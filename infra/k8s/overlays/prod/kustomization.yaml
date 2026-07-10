@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+# release.sh 用 `kustomize edit set image` 或 sed 改 newTag；此处给默认 latest 占位。
+images:
+  - name: yc-api
+    newName: registry.example.com/aiproject/api
+    newTag: latest
+  - name: yc-web
+    newName: registry.example.com/aiproject/web
+    newTag: latest
+  - name: yc-admin
+    newName: registry.example.com/aiproject/admin
+    newTag: latest
+  - name: yc-billing
+    newName: registry.example.com/aiproject/billing
+    newTag: latest
+  - name: yc-migrate
+    newName: registry.example.com/aiproject/migrate
+    newTag: latest

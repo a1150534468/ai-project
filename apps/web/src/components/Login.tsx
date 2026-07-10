@@ -1,0 +1,151 @@
+import { useState } from "react";
+import { Icon } from "@iconify/react";
+import { RippleButton } from "../motion";
+
+interface LoginProps {
+  onLogin: (token: string) => void;
+  onSwitchToRegister: () => void;
+  isLoading?: boolean;
+}
+
+export default function Login({ onLogin, onSwitchToRegister, isLoading = false }: LoginProps) {
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("password123");
+  const [error, setError] = useState("");
+
+  const handleLogin = async () => {
+    try {
+      setError("");
+      if (!identifier.trim()) {
+        setError("请输入用户名或 UID");
+        return;
+      }
+      if (!password.trim()) {
+        setError("请输入密码");
+        return;
+      }
+
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ identifier, password }),
+      });
+
+      if (!response.ok) {
+        setError("登录失败，请检查用户名和密码");
+        return;
+      }
+
+      const data = (await response.json()) as { token: string };
+      onLogin(data.token);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "登录出错，请稍后重试"
+      );
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        {/* Logo & Branding */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg">
+              云
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">云豆AI</h1>
+          <p className="text-gray-500 text-sm">您的全能 AI助手</p>
+        </div>
+
+        {/* Login Card */}
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20">
+          <h2 className="text-xl font-bold text-gray-900 mb-6">登录账户</h2>
+
+          {/* Input Fields */}
+          <div className="space-y-4 mb-6">
+            {/* Identifier Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                用户名 / UID
+              </label>
+              <div className="relative">
+                <Icon
+                  icon="mdi:account-outline"
+                  className="absolute left-3 top-3.5 text-gray-400"
+                />
+                <input
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  placeholder="输入用户名或 UID"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-gray-50/50"
+                />
+              </div>
+            </div>
+
+            {/* Password Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                密码
+              </label>
+              <div className="relative">
+                <Icon
+                  icon="mdi:lock-outline"
+                  className="absolute left-3 top-3.5 text-gray-400"
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
+                  placeholder="输入密码"
+                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-gray-50/50"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-sm text-red-600 flex items-center">
+                <Icon icon="mdi:alert-circle" className="mr-2" />
+                {error}
+              </p>
+            </div>
+          )}
+
+          {/* Login Button */}
+          <RippleButton
+            onClick={handleLogin}
+            disabled={isLoading}
+            className="w-full bg-brand hover:bg-brand/90 disabled:bg-gray-300 text-white font-medium py-3 rounded-lg transition-all shadow-lg hover:shadow-xl disabled:shadow-none"
+          >
+            {isLoading ? (
+              <span className="flex items-center justify-center">
+                <Icon icon="mdi:loading" className="animate-spin mr-2" />
+                登录中...
+              </span>
+            ) : (
+              "登录"
+            )}
+          </RippleButton>
+
+          {/* Footer */}
+          <p className="text-xs text-gray-500 text-center mt-6">
+            没有账户？{" "}
+            <button
+              onClick={onSwitchToRegister}
+              className="text-brand hover:underline font-medium"
+            >
+              去注册
+            </button>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

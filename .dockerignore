@@ -1,0 +1,17 @@
+node_modules
+**/node_modules
+.git
+.gitignore
+.DS_Store
+*.log
+.env
+.env.*
+dist
+**/dist
+.turbo
+**/.turbo
+*.tsbuildinfo
+**/*.tsbuildinfo
+coverage
+docs
+**/*.test.ts

@@ -1,0 +1,162 @@
+[
+  {
+    "key": "productivity-tasks",
+    "label": "办公效率",
+    "total": 8515
+  },
+  {
+    "key": "web-frontend-development",
+    "label": "网页与前端开发",
+    "total": 7075
+  },
+  {
+    "key": "search-research",
+    "label": "搜索与信息研究",
+    "total": 3345
+  },
+  {
+    "key": "coding-agents-ides",
+    "label": "开发与编程",
+    "total": 2449
+  },
+  {
+    "key": "devops-cloud",
+    "label": "云服务与DevOps",
+    "total": 2106
+  },
+  {
+    "key": "browser-automation",
+    "label": "浏览器自动化",
+    "total": 1952
+  },
+  {
+    "key": "pdf-documents",
+    "label": "PDF与文档处理",
+    "total": 1827
+  },
+  {
+    "key": "data-analytics",
+    "label": "数据分析",
+    "total": 1393
+  },
+  {
+    "key": "speech-transcription",
+    "label": "语音与翻译",
+    "total": 1325
+  },
+  {
+    "key": "security-passwords",
+    "label": "安全与密码",
+    "total": 1255
+  },
+  {
+    "key": "image-video-generation",
+    "label": "图像视频生成",
+    "total": 1099
+  },
+  {
+    "key": "git-github",
+    "label": "Git代码仓库",
+    "total": 1073
+  },
+  {
+    "key": "clawdbot-tools",
+    "label": "Openclaw扩展工具",
+    "total": 999
+  },
+  {
+    "key": "finance",
+    "label": "金融与行情",
+    "total": 701
+  },
+  {
+    "key": "communication",
+    "label": "社交与通讯",
+    "total": 674
+  },
+  {
+    "key": "health-fitness",
+    "label": "健康生活",
+    "total": 601
+  },
+  {
+    "key": "marketing-sales",
+    "label": "市场与销售",
+    "total": 474
+  },
+  {
+    "key": "shopping-e-commerce",
+    "label": "电商购物",
+    "total": 343
+  },
+  {
+    "key": "notes-pkm",
+    "label": "笔记与知识库",
+    "total": 335
+  },
+  {
+    "key": "transportation",
+    "label": "交通出行",
+    "total": 272
+  },
+  {
+    "key": "ai-llms",
+    "label": "大模型工具",
+    "total": 231
+  },
+  {
+    "key": "media-streaming",
+    "label": "视频流媒体",
+    "total": 194
+  },
+  {
+    "key": "calendar-scheduling",
+    "label": "日程管理",
+    "total": 148
+  },
+  {
+    "key": "ios-macos-development",
+    "label": "苹果开发",
+    "total": 143
+  },
+  {
+    "key": "smart-home-iot",
+    "label": "智能家居与IoT",
+    "total": 101
+  },
+  {
+    "key": "cli-utilities",
+    "label": "命令行工具",
+    "total": 74
+  },
+  {
+    "key": "gaming",
+    "label": "游戏娱乐",
+    "total": 71
+  },
+  {
+    "key": "moltbook",
+    "label": "Openclaw生态",
+    "total": 48
+  },
+  {
+    "key": "agent2agent-protocols",
+    "label": "机器人间通讯",
+    "total": 39
+  },
+  {
+    "key": "apple-apps-services",
+    "label": "苹果生态服务",
+    "total": 36
+  },
+  {
+    "key": "personal-development",
+    "label": "个人开发",
+    "total": 33
+  },
+  {
+    "key": "self-hosted-automation",
+    "label": "私有云助手",
+    "total": 27
+  }
+]

@@ -1,0 +1,1175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                          String                       @id @default(cuid())
+  uid                         String                       @unique
+  username                    String                       @unique
+  passwordHash                String
+  bannedAt                    DateTime?
+  memoryEnabled               Boolean                      @default(true)
+  channelId                   String?
+  createdAt                   DateTime                     @default(now())
+  channel                     Channel?                     @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  sessions                    Session[]
+  agents                      UserAgent[]
+  imageAssets                 ImageAsset[]
+  imageGenerationTasks        ImageGenerationTask[]
+  videoAssets                 VideoAsset[]
+  videoGenerationTasks        VideoGenerationTask[]
+  audioAssets                 AudioAsset[]
+  audioGenerationTasks        AudioGenerationTask[]
+  ecomWorkflows               EcomWorkflow[]
+  articleWorkflowProjects     ArticleWorkflowProject[]
+  localBusinessPromoProjects  LocalBusinessPromoProject[]
+  localBusinessPromoRuns      LocalBusinessPromoRun[]
+  novelProjects               NovelProject[]
+  novelTasks                  NovelTask[]
+  comicWorkflowProjects       ComicWorkflowProject[]
+  comicWorkflowBibleEntries   ComicWorkflowBibleEntry[]
+  comicWorkflowEpisodes       ComicWorkflowEpisode[]
+  comicWorkflowScriptVersions ComicWorkflowScriptVersion[]
+  comicWorkflowAssets         ComicWorkflowAsset[]
+  comicWorkflowShots          ComicWorkflowShot[]
+  agentTeams                  AgentTeam[]
+  agentTeamMembers            AgentTeamMember[]
+  agentWorkflowRuns           AgentWorkflowRun[]
+  agentWorkflowSteps          AgentWorkflowStep[]
+  agentWorkflowEvents         AgentWorkflowEvent[]
+  loginEvents                 LoginEvent[]
+  toolInstalls                UserToolInstall[]
+  ecomMainImageJobs           EcomMainImageJob[]
+  avatars                     Avatar[]
+  skyhumanTasks               SkyhumanTask[]
+  dubProjects                 DubProject[]
+  scheduledTasks              ScheduledTask[]
+  scheduledTaskRuns           ScheduledTaskRun[]
+
+  @@index([channelId])
+}
+
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Session {
+  id              String    @id @default(cuid())
+  userId          String
+  title           String    @default("新对话")
+  agentId         String?
+  agentName       String?
+  agentPrompt     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  attachedKbIds   String[]  @default([])
+  kbAttachAllOwn  Boolean   @default(false)
+  attachedToolIds String[]  @default([])
+
+  @@index([userId])
+  @@index([userId, agentId])
+}
+
+model UserAgent {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String   @default("")
+  prompt      String
+  modelUsed   String?
+  avatarSvg   String?
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String
+  content   String
+  model     String?
+  createdAt DateTime @default(now())
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+}
+
+model Memory {
+  id         String                      @id @default(cuid())
+  userId     String
+  title      String                      @default("")
+  text       String
+  type       String                      @default("OTHER")
+  importance Int                         @default(50)
+  tags       Json                        @default("[]")
+  embedding  Unsupported("vector(4096)")
+  metadata   Json?
+  lastUsedAt DateTime?
+  usedCount  Int                         @default(0)
+  createdAt  DateTime                    @default(now())
+
+  @@index([userId])
+  @@index([userId, type])
+}
+
+model Device {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String?
+  platform     String
+  appVersion   String    @default("")
+  online       Boolean   @default(false)
+  capabilities String[]  @default([])
+  tools        Json      @default("[]")
+  lastSeenAt   DateTime?
+  tokenHash    String    @unique
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model UserToolInstall {
+  id          String   @id @default(cuid())
+  userId      String
+  categoryKey String
+  marketId    String
+  name        String
+  description String   @default("")
+  toolName    String
+  status      String   @default("installed")
+  installedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, marketId])
+  @@unique([userId, toolName])
+  @@index([userId, updatedAt])
+}
+
+model DeviceSession {
+  id             String    @id @default(cuid())
+  deviceId       String
+  userId         String
+  appVersion     String
+  connectedAt    DateTime  @default(now())
+  disconnectedAt DateTime?
+  durationSec    Int?
+
+  @@index([deviceId])
+  @@index([userId, connectedAt])
+}
+
+model Admin {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  role         String // super_admin | admin
+  permissions  String[] @default([])
+  disabled     Boolean  @default(false)
+  createdBy    String?
+  createdAt    DateTime @default(now())
+}
+
+model AdminAudit {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String
+  target    String?
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([adminId, createdAt])
+}
+
+model Announcement {
+  id        String    @id @default(cuid())
+  title     String
+  body      String
+  active    Boolean   @default(true)
+  startAt   DateTime?
+  endAt     DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model MetricsDaily {
+  date           DateTime @id @db.Date
+  registered     Int      @default(0)
+  dau            Int      @default(0)
+  wau            Int      @default(0)
+  mau            Int      @default(0)
+  newPayingUsers Int      @default(0)
+  payingTotal    Int      @default(0)
+  revenueFen     Int      @default(0)
+  grantedPoints  Int      @default(0)
+  consumedPoints Int      @default(0)
+  updatedAt      DateTime @updatedAt
+}
+
+model CohortDaily {
+  cohortDate    DateTime @db.Date
+  dayOffset     Int
+  cohortSize    Int      @default(0)
+  retained      Int      @default(0)
+  cumRevenueFen Int      @default(0)
+  cumPayers     Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@id([cohortDate, dayOffset])
+}
+
+model KnowledgeBase {
+  id          String     @id @default(cuid())
+  ownerType   String // "USER" | "OFFICIAL"
+  userId      String?
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  documents   Document[]
+
+  @@index([userId])
+  @@index([ownerType])
+}
+
+model Document {
+  id         String        @id @default(cuid())
+  kbId       String
+  name       String
+  sourceType String // "FILE" | "URL" | "TEXT"
+  sourceUri  String?
+  mime       String?
+  sizeBytes  Int?
+  status     String        @default("pending") // pending|indexing|indexed|failed
+  error      String?
+  chunkCount Int           @default(0)
+  tokensUsed Int           @default(0)
+  opId       String?
+  lockedBy   String?
+  lockedAt   DateTime?
+  attempts   Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  kb         KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  chunks     Chunk[]
+
+  @@index([kbId])
+  @@index([status])
+}
+
+model Chunk {
+  id         String                      @id @default(cuid())
+  documentId String
+  kbId       String
+  ordinal    Int
+  content    String
+  embedding  Unsupported("vector(4096)")
+  createdAt  DateTime                    @default(now())
+  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([kbId])
+  @@index([documentId])
+}
+
+model KbQuotaPackage {
+  id           String   @id @default(cuid())
+  name         String
+  bytes        Int
+  durationDays Int      @default(0)
+  pricePoints  Int
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model KbQuotaGrant {
+  id        String    @id @default(cuid())
+  userId    String
+  bytes     Int
+  source    String // PURCHASE | ADMIN
+  expiresAt DateTime?
+  opId      String?   @unique
+  note      String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model ImageAsset {
+  id                      String               @id @default(cuid())
+  userId                  String
+  requestId               String
+  requestIndex            Int
+  prompt                  String
+  model                   String
+  size                    String
+  originalUrl             String
+  thumbnailUrl            String
+  objectKey               String?
+  mime                    String               @default("image/png")
+  createdAt               DateTime             @default(now())
+  user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  comicWorkflowAssets     ComicWorkflowAsset[]
+  comicWorkflowShotImages ComicWorkflowShot[]
+
+  @@unique([requestId, requestIndex])
+  @@index([userId, createdAt])
+}
+
+model ImageGenerationTask {
+  id             String   @id @default(cuid())
+  userId         String
+  requestId      String   @unique
+  prompt         String
+  model          String
+  size           String
+  count          Int
+  status         String   @default("running")
+  completedCount Int      @default(0)
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model VideoAsset {
+  id           String   @id @default(cuid())
+  userId       String
+  requestId    String
+  requestIndex Int      @default(0)
+  prompt       String
+  model        String
+  aspectRatio  String
+  resolution   String
+  durationSec  Int
+  originalUrl  String
+  objectKey    String?
+  mime         String   @default("video/mp4")
+  format       String   @default("mp4")
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, requestIndex])
+  @@index([userId, createdAt])
+}
+
+model VideoGenerationTask {
+  id             String    @id @default(cuid())
+  userId         String
+  requestId      String    @unique
+  providerTaskId String?
+  prompt         String
+  model          String
+  aspectRatio    String
+  resolution     String
+  durationSec    Int
+  generateAudio  Boolean   @default(true)
+  hasInputVideo  Boolean   @default(false)
+  resourceKey    String
+  chargedPoints  Int       @default(0)
+  status         String    @default("running")
+  progress       Int       @default(0)
+  error          String?
+  resultPayload  Json?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+  @@index([providerTaskId])
+}
+
+// 上传的视频素材元数据：以对象 URL 为键缓存权威时长（秒），供「有输入视频」复合计费按输入时长扣费。
+model VideoMaterial {
+  id          String   @id @default(cuid())
+  userId      String
+  url         String   @unique
+  objectKey   String?
+  mime        String   @default("video/mp4")
+  durationSec Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model AudioAsset {
+  id            String   @id @default(cuid())
+  userId        String
+  projectId     String?
+  requestId     String?
+  kind          String
+  source        String
+  provider      String?
+  providerModel String?
+  originalUrl   String
+  objectKey     String?
+  mime          String   @default("audio/wav")
+  format        String   @default("wav")
+  durationSec   Int      @default(0)
+  textContent   String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       LocalBusinessPromoProject? @relation("LocalBusinessPromoProjectAudioAssets", fields: [projectId], references: [id], onDelete: SetNull)
+  tasks         AudioGenerationTask[]
+  voiceCloneProjects LocalBusinessPromoProject[] @relation("LocalBusinessPromoVoiceSample")
+  activeNarrationProjects LocalBusinessPromoProject[] @relation("LocalBusinessPromoActiveNarration")
+  activeBgmProjects LocalBusinessPromoProject[] @relation("LocalBusinessPromoActiveBgm")
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([userId, kind, createdAt])
+  @@index([requestId])
+}
+
+model AudioGenerationTask {
+  id            String   @id @default(cuid())
+  userId        String
+  projectId     String?
+  requestId     String   @unique
+  kind          String
+  provider      String?
+  providerModel String?
+  status        String   @default("running")
+  error         String?
+  inputPayload  Json?
+  resultPayload Json?
+  assetId       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  completedAt   DateTime?
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project       LocalBusinessPromoProject? @relation("LocalBusinessPromoProjectAudioTasks", fields: [projectId], references: [id], onDelete: SetNull)
+  asset         AudioAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model EcomWorkflow {
+  id                  String   @id @default(cuid())
+  userId              String
+  platform            String
+  language            String
+  template            String
+  resolution          String   @default("1K")
+  segmentCount        Int      @default(3)
+  product             Json
+  referenceAssetIds   String[] @default([])
+  masterAssetId       String?
+  segments            Json     @default("[]")
+  stitchedAssetId     String?
+  stage               String   @default("draft")
+  error               String?
+  billingOperationIds String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, stage])
+}
+
+model LocalBusinessPromoProject {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String   @default("未命名宣传项目")
+  brief       Json     @default("{}")
+  materials   Json     @default("{}")
+  settings    Json     @default("{}")
+  scriptDraft String   @default("")
+  latestRunId String?
+  voiceCloneSampleAssetId String?
+  activeNarrationAssetId String?
+  activeBgmAssetId String?
+  status      String   @default("draft")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs        LocalBusinessPromoRun[]
+  audioAssets AudioAsset[] @relation("LocalBusinessPromoProjectAudioAssets")
+  audioTasks  AudioGenerationTask[] @relation("LocalBusinessPromoProjectAudioTasks")
+  voiceCloneSampleAsset AudioAsset? @relation("LocalBusinessPromoVoiceSample", fields: [voiceCloneSampleAssetId], references: [id], onDelete: SetNull)
+  activeNarrationAsset AudioAsset? @relation("LocalBusinessPromoActiveNarration", fields: [activeNarrationAssetId], references: [id], onDelete: SetNull)
+  activeBgmAsset AudioAsset? @relation("LocalBusinessPromoActiveBgm", fields: [activeBgmAssetId], references: [id], onDelete: SetNull)
+
+  @@index([userId, updatedAt])
+  @@index([userId, status])
+  @@index([voiceCloneSampleAssetId])
+  @@index([activeNarrationAssetId])
+  @@index([activeBgmAssetId])
+}
+
+model LocalBusinessPromoRun {
+  id                 String   @id @default(cuid())
+  projectId          String
+  userId             String
+  billingOperationId String?
+  billingRefundedAt DateTime?
+  billingRefundStatus String   @default("none")
+  billingRefundError  String?
+  billingRefundRetryCount Int  @default(0)
+  billingRefundLastAttemptAt DateTime?
+  billingRefundNextRetryAt DateTime?
+  settingsSnapshot   Json     @default("{}")
+  scriptSnapshot     String   @default("")
+  shotPlan           Json     @default("[]")
+  analysisSnapshot   Json?
+  clipRequestIds     String[] @default([])
+  mergedAssetId      String?
+  narrationAssetId   String?
+  bgmAssetId         String?
+  status             String   @default("queued")
+  progressPercent    Int      @default(0)
+  progressStage      String   @default("queued")
+  progressMessage    String?
+  error              String?
+  startedAt          DateTime?
+  workerId           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  completedAt        DateTime?
+  project          LocalBusinessPromoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+  @@index([userId, updatedAt])
+  @@index([status, updatedAt])
+  @@index([billingRefundStatus, billingRefundNextRetryAt])
+}
+
+model ArticleWorkflowProject {
+  id              String   @id @default(cuid())
+  userId          String
+  sourceFormat    String
+  sourceText      String
+  generationMode  String   @default("preserve-text")
+  title           String   @default("")
+  summary         String   @default("")
+  bodyHtml        String   @default("")
+  imageManifestJson Json   @default("[]")
+  status          String   @default("draft")
+  progressStage   String   @default("draft")
+  progressPercent Int      @default(0)
+  progressMessage String?
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([userId, status])
+}
+
+model EcomMainImageJob {
+  id                  String   @id @default(cuid())
+  userId              String
+  platform            String
+  language            String
+  ratio               String
+  resolution          String   @default("1K")
+  style               String
+  customStyle         String   @default("")
+  withText            Boolean  @default(true)
+  product             Json
+  referenceAssetIds   String[] @default([])
+  count               Int
+  images              Json     @default("[]")
+  stage               String   @default("draft")
+  error               String?
+  billingOperationIds String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, stage])
+}
+
+model NovelProject {
+  id             String              @id @default(cuid())
+  userId         String
+  title          String
+  genre          String              @default("")
+  status         String              @default("active")
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sections       NovelSection[]
+  chapters       NovelChapter[]
+  tasks          NovelTask[]
+  vectorMemories NovelVectorMemory[]
+
+  @@index([userId, updatedAt])
+}
+
+model NovelVectorMemory {
+  id          String                      @id @default(cuid())
+  projectId   String
+  sourceType  String
+  sourceId    String
+  sourceKind  String
+  title       String                      @default("")
+  content     String
+  contentHash String
+  embedding   Unsupported("vector(4096)")
+  createdAt   DateTime                    @default(now())
+  updatedAt   DateTime                    @updatedAt
+  project     NovelProject                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, sourceType, sourceId])
+  @@index([projectId, sourceKind])
+  @@index([projectId, updatedAt])
+}
+
+model NovelSection {
+  id             String                @id @default(cuid())
+  projectId      String
+  kind           String
+  status         String                @default("empty")
+  displayText    String                @default("")
+  structuredJson Json?
+  billableChars  Int                   @default(0)
+  lastTaskId     String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  project        NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions       NovelSectionVersion[]
+
+  @@unique([projectId, kind])
+  @@index([projectId, updatedAt])
+}
+
+model NovelSectionVersion {
+  id             String       @id @default(cuid())
+  sectionId      String
+  displayText    String
+  structuredJson Json?
+  billableChars  Int          @default(0)
+  operationId    String?
+  createdAt      DateTime     @default(now())
+  section        NovelSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId, createdAt])
+}
+
+model NovelChapter {
+  id            String                @id @default(cuid())
+  projectId     String
+  volumeIndex   Int                   @default(1)
+  chapterIndex  Int
+  title         String                @default("")
+  summary       String                @default("")
+  content       String                @default("")
+  status        String                @default("draft")
+  billableChars Int                   @default(0)
+  lastTaskId    String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  project       NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions      NovelChapterVersion[]
+
+  @@unique([projectId, chapterIndex])
+  @@index([projectId, updatedAt])
+}
+
+model NovelChapterVersion {
+  id            String       @id @default(cuid())
+  chapterId     String
+  title         String       @default("")
+  content       String
+  billableChars Int          @default(0)
+  operationId   String?
+  createdAt     DateTime     @default(now())
+  chapter       NovelChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@index([chapterId, createdAt])
+}
+
+model NovelTask {
+  id             String       @id @default(cuid())
+  projectId      String
+  userId         String
+  kind           String
+  targetKind     String
+  targetId       String?
+  status         String       @default("queued")
+  requestPayload Json?
+  resultPayload  Json?
+  operationId    String       @unique
+  error          String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  completedAt    DateTime?
+  cancelledAt    DateTime?
+  project        NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, updatedAt])
+  @@index([projectId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model ComicWorkflowProject {
+  id             String                       @id @default(cuid())
+  userId         String
+  title          String
+  logline        String                       @default("")
+  style          String                       @default("")
+  status         String                       @default("active")
+  currentStage   String                       @default("script")
+  settings       Json                         @default("{}")
+  createdAt      DateTime                     @default(now())
+  updatedAt      DateTime                     @updatedAt
+  user           User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bibleEntries   ComicWorkflowBibleEntry[]
+  episodes       ComicWorkflowEpisode[]
+  scriptVersions ComicWorkflowScriptVersion[]
+  assets         ComicWorkflowAsset[]
+  shots          ComicWorkflowShot[]
+
+  @@index([userId, updatedAt])
+  @@index([userId, status])
+}
+
+model ComicWorkflowBibleEntry {
+  id        String               @id @default(cuid())
+  projectId String
+  userId    String
+  category  String
+  title     String
+  content   String               @default("")
+  position  Int                  @default(0)
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  project   ComicWorkflowProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, position])
+  @@index([userId, updatedAt])
+}
+
+model ComicWorkflowEpisode {
+  id                  String                       @id @default(cuid())
+  projectId           String
+  userId              String
+  title               String
+  summary             String                       @default("")
+  episodeNo           Int
+  targetDurationSec   Int                          @default(90)
+  currentStage        String                       @default("script")
+  scriptVersionId     String?
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  project             ComicWorkflowProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scriptVersions      ComicWorkflowScriptVersion[] @relation("ComicEpisodeScriptVersions")
+  activeScriptVersion ComicWorkflowScriptVersion?  @relation("ComicEpisodeActiveScriptVersion", fields: [scriptVersionId], references: [id], onDelete: SetNull)
+  shots               ComicWorkflowShot[]
+
+  @@unique([projectId, episodeNo])
+  @@index([projectId, episodeNo])
+  @@index([userId, updatedAt])
+}
+
+model ComicWorkflowScriptVersion {
+  id                String                 @id @default(cuid())
+  episodeId         String
+  projectId         String
+  userId            String
+  versionNo         Int
+  status            String                 @default("draft")
+  outline           String                 @default("")
+  scriptText        String                 @default("")
+  source            String                 @default("manual")
+  prompt            String                 @default("")
+  metadata          Json                   @default("{}")
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  episode           ComicWorkflowEpisode   @relation("ComicEpisodeScriptVersions", fields: [episodeId], references: [id], onDelete: Cascade)
+  activeForEpisodes ComicWorkflowEpisode[] @relation("ComicEpisodeActiveScriptVersion")
+  project           ComicWorkflowProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user              User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([episodeId, versionNo])
+  @@index([episodeId, versionNo])
+  @@index([projectId, updatedAt])
+  @@index([userId, updatedAt])
+}
+
+model ComicWorkflowAsset {
+  id           String               @id @default(cuid())
+  projectId    String
+  userId       String
+  type         String
+  name         String
+  description  String               @default("")
+  prompt       String               @default("")
+  imageAssetId String?
+  source       String               @default("manual")
+  metadata     Json                 @default("{}")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  project      ComicWorkflowProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageAsset   ImageAsset?          @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, type])
+  @@index([userId, updatedAt])
+  @@index([imageAssetId])
+}
+
+model ComicWorkflowShot {
+  id           String               @id @default(cuid())
+  episodeId    String
+  projectId    String
+  userId       String
+  shotNo       Int
+  title        String               @default("")
+  description  String               @default("")
+  dialogue     String               @default("")
+  camera       String               @default("")
+  durationSec  Int                  @default(5)
+  assetIds     String[]             @default([])
+  imageAssetId String?
+  videoUrl     String?
+  videoStatus  String               @default("idle")
+  videoTaskId  String?
+  metadata     Json                 @default("{}")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  episode      ComicWorkflowEpisode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  project      ComicWorkflowProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  imageAsset   ImageAsset?          @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+
+  @@unique([episodeId, shotNo])
+  @@index([episodeId, shotNo])
+  @@index([projectId, shotNo])
+  @@index([userId, updatedAt])
+  @@index([imageAssetId])
+}
+
+model AgentTeam {
+  id              String             @id @default(cuid())
+  userId          String
+  name            String
+  description     String             @default("")
+  mainAgentPrompt String             @default("")
+  sourceRunId     String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members         AgentTeamMember[]
+  runs            AgentWorkflowRun[]
+
+  @@unique([id, userId])
+  @@index([sourceRunId])
+  @@index([userId, updatedAt])
+}
+
+model AgentTeamMember {
+  id             String    @id @default(cuid())
+  teamId         String
+  userId         String
+  name           String
+  role           String
+  responsibility String
+  systemPrompt   String
+  skills         Json      @default("[]")
+  isCore         Boolean   @default(false)
+  position       Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  team           AgentTeam @relation(fields: [teamId, userId], references: [id, userId], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, position])
+  @@index([userId, updatedAt])
+}
+
+model AgentWorkflowRun {
+  id           String               @id @default(cuid())
+  userId       String
+  teamId       String?
+  taskGoal     String
+  status       String               @default("draft")
+  teamSnapshot Json                 @default("{}")
+  planSnapshot Json                 @default("{}")
+  finalReport  String               @default("")
+  error        String?
+  operationIds String[]             @default([])
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  completedAt  DateTime?
+  cancelledAt  DateTime?
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team         AgentTeam?           @relation(fields: [teamId, userId], references: [id, userId], onDelete: Restrict)
+  steps        AgentWorkflowStep[]
+  events       AgentWorkflowEvent[]
+
+  @@unique([id, userId])
+  @@index([userId, updatedAt])
+  @@index([userId, status, updatedAt])
+  @@index([status, updatedAt])
+  @@index([teamId, updatedAt])
+}
+
+model AgentWorkflowStep {
+  id             String               @id @default(cuid())
+  runId          String
+  userId         String
+  memberName     String
+  memberSnapshot Json                 @default("{}")
+  title          String
+  goal           String
+  input          Json                 @default("{}")
+  output         String               @default("")
+  status         String               @default("pending")
+  position       Int                  @default(0)
+  retryCount     Int                  @default(0)
+  error          String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  startedAt      DateTime?
+  completedAt    DateTime?
+  run            AgentWorkflowRun     @relation(fields: [runId, userId], references: [id, userId], onDelete: Cascade)
+  user           User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events         AgentWorkflowEvent[]
+
+  @@unique([id, runId])
+  @@index([runId, position])
+  @@index([userId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model AgentWorkflowEvent {
+  id         String             @id @default(cuid())
+  runId      String
+  stepId     String?
+  userId     String
+  memberName String             @default("")
+  type       String
+  message    String
+  payload    Json?
+  createdAt  DateTime           @default(now())
+  run        AgentWorkflowRun   @relation(fields: [runId, userId], references: [id, userId], onDelete: Cascade)
+  step       AgentWorkflowStep? @relation(fields: [stepId, runId], references: [id, runId], onDelete: Cascade)
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([runId, createdAt])
+  @@index([stepId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Channel {
+  id             String   @id @default(cuid())
+  code           String   @unique
+  ownerType      String // "PLATFORM" | "RESELLER"
+  resellerId     String? // → Admin.id；PLATFORM 渠道为空
+  commissionRate Float    @default(0)
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  users          User[]
+
+  @@index([resellerId])
+}
+
+model ResellerVisibilityConfig {
+  id              String  @id @default("singleton")
+  showRecharge    Boolean @default(true)
+  showConsumption Boolean @default(true)
+  showMembership  Boolean @default(true)
+  showLastActive  Boolean @default(true)
+}
+
+model WechatBinding {
+  id         String    @id @default(cuid())
+  userId     String
+  deviceId   String    @unique
+  targetType String // "agent" | "team"
+  targetId   String
+  model      String    @default("MiniMax-M3") // 微信回复用模型；多模态不支持时退避到 M3
+  sessionId  String // 微信持续会话线程（指向 Session.id）
+  online     Boolean   @default(false)
+  lastSeenAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model ReportTask {
+  id           String   @id @default(cuid())
+  userId       String
+  stage        String   @default("pending")
+  sourceType   String
+  sourceName   String?
+  intent       String?
+  model        String
+  htmlKey      String?
+  truncated    Boolean  @default(false)
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  rounds       Int      @default(0)
+  error        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([userId, createdAt])
+}
+
+model Avatar {
+  id              String   @id @default(cuid())
+  userId          String
+  avatarCode      String
+  title           String   @default("未命名")
+  coverUrl        String?
+  sourceObjectKey String?
+  isFavorite      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model SkyhumanTask {
+  id             String    @id @default(cuid())
+  userId         String
+  kind           String
+  avatarId       String?
+  projectId      String?
+  providerTaskId String?
+  status         String    @default("running")
+  resourceKey    String
+  operationId    String    @unique
+  chargedPoints  Int       @default(0)
+  audioObjectKey String?
+  title          String    @default("未命名")
+  resultPayload  Json?
+  error          String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+  @@index([providerTaskId])
+  @@index([projectId])
+  @@index([userId, createdAt])
+}
+
+model DubProject {
+  id               String   @id @default(cuid())
+  userId           String
+  title            String   @default("未命名口播")
+  sourceVideoUrl   String?
+  analysis         Json?
+  script           String?
+  attachedKbIds    String[] @default([])
+  ttsMode          String?
+  audioUrl         String?
+  audioObjectKey   String?
+  audioDurationSec Int      @default(0)
+  avatarId         String?
+  bgmPresetId      String?
+  bgmObjectKey     String?
+  bgmVolume        Float    @default(0.3)
+  resultVideoUrl   String?
+  resultObjectKey  String?
+  finalVideoUrl    String?
+  finalObjectKey   String?
+  stage            String   @default("draft")
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, stage])
+}
+
+model DubBgmPreset {
+  id        String   @id @default(cuid())
+  title     String
+  url       String
+  objectKey String
+  sortOrder Int      @default(0)
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([enabled, sortOrder])
+}
+
+model ScheduledTask {
+  id            String             @id @default(cuid())
+  userId        String
+  title         String
+  prompt        String             @db.Text
+  agentId       String?
+  model         String
+  kbIds         Json?
+  deviceId      String?
+  cron          String
+  timezone      String             @default("Asia/Shanghai")
+  oneShot       Boolean            @default(false)
+  enabled       Boolean            @default(true)
+  emailTo       String
+  nextRunAt     DateTime
+  lastRunAt     DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs          ScheduledTaskRun[]
+
+  @@index([userId])
+  @@index([enabled, nextRunAt])
+}
+
+model ScheduledTaskRun {
+  id            String        @id @default(cuid())
+  taskId        String
+  userId        String
+  status        String        // running | success | failed | skipped
+  skipReason    String?       // device_offline | insufficient_balance | billing_unavailable | prev_running
+  triggeredAt   DateTime
+  startedAt     DateTime      @default(now())
+  finishedAt    DateTime?
+  reportText    String?       @db.Text
+  toolCalls     Int           @default(0)
+  inputTokens   Int           @default(0)
+  outputTokens  Int           @default(0)
+  pointsCharged Int?
+  emailStatus   String?       // sent | failed | skipped_no_config
+  error         String?       @db.Text
+  createdAt     DateTime      @default(now())
+  task          ScheduledTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+  @@index([userId])
+}

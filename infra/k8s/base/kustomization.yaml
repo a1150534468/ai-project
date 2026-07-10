@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: yunclaude
+resources:
+  - 00-namespace.yaml
+  - 05-default-sa-pullsecret.yaml
+  - 10-configmap.yaml
+  - 30-api.yaml
+  - 35-local-business-promo-worker.yaml
+  - 40-web.yaml
+  - 45-admin.yaml
+  - 50-billing.yaml
+  - 60-ingress.yaml
+  - 70-migrate-job.yaml
+  - 90-resourcequota.yaml

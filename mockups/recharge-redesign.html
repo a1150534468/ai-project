@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>充值页重构预览 · 会员/积分充值 + 当前套餐卡 A/B/C</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { DEFAULT: "#00b8a9", hover: "#00a096", soft: "#e6f7f5", ink: "#067a70" },
+        },
+      },
+    },
+  };
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+  * { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #f5f7fa; }
+  .card { background:#fff; border:1px solid #eceef1; border-radius:16px; }
+  .plan-gradient { background: linear-gradient(135deg,#0f766e 0%,#0b3b3a 60%,#132b2e 100%); }
+  .plan-gradient-warm { background: linear-gradient(135deg,#1f2937 0%,#0f766e 120%); }
+  .pill { display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; }
+  .metric-label { font-size:11px; color:#98a1ac; font-weight:600; letter-spacing:.02em; }
+  .btn-brand { background:#00b8a9; color:#fff; border:none; border-radius:999px; font-weight:600; cursor:pointer; transition:.15s; }
+  .btn-brand:hover { background:#00a096; }
+  .btn-ghost { background:#fff; border:1px solid #d9dde2; border-radius:999px; font-weight:600; color:#1d1d1f; cursor:pointer; transition:.15s; }
+  .btn-ghost:hover { border-color:#00b8a9; color:#067a70; }
+  .tab { position:relative; padding:6px 2px; font-size:16px; font-weight:600; color:#98a1ac; cursor:pointer; background:none; border:none; }
+  .tab.on { color:#1d1d1f; }
+  .tab.on::after { content:""; position:absolute; left:0; right:0; bottom:-11px; height:2.5px; border-radius:2px; background:#00b8a9; }
+  .variant { border:2px solid transparent; border-radius:20px; transition:.18s; }
+  .variant.sel { border-color:#00b8a9; box-shadow:0 0 0 4px rgba(0,184,169,.12); }
+  .pick-btn { font-size:12px; font-weight:600; border-radius:999px; padding:5px 14px; cursor:pointer; border:1px solid #d9dde2; background:#fff; color:#6b7280; }
+  .pick-btn.on { background:#00b8a9; border-color:#00b8a9; color:#fff; }
+  .ic { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+  .seg { background:#f0f2f5; border-radius:999px; padding:3px; display:inline-flex; gap:2px; }
+  .seg button { border:none; background:none; padding:6px 16px; border-radius:999px; font-size:13px; color:#6b7280; cursor:pointer; font-weight:500; }
+  .seg button.on { background:#fff; color:#1d1d1f; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .field { border:1px solid #d9dde2; border-radius:999px; background:#fff; }
+  .field:focus { outline:none; border-color:#00b8a9; box-shadow:0 0 0 3px rgba(0,184,169,.15); }
+</style>
+</head>
+<body class="text-[#1d1d1f]">
+
+<div class="max-w-5xl mx-auto px-6 py-8">
+
+  <!-- 标题 + 顶部 Tab -->
+  <div class="mb-6">
+    <h1 class="text-[26px] font-bold tracking-tight mb-4">会员与充值</h1>
+    <div class="flex items-center gap-7 border-b border-[#eceef1] pb-[10px]">
+      <button class="tab on" data-tab="member" onclick="switchTab('member')">会员</button>
+      <button class="tab" data-tab="recharge" onclick="switchTab('recharge')">积分充值</button>
+    </div>
+  </div>
+
+  <!-- ============ 会员页 ============ -->
+  <div id="tab-member">
+
+    <div class="mb-3 flex items-center gap-2 text-[13px] text-[#6b7280]">
+      <span class="pill" style="background:#fff7ed;color:#c2620a">👇 当前套餐卡 · 3 种排版</span>
+      <span>点下方按钮选一种，其余模块风格统一。当前已选：<b id="picked" class="text-[#067a70]">A</b></span>
+    </div>
+
+    <!-- 风格 A：参考图同款（左深色品牌块 + 右积分区，横向大卡） -->
+    <div class="variant sel mb-4" id="v-A">
+      <div class="flex items-center justify-between px-1 pt-1 pb-2">
+        <span class="text-xs font-semibold text-[#98a1ac]">风格 A · 参考图同款（深色品牌块 + 大号总积分）</span>
+        <button class="pick-btn on" onclick="pick('A')">选 A</button>
+      </div>
+      <div class="card p-5">
+        <div class="flex flex-col lg:flex-row gap-5">
+          <!-- 品牌块 -->
+          <div class="plan-gradient rounded-2xl p-5 text-white flex-none w-full lg:w-[260px] relative overflow-hidden">
+            <span class="pill" style="background:rgba(255,255,255,.16);color:#eafffb">● 生效中</span>
+            <div class="mt-6 text-xl font-bold">个人旗舰版</div>
+            <div class="mt-1 text-[12px] text-white/70">买断到期 2026-08-05</div>
+            <div class="mt-4 text-[12px] text-white/60">每日刷新临时点 · 到期清零</div>
+          </div>
+          <!-- 积分区：永久 / 临时 双池 -->
+          <div class="flex-1 min-w-0">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="metric-label">合计可用算力点</div>
+                <div class="text-[34px] leading-none font-extrabold mt-1">287,500 <span class="text-base font-semibold text-[#98a1ac]">点</span></div>
+              </div>
+              <div class="flex gap-2 flex-none">
+                <button class="btn-ghost text-[13px] px-4 py-2" onclick="switchTab('recharge')">消耗明细</button>
+                <button class="btn-brand text-[13px] px-4 py-2">购买 / 升级会员</button>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
+              <!-- 临时（套餐） -->
+              <div class="rounded-xl border p-3" style="border-color:#cbeee8;background:#f5fbfa">
+                <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-brand"></span><span class="metric-label">临时算力点 · 套餐</span></div>
+                <div class="text-xl font-extrabold mt-1">142,500 <span class="text-[11px] text-[#98a1ac] font-medium">剩余</span></div>
+                <div class="mt-2 h-1.5 rounded-full bg-[#e2efed] overflow-hidden"><div class="h-full w-[72%] bg-brand rounded-full"></div></div>
+                <div class="text-[11px] text-[#6b7280] mt-1.5">本期发放 198,000 · 已用 55,500</div>
+                <div class="text-[11px] text-[#c2620a] mt-0.5">07-09 00:00 到期清零</div>
+              </div>
+              <!-- 永久（充值） -->
+              <div class="rounded-xl border border-[#eef1f4] bg-[#fafbfc] p-3">
+                <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[#94a3b8]"></span><span class="metric-label">永久算力点 · 充值</span></div>
+                <div class="text-xl font-extrabold mt-1">145,000</div>
+                <div class="text-[11px] text-[#6b7280] mt-2">永不过期</div>
+                <div class="text-[11px] text-[#98a1ac] mt-0.5">扣费时临时点优先、永久点保底</div>
+              </div>
+              <!-- 视频点 / VIP -->
+              <div class="rounded-xl border border-[#eef1f4] bg-[#fafbfc] p-3">
+                <div class="flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-[#a78bfa]"></span><span class="metric-label">视频点 · 会员</span></div>
+                <div class="text-xl font-extrabold mt-1">3,200</div>
+                <div class="text-[11px] text-[#6b7280] mt-2">白银会员</div>
+                <div class="text-[11px] text-brand-ink mt-0.5">消费 9.5 折</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 风格 B：极简紧凑（无深色块，双列） -->
+    <div class="variant mb-4" id="v-B">
+      <div class="flex items-center justify-between px-1 pt-1 pb-2">
+        <span class="text-xs font-semibold text-[#98a1ac]">风格 B · 极简紧凑（无深色块，信息一眼扫完）</span>
+        <button class="pick-btn" onclick="pick('B')">选 B</button>
+      </div>
+      <div class="card p-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-5">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-xl font-bold">个人旗舰版</span>
+              <span class="pill" style="background:#e6f7f5;color:#067a70">生效中</span>
+            </div>
+            <div class="text-[12px] text-[#98a1ac] mt-1">有效期至 2026.08.05 · 每日刷新</div>
+            <div class="flex gap-2 mt-4">
+              <button class="btn-ghost text-[13px] px-4 py-2" onclick="switchTab('recharge')">消耗明细</button>
+              <button class="btn-brand text-[13px] px-4 py-2">购买 / 升级会员</button>
+            </div>
+          </div>
+          <div class="sm:text-right sm:border-l sm:border-[#f0f2f5] sm:pl-8">
+            <div class="metric-label">算力点余额</div>
+            <div class="text-[32px] leading-none font-extrabold mt-1">198,270 <span class="text-sm font-semibold text-[#98a1ac]">点</span></div>
+            <div class="text-[12px] text-[#6b7280] mt-3">视频点 <b>3,200</b> · <span class="text-brand-ink">白银会员 9.5折</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 风格 C：仪表盘（顶部条 + 4 指标 tile） -->
+    <div class="variant mb-6" id="v-C">
+      <div class="flex items-center justify-between px-1 pt-1 pb-2">
+        <span class="text-xs font-semibold text-[#98a1ac]">风格 C · 仪表盘（顶部条 + 指标格子，横向铺满）</span>
+        <button class="pick-btn" onclick="pick('C')">选 C</button>
+      </div>
+      <div class="card p-6">
+        <div class="flex items-center justify-between gap-3 pb-4 border-b border-[#f0f2f5]">
+          <div class="flex items-center gap-2.5">
+            <span class="w-8 h-8 rounded-full plan-gradient-warm flex items-center justify-center text-white text-xs font-bold">旗舰</span>
+            <span class="text-lg font-bold">个人旗舰版</span>
+            <span class="pill" style="background:#e6f7f5;color:#067a70">生效中</span>
+            <span class="text-[12px] text-[#98a1ac]">有效期至 2026.08.05</span>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn-ghost text-[13px] px-4 py-2" onclick="switchTab('recharge')">消耗明细</button>
+            <button class="btn-brand text-[13px] px-4 py-2">购买 / 升级会员</button>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+          <div class="rounded-xl bg-[#f7f9fb] p-4"><div class="metric-label">算力点余额</div><div class="text-xl font-extrabold mt-1">198,270</div></div>
+          <div class="rounded-xl bg-[#f7f9fb] p-4"><div class="metric-label">视频点余额</div><div class="text-xl font-extrabold mt-1">3,200</div></div>
+          <div class="rounded-xl bg-[#f7f9fb] p-4"><div class="metric-label">当前 VIP</div><div class="text-xl font-extrabold mt-1">白银会员</div></div>
+          <div class="rounded-xl bg-[#f7f9fb] p-4"><div class="metric-label">消费折扣</div><div class="text-xl font-extrabold mt-1 text-brand-ink">9.5 折</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 会员方案 -->
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-base font-semibold">会员方案</h3>
+      <span class="text-[12px] text-[#98a1ac]">一次性购买 · 到期不自动续费</span>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      <!-- 卡 1 月发放 -->
+      <div class="card p-5">
+        <div class="text-sm font-semibold">个人高阶版</div>
+        <div class="mt-2 flex items-baseline gap-1"><span class="text-2xl font-extrabold">¥79</span><span class="text-xs text-[#98a1ac]">/ 有效期 30 天</span></div>
+        <div class="mt-4 rounded-xl bg-[#f0faf8] p-3">
+          <div class="text-[11px] text-brand-ink font-semibold">每月发放</div>
+          <div class="text-xl font-extrabold text-[#0b3b3a] mt-0.5">99,000 <span class="text-xs font-semibold">算力点</span></div>
+          <div class="text-[11px] text-[#6b7280] mt-1">每月刷新 · 到期未用清零</div>
+        </div>
+        <div class="text-[12px] text-[#98a1ac] mt-3">整个周期共发放 <b class="text-[#1d1d1f]">99,000</b> 点</div>
+        <button class="btn-ghost w-full text-[13px] py-2.5 mt-3">购买会员</button>
+      </div>
+      <!-- 卡 2 日发放 · 当前 -->
+      <div class="card p-5 relative ring-2 ring-brand">
+        <span class="pill absolute top-4 right-4" style="background:#e6f7f5;color:#067a70">当前</span>
+        <div class="text-sm font-semibold">个人旗舰版</div>
+        <div class="mt-2 flex items-baseline gap-1"><span class="text-2xl font-extrabold">¥159</span><span class="text-xs text-[#98a1ac]">/ 有效期 30 天</span></div>
+        <div class="mt-4 rounded-xl bg-[#f0faf8] p-3">
+          <div class="text-[11px] text-brand-ink font-semibold">每日发放</div>
+          <div class="text-xl font-extrabold text-[#0b3b3a] mt-0.5">6,600 <span class="text-xs font-semibold">算力点</span></div>
+          <div class="text-[11px] text-[#6b7280] mt-1">每日刷新 · 到期未用清零</div>
+        </div>
+        <div class="text-[12px] text-[#98a1ac] mt-3">整个周期共发放 <b class="text-[#1d1d1f]">198,000</b> 点</div>
+        <button class="btn-brand w-full text-[13px] py-2.5 mt-3">再次购买</button>
+      </div>
+      <!-- 卡 3 日发放 -->
+      <div class="card p-5 relative">
+        <span class="pill absolute top-4 right-4" style="background:#fff1f2;color:#e11d48">🔥 热门</span>
+        <div class="text-sm font-semibold">个人尊享版</div>
+        <div class="mt-2 flex items-baseline gap-1"><span class="text-2xl font-extrabold">¥750</span><span class="text-xs text-[#98a1ac]">/ 有效期 30 天</span></div>
+        <div class="mt-4 rounded-xl bg-[#f0faf8] p-3">
+          <div class="text-[11px] text-brand-ink font-semibold">每日发放</div>
+          <div class="text-xl font-extrabold text-[#0b3b3a] mt-0.5">33,300 <span class="text-xs font-semibold">算力点</span></div>
+          <div class="text-[11px] text-[#6b7280] mt-1">每日刷新 · 到期未用清零</div>
+        </div>
+        <div class="text-[12px] text-[#98a1ac] mt-3">整个周期共发放 <b class="text-[#1d1d1f]">999,000</b> 点</div>
+        <button class="btn-brand w-full text-[13px] py-2.5 mt-3">购买会员</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 积分充值页 ============ -->
+  <div id="tab-recharge" class="hidden">
+
+    <!-- 精简余额条 -->
+    <div class="card p-4 mb-5 flex flex-wrap items-center gap-x-8 gap-y-3">
+      <div><span class="metric-label">算力点余额</span><span class="ml-2 text-lg font-extrabold">198,270</span></div>
+      <div><span class="metric-label">视频点余额</span><span class="ml-2 text-lg font-extrabold">3,200</span></div>
+      <div class="ml-auto seg"><button class="on">支付宝</button><button>微信支付</button></div>
+    </div>
+
+    <!-- 算力点快速充值 -->
+    <h3 class="text-base font-semibold mb-3">算力点快速充值</h3>
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div class="card p-4 text-center cursor-pointer hover:ring-2 hover:ring-brand transition"><div class="text-lg font-extrabold">¥10</div><div class="text-[12px] text-[#98a1ac] mt-1">1,000 算力点</div></div>
+      <div class="card p-4 text-center cursor-pointer hover:ring-2 hover:ring-brand transition"><div class="text-lg font-extrabold">¥50</div><div class="text-[12px] text-[#98a1ac] mt-1">5,000 算力点</div></div>
+      <div class="card p-4 text-center cursor-pointer hover:ring-2 hover:ring-brand transition"><div class="text-lg font-extrabold">¥100</div><div class="text-[12px] text-[#98a1ac] mt-1">10,000 算力点</div></div>
+      <div class="card p-4 text-center cursor-pointer hover:ring-2 hover:ring-brand transition"><div class="text-lg font-extrabold">¥200</div><div class="text-[12px] text-[#98a1ac] mt-1">20,000 算力点</div></div>
+    </div>
+
+    <!-- 自定义充值 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+      <div class="card p-5">
+        <h3 class="text-base font-semibold mb-3">算力点自定义充值</h3>
+        <div class="flex gap-2">
+          <input class="field flex-1 px-4 py-2.5 text-sm" placeholder="¥ 输入充值金额" />
+          <button class="btn-brand text-[13px] px-5">生成支付码</button>
+        </div>
+        <div class="text-[12px] text-[#98a1ac] mt-2">1 元 = 100 算力点 · 预计到账 —</div>
+      </div>
+      <div class="card p-5">
+        <h3 class="text-base font-semibold mb-3">视频点自定义充值</h3>
+        <div class="flex gap-2">
+          <input class="field flex-1 px-4 py-2.5 text-sm" placeholder="¥ 输入充值金额" />
+          <button class="btn-brand text-[13px] px-5">生成支付码</button>
+        </div>
+        <div class="text-[12px] text-[#98a1ac] mt-2">1 元 = 100 视频点 · 预计到账 —</div>
+      </div>
+    </div>
+
+    <!-- 兑换码 -->
+    <div class="card p-5 mb-6">
+      <h3 class="text-base font-semibold mb-3">兑换码</h3>
+      <div class="flex gap-2"><input class="field flex-1 px-4 py-2.5 text-sm" placeholder="请输入兑换码" /><button class="btn-brand text-[13px] px-6">兑换</button></div>
+    </div>
+
+    <!-- 消耗明细 -->
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3"><h3 class="text-base font-semibold">算力点消耗</h3><button class="btn-ghost text-[12px] px-3 py-1.5">刷新</button></div>
+      <div class="space-y-2">
+        <div class="flex items-center justify-between rounded-xl border border-[#f0f2f5] px-4 py-3"><div><div class="text-sm font-medium">对话 <span class="text-[11px] text-[#98a1ac] ml-1">Claude Opus</span></div><div class="text-[11px] text-[#98a1ac] mt-0.5">2026-07-08 10:22 · 白银会员 9.5折</div></div><div class="text-sm font-bold">-1,240 点</div></div>
+        <div class="flex items-center justify-between rounded-xl border border-[#f0f2f5] px-4 py-3"><div><div class="text-sm font-medium">AI 视频 <span class="text-[11px] text-[#98a1ac] ml-1">Seedance</span></div><div class="text-[11px] text-[#98a1ac] mt-0.5">2026-07-08 09:10</div></div><div class="text-sm font-bold">-300 视频点</div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchTab(t){
+    document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on', b.dataset.tab===t));
+    document.getElementById('tab-member').classList.toggle('hidden', t!=='member');
+    document.getElementById('tab-recharge').classList.toggle('hidden', t!=='recharge');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function pick(v){
+    document.getElementById('picked').textContent = v;
+    ['A','B','C'].forEach(x=>{
+      document.getElementById('v-'+x).classList.toggle('sel', x===v);
+      document.querySelector('#v-'+x+' .pick-btn').classList.toggle('on', x===v);
+    });
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+# 同源路由：web/admin 前端代码用相对 /api（不走 VITE_API_BASE），故各自域名下 /api 转 api。
+# app.example.com   /api → api(8090，不 rewrite，api 服务全 /api/* 路径)  /  → web
+# admin.example.com /api → api(8090)                                      /  → admin
+# api.example.com   /api/billing/epay → billing(易支付 notify)  /ws/connector + 其余 → api(connector/回调用)
+# TLS 复用通配证书 app-tls。
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  namespace: yunclaude
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # /api/chat 等 SSE 流式：拉长读写超时
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [app.example.com]
+      secretName: app-tls
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: api, port: { number: 8090 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: web, port: { number: 80 } } }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin
+  namespace: yunclaude
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [admin.example.com]
+      secretName: app-tls
+  rules:
+    - host: admin.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend: { service: { name: api, port: { number: 8090 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: admin, port: { number: 80 } } }
+---
+# api.example.com：connector WS（wss://api.example.com/ws/connector）+ 易支付回调入口（PUBLIC_CALLBACK_BASE）
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api
+  namespace: yunclaude
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.example.com]
+      secretName: app-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          # 易支付 notify 由 billing(Go) 直接服务该全路径；比 / 更长前缀优先，转 billing，不 rewrite
+          - path: /api/billing/epay
+            pathType: Prefix
+            backend: { service: { name: billing, port: { number: 8093 } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: api, port: { number: 8090 } } }

@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>布局方案 B · 左栏导航 + 两栏工作区</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          brand: { DEFAULT: "#00b8a9", hover: "#00a096", soft: "#e6f7f5", ink: "#067a70" },
+        },
+        borderRadius: { xl2: "14px" },
+      },
+    },
+  };
+</script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  * { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  body { background: #ececed; }
+  .card { background: #fff; border: 1px solid #e8e8ed; border-radius: 14px; }
+  .field { border: 1px solid #d2d2d7; border-radius: 10px; background: #fff; }
+  .field:focus { outline: none; border-color: #00b8a9; box-shadow: 0 0 0 3px rgba(0,184,169,.15); }
+  .rail-item { color:#86868b; border-radius:10px; padding:8px 10px; cursor:pointer; transition:.15s; display:flex; align-items:center; gap:10px; font-size:13px; }
+  .rail-item:hover { background:#f5f5f7; color:#1d1d1f; }
+  .rail-item.active { background:#e6f7f5; color:#067a70; font-weight:600; }
+  .rail-item.dev { opacity:.5; cursor:not-allowed; }
+  .step { display:flex; gap:10px; align-items:flex-start; padding:6px 0; }
+  .step .dot { width:22px; height:22px; border-radius:999px; display:grid; place-items:center; font-size:11px; font-weight:700; flex:none; }
+  .step.done .dot { background:#00b8a9; color:#fff; }
+  .step.current .dot { background:#e6f7f5; color:#067a70; box-shadow:0 0 0 4px rgba(0,184,169,.12); }
+  .step.todo .dot { background:#f0f0f2; color:#a1a1a6; }
+  .step .line { width:1px; flex:1; background:#e8e8ed; margin:2px 0 0 10px; }
+  .chip { border:1px solid #e8e8ed; background:#fff; border-radius:999px; padding:3px 10px; font-size:12px; color:#6e6e73; }
+  .tile { border:1px dashed #d2d2d7; border-radius:12px; background:#f7f7f9; display:grid; place-items:center; color:#a1a1a6; font-size:12px; }
+  .seg { background:#f0f0f2; border-radius:10px; padding:3px; display:inline-flex; gap:2px; }
+  .seg button { border:none; background:none; padding:5px 12px; border-radius:8px; font-size:13px; color:#6e6e73; cursor:pointer; }
+  .seg button.on { background:#fff; color:#1d1d1f; font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+  .btn-primary { background:#00b8a9; color:#fff; border:none; border-radius:10px; padding:10px 0; font-size:14px; font-weight:600; cursor:pointer; }
+  .btn-ghost { background:#fff; border:1px solid #d2d2d7; border-radius:10px; padding:10px 0; font-size:14px; font-weight:600; color:#1d1d1f; cursor:pointer; }
+  .scroll::-webkit-scrollbar { width:6px; } .scroll::-webkit-scrollbar-thumb { background:#d2d2d7; border-radius:3px; }
+  .ic { width:16px; height:16px; flex:none; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .ic-lg { width:18px; height:18px; }
+</style>
+</head>
+<body class="text-[#1d1d1f]">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+  <symbol id="ic-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+  <symbol id="ic-bag" viewBox="0 0 24 24"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></symbol>
+  <symbol id="ic-clap" viewBox="0 0 24 24"><path d="M20.2 6 3 11l-.9-2.4c-.3-1.1.3-2.2 1.3-2.5l13.5-4c1.1-.3 2.2.3 2.5 1.3Z"/><path d="m6.2 5.3 3.1 3.9"/><path d="m12.4 3.4 3.1 4"/><path d="M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></symbol>
+  <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="ic-ppt" viewBox="0 0 24 24"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></symbol>
+  <symbol id="ic-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="ic-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="ic-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="ic-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/></symbol>
+  <symbol id="ic-flow" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M6 9v3a3 3 0 0 0 3 3h6"/></symbol>
+  <symbol id="ic-chevron" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+</svg>
+
+<!-- 顶部页面切换器（仅 mock 用，非真实 UI） -->
+<div class="sticky top-0 z-30 flex items-center gap-3 border-b border-[#e8e8ed] bg-white/90 px-5 py-2.5 backdrop-blur">
+  <span class="text-xs font-bold text-brand-ink">布局方案 B · 预览</span>
+  <div class="seg" id="pageTabs">
+    <button data-page="image" class="on">生图模块</button>
+    <button data-page="ecom">电商长图</button>
+    <button data-page="comic">AI 漫剧</button>
+    <button data-page="agent">Agent 团队</button>
+  </div>
+  <span class="ml-auto text-xs text-[#a1a1a6]">左栏收纳模块导航 + 流程 + 状态，主区专注「配置 · 预览」</span>
+</div>
+
+<div id="stage" class="p-4"></div>
+
+<!-- ================= 模板区 ================= -->
+<template id="tpl-image">
+  <div class="mx-auto flex max-w-[1360px] gap-4">
+    <!-- 左栏 -->
+    <aside class="card flex w-[236px] flex-none flex-col p-3">
+      <div class="px-1 pb-2">
+        <p class="text-[11px] font-bold text-brand-ink">可视化工作流</p>
+        <p class="text-[13px] font-semibold text-[#1d1d1f]">工作流模块</p>
+      </div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="rail-item active"><svg class="ic"><use href="#ic-image"/></svg>生图模块</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-book"/></svg>小说模块</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-bag"/></svg>电商长图</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-clap"/></svg>AI 漫剧</div>
+        <div class="rail-item dev"><svg class="ic"><use href="#ic-clock"/></svg>定时任务<span class="ml-auto text-[10px]">开发中</span></div>
+        <div class="rail-item dev"><svg class="ic"><use href="#ic-ppt"/></svg>PPT 助手<span class="ml-auto text-[10px]">开发中</span></div>
+      </nav>
+      <div class="my-3 h-px bg-[#f0f0f2]"></div>
+      <p class="px-1 pb-1 text-[11px] font-semibold text-[#a1a1a6]">流程</p>
+      <div class="px-1">
+        <div class="step current"><div class="dot">1</div><div><p class="text-[13px] font-medium">输入主题</p></div></div>
+        <div class="step todo"><div class="dot">2</div><div><p class="text-[13px]">优化提示词</p></div></div>
+        <div class="step todo"><div class="dot">3</div><div><p class="text-[13px]">批量生成</p></div></div>
+        <div class="step todo"><div class="dot">4</div><div><p class="text-[13px]">风格筛选</p></div></div>
+        <div class="step todo"><div class="dot">5</div><div><p class="text-[13px]">导出</p></div></div>
+      </div>
+      <div class="mt-auto flex items-center gap-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2 text-[12px] text-[#6e6e73]">
+        <span class="h-2 w-2 rounded-full bg-brand"></span>暂无运行中 · 已完成 0 张
+      </div>
+    </aside>
+
+    <!-- 主区 -->
+    <main class="min-w-0 flex-1">
+      <div class="mb-3 flex items-end justify-between">
+        <div><h1 class="text-[22px] font-bold tracking-tight">生图模块</h1>
+          <p class="text-[13px] text-[#6e6e73]">批量生图、提示词优化、参考图管理</p></div>
+      </div>
+      <div class="grid grid-cols-[380px_1fr] gap-4">
+        <!-- 配置 -->
+        <section class="card p-4">
+          <p class="mb-3 text-[14px] font-semibold">生图配置</p>
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block"><span class="mb-1 block text-[12px] text-[#6e6e73]">比例</span>
+              <select class="field h-10 w-full px-2 text-sm"><option>1:1</option><option>4:3</option><option>16:9</option></select></label>
+            <label class="block"><span class="mb-1 block text-[12px] text-[#6e6e73]">分辨率</span>
+              <select class="field h-10 w-full px-2 text-sm"><option>1K</option><option>2K</option></select></label>
+          </div>
+          <div class="mt-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2 text-[12px] text-[#6e6e73]">输出尺寸 1024×1024</div>
+          <p class="mb-1.5 mt-3 text-[12px] text-[#6e6e73]">批量张数（最多 8 张并发）</p>
+          <div class="seg w-full"><button class="on flex-1">1</button><button class="flex-1">2</button><button class="flex-1">4</button><button class="flex-1">8</button></div>
+          <input class="field mt-2 h-10 w-full px-3 text-sm" value="1" />
+          <p class="mb-1.5 mt-3 text-[12px] text-[#6e6e73]">提示词</p>
+          <textarea class="field h-24 w-full resize-none p-3 text-sm leading-6">陶瓷浅色餐盘，米白色桌布，绿色植物虚化背景，夏日野餐氛围，品牌感强，现代餐饮视觉设计。</textarea>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button class="btn-primary">生成图片</button><button class="btn-ghost">优化提示词</button>
+            <button class="btn-ghost">收藏夹</button><button class="btn-ghost">收藏当前</button>
+          </div>
+          <div class="mt-3 flex items-center justify-between text-[12px] text-[#6e6e73]"><span>参考图 (0/5)</span></div>
+          <button class="field mt-1.5 h-10 w-full text-[13px] text-[#6e6e73]">＋ 上传参考图</button>
+          <div class="mt-3 flex items-center justify-between text-[12px] text-[#6e6e73]"><span>最近生成 (0/50)</span><span class="text-brand-ink">全部原图链接</span></div>
+          <div class="tile mt-1.5 h-16">暂无生成图片</div>
+        </section>
+        <!-- 预览 -->
+        <section class="card flex flex-col p-4">
+          <div class="mb-3 flex items-center justify-between">
+            <p class="text-[14px] font-semibold">生成预览</p>
+            <div class="flex gap-1.5"><span class="chip">队列中 0</span><span class="chip">生成中 0</span><span class="chip">已完成 0</span></div>
+          </div>
+          <div class="grid flex-1 grid-cols-3 grid-rows-2 gap-3">
+            <div class="tile">等待生成</div><div class="tile">等待生成</div><div class="tile">等待生成</div>
+            <div class="tile">等待生成</div><div class="tile">等待生成</div><div class="tile">等待生成</div>
+          </div>
+          <div class="tile mt-3 h-12">暂无生图任务</div>
+        </section>
+      </div>
+    </main>
+  </div>
+</template>
+
+<template id="tpl-ecom">
+  <div class="mx-auto flex max-w-[1360px] gap-4">
+    <aside class="card flex w-[236px] flex-none flex-col p-3">
+      <div class="px-1 pb-2"><p class="text-[11px] font-bold text-brand-ink">可视化工作流</p><p class="text-[13px] font-semibold">工作流模块</p></div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="rail-item"><svg class="ic"><use href="#ic-image"/></svg>生图模块</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-book"/></svg>小说模块</div>
+        <div class="rail-item active"><svg class="ic"><use href="#ic-bag"/></svg>电商长图</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-clap"/></svg>AI 漫剧</div>
+        <div class="rail-item dev"><svg class="ic"><use href="#ic-clock"/></svg>定时任务<span class="ml-auto text-[10px]">开发中</span></div>
+        <div class="rail-item dev"><svg class="ic"><use href="#ic-ppt"/></svg>PPT 助手<span class="ml-auto text-[10px]">开发中</span></div>
+      </nav>
+      <div class="my-3 h-px bg-[#f0f0f2]"></div>
+      <p class="px-1 pb-1 text-[11px] font-semibold text-[#a1a1a6]">流程</p>
+      <div class="px-1">
+        <div class="step current"><div class="dot">1</div><div><p class="text-[13px] font-medium">参考图</p></div></div>
+        <div class="step todo"><div class="dot">2</div><div><p class="text-[13px]">商品信息</p></div></div>
+        <div class="step todo"><div class="dot">3</div><div><p class="text-[13px]">母版生成</p></div></div>
+        <div class="step todo"><div class="dot">4</div><div><p class="text-[13px]">三段长图</p></div></div>
+        <div class="step todo"><div class="dot">5</div><div><p class="text-[13px]">拼接保存</p></div></div>
+      </div>
+      <div class="mt-auto flex items-center gap-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2 text-[12px] text-[#6e6e73]"><span class="h-2 w-2 rounded-full bg-brand"></span>参考图 · 母版 · 分段 · 拼接</div>
+    </aside>
+
+    <main class="min-w-0 flex-1">
+      <div class="mb-3"><h1 class="text-[22px] font-bold tracking-tight">电商长图工作台</h1>
+        <p class="text-[13px] text-[#6e6e73]">上传参考图、生成母版、确认分段并在浏览器完成白底纵向拼接</p></div>
+      <div class="grid grid-cols-[400px_1fr] gap-4">
+        <!-- 配置 -->
+        <section class="card p-4">
+          <div class="grid grid-cols-2 gap-3">
+            <label class="block"><span class="mb-1 block text-[12px] text-[#6e6e73]">平台</span><select class="field h-10 w-full px-2 text-sm"><option>淘宝</option><option>京东</option></select></label>
+            <label class="block"><span class="mb-1 block text-[12px] text-[#6e6e73]">模板</span><select class="field h-10 w-full px-2 text-sm"><option>通用商品详情模板</option></select></label>
+          </div>
+          <label class="mt-3 block"><span class="mb-1 block text-[12px] text-[#6e6e73]">清晰度</span><select class="field h-10 w-full px-2 text-sm"><option>1K · 768×1024</option></select></label>
+          <label class="mt-3 block"><span class="mb-1 block text-[12px] text-[#6e6e73]">商品名称</span><input class="field h-10 w-full px-3 text-sm" /></label>
+          <label class="mt-3 block"><span class="mb-1 block text-[12px] text-[#6e6e73]">商品类目</span><input class="field h-10 w-full px-3 text-sm" /></label>
+          <label class="mt-3 block"><span class="mb-1 block text-[12px] text-[#6e6e73]">卖点文案</span><textarea class="field h-20 w-full resize-none p-3 text-sm"></textarea></label>
+          <label class="mt-3 block"><span class="mb-1 block text-[12px] text-[#6e6e73]">额外说明</span><textarea class="field h-16 w-full resize-none p-3 text-sm"></textarea></label>
+          <div class="mt-3 flex items-center justify-between text-[12px] text-[#6e6e73]"><span>参考图 (0/5)</span><span class="text-brand-ink">上传参考图</span></div>
+          <div class="tile mt-1.5 h-14">上传后展示本地缩略图</div>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button class="btn-primary">生成母版</button><button class="btn-ghost">重试主图</button>
+            <button class="btn-ghost">确认分段</button><button class="btn-ghost">浏览器拼接长图</button>
+          </div>
+        </section>
+        <!-- 预览：状态 + 三段 + 拼接 -->
+        <section class="flex flex-col gap-4">
+          <div class="card p-4">
+            <div class="flex items-center justify-between"><p class="text-[14px] font-semibold">母版与分段状态</p><span class="chip">未开始</span></div>
+            <p class="mt-1.5 text-[12px] leading-5 text-[#6e6e73]">先生成母版，再确认分段。当前界面只展示接口已知的状态与分段结果。</p>
+          </div>
+          <div class="card p-4">
+            <p class="mb-3 text-[14px] font-semibold">三段预览</p>
+            <div class="grid grid-cols-3 gap-3">
+              <div><div class="mb-1.5 flex items-center justify-between text-[12px]"><span class="font-medium">第 1 段</span><span class="text-brand-ink">重绘</span></div><div class="tile aspect-[3/4]">待生成分段</div></div>
+              <div><div class="mb-1.5 flex items-center justify-between text-[12px]"><span class="font-medium">第 2 段</span><span class="text-brand-ink">重绘</span></div><div class="tile aspect-[3/4]">待生成分段</div></div>
+              <div><div class="mb-1.5 flex items-center justify-between text-[12px]"><span class="font-medium">第 3 段</span><span class="text-brand-ink">重绘</span></div><div class="tile aspect-[3/4]">待生成分段</div></div>
+            </div>
+          </div>
+          <div class="card p-4">
+            <div class="flex items-center justify-between"><p class="text-[14px] font-semibold">浏览器白底拼接</p><button class="rounded-[10px] bg-brand/30 px-3 py-1.5 text-[13px] font-semibold text-white">保存拼接长图</button></div>
+            <p class="mt-1.5 text-[12px] text-[#6e6e73]">三段原图齐全后，在浏览器中纵向拼接，再保存回工作流。</p>
+            <div class="tile mt-3 h-16">三段原图齐全后才可拼接与保存</div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</template>
+
+<template id="tpl-comic">
+  <div class="mx-auto flex max-w-[1360px] gap-4">
+    <aside class="card flex w-[236px] flex-none flex-col p-3">
+      <div class="px-1 pb-2"><p class="text-[11px] font-bold text-brand-ink">可视化工作流</p><p class="text-[13px] font-semibold">工作流模块</p></div>
+      <nav class="flex flex-col gap-0.5">
+        <div class="rail-item"><svg class="ic"><use href="#ic-image"/></svg>生图模块</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-book"/></svg>小说模块</div>
+        <div class="rail-item"><svg class="ic"><use href="#ic-bag"/></svg>电商长图</div>
+        <div class="rail-item active"><svg class="ic"><use href="#ic-clap"/></svg>AI 漫剧</div>
+        <div class="rail-item dev"><svg class="ic"><use href="#ic-clock"/></svg>定时任务<span class="ml-auto text-[10px]">开发中</span></div>
+        <div class="rail-item dev"><svg class="ic"><use href="#ic-ppt"/></svg>PPT 助手<span class="ml-auto text-[10px]">开发中</span></div>
+      </nav>
+      <div class="my-3 h-px bg-[#f0f0f2]"></div>
+      <p class="px-1 pb-1 text-[11px] font-semibold text-[#a1a1a6]">流程</p>
+      <div class="px-1">
+        <div class="step current"><div class="dot">1</div><div><p class="text-[13px] font-medium">输入主题</p></div></div>
+        <div class="step todo"><div class="dot">2</div><div><p class="text-[13px]">优化提示词</p></div></div>
+        <div class="step todo"><div class="dot">3</div><div><p class="text-[13px]">批量生成</p></div></div>
+        <div class="step todo"><div class="dot">4</div><div><p class="text-[13px]">风格筛选</p></div></div>
+        <div class="step todo"><div class="dot">5</div><div><p class="text-[13px]">导出</p></div></div>
+      </div>
+      <div class="mt-auto flex items-center gap-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2 text-[12px] text-[#6e6e73]"><span class="h-2 w-2 rounded-full bg-brand"></span>脚本 · 资产 · 分镜 · 渲染</div>
+    </aside>
+
+    <main class="grid min-w-0 flex-1 grid-cols-[220px_1fr] gap-4">
+      <!-- 项目列表列 -->
+      <section class="card flex flex-col p-3">
+        <div class="mb-2 flex items-center justify-between px-1"><p class="text-[13px] font-semibold">漫剧项目</p><span class="chip">1 个</span></div>
+        <div class="rounded-[10px] border border-brand/40 bg-brand-soft p-3">
+          <p class="text-[13px] font-semibold text-brand-ink">小猫和小狗</p>
+          <p class="mt-0.5 text-[12px] text-[#6e6e73]">小猫和小狗的快乐日常</p>
+        </div>
+        <div class="mt-3 flex flex-col gap-2">
+          <input class="field h-9 w-full px-3 text-sm" placeholder="项目名" />
+          <input class="field h-9 w-full px-3 text-sm" placeholder="一句话剧情" />
+          <input class="field h-9 w-full px-3 text-sm" placeholder="视觉风格" />
+          <button class="btn-primary opacity-40">＋ 新建项目</button>
+        </div>
+      </section>
+      <!-- 工作区 -->
+      <section class="card p-4">
+        <div class="flex items-start justify-between">
+          <div><h1 class="text-[20px] font-bold">小猫和小狗</h1><p class="text-[13px] text-[#6e6e73]">小猫和小狗的快乐日常</p></div>
+          <div class="seg"><button>脚本</button><button>资产</button><button>分镜</button><button class="on">渲染</button></div>
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+          <select class="field h-9 px-2 text-sm"><option>Seedance Lite · 720p</option></select>
+          <button class="rounded-[10px] bg-brand/30 px-3 py-1.5 text-[13px] font-semibold text-white">生成整集清单</button>
+        </div>
+        <div class="mt-4 grid grid-cols-[1fr_300px] gap-4">
+          <div class="tile h-64">选择上方标签开始：脚本 / 资产 / 分镜 / 渲染</div>
+          <div class="rounded-[12px] border border-[#e8e8ed] p-3">
+            <p class="mb-2 text-[13px] font-semibold">设定资料</p>
+            <input class="field h-9 w-full px-3 text-sm" placeholder="设定标题" />
+            <textarea class="field mt-2 h-24 w-full resize-none p-3 text-sm" placeholder="设定内容"></textarea>
+            <button class="btn-ghost mt-2 w-full">添加设定</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</template>
+
+<template id="tpl-agent">
+  <div class="mx-auto flex max-w-[1360px] gap-4">
+    <!-- 左栏：团队 + 运行历史 -->
+    <aside class="card flex w-[300px] flex-none flex-col p-3">
+      <div class="mb-2 flex items-center gap-2 px-1"><svg class="ic ic-lg text-brand-ink"><use href="#ic-users"/></svg><p class="text-[13px] font-semibold">AGENT 团队</p></div>
+      <div class="seg mb-3 w-full"><button class="on flex-1">运行历史</button><button class="flex-1">我的团队</button></div>
+      <div class="scroll flex flex-col gap-1.5 overflow-y-auto pr-1" style="max-height:560px">
+        <div class="rounded-[10px] border border-brand/40 bg-brand-soft p-2.5">
+          <div class="flex items-center justify-between"><p class="text-[13px] font-semibold text-brand-ink truncate">分析一下中国 2025 经济发展</p><span class="text-[10px] text-brand-ink">已完成</span></div>
+          <p class="mt-0.5 text-[11px] text-[#6e6e73] truncate">07-04 13:32</p>
+        </div>
+        <div class="rail-item flex-col !items-start gap-0.5"><div class="flex w-full items-center justify-between"><span class="truncate text-[13px] text-[#1d1d1f]">分析一下中国 2025 经济发展</span><span class="text-[10px] text-[#a1a1a6]">已完成</span></div><span class="text-[11px] text-[#a1a1a6]">07-03 16:36</span></div>
+        <div class="rail-item flex-col !items-start gap-0.5"><div class="flex w-full items-center justify-between"><span class="truncate text-[13px] text-[#1d1d1f]">2024 美国经济发展报告 1w 字</span><span class="text-[10px] text-[#a1a1a6]">已完成</span></div><span class="text-[11px] text-[#a1a1a6]">07-03 15:42</span></div>
+        <div class="rail-item flex-col !items-start gap-0.5"><div class="flex w-full items-center justify-between"><span class="truncate text-[13px] text-[#1d1d1f]">2024 美国经济发展报告 1w 字</span><span class="text-[10px] text-[#a1a1a6]">已完成</span></div><span class="text-[11px] text-[#a1a1a6]">07-03 15:16</span></div>
+        <div class="rail-item flex-col !items-start gap-0.5"><div class="flex w-full items-center justify-between"><span class="truncate text-[13px] text-[#1d1d1f]">审查这份授权书模板</span><span class="text-[10px] text-[#c0392b]">失败</span></div><span class="text-[11px] text-[#a1a1a6]">07-03 14:14</span></div>
+        <div class="rail-item flex-col !items-start gap-0.5"><div class="flex w-full items-center justify-between"><span class="truncate text-[13px] text-[#1d1d1f]">帮我审查一份合同</span><span class="text-[10px] text-[#a1a1a6]">待发起</span></div><span class="text-[11px] text-[#a1a1a6]">07-03 13:26</span></div>
+      </div>
+    </aside>
+
+    <!-- 主区：发起 + 报告（内部三模板） -->
+    <main class="min-w-0 flex-1">
+      <div class="mb-3 flex items-center gap-3">
+        <span class="text-[12px] font-semibold text-[#a1a1a6]">右侧功能区模板</span>
+        <div class="seg" id="agentSeg">
+          <button data-agb="a" class="on">模板A · 分栏</button>
+          <button data-agb="b">模板B · 沉浸阅读</button>
+          <button data-agb="c">模板C · 仪表盘</button>
+        </div>
+      </div>
+      <div id="agentBody"></div>
+    </main>
+  </div>
+</template>
+
+<script>
+  const stage = document.getElementById("stage");
+
+  // ---- Agent 右侧功能区：共享片段 ----
+  const composerFull = `
+    <section class="card p-4">
+      <div class="mb-2 flex items-center gap-2"><svg class="ic ic-lg text-brand-ink"><use href="#ic-zap"/></svg><p class="text-[15px] font-semibold">智能任务发起</p></div>
+      <textarea class="field h-20 w-full resize-none p-3 text-sm leading-6">分析一下中国 2025 年的经济发展</textarea>
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <select class="field h-9 px-2 text-sm"><option>中国2025经济深度分析团队</option></select>
+        <select class="field h-9 px-2 text-sm"><option>特调办公专用极速模型</option></select>
+        <select class="field h-9 px-2 text-sm"><option>挂载知识库</option></select>
+        <button class="btn-ghost px-3 py-2">上传文件</button>
+        <button class="btn-primary ml-auto px-5">使用团队执行</button>
+      </div>
+    </section>`;
+
+  const composerBar = `
+    <section class="card flex flex-wrap items-center gap-2 p-2.5">
+      <svg class="ic ic-lg text-brand-ink"><use href="#ic-zap"/></svg>
+      <input class="field h-10 min-w-[220px] flex-1 px-3 text-sm" value="分析一下中国 2025 年的经济发展" />
+      <select class="field h-10 px-2 text-sm"><option>中国2025经济深度分析团队</option></select>
+      <select class="field h-10 px-2 text-sm"><option>极速模型</option></select>
+      <button class="btn-ghost flex items-center gap-1 px-3"><svg class="ic"><use href="#ic-file"/></svg>知识库 / 文件</button>
+      <button class="btn-primary px-5">执行</button>
+    </section>`;
+
+  const reportInner = `
+    <div class="mb-3 flex items-center justify-between border-b border-[#f0f0f2] pb-3">
+      <div><p class="text-[12px] font-semibold text-brand-ink">经典成功案例 · 任务答案与报告</p><p class="text-[16px] font-bold">分析一下中国 2025 年的经济发展</p></div>
+      <button class="chip flex items-center gap-1"><svg class="ic"><use href="#ic-flow"/></svg>查看工作流</button>
+    </div>
+    <h2 class="text-[18px] font-bold">中国 2025 年经济发展前景分析报告</h2>
+    <p class="mt-2 text-[13px] leading-6 text-[#424245]">核心摘要：2025 年是中国经济迈向高质量发展新阶段的关键一年，在基准情景下，预计 GDP 增速将约在 4.5%–5.0% 区间，呈现「稳增长、结构深化」的态势……</p>
+    <p class="mt-4 text-[15px] font-semibold">一、核心驱动与增长动力分析</p>
+    <p class="mt-1.5 text-[13px] leading-6 text-[#424245]">消费：从修复走向企稳，成为稳定器。依据 2024 年一季度社会消费品零售总额延续温和复苏……投资：结构优化主导，新旧动能加速……</p>
+    <div class="mt-3 overflow-hidden rounded-[10px] border border-[#e8e8ed]">
+      <div class="grid grid-cols-[1fr_120px] bg-[#f7f7f9] px-3 py-2 text-[12px] font-semibold text-[#6e6e73]"><span>主要风险识别</span><span>概率 / 影响</span></div>
+      <div class="grid grid-cols-[1fr_120px] px-3 py-2 text-[12px] text-[#424245]"><span>房地产市场超预期下行</span><span>中 / 高</span></div>
+      <div class="grid grid-cols-[1fr_120px] border-t border-[#f0f0f2] px-3 py-2 text-[12px] text-[#424245]"><span>地方财政收支承压</span><span>中 / 中</span></div>
+      <div class="grid grid-cols-[1fr_120px] border-t border-[#f0f0f2] px-3 py-2 text-[12px] text-[#424245]"><span>全球需求走弱扰动出口</span><span>中高 / 中</span></div>
+    </div>
+    <p class="mt-4 text-[15px] font-semibold">五、GDP 增速情景测算（2025 年）</p>
+    <p class="mt-1.5 text-[13px] leading-6 text-[#424245]">基准情景（概率 60%）：4.5%–5.0%；乐观情景（概率 30%）：5.0%–5.5%；压力情景（概率 10%）：低于 4.5%。</p>`;
+
+  const metaChips = `
+    <div class="mt-2 flex flex-wrap gap-2">
+      <span class="chip flex items-center gap-1 text-brand-ink"><svg class="ic"><use href="#ic-check"/></svg>已完成</span>
+      <span class="chip flex items-center gap-1"><svg class="ic"><use href="#ic-clock"/></svg>耗时 2m13s</span>
+      <span class="chip flex items-center gap-1"><svg class="ic"><use href="#ic-file"/></svg>约 3.2k 字</span>
+      <span class="chip flex items-center gap-1"><svg class="ic"><use href="#ic-users"/></svg>5 人协作</span>
+    </div>`;
+
+  const teamCard = (name, desc, n) =>
+    `<div class="rounded-[12px] border border-[#e8e8ed] p-3"><p class="text-[13px] font-semibold">${name}</p><p class="mt-1 text-[11px] leading-5 text-[#6e6e73]">${desc}</p><p class="mt-2 text-[11px] text-brand-ink">${n} 人</p></div>`;
+  const teamRow = (name, n) =>
+    `<div class="flex items-center justify-between rounded-[10px] border border-[#e8e8ed] px-3 py-2"><span class="truncate text-[12px] font-medium">${name}</span><span class="flex-none text-[11px] text-brand-ink">${n} 人</span></div>`;
+  const TEAMS = [
+    ["中国2025经济深度分析团队", "专注于对国内外经济形势与政策变化的深度研判，针对 2025……", 5],
+    ["2024 美国经济分析团队", "针对 2024 美国经济发展与政策，产出结构化分析报告……", 5],
+    ["ICP 授权书模板审查团队", "专门审查授权 / 合同类文件，检查合规、要素完整……", 6],
+  ];
+  const teamsGrid = `<div class="grid grid-cols-3 gap-3">${TEAMS.map((t) => teamCard(...t)).join("")}</div>`;
+  const teamsList = TEAMS.concat([["深度研究快讯团队", "", 4]]).map((t) => teamRow(t[0], t[2])).join("");
+
+  // ---- 三个模板 ----
+  const agentBodies = {
+    // A · 分栏：报告主体 + 团队常驻右栏
+    a: `${composerFull}
+      <div class="mt-4 grid grid-cols-[1fr_290px] gap-4">
+        <section class="card p-5">${reportInner}</section>
+        <aside class="flex flex-col gap-3">
+          <div class="card p-4"><p class="mb-2 text-[13px] font-semibold">任务状态</p>${metaChips.replace('mt-2 ', '')}</div>
+          <div class="card p-4"><div class="mb-2 flex items-center justify-between"><p class="text-[13px] font-semibold">我的 Agent 团队</p><span class="text-[11px] text-[#a1a1a6]">4 个</span></div><div class="flex flex-col gap-2">${teamsList}</div></div>
+        </aside>
+      </div>`,
+    // B · 沉浸阅读：工具条 + 全宽报告 + 团队折叠
+    b: `${composerBar}
+      <section class="card mt-4 p-6">${reportInner}${metaChips}</section>
+      <section class="card mt-4 flex items-center justify-between px-4 py-3">
+        <p class="text-[13px] font-semibold">我的 Agent 团队 <span class="ml-1 text-[11px] font-normal text-[#a1a1a6]">4 个</span></p>
+        <button class="chip flex items-center gap-1">展开<svg class="ic"><use href="#ic-chevron"/></svg></button>
+      </section>`,
+    // C · 仪表盘：指标带 + 报告 + 团队卡
+    c: `${composerFull}
+      <div class="mt-4 grid grid-cols-4 gap-3">
+        <div class="card flex items-center gap-3 p-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-[9px] bg-brand-soft text-brand-ink"><svg class="ic"><use href="#ic-check"/></svg></span><div><p class="text-[11px] text-[#a1a1a6]">状态</p><p class="text-[14px] font-bold">已完成</p></div></div>
+        <div class="card flex items-center gap-3 p-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-[9px] bg-[#f0f0f2]"><svg class="ic"><use href="#ic-clock"/></svg></span><div><p class="text-[11px] text-[#a1a1a6]">耗时</p><p class="text-[14px] font-bold">2m13s</p></div></div>
+        <div class="card flex items-center gap-3 p-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-[9px] bg-[#f0f0f2]"><svg class="ic"><use href="#ic-file"/></svg></span><div><p class="text-[11px] text-[#a1a1a6]">篇幅</p><p class="text-[14px] font-bold">3.2k 字</p></div></div>
+        <div class="card flex items-center gap-3 p-3"><span class="grid h-9 w-9 flex-none place-items-center rounded-[9px] bg-[#f0f0f2]"><svg class="ic"><use href="#ic-users"/></svg></span><div><p class="text-[11px] text-[#a1a1a6]">协作</p><p class="text-[14px] font-bold">5 人</p></div></div>
+      </div>
+      <div class="mt-3 grid grid-cols-[1fr_320px] gap-4">
+        <section class="card p-5">${reportInner}</section>
+        <section class="card p-4"><div class="mb-3 flex items-center justify-between"><p class="text-[13px] font-semibold">我的 Agent 团队</p><span class="text-[11px] text-[#a1a1a6]">4 个</span></div><div class="flex flex-col gap-3">${TEAMS.map((t) => teamCard(...t)).join("")}</div></section>
+      </div>`,
+  };
+
+  function initAgent() {
+    const seg = document.getElementById("agentSeg");
+    const body = document.getElementById("agentBody");
+    const show = (v) => {
+      body.innerHTML = agentBodies[v];
+      seg.querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.agb === v));
+    };
+    seg.addEventListener("click", (e) => { const b = e.target.closest("button[data-agb]"); if (b) show(b.dataset.agb); });
+    show("a");
+  }
+
+  const render = (page) => {
+    stage.innerHTML = document.getElementById("tpl-" + page).innerHTML;
+    if (page === "agent") initAgent();
+  };
+  document.getElementById("pageTabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-page]"); if (!btn) return;
+    document.querySelectorAll("#pageTabs button").forEach((b) => b.classList.remove("on"));
+    btn.classList.add("on"); render(btn.dataset.page);
+  });
+  render("image");
+</script>
+</body>
+</html>

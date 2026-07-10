@@ -1,0 +1,52 @@
+export type Permission =
+  | "BALANCE_ADJUST"
+  | "USER_MANAGE"
+  | "USER_BILLING_LOG_VIEW"
+  | "USER_DETAIL_VIEW"
+  | "ORDER_MANAGE"
+  | "REDEMPTION_MANAGE"
+  | "PRICING_MANAGE"
+  | "MODEL_MANAGE"
+  | "MEMBERSHIP_MANAGE"
+  | "ANNOUNCEMENT_MANAGE"
+  | "VIEW_ANALYTICS"
+  | "ADMIN_MANAGE"
+  | "KNOWLEDGE_MANAGE"
+  | "RESELLER_MANAGE";
+
+export interface Session {
+  token: string;
+  adminId: string;
+  role: "super_admin" | "admin" | "reseller";
+  permissions: Permission[];
+}
+
+const KEY = "yc_admin_session";
+
+export function can(s: Session | null, perm: Permission): boolean {
+  if (!s) return false;
+  if (s.role === "super_admin") return true;
+  return s.permissions.includes(perm);
+}
+
+export function loadSession(): Session | null {
+  const raw = sessionStorage.getItem(KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as Session;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSession(s: Session): void {
+  sessionStorage.setItem(KEY, JSON.stringify(s));
+}
+
+export function clearSession(): void {
+  sessionStorage.removeItem(KEY);
+}
+
+export function isReseller(s: Session | null): boolean {
+  return s?.role === "reseller";
+}

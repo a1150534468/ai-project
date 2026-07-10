@@ -1,0 +1,2 @@
+ALTER TABLE "EcomWorkflow"
+  ADD COLUMN "resolution" TEXT NOT NULL DEFAULT '1K';

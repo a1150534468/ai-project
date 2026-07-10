@@ -1,0 +1,54 @@
+.article-workflow-rich-editor {
+  background: #ffffff;
+}
+
+.article-workflow-rich-editor__toolbar {
+  border-bottom: 1px solid #edf0f5;
+  background: #fbfcff;
+}
+
+.article-workflow-rich-editor__toolbar .w-e-toolbar {
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+}
+
+.article-workflow-rich-editor__toolbar .w-e-bar-item {
+  margin-right: 2px;
+}
+
+.article-workflow-rich-editor__body .w-e-text-container {
+  min-height: 560px;
+  border: 0 !important;
+  background: #ffffff;
+}
+
+.article-workflow-rich-editor__body .w-e-text-container .w-e-scroll {
+  padding: 28px 32px;
+}
+
+.article-workflow-rich-editor__body .w-e-text-container .w-e-text {
+  min-height: 560px;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.9;
+  color: #17212f;
+}
+
+.article-workflow-rich-editor__body .w-e-text-container p,
+.article-workflow-rich-editor__body .w-e-text-container li,
+.article-workflow-rich-editor__body .w-e-text-container blockquote {
+  margin: 0 0 1em;
+}
+
+.article-workflow-rich-editor__body .w-e-text-container img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.article-workflow-rich-editor__body .w-e-text-placeholder {
+  color: #98a2b3;
+  font-style: normal;
+}
