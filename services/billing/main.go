@@ -100,7 +100,8 @@ func main() {
 	}()
 
 	r := gin.Default()
-	api.New(st, cfg.InternalToken, epay).Register(r)
+	log.Printf("billing pricing mode: %s", cfg.PricingMode)
+	api.NewWithPricingMode(st, cfg.InternalToken, epay, cfg.PricingMode).Register(r)
 	r.GET("/health", func(c *gin.Context) { c.JSON(http.StatusOK, gin.H{"ok": true}) })
 	log.Printf("billing listening on :%s", cfg.Port)
 	if err := r.Run(":" + cfg.Port); err != nil {

@@ -9,12 +9,116 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"yc-billing/internal/billingmode"
 	"yc-billing/internal/bucket"
 	"yc-billing/internal/model"
 	"yc-billing/internal/pgtest"
 	"yc-billing/internal/store"
+	"yc-billing/internal/videopoint"
 	"yc-billing/internal/vip"
 )
+
+func learningRouter(st *store.Store) *gin.Engine {
+	r := gin.New()
+	NewWithPricingMode(st, "test-token", nil, billingmode.Learning).Register(r)
+	return r
+}
+
+func postJSON(r http.Handler, path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Internal-Token", "test-token")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	return w
+}
+
+func TestLearningTokenReserveSettleCostsOneAndKeepsUsage(t *testing.T) {
+	st := newAPIStore(t)
+	st.DB.Create(&model.PriceRule{
+		Model: "expensive-model", DisplayName: "Expensive", Enabled: true,
+		InputPricePerMillion: 100000, OutputPricePerMillion: 200000,
+	})
+	if err := bucket.GrantPoints(st.DB, "learn-chat", 2, nil, bucket.SourceSystem); err != nil {
+		t.Fatal(err)
+	}
+	r := learningRouter(st)
+
+	reserveBody := `{"operationId":"learn:chat:1","userId":"learn-chat","type":"chat","model":"expensive-model","inputTokens":50000,"maxOutputTokens":50000}`
+	for range 2 {
+		w := postJSON(r, "/reserve", reserveBody)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"reserved":1`) {
+			t.Fatalf("reserve status=%d body=%s", w.Code, w.Body.String())
+		}
+	}
+	w := postJSON(r, "/settle", `{"operationId":"learn:chat:1","userId":"learn-chat","model":"expensive-model","inputTokens":40000,"outputTokens":30000,"cacheInputTokens":2000,"cacheOutputTokens":1000}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"settled":1`) {
+		t.Fatalf("settle status=%d body=%s", w.Code, w.Body.String())
+	}
+	if got, _ := bucket.Balance(st.DB, "learn-chat"); got != 1 {
+		t.Fatalf("balance=%d, want 1", got)
+	}
+	var usage model.UsageRecord
+	if err := st.DB.First(&usage, "operation_id = ?", "learn:chat:1").Error; err != nil {
+		t.Fatal(err)
+	}
+	if usage.ActualPoints != 1 || usage.InputTokens != 40000 || usage.OutputTokens != 30000 || usage.CacheInputTokens != 2000 || usage.CacheOutputTokens != 1000 {
+		t.Fatalf("unexpected usage: %+v", usage)
+	}
+}
+
+func TestLearningChargePointsAndVideoUseTheirOwnAccounts(t *testing.T) {
+	st := newAPIStore(t)
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "video_api", PricingType: "VIDEO_IO", Rate: 5, OutputRate: 10, PerUnits: 1, Enabled: true})
+	if err := bucket.GrantPoints(st.DB, "learn-api", 3, nil, bucket.SourceSystem); err != nil {
+		t.Fatal(err)
+	}
+	if err := videopoint.CreditInTx(st.DB, "learn-api", 2); err != nil {
+		t.Fatal(err)
+	}
+	r := learningRouter(st)
+
+	w := postJSON(r, "/charge-points", `{"operationId":"learn:kb:1","userId":"learn-api","points":900,"kind":"kb_quota"}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"charged":1`) {
+		t.Fatalf("charge-points status=%d body=%s", w.Code, w.Body.String())
+	}
+	w = postJSON(r, "/resource/charge", `{"operationId":"learn:video:api","userId":"learn-api","resourceKey":"video_api","units":60,"inputUnits":30,"accountType":"video"}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"charged":1`) {
+		t.Fatalf("video charge status=%d body=%s", w.Code, w.Body.String())
+	}
+	w = postJSON(r, "/resource/settle-video", `{"operationId":"learn:video:api","resourceKey":"video_api","units":45,"inputUnits":30}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"settled":1`) {
+		t.Fatalf("video settle status=%d body=%s", w.Code, w.Body.String())
+	}
+	if got, _ := bucket.Balance(st.DB, "learn-api"); got != 2 {
+		t.Fatalf("points balance=%d, want 2 after only charge-points used it", got)
+	}
+	if got, _ := videopoint.Balance(st.DB, "learn-api"); got != 1 {
+		t.Fatalf("video balance=%d, want 1", got)
+	}
+	w = postJSON(r, "/resource/refund", `{"operationId":"learn:video:api"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("refund status=%d body=%s", w.Code, w.Body.String())
+	}
+	if got, _ := videopoint.Balance(st.DB, "learn-api"); got != 2 {
+		t.Fatalf("refunded video points=%d, want 2", got)
+	}
+}
+
+func TestLearningReturns402AtZeroBalance(t *testing.T) {
+	st := newAPIStore(t)
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "image_api", PricingType: "PER_CALL", Rate: 40, PerUnits: 1, Enabled: true})
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "video_empty_api", PricingType: "PER_UNIT", Rate: 40, PerUnits: 1, Enabled: true})
+	r := learningRouter(st)
+	w := postJSON(r, "/resource/charge", `{"operationId":"learn:empty:1","userId":"learn-empty","resourceKey":"image_api","units":1}`)
+	if w.Code != http.StatusPaymentRequired || !strings.Contains(w.Body.String(), `"code":"INSUFFICIENT_BALANCE"`) {
+		t.Fatalf("points status=%d body=%s", w.Code, w.Body.String())
+	}
+	w = postJSON(r, "/resource/charge", `{"operationId":"learn:video-empty:1","userId":"learn-empty","resourceKey":"video_empty_api","units":1,"accountType":"video"}`)
+	if w.Code != http.StatusPaymentRequired || !strings.Contains(w.Body.String(), `"code":"INSUFFICIENT_BALANCE"`) {
+		t.Fatalf("video status=%d body=%s", w.Code, w.Body.String())
+	}
+}
 
 func newAPIStore(t *testing.T) *store.Store {
 	t.Helper()

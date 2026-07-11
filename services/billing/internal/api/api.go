@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 	"yc-billing/internal/adjust"
 	"yc-billing/internal/analytics"
+	"yc-billing/internal/billingmode"
 	"yc-billing/internal/bucket"
 	"yc-billing/internal/membership"
 	"yc-billing/internal/model"
@@ -27,21 +28,26 @@ import (
 )
 
 type Handler struct {
-	st         *store.Store
-	w          *wallet.Wallet
-	epay       *pay.Epay
-	topup      *topup.Service
-	redeem     *redeem.Service
-	sub        *sub.Service
-	adjust     *adjust.Service
-	registry   *registry.Service
-	analytics  *analytics.Service
-	resource   *resource.Service
-	membership *membership.Service
-	token      string
+	st          *store.Store
+	w           *wallet.Wallet
+	epay        *pay.Epay
+	topup       *topup.Service
+	redeem      *redeem.Service
+	sub         *sub.Service
+	adjust      *adjust.Service
+	registry    *registry.Service
+	analytics   *analytics.Service
+	resource    *resource.Service
+	membership  *membership.Service
+	token       string
+	pricingMode billingmode.Mode
 }
 
 func New(st *store.Store, token string, epay *pay.Epay) *Handler {
+	return NewWithPricingMode(st, token, epay, billingmode.Standard)
+}
+
+func NewWithPricingMode(st *store.Store, token string, epay *pay.Epay, mode billingmode.Mode) *Handler {
 	var topupSvc *topup.Service
 	if epay != nil {
 		topupSvc = topup.New(st)
@@ -49,8 +55,8 @@ func New(st *store.Store, token string, epay *pay.Epay) *Handler {
 	return &Handler{
 		st: st, w: wallet.New(st), epay: epay, topup: topupSvc,
 		redeem: redeem.New(st), sub: sub.New(st),
-		adjust: adjust.New(st), registry: registry.New(st), analytics: analytics.New(st), resource: resource.New(st),
-		membership: membership.New(st), token: token,
+		adjust: adjust.New(st), registry: registry.New(st), analytics: analytics.New(st), resource: resource.NewWithPricingMode(st, mode),
+		membership: membership.New(st), token: token, pricingMode: mode,
 	}
 }
 
@@ -313,7 +319,7 @@ func (h *Handler) reserve(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "model not priced"})
 		return
 	}
-	est := pricing.ReserveQuota(rule, req.InputTokens, req.MaxOutputTokens, gr)
+	est := h.pricingMode.NormalizeCost(pricing.ReserveQuota(rule, req.InputTokens, req.MaxOutputTokens, gr))
 	reserved, err := h.w.Reserve(req.OperationID, req.UserID, req.Type, req.Model, est)
 	if err == wallet.ErrInsufficient {
 		c.JSON(http.StatusPaymentRequired, gin.H{"error": "insufficient", "code": "INSUFFICIENT_BALANCE"})
@@ -347,12 +353,12 @@ func (h *Handler) settle(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "model not priced"})
 		return
 	}
-	actual := pricing.ChatQuota(rule, pricing.Usage{
+	actual := h.pricingMode.NormalizeCost(pricing.ChatQuota(rule, pricing.Usage{
 		InputTokens:       req.InputTokens,
 		OutputTokens:      req.OutputTokens,
 		CacheInputTokens:  req.CacheInputTokens,
 		CacheOutputTokens: req.CacheOutputTokens,
-	}, gr)
+	}, gr))
 	if err := h.w.SettleWithTokens(req.OperationID, actual, wallet.TokenUsage{
 		InputTokens:       req.InputTokens,
 		OutputTokens:      req.OutputTokens,
@@ -866,7 +872,8 @@ func (h *Handler) chargePoints(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid params"})
 		return
 	}
-	err := wallet.ChargePoints(h.st.DB, req.OperationID, req.UserID, req.Points, req.Kind)
+	points := h.pricingMode.NormalizeCost(req.Points)
+	err := wallet.ChargePoints(h.st.DB, req.OperationID, req.UserID, points, req.Kind)
 	if err == wallet.ErrInsufficient {
 		c.JSON(http.StatusPaymentRequired, gin.H{"error": "insufficient", "code": "INSUFFICIENT_BALANCE"})
 		return
@@ -875,7 +882,7 @@ func (h *Handler) chargePoints(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"charged": req.Points})
+	c.JSON(http.StatusOK, gin.H{"charged": points})
 }
 
 type userKbQuotaResp struct {
