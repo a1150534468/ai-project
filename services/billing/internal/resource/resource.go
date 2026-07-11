@@ -10,6 +10,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"yc-billing/internal/billingmode"
 	"yc-billing/internal/model"
 	"yc-billing/internal/store"
 )
@@ -19,9 +20,18 @@ var (
 	ErrInsufficient      = errors.New("余额不足")
 )
 
-type Service struct{ st *store.Store }
+type Service struct {
+	st   *store.Store
+	mode billingmode.Mode
+}
 
-func New(st *store.Store) *Service { return &Service{st: st} }
+func New(st *store.Store) *Service {
+	return NewWithPricingMode(st, billingmode.Standard)
+}
+
+func NewWithPricingMode(st *store.Store, mode billingmode.Mode) *Service {
+	return &Service{st: st, mode: mode}
+}
 
 // Quote 计算资源用量的算力点成本（ceil 取整）。
 func (s *Service) Quote(resourceKey string, units int64) (int64, error) {
@@ -33,21 +43,23 @@ func (s *Service) Quote(resourceKey string, units int64) (int64, error) {
 		}
 		return 0, err
 	}
+	var cost int64
 	switch p.PricingType {
 	case "PER_CALL":
-		return int64(math.Ceil(p.Rate)), nil
+		cost = int64(math.Ceil(p.Rate))
 	case "PER_UNIT":
 		per := p.PerUnits
 		if per <= 0 {
 			per = 1
 		}
-		return int64(math.Ceil(p.Rate * float64(units) / float64(per))), nil
+		cost = int64(math.Ceil(p.Rate * float64(units) / float64(per)))
 	case pricingTypeVideoIO:
 		// 单量入口按纯输出计价（无输入视频场景兜底），公式与 QuoteVideoIO(0, units) 一致。
-		return int64(math.Ceil(p.OutputRate * float64(units))), nil
+		cost = int64(math.Ceil(p.OutputRate * float64(units)))
 	default:
 		return 0, ErrResourceNotPriced
 	}
+	return s.mode.NormalizeCost(cost), nil
 }
 
 const pricingTypeVideoIO = "VIDEO_IO"
@@ -70,18 +82,20 @@ func (s *Service) QuoteVideoIO(resourceKey string, inputSec, outputSec int64) (i
 	if outputSec < 0 {
 		outputSec = 0
 	}
+	var cost int64
 	switch p.PricingType {
 	case pricingTypeVideoIO:
-		return int64(math.Ceil(p.Rate*float64(inputSec) + p.OutputRate*float64(outputSec))), nil
+		cost = int64(math.Ceil(p.Rate*float64(inputSec) + p.OutputRate*float64(outputSec)))
 	case "PER_UNIT":
 		per := p.PerUnits
 		if per <= 0 {
 			per = 1
 		}
-		return int64(math.Ceil(p.Rate * float64(outputSec) / float64(per))), nil
+		cost = int64(math.Ceil(p.Rate * float64(outputSec) / float64(per)))
 	default:
 		return 0, ErrResourceNotPriced
 	}
+	return s.mode.NormalizeCost(cost), nil
 }
 
 const rechargeRatioKey = "recharge_points_per_yuan"

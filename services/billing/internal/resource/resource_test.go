@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"yc-billing/internal/billingmode"
 	"yc-billing/internal/bucket"
 	"yc-billing/internal/model"
 	"yc-billing/internal/pgtest"
@@ -13,6 +14,102 @@ import (
 	"yc-billing/internal/videopoint"
 	"yc-billing/internal/vip"
 )
+
+func TestLearningChargeIsOnePointIdempotentAndRefundable(t *testing.T) {
+	st := newStore(t)
+	s := NewWithPricingMode(st, billingmode.Learning)
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "image_generation", PricingType: "PER_UNIT", Rate: 40, PerUnits: 1, Enabled: true})
+	if err := bucket.GrantPoints(st.DB, "learn-u1", 2, nil, bucket.SourceSystem); err != nil {
+		t.Fatal(err)
+	}
+
+	charged, err := s.Charge("learn:image:1", "learn-u1", "image_generation", 4)
+	if err != nil || charged != 1 {
+		t.Fatalf("charge=%d err=%v, want 1", charged, err)
+	}
+	charged, err = s.Charge("learn:image:1", "learn-u1", "image_generation", 4)
+	if err != nil || charged != 1 {
+		t.Fatalf("replayed charge=%d err=%v, want 1", charged, err)
+	}
+	if got, _ := bucket.Balance(st.DB, "learn-u1"); got != 1 {
+		t.Fatalf("balance=%d, want 1", got)
+	}
+	if err := s.RefundCharge("learn:image:1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RefundCharge("learn:image:1"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := bucket.Balance(st.DB, "learn-u1"); got != 2 {
+		t.Fatalf("refunded balance=%d, want 2", got)
+	}
+}
+
+func TestLearningReserveSettleKeepsOnePoint(t *testing.T) {
+	st := newStore(t)
+	s := NewWithPricingMode(st, billingmode.Learning)
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "novel_text_output", PricingType: "PER_UNIT", Rate: 8, PerUnits: 1000, Enabled: true})
+	if err := bucket.GrantPoints(st.DB, "learn-u2", 2, nil, bucket.SourceSystem); err != nil {
+		t.Fatal(err)
+	}
+
+	reserved, err := s.Reserve("learn:novel:1", "learn-u2", "novel_text_output", 100000)
+	if err != nil || reserved != 1 {
+		t.Fatalf("reserved=%d err=%v, want 1", reserved, err)
+	}
+	settled, err := s.Settle("learn:novel:1", "novel_text_output", 90000)
+	if err != nil || settled != 1 {
+		t.Fatalf("settled=%d err=%v, want 1", settled, err)
+	}
+	if got, _ := bucket.Balance(st.DB, "learn-u2"); got != 1 {
+		t.Fatalf("balance=%d, want 1", got)
+	}
+}
+
+func TestLearningVideoUsesOneVideoPoint(t *testing.T) {
+	st := newStore(t)
+	s := NewWithPricingMode(st, billingmode.Learning)
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "video_learning", PricingType: "VIDEO_IO", Rate: 5, OutputRate: 10, PerUnits: 1, Enabled: true})
+	if err := bucket.GrantPoints(st.DB, "learn-video", 100, nil, bucket.SourceSystem); err != nil {
+		t.Fatal(err)
+	}
+	if err := videopoint.CreditInTx(st.DB, "learn-video", 2); err != nil {
+		t.Fatal(err)
+	}
+
+	charged, err := s.ChargeVideoIO("learn:video:1", "learn-video", "video_learning", 30, 60)
+	if err != nil || charged != 1 {
+		t.Fatalf("charge=%d err=%v, want 1", charged, err)
+	}
+	settled, err := s.SettleVideoIO("learn:video:1", "video_learning", 30, 45)
+	if err != nil || settled != 1 {
+		t.Fatalf("settle=%d err=%v, want 1", settled, err)
+	}
+	if got, _ := bucket.Balance(st.DB, "learn-video"); got != 100 {
+		t.Fatalf("points balance=%d, want unchanged 100", got)
+	}
+	if got, _ := videopoint.Balance(st.DB, "learn-video"); got != 1 {
+		t.Fatalf("video balance=%d, want 1", got)
+	}
+	if err := s.RefundCharge("learn:video:1"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := videopoint.Balance(st.DB, "learn-video"); got != 2 {
+		t.Fatalf("refunded video points=%d, want 2", got)
+	}
+}
+
+func TestLearningStillRejectsUnknownResourceAndInsufficientBalance(t *testing.T) {
+	st := newStore(t)
+	s := NewWithPricingMode(st, billingmode.Learning)
+	if _, err := s.Charge("learn:missing", "learn-empty", "missing", 1); err != ErrResourceNotPriced {
+		t.Fatalf("missing resource err=%v, want ErrResourceNotPriced", err)
+	}
+	st.DB.Create(&model.ResourcePrice{ResourceKey: "known", PricingType: "PER_CALL", Rate: 50, PerUnits: 1, Enabled: true})
+	if _, err := s.Charge("learn:402", "learn-empty", "known", 1); err != ErrInsufficient {
+		t.Fatalf("empty balance err=%v, want ErrInsufficient", err)
+	}
+}
 
 func newStore(t *testing.T) *store.Store {
 	dsn := pgtest.DSN()
