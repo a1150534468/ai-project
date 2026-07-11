@@ -5,7 +5,11 @@ import { chapterPlansFromOutline } from "./novel-chapter-plans.js";
 import type { NovelGenerator } from "./novel-generation.js";
 import { NOVEL_RESOURCE_KEY, NOVEL_STAGE_KINDS, NOVEL_TASK_STATUS, type NovelStageKind, type NovelTargetKind } from "./novel-types.js";
 import { NOVEL_STAGE_LABELS } from "./novel-prompts.js";
+import { buildNovelGenerationContext, buildNovelEnhancedContextText } from "./novel-context-builder.js";
+import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
+import { buildNovelReviewPayload } from "./novel-review.js";
 import { buildNovelVectorMemoryContext, refreshNovelVectorMemory } from "./novel-vector-memory.js";
+import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-workbench-types.js";
 
 export interface BillingForNovels {
   reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
@@ -92,6 +96,25 @@ function excerpt(text: string, maxChars: number): string {
   const compacted = compactLine(text);
   const chars = Array.from(compacted);
   return chars.length > maxChars ? `${chars.slice(0, maxChars).join("")}...` : compacted;
+}
+
+function jsonArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function extractKnownNamesFromSections(sections: readonly { kind: string; displayText: string }[]): { characters: string[]; locations: string[] } {
+  const chars = sections.find((section) => section.kind === "chars")?.displayText ?? "";
+  const world = sections.find((section) => section.kind === "world")?.displayText ?? "";
+  const names = (text: string) => Array.from(new Set((text.match(/[\u4e00-\u9fff]{2,8}/gu) ?? []).slice(0, 30)));
+  return { characters: names(chars), locations: names(world) };
+}
+
+function factStatus(status: string): NovelKnowledgeFactPayload["status"] {
+  return status === "draft" || status === "conflict" ? status : "confirmed";
+}
+
+function foreshadowStatus(status: string): NovelForeshadowPayload["status"] {
+  return status === "hinted" || status === "resolved" || status === "abandoned" ? status : "open";
 }
 
 function buildLongMemoryDisplayText(chapters: readonly NovelMemoryChapter[]): string {
@@ -298,6 +321,60 @@ async function buildContextText(prisma: PrismaClient, projectId: string): Promis
   return [sectionText, chapterText].filter(Boolean).join("\n\n");
 }
 
+async function loadNovelGenerationContextPayload(args: {
+  readonly prisma: PrismaClient;
+  readonly project: {
+    readonly id: string;
+    readonly title: string;
+    readonly genre: string;
+  };
+  readonly chapterIndex: number;
+  readonly chapterTitle: string;
+  readonly chapterSummary: string;
+}) {
+  const store = args.prisma as PrismaClient & {
+    novelKnowledgeFact?: { findMany: (args: unknown) => Promise<NovelKnowledgeFactPayload[]> };
+    novelForeshadowItem?: { findMany: (args: unknown) => Promise<NovelForeshadowPayload[]> };
+  };
+  const [sections, previousChapters, facts, foreshadowItems] = await Promise.all([
+    args.prisma.novelSection.findMany({ where: { projectId: args.project.id } }),
+    args.prisma.novelChapter.findMany({ where: { projectId: args.project.id }, orderBy: { chapterIndex: "asc" } }),
+    store.novelKnowledgeFact?.findMany({
+      where: { projectId: args.project.id, status: { not: "conflict" } },
+      orderBy: { updatedAt: "desc" },
+      take: 24,
+    }) ?? Promise.resolve([]),
+    store.novelForeshadowItem?.findMany({
+      where: { projectId: args.project.id, status: { not: "resolved" } },
+      orderBy: [{ expectedPayoffChapter: "asc" }, { updatedAt: "desc" }],
+      take: 24,
+    }) ?? Promise.resolve([]),
+  ]);
+  const reviewFeedback = previousChapters
+    .filter((chapter) => chapter.chapterIndex < args.chapterIndex)
+    .sort((a, b) => b.chapterIndex - a.chapterIndex)
+    .slice(0, 5)
+    .map((chapter) => ({
+      chapterIndex: chapter.chapterIndex,
+      status: "reviewStatus" in chapter && typeof chapter.reviewStatus === "string" ? chapter.reviewStatus : "pending",
+      reviewNotes: "reviewNotes" in chapter && typeof chapter.reviewNotes === "string" ? chapter.reviewNotes : "",
+      aiReview: "aiReview" in chapter && typeof chapter.aiReview === "string" ? chapter.aiReview : "",
+      aiActionItems: jsonArray("aiActionItems" in chapter ? chapter.aiActionItems : []),
+      modificationRate: "modificationRate" in chapter && typeof chapter.modificationRate === "number" ? chapter.modificationRate : 0,
+    }));
+  return buildNovelGenerationContext({
+    project: args.project,
+    chapterIndex: args.chapterIndex,
+    chapterTitle: args.chapterTitle,
+    chapterSummary: args.chapterSummary,
+    sections,
+    previousChapters: previousChapters.filter((chapter) => chapter.chapterIndex < args.chapterIndex),
+    facts: facts.map((fact) => ({ ...fact, status: factStatus(fact.status) })),
+    foreshadowItems: foreshadowItems.map((item) => ({ ...item, status: foreshadowStatus(item.status) })),
+    reviewFeedback,
+  });
+}
+
 async function buildChapterContextText(args: {
   readonly prisma: PrismaClient;
   readonly project: {
@@ -309,6 +386,15 @@ async function buildChapterContextText(args: {
   readonly chapterTitle: string;
   readonly chapterSummary: string;
 }): Promise<string> {
+  const chapterIndex = args.chapterIndex ?? 1;
+  const contextPayload = await loadNovelGenerationContextPayload({
+    prisma: args.prisma,
+    project: args.project,
+    chapterIndex,
+    chapterTitle: args.chapterTitle,
+    chapterSummary: args.chapterSummary,
+  });
+  const enhancedContextText = buildNovelEnhancedContextText(contextPayload);
   const baseContextText = await buildContextText(args.prisma, args.project.id);
   try {
     const vectorContextText = await buildNovelVectorMemoryContext({
@@ -316,13 +402,13 @@ async function buildChapterContextText(args: {
       projectId: args.project.id,
       projectTitle: args.project.title,
       genre: args.project.genre,
-      chapterIndex: args.chapterIndex,
+      chapterIndex,
       chapterTitle: args.chapterTitle,
       chapterSummary: args.chapterSummary,
     });
-    return [baseContextText, vectorContextText].filter(Boolean).join("\n\n");
+    return [enhancedContextText, baseContextText, vectorContextText].filter(Boolean).join("\n\n");
   } catch (error) {
-    if (error instanceof Error) return baseContextText;
+    if (error instanceof Error) return [enhancedContextText, baseContextText].filter(Boolean).join("\n\n");
     throw error;
   }
 }
@@ -395,29 +481,73 @@ async function saveGeneratedResult(args: {
   const payload = taskPayload(task);
   const displayText = formatGeneratedNovelDisplayText(targetKind, args.parsed);
   const billableChars = args.billableChars;
+  const project = targetKind === "chapter" ? await prisma.novelProject.findUnique({ where: { id: task.projectId } }) : null;
+  if (targetKind === "chapter" && !project) throw new Error("novel project not found");
+  const chapterIndex = targetKind === "chapter" ? Number(payload.chapterIndex) || 1 : 0;
+  const generatedTitle = targetKind === "chapter" && isRecord(args.parsed) && typeof args.parsed.title === "string" ? args.parsed.title.trim() : "";
+  const title = targetKind === "chapter" ? generatedTitle || String(payload.title || `第 ${chapterIndex} 章`) : "";
+  const sections = targetKind === "chapter" ? await prisma.novelSection.findMany({ where: { projectId: task.projectId } }) : [];
+  const knownNames = extractKnownNamesFromSections(sections);
+  const contextSnapshot = targetKind === "chapter" && project ? await loadNovelGenerationContextPayload({
+    prisma,
+    project,
+    chapterIndex,
+    chapterTitle: title,
+    chapterSummary: String(payload.summary || ""),
+  }) : null;
+  const postprocess = targetKind === "chapter" && project ? buildNovelChapterPostprocessPayload({
+    projectTitle: project.title,
+    chapterIndex,
+    title,
+    content: displayText,
+    knownCharacters: knownNames.characters,
+    knownLocations: knownNames.locations,
+  }) : null;
+  const review = postprocess ? buildNovelReviewPayload({
+    rawContent: displayText,
+    finalContent: displayText,
+    summary: postprocess.summary.summary,
+    openThreads: postprocess.summary.openThreads,
+    consistencyRisks: postprocess.consistencyStatus.risks,
+  }) : null;
 
   await prisma.$transaction(async (tx) => {
     if (targetKind === "chapter") {
-      const chapterIndex = Number(payload.chapterIndex) || 1;
-      const generatedTitle = isRecord(args.parsed) && typeof args.parsed.title === "string" ? args.parsed.title.trim() : "";
-      const title = generatedTitle || String(payload.title || `第 ${chapterIndex} 章`);
       const chapter = await tx.novelChapter.upsert({
         where: { projectId_chapterIndex: { projectId: task.projectId, chapterIndex } },
         create: {
           projectId: task.projectId,
           chapterIndex,
           title,
-          summary: String(payload.summary || ""),
+          summary: postprocess?.summary.summary || String(payload.summary || ""),
           content: displayText,
+          rawContent: displayText,
+          openThreads: jsonValue(postprocess?.summary.openThreads ?? []),
+          contextSnapshot: jsonValue(contextSnapshot),
+          generationMeta: jsonValue({ model: args.model, operationId: task.operationId }),
+          consistencyJson: jsonValue(postprocess?.consistencyStatus ?? null),
           status: "ready",
+          reviewStatus: "pending",
+          aiReview: review?.aiReview ?? "",
+          aiActionItems: jsonValue(review?.aiActionItems ?? []),
+          modificationRate: review?.modificationRate ?? 0,
           billableChars,
           lastTaskId: task.id,
         },
         update: {
           title,
-          summary: String(payload.summary || ""),
+          summary: postprocess?.summary.summary || String(payload.summary || ""),
           content: displayText,
+          rawContent: displayText,
+          openThreads: jsonValue(postprocess?.summary.openThreads ?? []),
+          contextSnapshot: jsonValue(contextSnapshot),
+          generationMeta: jsonValue({ model: args.model, operationId: task.operationId }),
+          consistencyJson: jsonValue(postprocess?.consistencyStatus ?? null),
           status: "ready",
+          reviewStatus: "pending",
+          aiReview: review?.aiReview ?? "",
+          aiActionItems: jsonValue(review?.aiActionItems ?? []),
+          modificationRate: review?.modificationRate ?? 0,
           billableChars,
           lastTaskId: task.id,
         },
@@ -425,6 +555,59 @@ async function saveGeneratedResult(args: {
       await tx.novelChapterVersion.create({
         data: { chapterId: chapter.id, title, content: displayText, billableChars, operationId: task.operationId },
       });
+      const txWithAssets = tx as typeof tx & {
+        novelKnowledgeFact?: { upsert: (args: unknown) => Promise<unknown> };
+        novelForeshadowItem?: { upsert: (args: unknown) => Promise<unknown> };
+      };
+      await Promise.all((postprocess?.facts ?? []).map((fact) => txWithAssets.novelKnowledgeFact?.upsert({
+        where: {
+          projectId_chapterIndex_subject_predicate_object: {
+            projectId: task.projectId,
+            chapterIndex: fact.chapterIndex ?? chapterIndex,
+            subject: fact.subject,
+            predicate: fact.predicate,
+            object: fact.object,
+          },
+        },
+        create: {
+          projectId: task.projectId,
+          chapterId: chapter.id,
+          chapterIndex: fact.chapterIndex ?? chapterIndex,
+          subject: fact.subject,
+          predicate: fact.predicate,
+          object: fact.object,
+          sourceExcerpt: fact.sourceExcerpt,
+          confidence: fact.confidence,
+          status: fact.status,
+        },
+        update: {
+          chapterId: chapter.id,
+          sourceExcerpt: fact.sourceExcerpt,
+          confidence: fact.confidence,
+          status: fact.status,
+        },
+      }) ?? Promise.resolve()));
+      await Promise.all((postprocess?.foreshadowItems ?? []).map((item) => txWithAssets.novelForeshadowItem?.upsert({
+        where: { projectId_title: { projectId: task.projectId, title: item.title } },
+        create: {
+          projectId: task.projectId,
+          introducedInChapterId: chapter.id,
+          introducedInChapterIndex: item.introducedInChapterIndex ?? chapterIndex,
+          title: item.title,
+          description: item.description,
+          expectedPayoffChapter: item.expectedPayoffChapter,
+          status: item.status,
+          relatedCharacter: item.relatedCharacter,
+        },
+        update: {
+          introducedInChapterId: chapter.id,
+          introducedInChapterIndex: item.introducedInChapterIndex ?? chapterIndex,
+          description: item.description,
+          expectedPayoffChapter: item.expectedPayoffChapter,
+          status: item.status,
+          relatedCharacter: item.relatedCharacter,
+        },
+      }) ?? Promise.resolve()));
       await refreshNovelLongMemory({
         store: tx,
         projectId: task.projectId,

@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { buyMembership, generateNovelChapter, generateNovelStage, getNovelProject, getTopupOrder, saveNovelChapter } from "./api";
+import {
+  analyzeNovelChapter,
+  buyMembership,
+  generateNovelChapter,
+  generateNovelStage,
+  getNovelProject,
+  getNovelWorkbench,
+  getTopupOrder,
+  saveNovelChapter,
+  saveNovelChapterReview,
+} from "./api";
 
 describe("novel workflow API", () => {
   afterEach(() => {
@@ -122,6 +132,56 @@ describe("novel workflow API", () => {
     const detail = await getNovelProject("token", "project-1");
 
     expect(detail.sections.find((section) => section.kind === "draft")?.displayText).toContain("已记忆至第 2 章");
+  });
+
+  it("fetches novel workbench payload", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      data: {
+        project: { id: "project-1", title: "长夜纪元", genre: "玄幻", status: "active", createdAt: "2026-07-01T08:00:00.000Z", updatedAt: "2026-07-01T08:00:00.000Z" },
+        stats: { totalWords: 10, finishedChapters: 1, completionRate: 8, averageWords: 10, lastUpdate: "2026-07-01T08:00:00.000Z" },
+        chapters: [],
+        sections: [],
+        knowledgeFacts: [],
+        foreshadowItems: [],
+        workbenchHighlights: { focusChapterNumber: 2, recommendedFocus: "", dueForeshadowItems: [], continuityAlerts: [], microBeats: [], focusCard: null, qualitySnapshot: { consistencyStatus: "ok", consistencyRisks: [], styleRisk: "low", styleTone: "" }, workflowGate: null },
+      },
+    }), { status: 200 }));
+
+    await getNovelWorkbench("token", "project-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workflow/novels/projects/project-1/workbench",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("saves novel chapter review", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      data: { chapter: { id: "chapter-1", chapterIndex: 1, reviewStatus: "approved", reviewNotes: "已改。" } },
+    }), { status: 200 }));
+
+    await saveNovelChapterReview("token", "project-1", 1, { status: "approved", reviewNotes: "已改。" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workflow/novels/projects/project-1/chapters/1/review",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ status: "approved", reviewNotes: "已改。" }),
+      }),
+    );
+  });
+
+  it("requests chapter analysis refresh", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      data: { chapter: { id: "chapter-1", chapterIndex: 1 } },
+    }), { status: 200 }));
+
+    await analyzeNovelChapter("token", "project-1", 1);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workflow/novels/projects/project-1/chapters/1/analyze",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 });
 

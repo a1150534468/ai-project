@@ -36,7 +36,18 @@ interface ChapterRow {
   title: string;
   summary: string;
   content: string;
+  rawContent?: string;
+  openThreads?: unknown;
+  contextSnapshot?: unknown;
+  generationMeta?: unknown;
+  consistencyJson?: unknown;
   status: string;
+  reviewStatus?: string;
+  reviewNotes?: string;
+  aiReview?: string;
+  aiActionItems?: unknown;
+  modificationRate?: number;
+  reviewedAt?: Date | null;
   billableChars: number;
   lastTaskId: string | null;
   createdAt: Date;
@@ -75,6 +86,35 @@ interface NovelVectorMemoryRow {
   updatedAt: Date;
 }
 
+interface KnowledgeFactRow {
+  id: string;
+  projectId: string;
+  chapterId: string | null;
+  chapterIndex: number | null;
+  subject: string;
+  predicate: string;
+  object: string;
+  sourceExcerpt: string;
+  confidence: number;
+  status: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface ForeshadowRow {
+  id: string;
+  projectId: string;
+  introducedInChapterId: string | null;
+  introducedInChapterIndex: number | null;
+  title: string;
+  description: string;
+  expectedPayoffChapter: number;
+  status: string;
+  relatedCharacter: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 function now(): Date {
   return new Date("2026-07-01T08:00:00.000Z");
 }
@@ -85,6 +125,8 @@ function createPrismaMock(seedProjects: ProjectRow[] = []) {
   const chapters: ChapterRow[] = [];
   const tasks: TaskRow[] = [];
   const vectorMemories: NovelVectorMemoryRow[] = [];
+  const knowledgeFacts: KnowledgeFactRow[] = [];
+  const foreshadowItems: ForeshadowRow[] = [];
   const db: any = {
     novelProject: {
       create: vi.fn(async (args: { data: { userId: string; title: string; genre: string } }) => {
@@ -160,7 +202,18 @@ function createPrismaMock(seedProjects: ProjectRow[] = []) {
           title: "",
           summary: "",
           content: "",
+          rawContent: "",
+          openThreads: [],
+          contextSnapshot: null,
+          generationMeta: null,
+          consistencyJson: null,
           status: "draft",
+          reviewStatus: "pending",
+          reviewNotes: "",
+          aiReview: "",
+          aiActionItems: [],
+          modificationRate: 0,
+          reviewedAt: null,
           billableChars: 0,
           lastTaskId: null,
           createdAt: now(),
@@ -192,7 +245,18 @@ function createPrismaMock(seedProjects: ProjectRow[] = []) {
             title: "",
             summary: "",
             content: "",
+            rawContent: "",
+            openThreads: [],
+            contextSnapshot: null,
+            generationMeta: null,
+            consistencyJson: null,
             status: "draft",
+            reviewStatus: "pending",
+            reviewNotes: "",
+            aiReview: "",
+            aiActionItems: [],
+            modificationRate: 0,
+            reviewedAt: null,
             billableChars: 0,
             lastTaskId: null,
             createdAt: now(),
@@ -203,6 +267,12 @@ function createPrismaMock(seedProjects: ProjectRow[] = []) {
         } else {
           Object.assign(row, args.update, { updatedAt: now() });
         }
+        return row;
+      }),
+      update: vi.fn(async (args: { where: { id: string }; data: Partial<ChapterRow> }) => {
+        const row = chapters.find((item) => item.id === args.where.id);
+        if (!row) throw new Error("chapter not found");
+        Object.assign(row, args.data, { updatedAt: now() });
         return row;
       }),
     },
@@ -245,6 +315,67 @@ function createPrismaMock(seedProjects: ProjectRow[] = []) {
         Object.assign(row, args.data, { updatedAt: now() });
         return row;
       }),
+    },
+    novelKnowledgeFact: {
+      upsert: vi.fn(async (args: any) => {
+        const key = args.where.projectId_chapterIndex_subject_predicate_object;
+        let row = knowledgeFacts.find((item) =>
+          item.projectId === key.projectId &&
+          item.chapterIndex === key.chapterIndex &&
+          item.subject === key.subject &&
+          item.predicate === key.predicate &&
+          item.object === key.object
+        );
+        if (!row) {
+          const next: KnowledgeFactRow = {
+            id: `fact-${knowledgeFacts.length + 1}`,
+            chapterId: null,
+            chapterIndex: null,
+            sourceExcerpt: "",
+            confidence: 0.7,
+            status: "confirmed",
+            createdAt: now(),
+            updatedAt: now(),
+            ...args.create,
+          };
+          knowledgeFacts.push(next);
+          row = next;
+        } else {
+          Object.assign(row, args.update, { updatedAt: now() });
+        }
+        return row;
+      }),
+      findMany: vi.fn(async (args: { where?: { projectId?: string } }) =>
+        knowledgeFacts.filter((row) => !args.where?.projectId || row.projectId === args.where.projectId)
+      ),
+    },
+    novelForeshadowItem: {
+      upsert: vi.fn(async (args: any) => {
+        const key = args.where.projectId_title;
+        let row = foreshadowItems.find((item) => item.projectId === key.projectId && item.title === key.title);
+        if (!row) {
+          const next: ForeshadowRow = {
+            id: `foreshadow-${foreshadowItems.length + 1}`,
+            introducedInChapterId: null,
+            introducedInChapterIndex: null,
+            description: "",
+            expectedPayoffChapter: 0,
+            status: "open",
+            relatedCharacter: "",
+            createdAt: now(),
+            updatedAt: now(),
+            ...args.create,
+          };
+          foreshadowItems.push(next);
+          row = next;
+        } else {
+          Object.assign(row, args.update, { updatedAt: now() });
+        }
+        return row;
+      }),
+      findMany: vi.fn(async (args: { where?: { projectId?: string } }) =>
+        foreshadowItems.filter((row) => !args.where?.projectId || row.projectId === args.where.projectId)
+      ),
     },
     $queryRawUnsafe: vi.fn(async (sql: string, ...args: unknown[]) => {
       if (sql.includes('"contentHash"')) {
@@ -297,7 +428,7 @@ function createPrismaMock(seedProjects: ProjectRow[] = []) {
       return 1;
     }),
     $transaction: vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(db)),
-    _rows: { projects, sections, chapters, tasks, vectorMemories },
+    _rows: { projects, sections, chapters, tasks, vectorMemories, knowledgeFacts, foreshadowItems },
   };
   return db;
 }
@@ -688,6 +819,47 @@ describe("novel workflow routes", () => {
     await app.close();
   });
 
+  it("post-processes generated chapter into review and workbench assets", async () => {
+    const prisma = createPrismaMock([{ id: "project-1", userId: "u1", title: "长夜纪元", genre: "玄幻", status: "active", createdAt: now(), updatedAt: now() }]);
+    prisma._rows.sections.push({
+      id: "section-chars",
+      projectId: "project-1",
+      kind: "chars",
+      status: "ready",
+      displayText: "【角色】\n沈九泠\n赵虎",
+      structuredJson: null,
+      billableChars: 6,
+      lastTaskId: null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    const billing = createBillingMock();
+    const generator = vi.fn(async () => ({
+      text: JSON.stringify({ title: "锁灵坠", content: "沈九泠在寒泉院发现锁灵坠。赵虎为何提前知道此物？" }),
+      model: "server-model",
+    }));
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, generator, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/novels/projects/project-1/chapters/generate",
+      payload: { chapterIndex: 2, title: "锁灵坠", summary: "取得保命线索。", targetChars: 3000 },
+    });
+
+    expect(response.statusCode).toBe(202);
+    await scheduled[0];
+    const chapter = prisma._rows.chapters.find((row: ChapterRow) => row.chapterIndex === 2);
+    expect(chapter.summary).toContain("锁灵坠");
+    expect(chapter.openThreads).toContain("赵虎为何提前知道此物？");
+    expect((chapter.consistencyJson as any).quality.score).toBeLessThanOrEqual(100);
+    expect(chapter.aiReview).toContain("诊断");
+    expect(chapter.reviewStatus).toBe("pending");
+    expect(prisma._rows.knowledgeFacts.length).toBeGreaterThan(0);
+    expect(prisma._rows.foreshadowItems.length).toBeGreaterThan(0);
+    await app.close();
+  });
+
   it("uses vectorized novel context when generating later chapters", async () => {
     vi.stubEnv("EMBEDDING_BASE_URL", "http://embedding.test");
     vi.stubEnv("EMBEDDING_API_KEY", "embedding-key");
@@ -797,6 +969,86 @@ describe("novel workflow routes", () => {
       lastTaskId: "task-old",
     });
     expect(prisma._rows.chapters[0].billableChars).toBe(6);
+    await app.close();
+  });
+
+  it("returns a novel workbench payload for an owned project", async () => {
+    const prisma = createPrismaMock([{ id: "project-1", userId: "u1", title: "长夜纪元", genre: "玄幻", status: "active", createdAt: now(), updatedAt: now() }]);
+    prisma._rows.chapters.push({
+      id: "chapter-1",
+      projectId: "project-1",
+      volumeIndex: 1,
+      chapterIndex: 1,
+      title: "寒泉院",
+      summary: "沈九泠发现锁灵坠。",
+      content: "正文",
+      rawContent: "正文",
+      openThreads: ["锁灵坠是谁留下的？"],
+      contextSnapshot: null,
+      generationMeta: null,
+      consistencyJson: { status: "warning", risks: ["章节字数偏低"], quality: { score: 70, styleRisk: "medium" } },
+      status: "ready",
+      reviewStatus: "pending",
+      reviewNotes: "",
+      aiReview: "诊断：质量分 70 /100",
+      aiActionItems: ["补足场景"],
+      modificationRate: 0,
+      reviewedAt: null,
+      billableChars: 2,
+      lastTaskId: null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    const app = await createApp({ prisma, billing: createBillingMock() });
+
+    const response = await app.inject({ method: "GET", url: "/api/workflow/novels/projects/project-1/workbench" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.stats.finishedChapters).toBe(1);
+    expect(response.json().data.workbenchHighlights.focusChapterNumber).toBe(2);
+    expect(response.json().data.chapters[0].reviewStatus).toBe("pending");
+    await app.close();
+  });
+
+  it("saves chapter review status and notes", async () => {
+    const prisma = createPrismaMock([{ id: "project-1", userId: "u1", title: "长夜纪元", genre: "玄幻", status: "active", createdAt: now(), updatedAt: now() }]);
+    prisma._rows.chapters.push({
+      id: "chapter-1",
+      projectId: "project-1",
+      volumeIndex: 1,
+      chapterIndex: 1,
+      title: "寒泉院",
+      summary: "旧摘要",
+      content: "人工润色后的正文",
+      rawContent: "AI正文",
+      openThreads: [],
+      contextSnapshot: null,
+      generationMeta: null,
+      consistencyJson: null,
+      status: "ready",
+      reviewStatus: "pending",
+      reviewNotes: "",
+      aiReview: "",
+      aiActionItems: [],
+      modificationRate: 0,
+      reviewedAt: null,
+      billableChars: 8,
+      lastTaskId: null,
+      createdAt: now(),
+      updatedAt: now(),
+    });
+    const app = await createApp({ prisma, billing: createBillingMock() });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/novels/projects/project-1/chapters/1/review",
+      payload: { status: "approved", reviewNotes: "已补强结尾。" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.chapter.reviewStatus).toBe("approved");
+    expect(response.json().data.chapter.reviewNotes).toBe("已补强结尾。");
+    expect(response.json().data.chapter.reviewedAt).not.toBeNull();
     await app.close();
   });
 

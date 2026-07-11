@@ -583,7 +583,18 @@ export interface NovelChapter {
   title: string;
   summary: string;
   content: string;
+  rawContent?: string;
+  openThreads?: string[];
+  contextSnapshot?: unknown;
+  generationMeta?: unknown;
+  consistencyJson?: unknown;
   status: string;
+  reviewStatus?: "pending" | "approved" | "revise";
+  reviewNotes?: string;
+  aiReview?: string;
+  aiActionItems?: string[];
+  modificationRate?: number;
+  reviewedAt?: string | null;
   billableChars: number;
   lastTaskId: string | null;
   updatedAt: string;
@@ -615,6 +626,24 @@ export interface NovelProjectDetail {
   sections: NovelSection[];
   chapters: NovelChapter[];
   tasks: NovelTask[];
+}
+
+export interface NovelWorkbenchStats {
+  totalWords: number;
+  finishedChapters: number;
+  completionRate: number;
+  averageWords: number;
+  lastUpdate: string | null;
+}
+
+export interface NovelWorkbenchPayload {
+  project: NovelProjectDetail["project"];
+  stats: NovelWorkbenchStats;
+  chapters: NovelChapter[];
+  sections: NovelSection[];
+  knowledgeFacts: Array<Record<string, unknown>>;
+  foreshadowItems: Array<Record<string, unknown>>;
+  workbenchHighlights: Record<string, unknown>;
 }
 
 export interface CreateNovelInitialSettings {
@@ -676,6 +705,16 @@ export async function getNovelProject(token: string, projectId: string): Promise
   });
   if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取小说项目失败"), r.status);
   const resp = (await r.json()) as { data: NovelProjectDetail };
+  return resp.data;
+}
+
+export async function getNovelWorkbench(token: string, projectId: string): Promise<NovelWorkbenchPayload> {
+  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/workbench`, {
+    method: "GET",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取小说工作台失败"), r.status);
+  const resp = (await r.json()) as { data: NovelWorkbenchPayload };
   return resp.data;
 }
 
@@ -750,6 +789,32 @@ export async function saveNovelChapter(
     body: JSON.stringify(payload),
   });
   if (!r.ok) throw new ApiError(await readErrorMessage(r, "保存章节失败"), r.status);
+  const resp = (await r.json()) as { data: { chapter: NovelChapter } };
+  return resp.data.chapter;
+}
+
+export async function saveNovelChapterReview(
+  token: string,
+  projectId: string,
+  chapterIndex: number,
+  payload: { status?: "pending" | "approved" | "revise"; reviewNotes?: string; regenerateAi?: boolean },
+): Promise<NovelChapter> {
+  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/review`, {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+  if (!r.ok) throw new ApiError(await readErrorMessage(r, "保存章节审阅失败"), r.status);
+  const resp = (await r.json()) as { data: { chapter: NovelChapter } };
+  return resp.data.chapter;
+}
+
+export async function analyzeNovelChapter(token: string, projectId: string, chapterIndex: number): Promise<NovelChapter> {
+  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/analyze`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new ApiError(await readErrorMessage(r, "分析章节失败"), r.status);
   const resp = (await r.json()) as { data: { chapter: NovelChapter } };
   return resp.data.chapter;
 }

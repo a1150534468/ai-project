@@ -623,6 +623,8 @@ model NovelProject {
   chapters       NovelChapter[]
   tasks          NovelTask[]
   vectorMemories NovelVectorMemory[]
+  knowledgeFacts NovelKnowledgeFact[]
+  foreshadowItems NovelForeshadowItem[]
 
   @@index([userId, updatedAt])
 }
@@ -678,23 +680,74 @@ model NovelSectionVersion {
 }
 
 model NovelChapter {
-  id            String                @id @default(cuid())
-  projectId     String
-  volumeIndex   Int                   @default(1)
-  chapterIndex  Int
-  title         String                @default("")
-  summary       String                @default("")
-  content       String                @default("")
-  status        String                @default("draft")
-  billableChars Int                   @default(0)
-  lastTaskId    String?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @updatedAt
-  project       NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions      NovelChapterVersion[]
+  id               String                @id @default(cuid())
+  projectId        String
+  volumeIndex      Int                   @default(1)
+  chapterIndex     Int
+  title            String                @default("")
+  summary          String                @default("")
+  content          String                @default("")
+  rawContent       String                @default("")
+  openThreads      Json                  @default("[]")
+  contextSnapshot  Json?
+  generationMeta   Json?
+  consistencyJson  Json?
+  status           String                @default("draft")
+  reviewStatus     String                @default("pending")
+  reviewNotes      String                @default("")
+  aiReview         String                @default("")
+  aiActionItems    Json                  @default("[]")
+  modificationRate Int                   @default(0)
+  reviewedAt       DateTime?
+  billableChars    Int                   @default(0)
+  lastTaskId       String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  project          NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions         NovelChapterVersion[]
 
   @@unique([projectId, chapterIndex])
   @@index([projectId, updatedAt])
+  @@index([projectId, reviewStatus])
+}
+
+model NovelKnowledgeFact {
+  id            String       @id @default(cuid())
+  projectId     String
+  chapterId     String?
+  chapterIndex  Int?
+  subject       String
+  predicate     String
+  object        String
+  sourceExcerpt String       @default("")
+  confidence    Float        @default(0.7)
+  status        String       @default("confirmed")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, chapterIndex, subject, predicate, object])
+  @@index([projectId, status])
+  @@index([projectId, updatedAt])
+}
+
+model NovelForeshadowItem {
+  id                       String       @id @default(cuid())
+  projectId                String
+  introducedInChapterId    String?
+  introducedInChapterIndex Int?
+  title                    String
+  description              String       @default("")
+  expectedPayoffChapter    Int          @default(0)
+  status                   String       @default("open")
+  relatedCharacter         String       @default("")
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+  project                  NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, title])
+  @@index([projectId, status])
+  @@index([projectId, expectedPayoffChapter])
 }
 
 model NovelChapterVersion {

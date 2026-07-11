@@ -5,8 +5,11 @@ import { createBillingClient, InsufficientBalanceError } from "@yc/billing";
 import { getPrisma } from "@yc/db";
 import { createNovelGenerator, type NovelGenerator } from "./novel-generation.js";
 import { visibleCharCount } from "./novel-billable.js";
+import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
+import { buildNovelReviewPayload, estimateNovelModificationRate } from "./novel-review.js";
 import { NOVEL_COVER_RESOURCE_KEY, NOVEL_RESOURCE_KEY, NOVEL_STAGE_KINDS, NOVEL_TASK_STATUS } from "./novel-types.js";
 import type { NovelStageKind } from "./novel-types.js";
+import { getNovelWorkbench, serializeNovelWorkbenchChapter } from "./novel-workbench.js";
 import {
   ensureProjectSections,
   estimateReserveChars,
@@ -111,6 +114,11 @@ const saveChapterSchema = z.object({
   summary: z.string().trim().max(3000).optional().default(""),
   content: z.string().max(500_000).optional().default(""),
 });
+const reviewChapterSchema = z.object({
+  status: z.enum(["pending", "approved", "revise"]).optional(),
+  reviewNotes: z.string().max(20_000).optional().default(""),
+  regenerateAi: z.boolean().optional().default(false),
+});
 
 function scheduledRunner(app: FastifyInstance): ScheduleTask {
   return (work) => {
@@ -129,6 +137,17 @@ function billingUnavailable(app: FastifyInstance, error: unknown, message: strin
 
 function compactList(values: readonly string[]): string[] {
   return values.map((value) => value.trim()).filter(Boolean);
+}
+
+function jsonStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function extractKnownNamesFromSections(sections: readonly { kind: string; displayText: string }[]): { characters: string[]; locations: string[] } {
+  const chars = sections.find((section) => section.kind === "chars")?.displayText ?? "";
+  const world = sections.find((section) => section.kind === "world")?.displayText ?? "";
+  const names = (text: string) => Array.from(new Set((text.match(/[\u4e00-\u9fff]{2,8}/gu) ?? []).slice(0, 30)));
+  return { characters: names(chars), locations: names(world) };
 }
 
 function pushInitialBlock(blocks: string[], heading: string, value: string): void {
@@ -265,6 +284,16 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const detail = await getProjectDetail(prisma, userId, parsed.data.projectId);
     if (!detail) return reply.code(404).send({ error: "项目不存在" });
     return { success: true, data: detail };
+  });
+
+  app.get("/api/workflow/novels/projects/:projectId/workbench", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const parsed = projectParamsSchema.safeParse(req.params);
+    if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
+    const workbench = await getNovelWorkbench(prisma, userId, parsed.data.projectId);
+    if (!workbench) return reply.code(404).send({ error: "项目不存在" });
+    return { success: true, data: workbench };
   });
 
   app.patch("/api/workflow/novels/projects/:projectId", async (req, reply) => {
@@ -441,18 +470,139 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
       return chapter;
     });
     await refreshNovelVectorMemoryBestEffort(prisma, project.id);
-    return { success: true, data: { chapter: {
-      id: saved.id,
-      volumeIndex: saved.volumeIndex,
-      chapterIndex: saved.chapterIndex,
-      title: saved.title,
-      summary: saved.summary,
-      content: saved.content,
-      status: saved.status,
-      billableChars: saved.billableChars,
-      lastTaskId: saved.lastTaskId,
-      updatedAt: saved.updatedAt.toISOString(),
-    } } };
+    return { success: true, data: { chapter: serializeNovelWorkbenchChapter(saved) } };
+  });
+
+  app.post("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/review", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = chapterParamsSchema.safeParse(req.params);
+    const body = reviewChapterSchema.safeParse(req.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const chapters = await prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } });
+    const current = chapters.find((chapter) => chapter.chapterIndex === params.data.chapterIndex);
+    if (!current) return reply.code(404).send({ error: "章节不存在" });
+    const rawContent = "rawContent" in current && typeof current.rawContent === "string" ? current.rawContent : "";
+    const openThreads = jsonStringArray("openThreads" in current ? current.openThreads : []);
+    const consistency = "consistencyJson" in current && typeof current.consistencyJson === "object" && current.consistencyJson !== null ? current.consistencyJson as { risks?: unknown } : null;
+    const consistencyRisks = jsonStringArray(consistency?.risks);
+    const regenerated = body.data.regenerateAi ? buildNovelReviewPayload({
+      rawContent: rawContent || current.content,
+      finalContent: current.content,
+      summary: current.summary,
+      openThreads,
+      consistencyRisks,
+    }) : null;
+    const saved = await prisma.novelChapter.update({
+      where: { id: current.id },
+      data: {
+        reviewStatus: body.data.status ?? ("reviewStatus" in current && typeof current.reviewStatus === "string" ? current.reviewStatus : "pending"),
+        reviewNotes: body.data.reviewNotes,
+        reviewedAt: new Date(),
+        modificationRate: estimateNovelModificationRate(rawContent || current.content, current.content),
+        ...(regenerated ? { aiReview: regenerated.aiReview, aiActionItems: regenerated.aiActionItems } : {}),
+      },
+    });
+    return { success: true, data: { chapter: serializeNovelWorkbenchChapter(saved) } };
+  });
+
+  app.post("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/analyze", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = chapterParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const [sections, chapters] = await Promise.all([
+      prisma.novelSection.findMany({ where: { projectId: project.id } }),
+      prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } }),
+    ]);
+    const current = chapters.find((chapter) => chapter.chapterIndex === params.data.chapterIndex);
+    if (!current) return reply.code(404).send({ error: "章节不存在" });
+    const knownNames = extractKnownNamesFromSections(sections);
+    const postprocess = buildNovelChapterPostprocessPayload({
+      projectTitle: project.title,
+      chapterIndex: current.chapterIndex,
+      title: current.title,
+      content: current.content,
+      knownCharacters: knownNames.characters,
+      knownLocations: knownNames.locations,
+    });
+    const rawContent = "rawContent" in current && typeof current.rawContent === "string" && current.rawContent ? current.rawContent : current.content;
+    const review = buildNovelReviewPayload({
+      rawContent,
+      finalContent: current.content,
+      summary: postprocess.summary.summary,
+      openThreads: postprocess.summary.openThreads,
+      consistencyRisks: postprocess.consistencyStatus.risks,
+    });
+    const saved = await prisma.$transaction(async (tx) => {
+      const chapter = await tx.novelChapter.update({
+        where: { id: current.id },
+        data: {
+          summary: postprocess.summary.summary,
+          openThreads: postprocess.summary.openThreads,
+          consistencyJson: postprocess.consistencyStatus as any,
+          aiReview: review.aiReview,
+          aiActionItems: review.aiActionItems,
+          modificationRate: review.modificationRate,
+        },
+      });
+      const txWithAssets = tx as typeof tx & {
+        novelKnowledgeFact?: { upsert: (args: unknown) => Promise<unknown> };
+        novelForeshadowItem?: { upsert: (args: unknown) => Promise<unknown> };
+      };
+      await Promise.all(postprocess.facts.map((fact) => txWithAssets.novelKnowledgeFact?.upsert({
+        where: {
+          projectId_chapterIndex_subject_predicate_object: {
+            projectId: project.id,
+            chapterIndex: fact.chapterIndex ?? current.chapterIndex,
+            subject: fact.subject,
+            predicate: fact.predicate,
+            object: fact.object,
+          },
+        },
+        create: {
+          projectId: project.id,
+          chapterId: current.id,
+          chapterIndex: fact.chapterIndex ?? current.chapterIndex,
+          subject: fact.subject,
+          predicate: fact.predicate,
+          object: fact.object,
+          sourceExcerpt: fact.sourceExcerpt,
+          confidence: fact.confidence,
+          status: fact.status,
+        },
+        update: {
+          sourceExcerpt: fact.sourceExcerpt,
+          confidence: fact.confidence,
+          status: fact.status,
+        },
+      }) ?? Promise.resolve()));
+      await Promise.all(postprocess.foreshadowItems.map((item) => txWithAssets.novelForeshadowItem?.upsert({
+        where: { projectId_title: { projectId: project.id, title: item.title } },
+        create: {
+          projectId: project.id,
+          introducedInChapterId: current.id,
+          introducedInChapterIndex: item.introducedInChapterIndex ?? current.chapterIndex,
+          title: item.title,
+          description: item.description,
+          expectedPayoffChapter: item.expectedPayoffChapter,
+          status: item.status,
+          relatedCharacter: item.relatedCharacter,
+        },
+        update: {
+          description: item.description,
+          expectedPayoffChapter: item.expectedPayoffChapter,
+          status: item.status,
+          relatedCharacter: item.relatedCharacter,
+        },
+      }) ?? Promise.resolve()));
+      return chapter;
+    });
+    return { success: true, data: { chapter: serializeNovelWorkbenchChapter(saved) } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/outline/auto", async (req, reply) => {

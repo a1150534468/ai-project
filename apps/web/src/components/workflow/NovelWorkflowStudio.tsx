@@ -4,19 +4,23 @@ import { AnimatePresence, motion } from "motion/react";
 import { RippleButton, Stagger, StaggerItem, spring, msgIn } from "../../motion";
 import {
   ApiError,
+  analyzeNovelChapter,
   cancelNovelTask,
   createNovelProject,
   generateNovelChapter,
   generateNovelStage,
   getNovelProject,
+  getNovelWorkbench,
   listNovelProjects,
   saveNovelChapter,
+  saveNovelChapterReview,
   saveNovelSection,
   type NovelChapter,
   type NovelProjectDetail,
   type NovelProjectSummary,
   type NovelStageKind,
   type NovelTask,
+  type NovelWorkbenchPayload,
 } from "../../api";
 import {
   createDefaultNovelDraft,
@@ -28,6 +32,11 @@ import {
 import { STAGE_OPTIONS } from "./NovelWorkflowPieces";
 import { normalizeNovelDraftText } from "./novelDraftNormalizer";
 import { appendRepeatBlock, removeRepeatBlock, splitRepeatBlocks, updateRepeatBlock } from "./novelRepeatBlocks";
+import { NovelChapterEditorPanel } from "./NovelChapterEditorPanel";
+import { NovelChapterIntelligencePanel } from "./NovelChapterIntelligencePanel";
+import { NovelChapterListPanel } from "./NovelChapterListPanel";
+import { NovelReviewPanel } from "./NovelReviewPanel";
+import { NovelWorkbenchSignals } from "./NovelWorkbenchSignals";
 
 interface NovelWorkflowStudioProps {
   readonly token: string;
@@ -224,6 +233,14 @@ function upsertChapter(detail: NovelProjectDetail, chapter: NovelChapter): Novel
   return { ...detail, chapters };
 }
 
+function upsertWorkbenchChapter(workbench: NovelWorkbenchPayload, chapter: NovelChapter): NovelWorkbenchPayload {
+  const chapters = [
+    ...workbench.chapters.filter((item) => item.id !== chapter.id && item.chapterIndex !== chapter.chapterIndex),
+    chapter,
+  ].sort((a, b) => a.chapterIndex - b.chapterIndex);
+  return { ...workbench, chapters };
+}
+
 function formatTime(value: string): string {
   return new Date(value).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
@@ -297,6 +314,7 @@ function primaryProjectSummary(detail: NovelProjectDetail): NovelProjectSummary 
 export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowStudioProps) {
   const [projects, setProjects] = useState<readonly NovelProjectSummary[]>([]);
   const [detail, setDetail] = useState<NovelProjectDetail | null>(null);
+  const [workbench, setWorkbench] = useState<NovelWorkbenchPayload | null>(null);
   const [activeTab, setActiveTab] = useState<NovelTabKind>("projects");
   const [createDraft, setCreateDraft] = useState<NovelCreateDraft>(() => createDefaultNovelDraft());
   const [drafts, setDrafts] = useState<Record<NovelStageKind, string>>(() => emptyDrafts());
@@ -311,11 +329,13 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busyAction, setBusyAction] = useState("");
+  const [reviewSaving, setReviewSaving] = useState(false);
 
   const activeTasks = detail?.tasks.filter(isActiveTask) ?? [];
+  const displayChapters = workbench?.chapters ?? detail?.chapters ?? [];
   const selectedChapter = useMemo(
-    () => detail?.chapters.find((chapter) => chapter.id === selectedChapterId) ?? detail?.chapters[0] ?? null,
-    [detail, selectedChapterId],
+    () => displayChapters.find((chapter) => chapter.id === selectedChapterId) ?? displayChapters[0] ?? null,
+    [displayChapters, selectedChapterId],
   );
 
   const applyDetail = useCallback((next: NovelProjectDetail) => {
@@ -324,14 +344,24 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     setSelectedChapterId((current) => next.chapters.some((chapter) => chapter.id === current) ? current : next.chapters[0]?.id || "");
   }, []);
 
+  const applyWorkbench = useCallback((next: NovelWorkbenchPayload) => {
+    setWorkbench(next);
+    setSelectedChapterId((current) => next.chapters.some((chapter) => chapter.id === current) ? current : next.chapters[0]?.id || "");
+  }, []);
+
   const refreshDetail = useCallback(async (projectId: string, quiet = false) => {
     try {
-      applyDetail(await getNovelProject(token, projectId));
+      const [nextDetail, nextWorkbench] = await Promise.all([
+        getNovelProject(token, projectId),
+        getNovelWorkbench(token, projectId).catch(() => null),
+      ]);
+      applyDetail(nextDetail);
+      if (nextWorkbench) applyWorkbench(nextWorkbench);
       if (!quiet) setNotice("");
     } catch (err) {
       if (!quiet) setError(errorMessage(err, "获取小说项目失败"));
     }
-  }, [applyDetail, token]);
+  }, [applyDetail, applyWorkbench, token]);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -388,6 +418,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
             content: chapterContent,
           });
           setDetail((current) => current && current.project.id === detail.project.id ? upsertChapter(current, saved) : current);
+          setWorkbench((current) => current && current.project.id === detail.project.id ? upsertWorkbenchChapter(current, saved) : current);
           setChapterSaveStatus("saved");
         } catch (err) {
           setChapterSaveStatus("error");
@@ -431,6 +462,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
           initialSettings: novelCreateInitialSettings(createDraft),
         });
         applyDetail(created);
+        setWorkbench(null);
         setProjects((prev) => [primaryProjectSummary(created), ...prev.filter((item) => item.id !== created.project.id)]);
         setActiveTab("settings");
         setCreateDraft(createDefaultNovelDraft());
@@ -447,6 +479,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     setError("");
     setNotice("");
     setDetail((current) => current?.project.id === projectId ? current : null);
+    setWorkbench((current) => current?.project.id === projectId ? current : null);
     setActiveTab("settings");
     void refreshDetail(projectId);
   };
@@ -461,6 +494,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
   const handleOpenProjectsPage = () => {
     setError("");
     setNotice("");
+    setWorkbench(null);
     setActiveTab("projects");
     void loadProjects();
   };
@@ -548,6 +582,46 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
         setError(errorMessage(err, "创建章节任务失败"));
       } finally {
         setBusyAction("");
+      }
+    })();
+  };
+
+  const handleSaveReview = (payload: { status?: "pending" | "approved" | "revise"; reviewNotes?: string; regenerateAi?: boolean }) => {
+    if (!detail || !selectedChapter) return;
+    setReviewSaving(true);
+    setError("");
+    setNotice("");
+    void (async () => {
+      try {
+        const saved = await saveNovelChapterReview(token, detail.project.id, selectedChapter.chapterIndex, payload);
+        setDetail((current) => current && current.project.id === detail.project.id ? upsertChapter(current, saved) : current);
+        setWorkbench((current) => current && current.project.id === detail.project.id ? upsertWorkbenchChapter(current, saved) : current);
+        setNotice("章节审阅已保存");
+      } catch (err) {
+        setError(errorMessage(err, "保存章节审阅失败"));
+      } finally {
+        setReviewSaving(false);
+      }
+    })();
+  };
+
+  const handleAnalyzeChapter = () => {
+    if (!detail || !selectedChapter) return;
+    setReviewSaving(true);
+    setError("");
+    setNotice("");
+    void (async () => {
+      try {
+        const saved = await analyzeNovelChapter(token, detail.project.id, selectedChapter.chapterIndex);
+        setDetail((current) => current && current.project.id === detail.project.id ? upsertChapter(current, saved) : current);
+        const nextWorkbench = await getNovelWorkbench(token, detail.project.id).catch(() => null);
+        if (nextWorkbench) applyWorkbench(nextWorkbench);
+        else setWorkbench((current) => current && current.project.id === detail.project.id ? upsertWorkbenchChapter(current, saved) : current);
+        setNotice("章节分析已刷新");
+      } catch (err) {
+        setError(errorMessage(err, "分析章节失败"));
+      } finally {
+        setReviewSaving(false);
       }
     })();
   };
@@ -682,10 +756,6 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
             <h2 className="text-lg font-semibold text-[#1d1d1f]">正文</h2>
             <p className="mt-1 text-sm leading-6 text-[#6e6e73]">{config.helper}</p>
           </div>
-          <RippleButton type="button" onClick={handleChapterGenerate} disabled={busyAction === "chapter"} className="flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:bg-brand/40">
-            <Icon icon="mdi:file-document-edit-outline" aria-hidden />
-            {busyAction === "chapter" ? "提交中" : "生成正文"}
-          </RippleButton>
         </div>
         <div className="mt-5 rounded-[10px] border border-[#e8e8ed] p-4">
           <label className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
@@ -693,44 +763,25 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
             <textarea value={values["长篇记忆"] ?? ""} onChange={(event) => updateField("draft", "长篇记忆", event.target.value)} rows={4} className="w-full resize-y rounded-[8px] border border-[#d2d2d7] p-3 text-sm leading-6" />
           </label>
         </div>
-        <div className="mt-5 grid items-stretch gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <div data-testid="novel-chapter-list-panel" className="grid min-h-[520px] min-w-0 grid-rows-[auto_auto_minmax(0,1fr)] rounded-[10px] border border-[#e8e8ed] p-4">
-            <h3 className="text-sm font-semibold text-[#1d1d1f]">章节列表</h3>
-            <input placeholder="搜索章节或标题" className="mt-3 h-10 w-full rounded-[8px] border border-[#d2d2d7] px-3 text-sm" />
-            <div className="mt-3 grid min-h-0 content-start gap-2 overflow-y-auto overflow-x-hidden pr-1 [scrollbar-width:thin]">
-              {detail?.chapters.map((chapter) => (
-                <button key={chapter.id} type="button" onClick={() => setSelectedChapterId(chapter.id)} className={`min-w-0 max-w-full overflow-hidden rounded-[8px] border px-3 py-2 text-left text-sm ${selectedChapter?.id === chapter.id ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-[#e8e8ed] bg-white"}`}>
-                  <span className="block truncate font-semibold">第 {chapter.chapterIndex} 章 {chapter.title || "未命名"}</span>
-                  <span className="mt-1 block truncate text-xs text-[#6e6e73]">{chapter.summary || `${chapter.billableChars} 字`}</span>
-                </button>
-              ))}
-              {(!detail || detail.chapters.length === 0) && <div className="rounded-[10px] border border-dashed border-[#d2d2d7] py-8 text-center text-xs text-[#8a8a8f]">暂无章节</div>}
-            </div>
-          </div>
-          <div data-testid="novel-chapter-editor-panel" className="grid min-h-[520px] gap-3 rounded-[10px] border border-[#e8e8ed] p-4">
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_160px]">
-              <input value={chapterTitle} onChange={(event) => setChapterTitle(event.target.value)} placeholder={selectedChapter?.title || "章节标题，可选"} className="h-10 rounded-[8px] border border-[#d2d2d7] px-3 text-sm" />
-              <input value={targetChars} onChange={(event) => setTargetChars(event.target.value)} inputMode="numeric" placeholder="目标字数" className="h-10 rounded-[8px] border border-[#d2d2d7] px-3 text-sm" />
-            </div>
-            <textarea value={chapterSummary} onChange={(event) => setChapterSummary(event.target.value)} placeholder="章节概要或本章要求" rows={4} className="w-full resize-y rounded-[8px] border border-[#d2d2d7] p-3 text-sm leading-6" />
-            <div className="grid gap-2">
-              <div className="flex items-center justify-between gap-3 text-xs text-[#8a8a8f]">
-                <span>{selectedChapter ? `第 ${selectedChapter.chapterIndex} 章正文` : "选择章节开始编辑"}</span>
-                <span>
-                  {chapterSaveStatus === "saving" && "自动保存中"}
-                  {chapterSaveStatus === "saved" && "已自动保存"}
-                  {chapterSaveStatus === "error" && "自动保存失败"}
-                </span>
-              </div>
-              <textarea
-                value={selectedChapter ? chapterContent : ""}
-                onChange={(event) => setChapterContent(event.target.value)}
-                disabled={!selectedChapter}
-                placeholder={selectedChapter ? "AI 生成完成后可直接修改正文，系统会自动保存。" : "先在左侧选择章节"}
-                rows={18}
-                className="min-h-[360px] w-full resize-y rounded-[8px] border border-[#e8e8ed] bg-[#f7faf9] p-4 text-sm leading-7 text-[#1d1d1f] outline-none focus:border-brand/60 disabled:text-[#8a8a8f]"
-              />
-            </div>
+        <div className="mt-5 grid items-start gap-4 xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+          <NovelChapterListPanel chapters={displayChapters} selectedChapterId={selectedChapterId} onSelect={setSelectedChapterId} />
+          <NovelChapterEditorPanel
+            selectedChapter={selectedChapter}
+            chapterTitle={chapterTitle}
+            chapterSummary={chapterSummary}
+            chapterContent={chapterContent}
+            targetChars={targetChars}
+            saveStatus={chapterSaveStatus}
+            isGenerating={busyAction === "chapter"}
+            onTitleChange={setChapterTitle}
+            onSummaryChange={setChapterSummary}
+            onContentChange={setChapterContent}
+            onTargetCharsChange={setTargetChars}
+            onGenerate={handleChapterGenerate}
+          />
+          <div className="grid gap-4">
+            <NovelChapterIntelligencePanel chapter={selectedChapter} workbench={workbench} />
+            <NovelReviewPanel chapter={selectedChapter} isSaving={reviewSaving} onSave={handleSaveReview} onAnalyze={handleAnalyzeChapter} />
           </div>
         </div>
       </section>
@@ -864,6 +915,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
             </button>
           </div>
         </div>
+        {workbench && <NovelWorkbenchSignals workbench={workbench} />}
         <div className="mt-4 flex min-w-0 gap-2 overflow-x-auto border-b border-[#e8e8ed] pb-2 [scrollbar-width:thin]">
           {TAB_OPTIONS.map((tab) => (
             <button key={tab.kind} type="button" onClick={() => setActiveTab(tab.kind)} className={`flex h-10 shrink-0 items-center gap-2 border-b-2 px-3 text-sm font-semibold ${activeTab === tab.kind ? "border-brand text-brand-ink" : "border-transparent text-[#6e6e73]"}`}>
