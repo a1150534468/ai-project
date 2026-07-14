@@ -24,6 +24,28 @@ function stringList(value: unknown): string[] {
   return value.map(text).filter(Boolean);
 }
 
+export function normalizeNovelStorylineMilestones(value: unknown, maxChapter: number): Array<{
+  readonly chapterNumber: number;
+  readonly title: string;
+  readonly description: string;
+}> {
+  const seen = new Set<string>();
+  const rows: Array<{ chapterNumber: number; title: string; description: string }> = [];
+  const candidates = list(value);
+  for (const [index, candidate] of candidates.entries()) {
+    const milestone = object(candidate);
+    const rawChapterNumber = milestone.chapterNumber ?? milestone["章节"];
+    const distributedChapterNumber = Math.max(1, Math.round(((index + 1) / (candidates.length + 1)) * Math.max(1, maxChapter)));
+    const chapterNumber = Math.min(Math.max(1, maxChapter), Math.max(1, Math.round(rawChapterNumber === undefined || rawChapterNumber === null || text(rawChapterNumber) === "" ? distributedChapterNumber : number(rawChapterNumber, 1))));
+    const title = text(milestone.title ?? milestone["标题"] ?? candidate) || `第${chapterNumber}章里程碑`;
+    const key = `${chapterNumber}\u0000${title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push({ chapterNumber, title, description: text(milestone.description ?? milestone["描述"]) });
+  }
+  return rows;
+}
+
 function editablePlotVolumes(root: Record<string, unknown>): unknown[] {
   const generated = list(root.volumes ?? root["分卷"]);
   if (generated.length) return generated;
@@ -192,10 +214,12 @@ export async function syncNovelSetupAssets(args: {
     args.prisma.novelStructureNode.deleteMany({ where: { projectId: args.projectId } }),
     args.prisma.novelChapter.deleteMany({ where: { projectId: args.projectId } }),
   ]);
+  const storylineTitles = new Set<string>();
   for (const candidate of list(root.storylines ?? root["故事线"])) {
     const line = object(candidate);
     const title = text(line.title ?? line["标题"]);
-    if (!title) continue;
+    if (!title || storylineTitles.has(title)) continue;
+    storylineTitles.add(title);
     const created = await args.prisma.novelStoryline.create({ data: {
       projectId: args.projectId,
       title,
@@ -204,10 +228,8 @@ export async function syncNovelSetupAssets(args: {
       conflict: text(line.conflict ?? line["冲突"]),
       promiseTags: stringList(line.promiseTags ?? line["承诺标签"]) as Prisma.InputJsonValue,
     } });
-    for (const milestoneCandidate of list(line.milestones ?? line["里程碑"])) {
-      const milestone = object(milestoneCandidate);
-      const chapterNumber = Math.max(1, number(milestone.chapterNumber ?? milestone["章节"], 1));
-      await args.prisma.novelStorylineMilestone.create({ data: { projectId: args.projectId, storylineId: created.id, chapterNumber, title: text(milestone.title ?? milestone["标题"]) || `第${chapterNumber}章里程碑`, description: text(milestone.description ?? milestone["描述"]) } });
+    for (const milestone of normalizeNovelStorylineMilestones(line.milestones ?? line["里程碑"], project.targetChapters)) {
+      await args.prisma.novelStorylineMilestone.create({ data: { projectId: args.projectId, storylineId: created.id, ...milestone } });
     }
   }
   const bookNode = await args.prisma.novelStructureNode.create({ data: { projectId: args.projectId, nodeType: "book", number: 1, title: project.title, description: project.premise, startChapter: 1, endChapter: project.targetChapters, outline: project.premise } });

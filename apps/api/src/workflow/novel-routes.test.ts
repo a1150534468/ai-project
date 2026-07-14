@@ -245,9 +245,8 @@ describe("PlotPilot novel workflow routes", () => {
     const state = createPrismaMock();
     state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: { worldPreset: "宗门世界" }, generationPrefs: {}, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 1, setupCompleted: false, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
     state.rows.bibles.push({ id: "bible-1", projectId: "project-1", premiseLock: "沈氏后人追查家族旧案。", genreLock: "东方玄幻", worldPresetLock: "宗门世界", version: 1, createdAt: fixedNow, updatedAt: fixedNow });
-    const generator = vi.fn(async () => ({
-      model: "server-model",
-      text: JSON.stringify({
+    let progressDuringStream: Record<string, unknown> | undefined;
+    const generatedText = JSON.stringify({
         styleGuide: { narrativeVoice: "第三人称限知", sentenceRhythm: "短句推进", dialogue: "潜台词优先", sensory: "触觉优先", avoid: ["空泛抒情"], sample: "雪落在断剑上。" },
         worldbuilding: {
           coreRules: { summary: "灵力守恒", details: ["越阶必付代价"] },
@@ -256,8 +255,12 @@ describe("PlotPilot novel workflow routes", () => {
           culture: { summary: "血契记名" },
           dailyLife: { summary: "灵票交易" },
         },
-      }),
-    }));
+      });
+    const generator = vi.fn(async (input: any) => {
+      await input.onChunk?.(generatedText);
+      progressDuringStream = { ...state.rows.tasks[0] };
+      return { model: "server-model", text: generatedText };
+    });
     const scheduled: Promise<void>[] = [];
     const app = await createApp({ prisma: state.prisma, billing: createBillingMock(), generator, scheduled });
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/setup/bible/generate", payload: { prompt: "冷峻克制" } });
@@ -267,7 +270,10 @@ describe("PlotPilot novel workflow routes", () => {
     expect(state.rows.worldDimensions).toHaveLength(5);
     expect(state.rows.styleNotes.map((item) => item.title)).toContain("叙事声音");
     expect(state.rows.projects[0].setupStage).toBe(2);
+    expect(progressDuringStream).toMatchObject({ progressStage: "streaming", streamedChars: generatedText.length });
+    expect(Number(progressDuringStream?.progressPercent)).toBeGreaterThan(35);
     expect(state.rows.tasks[0].status).toBe("succeeded");
+    expect(state.rows.tasks[0]).toMatchObject({ progressPercent: 100, progressStage: "completed" });
     await app.close();
   });
 

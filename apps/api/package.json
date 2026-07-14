@@ -9,6 +9,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "worker:local-business-promo": "tsx src/workers/local-business-promo-worker.ts",
+    "worker:novel:dev": "tsx watch src/workers/novel-worker.ts",
     "worker:novel": "tsx src/workers/novel-worker.ts"
   },
   "dependencies": {

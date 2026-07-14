@@ -81,7 +81,7 @@ run_background() {
 echo "[3/4] 启动本机服务..."
 run_background bash -lc 'cd "$1/services/billing" && exec go run .' _ "$ROOT_DIR"
 run_background pnpm --filter @ai-assistant/api dev
-run_background pnpm --filter @ai-assistant/api worker:novel
+run_background pnpm --filter @ai-assistant/api worker:novel:dev
 run_background env PORT=5174 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/web dev
 run_background env PORT=5175 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/admin dev
 

@@ -825,24 +825,29 @@ model NovelChapterVersion {
 }
 
 model NovelTask {
-  id             String              @id @default(cuid())
-  projectId      String
-  userId         String
-  kind           String
-  targetKind     String
-  targetId       String?
-  status         String              @default("queued")
-  requestPayload Json?
-  resultPayload  Json?
-  operationId    String              @unique
-  error          String?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  completedAt    DateTime?
-  cancelledAt    DateTime?
-  project        NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outboxCommand  NovelCommandOutbox?
+  id              String              @id @default(cuid())
+  projectId       String
+  userId          String
+  kind            String
+  targetKind      String
+  targetId        String?
+  status          String              @default("queued")
+  progressPercent Int                 @default(0)
+  progressStage   String              @default("queued")
+  progressMessage String?
+  progressPreview String              @default("")
+  streamedChars   Int                 @default(0)
+  requestPayload  Json?
+  resultPayload   Json?
+  operationId     String              @unique
+  error           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  project         NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outboxCommand   NovelCommandOutbox?
 
   @@index([userId, updatedAt])
   @@index([projectId, updatedAt])

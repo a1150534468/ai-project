@@ -41,6 +41,52 @@ async function appFor(prisma: PrismaClient) {
 }
 
 describe("novel checkpoint resources", () => {
+  it("returns the latest failed setup task so the wizard can explain and retry it", async () => {
+    const failedTask = {
+      id: "task-1",
+      projectId: "project-1",
+      userId: "user-1",
+      kind: "generate",
+      targetKind: "setupPlot",
+      targetId: null,
+      status: "failed",
+      progressPercent: 86,
+      progressStage: "failed",
+      progressMessage: "写入失败",
+      progressPreview: "",
+      streamedChars: 8000,
+      requestPayload: {},
+      resultPayload: null,
+      operationId: "operation-1",
+      error: "Unique constraint failed",
+      createdAt: new Date("2026-07-14T00:00:00Z"),
+      updatedAt: new Date("2026-07-14T00:02:00Z"),
+      completedAt: null,
+      cancelledAt: null,
+    };
+    const prisma = {
+      novelProject: { findFirst: vi.fn(async () => ({ id: "project-1", userId: "user-1", setupStage: 4, setupCompleted: false })) },
+      novelBible: { findUnique: vi.fn(async () => null) },
+      novelCharacter: { findMany: vi.fn(async () => []) },
+      novelCharacterRelation: { findMany: vi.fn(async () => []) },
+      novelLocation: { findMany: vi.fn(async () => []) },
+      novelStoryline: { findMany: vi.fn(async () => []) },
+      novelStructureNode: { findMany: vi.fn(async () => []) },
+      novelChapter: { findMany: vi.fn(async () => []) },
+      novelTask: { findFirst: vi.fn(async ({ where }: any) => where.status ? null : failedTask) },
+    } as unknown as PrismaClient;
+    const app = await appFor(prisma);
+
+    const response = await app.inject({ method: "GET", url: "/api/workflow/novels/projects/project-1/setup" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toMatchObject({
+      activeTask: null,
+      latestTask: { id: "task-1", targetKind: "setupPlot", status: "failed", error: "Unique constraint failed" },
+    });
+    await app.close();
+  });
+
   it("restores the project and chapters while switching branches", async () => {
     const state = checkpointPrisma();
     const app = await appFor(state.prisma);

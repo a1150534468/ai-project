@@ -248,7 +248,7 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await requireProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
-    const [bible, characters, relations, locations, storylines, structure, chapters, task] = await Promise.all([
+    const [bible, characters, relations, locations, storylines, structure, chapters, activeTask, latestTask] = await Promise.all([
       prisma.novelBible.findUnique({ where: { projectId: project.id }, include: { worldDimensions: { orderBy: { position: "asc" } }, styleNotes: { orderBy: { position: "asc" } } } }),
       prisma.novelCharacter.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "asc" } }),
       prisma.novelCharacterRelation.findMany({ where: { projectId: project.id } }),
@@ -257,8 +257,10 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
       prisma.novelStructureNode.findMany({ where: { projectId: project.id }, orderBy: [{ nodeType: "asc" }, { number: "asc" }] }),
       prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } }),
       prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind: { in: ["setupBible", "setupCharacters", "setupLocations", "setupPlot"] }, status: { in: ["queued", "running"] } }, orderBy: { createdAt: "desc" } }),
+      prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind: { in: ["setupBible", "setupCharacters", "setupLocations", "setupPlot"] } }, orderBy: { createdAt: "desc" } }),
     ]);
-    return { success: true, data: { project: { id: project.id, setupStage: project.setupStage, setupCompleted: project.setupCompleted }, bible, characters, relations, locations, storylines, structure, chapters, activeTask: task ? { ...task, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString() } : null } };
+    const serializeSetupTask = (task: typeof activeTask) => task ? { ...task, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), completedAt: task.completedAt?.toISOString() ?? null, cancelledAt: task.cancelledAt?.toISOString() ?? null } : null;
+    return { success: true, data: { project: { id: project.id, setupStage: project.setupStage, setupCompleted: project.setupCompleted }, bible, characters, relations, locations, storylines, structure, chapters, activeTask: serializeSetupTask(activeTask), latestTask: serializeSetupTask(latestTask) } };
   });
 
   app.put("/api/workflow/novels/projects/:projectId/setup/:setupKind", async (req, reply) => {

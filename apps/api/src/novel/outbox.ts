@@ -85,7 +85,18 @@ export async function recoverInterruptedNovelTasks(
   });
   for (const task of tasks) {
     await prisma.$transaction(async (tx) => {
-      if (task.status === "running") await tx.novelTask.update({ where: { id: task.id }, data: { status: "queued", error: "Worker 中断，已重新排队" } });
+      if (task.status === "running") await tx.novelTask.update({
+        where: { id: task.id },
+        data: {
+          status: "queued",
+          progressPercent: 0,
+          progressStage: "queued",
+          progressMessage: "Worker 中断，任务已重新排队",
+          progressPreview: "",
+          streamedChars: 0,
+          error: "Worker 中断，已重新排队",
+        },
+      });
       await tx.novelCommandOutbox.upsert({
         where: { taskId: task.id },
         create: { projectId: task.projectId, taskId: task.id, payload: { type: "generation-task", taskId: task.id }, priority: 1, jobName: "generation-task" },

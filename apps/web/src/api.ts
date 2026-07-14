@@ -609,6 +609,11 @@ export interface NovelTask {
   targetKind: "setupBible" | "setupCharacters" | "setupLocations" | "setupPlot" | "chapter" | "chapterRewrite" | string;
   targetId: string | null;
   status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  progressPercent: number;
+  progressStage: string;
+  progressMessage: string | null;
+  progressPreview: string;
+  streamedChars: number;
   requestPayload: unknown;
   error: string | null;
   createdAt: string;
@@ -737,6 +742,7 @@ export interface NovelSetupPayload {
   structure: NovelStructureNode[];
   chapters: NovelChapter[];
   activeTask: NovelTask | null;
+  latestTask: NovelTask | null;
 }
 
 export async function getNovelSetup(token: string, projectId: string): Promise<NovelSetupPayload> {

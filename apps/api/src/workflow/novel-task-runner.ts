@@ -25,6 +25,11 @@ export interface NovelTaskRow {
   readonly targetId: string | null;
   readonly operationId: string;
   readonly status: string;
+  readonly progressPercent: number;
+  readonly progressStage: string;
+  readonly progressMessage: string | null;
+  readonly progressPreview: string;
+  readonly streamedChars: number;
   readonly requestPayload: Prisma.JsonValue | null;
   readonly error: string | null;
   readonly createdAt: Date;
@@ -55,6 +60,46 @@ function jsonValue(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNu
 
 function taskPayload(task: NovelTaskRow): Record<string, unknown> {
   return isRecord(task.requestPayload) ? task.requestPayload : {};
+}
+
+const PROGRESS_PREVIEW_CHARS = 1600;
+
+function streamedCharCount(value: string): number {
+  return Array.from(value).length;
+}
+
+function appendProgressPreview(current: string, chunk: string): string {
+  const chars = Array.from(`${current}${chunk}`);
+  return chars.slice(Math.max(0, chars.length - PROGRESS_PREVIEW_CHARS)).join("");
+}
+
+function expectedStreamChars(targetKind: NovelTargetKind, payload: Record<string, unknown>, targetChapters: number): number {
+  if (targetKind === "chapter" || targetKind === "chapterRewrite") {
+    return Math.max(300, Number(payload.targetChars) || (targetKind === "chapter" ? 3000 : 500));
+  }
+  if (targetKind === "setupBible") return 3500;
+  if (targetKind === "setupCharacters") return 5000;
+  if (targetKind === "setupLocations") return 3500;
+  return Math.max(6000, Math.min(16_000, targetChapters * 90));
+}
+
+async function updateTaskProgress(prisma: PrismaClient, taskId: string, data: {
+  readonly progressPercent: number;
+  readonly progressStage: string;
+  readonly progressMessage: string;
+  readonly progressPreview?: string;
+  readonly streamedChars?: number;
+}): Promise<void> {
+  await prisma.novelTask.update({
+    where: { id: taskId },
+    data: {
+      progressPercent: Math.max(0, Math.min(100, Math.round(data.progressPercent))),
+      progressStage: data.progressStage,
+      progressMessage: data.progressMessage,
+      ...(data.progressPreview === undefined ? {} : { progressPreview: data.progressPreview }),
+      ...(data.streamedChars === undefined ? {} : { streamedChars: data.streamedChars }),
+    },
+  });
 }
 
 export function estimateReserveChars(targetKind: NovelTargetKind, targetChars?: number, _targetCount?: number): number {
@@ -128,6 +173,11 @@ export function serializeTask(task: NovelTaskRow) {
     targetKind: task.targetKind,
     targetId: task.targetId,
     status: task.status,
+    progressPercent: task.progressPercent,
+    progressStage: task.progressStage,
+    progressMessage: task.progressMessage,
+    progressPreview: task.progressPreview,
+    streamedChars: task.streamedChars,
     requestPayload: task.requestPayload,
     error: task.error,
     createdAt: task.createdAt.toISOString(),
@@ -408,6 +458,11 @@ export async function reserveAndCreateTask(args: {
           targetKind: args.targetKind,
           targetId: args.targetId ?? null,
           status: NOVEL_TASK_STATUS.queued,
+          progressPercent: 0,
+          progressStage: "queued",
+          progressMessage: "任务已入队，等待 Novel Worker 接收",
+          progressPreview: "",
+          streamedChars: 0,
           requestPayload: jsonValue(args.payload),
           operationId: opId,
         },
@@ -613,6 +668,9 @@ async function saveGeneratedResult(args: {
       where: { id: task.id },
       data: {
         status: NOVEL_TASK_STATUS.succeeded,
+        progressPercent: 100,
+        progressStage: "completed",
+        progressMessage: "生成结果已校验并写入作品资料",
         resultPayload: { model: args.model, billableChars, settledPoints: args.settledPoints },
         completedAt: new Date(),
       },
@@ -633,7 +691,18 @@ export async function runNovelTask(args: {
   if (!latestBeforeRun || latestBeforeRun.status === NOVEL_TASK_STATUS.succeeded || latestBeforeRun.status === NOVEL_TASK_STATUS.failed || latestBeforeRun.status === NOVEL_TASK_STATUS.cancelled) return;
   try {
     const claimed = await assertTaskActive(prisma, args.task.id);
-    await prisma.novelTask.update({ where: { id: claimed.id }, data: { status: NOVEL_TASK_STATUS.running, error: null } });
+    await prisma.novelTask.update({
+      where: { id: claimed.id },
+      data: {
+        status: NOVEL_TASK_STATUS.running,
+        error: null,
+        progressPercent: 5,
+        progressStage: "preparing",
+        progressMessage: "Worker 已接收任务，正在读取作品资料",
+        progressPreview: "",
+        streamedChars: 0,
+      },
+    });
     const task = await assertTaskActive(prisma, claimed.id);
     const payload = taskPayload(task);
     const project = await prisma.novelProject.findUnique({ where: { id: task.projectId } });
@@ -642,6 +711,11 @@ export async function runNovelTask(args: {
     const chapterIndex = Number(payload.chapterIndex) || undefined;
     const chapterTitle = String(payload.title || "");
     const chapterSummary = String(payload.summary || "");
+    await updateTaskProgress(prisma, task.id, {
+      progressPercent: 12,
+      progressStage: "context",
+      progressMessage: "正在汇总已确认的故事设定与前序资料",
+    });
     const contextText = targetKind === "chapter" || targetKind === "chapterRewrite"
       ? [
           await buildChapterContextText({
@@ -663,6 +737,11 @@ export async function runNovelTask(args: {
           targetKind === "setupPlot" ? `主要人物：${JSON.stringify(await prisma.novelCharacter.findMany({ where: { projectId: project.id } }))}` : "",
           targetKind === "setupPlot" ? `地点：${JSON.stringify(await prisma.novelLocation.findMany({ where: { projectId: project.id } }))}` : "",
         ].filter(Boolean).join("\n\n");
+    await updateTaskProgress(prisma, task.id, {
+      progressPercent: 24,
+      progressStage: "prompting",
+      progressMessage: "上下文已就绪，正在构建本步骤生成指令",
+    });
     const promptStore = prisma as PrismaClient & {
       novelPromptTemplate?: { findUnique: (args: unknown) => Promise<{ content: string; model: string; temperature: number } | null> };
     };
@@ -678,48 +757,120 @@ export async function runNovelTask(args: {
         templateModel = "";
       }
     }
-    const result = await generator({
-      targetKind,
-      projectTitle: project.title,
-      genre: project.genre,
-      userPrompt: String(payload.prompt || ""),
-      contextText,
-      chapterTitle,
-      chapterSummary,
-      chapterIndex,
-      targetChars: Number(payload.targetChars) || undefined,
-      targetCount: Number(payload.targetCount) || undefined,
-      promptOverride: template ? renderNovelPromptTemplate(template.content, {
+    await updateTaskProgress(prisma, task.id, {
+      progressPercent: 32,
+      progressStage: "generating",
+      progressMessage: "生成指令已提交，等待模型开始流式输出",
+    });
+    let streamedChars = 0;
+    let progressPreview = "";
+    let lastPersistedAt = 0;
+    let lastPersistedChars = 0;
+    const modelRequestedAt = Date.now();
+    let waitHeartbeat = Promise.resolve();
+    let waitTimer: ReturnType<typeof setInterval> | undefined = setInterval(() => {
+      if (streamedChars > 0) return;
+      const waitingSeconds = Math.max(1, Math.round((Date.now() - modelRequestedAt) / 1000));
+      waitHeartbeat = waitHeartbeat
+        .then(() => updateTaskProgress(prisma, task.id, {
+          progressPercent: 32,
+          progressStage: "generating",
+          progressMessage: `模型正在处理生成指令，已等待 ${waitingSeconds} 秒，尚未返回首个可展示文本`,
+        }))
+        .catch(() => undefined);
+    }, 5000);
+    const expectedChars = expectedStreamChars(targetKind, payload, project.targetChapters);
+    const onChunk = async (chunk: string) => {
+      if (streamedChars === 0 && waitTimer) {
+        clearInterval(waitTimer);
+        waitTimer = undefined;
+        await waitHeartbeat;
+      }
+      streamedChars += streamedCharCount(chunk);
+      progressPreview = appendProgressPreview(progressPreview, chunk);
+      await args.onChunk?.(chunk);
+      const now = Date.now();
+      const charsSincePersist = streamedChars - lastPersistedChars;
+      if ((now - lastPersistedAt < 700 || charsSincePersist < 80) && charsSincePersist < 500) return;
+      const outputRatio = Math.min(1, streamedChars / expectedChars);
+      await updateTaskProgress(prisma, task.id, {
+        progressPercent: 35 + outputRatio * 49,
+        progressStage: "streaming",
+        progressMessage: `模型正在流式生成，已接收 ${streamedChars.toLocaleString("zh-CN")} 字`,
+        progressPreview,
+        streamedChars,
+      });
+      lastPersistedAt = now;
+      lastPersistedChars = streamedChars;
+    };
+    let result: Awaited<ReturnType<NovelGenerator>>;
+    try {
+      result = await generator({
+        targetKind,
         projectTitle: project.title,
         genre: project.genre,
-        chapterNumber: chapterIndex ?? "",
-        chapterTitle,
-        chapterPlan: chapterSummary,
-        context: contextText,
-        targetChars: Number(payload.targetChars) || 3000,
         userPrompt: String(payload.prompt || ""),
-      }) : undefined,
-      modelOverride: templateModel || undefined,
-      temperatureOverride: template?.temperature,
-      onChunk: args.onChunk,
-    });
+        contextText,
+        chapterTitle,
+        chapterSummary,
+        chapterIndex,
+        targetChars: Number(payload.targetChars) || undefined,
+        targetCount: Number(payload.targetCount) || undefined,
+        promptOverride: template ? renderNovelPromptTemplate(template.content, {
+          projectTitle: project.title,
+          genre: project.genre,
+          chapterNumber: chapterIndex ?? "",
+          chapterTitle,
+          chapterPlan: chapterSummary,
+          context: contextText,
+          targetChars: Number(payload.targetChars) || 3000,
+          userPrompt: String(payload.prompt || ""),
+        }) : undefined,
+        modelOverride: templateModel || undefined,
+        temperatureOverride: template?.temperature,
+        onChunk,
+      });
+    } finally {
+      if (waitTimer) clearInterval(waitTimer);
+      await waitHeartbeat;
+    }
     await assertTaskActive(prisma, task.id);
+    await updateTaskProgress(prisma, task.id, {
+      progressPercent: 86,
+      progressStage: "validating",
+      progressMessage: `模型输出完成，共接收 ${streamedChars.toLocaleString("zh-CN")} 字，正在校验结构`,
+      progressPreview,
+      streamedChars,
+    });
     const parsed = parseRequiredGeneratedNovelValue(targetKind, result.text);
     const billableChars = billableCharCount(targetKind, parsed);
+    await updateTaskProgress(prisma, task.id, {
+      progressPercent: 91,
+      progressStage: "settling",
+      progressMessage: "输出结构校验通过，正在核算本次生成用量",
+    });
     const settled = await billing.settleResource({
       operationId: task.operationId,
       resourceKey: NOVEL_RESOURCE_KEY,
       units: billableChars,
     });
+    await updateTaskProgress(prisma, task.id, {
+      progressPercent: 96,
+      progressStage: "saving",
+      progressMessage: "用量核算完成，正在写入作品资料",
+    });
     await saveGeneratedResult({ prisma, task, parsed, model: result.model, billableChars, settledPoints: settled.settled });
   } catch (error) {
     await billing.refundResource(args.task.operationId).catch(() => undefined);
     const status = error instanceof NovelTaskStoppedError ? NOVEL_TASK_STATUS.cancelled : NOVEL_TASK_STATUS.failed;
+    const message = status === NOVEL_TASK_STATUS.cancelled ? "用户已取消" : safeErrorMessage(error);
     await prisma.novelTask.update({
       where: { id: args.task.id },
       data: {
         status,
-        error: status === NOVEL_TASK_STATUS.cancelled ? "用户已取消" : safeErrorMessage(error),
+        progressStage: status,
+        progressMessage: message,
+        error: message,
         cancelledAt: status === NOVEL_TASK_STATUS.cancelled ? new Date() : undefined,
       },
     }).catch(() => undefined);
