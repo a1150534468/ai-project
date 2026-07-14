@@ -44,6 +44,7 @@ import { ecomMainImageRoutes } from "./workflow/ecom-main-routes.js";
 import { ecomHelpWriteRoutes } from "./workflow/ecom-helpwrite-routes.js";
 import { fanoutRoutes } from "./workflow/fanout-routes.js";
 import { novelWorkflowRoutes } from "./workflow/novel-routes.js";
+import { novelEngineRoutes } from "./novel/routes.js";
 import { comicWorkflowRoutes } from "./workflow/comic-routes.js";
 import { comicProductionRoutes } from "./workflow/comic-production-routes.js";
 import { reportRoutes } from "./workflow/report-routes.js";
@@ -136,6 +137,7 @@ export async function buildServer() {
   await app.register(ecomHelpWriteRoutes);
   await app.register(fanoutRoutes);
   await app.register(novelWorkflowRoutes);
+  await app.register(novelEngineRoutes);
   await app.register(comicWorkflowRoutes);
   await app.register(comicProductionRoutes);
   await app.register((a) => reportRoutes(a, { prisma: getPrisma() }));

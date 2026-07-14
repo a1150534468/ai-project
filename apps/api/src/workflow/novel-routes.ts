@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
@@ -7,15 +7,13 @@ import { createNovelGenerator, type NovelGenerator } from "./novel-generation.js
 import { visibleCharCount } from "./novel-billable.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload, estimateNovelModificationRate } from "./novel-review.js";
-import { NOVEL_COVER_RESOURCE_KEY, NOVEL_RESOURCE_KEY, NOVEL_STAGE_KINDS, NOVEL_TASK_STATUS } from "./novel-types.js";
-import type { NovelStageKind } from "./novel-types.js";
+import { dispatchNovelOutboxBatch } from "../novel/outbox.js";
+import { NOVEL_COVER_RESOURCE_KEY, NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS } from "./novel-types.js";
 import { getNovelWorkbench, serializeNovelWorkbenchChapter } from "./novel-workbench.js";
 import {
-  ensureProjectSections,
   estimateReserveChars,
   getProjectDetail,
   nextChapterIndex,
-  refreshNovelLongMemory,
   refreshNovelVectorMemoryBestEffort,
   reserveAndCreateTask,
   runNovelTask,
@@ -66,42 +64,29 @@ const DEFAULT_NOVEL_COVER_PRICE: NovelResourcePriceRow = {
 
 const projectParamsSchema = z.object({ projectId: z.string().trim().min(1) });
 const taskParamsSchema = z.object({ taskId: z.string().trim().min(1) });
-const stageParamsSchema = projectParamsSchema.extend({
-  kind: z.enum(NOVEL_STAGE_KINDS),
+const setupParamsSchema = projectParamsSchema.extend({
+  setupKind: z.enum(["bible", "characters", "locations", "plot"]),
 });
+const setupGenerateSchema = z.object({ prompt: z.string().trim().max(5000).optional().default("") });
 const chapterParamsSchema = projectParamsSchema.extend({
   chapterIndex: z.coerce.number().int().min(1).max(9999),
 });
-const textListSchema = z.array(z.string().trim().max(40)).max(120).optional().default([]);
-const initialSettingsSchema = z.object({
-  channel: z.string().trim().max(40).optional().default(""),
-  coreRequirement: z.string().trim().max(3000).optional().default(""),
-  platforms: textListSchema,
-  topics: textListSchema,
-  perspective: z.string().trim().max(40).optional().default(""),
-  styleMode: z.string().trim().max(40).optional().default(""),
-  era: z.string().trim().max(40).optional().default(""),
-  hasCheat: z.boolean().optional(),
-  styleTags: z.array(z.string().trim().max(40)).max(5).optional().default([]),
-  language: z.string().trim().max(20).optional().default(""),
-  chapterCount: z.number().int().min(1).max(9999).optional(),
-  chapterChars: z.number().int().min(500).max(50000).optional(),
-});
+const chapterVersionParamsSchema = chapterParamsSchema.extend({ versionId: z.string().trim().min(1) });
 const createProjectSchema = z.object({
   title: z.string().trim().min(1).max(80),
-  genre: z.string().trim().max(40).optional().default(""),
-  initialSettings: initialSettingsSchema.optional(),
+  premise: z.string().trim().min(10).max(20_000),
+  genre: z.string().trim().max(120).optional().default(""),
+  worldPreset: z.string().trim().max(10_000).optional().default(""),
+  storyStructure: z.string().trim().max(10_000).optional().default(""),
+  pacingControl: z.string().trim().max(10_000).optional().default(""),
+  writingStyle: z.string().trim().max(10_000).optional().default(""),
+  specialRequirements: z.string().trim().max(10_000).optional().default(""),
+  targetChapters: z.number().int().min(1).max(9999).default(100),
+  targetCharsPerChapter: z.number().int().min(500).max(20_000).default(3000),
 });
 const updateProjectSchema = z.object({
   title: z.string().trim().min(1).max(80).optional(),
   genre: z.string().trim().max(40).optional(),
-});
-const saveSectionSchema = z.object({
-  displayText: z.string().max(200_000).default(""),
-});
-const stageGenerateSchema = z.object({
-  prompt: z.string().trim().max(3000).optional().default(""),
-  targetCount: z.number().int().min(1).max(500).optional(),
 });
 const chapterGenerateSchema = z.object({
   chapterIndex: z.number().int().min(1).max(9999).optional(),
@@ -112,19 +97,23 @@ const chapterGenerateSchema = z.object({
 const saveChapterSchema = z.object({
   title: z.string().trim().max(80).optional().default(""),
   summary: z.string().trim().max(3000).optional().default(""),
+  outline: z.string().max(20_000).optional(),
+  generationHint: z.string().max(20_000).optional(),
+  executionPlan: z.unknown().optional(),
+  microBeats: z.array(z.unknown()).max(100).optional(),
   content: z.string().max(500_000).optional().default(""),
+});
+const rewriteChapterSelectionSchema = z.object({
+  selectedText: z.string().min(1).max(12_000),
+  selectionStart: z.number().int().min(0).max(500_000),
+  selectionEnd: z.number().int().min(1).max(500_000),
+  instruction: z.string().trim().min(1).max(2000),
 });
 const reviewChapterSchema = z.object({
   status: z.enum(["pending", "approved", "revise"]).optional(),
-  reviewNotes: z.string().max(20_000).optional().default(""),
+  reviewNotes: z.string().max(20_000).optional(),
   regenerateAi: z.boolean().optional().default(false),
 });
-
-function scheduledRunner(app: FastifyInstance): ScheduleTask {
-  return (work) => {
-    void work().catch((error) => app.log.error(error));
-  };
-}
 
 async function findOwnedProject(prisma: PrismaClient, userId: string, projectId: string) {
   return prisma.novelProject.findFirst({ where: { id: projectId, userId } });
@@ -135,45 +124,12 @@ function billingUnavailable(app: FastifyInstance, error: unknown, message: strin
   return { error: message };
 }
 
-function compactList(values: readonly string[]): string[] {
-  return values.map((value) => value.trim()).filter(Boolean);
+function jsonValue(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
+  return value === null || value === undefined ? Prisma.JsonNull : value as Prisma.InputJsonValue;
 }
 
 function jsonStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
-}
-
-function extractKnownNamesFromSections(sections: readonly { kind: string; displayText: string }[]): { characters: string[]; locations: string[] } {
-  const chars = sections.find((section) => section.kind === "chars")?.displayText ?? "";
-  const world = sections.find((section) => section.kind === "world")?.displayText ?? "";
-  const names = (text: string) => Array.from(new Set((text.match(/[\u4e00-\u9fff]{2,8}/gu) ?? []).slice(0, 30)));
-  return { characters: names(chars), locations: names(world) };
-}
-
-function pushInitialBlock(blocks: string[], heading: string, value: string): void {
-  const text = value.trim();
-  if (text) blocks.push(`【${heading}】\n${text}`);
-}
-
-function composeInitialSettingsText(settings: z.infer<typeof initialSettingsSchema> | undefined): string {
-  if (!settings) return "";
-  const blocks: string[] = [];
-  pushInitialBlock(blocks, "核心要求", settings.coreRequirement);
-  pushInitialBlock(blocks, "频道", settings.channel);
-  pushInitialBlock(blocks, "平台", compactList(settings.platforms).join(" / "));
-  pushInitialBlock(blocks, "题材", compactList(settings.topics).join(" / "));
-  pushInitialBlock(blocks, "视角", settings.perspective);
-  pushInitialBlock(blocks, "文风模式", settings.styleMode);
-  pushInitialBlock(blocks, "年代", settings.era);
-  if (settings.hasCheat !== undefined) pushInitialBlock(blocks, "是否金手指", settings.hasCheat ? "是" : "否");
-  pushInitialBlock(blocks, "风格标签", compactList(settings.styleTags).join(" / "));
-  pushInitialBlock(blocks, "语言", settings.language);
-  const chapterLines = [
-    settings.chapterCount !== undefined ? `章节数：${settings.chapterCount}` : "",
-    settings.chapterChars !== undefined ? `每章字数：${settings.chapterChars}` : "",
-  ].filter(Boolean);
-  pushInitialBlock(blocks, "章节规划", chapterLines.join("\n"));
-  return blocks.join("\n\n");
 }
 
 function resourcePrice(rows: readonly NovelResourcePriceRow[], fallback: NovelResourcePriceRow): NovelResourcePriceRow {
@@ -188,10 +144,15 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     token: process.env.BILLING_INTERNAL_TOKEN!,
   });
   const generator = deps.generator ?? createNovelGenerator();
-  const scheduleTask = deps.scheduleTask ?? scheduledRunner(app);
+  const scheduleTask = deps.scheduleTask;
+  const taskDelivery = scheduleTask ? "inline" as const : "worker-outbox" as const;
 
   function enqueue(task: NovelTaskRow): void {
-    scheduleTask(() => runNovelTask({ prisma, billing, generator, task }));
+    if (scheduleTask) {
+      scheduleTask(() => runNovelTask({ prisma, billing, generator, task }));
+      return;
+    }
+    void dispatchNovelOutboxBatch(prisma).catch((error) => app.log.error(error));
   }
 
   app.get("/api/workflow/novels/pricing", async (req, reply) => {
@@ -227,12 +188,19 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
       where: { userId },
       orderBy: { updatedAt: "desc" },
       take: 30,
+      include: { chapters: { select: { billableChars: true } } },
     });
     return { success: true, data: rows.map((project) => ({
       id: project.id,
       title: project.title,
       genre: project.genre,
+      premise: project.premise,
       status: project.status,
+      setupStage: project.setupStage,
+      setupCompleted: project.setupCompleted,
+      targetChapters: project.targetChapters,
+      chapterCount: project.chapters.length,
+      totalWords: project.chapters.reduce((sum, chapter) => sum + chapter.billableChars, 0),
       updatedAt: project.updatedAt.toISOString(),
     })) };
   });
@@ -243,34 +211,31 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const parsed = createProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "请输入小说标题" });
     const project = await prisma.novelProject.create({
-      data: { userId, title: parsed.data.title, genre: parsed.data.genre },
+      data: {
+        userId,
+        title: parsed.data.title,
+        genre: parsed.data.genre,
+        premise: parsed.data.premise,
+        targetChapters: parsed.data.targetChapters,
+        targetCharsPerChapter: parsed.data.targetCharsPerChapter,
+        setupStage: 1,
+        setupCompleted: false,
+        settings: {
+          worldPreset: parsed.data.worldPreset,
+          storyStructure: parsed.data.storyStructure,
+          pacingControl: parsed.data.pacingControl,
+          writingStyle: parsed.data.writingStyle,
+          specialRequirements: parsed.data.specialRequirements,
+        },
+        bible: {
+          create: {
+            premiseLock: parsed.data.premise,
+            genreLock: parsed.data.genre,
+            worldPresetLock: parsed.data.worldPreset,
+          },
+        },
+      },
     });
-    await ensureProjectSections(prisma, project.id);
-    const initialSettingsText = composeInitialSettingsText(parsed.data.initialSettings);
-    if (initialSettingsText) {
-      const settings = await prisma.novelSection.upsert({
-        where: { projectId_kind: { projectId: project.id, kind: "settings" } },
-        create: {
-          projectId: project.id,
-          kind: "settings",
-          status: "draft",
-          displayText: initialSettingsText,
-          billableChars: 0,
-        },
-        update: {
-          status: "draft",
-          displayText: initialSettingsText,
-          billableChars: 0,
-        },
-      });
-      await prisma.novelSectionVersion.create({
-        data: {
-          sectionId: settings.id,
-          displayText: initialSettingsText,
-          billableChars: 0,
-        },
-      });
-    }
     await refreshNovelVectorMemoryBestEffort(prisma, project.id);
     const detail = await getProjectDetail(prisma, userId, project.id);
     return reply.code(201).send({ success: true, data: detail });
@@ -315,6 +280,20 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     return { success: true, data: detail };
   });
 
+  app.delete("/api/workflow/novels/projects/:projectId", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const activeRun = await prisma.novelRun.findFirst({ where: { projectId: project.id, status: { in: ["queued", "planning", "writing", "validating", "postprocessing", "awaitingReview", "paused", "failed"] } }, select: { id: true } });
+    const activeTask = await prisma.novelTask.findFirst({ where: { projectId: project.id, status: { in: ["queued", "running"] } }, select: { id: true } });
+    if (activeRun || activeTask) return reply.code(409).send({ error: "请先停止当前小说运行和生成任务，再删除作品" });
+    await prisma.novelProject.delete({ where: { id: project.id } });
+    return { success: true };
+  });
+
   app.get("/api/workflow/novels/projects/:projectId/tasks", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
@@ -330,78 +309,25 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     return { success: true, data: tasks.map(serializeTask) };
   });
 
-  app.put("/api/workflow/novels/projects/:projectId/stages/:kind", async (req, reply) => {
+  app.post("/api/workflow/novels/projects/:projectId/setup/:setupKind/generate", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
-    const params = stageParamsSchema.safeParse(req.params);
-    const body = saveSectionSchema.safeParse(req.body);
+    const params = setupParamsSchema.safeParse(req.params);
+    const body = setupGenerateSchema.safeParse(req.body);
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
-    const saved = await prisma.$transaction(async (tx) => {
-      const section = await tx.novelSection.upsert({
-        where: { projectId_kind: { projectId: project.id, kind: params.data.kind } },
-        create: {
-          projectId: project.id,
-          kind: params.data.kind,
-          status: "draft",
-          displayText: body.data.displayText,
-          billableChars: 0,
-        },
-        update: {
-          status: "draft",
-          displayText: body.data.displayText,
-          billableChars: 0,
-        },
-      });
-      await tx.novelSectionVersion.create({
-        data: {
-          sectionId: section.id,
-          displayText: body.data.displayText,
-          billableChars: 0,
-        },
-      });
-      return section;
-    });
-    await refreshNovelVectorMemoryBestEffort(prisma, project.id);
-    return { success: true, data: { section: {
-      id: saved.id,
-      kind: saved.kind,
-      label: params.data.kind,
-      status: saved.status,
-      displayText: saved.displayText,
-      billableChars: saved.billableChars,
-      lastTaskId: saved.lastTaskId,
-      updatedAt: saved.updatedAt.toISOString(),
-    } } };
-  });
-
-  app.post("/api/workflow/novels/projects/:projectId/stages/:kind/generate", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
-    const params = stageParamsSchema.safeParse(req.params);
-    const body = stageGenerateSchema.safeParse(req.body);
-    if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
-    const project = await findOwnedProject(prisma, userId, params.data.projectId);
-    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    if (project.setupCompleted) return reply.code(409).send({ error: "新书设置已完成，请在作品工作台中修改资料" });
+    const targetKind = ({ bible: "setupBible", characters: "setupCharacters", locations: "setupLocations", plot: "setupPlot" } as const)[params.data.setupKind];
+    const active = await prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind, status: { in: ["queued", "running"] } } });
+    if (active) return reply.code(409).send({ error: "该设置步骤正在生成" });
     try {
-      const task = await reserveAndCreateTask({
-        prisma,
-        billing,
-        userId,
-        projectId: project.id,
-        targetKind: params.data.kind,
-        payload: {
-          prompt: body.data.prompt,
-          ...(body.data.targetCount !== undefined ? { targetCount: body.data.targetCount } : {}),
-        },
-        estimateChars: estimateReserveChars(params.data.kind, undefined, body.data.targetCount),
-      });
+      const task = await reserveAndCreateTask({ prisma, billing, userId, projectId: project.id, targetKind, payload: { prompt: body.data.prompt }, estimateChars: estimateReserveChars(targetKind), delivery: taskDelivery });
       enqueue(task);
       return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
     } catch (error) {
       if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });
-      return reply.code(502).send(billingUnavailable(app, error, "创建小说任务失败"));
+      return reply.code(502).send(billingUnavailable(app, error, "创建新书设置任务失败"));
     }
   });
 
@@ -423,6 +349,7 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
         targetKind: "chapter",
         payload: { ...body.data, chapterIndex },
         estimateChars: estimateReserveChars("chapter", body.data.targetChars),
+        delivery: taskDelivery,
       });
       enqueue(task);
       return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
@@ -440,8 +367,13 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const existing = await prisma.novelChapter.findUnique({
+      where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } },
+    });
     const saved = await prisma.$transaction(async (tx) => {
       const content = body.data.content;
+      const contentChanged = existing?.content !== content;
+      const modificationRate = estimateNovelModificationRate(existing?.rawContent ?? "", content);
       const chapter = await tx.novelChapter.upsert({
         where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } },
         create: {
@@ -449,28 +381,133 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
           chapterIndex: params.data.chapterIndex,
           title: body.data.title || `第 ${params.data.chapterIndex} 章`,
           summary: body.data.summary,
+          outline: body.data.outline ?? body.data.summary,
+          generationHint: body.data.generationHint ?? "",
+          executionPlan: body.data.executionPlan === undefined ? undefined : jsonValue(body.data.executionPlan),
+          microBeats: body.data.microBeats === undefined ? undefined : jsonValue(body.data.microBeats),
           content,
           status: content.trim() ? "ready" : "draft",
+          reviewStatus: "pending",
+          modificationRate,
+          reviewedAt: null,
           billableChars: visibleCharCount(content),
         },
         update: {
           title: body.data.title,
           summary: body.data.summary,
+          ...(body.data.outline !== undefined ? { outline: body.data.outline } : {}),
+          ...(body.data.generationHint !== undefined ? { generationHint: body.data.generationHint } : {}),
+          ...(body.data.executionPlan !== undefined ? { executionPlan: jsonValue(body.data.executionPlan) } : {}),
+          ...(body.data.microBeats !== undefined ? { microBeats: jsonValue(body.data.microBeats) } : {}),
           content,
           status: content.trim() ? "ready" : "draft",
+          ...(contentChanged ? { reviewStatus: "pending", modificationRate, reviewedAt: null } : {}),
           billableChars: visibleCharCount(content),
         },
       });
-      await refreshNovelLongMemory({
-        store: tx,
-        projectId: project.id,
-        sourceTaskId: chapter.lastTaskId,
-        recordVersion: false,
-      });
+      if (contentChanged) {
+        await tx.novelChapterVersion.create({
+          data: { chapterId: chapter.id, title: chapter.title, content: chapter.content, billableChars: chapter.billableChars },
+        });
+      }
       return chapter;
     });
     await refreshNovelVectorMemoryBestEffort(prisma, project.id);
     return { success: true, data: { chapter: serializeNovelWorkbenchChapter(saved) } };
+  });
+
+  app.post("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/rewrite", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = chapterParamsSchema.safeParse(req.params);
+    const body = rewriteChapterSelectionSchema.safeParse(req.body);
+    if (!params.success || !body.success || body.data.selectionEnd <= body.data.selectionStart) {
+      return reply.code(400).send({ error: "请选择需要改写的正文，并填写改写要求" });
+    }
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const chapter = await prisma.novelChapter.findUnique({
+      where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } },
+    });
+    if (!chapter) return reply.code(404).send({ error: "章节不存在" });
+    const { selectedText, selectionStart, selectionEnd, instruction } = body.data;
+    if (chapter.content.slice(selectionStart, selectionEnd) !== selectedText) {
+      return reply.code(409).send({ error: "章节正文已变化，请重新选择需要改写的内容" });
+    }
+    const active = await prisma.novelTask.findFirst({
+      where: {
+        projectId: project.id,
+        targetKind: "chapterRewrite",
+        targetId: chapter.id,
+        status: { in: [NOVEL_TASK_STATUS.queued, NOVEL_TASK_STATUS.running] },
+      },
+    });
+    if (active) return reply.code(409).send({ error: "该章节已有局部改写任务正在运行" });
+    const targetChars = Math.max(200, Math.min(visibleCharCount(selectedText), 6000));
+    try {
+      const task = await reserveAndCreateTask({
+        prisma,
+        billing,
+        userId,
+        projectId: project.id,
+        targetKind: "chapterRewrite",
+        targetId: chapter.id,
+        payload: {
+          chapterIndex: chapter.chapterIndex,
+          title: chapter.title,
+          summary: selectedText,
+          selectedText,
+          selectionStart,
+          selectionEnd,
+          selectionBefore: chapter.content.slice(Math.max(0, selectionStart - 1500), selectionStart),
+          selectionAfter: chapter.content.slice(selectionEnd, selectionEnd + 1500),
+          prompt: instruction,
+          targetChars,
+        },
+        estimateChars: estimateReserveChars("chapterRewrite", targetChars),
+        delivery: taskDelivery,
+      });
+      enqueue(task);
+      return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
+    } catch (error) {
+      if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });
+      return reply.code(502).send(billingUnavailable(app, error, "创建局部改写任务失败"));
+    }
+  });
+
+  app.get("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/versions", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = chapterParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const chapter = await prisma.novelChapter.findUnique({ where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } } });
+    if (!chapter) return reply.code(404).send({ error: "章节不存在" });
+    const versions = await prisma.novelChapterVersion.findMany({ where: { chapterId: chapter.id }, orderBy: { createdAt: "desc" }, take: 100 });
+    return { success: true, data: { versions } };
+  });
+
+  app.post("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/versions/:versionId/restore", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = chapterVersionParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const chapter = await prisma.novelChapter.findUnique({ where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } } });
+    if (!chapter) return reply.code(404).send({ error: "章节不存在" });
+    const version = await prisma.novelChapterVersion.findFirst({ where: { id: params.data.versionId, chapterId: chapter.id } });
+    if (!version) return reply.code(404).send({ error: "章节版本不存在" });
+    const restored = await prisma.$transaction(async (tx) => {
+      await tx.novelChapterVersion.create({ data: { chapterId: chapter.id, title: chapter.title, content: chapter.content, billableChars: chapter.billableChars } });
+      return tx.novelChapter.update({
+        where: { id: chapter.id },
+        data: { title: version.title, content: version.content, billableChars: version.billableChars, reviewStatus: "pending", reviewedAt: null },
+      });
+    });
+    await refreshNovelVectorMemoryBestEffort(prisma, project.id);
+    return { success: true, data: { chapter: serializeNovelWorkbenchChapter(restored) } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/review", async (req, reply) => {
@@ -488,20 +525,28 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const openThreads = jsonStringArray("openThreads" in current ? current.openThreads : []);
     const consistency = "consistencyJson" in current && typeof current.consistencyJson === "object" && current.consistencyJson !== null ? current.consistencyJson as { risks?: unknown } : null;
     const consistencyRisks = jsonStringArray(consistency?.risks);
+    const modificationRate = estimateNovelModificationRate(rawContent, current.content);
     const regenerated = body.data.regenerateAi ? buildNovelReviewPayload({
-      rawContent: rawContent || current.content,
+      rawContent,
       finalContent: current.content,
       summary: current.summary,
       openThreads,
       consistencyRisks,
     }) : null;
+    const currentReviewStatus = "reviewStatus" in current && typeof current.reviewStatus === "string" ? current.reviewStatus : "pending";
+    const currentReviewNotes = "reviewNotes" in current && typeof current.reviewNotes === "string" ? current.reviewNotes : "";
+    const nextReviewStatus = body.data.status ?? currentReviewStatus;
+    const nextReviewNotes = body.data.reviewNotes ?? currentReviewNotes;
+    const reviewChanged = body.data.status !== undefined || body.data.reviewNotes !== undefined;
     const saved = await prisma.novelChapter.update({
       where: { id: current.id },
       data: {
-        reviewStatus: body.data.status ?? ("reviewStatus" in current && typeof current.reviewStatus === "string" ? current.reviewStatus : "pending"),
-        reviewNotes: body.data.reviewNotes,
-        reviewedAt: new Date(),
-        modificationRate: estimateNovelModificationRate(rawContent || current.content, current.content),
+        reviewStatus: nextReviewStatus,
+        reviewNotes: nextReviewNotes,
+        reviewedAt: nextReviewStatus === "pending" && !nextReviewNotes.trim()
+          ? null
+          : reviewChanged ? new Date() : current.reviewedAt,
+        modificationRate,
         ...(regenerated ? { aiReview: regenerated.aiReview, aiActionItems: regenerated.aiActionItems } : {}),
       },
     });
@@ -515,22 +560,22 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
-    const [sections, chapters] = await Promise.all([
-      prisma.novelSection.findMany({ where: { projectId: project.id } }),
+    const [knownCharacters, knownLocations, chapters] = await Promise.all([
+      prisma.novelCharacter.findMany({ where: { projectId: project.id }, select: { name: true }, take: 50 }),
+      prisma.novelLocation.findMany({ where: { projectId: project.id }, select: { name: true }, take: 50 }),
       prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } }),
     ]);
     const current = chapters.find((chapter) => chapter.chapterIndex === params.data.chapterIndex);
     if (!current) return reply.code(404).send({ error: "章节不存在" });
-    const knownNames = extractKnownNamesFromSections(sections);
     const postprocess = buildNovelChapterPostprocessPayload({
       projectTitle: project.title,
       chapterIndex: current.chapterIndex,
       title: current.title,
       content: current.content,
-      knownCharacters: knownNames.characters,
-      knownLocations: knownNames.locations,
+      knownCharacters: knownCharacters.map((item) => item.name),
+      knownLocations: knownLocations.map((item) => item.name),
     });
-    const rawContent = "rawContent" in current && typeof current.rawContent === "string" && current.rawContent ? current.rawContent : current.content;
+    const rawContent = "rawContent" in current && typeof current.rawContent === "string" ? current.rawContent : "";
     const review = buildNovelReviewPayload({
       rawContent,
       finalContent: current.content,
@@ -603,39 +648,6 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
       return chapter;
     });
     return { success: true, data: { chapter: serializeNovelWorkbenchChapter(saved) } };
-  });
-
-  app.post("/api/workflow/novels/projects/:projectId/outline/auto", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
-    const params = projectParamsSchema.safeParse(req.params);
-    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
-    const project = await findOwnedProject(prisma, userId, params.data.projectId);
-    if (!project) return reply.code(404).send({ error: "项目不存在" });
-    const reservedTasks: NovelTaskRow[] = [];
-    try {
-      for (const kind of NOVEL_STAGE_KINDS) {
-        reservedTasks.push(await reserveAndCreateTask({
-          prisma,
-          billing,
-          userId,
-          projectId: project.id,
-          targetKind: kind,
-          payload: { prompt: "" },
-          estimateChars: estimateReserveChars(kind as NovelStageKind),
-        }));
-      }
-      scheduleTask(async () => {
-        for (const task of reservedTasks) {
-          await runNovelTask({ prisma, billing, generator, task });
-        }
-      });
-      return reply.code(202).send({ success: true, data: { tasks: reservedTasks.map(serializeTask) } });
-    } catch (error) {
-      await Promise.all(reservedTasks.map((task) => billing.refundResource(task.operationId).catch(() => undefined)));
-      if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });
-      return reply.code(502).send(billingUnavailable(app, error, "创建自动大纲任务失败"));
-    }
   });
 
   app.post("/api/workflow/novels/tasks/:taskId/cancel", async (req, reply) => {

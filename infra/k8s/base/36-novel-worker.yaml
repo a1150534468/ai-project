@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: novel-worker
+  namespace: ai-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: novel-worker
+  template:
+    metadata:
+      labels:
+        app: novel-worker
+    spec:
+      terminationGracePeriodSeconds: 180
+      imagePullSecrets:
+        - name: image-pull-secret-placeholder
+      containers:
+        - name: novel-worker
+          image: ai-assistant-api
+          command:
+            - node
+            - --import
+            - tsx
+            - apps/api/src/workers/novel-worker.ts
+          envFrom:
+            - configMapRef:
+                name: ai-assistant-api-config
+            - secretRef:
+                name: ai-assistant-api-secrets
+          ports:
+            - name: health
+              containerPort: 8091
+              protocol: TCP
+          startupProbe:
+            httpGet:
+              path: /
+              port: health
+            failureThreshold: 30
+            periodSeconds: 2
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 4
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+              ephemeral-storage: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+              ephemeral-storage: "4Gi"

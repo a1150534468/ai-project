@@ -5,11 +5,11 @@ FROM gcr.io/distroless/static-debian12:nonroot AS certs
 FROM node:24-bookworm-slim
 WORKDIR /repo
 # apt 走华为云 HTTPS 镜像（deb 国际线慢）；openssl+ca-certificates: Prisma 查询引擎连 PG 必需；
-# ffmpeg: 视频素材/生成结果时长探测（ffprobe），缺则输入视频时长测不出、复合计费与预估失效
+# ffmpeg: 视频素材/生成结果时长探测；Noto CJK: 小说 PDF 导出中文字体
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 RUN printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list \
  && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates python3 make g++ ffmpeg \
+ && apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates python3 make g++ ffmpeg fonts-noto-cjk \
  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 ENV npm_config_registry=https://registry.npmmirror.com
@@ -22,6 +22,7 @@ COPY packages/billing/package.json packages/billing/package.json
 COPY packages/connector-protocol/package.json packages/connector-protocol/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/llm/package.json packages/llm/package.json
+COPY packages/novel-workflow/package.json packages/novel-workflow/package.json
 RUN pnpm install --frozen-lockfile
 # ② 源码（.dockerignore 已排除 node_modules/dist）
 COPY . .

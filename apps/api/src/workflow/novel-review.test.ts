@@ -7,7 +7,7 @@ describe("novel review", () => {
     expect(estimateNovelModificationRate("", "新稿")).toBe(100);
   });
 
-  it("suggests revise when chapter has low modification rate and quality risks", () => {
+  it("suggests revise from quality risks without enforcing a modification threshold", () => {
     const payload = buildNovelReviewPayload({
       rawContent: "嘴角微微上扬。嘴角微微上扬。",
       finalContent: "嘴角微微上扬。嘴角微微上扬。",
@@ -18,6 +18,6 @@ describe("novel review", () => {
 
     expect(payload.modificationRate).toBe(0);
     expect(payload.suggestedStatus).toBe("revise");
-    expect(payload.aiActionItems.join("\n")).toContain("人工改稿幅度偏低");
+    expect(payload.aiActionItems.join("\n")).toContain("一致性复核");
   });
 });

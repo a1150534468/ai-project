@@ -1,16 +1,6 @@
-export const NOVEL_STAGE_KINDS = [
-  "settings",
-  "macro",
-  "world",
-  "chars",
-  "volumes",
-  "outline",
-  "draft",
-  "style",
-] as const;
-export type NovelStageKind = (typeof NOVEL_STAGE_KINDS)[number];
-
-export const NOVEL_TARGET_KINDS = [...NOVEL_STAGE_KINDS, "chapter"] as const;
+export const NOVEL_SETUP_TARGET_KINDS = ["setupBible", "setupCharacters", "setupLocations", "setupPlot"] as const;
+export type NovelSetupTargetKind = (typeof NOVEL_SETUP_TARGET_KINDS)[number];
+export const NOVEL_TARGET_KINDS = [...NOVEL_SETUP_TARGET_KINDS, "chapter", "chapterRewrite"] as const;
 export type NovelTargetKind = (typeof NOVEL_TARGET_KINDS)[number];
 
 export const NOVEL_TASK_STATUS = {

@@ -155,6 +155,12 @@ export interface NovelGenerationContextPayload {
     readonly continuity: string[];
     readonly tactical: string[];
   };
+  readonly structuredContext: {
+    readonly contract: string[];
+    readonly world: string[];
+    readonly characters: string[];
+    readonly continuity: string[];
+  };
   readonly focusCard: NovelFocusCard;
   readonly microBeats: NovelMicroBeat[];
   readonly continuityAlerts: NovelContinuityAlert[];

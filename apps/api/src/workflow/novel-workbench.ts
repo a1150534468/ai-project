@@ -10,6 +10,10 @@ export type NovelChapterRow = {
   readonly chapterIndex: number;
   readonly title: string;
   readonly summary: string;
+  readonly outline?: string;
+  readonly generationHint?: string;
+  readonly executionPlan?: JsonValue;
+  readonly microBeats?: JsonValue;
   readonly content: string;
   readonly rawContent?: string;
   readonly openThreads?: JsonValue;
@@ -90,6 +94,10 @@ export function serializeNovelWorkbenchChapter(chapter: NovelChapterRow) {
     chapterIndex: chapter.chapterIndex,
     title: chapter.title,
     summary: chapter.summary,
+    outline: chapter.outline,
+    generationHint: chapter.generationHint,
+    executionPlan: chapter.executionPlan ?? null,
+    microBeats: chapter.microBeats ?? [],
     content: chapter.content,
     rawContent: chapter.rawContent ?? "",
     openThreads: jsonStringArray(chapter.openThreads),
@@ -116,8 +124,11 @@ export async function getNovelWorkbench(prisma: PrismaClient, userId: string, pr
     novelKnowledgeFact?: { findMany: (args: unknown) => Promise<ReturnType<typeof serializeFact>[]> };
     novelForeshadowItem?: { findMany: (args: unknown) => Promise<ReturnType<typeof serializeForeshadow>[]> };
   };
-  const [sections, chapters, factRows, foreshadowRows] = await Promise.all([
-    prisma.novelSection.findMany({ where: { projectId: project.id } }),
+  const [bible, storylines, characters, locations, chapters, factRows, foreshadowRows] = await Promise.all([
+    prisma.novelBible.findUnique({ where: { projectId: project.id }, include: { worldDimensions: { orderBy: { position: "asc" } }, styleNotes: { orderBy: { position: "asc" } } } }),
+    prisma.novelStoryline.findMany({ where: { projectId: project.id, status: "active" }, include: { milestones: { orderBy: { chapterNumber: "asc" }, take: 12 } } }),
+    prisma.novelCharacter.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "asc" }, take: 24 }),
+    prisma.novelLocation.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "asc" }, take: 24 }),
     prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } }),
     store.novelKnowledgeFact?.findMany({ where: { projectId: project.id }, orderBy: { updatedAt: "desc" }, take: 80 }) ?? Promise.resolve([]),
     store.novelForeshadowItem?.findMany({ where: { projectId: project.id }, orderBy: [{ status: "asc" }, { expectedPayoffChapter: "asc" }], take: 80 }) ?? Promise.resolve([]),
@@ -145,11 +156,21 @@ export async function getNovelWorkbench(prisma: PrismaClient, userId: string, pr
     chapterIndex: focusChapterNumber,
     chapterTitle: `第 ${focusChapterNumber} 章`,
     chapterSummary: "",
-    sections,
+    conflictAnchor: storylines[0]?.conflict ?? "",
+    styleProfileText: bible?.styleNotes.map((item) => `${item.title}：${item.content}`).join("；") ?? "",
     previousChapters: serializedChapters,
     facts: knowledgeFacts,
     foreshadowItems,
     reviewFeedback,
+    structuredContext: {
+      contract: [project.premise ? `故事梗概：${project.premise}` : "", project.narrativeContract ? `叙事契约：${JSON.stringify(project.narrativeContract)}` : ""],
+      world: [
+        ...(bible?.worldDimensions.map((item) => `${item.title}：${item.summary}；${JSON.stringify(item.details)}`) ?? []),
+        ...locations.map((item) => `地点：${item.name}；规则：${item.rules}；${item.description}`),
+      ],
+      characters: characters.map((item) => `人物：${item.name}（${item.role}）；动机：${item.coreMotivation}；信念：${item.coreBelief}`),
+      continuity: storylines.map((item) => `故事线：${item.title}；目标：${item.goal}；冲突：${item.conflict}`),
+    },
   });
   const latestQuality = serializedChapters
     .map((chapter) => jsonRecord(chapter.consistencyJson))
@@ -173,16 +194,6 @@ export async function getNovelWorkbench(prisma: PrismaClient, userId: string, pr
       lastUpdate: serializedChapters.at(-1)?.updatedAt ?? project.updatedAt.toISOString(),
     },
     chapters: serializedChapters,
-    sections: sections.map((section) => ({
-      id: section.id,
-      kind: section.kind,
-      label: section.kind,
-      status: section.status,
-      displayText: section.displayText,
-      billableChars: section.billableChars,
-      lastTaskId: section.lastTaskId,
-      updatedAt: section.updatedAt.toISOString(),
-    })),
     knowledgeFacts,
     foreshadowItems,
     workbenchHighlights: {

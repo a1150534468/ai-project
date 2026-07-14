@@ -31,6 +31,7 @@ model User {
   localBusinessPromoRuns      LocalBusinessPromoRun[]
   novelProjects               NovelProject[]
   novelTasks                  NovelTask[]
+  novelRuns                   NovelRun[]
   comicWorkflowProjects       ComicWorkflowProject[]
   comicWorkflowBibleEntries   ComicWorkflowBibleEntry[]
   comicWorkflowEpisodes       ComicWorkflowEpisode[]
@@ -416,28 +417,28 @@ model VideoMaterial {
 }
 
 model AudioAsset {
-  id            String   @id @default(cuid())
-  userId        String
-  projectId     String?
-  requestId     String?
-  kind          String
-  source        String
-  provider      String?
-  providerModel String?
-  originalUrl   String
-  objectKey     String?
-  mime          String   @default("audio/wav")
-  format        String   @default("wav")
-  durationSec   Int      @default(0)
-  textContent   String?
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project       LocalBusinessPromoProject? @relation("LocalBusinessPromoProjectAudioAssets", fields: [projectId], references: [id], onDelete: SetNull)
-  tasks         AudioGenerationTask[]
-  voiceCloneProjects LocalBusinessPromoProject[] @relation("LocalBusinessPromoVoiceSample")
+  id                      String                      @id @default(cuid())
+  userId                  String
+  projectId               String?
+  requestId               String?
+  kind                    String
+  source                  String
+  provider                String?
+  providerModel           String?
+  originalUrl             String
+  objectKey               String?
+  mime                    String                      @default("audio/wav")
+  format                  String                      @default("wav")
+  durationSec             Int                         @default(0)
+  textContent             String?
+  metadata                Json?
+  createdAt               DateTime                    @default(now())
+  user                    User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project                 LocalBusinessPromoProject?  @relation("LocalBusinessPromoProjectAudioAssets", fields: [projectId], references: [id], onDelete: SetNull)
+  tasks                   AudioGenerationTask[]
+  voiceCloneProjects      LocalBusinessPromoProject[] @relation("LocalBusinessPromoVoiceSample")
   activeNarrationProjects LocalBusinessPromoProject[] @relation("LocalBusinessPromoActiveNarration")
-  activeBgmProjects LocalBusinessPromoProject[] @relation("LocalBusinessPromoActiveBgm")
+  activeBgmProjects       LocalBusinessPromoProject[] @relation("LocalBusinessPromoActiveBgm")
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -446,24 +447,24 @@ model AudioAsset {
 }
 
 model AudioGenerationTask {
-  id            String   @id @default(cuid())
+  id            String                     @id @default(cuid())
   userId        String
   projectId     String?
-  requestId     String   @unique
+  requestId     String                     @unique
   kind          String
   provider      String?
   providerModel String?
-  status        String   @default("running")
+  status        String                     @default("running")
   error         String?
   inputPayload  Json?
   resultPayload Json?
   assetId       String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
   completedAt   DateTime?
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   project       LocalBusinessPromoProject? @relation("LocalBusinessPromoProjectAudioTasks", fields: [projectId], references: [id], onDelete: SetNull)
-  asset         AudioAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  asset         AudioAsset?                @relation(fields: [assetId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -495,27 +496,27 @@ model EcomWorkflow {
 }
 
 model LocalBusinessPromoProject {
-  id          String   @id @default(cuid())
-  userId      String
-  title       String   @default("未命名宣传项目")
-  brief       Json     @default("{}")
-  materials   Json     @default("{}")
-  settings    Json     @default("{}")
-  scriptDraft String   @default("")
-  latestRunId String?
+  id                      String                  @id @default(cuid())
+  userId                  String
+  title                   String                  @default("未命名宣传项目")
+  brief                   Json                    @default("{}")
+  materials               Json                    @default("{}")
+  settings                Json                    @default("{}")
+  scriptDraft             String                  @default("")
+  latestRunId             String?
   voiceCloneSampleAssetId String?
-  activeNarrationAssetId String?
-  activeBgmAssetId String?
-  status      String   @default("draft")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  runs        LocalBusinessPromoRun[]
-  audioAssets AudioAsset[] @relation("LocalBusinessPromoProjectAudioAssets")
-  audioTasks  AudioGenerationTask[] @relation("LocalBusinessPromoProjectAudioTasks")
-  voiceCloneSampleAsset AudioAsset? @relation("LocalBusinessPromoVoiceSample", fields: [voiceCloneSampleAssetId], references: [id], onDelete: SetNull)
-  activeNarrationAsset AudioAsset? @relation("LocalBusinessPromoActiveNarration", fields: [activeNarrationAssetId], references: [id], onDelete: SetNull)
-  activeBgmAsset AudioAsset? @relation("LocalBusinessPromoActiveBgm", fields: [activeBgmAssetId], references: [id], onDelete: SetNull)
+  activeNarrationAssetId  String?
+  activeBgmAssetId        String?
+  status                  String                  @default("draft")
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
+  user                    User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs                    LocalBusinessPromoRun[]
+  audioAssets             AudioAsset[]            @relation("LocalBusinessPromoProjectAudioAssets")
+  audioTasks              AudioGenerationTask[]   @relation("LocalBusinessPromoProjectAudioTasks")
+  voiceCloneSampleAsset   AudioAsset?             @relation("LocalBusinessPromoVoiceSample", fields: [voiceCloneSampleAssetId], references: [id], onDelete: SetNull)
+  activeNarrationAsset    AudioAsset?             @relation("LocalBusinessPromoActiveNarration", fields: [activeNarrationAssetId], references: [id], onDelete: SetNull)
+  activeBgmAsset          AudioAsset?             @relation("LocalBusinessPromoActiveBgm", fields: [activeBgmAssetId], references: [id], onDelete: SetNull)
 
   @@index([userId, updatedAt])
   @@index([userId, status])
@@ -525,36 +526,36 @@ model LocalBusinessPromoProject {
 }
 
 model LocalBusinessPromoRun {
-  id                 String   @id @default(cuid())
-  projectId          String
-  userId             String
-  billingOperationId String?
-  billingRefundedAt DateTime?
-  billingRefundStatus String   @default("none")
-  billingRefundError  String?
-  billingRefundRetryCount Int  @default(0)
+  id                         String                    @id @default(cuid())
+  projectId                  String
+  userId                     String
+  billingOperationId         String?
+  billingRefundedAt          DateTime?
+  billingRefundStatus        String                    @default("none")
+  billingRefundError         String?
+  billingRefundRetryCount    Int                       @default(0)
   billingRefundLastAttemptAt DateTime?
-  billingRefundNextRetryAt DateTime?
-  settingsSnapshot   Json     @default("{}")
-  scriptSnapshot     String   @default("")
-  shotPlan           Json     @default("[]")
-  analysisSnapshot   Json?
-  clipRequestIds     String[] @default([])
-  mergedAssetId      String?
-  narrationAssetId   String?
-  bgmAssetId         String?
-  status             String   @default("queued")
-  progressPercent    Int      @default(0)
-  progressStage      String   @default("queued")
-  progressMessage    String?
-  error              String?
-  startedAt          DateTime?
-  workerId           String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  completedAt        DateTime?
-  project          LocalBusinessPromoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billingRefundNextRetryAt   DateTime?
+  settingsSnapshot           Json                      @default("{}")
+  scriptSnapshot             String                    @default("")
+  shotPlan                   Json                      @default("[]")
+  analysisSnapshot           Json?
+  clipRequestIds             String[]                  @default([])
+  mergedAssetId              String?
+  narrationAssetId           String?
+  bgmAssetId                 String?
+  status                     String                    @default("queued")
+  progressPercent            Int                       @default(0)
+  progressStage              String                    @default("queued")
+  progressMessage            String?
+  error                      String?
+  startedAt                  DateTime?
+  workerId                   String?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  completedAt                DateTime?
+  project                    LocalBusinessPromoProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                       User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([projectId, createdAt])
   @@index([userId, updatedAt])
@@ -563,23 +564,23 @@ model LocalBusinessPromoRun {
 }
 
 model ArticleWorkflowProject {
-  id              String   @id @default(cuid())
-  userId          String
-  sourceFormat    String
-  sourceText      String
-  generationMode  String   @default("preserve-text")
-  title           String   @default("")
-  summary         String   @default("")
-  bodyHtml        String   @default("")
-  imageManifestJson Json   @default("[]")
-  status          String   @default("draft")
-  progressStage   String   @default("draft")
-  progressPercent Int      @default(0)
-  progressMessage String?
-  error           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  sourceFormat      String
+  sourceText        String
+  generationMode    String   @default("preserve-text")
+  title             String   @default("")
+  summary           String   @default("")
+  bodyHtml          String   @default("")
+  imageManifestJson Json     @default("[]")
+  status            String   @default("draft")
+  progressStage     String   @default("draft")
+  progressPercent   Int      @default(0)
+  progressMessage   String?
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, updatedAt])
   @@index([userId, status])
@@ -611,22 +612,103 @@ model EcomMainImageJob {
 }
 
 model NovelProject {
-  id             String              @id @default(cuid())
-  userId         String
-  title          String
-  genre          String              @default("")
-  status         String              @default("active")
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
-  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sections       NovelSection[]
-  chapters       NovelChapter[]
-  tasks          NovelTask[]
-  vectorMemories NovelVectorMemory[]
-  knowledgeFacts NovelKnowledgeFact[]
-  foreshadowItems NovelForeshadowItem[]
+  id                    String                    @id @default(cuid())
+  userId                String
+  title                 String
+  genre                 String                    @default("")
+  premise               String                    @default("")
+  settings              Json                      @default("{}")
+  generationPrefs       Json                      @default("{}")
+  narrativeContract     Json                      @default("{}")
+  targetChapters        Int                       @default(100)
+  targetCharsPerChapter Int                       @default(3000)
+  setupStage            Int                       @default(1)
+  setupCompleted        Boolean                   @default(false)
+  storyPhase            String                    @default("opening")
+  autopilotStatus       String                    @default("idle")
+  currentBranch         String                    @default("main")
+  status                String                    @default("active")
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  user                  User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapters              NovelChapter[]
+  tasks                 NovelTask[]
+  vectorMemories        NovelVectorMemory[]
+  knowledgeFacts        NovelKnowledgeFact[]
+  foreshadowItems       NovelForeshadowItem[]
+  runs                  NovelRun[]
+  runEvents             NovelRunEvent[]
+  outboxCommands        NovelCommandOutbox[]
+  structureNodes        NovelStructureNode[]
+  characters            NovelCharacter[]
+  characterRelations    NovelCharacterRelation[]
+  locations             NovelLocation[]
+  timelineEvents        NovelTimelineEvent[]
+  storylines            NovelStoryline[]
+  storylineMilestones   NovelStorylineMilestone[]
+  props                 NovelProp[]
+  propEvents            NovelPropEvent[]
+  narrativeEvents       NovelNarrativeEvent[]
+  causalEdges           NovelCausalEdge[]
+  narrativeDebts        NovelNarrativeDebt[]
+  entityStates          NovelEntityState[]
+  qualityReports        NovelQualityReport[]
+  checkpoints           NovelCheckpoint[]
+  promptTemplates       NovelPromptTemplate[]
+  bible                 NovelBible?
+  worldDimensions       NovelWorldDimension[]
+  styleNotes            NovelStyleNote[]
 
   @@index([userId, updatedAt])
+}
+
+model NovelBible {
+  id              String                @id @default(cuid())
+  projectId       String                @unique
+  premiseLock     String                @default("")
+  genreLock       String                @default("")
+  worldPresetLock String                @default("")
+  version         Int                   @default(1)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  project         NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worldDimensions NovelWorldDimension[]
+  styleNotes      NovelStyleNote[]
+}
+
+model NovelWorldDimension {
+  id           String       @id @default(cuid())
+  projectId    String
+  bibleId      String
+  dimensionKey String
+  title        String
+  summary      String       @default("")
+  details      Json         @default("{}")
+  position     Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  project      NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bible        NovelBible   @relation(fields: [bibleId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, dimensionKey])
+  @@index([bibleId, position])
+}
+
+model NovelStyleNote {
+  id        String       @id @default(cuid())
+  projectId String
+  bibleId   String
+  category  String
+  title     String
+  content   String
+  position  Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  project   NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  bible     NovelBible   @relation(fields: [bibleId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, category, title])
+  @@index([bibleId, position])
 }
 
 model NovelVectorMemory {
@@ -648,37 +730,6 @@ model NovelVectorMemory {
   @@index([projectId, updatedAt])
 }
 
-model NovelSection {
-  id             String                @id @default(cuid())
-  projectId      String
-  kind           String
-  status         String                @default("empty")
-  displayText    String                @default("")
-  structuredJson Json?
-  billableChars  Int                   @default(0)
-  lastTaskId     String?
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
-  project        NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions       NovelSectionVersion[]
-
-  @@unique([projectId, kind])
-  @@index([projectId, updatedAt])
-}
-
-model NovelSectionVersion {
-  id             String       @id @default(cuid())
-  sectionId      String
-  displayText    String
-  structuredJson Json?
-  billableChars  Int          @default(0)
-  operationId    String?
-  createdAt      DateTime     @default(now())
-  section        NovelSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-
-  @@index([sectionId, createdAt])
-}
-
 model NovelChapter {
   id               String                @id @default(cuid())
   projectId        String
@@ -686,6 +737,10 @@ model NovelChapter {
   chapterIndex     Int
   title            String                @default("")
   summary          String                @default("")
+  outline          String                @default("")
+  generationHint   String                @default("")
+  executionPlan    Json?
+  microBeats       Json                  @default("[]")
   content          String                @default("")
   rawContent       String                @default("")
   openThreads      Json                  @default("[]")
@@ -699,12 +754,18 @@ model NovelChapter {
   aiActionItems    Json                  @default("[]")
   modificationRate Int                   @default(0)
   reviewedAt       DateTime?
+  tensionScore     Float                 @default(0)
+  plotTension      Float                 @default(0)
+  emotionalTension Float                 @default(0)
+  pacingTension    Float                 @default(0)
+  qualityScore     Float                 @default(0)
   billableChars    Int                   @default(0)
   lastTaskId       String?
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
   project          NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   versions         NovelChapterVersion[]
+  qualityReports   NovelQualityReport[]
 
   @@unique([projectId, chapterIndex])
   @@index([projectId, updatedAt])
@@ -764,27 +825,443 @@ model NovelChapterVersion {
 }
 
 model NovelTask {
-  id             String       @id @default(cuid())
+  id             String              @id @default(cuid())
   projectId      String
   userId         String
   kind           String
   targetKind     String
   targetId       String?
-  status         String       @default("queued")
+  status         String              @default("queued")
   requestPayload Json?
   resultPayload  Json?
-  operationId    String       @unique
+  operationId    String              @unique
   error          String?
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
   completedAt    DateTime?
   cancelledAt    DateTime?
-  project        NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project        NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outboxCommand  NovelCommandOutbox?
 
   @@index([userId, updatedAt])
   @@index([projectId, updatedAt])
   @@index([status, updatedAt])
+}
+
+model NovelRun {
+  id                    String               @id @default(cuid())
+  projectId             String
+  userId                String
+  mode                  String
+  status                String               @default("queued")
+  currentStep           String?
+  currentChapter        Int?
+  startChapter          Int                  @default(1)
+  targetChapters        Int
+  targetCharsPerChapter Int                  @default(3000)
+  completedChapters     Int                  @default(0)
+  autoReview            Boolean              @default(true)
+  pauseRequested        Boolean              @default(false)
+  cancelRequested       Boolean              @default(false)
+  consecutiveFailures   Int                  @default(0)
+  lastEventSequence     Int                  @default(0)
+  error                 String?
+  startedAt             DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  project               NovelProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps                 NovelRunStep[]
+  events                NovelRunEvent[]
+  outboxCommands        NovelCommandOutbox[]
+
+  @@index([projectId, updatedAt])
+  @@index([userId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model NovelRunStep {
+  id                 String              @id @default(cuid())
+  runId              String
+  sequence           Int
+  kind               String
+  status             String              @default("queued")
+  chapterNumber      Int?
+  attempt            Int                 @default(0)
+  maxAttempts        Int                 @default(3)
+  priority           Int                 @default(5)
+  progress           Int                 @default(0)
+  input              Json                @default("{}")
+  output             Json?
+  error              String?
+  workerId           String?
+  billingOperationId String?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  run                NovelRun            @relation(fields: [runId], references: [id], onDelete: Cascade)
+  outboxCommand      NovelCommandOutbox?
+
+  @@unique([runId, sequence])
+  @@index([runId, status])
+  @@index([status, updatedAt])
+}
+
+model NovelRunEvent {
+  id            String       @id @default(cuid())
+  runId         String
+  projectId     String
+  sequence      Int
+  type          String
+  stage         String
+  step          String?
+  chapterNumber Int?
+  progress      Int          @default(0)
+  payload       Json         @default("{}")
+  createdAt     DateTime     @default(now())
+  run           NovelRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence])
+  @@index([projectId, createdAt])
+  @@index([runId, createdAt])
+}
+
+model NovelCommandOutbox {
+  id          String        @id @default(cuid())
+  projectId   String
+  runId       String?
+  stepId      String?       @unique
+  taskId      String?       @unique
+  queueName   String        @default("novel-runs")
+  jobName     String        @default("execute-step")
+  payload     Json
+  priority    Int           @default(5)
+  status      String        @default("pending")
+  attempts    Int           @default(0)
+  availableAt DateTime      @default(now())
+  sentAt      DateTime?
+  lastError   String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  project     NovelProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run         NovelRun?     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  step        NovelRunStep? @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  task        NovelTask?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([status, availableAt])
+  @@index([runId, createdAt])
+}
+
+model NovelStructureNode {
+  id           String               @id @default(cuid())
+  projectId    String
+  parentId     String?
+  nodeType     String
+  title        String
+  description  String               @default("")
+  number       Int
+  startChapter Int?
+  endChapter   Int?
+  outline      String               @default("")
+  metadata     Json                 @default("{}")
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  project      NovelProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent       NovelStructureNode?  @relation("NovelStructureTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children     NovelStructureNode[] @relation("NovelStructureTree")
+
+  @@unique([projectId, nodeType, number, parentId])
+  @@index([projectId, parentId, number])
+}
+
+model NovelCharacter {
+  id                String                   @id @default(cuid())
+  projectId         String
+  name              String
+  role              String                   @default("")
+  gender            String                   @default("")
+  age               String                   @default("")
+  description       String                   @default("")
+  appearance        String                   @default("")
+  personality       String                   @default("")
+  publicProfile     String                   @default("")
+  coreBelief        String                   @default("")
+  coreMotivation    String                   @default("")
+  innerLack         String                   @default("")
+  moralTaboos       Json                     @default("[]")
+  voiceStyle        String                   @default("")
+  state             Json                     @default("{}")
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+  project           NovelProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  outgoingRelations NovelCharacterRelation[] @relation("NovelCharacterFrom")
+  incomingRelations NovelCharacterRelation[] @relation("NovelCharacterTo")
+
+  @@unique([projectId, name])
+  @@index([projectId, role])
+}
+
+model NovelCharacterRelation {
+  id              String         @id @default(cuid())
+  projectId       String
+  fromCharacterId String
+  toCharacterId   String
+  relationType    String
+  description     String         @default("")
+  strength        Float          @default(0.5)
+  state           Json           @default("{}")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  project         NovelProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromCharacter   NovelCharacter @relation("NovelCharacterFrom", fields: [fromCharacterId], references: [id], onDelete: Cascade)
+  toCharacter     NovelCharacter @relation("NovelCharacterTo", fields: [toCharacterId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, fromCharacterId, toCharacterId, relationType])
+  @@index([projectId, relationType])
+}
+
+model NovelLocation {
+  id          String       @id @default(cuid())
+  projectId   String
+  name        String
+  description String       @default("")
+  rules       String       @default("")
+  metadata    Json         @default("{}")
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  project     NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+}
+
+model NovelTimelineEvent {
+  id            String       @id @default(cuid())
+  projectId     String
+  chapterNumber Int?
+  timeLabel     String       @default("")
+  title         String
+  description   String       @default("")
+  participants  Json         @default("[]")
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, chapterNumber])
+}
+
+model NovelStoryline {
+  id            String                    @id @default(cuid())
+  projectId     String
+  title         String
+  storylineType String                    @default("main")
+  status        String                    @default("active")
+  goal          String                    @default("")
+  conflict      String                    @default("")
+  promiseTags   Json                      @default("[]")
+  aliases       Json                      @default("[]")
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  project       NovelProject              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestones    NovelStorylineMilestone[]
+
+  @@unique([projectId, title])
+  @@index([projectId, status])
+}
+
+model NovelStorylineMilestone {
+  id            String         @id @default(cuid())
+  projectId     String
+  storylineId   String
+  chapterNumber Int
+  title         String
+  description   String         @default("")
+  status        String         @default("planned")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  project       NovelProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  storyline     NovelStoryline @relation(fields: [storylineId], references: [id], onDelete: Cascade)
+
+  @@unique([storylineId, chapterNumber, title])
+  @@index([projectId, chapterNumber])
+}
+
+model NovelProp {
+  id          String           @id @default(cuid())
+  projectId   String
+  name        String
+  description String           @default("")
+  owner       String           @default("")
+  location    String           @default("")
+  status      String           @default("active")
+  metadata    Json             @default("{}")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  project     NovelProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events      NovelPropEvent[]
+
+  @@unique([projectId, name])
+}
+
+model NovelPropEvent {
+  id            String       @id @default(cuid())
+  projectId     String
+  propId        String
+  chapterNumber Int?
+  eventType     String
+  description   String       @default("")
+  stateAfter    Json         @default("{}")
+  createdAt     DateTime     @default(now())
+  project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  prop          NovelProp    @relation(fields: [propId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, chapterNumber])
+  @@index([propId, createdAt])
+}
+
+model NovelNarrativeEvent {
+  id            String            @id @default(cuid())
+  projectId     String
+  chapterNumber Int
+  eventType     String
+  title         String
+  description   String            @default("")
+  actors        Json              @default("[]")
+  locations     Json              @default("[]")
+  tags          Json              @default("[]")
+  tension       Float             @default(0)
+  createdAt     DateTime          @default(now())
+  project       NovelProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  outgoingEdges NovelCausalEdge[] @relation("NovelCausalFrom")
+  incomingEdges NovelCausalEdge[] @relation("NovelCausalTo")
+
+  @@index([projectId, chapterNumber])
+}
+
+model NovelCausalEdge {
+  id           String              @id @default(cuid())
+  projectId    String
+  fromEventId  String
+  toEventId    String
+  relationType String
+  confidence   Float               @default(0.7)
+  evidence     String              @default("")
+  createdAt    DateTime            @default(now())
+  project      NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromEvent    NovelNarrativeEvent @relation("NovelCausalFrom", fields: [fromEventId], references: [id], onDelete: Cascade)
+  toEvent      NovelNarrativeEvent @relation("NovelCausalTo", fields: [toEventId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, fromEventId, toEventId, relationType])
+}
+
+model NovelNarrativeDebt {
+  id                String       @id @default(cuid())
+  projectId         String
+  debtType          String
+  title             String
+  description       String       @default("")
+  introducedChapter Int?
+  dueChapter        Int?
+  status            String       @default("open")
+  severity          String       @default("medium")
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  project           NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status, dueChapter])
+}
+
+model NovelEntityState {
+  id            String       @id @default(cuid())
+  projectId     String
+  entityType    String
+  entityKey     String
+  chapterNumber Int
+  state         Json
+  sourceExcerpt String       @default("")
+  createdAt     DateTime     @default(now())
+  project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, entityType, entityKey, chapterNumber])
+  @@index([projectId, chapterNumber])
+}
+
+model NovelQualityReport {
+  id               String        @id @default(cuid())
+  projectId        String
+  chapterId        String?
+  chapterNumber    Int?
+  runId            String?
+  overallScore     Float         @default(0)
+  consistencyScore Float         @default(0)
+  styleScore       Float         @default(0)
+  tensionScore     Float         @default(0)
+  issues           Json          @default("[]")
+  metrics          Json          @default("{}")
+  gatePassed       Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  project          NovelProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapter          NovelChapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, chapterNumber])
+  @@index([chapterId, createdAt])
+}
+
+model NovelCheckpoint {
+  id            String            @id @default(cuid())
+  projectId     String
+  branchName    String            @default("main")
+  parentId      String?
+  chapterNumber Int?
+  label         String            @default("")
+  snapshot      Json
+  isHead        Boolean           @default(false)
+  createdAt     DateTime          @default(now())
+  project       NovelProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parent        NovelCheckpoint?  @relation("NovelCheckpointTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children      NovelCheckpoint[] @relation("NovelCheckpointTree")
+
+  @@index([projectId, branchName, createdAt])
+  @@index([projectId, isHead])
+}
+
+model NovelPromptTemplate {
+  id            String               @id @default(cuid())
+  projectId     String
+  nodeKey       String
+  name          String
+  category      String
+  content       String
+  variables     Json                 @default("[]")
+  model         String               @default("")
+  temperature   Float                @default(0.7)
+  activeVersion Int                  @default(1)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  project       NovelProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions      NovelPromptVersion[]
+
+  @@unique([projectId, nodeKey])
+  @@index([projectId, category])
+}
+
+model NovelPromptVersion {
+  id          String              @id @default(cuid())
+  templateId  String
+  version     Int
+  content     String
+  variables   Json                @default("[]")
+  model       String              @default("")
+  temperature Float               @default(0.7)
+  changeNote  String              @default("")
+  createdAt   DateTime            @default(now())
+  template    NovelPromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, version])
+  @@index([templateId, createdAt])
 }
 
 model ComicWorkflowProject {
@@ -1179,25 +1656,25 @@ model DubBgmPreset {
 }
 
 model ScheduledTask {
-  id            String             @id @default(cuid())
-  userId        String
-  title         String
-  prompt        String             @db.Text
-  agentId       String?
-  model         String
-  kbIds         Json?
-  deviceId      String?
-  cron          String
-  timezone      String             @default("Asia/Shanghai")
-  oneShot       Boolean            @default(false)
-  enabled       Boolean            @default(true)
-  emailTo       String
-  nextRunAt     DateTime
-  lastRunAt     DateTime?
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  runs          ScheduledTaskRun[]
+  id        String             @id @default(cuid())
+  userId    String
+  title     String
+  prompt    String             @db.Text
+  agentId   String?
+  model     String
+  kbIds     Json?
+  deviceId  String?
+  cron      String
+  timezone  String             @default("Asia/Shanghai")
+  oneShot   Boolean            @default(false)
+  enabled   Boolean            @default(true)
+  emailTo   String
+  nextRunAt DateTime
+  lastRunAt DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs      ScheduledTaskRun[]
 
   @@index([userId])
   @@index([enabled, nextRunAt])
@@ -1207,8 +1684,8 @@ model ScheduledTaskRun {
   id            String        @id @default(cuid())
   taskId        String
   userId        String
-  status        String        // running | success | failed | skipped
-  skipReason    String?       // device_offline | insufficient_balance | billing_unavailable | prev_running
+  status        String // running | success | failed | skipped
+  skipReason    String? // device_offline | insufficient_balance | billing_unavailable | prev_running
   triggeredAt   DateTime
   startedAt     DateTime      @default(now())
   finishedAt    DateTime?
@@ -1217,7 +1694,7 @@ model ScheduledTaskRun {
   inputTokens   Int           @default(0)
   outputTokens  Int           @default(0)
   pointsCharged Int?
-  emailStatus   String?       // sent | failed | skipped_no_config
+  emailStatus   String? // sent | failed | skipped_no_config
   error         String?       @db.Text
   createdAt     DateTime      @default(now())
   task          ScheduledTask @relation(fields: [taskId], references: [id], onDelete: Cascade)

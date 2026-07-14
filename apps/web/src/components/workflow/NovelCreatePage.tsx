@@ -1,102 +1,102 @@
+import { useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { CreateNovelInitialSettings } from "../../api";
 
+export type NovelLengthTier = "starter" | "standard" | "long" | "epic";
+
 export interface NovelCreateDraft {
   readonly title: string;
-  readonly channel: string;
-  readonly coreRequirement: string;
-  readonly platforms: readonly string[];
-  readonly topics: readonly string[];
-  readonly perspective: string;
-  readonly styleMode: string;
-  readonly era: string;
-  readonly hasCheat: "yes" | "no";
-  readonly styleTags: readonly string[];
-  readonly language: string;
+  readonly premise: string;
+  readonly market: string;
+  readonly subgenre: string;
+  readonly worldPreset: string;
+  readonly storyStructure: string;
+  readonly pacingControl: string;
+  readonly writingStyle: string;
+  readonly specialRequirements: string;
+  readonly lengthTier: NovelLengthTier;
   readonly chapterCount: string;
   readonly chapterChars: string;
 }
 
-const CHANNEL_OPTIONS = ["男频长篇", "女频长篇", "短篇", "儿童短篇"] as const;
-const PLATFORM_OPTIONS = ["晋江文学城", "番茄", "七猫", "起点", "知乎", "潇湘书院", "云起书院", "豆瓣阅读", "刺猬猫", "Wattpad", "Radish", "Dreame"] as const;
-const TOPIC_OPTIONS = ["都市", "言情", "宫斗", "宅斗", "玄幻", "奇幻", "西方玄幻", "仙侠", "科幻", "武侠", "悬疑", "历史", "末世", "游戏", "娱乐圈", "职场", "灵异", "军事"] as const;
-const PERSPECTIVE_OPTIONS = ["第一人称", "第三人称"] as const;
-const STYLE_MODE_OPTIONS = ["强爽点", "经典作品", "简洁直白", "强悬疑", "知乎短文", "幽默搞笑", "儿童故事"] as const;
-const ERA_OPTIONS = ["古代", "现代", "未来", "架空"] as const;
-const STYLE_TAG_OPTIONS = [
-  "总裁文", "穿越文", "纯爱", "虐恋文", "甜宠文", "种田文", "女强文", "宫斗文", "娱乐圈文", "年代文",
-  "无CP", "替身文", "脑洞文", "团宠文", "医妃文", "军恋文", "穿书文", "读心流", "替嫁流", "攻略文",
-  "真假千金文", "先婚后爱流", "映美文", "随身文", "进化文", "异能文", "悬疑文", "推理文", "灵异文", "无限流",
-  "升级流", "打脸文", "经营文", "反套路", "强强文", "救赎文", "暗黑文", "学霸文", "神医文", "嫡女文",
-] as const;
+type Taxonomy = {
+  readonly label: string;
+  readonly icon: string;
+  readonly topics: readonly string[];
+  readonly world: string;
+  readonly structure: string;
+  readonly pacing: string;
+  readonly style: string;
+};
+
+const MARKET_TAXONOMY: readonly Taxonomy[] = [
+  { label: "男频", icon: "mdi:sword-cross", topics: ["东方玄幻", "都市异能", "仙侠武侠", "科幻末世", "历史争霸", "悬疑探险"], world: "规则清晰、成长路径可验证的高压世界", structure: "目标升级与阶段破局并行的长线结构", pacing: "强钩子开局，小循环持续兑现", style: "动作明确、信息密度高、情绪反馈直接" },
+  { label: "女频", icon: "mdi:flower-tulip-outline", topics: ["现代言情", "古代言情", "幻想言情", "悬疑推理", "青春成长", "职场群像"], world: "关系与身份秩序驱动的沉浸式世界", structure: "人物关系变化牵引主线的长线结构", pacing: "情绪递进与关系转折交替", style: "细腻克制、人物感受与对话并重" },
+  { label: "精品故事", icon: "mdi:book-open-page-variant-outline", topics: ["现实主义", "历史传奇", "科幻寓言", "社会悬疑", "家庭伦理", "成长疗愈"], world: "主题、人物与时代背景彼此咬合", structure: "围绕核心命题收束的精炼结构", pacing: "场景有效、转折克制、结尾回响", style: "准确、耐读，重视意象与人物弧光" },
+];
+
+const LENGTH_TIERS: readonly { value: NovelLengthTier; title: string; hint: string; chapters: number; chars: number }[] = [
+  { value: "starter", title: "轻量长篇", hint: "约 10 万字 · 40 章", chapters: 40, chars: 2500 },
+  { value: "standard", title: "标准长篇", hint: "约 30 万字 · 100 章", chapters: 100, chars: 3000 },
+  { value: "long", title: "大型长篇", hint: "约 60 万字 · 180 章", chapters: 180, chars: 3300 },
+  { value: "epic", title: "史诗长篇", hint: "约 100 万字 · 280 章", chapters: 280, chars: 3600 },
+];
+
+function currentTaxonomy(draft: NovelCreateDraft): Taxonomy {
+  return MARKET_TAXONOMY.find((item) => item.label === draft.market) ?? MARKET_TAXONOMY[0]!;
+}
 
 export function createDefaultNovelDraft(): NovelCreateDraft {
+  const taxonomy = MARKET_TAXONOMY[0]!;
+  const length = LENGTH_TIERS[1]!;
   return {
     title: "",
-    channel: "男频长篇",
-    coreRequirement: "视角：第三人称；金手指：否；章节数：12；每章约 5000 字；语言：中文",
-    platforms: ["番茄", "起点"],
-    topics: ["玄幻"],
-    perspective: "第三人称",
-    styleMode: "强爽点",
-    era: "古代",
-    hasCheat: "no",
-    styleTags: ["升级流"],
-    language: "中文",
-    chapterCount: "12",
-    chapterChars: "5000",
+    premise: "",
+    market: taxonomy.label,
+    subgenre: taxonomy.topics[0]!,
+    worldPreset: taxonomy.world,
+    storyStructure: taxonomy.structure,
+    pacingControl: taxonomy.pacing,
+    writingStyle: taxonomy.style,
+    specialRequirements: "保持人物动机连续，伏笔有明确回收窗口，每章结尾保留有效推进钩子。",
+    lengthTier: length.value,
+    chapterCount: String(length.chapters),
+    chapterChars: String(length.chars),
   };
 }
 
+export function novelCreateTitle(draft: NovelCreateDraft): string {
+  const explicit = draft.title.trim();
+  if (explicit) return explicit;
+  const firstSentence = draft.premise.trim().split(/[。！？\n]/u).find(Boolean)?.trim() ?? "";
+  return firstSentence.slice(0, 18) || "未命名新作";
+}
+
 export function novelCreateGenre(draft: NovelCreateDraft): string {
-  return [draft.channel, ...draft.topics.slice(0, 2)].filter(Boolean).join(" · ");
+  return [draft.market, draft.subgenre].filter(Boolean).join(" · ");
 }
 
 export function novelCreateInitialSettings(draft: NovelCreateDraft): CreateNovelInitialSettings {
   const chapterCount = Number.parseInt(draft.chapterCount, 10);
   const chapterChars = Number.parseInt(draft.chapterChars, 10);
   return {
-    channel: draft.channel,
-    coreRequirement: draft.coreRequirement,
-    platforms: [...draft.platforms],
-    topics: [...draft.topics],
-    perspective: draft.perspective,
-    styleMode: draft.styleMode,
-    era: draft.era,
-    hasCheat: draft.hasCheat === "yes",
-    styleTags: [...draft.styleTags],
-    language: draft.language,
+    channel: draft.market,
+    coreRequirement: [
+      `【故事梗概】\n${draft.premise.trim()}`,
+      `【世界预设】\n${draft.worldPreset.trim()}`,
+      `【故事结构】\n${draft.storyStructure.trim()}`,
+      `【节奏控制】\n${draft.pacingControl.trim()}`,
+      `【写作风格】\n${draft.writingStyle.trim()}`,
+      `【特殊要求】\n${draft.specialRequirements.trim()}`,
+    ].join("\n\n"),
+    topics: [draft.subgenre],
+    perspective: "第三人称",
+    styleMode: draft.writingStyle,
+    styleTags: [draft.subgenre, "长篇叙事"],
+    language: "中文",
     chapterCount: Number.isFinite(chapterCount) ? chapterCount : undefined,
     chapterChars: Number.isFinite(chapterChars) ? chapterChars : undefined,
   };
-}
-
-function toggleListValue(values: readonly string[], value: string, max?: number): string[] {
-  if (values.includes(value)) return values.filter((item) => item !== value);
-  if (max !== undefined && values.length >= max) return [...values];
-  return [...values, value];
-}
-
-function ChipButton({
-  active,
-  children,
-  onClick,
-}: {
-  readonly active: boolean;
-  readonly children: string;
-  readonly onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`h-8 rounded-[8px] border px-3 text-xs font-semibold transition ${
-        active ? "border-brand bg-brand-soft text-brand-ink" : "border-[#d2d2d7] bg-white text-[#1d1d1f] hover:border-brand/40"
-      }`}
-    >
-      {children}
-    </button>
-  );
 }
 
 export function NovelCreatePage({
@@ -114,129 +114,93 @@ export function NovelCreatePage({
   readonly onChange: (draft: NovelCreateDraft) => void;
   readonly onSubmit: () => void;
 }) {
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const taxonomy = useMemo(() => currentTaxonomy(draft), [draft.market]);
   const update = (patch: Partial<NovelCreateDraft>) => onChange({ ...draft, ...patch });
+  const chooseMarket = (item: Taxonomy) => update({
+    market: item.label,
+    subgenre: item.topics[0]!,
+    worldPreset: item.world,
+    storyStructure: item.structure,
+    pacingControl: item.pacing,
+    writingStyle: item.style,
+  });
+  const chooseLength = (value: NovelLengthTier) => {
+    const option = LENGTH_TIERS.find((item) => item.value === value)!;
+    update({ lengthTier: value, chapterCount: String(option.chapters), chapterChars: String(option.chars) });
+  };
+  const ready = draft.premise.trim().length >= 10 && draft.subgenre.trim().length > 0;
+
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
-      <div className="flex flex-col gap-3 border-b border-[#e8e8ed] pb-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            disabled={!canGoBack}
-            className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-[#d2d2d7] px-3 text-sm font-semibold disabled:opacity-50"
-          >
-            <Icon icon="mdi:arrow-left" aria-hidden />
-            书架
+    <section className="overflow-hidden rounded-2xl border border-[#e2e7e5] bg-white shadow-[0_18px_60px_rgba(15,23,42,0.07)]">
+      <div className="border-b border-[#edf0ef] bg-[radial-gradient(circle_at_top_right,rgba(0,184,169,0.13),transparent_38%)] px-5 py-5 sm:px-7">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            {canGoBack && <button type="button" onClick={onBack} className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d9dfdd] bg-white text-[#50575a]" aria-label="返回书库"><Icon icon="mdi:arrow-left" /></button>}
+            <div>
+              <p className="flex items-center gap-2 text-xs font-bold text-brand-ink"><Icon icon="mdi:creation-outline" /> STORY FOUNDRY</p>
+              <h2 className="mt-1 text-xl font-semibold text-[#17201e]">把一个故事想法，变成长篇叙事工程</h2>
+              <p className="mt-1 text-sm leading-6 text-[#68716f]">先写清主线与读者期待，系统会在设置向导中逐步生成文风、世界、人物、地图和剧情总纲。</p>
+            </div>
+          </div>
+          <button type="button" onClick={() => setShowAdvanced((value) => !value)} className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-[#d9dfdd] bg-white px-3 text-xs font-semibold text-[#4d5755]">
+            <Icon icon={showAdvanced ? "mdi:tune-vertical-variant" : "mdi:tune-variant"} />
+            {showAdvanced ? "使用篇幅档位" : "高级设置"}
           </button>
-          <h2 className="text-lg font-semibold text-[#1d1d1f]">新建作品</h2>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4">
-        <label className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-          作品名
-          <input
-            value={draft.title}
-            onChange={(event) => update({ title: event.currentTarget.value })}
-            placeholder="如：剑来"
-            className="h-11 rounded-[8px] border border-[#d2d2d7] px-3 text-sm outline-none focus:border-brand/60"
+      <div className="grid gap-6 p-5 sm:p-7">
+        <label className="grid gap-2">
+          <span className="flex items-center justify-between gap-3 text-sm font-semibold text-[#28302f]"><span>故事梗概</span><span className="text-xs font-normal text-[#929996]">{draft.premise.length}/2000</span></span>
+          <textarea
+            value={draft.premise}
+            onChange={(event) => update({ premise: event.currentTarget.value.slice(0, 2000) })}
+            placeholder="用一段话写清主角、核心困境、主线目标与爽点预期……\n\n例如：被逐出宗门的阵法师发现自己能听见古阵残响，他必须在王朝封锁前修复失落阵图，也逐渐发现师门覆灭与皇室气运有关。"
+            rows={6}
+            className="w-full resize-y rounded-2xl border border-[#d9dfdd] bg-[#fbfcfc] p-4 text-sm leading-7 text-[#202725] outline-none transition placeholder:text-[#a4aaa8] focus:border-brand/60 focus:bg-white focus:ring-4 focus:ring-brand/10"
           />
         </label>
 
-        <div className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-          频道
-          <div className="grid gap-2 sm:grid-cols-2">
-            {CHANNEL_OPTIONS.map((option) => (
-              <ChipButton key={option} active={draft.channel === option} onClick={() => update({ channel: option })}>{option}</ChipButton>
-            ))}
+        <div className="grid gap-3">
+          <div><p className="text-sm font-semibold text-[#28302f]">市场分区</p><p className="mt-1 text-xs text-[#818986]">大类 → 细分主题；选择后自动推导世界、结构、节奏与文风，后续都可修改。</p></div>
+          <div className="flex flex-wrap gap-2">
+            {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-[#d9dfdd] bg-white text-[#4c5553] hover:border-brand/40"}`}><Icon icon={item.icon} />{item.label}</button>)}
+          </div>
+          <div className="flex flex-wrap gap-2 rounded-2xl bg-[#f6f8f7] p-3">
+            {taxonomy.topics.map((topic) => <button key={topic} type="button" onClick={() => update({ subgenre: topic })} className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-white text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-[#626b68] hover:bg-white"}`}>{topic}</button>)}
           </div>
         </div>
 
-        <label className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-          核心要求
-          <textarea
-            value={draft.coreRequirement}
-            onChange={(event) => update({ coreRequirement: event.currentTarget.value })}
-            rows={4}
-            className="resize-y rounded-[8px] border border-[#d2d2d7] p-3 text-sm leading-6 outline-none focus:border-brand/60"
-          />
-        </label>
+        {!showAdvanced ? (
+          <div className="grid gap-3">
+            <div><p className="text-sm font-semibold text-[#28302f]">目标篇幅</p><p className="mt-1 text-xs text-[#818986]">按网文常用节奏推导章数与单章字数。</p></div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {LENGTH_TIERS.map((option) => <button key={option.value} type="button" onClick={() => chooseLength(option.value)} className={`rounded-xl border p-3 text-left transition ${draft.lengthTier === option.value ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white hover:border-brand/35"}`}><span className="block text-sm font-semibold text-[#28302f]">{option.title}</span><span className="mt-1 block text-xs text-[#7a8380]">{option.hint}</span></button>)}
+            </div>
+          </div>
+        ) : (
+          <div className="grid gap-4 rounded-2xl border border-[#e1e5e3] bg-[#f8faf9] p-4 sm:grid-cols-3">
+            <label className="grid gap-2 text-xs font-semibold text-[#59625f]">书名（可留空由梗概生成）<input value={draft.title} onChange={(event) => update({ title: event.currentTarget.value })} className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-[#202725] outline-none focus:border-brand/60" placeholder="未命名新作" /></label>
+            <label className="grid gap-2 text-xs font-semibold text-[#59625f]">章节数<input value={draft.chapterCount} onChange={(event) => update({ chapterCount: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-[#202725] outline-none focus:border-brand/60" /></label>
+            <label className="grid gap-2 text-xs font-semibold text-[#59625f]">每章字数<input value={draft.chapterChars} onChange={(event) => update({ chapterChars: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-[#202725] outline-none focus:border-brand/60" /></label>
+          </div>
+        )}
 
-        <OptionGroup title="平台" options={PLATFORM_OPTIONS} values={draft.platforms} onToggle={(value) => update({ platforms: toggleListValue(draft.platforms, value) })} />
-        <OptionGroup title="题材" options={TOPIC_OPTIONS} values={draft.topics} onToggle={(value) => update({ topics: toggleListValue(draft.topics, value) })} />
-        <SingleOptionGroup title="视角" options={PERSPECTIVE_OPTIONS} value={draft.perspective} onChange={(value) => update({ perspective: value })} />
-        <SingleOptionGroup title="文风模式" options={STYLE_MODE_OPTIONS} value={draft.styleMode} onChange={(value) => update({ styleMode: value })} />
-        <SingleOptionGroup title="年代" options={ERA_OPTIONS} value={draft.era} onChange={(value) => update({ era: value })} />
-        <SingleOptionGroup title="是否金手指" options={["否", "是"]} value={draft.hasCheat === "yes" ? "是" : "否"} onChange={(value) => update({ hasCheat: value === "是" ? "yes" : "no" })} />
-        <OptionGroup title="风格标签（最多5）" options={STYLE_TAG_OPTIONS} values={draft.styleTags} onToggle={(value) => update({ styleTags: toggleListValue(draft.styleTags, value, 5) })} />
-        <SingleOptionGroup title="语言" options={["中文", "英文"]} value={draft.language} onChange={(value) => update({ language: value })} />
+        <details className="group rounded-2xl border border-[#e1e5e3] bg-white">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#4d5755]"><span className="flex items-center gap-2"><Icon icon="mdi:layers-triple-outline" className="text-brand-ink" />查看自动推导的创作约束</span><Icon icon="mdi:chevron-down" className="transition group-open:rotate-180" /></summary>
+          <div className="grid gap-3 border-t border-[#edf0ef] p-4 sm:grid-cols-2">
+            {([
+              ["世界预设", "worldPreset"], ["故事结构", "storyStructure"], ["节奏控制", "pacingControl"], ["写作风格", "writingStyle"], ["特殊要求", "specialRequirements"],
+            ] as const).map(([label, key]) => <label key={key} className={`grid gap-1.5 text-xs font-semibold text-[#68716f] ${key === "specialRequirements" ? "sm:col-span-2" : ""}`}>{label}<textarea value={draft[key]} onChange={(event) => update({ [key]: event.currentTarget.value })} rows={3} className="resize-y rounded-xl border border-[#d9dfdd] bg-[#fbfcfc] p-3 text-sm leading-6 text-[#29312f] outline-none focus:border-brand/60" /></label>)}
+          </div>
+        </details>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-            章节数
-            <input value={draft.chapterCount} onChange={(event) => update({ chapterCount: event.currentTarget.value })} inputMode="numeric" className="h-11 rounded-[8px] border border-[#d2d2d7] px-3 text-sm" />
-          </label>
-          <label className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-            每章字数
-            <input value={draft.chapterChars} onChange={(event) => update({ chapterChars: event.currentTarget.value })} inputMode="numeric" className="h-11 rounded-[8px] border border-[#d2d2d7] px-3 text-sm" />
-          </label>
+        <div className="flex flex-col gap-3 border-t border-[#edf0ef] pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs leading-5 text-[#818986]"><Icon icon="mdi:shield-check-outline" className="mr-1 inline text-brand-ink" />创建后先进入可修改的设置向导，不会直接开始整书生成。</p>
+          <button type="button" onClick={onSubmit} disabled={!ready || isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45"><Icon icon={isSubmitting ? "mdi:loading" : "mdi:creation-outline"} className={isSubmitting ? "animate-spin" : ""} />{isSubmitting ? "正在建档" : "建档并进入设置向导"}</button>
         </div>
-
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={isSubmitting}
-          className="mt-2 flex h-11 items-center justify-center rounded-[10px] bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-hover disabled:bg-brand/40"
-        >
-          {isSubmitting ? "创建中" : "创建作品"}
-        </button>
       </div>
     </section>
-  );
-}
-
-function OptionGroup({
-  title,
-  options,
-  values,
-  onToggle,
-}: {
-  readonly title: string;
-  readonly options: readonly string[];
-  readonly values: readonly string[];
-  readonly onToggle: (value: string) => void;
-}) {
-  return (
-    <div className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-      {title}
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => (
-          <ChipButton key={option} active={values.includes(option)} onClick={() => onToggle(option)}>{option}</ChipButton>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function SingleOptionGroup({
-  title,
-  options,
-  value,
-  onChange,
-}: {
-  readonly title: string;
-  readonly options: readonly string[];
-  readonly value: string;
-  readonly onChange: (value: string) => void;
-}) {
-  return (
-    <div className="grid gap-2 text-sm font-semibold text-[#4f4f55]">
-      {title}
-      <div className="flex flex-wrap gap-2">
-        {options.map((option) => (
-          <ChipButton key={option} active={value === option} onClick={() => onChange(option)}>{option}</ChipButton>
-        ))}
-      </div>
-    </div>
   );
 }

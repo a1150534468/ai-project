@@ -307,8 +307,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
   };
 
   return (
-    <div className="min-h-full bg-[#f5f5f7] px-4 py-6 lg:px-6 lg:py-6">
-      <div className="mx-auto flex max-w-[1480px] flex-col gap-4 lg:flex-row lg:items-start">
+    <div className={`min-h-full bg-[#f5f5f7] ${activeModuleId === "novel" ? "" : "px-4 py-6 lg:px-6 lg:py-6"}`}>
+      <div className={`mx-auto flex flex-col gap-4 lg:flex-row lg:items-start ${activeModuleId === "novel" ? "max-w-none" : "max-w-[1480px]"}`}>
         {activeModuleId === "commerce-long-image" && (
           <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-3 lg:sticky lg:top-6 lg:w-[236px] lg:flex-none">
             <EcomHistorySidebar
@@ -327,11 +327,11 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
         )}
 
         <main className="min-w-0 flex-1">
-          <header className="mb-4">
+          {activeModuleId !== "novel" && <header className="mb-4">
             <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
             <h1 className="page-title text-[24px]">{activeModule.title}</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
-          </header>
+          </header>}
 
           {activeModuleId === "image" ? (
           <ImageWorkflowStudio

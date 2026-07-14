@@ -13,16 +13,18 @@ describe("NovelWorkflowStudio", () => {
     expect(html).toContain("bg-brand");
   });
 
-  it("renders the standalone project entry before the create form", () => {
+  it("renders the PlotPilot-style premise-first library and create foundry", () => {
     const html = renderToStaticMarkup(<NovelWorkflowStudio token="token" />);
 
-    expect(html).toContain("小说作品");
-    expect(html).toContain("选择作品进入编辑");
-    expect(html).toContain("正在加载作品");
-    expect(html).toContain("新建作品");
+    expect(html).toContain("长篇叙事工作台");
+    expect(html).toContain("故事梗概");
+    expect(html).toContain("市场分区");
+    expect(html).toContain("目标篇幅");
+    expect(html).toContain("建档并进入设置向导");
     expect(html).not.toContain("核心要求");
     expect(html).not.toContain("是否金手指");
-    expect(html).not.toContain("每章字数");
+    expect(html).not.toContain("频道");
+    expect(html).not.toContain("是否金手指");
     expect(html).not.toContain("新建当前输入");
   });
 
@@ -55,7 +57,6 @@ describe("NovelWorkflowStudio", () => {
         lastTaskId: null,
         updatedAt: "",
       }],
-      sections: [],
       knowledgeFacts: [{ subject: "锁灵坠", predicate: "能力", object: "护住心脉" }],
       foreshadowItems: [{ title: "锁灵坠来历", status: "open", expectedPayoffChapter: 4 }],
       workbenchHighlights: {

@@ -8,7 +8,8 @@
     "dev": "tsx watch src/server.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "worker:local-business-promo": "tsx src/workers/local-business-promo-worker.ts"
+    "worker:local-business-promo": "tsx src/workers/local-business-promo-worker.ts",
+    "worker:novel": "tsx src/workers/novel-worker.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.69.0",
@@ -25,9 +26,11 @@
     "@ai-assistant/connector-protocol": "workspace:*",
     "@ai-assistant/db": "workspace:*",
     "@ai-assistant/llm": "workspace:*",
+    "@ai-assistant/novel-workflow": "workspace:*",
     "argon2": "^0.44.0",
     "bullmq": "^5.79.2",
     "croner": "^10.0.1",
+    "docx": "^9.5.1",
     "echarts": "^6.1.0",
     "fast-xml-parser": "^5.9.3",
     "fastify": "^5.0.0",
@@ -38,6 +41,7 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "nodemailer": "^9.0.3",
+    "pdfkit": "^0.17.2",
     "pdf-parse": "^2.4.5",
     "sharp": "^0.35.3",
     "xlsx": "^0.18.5",
@@ -46,6 +50,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/nodemailer": "^8.0.1",
+    "@types/pdfkit": "^0.17.4",
     "form-data": "^4.0.6",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

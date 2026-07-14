@@ -26,6 +26,8 @@ data:
   LOCAL_BUSINESS_PROMO_FFMPEG_CONCURRENCY: "1"
   LOCAL_BUSINESS_PROMO_JOB_ATTEMPTS: "2"
   LOCAL_BUSINESS_PROMO_JOB_BACKOFF_MS: "30000"
+  NOVEL_WORKER_CONCURRENCY: "2"
+  NOVEL_WORKER_HEALTH_PORT: "8091"
   # 视频/图片理解旧工作流仍走 Gemini 原生协议；迁移该工作流时再切百炼全模态接口。
   VIDEO_ANALYZE_MODEL: "gemini-2.5-flash"
   # 数字人口播：飞天数字人（对口型）与小米 MiMo（TTS）的非敏感配置。

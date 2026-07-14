@@ -28,6 +28,8 @@ replicas:
     count: 1
   - name: local-business-promo-worker
     count: 1
+  - name: novel-worker
+    count: 1
 
 patches:
   - path: local-config.yaml

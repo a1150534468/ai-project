@@ -1,20 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { billableCharCount, formatGeneratedNovelDisplayText, parseGeneratedNovelValue, parseRequiredGeneratedNovelValue, visibleCharCount } from "./novel-billable.js";
-import { chapterPlansFromOutline } from "./novel-chapter-plans.js";
+import { billableCharCount, formatGeneratedNovelDisplayText, parseRequiredGeneratedNovelValue, visibleCharCount } from "./novel-billable.js";
 import type { NovelGenerator } from "./novel-generation.js";
-import { NOVEL_RESOURCE_KEY, NOVEL_STAGE_KINDS, NOVEL_TASK_STATUS, type NovelStageKind, type NovelTargetKind } from "./novel-types.js";
-import { NOVEL_STAGE_LABELS } from "./novel-prompts.js";
+import { NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS, type NovelSetupTargetKind, type NovelTargetKind } from "./novel-types.js";
 import { buildNovelGenerationContext, buildNovelEnhancedContextText } from "./novel-context-builder.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload } from "./novel-review.js";
 import { buildNovelVectorMemoryContext, refreshNovelVectorMemory } from "./novel-vector-memory.js";
 import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-workbench-types.js";
+import { syncNovelSetupAssets } from "../novel/structured-sync.js";
 
 export interface BillingForNovels {
   reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
   settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
+  listModels?: () => Promise<{ data: Array<{ model: string; enabled: boolean }> }>;
 }
 
 export interface NovelTaskRow {
@@ -57,36 +57,20 @@ function taskPayload(task: NovelTaskRow): Record<string, unknown> {
   return isRecord(task.requestPayload) ? task.requestPayload : {};
 }
 
-function countOrDefault(targetCount: number | undefined, fallback: number): number {
-  return Math.max(1, targetCount ?? fallback);
+export function estimateReserveChars(targetKind: NovelTargetKind, targetChars?: number, _targetCount?: number): number {
+  if (targetKind === "chapter") return Math.max(1000, Math.min(targetChars ?? 3000, 12000));
+  if (targetKind === "chapterRewrite") return Math.max(200, Math.min(targetChars ?? 500, 6000));
+  if (targetKind === "setupPlot") return 16_000;
+  return 10_000;
 }
 
-export function estimateReserveChars(targetKind: NovelTargetKind, targetChars?: number, targetCount?: number): number {
-  if (targetKind === "chapter") return Math.max(1000, Math.min(targetChars ?? 3000, 12000));
-  if (targetKind === "outline") return Math.min(16000, Math.max(10000, countOrDefault(targetCount, 12) * 800));
-  if (targetKind === "volumes") return Math.min(12000, Math.max(6000, countOrDefault(targetCount, 6) * 900));
-  if (targetKind === "chars") return Math.min(12000, Math.max(5000, countOrDefault(targetCount, 6) * 700));
-  if (targetKind === "world") return 6000;
-  return 3000;
+function isSetupTargetKind(kind: NovelTargetKind): kind is NovelSetupTargetKind {
+  return kind === "setupBible" || kind === "setupCharacters" || kind === "setupLocations" || kind === "setupPlot";
 }
 
 function operationId(): string {
   return `novel:${randomUUID()}`;
 }
-
-function stageOrder(kind: string): number {
-  const index = NOVEL_STAGE_KINDS.findIndex((item) => item === kind);
-  return index >= 0 ? index : NOVEL_STAGE_KINDS.length;
-}
-
-type NovelMemoryStore = Pick<PrismaClient, "novelChapter" | "novelSection" | "novelSectionVersion">;
-
-type NovelMemoryChapter = {
-  readonly chapterIndex: number;
-  readonly title: string;
-  readonly summary: string;
-  readonly content: string;
-};
 
 function compactLine(text: string): string {
   return text.replace(/\s+/g, " ").trim();
@@ -102,13 +86,6 @@ function jsonArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function extractKnownNamesFromSections(sections: readonly { kind: string; displayText: string }[]): { characters: string[]; locations: string[] } {
-  const chars = sections.find((section) => section.kind === "chars")?.displayText ?? "";
-  const world = sections.find((section) => section.kind === "world")?.displayText ?? "";
-  const names = (text: string) => Array.from(new Set((text.match(/[\u4e00-\u9fff]{2,8}/gu) ?? []).slice(0, 30)));
-  return { characters: names(chars), locations: names(world) };
-}
-
 function factStatus(status: string): NovelKnowledgeFactPayload["status"] {
   return status === "draft" || status === "conflict" ? status : "confirmed";
 }
@@ -117,84 +94,31 @@ function foreshadowStatus(status: string): NovelForeshadowPayload["status"] {
   return status === "hinted" || status === "resolved" || status === "abandoned" ? status : "open";
 }
 
-function buildLongMemoryDisplayText(chapters: readonly NovelMemoryChapter[]): string {
-  const completed = chapters
-    .filter((chapter) => chapter.content.trim())
-    .sort((a, b) => a.chapterIndex - b.chapterIndex);
-  if (completed.length === 0) return "";
-  const remembered = completed.slice(-24);
-  const lastChapter = completed[completed.length - 1];
-  if (!lastChapter) return "";
-  const chapterBlocks = remembered.map((chapter) => [
-    `第 ${chapter.chapterIndex} 章 ${chapter.title.trim() || "未命名"}`,
-    chapter.summary.trim() ? `摘要：${compactLine(chapter.summary)}` : "",
-    `正文要点：${excerpt(chapter.content, 260)}`,
-  ].filter(Boolean).join("\n"));
-  return [
-    "【长篇记忆】",
-    `已记忆至第 ${lastChapter.chapterIndex} 章。`,
-    "",
-    "章节进展：",
-    chapterBlocks.join("\n\n"),
-  ].join("\n").trim();
+function contextRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
-export async function refreshNovelLongMemory(args: {
-  readonly store: NovelMemoryStore;
-  readonly projectId: string;
-  readonly sourceTaskId: string | null;
-  readonly operationId?: string;
-  readonly recordVersion: boolean;
-}): Promise<void> {
-  const chapters = await args.store.novelChapter.findMany({
-    where: { projectId: args.projectId },
-    orderBy: { chapterIndex: "asc" },
-  });
-  const displayText = buildLongMemoryDisplayText(chapters);
-  const existing = (await args.store.novelSection.findMany({ where: { projectId: args.projectId } }))
-    .find((section) => section.kind === "draft");
-  const status = displayText ? "ready" : "empty";
-  const billableChars = visibleCharCount(displayText);
-  const lastTaskId = args.sourceTaskId ?? existing?.lastTaskId ?? null;
-  if (
-    existing &&
-    existing.status === status &&
-    existing.displayText === displayText &&
-    existing.billableChars === billableChars &&
-    existing.lastTaskId === lastTaskId
-  ) {
-    return;
+function contextString(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" ? String(value).trim() : "";
+}
+
+function contextJson(value: unknown, maxChars = 240): string {
+  if (value === null || value === undefined) return "";
+  try {
+    return excerpt(JSON.stringify(value), maxChars);
+  } catch {
+    return "";
   }
-  const section = await args.store.novelSection.upsert({
-    where: { projectId_kind: { projectId: args.projectId, kind: "draft" } },
-    create: {
-      projectId: args.projectId,
-      kind: "draft",
-      status,
-      displayText,
-      structuredJson: Prisma.JsonNull,
-      billableChars,
-      lastTaskId,
-    },
-    update: {
-      status,
-      displayText,
-      structuredJson: Prisma.JsonNull,
-      billableChars,
-      lastTaskId,
-    },
-  });
-  if (args.recordVersion && existing?.displayText !== displayText) {
-    await args.store.novelSectionVersion.create({
-      data: {
-        sectionId: section.id,
-        displayText,
-        structuredJson: Prisma.JsonNull,
-        billableChars,
-        operationId: args.operationId,
-      },
-    });
-  }
+}
+
+function promptNodeKey(targetKind: NovelTargetKind): string {
+  if (targetKind === "chapter") return "chapter-writing";
+  if (targetKind === "chapterRewrite") return "chapter-rewrite";
+  return `${targetKind}-generation`;
+}
+
+function renderNovelPromptTemplate(content: string, variables: Record<string, string | number>): string {
+  return content.replace(/\{\{\s*([\w.]+)\s*\}\}/gu, (_match, key: string) => String(variables[key] ?? ""));
 }
 
 export function serializeTask(task: NovelTaskRow) {
@@ -213,90 +137,72 @@ export function serializeTask(task: NovelTaskRow) {
   };
 }
 
-export async function ensureProjectSections(prisma: PrismaClient, projectId: string): Promise<void> {
-  await Promise.all(NOVEL_STAGE_KINDS.map((kind) =>
-    prisma.novelSection.upsert({
-      where: { projectId_kind: { projectId, kind } },
-      create: { projectId, kind },
-      update: {},
-    })
-  ));
-}
-
-async function syncChaptersFromOutline(prisma: PrismaClient, projectId: string, sections: readonly {
-  readonly kind: string;
-  readonly displayText: string;
-  readonly structuredJson: Prisma.JsonValue | null;
-}[]): Promise<void> {
-  const outline = sections.find((section) => section.kind === "outline");
-  if (!outline) return;
-  const plans = chapterPlansFromOutline({ displayText: outline.displayText, structuredJson: outline.structuredJson });
-  if (plans.length === 0) return;
-  const existing = await prisma.novelChapter.findMany({ where: { projectId } });
-  const existingIndexes = new Set(existing.map((chapter) => chapter.chapterIndex));
-  await Promise.all(plans
-    .filter((plan) => !existingIndexes.has(plan.chapterIndex))
-    .map((plan) => prisma.novelChapter.create({
-      data: {
-        projectId,
-        chapterIndex: plan.chapterIndex,
-        title: plan.title,
-        summary: plan.summary,
-        status: "draft",
-        billableChars: 0,
-      },
-    })));
-}
-
 export async function getProjectDetail(prisma: PrismaClient, userId: string, projectId: string) {
   const project = await prisma.novelProject.findFirst({
     where: { id: projectId, userId },
     include: {
-      sections: true,
       tasks: { orderBy: { updatedAt: "desc" }, take: 20 },
+      bible: { include: { worldDimensions: { orderBy: { position: "asc" } }, styleNotes: { orderBy: { position: "asc" } } } },
     },
   });
   if (!project) return null;
-  await ensureProjectSections(prisma, project.id);
-  const sectionsBeforeSync = (await prisma.novelSection.findMany({ where: { projectId: project.id } }))
-    .sort((a, b) => stageOrder(a.kind) - stageOrder(b.kind));
-  await syncChaptersFromOutline(prisma, project.id, sectionsBeforeSync);
-  await refreshNovelLongMemory({
-    store: prisma,
-    projectId: project.id,
-    sourceTaskId: null,
-    recordVersion: false,
-  });
-  const sections = (await prisma.novelSection.findMany({ where: { projectId: project.id } }))
-    .sort((a, b) => stageOrder(a.kind) - stageOrder(b.kind));
   const chapters = await prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } });
   return {
     project: {
       id: project.id,
       title: project.title,
       genre: project.genre,
+      premise: project.premise,
+      settings: project.settings,
+      targetChapters: project.targetChapters,
+      targetCharsPerChapter: project.targetCharsPerChapter,
+      setupStage: project.setupStage,
+      setupCompleted: project.setupCompleted,
+      storyPhase: project.storyPhase,
+      autopilotStatus: project.autopilotStatus,
+      currentBranch: project.currentBranch,
       status: project.status,
       createdAt: project.createdAt.toISOString(),
       updatedAt: project.updatedAt.toISOString(),
     },
-    sections: sections.map((section) => ({
-      id: section.id,
-      kind: section.kind,
-      label: NOVEL_STAGE_LABELS[section.kind as NovelStageKind] ?? section.kind,
-      status: section.status,
-      displayText: section.displayText,
-      billableChars: section.billableChars,
-      lastTaskId: section.lastTaskId,
-      updatedAt: section.updatedAt.toISOString(),
-    })),
+    bible: project.bible ? {
+      id: project.bible.id,
+      premiseLock: project.bible.premiseLock,
+      genreLock: project.bible.genreLock,
+      worldPresetLock: project.bible.worldPresetLock,
+      version: project.bible.version,
+      worldDimensions: project.bible.worldDimensions,
+      styleNotes: project.bible.styleNotes,
+      updatedAt: project.bible.updatedAt.toISOString(),
+    } : null,
     chapters: chapters.map((chapter) => ({
       id: chapter.id,
       volumeIndex: chapter.volumeIndex,
       chapterIndex: chapter.chapterIndex,
       title: chapter.title,
       summary: chapter.summary,
+      outline: chapter.outline,
+      generationHint: chapter.generationHint,
+      executionPlan: chapter.executionPlan,
+      microBeats: chapter.microBeats,
       content: chapter.content,
+      rawContent: chapter.rawContent,
+      openThreads: chapter.openThreads,
+      contextSnapshot: chapter.contextSnapshot,
+      generationMeta: chapter.generationMeta,
+      consistencyJson: chapter.consistencyJson,
       status: chapter.status,
+      reviewStatus: chapter.reviewStatus,
+      reviewNotes: chapter.reviewNotes,
+      aiReview: chapter.aiReview,
+      aiActionItems: chapter.aiActionItems,
+      modificationRate: chapter.modificationRate,
+      reviewedAt: chapter.reviewedAt?.toISOString() ?? null,
+      tensionScore: chapter.tensionScore,
+      plotTension: chapter.plotTension,
+      emotionalTension: chapter.emotionalTension,
+      pacingTension: chapter.pacingTension,
+      qualityScore: chapter.qualityScore,
       billableChars: chapter.billableChars,
       lastTaskId: chapter.lastTaskId,
       updatedAt: chapter.updatedAt.toISOString(),
@@ -305,28 +211,15 @@ export async function getProjectDetail(prisma: PrismaClient, userId: string, pro
   };
 }
 
-async function buildContextText(prisma: PrismaClient, projectId: string): Promise<string> {
-  const [sections, chapters] = await Promise.all([
-    prisma.novelSection.findMany({ where: { projectId } }),
-    prisma.novelChapter.findMany({ where: { projectId }, orderBy: { chapterIndex: "asc" }, take: 12 }),
-  ]);
-  const sectionText = sections
-    .filter((section) => section.displayText.trim())
-    .sort((a, b) => stageOrder(a.kind) - stageOrder(b.kind))
-    .map((section) => `${NOVEL_STAGE_LABELS[section.kind as NovelStageKind] ?? section.kind}：\n${section.displayText}`)
-    .join("\n\n");
-  const chapterText = chapters
-    .map((chapter) => `第 ${chapter.chapterIndex} 章 ${chapter.title || "未命名"}：${chapter.summary || chapter.content.slice(0, 160)}`)
-    .join("\n");
-  return [sectionText, chapterText].filter(Boolean).join("\n\n");
-}
-
 async function loadNovelGenerationContextPayload(args: {
   readonly prisma: PrismaClient;
   readonly project: {
     readonly id: string;
     readonly title: string;
     readonly genre: string;
+    readonly premise?: string;
+    readonly settings?: unknown;
+    readonly narrativeContract?: unknown;
   };
   readonly chapterIndex: number;
   readonly chapterTitle: string;
@@ -335,9 +228,17 @@ async function loadNovelGenerationContextPayload(args: {
   const store = args.prisma as PrismaClient & {
     novelKnowledgeFact?: { findMany: (args: unknown) => Promise<NovelKnowledgeFactPayload[]> };
     novelForeshadowItem?: { findMany: (args: unknown) => Promise<NovelForeshadowPayload[]> };
+    novelCharacter?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelCharacterRelation?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelLocation?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelStoryline?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelTimelineEvent?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelNarrativeDebt?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelProp?: { findMany: (args: unknown) => Promise<unknown[]> };
+    novelBible?: { findUnique: (args: unknown) => Promise<unknown> };
   };
-  const [sections, previousChapters, facts, foreshadowItems] = await Promise.all([
-    args.prisma.novelSection.findMany({ where: { projectId: args.project.id } }),
+  const [bibleValue, previousChapters, facts, foreshadowItems, characters, relations, locations, storylines, timeline, debts, props] = await Promise.all([
+    store.novelBible?.findUnique({ where: { projectId: args.project.id }, include: { worldDimensions: { orderBy: { position: "asc" } }, styleNotes: { orderBy: { position: "asc" } } } }) ?? Promise.resolve(null),
     args.prisma.novelChapter.findMany({ where: { projectId: args.project.id }, orderBy: { chapterIndex: "asc" } }),
     store.novelKnowledgeFact?.findMany({
       where: { projectId: args.project.id, status: { not: "conflict" } },
@@ -349,7 +250,17 @@ async function loadNovelGenerationContextPayload(args: {
       orderBy: [{ expectedPayoffChapter: "asc" }, { updatedAt: "desc" }],
       take: 24,
     }) ?? Promise.resolve([]),
+    store.novelCharacter?.findMany({ where: { projectId: args.project.id }, orderBy: [{ role: "asc" }, { name: "asc" }], take: 24 }) ?? Promise.resolve([]),
+    store.novelCharacterRelation?.findMany({ where: { projectId: args.project.id }, include: { fromCharacter: { select: { name: true } }, toCharacter: { select: { name: true } } }, take: 40 }) ?? Promise.resolve([]),
+    store.novelLocation?.findMany({ where: { projectId: args.project.id }, orderBy: { updatedAt: "desc" }, take: 16 }) ?? Promise.resolve([]),
+    store.novelStoryline?.findMany({ where: { projectId: args.project.id, status: "active" }, include: { milestones: { where: { chapterNumber: { gte: args.chapterIndex - 2, lte: args.chapterIndex + 3 } }, orderBy: { chapterNumber: "asc" } } }, take: 12 }) ?? Promise.resolve([]),
+    store.novelTimelineEvent?.findMany({ where: { projectId: args.project.id, OR: [{ chapterNumber: null }, { chapterNumber: { lte: args.chapterIndex } }] }, orderBy: [{ chapterNumber: "desc" }, { updatedAt: "desc" }], take: 16 }) ?? Promise.resolve([]),
+    store.novelNarrativeDebt?.findMany({ where: { projectId: args.project.id, status: "open" }, orderBy: [{ dueChapter: "asc" }, { createdAt: "asc" }], take: 16 }) ?? Promise.resolve([]),
+    store.novelProp?.findMany({ where: { projectId: args.project.id, status: { not: "retired" } }, orderBy: { updatedAt: "desc" }, take: 16 }) ?? Promise.resolve([]),
   ]);
+  const bible = contextRecord(bibleValue);
+  const worldDimensions = Array.isArray(bible.worldDimensions) ? bible.worldDimensions : [];
+  const styleNotes = Array.isArray(bible.styleNotes) ? bible.styleNotes : [];
   const reviewFeedback = previousChapters
     .filter((chapter) => chapter.chapterIndex < args.chapterIndex)
     .sort((a, b) => b.chapterIndex - a.chapterIndex)
@@ -367,11 +278,59 @@ async function loadNovelGenerationContextPayload(args: {
     chapterIndex: args.chapterIndex,
     chapterTitle: args.chapterTitle,
     chapterSummary: args.chapterSummary,
-    sections,
+    conflictAnchor: contextString(contextRecord(args.project.narrativeContract).coreQuestion),
+    styleProfileText: styleNotes.map((value) => { const row = contextRecord(value); return `${contextString(row.title)}：${contextString(row.content)}`; }).filter(Boolean).join("；"),
     previousChapters: previousChapters.filter((chapter) => chapter.chapterIndex < args.chapterIndex),
     facts: facts.map((fact) => ({ ...fact, status: factStatus(fact.status) })),
     foreshadowItems: foreshadowItems.map((item) => ({ ...item, status: foreshadowStatus(item.status) })),
     reviewFeedback,
+    structuredContext: {
+      contract: [
+        args.project.premise ? `故事前提：${excerpt(args.project.premise, 360)}` : "",
+        contextJson(args.project.narrativeContract) ? `叙事契约：${contextJson(args.project.narrativeContract, 600)}` : "",
+      ],
+      world: [
+        contextJson(args.project.settings) ? `项目世界规则：${contextJson(args.project.settings, 500)}` : "",
+        ...worldDimensions.map((value) => {
+          const row = contextRecord(value);
+          return `世界维度·${contextString(row.title)}：${contextString(row.summary)}；${contextJson(row.details, 400)}`;
+        }),
+        ...locations.map((value) => {
+          const row = contextRecord(value);
+          return `地点：${contextString(row.name)}；规则：${contextString(row.rules)}；${contextString(row.description)}`;
+        }),
+      ],
+      characters: [
+        ...characters.map((value) => {
+          const row = contextRecord(value);
+          return `人物：${contextString(row.name)}（${contextString(row.role) || "角色"}）；动机：${contextString(row.coreMotivation)}；信念：${contextString(row.coreBelief)}；当前状态：${contextJson(row.state)}`;
+        }),
+        ...relations.map((value) => {
+          const row = contextRecord(value);
+          const from = contextRecord(row.fromCharacter);
+          const to = contextRecord(row.toCharacter);
+          return `关系：${contextString(from.name) || contextString(row.fromCharacterId)} → ${contextString(to.name) || contextString(row.toCharacterId)} = ${contextString(row.relationType)}；${contextString(row.description)}`;
+        }),
+      ],
+      continuity: [
+        ...storylines.map((value) => {
+          const row = contextRecord(value);
+          return `故事线：${contextString(row.title)}；目标：${contextString(row.goal)}；冲突：${contextString(row.conflict)}；近期里程碑：${contextJson(row.milestones)}`;
+        }),
+        ...timeline.map((value) => {
+          const row = contextRecord(value);
+          return `时间线：${contextString(row.timeLabel)} ${contextString(row.title)}；${contextString(row.description)}`;
+        }),
+        ...debts.map((value) => {
+          const row = contextRecord(value);
+          return `叙事债务：${contextString(row.title)}；应在第${contextString(row.dueChapter) || "后续"}章前处理；${contextString(row.description)}`;
+        }),
+        ...props.map((value) => {
+          const row = contextRecord(value);
+          return `道具：${contextString(row.name)}；持有者：${contextString(row.owner)}；位置：${contextString(row.location)}；状态：${contextString(row.status)}`;
+        }),
+      ],
+    },
   });
 }
 
@@ -395,7 +354,6 @@ async function buildChapterContextText(args: {
     chapterSummary: args.chapterSummary,
   });
   const enhancedContextText = buildNovelEnhancedContextText(contextPayload);
-  const baseContextText = await buildContextText(args.prisma, args.project.id);
   try {
     const vectorContextText = await buildNovelVectorMemoryContext({
       store: args.prisma,
@@ -406,9 +364,9 @@ async function buildChapterContextText(args: {
       chapterTitle: args.chapterTitle,
       chapterSummary: args.chapterSummary,
     });
-    return [enhancedContextText, baseContextText, vectorContextText].filter(Boolean).join("\n\n");
+    return [enhancedContextText, vectorContextText].filter(Boolean).join("\n\n");
   } catch (error) {
-    if (error instanceof Error) return [enhancedContextText, baseContextText].filter(Boolean).join("\n\n");
+    if (error instanceof Error) return enhancedContextText;
     throw error;
   }
 }
@@ -431,6 +389,7 @@ export async function reserveAndCreateTask(args: {
   readonly targetId?: string | null;
   readonly payload: Record<string, unknown>;
   readonly estimateChars: number;
+  readonly delivery?: "inline" | "worker-outbox";
 }): Promise<NovelTaskRow> {
   const opId = operationId();
   await args.billing.reserveResource({
@@ -440,17 +399,31 @@ export async function reserveAndCreateTask(args: {
     units: args.estimateChars,
   });
   try {
-    return await args.prisma.novelTask.create({
-      data: {
-        projectId: args.projectId,
-        userId: args.userId,
-        kind: "generate",
-        targetKind: args.targetKind,
-        targetId: args.targetId ?? null,
-        status: NOVEL_TASK_STATUS.queued,
-        requestPayload: jsonValue(args.payload),
-        operationId: opId,
-      },
+    return await args.prisma.$transaction(async (tx) => {
+      const task = await tx.novelTask.create({
+        data: {
+          projectId: args.projectId,
+          userId: args.userId,
+          kind: "generate",
+          targetKind: args.targetKind,
+          targetId: args.targetId ?? null,
+          status: NOVEL_TASK_STATUS.queued,
+          requestPayload: jsonValue(args.payload),
+          operationId: opId,
+        },
+      });
+      if (args.delivery === "worker-outbox") {
+        await tx.novelCommandOutbox.create({
+          data: {
+            projectId: args.projectId,
+            taskId: task.id,
+            payload: { type: "generation-task", taskId: task.id },
+            priority: 1,
+            jobName: "generation-task",
+          },
+        });
+      }
+      return task;
     });
   } catch (error) {
     await args.billing.refundResource(opId).catch(() => undefined);
@@ -481,13 +454,16 @@ async function saveGeneratedResult(args: {
   const payload = taskPayload(task);
   const displayText = formatGeneratedNovelDisplayText(targetKind, args.parsed);
   const billableChars = args.billableChars;
-  const project = targetKind === "chapter" ? await prisma.novelProject.findUnique({ where: { id: task.projectId } }) : null;
-  if (targetKind === "chapter" && !project) throw new Error("novel project not found");
-  const chapterIndex = targetKind === "chapter" ? Number(payload.chapterIndex) || 1 : 0;
+  const isChapterTarget = targetKind === "chapter" || targetKind === "chapterRewrite";
+  const project = isChapterTarget ? await prisma.novelProject.findUnique({ where: { id: task.projectId } }) : null;
+  if (isChapterTarget && !project) throw new Error("novel project not found");
+  const chapterIndex = isChapterTarget ? Number(payload.chapterIndex) || 1 : 0;
   const generatedTitle = targetKind === "chapter" && isRecord(args.parsed) && typeof args.parsed.title === "string" ? args.parsed.title.trim() : "";
-  const title = targetKind === "chapter" ? generatedTitle || String(payload.title || `第 ${chapterIndex} 章`) : "";
-  const sections = targetKind === "chapter" ? await prisma.novelSection.findMany({ where: { projectId: task.projectId } }) : [];
-  const knownNames = extractKnownNamesFromSections(sections);
+  const title = isChapterTarget ? generatedTitle || String(payload.title || `第 ${chapterIndex} 章`) : "";
+  const [knownCharacters, knownLocations] = targetKind === "chapter" ? await Promise.all([
+    prisma.novelCharacter.findMany({ where: { projectId: task.projectId }, select: { name: true }, take: 50 }),
+    prisma.novelLocation.findMany({ where: { projectId: task.projectId }, select: { name: true }, take: 50 }),
+  ]) : [[], []];
   const contextSnapshot = targetKind === "chapter" && project ? await loadNovelGenerationContextPayload({
     prisma,
     project,
@@ -500,9 +476,13 @@ async function saveGeneratedResult(args: {
     chapterIndex,
     title,
     content: displayText,
-    knownCharacters: knownNames.characters,
-    knownLocations: knownNames.locations,
+    knownCharacters: knownCharacters.map((item) => item.name),
+    knownLocations: knownLocations.map((item) => item.name),
   }) : null;
+
+  if (isSetupTargetKind(targetKind)) {
+    await syncNovelSetupAssets({ prisma, projectId: task.projectId, targetKind, value: args.parsed });
+  }
   const review = postprocess ? buildNovelReviewPayload({
     rawContent: displayText,
     finalContent: displayText,
@@ -608,36 +588,25 @@ async function saveGeneratedResult(args: {
           relatedCharacter: item.relatedCharacter,
         },
       }) ?? Promise.resolve()));
-      await refreshNovelLongMemory({
-        store: tx,
-        projectId: task.projectId,
-        sourceTaskId: task.id,
-        operationId: task.operationId,
-        recordVersion: true,
-      });
-    } else {
-      const structuredJson = typeof args.parsed === "string" ? Prisma.JsonNull : jsonValue(args.parsed);
-      const section = await tx.novelSection.upsert({
-        where: { projectId_kind: { projectId: task.projectId, kind: targetKind } },
-        create: {
-          projectId: task.projectId,
-          kind: targetKind,
-          status: "ready",
-          displayText,
-          structuredJson,
-          billableChars,
+    } else if (targetKind === "chapterRewrite") {
+      const chapter = await tx.novelChapter.findUnique({ where: { projectId_chapterIndex: { projectId: task.projectId, chapterIndex } } });
+      if (!chapter) throw new Error("chapter not found for rewrite");
+      const selectedText = String(payload.selectedText || "");
+      const start = Math.max(0, Number(payload.selectionStart) || 0);
+      const end = Math.max(start, Number(payload.selectionEnd) || start + selectedText.length);
+      if (!selectedText || chapter.content.slice(start, end) !== selectedText) throw new Error("章节正文已变化，请重新选择需要改写的内容");
+      const nextContent = `${chapter.content.slice(0, start)}${displayText}${chapter.content.slice(end)}`;
+      await tx.novelChapterVersion.create({ data: { chapterId: chapter.id, title: chapter.title, content: chapter.content, billableChars: chapter.billableChars } });
+      await tx.novelChapter.update({
+        where: { id: chapter.id },
+        data: {
+          content: nextContent,
+          billableChars: visibleCharCount(nextContent),
+          reviewStatus: "pending",
+          reviewedAt: null,
           lastTaskId: task.id,
+          generationMeta: jsonValue({ model: args.model, operationId: task.operationId, operation: "chapterRewrite", selectionStart: start, selectionEnd: end }),
         },
-        update: {
-          status: "ready",
-          displayText,
-          structuredJson,
-          billableChars,
-          lastTaskId: task.id,
-        },
-      });
-      await tx.novelSectionVersion.create({
-        data: { sectionId: section.id, displayText, structuredJson, billableChars, operationId: task.operationId },
       });
     }
     await tx.novelTask.update({
@@ -657,8 +626,11 @@ export async function runNovelTask(args: {
   readonly billing: BillingForNovels;
   readonly generator: NovelGenerator;
   readonly task: NovelTaskRow;
+  readonly onChunk?: (chunk: string) => Promise<void>;
 }): Promise<void> {
   const { prisma, billing, generator } = args;
+  const latestBeforeRun = await prisma.novelTask.findUnique({ where: { id: args.task.id } });
+  if (!latestBeforeRun || latestBeforeRun.status === NOVEL_TASK_STATUS.succeeded || latestBeforeRun.status === NOVEL_TASK_STATUS.failed || latestBeforeRun.status === NOVEL_TASK_STATUS.cancelled) return;
   try {
     const claimed = await assertTaskActive(prisma, args.task.id);
     await prisma.novelTask.update({ where: { id: claimed.id }, data: { status: NOVEL_TASK_STATUS.running, error: null } });
@@ -670,25 +642,66 @@ export async function runNovelTask(args: {
     const chapterIndex = Number(payload.chapterIndex) || undefined;
     const chapterTitle = String(payload.title || "");
     const chapterSummary = String(payload.summary || "");
+    const contextText = targetKind === "chapter" || targetKind === "chapterRewrite"
+      ? [
+          await buildChapterContextText({
+            prisma,
+            project,
+            chapterIndex,
+            chapterTitle,
+            chapterSummary,
+          }),
+          targetKind === "chapterRewrite"
+            ? [`选区前文：\n${String(payload.selectionBefore || "（章首）")}`, `选区后文：\n${String(payload.selectionAfter || "（章尾）")}`].join("\n\n")
+            : "",
+        ].filter(Boolean).join("\n\n")
+      : [
+          `故事梗概：${project.premise}`,
+          `锁定类型：${project.genre}`,
+          `创作设置：${JSON.stringify(project.settings)}`,
+          targetKind !== "setupBible" ? `已确认 Bible：${JSON.stringify(await prisma.novelBible.findUnique({ where: { projectId: project.id }, include: { worldDimensions: true, styleNotes: true } }))}` : "",
+          targetKind === "setupPlot" ? `主要人物：${JSON.stringify(await prisma.novelCharacter.findMany({ where: { projectId: project.id } }))}` : "",
+          targetKind === "setupPlot" ? `地点：${JSON.stringify(await prisma.novelLocation.findMany({ where: { projectId: project.id } }))}` : "",
+        ].filter(Boolean).join("\n\n");
+    const promptStore = prisma as PrismaClient & {
+      novelPromptTemplate?: { findUnique: (args: unknown) => Promise<{ content: string; model: string; temperature: number } | null> };
+    };
+    const template = await promptStore.novelPromptTemplate?.findUnique({
+      where: { projectId_nodeKey: { projectId: project.id, nodeKey: promptNodeKey(targetKind) } },
+    }) ?? null;
+    let templateModel = template?.model || "";
+    if (templateModel && billing.listModels) {
+      try {
+        const models = await billing.listModels();
+        if (!models.data.some((item) => item.enabled && item.model === templateModel)) templateModel = "";
+      } catch {
+        templateModel = "";
+      }
+    }
     const result = await generator({
       targetKind,
       projectTitle: project.title,
       genre: project.genre,
       userPrompt: String(payload.prompt || ""),
-      contextText: targetKind === "chapter"
-        ? await buildChapterContextText({
-          prisma,
-          project,
-          chapterIndex,
-          chapterTitle,
-          chapterSummary,
-        })
-        : await buildContextText(prisma, project.id),
+      contextText,
       chapterTitle,
       chapterSummary,
       chapterIndex,
       targetChars: Number(payload.targetChars) || undefined,
       targetCount: Number(payload.targetCount) || undefined,
+      promptOverride: template ? renderNovelPromptTemplate(template.content, {
+        projectTitle: project.title,
+        genre: project.genre,
+        chapterNumber: chapterIndex ?? "",
+        chapterTitle,
+        chapterPlan: chapterSummary,
+        context: contextText,
+        targetChars: Number(payload.targetChars) || 3000,
+        userPrompt: String(payload.prompt || ""),
+      }) : undefined,
+      modelOverride: templateModel || undefined,
+      temperatureOverride: template?.temperature,
+      onChunk: args.onChunk,
     });
     await assertTaskActive(prisma, task.id);
     const parsed = parseRequiredGeneratedNovelValue(targetKind, result.text);

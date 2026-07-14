@@ -1,22 +1,26 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { embed, loadEmbeddingConfig, type EmbeddingConfig } from "../memory/embedding-client.js";
-import { NOVEL_STAGE_LABELS } from "./novel-prompts.js";
-import type { NovelStageKind } from "./novel-types.js";
 
 const VECTOR_CONTEXT_LIMIT = 8;
 const INDEX_CONTENT_LIMIT = 3200;
 const HIT_CONTENT_LIMIT = 700;
 
 type NovelVectorStore = {
-  readonly novelSection: Pick<PrismaClient["novelSection"], "findMany">;
+  readonly novelProject: Pick<PrismaClient["novelProject"], "findUnique">;
+  readonly novelBible: Pick<PrismaClient["novelBible"], "findUnique">;
+  readonly novelWorldDimension: Pick<PrismaClient["novelWorldDimension"], "findMany">;
+  readonly novelStyleNote: Pick<PrismaClient["novelStyleNote"], "findMany">;
+  readonly novelCharacter: Pick<PrismaClient["novelCharacter"], "findMany">;
+  readonly novelLocation: Pick<PrismaClient["novelLocation"], "findMany">;
+  readonly novelStoryline: Pick<PrismaClient["novelStoryline"], "findMany">;
   readonly novelChapter: Pick<PrismaClient["novelChapter"], "findMany">;
   $queryRawUnsafe<T = unknown>(query: string, ...values: readonly unknown[]): Promise<T>;
   $executeRawUnsafe(query: string, ...values: readonly unknown[]): Promise<number>;
 };
 
 type NovelVectorDocument = {
-  readonly sourceType: "section" | "chapter";
+  readonly sourceType: "bible" | "world" | "style" | "character" | "location" | "storyline" | "chapter";
   readonly sourceId: string;
   readonly sourceKind: string;
   readonly title: string;
@@ -59,49 +63,124 @@ function vectorKey(row: Pick<ExistingVectorRow, "sourceType" | "sourceId">): str
   return `${row.sourceType}:${row.sourceId}`;
 }
 
-function isNovelStageKind(kind: string): kind is NovelStageKind {
-  return kind in NOVEL_STAGE_LABELS;
+function jsonText(value: unknown): string {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
 }
 
-function stageLabel(kind: string): string {
-  return isNovelStageKind(kind) ? NOVEL_STAGE_LABELS[kind] : kind;
+function document(args: Omit<NovelVectorDocument, "contentHash">): NovelVectorDocument | null {
+  const content = clipText(args.content, INDEX_CONTENT_LIMIT);
+  if (!content) return null;
+  return { ...args, content, contentHash: hashContent(content) };
 }
 
 async function loadNovelVectorDocuments(store: NovelVectorStore, projectId: string): Promise<NovelVectorDocument[]> {
-  const [sections, chapters] = await Promise.all([
-    store.novelSection.findMany({ where: { projectId } }),
+  const [project, bible, worldDimensions, styleNotes, characters, locations, storylines, chapters] = await Promise.all([
+    store.novelProject.findUnique({ where: { id: projectId } }),
+    store.novelBible.findUnique({ where: { projectId } }),
+    store.novelWorldDimension.findMany({ where: { projectId }, orderBy: { position: "asc" } }),
+    store.novelStyleNote.findMany({ where: { projectId }, orderBy: { position: "asc" } }),
+    store.novelCharacter.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } }),
+    store.novelLocation.findMany({ where: { projectId }, orderBy: { createdAt: "asc" } }),
+    store.novelStoryline.findMany({ where: { projectId }, include: { milestones: { orderBy: { chapterNumber: "asc" } } }, orderBy: { createdAt: "asc" } }),
     store.novelChapter.findMany({ where: { projectId }, orderBy: { chapterIndex: "asc" } }),
   ]);
-  const sectionDocs = sections
-    .filter((section) => section.displayText.trim())
-    .map((section) => {
-      const label = stageLabel(section.kind);
-      const content = `【${label}】\n${clipText(section.displayText, INDEX_CONTENT_LIMIT)}`;
-      return {
-        sourceType: "section",
-        sourceId: section.id,
-        sourceKind: section.kind,
-        title: label,
-        content,
-        contentHash: hashContent(content),
-      } satisfies NovelVectorDocument;
-    });
+  const docs: Array<NovelVectorDocument | null> = [];
+  if (project) {
+    docs.push(document({
+      sourceType: "bible",
+      sourceId: project.id,
+      sourceKind: "story-contract",
+      title: "故事圣经与叙事契约",
+      content: [
+        `【故事圣经】\n书名：${project.title}`,
+        project.genre ? `题材：${project.genre}` : "",
+        project.premise ? `核心梗概：${project.premise}` : "",
+        jsonText(project.settings) ? `项目设置：${jsonText(project.settings)}` : "",
+        jsonText(project.narrativeContract) ? `叙事契约：${jsonText(project.narrativeContract)}` : "",
+      ].filter(Boolean).join("\n"),
+    }));
+  }
+  if (bible) {
+    docs.push(document({
+      sourceType: "bible",
+      sourceId: bible.id,
+      sourceKind: "locked-foundation",
+      title: "锁定设定",
+      content: `【锁定设定】\n故事前提：${bible.premiseLock}\n题材：${bible.genreLock}\n世界预设：${bible.worldPresetLock}`,
+    }));
+  }
+  docs.push(...worldDimensions.map((item) => document({
+    sourceType: "world",
+    sourceId: item.id,
+    sourceKind: item.dimensionKey,
+    title: item.title,
+    content: `【世界维度·${item.title}】\n${item.summary}\n${jsonText(item.details)}`,
+  })));
+  docs.push(...styleNotes.map((item) => document({
+    sourceType: "style",
+    sourceId: item.id,
+    sourceKind: item.category,
+    title: item.title,
+    content: `【文风公约·${item.title}】\n${item.content}`,
+  })));
+  docs.push(...characters.map((item) => document({
+    sourceType: "character",
+    sourceId: item.id,
+    sourceKind: item.role || "character",
+    title: item.name,
+    content: [
+      `【人物·${item.name}】`,
+      item.role ? `角色定位：${item.role}` : "",
+      item.description ? `人物简介：${item.description}` : "",
+      item.appearance ? `外貌：${item.appearance}` : "",
+      item.personality ? `性格：${item.personality}` : "",
+      item.coreBelief ? `核心信念：${item.coreBelief}` : "",
+      item.coreMotivation ? `核心动机：${item.coreMotivation}` : "",
+      item.innerLack ? `内在缺失：${item.innerLack}` : "",
+      item.voiceStyle ? `语言风格：${item.voiceStyle}` : "",
+      jsonText(item.state) ? `当前状态：${jsonText(item.state)}` : "",
+    ].filter(Boolean).join("\n"),
+  })));
+  docs.push(...locations.map((item) => document({
+    sourceType: "location",
+    sourceId: item.id,
+    sourceKind: "location",
+    title: item.name,
+    content: `【地点·${item.name}】\n${item.description}\n规则：${item.rules}\n${jsonText(item.metadata)}`,
+  })));
+  docs.push(...storylines.map((item) => document({
+    sourceType: "storyline",
+    sourceId: item.id,
+    sourceKind: item.storylineType,
+    title: item.title,
+    content: [
+      `【故事线·${item.title}】`,
+      `类型：${item.storylineType}；状态：${item.status}`,
+      item.goal ? `目标：${item.goal}` : "",
+      item.conflict ? `冲突：${item.conflict}` : "",
+      item.milestones.length ? `里程碑：\n${item.milestones.map((milestone) => `第${milestone.chapterNumber}章 ${milestone.title}：${milestone.description}`).join("\n")}` : "",
+    ].filter(Boolean).join("\n"),
+  })));
   const chapterDocs = chapters
     .filter((chapter) => chapter.content.trim())
     .map((chapter) => {
       const title = `第 ${chapter.chapterIndex} 章 ${chapter.title.trim() || "未命名"}`;
       const summary = chapter.summary.trim() ? `摘要：${clipText(chapter.summary, 500)}\n` : "";
-      const content = `【前文正文】\n${title}\n${summary}正文：${clipText(chapter.content, INDEX_CONTENT_LIMIT)}`;
-      return {
+      return document({
         sourceType: "chapter",
         sourceId: chapter.id,
         sourceKind: `chapter:${chapter.chapterIndex}`,
         title,
-        content,
-        contentHash: hashContent(content),
-      } satisfies NovelVectorDocument;
+        content: `【前文正文】\n${title}\n${summary}正文：${chapter.content}`,
+      });
     });
-  return [...sectionDocs, ...chapterDocs];
+  return [...docs, ...chapterDocs].filter((item): item is NovelVectorDocument => item !== null);
 }
 
 async function deleteStaleRows(store: NovelVectorStore, projectId: string, rowIds: readonly string[]): Promise<void> {

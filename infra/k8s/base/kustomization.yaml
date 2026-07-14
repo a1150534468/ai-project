@@ -7,6 +7,7 @@ resources:
   - 10-configmap.yaml
   - 30-api.yaml
   - 35-local-business-promo-worker.yaml
+  - 36-novel-worker.yaml
   - 40-web.yaml
   - 45-admin.yaml
   - 50-billing.yaml

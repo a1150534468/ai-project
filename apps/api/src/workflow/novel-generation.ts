@@ -13,10 +13,6 @@ export function resolveNovelTextModel(env: NodeJS.ProcessEnv = process.env, defa
   return (env.NOVEL_TEXT_MODEL ?? defaultModel ?? "").trim() || "GLM-5.2";
 }
 
-function countOrDefault(input: NovelPromptInput, fallback: number): number {
-  return Math.max(1, input.targetCount ?? fallback);
-}
-
 function clampTokenBudget(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
@@ -25,16 +21,10 @@ export function novelGenerationMaxTokens(input: NovelPromptInput): number {
   if (input.targetKind === "chapter") {
     return clampTokenBudget(Math.max(6000, Math.ceil((input.targetChars ?? 3000) * 2)), 6000, 16000);
   }
-  if (input.targetKind === "outline") {
-    return clampTokenBudget(Math.max(10000, countOrDefault(input, 12) * 900), 6000, 16000);
-  }
-  if (input.targetKind === "volumes") {
-    return clampTokenBudget(Math.max(6000, countOrDefault(input, 6) * 1000), 6000, 12000);
-  }
-  if (input.targetKind === "chars") {
-    return clampTokenBudget(Math.max(5000, countOrDefault(input, 6) * 800), 5000, 12000);
-  }
-  return 5000;
+  if (input.targetKind === "chapterRewrite") return clampTokenBudget(Math.max(2000, Math.ceil((input.targetChars ?? 500) * 2)), 2000, 8000);
+  if (input.targetKind === "setupPlot") return 16_000;
+  if (input.targetKind === "setupBible" || input.targetKind === "setupCharacters" || input.targetKind === "setupLocations") return 10_000;
+  return 10_000;
 }
 
 function extractResponseText(response: { content: Array<Anthropic.ContentBlock> }): string {
@@ -49,16 +39,29 @@ export function createNovelGenerator(env: NodeJS.ProcessEnv = process.env): Nove
   return async (input) => {
     const cfg = loadLlmConfig(env);
     const client = createLlmClient(cfg);
-    const model = resolveNovelTextModel(env, cfg.defaultModel);
-    const response = await client.messages.create({
+    const model = input.modelOverride?.trim() || resolveNovelTextModel(env, cfg.defaultModel);
+    const request = {
       model,
       max_tokens: novelGenerationMaxTokens(input),
+      ...(typeof input.temperatureOverride === "number" ? { temperature: Math.max(0, Math.min(2, input.temperatureOverride)) } : {}),
       system: buildNovelSystemPrompt(input.targetKind),
       messages: [{
-        role: "user",
-        content: buildNovelUserPrompt(input),
+        role: "user" as const,
+        content: input.promptOverride?.trim() || buildNovelUserPrompt(input),
       }],
-    });
+    };
+    let response: { content: Array<Anthropic.ContentBlock> };
+    if (input.onChunk) {
+      const stream = client.messages.stream(request);
+      let pending = Promise.resolve();
+      stream.on("text", (chunk) => {
+        pending = pending.then(() => input.onChunk!(chunk));
+      });
+      response = await stream.finalMessage();
+      await pending;
+    } else {
+      response = await client.messages.create(request);
+    }
     const text = extractResponseText(response);
     if (!text) throw new Error("empty novel generation response");
     return { text, model };

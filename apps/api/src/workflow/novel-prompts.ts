@@ -1,37 +1,22 @@
-import type { NovelStageKind, NovelTargetKind } from "./novel-types.js";
+import type { NovelSetupTargetKind, NovelTargetKind } from "./novel-types.js";
 
-export const NOVEL_STAGE_LABELS: Record<NovelStageKind, string> = {
-  settings: "设定",
-  macro: "宏观",
-  world: "世界观",
-  chars: "角色",
-  volumes: "卷纲",
-  outline: "拆章",
-  draft: "正文",
-  style: "写法",
+const SETUP_GUIDANCE: Record<NovelSetupTargetKind, string> = {
+  setupBible: "基于故事梗概先确定文风公约，再构建核心法则、地理生态、社会结构、历史文化、日常生活五维世界观。",
+  setupCharacters: "基于已锁定的梗概和世界观创建主要人物、心理锚点、人物弧光、秘密、声线以及人物关系。",
+  setupLocations: "从世界观与人物行动路径中提取可持续使用的地点系统，包含空间关系、场景规则、风险与叙事用途。",
+  setupPlot: "规划主线、支线与暗线、汇流点，并构建部卷幕章故事树和逐章可执行大纲。",
 };
 
-const STAGE_GUIDANCE: Record<NovelStageKind, string> = {
-  settings: "提炼题材、受众、主线卖点、叙事视角、情绪基调和禁忌边界。",
-  macro: "设计长篇主线、核心冲突、阶段转折、升级节奏和结局方向。",
-  world: "构建地理、势力、规则、资源、历史事件和日常生活细节。",
-  chars: "创建主角、关键配角、反派和关系网，包含动机、弧光与秘密。",
-  volumes: "拆分卷结构，给出每卷主题、目标、高潮、反转和承接关系。",
-  outline: "按章节列出标题、剧情目的、冲突、伏笔、结尾钩子和预计字数。",
-  draft: "基于长篇记忆、卷纲与章节目标，规划正文写作顺序和章节正文要点。",
-  style: "从样文中提取写法名、句式、节奏、视角、叙述偏好和可复用特征池。",
+const SETUP_OUTPUT_FIELDS: Record<NovelSetupTargetKind, string> = {
+  setupBible: "styleGuide（含narrativeVoice、sentenceRhythm、dialogue、sensory、avoid、sample）、worldbuilding（含coreRules、geography、society、culture、dailyLife；每维含summary与details）",
+  setupCharacters: "characters（每项含name、role、gender、age、description、appearance、personality、publicProfile、coreBelief、coreMotivation、innerLack、moralTaboos、voiceStyle）、relations（含from、to、relationType、description、strength）",
+  setupLocations: "locations（每项含name、description、rules、region、risk、narrativeFunction、connections）",
+  setupPlot: "storylines（含title、storylineType、goal、conflict、promiseTags、milestones）、volumes（含number、title、summary、startChapter、endChapter、acts；幕含number、title、summary、chapters；章含number、title、outline、goal、endingHook、targetWords）",
 };
 
-const STAGE_OUTPUT_FIELDS: Record<NovelStageKind, string> = {
-  settings: "核心要求、频道、平台、题材、视角、文风模式、年代、是否金手指、风格标签、语言、章节规划、卖点、目标读者、前30章承诺",
-  macro: "故事引擎、主线、长期对立、节奏底盘、前30章承诺",
-  world: "世界手册、规则、势力、地点、关系",
-  chars: "角色、关系网",
-  volumes: "分卷",
-  outline: "章节列表",
-  draft: "长篇记忆",
-  style: "样文、写法名、特征池",
-};
+function isSetupTarget(kind: NovelTargetKind): kind is NovelSetupTargetKind {
+  return kind === "setupBible" || kind === "setupCharacters" || kind === "setupLocations" || kind === "setupPlot";
+}
 
 export interface NovelPromptInput {
   readonly targetKind: NovelTargetKind;
@@ -44,19 +29,18 @@ export interface NovelPromptInput {
   readonly chapterIndex?: number;
   readonly targetChars?: number;
   readonly targetCount?: number;
-}
-
-function targetCountLine(kind: NovelStageKind, targetCount?: number): string {
-  if (!targetCount) return "";
-  if (kind === "chars") return `数量要求：请生成 ${targetCount} 个角色。`;
-  if (kind === "volumes") return `数量要求：请生成 ${targetCount} 卷。`;
-  if (kind === "outline") return `数量要求：请生成 ${targetCount} 个章节。`;
-  return "";
+  readonly promptOverride?: string;
+  readonly modelOverride?: string;
+  readonly temperatureOverride?: number;
+  readonly onChunk?: (chunk: string) => Promise<void>;
 }
 
 export function buildNovelSystemPrompt(targetKind: NovelTargetKind): string {
   if (targetKind === "chapter") {
     return "你是中文长篇小说写作助手。只输出章节正文，若使用 JSON 也只能包含 title 和 content 字段，不要解释，不要 Markdown。";
+  }
+  if (targetKind === "chapterRewrite") {
+    return "你是中文长篇小说精修助手。只输出改写后的选区正文，不要标题、解释、Markdown 或 JSON；必须保持与选区前后文自然衔接。";
   }
   return [
     "你是中文长篇小说策划助手。",
@@ -79,17 +63,31 @@ export function buildNovelUserPrompt(input: NovelPromptInput): string {
     ].filter(Boolean).join("\n\n");
   }
 
-  const label = NOVEL_STAGE_LABELS[input.targetKind];
-  return [
-    `项目：${input.projectTitle}`,
-    input.genre ? `题材：${input.genre}` : "",
-    `当前阶段：${label}`,
-    `阶段目标：${STAGE_GUIDANCE[input.targetKind]}`,
-    `输出字段：${STAGE_OUTPUT_FIELDS[input.targetKind]}`,
-    targetCountLine(input.targetKind, input.targetCount),
-    input.userPrompt ? `用户补充：${input.userPrompt}` : "",
-    input.contextText ? `已有上下文：\n${input.contextText}` : "",
-    "请严格输出一个 JSON 对象，键名只使用“输出字段”里列出的中文字段名；不要输出项目名、阶段名、Markdown 或解释。",
-    "每个字段的值必须是可直接填入表单的中文内容；列表类字段用字符串数组。",
-  ].filter(Boolean).join("\n\n");
+  if (input.targetKind === "chapterRewrite") {
+    return [
+      `作品：${input.projectTitle}`,
+      input.chapterIndex ? `章节：第 ${input.chapterIndex} 章 ${input.chapterTitle || ""}` : "",
+      input.userPrompt ? `改写要求：${input.userPrompt}` : "改写要求：提升表达与叙事张力。",
+      input.chapterSummary ? `待改写选区：\n${input.chapterSummary}` : "",
+      input.contextText ? `章节上下文与硬约束：\n${input.contextText}` : "",
+      `目标长度：约 ${input.targetChars ?? 500} 字，不要明显偏离原选区长度。`,
+      "只返回可直接替换选区的正文。",
+    ].filter(Boolean).join("\n\n");
+  }
+
+  if (isSetupTarget(input.targetKind)) {
+    return [
+      `作品：${input.projectTitle}`,
+      input.genre ? `锁定类型：${input.genre}` : "",
+      `设置步骤：${input.targetKind}`,
+      `生成目标：${SETUP_GUIDANCE[input.targetKind]}`,
+      `输出结构：${SETUP_OUTPUT_FIELDS[input.targetKind]}`,
+      input.userPrompt ? `作者补充：${input.userPrompt}` : "",
+      input.contextText ? `已确认资料：\n${input.contextText}` : "",
+      "严格输出一个完整 JSON 对象；键名使用输出结构指定的英文键，不要 Markdown、注释或解释。",
+      "所有字段内容使用中文；不得改变已锁定的故事梗概、类型与世界规则。",
+    ].filter(Boolean).join("\n\n");
+  }
+
+  return "";
 }

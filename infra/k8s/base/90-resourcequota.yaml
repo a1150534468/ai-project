@@ -5,10 +5,11 @@ metadata:
   namespace: ai-assistant
 spec:
   hard:
-    requests.cpu: "4"
+    # API HPA 满副本 + 两个小说 Worker + Worker/API 滚动发布需要并存空间。
+    requests.cpu: "6"
     requests.memory: 8Gi
-    # limits 留 headroom：api HPA 满副本(6)叠加滚动 surge 时 limits.cpu 峰值 ~8.5，避免被配额挡住 surge 致发布卡住
-    limits.cpu: "10"
+    # limits 留 headroom：API HPA 与小说 Worker 同时 surge 时仍可完成滚动发布。
+    limits.cpu: "20"
     limits.memory: 18Gi
     pods: "30"
 ---

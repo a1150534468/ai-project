@@ -19,3 +19,7 @@ images:
   - name: ai-assistant-migrate
     newName: registry.example.com/aiproject/migrate
     newTag: latest
+
+replicas:
+  - name: novel-worker
+    count: 2
