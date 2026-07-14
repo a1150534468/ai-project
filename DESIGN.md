@@ -1,4 +1,4 @@
-# yun-claude Design System
+# AI 助手 Design System
 
 ## 1. Atmosphere & Identity
 

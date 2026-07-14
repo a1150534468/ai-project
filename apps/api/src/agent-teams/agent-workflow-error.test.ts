@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { formatAgentWorkflowError } from "./agent-workflow-error.js";
 
 describe("formatAgentWorkflowError", () => {

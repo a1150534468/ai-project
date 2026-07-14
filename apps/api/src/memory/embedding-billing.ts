@@ -1,4 +1,4 @@
-import type { ReserveArgs, SettleArgs } from "@yc/billing";
+import type { ReserveArgs, SettleArgs } from "@ai-assistant/billing";
 import { embed, type EmbedResult, type EmbeddingConfig } from "./embedding-client.js";
 
 export interface EmbeddingBillingClient {

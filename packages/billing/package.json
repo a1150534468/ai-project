@@ -1,5 +1,5 @@
 {
-  "name": "@yc/billing",
+  "name": "@ai-assistant/billing",
   "version": "0.0.0",
   "private": true,
   "type": "module",

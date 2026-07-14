@@ -1,5 +1,5 @@
 import "../env.js";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import {
   closeLocalBusinessPromoQueue,
   createLocalBusinessPromoWorker,

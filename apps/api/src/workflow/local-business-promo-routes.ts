@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { createBillingClient } from "@yc/billing";
-import { getPrisma } from "@yc/db";
+import { createBillingClient } from "@ai-assistant/billing";
+import { getPrisma } from "@ai-assistant/db";
 import { ensureLocalBusinessPromoBgmLibrary } from "./audio-service.js";
 import { registerLocalBusinessPromoAudioRoutes } from "./local-business-promo-audio-routes.js";
 import { enqueueLocalBusinessPromoRun } from "./local-business-promo-queue.js";

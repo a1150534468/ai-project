@@ -3,7 +3,7 @@ import type {
   ArticleWorkflowImageAsset,
   ArticleWorkflowProjectStatus,
   ArticleWorkflowSourceFormat,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { ApiError, readErrorMessage } from "./apiError";
 
 export interface ArticleWorkflowProjectSummary {

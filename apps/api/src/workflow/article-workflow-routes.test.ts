@@ -28,7 +28,7 @@ describe("article-workflow routes", () => {
 
     expect(response.statusCode).toBe(201);
     await scheduledTask!();
-    expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-yc-image-slot");
+    expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
     expect(prisma.__state.projects[0]?.generationMode).toBe("preserve-text");
   });
 
@@ -52,9 +52,9 @@ describe("article-workflow routes", () => {
             text: [
               '<section style="width:100%;max-width:667px;margin:0 auto;box-sizing:border-box;">',
               '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">第一段。</p>',
-              '<section data-yc-image-slot="cover"></section>',
+              '<section data-ai-assistant-image-slot="cover"></section>',
               '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">第二段。</p>',
-              '<section data-yc-image-slot="inline-1"></section>',
+              '<section data-ai-assistant-image-slot="inline-1"></section>',
               "</section>",
             ].join(""),
           }],
@@ -164,7 +164,7 @@ describe("article-workflow routes", () => {
         bodyHtml: [
           '<section style="width:100%;max-width:667px;margin:0 auto;box-sizing:border-box;">',
           '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">开头第一段。</p>',
-          '<section data-yc-image-slot="cover"></section>',
+          '<section data-ai-assistant-image-slot="cover"></section>',
           '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">第二段继续说明。</p>',
           "</section>",
         ].join(""),
@@ -218,8 +218,8 @@ describe("article-workflow routes", () => {
             text: [
               '<section style="width:100%;max-width:667px;margin:0 auto;box-sizing:border-box;">',
               '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">重写后的正文。</p>',
-              '<section data-yc-image-slot="cover"></section>',
-              '<section data-yc-image-slot="inline-1"></section>',
+              '<section data-ai-assistant-image-slot="cover"></section>',
+              '<section data-ai-assistant-image-slot="inline-1"></section>',
               "</section>",
             ].join(""),
           }],

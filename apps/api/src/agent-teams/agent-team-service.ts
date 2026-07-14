@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type Anthropic from "@anthropic-ai/sdk";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { buildTeamRecommendationPrompt } from "./agent-team-prompts.js";
 import { normalizeRecommendedTeam } from "./agent-team-normalize.js";
 import { AGENT_TEAM_RUN_STATUS, confirmTeamBodySchema, type RecommendedAgentMember, type RecommendedTeam } from "./agent-team-types.js";

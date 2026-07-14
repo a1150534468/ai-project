@@ -5,7 +5,7 @@ import type { EmbedResult } from "../embedding-client.js";
 import type { MemoryHit } from "../memory-store.js";
 import type { MemoryRecord } from "../memory-types.js";
 
-vi.mock("@yc/db", () => ({
+vi.mock("@ai-assistant/db", () => ({
   getPrisma: vi.fn(),
 }));
 
@@ -21,7 +21,7 @@ vi.mock("../embedding-client.js", () => ({
 vi.mock("../memory-service.js", () => ({ search: vi.fn() }));
 vi.mock("../memory-store.js", () => ({ deleteMemory: vi.fn(), listMemory: vi.fn(), touchMemories: vi.fn(), updateMemory: vi.fn() }));
 
-const { getPrisma } = await import("@yc/db");
+const { getPrisma } = await import("@ai-assistant/db");
 const embeddingClient = await import("../embedding-client.js");
 const memoryService = await import("../memory-service.js");
 const memoryStore = await import("../memory-store.js");

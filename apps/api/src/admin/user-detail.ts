@@ -1,5 +1,5 @@
-import type { PrismaClient } from "@yc/db";
-import type { createBillingClient } from "@yc/billing";
+import type { PrismaClient } from "@ai-assistant/db";
+import type { createBillingClient } from "@ai-assistant/billing";
 import { listDevicesForAdmin } from "../device/service.js";
 
 type Billing = ReturnType<typeof createBillingClient>;

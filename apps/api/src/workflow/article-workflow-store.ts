@@ -3,7 +3,7 @@ import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowProjectStatus,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { jsonValue } from "./article-workflow-serializer.js";
 
 export async function findOwnedArticleWorkflowProject(

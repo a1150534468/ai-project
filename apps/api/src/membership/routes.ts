@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createBillingClient } from "@yc/billing";
+import { createBillingClient } from "@ai-assistant/billing";
 
 const buySchema = z.object({
   cardId: z.number().int().positive(),

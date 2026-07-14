@@ -2,7 +2,7 @@ package vip
 
 import (
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func DiscountedPoints(original int64, discountBps int) int64 {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { WechatInbound, WechatStatus, WechatSend } from "@yc/connector-protocol";
+import type { WechatInbound, WechatStatus, WechatSend } from "@ai-assistant/connector-protocol";
 import type { ResolvedBinding } from "./binding.js";
 
 export interface WechatServiceDeps {

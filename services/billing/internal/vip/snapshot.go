@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func (s *Service) SnapshotForPricingInTx(userID string) (Summary, error) {

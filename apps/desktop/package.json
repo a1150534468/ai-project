@@ -1,5 +1,5 @@
 {
-  "name": "@yc/desktop",
+  "name": "@ai-assistant/desktop",
   "version": "1.0.22",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@yc/connector-protocol": "workspace:*",
+    "@ai-assistant/connector-protocol": "workspace:*",
     "electron-updater": "^6.8.9",
     "tinyglobby": "^0.2.10",
     "ws": "^8.18.0",

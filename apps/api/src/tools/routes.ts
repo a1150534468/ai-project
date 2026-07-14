@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
-import { connectorToolSchema, localTools, TOOL_SKILL_MARKET_INSTALL, type ConnectorTool } from "@yc/connector-protocol";
+import { getPrisma } from "@ai-assistant/db";
+import { connectorToolSchema, localTools, TOOL_SKILL_MARKET_INSTALL, type ConnectorTool } from "@ai-assistant/connector-protocol";
 import { getDispatcher } from "../connector/hub.js";
 import { pickActiveDevice } from "../connector/select-device.js";
 import { touchDevice } from "../device/service.js";

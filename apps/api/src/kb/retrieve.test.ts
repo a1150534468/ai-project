@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { PrismaClient } from "@prisma/client";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import {
   dedupeKbCitations,
   filterRelevantChunks,
@@ -145,8 +145,8 @@ describe("KB Retrieve", () => {
     let indexedDocId: string;
     let failedDocId: string;
     let testKbId: string;
-    const testVector = new Array(4096).fill(0.1);
-    const testVector2 = new Array(4096).fill(0.2);
+    const testVector = new Array(1024).fill(0.1);
+    const testVector2 = new Array(1024).fill(0.2);
 
     beforeAll(async () => {
       testKbId = userOwnKbId1;

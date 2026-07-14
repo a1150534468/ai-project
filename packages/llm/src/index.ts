@@ -1,2 +1,2 @@
-export { loadLlmConfig, createLlmClient } from "./client.js";
-export type { LlmConfig } from "./client.js";
+export { buildBailianBaseURL, loadLlmConfig, createLlmClient } from "./client.js";
+export type { LlmConfig, LlmProvider } from "./client.js";

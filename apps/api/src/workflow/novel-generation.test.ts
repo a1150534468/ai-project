@@ -3,7 +3,7 @@ import { createNovelGenerator } from "./novel-generation.js";
 
 const messagesCreate = vi.hoisted(() => vi.fn());
 
-vi.mock("@yc/llm", () => ({
+vi.mock("@ai-assistant/llm", () => ({
   loadLlmConfig: vi.fn(() => ({ defaultModel: "server-default" })),
   createLlmClient: vi.fn(() => ({
     messages: {

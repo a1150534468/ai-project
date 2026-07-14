@@ -60,7 +60,7 @@ async function main() {
   const secretAccessKey = requireEnv("DESKTOP_RELEASE_S3_SECRET_ACCESS_KEY");
   const region = process.env.DESKTOP_RELEASE_S3_REGION?.trim() || "us-east-1";
   const prefix = normalizePrefix(process.env.DESKTOP_RELEASE_S3_PREFIX?.trim() || "desktop/win");
-  const artifactsDir = path.resolve(process.env.YC_DESKTOP_DIST_DIR?.trim() || "dist");
+  const artifactsDir = path.resolve(process.env.AI_ASSISTANT_DESKTOP_DIST_DIR?.trim() || "dist");
   const publicRead = process.env.DESKTOP_RELEASE_S3_PUBLIC_READ === "1";
 
   const artifacts = await listArtifacts(artifactsDir);

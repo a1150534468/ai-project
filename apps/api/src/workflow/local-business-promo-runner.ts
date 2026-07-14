@@ -1,8 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { PrismaClient } from "@prisma/client";
 import { UnrecoverableError } from "bullmq";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
-import { getPrisma } from "@yc/db";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
+import { getPrisma } from "@ai-assistant/db";
 import {
   LOCAL_BUSINESS_PROMO_VIDEO_MODEL,
   LOCAL_BUSINESS_PROMO_VIDEO_RESOLUTION,

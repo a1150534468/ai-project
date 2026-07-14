@@ -6,7 +6,7 @@ import { fsGlob, fsGrep } from "./search.js";
 
 let dir = "";
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "yc-search-"));
+  dir = await mkdtemp(join(tmpdir(), "ai-assistant-search-"));
   await mkdir(join(dir, "src"), { recursive: true });
   await writeFile(join(dir, "src", "a.ts"), "const hello = 1;\nfunction foo() {}\n");
   await writeFile(join(dir, "src", "b.ts"), "const world = 2;\n");

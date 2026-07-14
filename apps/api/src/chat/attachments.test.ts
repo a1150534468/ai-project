@@ -7,15 +7,22 @@ import {
 } from "./attachments.js";
 
 describe("chat attachments", () => {
-  it("falls back to MiniMax-M3 for image turns when selected model has no vision support", () => {
-    expect(resolveChatModel("GLM-5.2", true)).toMatchObject({
-      model: "MiniMax-M3",
-      requestedModel: "GLM-5.2",
+  it("falls back to Bailian qwen3.7-plus for image turns when selected model has no vision support", () => {
+    expect(resolveChatModel("glm-5.2", true)).toMatchObject({
+      model: "qwen3.7-plus",
+      requestedModel: "glm-5.2",
       fallbackReason: "image_requires_multimodal",
     });
-    expect(resolveChatModel("MiniMax-M3", true)).toMatchObject({
-      model: "MiniMax-M3",
+    expect(resolveChatModel("qwen3.7-plus", true)).toMatchObject({
+      model: "qwen3.7-plus",
       fallbackReason: null,
+    });
+  });
+
+  it("allows overriding the multimodal fallback for a deployed Bailian catalog", () => {
+    expect(resolveChatModel("deepseek-v4-pro", true, "qwen3.5-omni-plus")).toMatchObject({
+      model: "qwen3.5-omni-plus",
+      fallbackReason: "image_requires_multimodal",
     });
   });
 

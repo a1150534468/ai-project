@@ -4,10 +4,10 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
-	"yc-billing/internal/store"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
+	"ai-assistant-billing/internal/store"
+	"ai-assistant-billing/internal/vip"
 )
 
 func (h *Handler) activateMembershipOrderInTx(tx *gorm.DB, order *model.TopUp, now time.Time) error {

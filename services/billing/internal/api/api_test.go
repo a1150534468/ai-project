@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"yc-billing/internal/billingmode"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/pgtest"
-	"yc-billing/internal/store"
-	"yc-billing/internal/videopoint"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/billingmode"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/pgtest"
+	"ai-assistant-billing/internal/store"
+	"ai-assistant-billing/internal/videopoint"
+	"ai-assistant-billing/internal/vip"
 )
 
 func learningRouter(st *store.Store) *gin.Engine {

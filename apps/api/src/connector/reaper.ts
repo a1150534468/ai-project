@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type { Redis } from "ioredis";
 
 // 收尾：心跳超时（lastSeenAt 早于阈值）的设备，其未关会话用 lastSeenAt 结算，避免时长虚高。
@@ -29,7 +29,7 @@ export async function reapStaleSessions(prisma: PrismaClient, staleMs: number): 
 
 // 多实例只跑一个：Redis SET NX 抢锁，60s 周期。
 export function startReaper(prisma: PrismaClient, redis: Redis): NodeJS.Timeout {
-  const LOCK_KEY = "yunclaude:conn:reaper:lock";
+  const LOCK_KEY = "ai-assistant:conn:reaper:lock";
   const tick = async () => {
     const got = await redis.set(LOCK_KEY, "1", "EX", 55, "NX");
     if (got !== "OK") return;

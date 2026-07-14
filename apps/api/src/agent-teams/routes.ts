@@ -1,8 +1,8 @@
 import { Prisma, type AgentWorkflowEvent, type AgentWorkflowRun, type AgentWorkflowStep, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
-import { getPrisma } from "@yc/db";
-import { localTools } from "@yc/connector-protocol";
-import { InsufficientBalanceError } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { localTools } from "@ai-assistant/connector-protocol";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { getDispatcher } from "../connector/hub.js";
 import { makeLocalExecTool } from "../connector/local-tools.js";
 import { pickActiveDevice } from "../connector/select-device.js";

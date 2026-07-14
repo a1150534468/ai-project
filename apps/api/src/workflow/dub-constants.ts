@@ -14,12 +14,12 @@ export const DUB_AVATAR_VIDEO_MAX_BYTES = 100 * 1024 * 1024; // 100MB 场景视�
 export const DUB_AUDIO_MAX_BYTES = 20 * 1024 * 1024; // 20MB 驱动音频
 
 // 飞天并发信号量
-export const DUB_SKY_INFLIGHT_KEY = "yunclaude:dub:sky:inflight";
+export const DUB_SKY_INFLIGHT_KEY = "ai-assistant:dub:sky:inflight";
 export const DUB_SKY_MAX_INFLIGHT = Number(process.env.SKYHUMAN_MAX_INFLIGHT ?? "3");
 export const DUB_SKY_SLOT_TTL_SEC = 1800; // 单任务最长占位 30min，防崩溃泄漏
 
 // reaper
-export const DUB_REAPER_LOCK_KEY = "yunclaude:dub:reaper:lock";
+export const DUB_REAPER_LOCK_KEY = "ai-assistant:dub:reaper:lock";
 export const DUB_TASK_STALE_MS = 90_000; // running 超 90s 未终结即由 reaper 补查
 
 // TTS 计费 key（后台配每字单价·算力点）

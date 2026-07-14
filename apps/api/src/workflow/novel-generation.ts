@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { buildNovelSystemPrompt, buildNovelUserPrompt, type NovelPromptInput } from "./novel-prompts.js";
 
 export interface NovelGenerationResult {

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { authUserId } from "./ecom-route-helpers.js";
 import { helpWriteEcomField, type HelpWriteInput } from "./ecom-helpwrite-service.js";
 

@@ -52,7 +52,7 @@ function sessionAgentOption(session?: Session): AgentOption | null {
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem("yc_token") ?? "");
+  const [token, setToken] = useState(() => localStorage.getItem("ai_assistant_token") ?? "");
   const [authView, setAuthView] = useState<"login" | "register">("login");
   const [view, setView] = useState<ViewType>("chat");
   const [workflowModule, setWorkflowModule] = useState<WorkflowModuleId>("image");
@@ -83,8 +83,8 @@ export default function App() {
 
   // 持久化 token：刷新不丢登录态
   useEffect(() => {
-    if (token) localStorage.setItem("yc_token", token);
-    else localStorage.removeItem("yc_token");
+    if (token) localStorage.setItem("ai_assistant_token", token);
+    else localStorage.removeItem("ai_assistant_token");
   }, [token]);
 
   // 加载会话（须在任何条件 return 之前调用，保证 hook 顺序稳定）

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 
-vi.mock("@yc/billing", async (orig) => {
-  const actual = await orig<typeof import("@yc/billing")>();
+vi.mock("@ai-assistant/billing", async (orig) => {
+  const actual = await orig<typeof import("@ai-assistant/billing")>();
   return {
     ...actual,
     createBillingClient: () => ({
@@ -28,7 +28,7 @@ vi.mock("./service.js", async (orig) => {
   return { ...actual, getVisibilityConfig: async () => vis };
 });
 
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { createAdmin } from "../admin/service.js";
 import { signAdminToken } from "../admin/token.js";

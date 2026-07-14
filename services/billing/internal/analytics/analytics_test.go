@@ -7,9 +7,9 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/pgtest"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/pgtest"
+	"ai-assistant-billing/internal/store"
 )
 
 func newStore(t *testing.T) *store.Store {

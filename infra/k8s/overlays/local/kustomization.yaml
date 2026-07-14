@@ -1,0 +1,52 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ai-assistant
+
+resources:
+  - ../../base
+
+images:
+  - name: ai-assistant-api
+    newTag: local
+  - name: ai-assistant-web
+    newTag: local
+  - name: ai-assistant-admin
+    newTag: local
+  - name: ai-assistant-billing
+    newTag: local
+  - name: ai-assistant-migrate
+    newTag: local
+
+replicas:
+  - name: api
+    count: 1
+  - name: web
+    count: 1
+  - name: admin
+    count: 1
+  - name: billing
+    count: 1
+  - name: local-business-promo-worker
+    count: 1
+
+patches:
+  - path: local-config.yaml
+  - path: local-ingress.yaml
+  - path: local-workloads.yaml
+  - target:
+      kind: Deployment
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/imagePullSecrets
+  - target:
+      kind: Job
+      name: migrate
+    patch: |-
+      - op: remove
+        path: /spec/template/spec/imagePullSecrets
+  - target:
+      kind: ServiceAccount
+      name: default
+    patch: |-
+      - op: remove
+        path: /imagePullSecrets

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func TestAddGrowthUpgradesOnlyUpAndIsIdempotent(t *testing.T) {

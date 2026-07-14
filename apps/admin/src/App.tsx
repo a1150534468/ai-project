@@ -124,8 +124,8 @@ function Login({ onLogin }: { onLogin: (s: Session) => void }) {
       {node}
       <div className="login-container">
         <div className="login-brand">
-          <div className="brand-logo">云</div>
-          <div className="brand-name">YunClaude</div>
+          <div className="brand-logo">AI</div>
+          <div className="brand-name">AI 助手</div>
           <div className="brand-desc">运营控制台</div>
         </div>
         <div className="login-form">
@@ -189,9 +189,9 @@ function Shell({
     <div className="frame">
       <aside className={`side ${sidebarOpen ? "open" : ""}`}>
         <div className="brand">
-          <div className="brand-logo">云</div>
+          <div className="brand-logo">AI</div>
           <div className="brand-info">
-            <div className="brand-name">YunClaude</div>
+            <div className="brand-name">AI 助手</div>
             <div className="brand-desc">运营控制台</div>
           </div>
         </div>
@@ -270,9 +270,9 @@ function ResellerConsole({ session, onLogout }: { session: Session; onLogout: ()
     <div className="frame">
       <aside className="side">
         <div className="brand">
-          <div className="brand-logo">云</div>
+          <div className="brand-logo">AI</div>
           <div className="brand-info">
-            <div className="brand-name">YunClaude</div>
+            <div className="brand-name">AI 助手</div>
             <div className="brand-desc">代理后台</div>
           </div>
         </div>

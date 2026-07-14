@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func TestEnsureDefaultLevelsSeedsTenLevels(t *testing.T) {

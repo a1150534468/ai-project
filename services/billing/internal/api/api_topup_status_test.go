@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func TestTopupOrderStatusIsScopedToUserAndTradeNo(t *testing.T) {
 	st := openAPISQLiteStore(t)
 	paidAt := time.Now()
 	if err := st.DB.Create(&model.TopUp{
-		TradeNo:       "yc123",
+		TradeNo:       "ai123",
 		UserID:        "u1",
 		AmountFen:     100,
 		Points:        100,
@@ -33,7 +33,7 @@ func TestTopupOrderStatusIsScopedToUserAndTradeNo(t *testing.T) {
 	r := gin.New()
 	New(st, "test-token", nil).Register(r)
 
-	req := httptest.NewRequest(http.MethodGet, "/topup/u1/yc123", nil)
+	req := httptest.NewRequest(http.MethodGet, "/topup/u1/ai123", nil)
 	req.Header.Set("X-Internal-Token", "test-token")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -51,11 +51,11 @@ func TestTopupOrderStatusIsScopedToUserAndTradeNo(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("json: %v", err)
 	}
-	if body.Data.TradeNo != "yc123" || body.Data.UserID != "u1" || body.Data.PaymentMethod != "wxpay" || body.Data.Status != "success" {
+	if body.Data.TradeNo != "ai123" || body.Data.UserID != "u1" || body.Data.PaymentMethod != "wxpay" || body.Data.Status != "success" {
 		t.Fatalf("unexpected body: %+v", body.Data)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/topup/u2/yc123", nil)
+	req = httptest.NewRequest(http.MethodGet, "/topup/u2/ai123", nil)
 	req.Header.Set("X-Internal-Token", "test-token")
 	w = httptest.NewRecorder()
 	r.ServeHTTP(w, req)

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 
 export class BindingForbiddenError extends Error {
   constructor(message: string) {

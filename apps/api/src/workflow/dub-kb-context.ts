@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import { loadEmbeddingConfig } from "../memory/embedding-client.js";
 import { billableEmbed } from "../memory/embedding-billing.js";
 import { resolveEffectiveKbIds, retrieveChunks, filterRelevantChunks, type RetrievedChunk } from "../kb/retrieve.js";

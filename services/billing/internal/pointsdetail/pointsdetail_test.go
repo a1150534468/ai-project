@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/membership"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/membership"
+	"ai-assistant-billing/internal/model"
 )
 
 func openTestDB(t *testing.T) *gorm.DB {

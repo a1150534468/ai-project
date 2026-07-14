@@ -8,7 +8,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: web
-  namespace: yunclaude
+  namespace: ai-assistant
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     # /api/chat 等 SSE 流式：拉长读写超时
@@ -35,7 +35,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: admin
-  namespace: yunclaude
+  namespace: ai-assistant
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -62,7 +62,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: api
-  namespace: yunclaude
+  namespace: ai-assistant
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"

@@ -22,7 +22,7 @@ import {
   TOOL_BROWSER_NETWORK,
   TOOL_BROWSER_CLOSE,
   TOOL_SKILL_MARKET_INSTALL,
-} from "@yc/connector-protocol";
+} from "@ai-assistant/connector-protocol";
 import { checkHighRisk } from "../high-risk.js";
 import { runTerminal } from "./terminal.js";
 import { bundledPythonBinDir } from "./pyruntime.js";

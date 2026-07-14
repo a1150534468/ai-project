@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { describe, expect, it, beforeEach, vi } from "vitest";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { imageWorkflowRoutes, loadImageAttemptTimeoutMs } from "./image-routes.js";
 

@@ -1,9 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import type Anthropic from "@anthropic-ai/sdk";
-import { getPrisma, getRedis } from "@yc/db";
-import { createBillingClient } from "@yc/billing";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { getPrisma, getRedis } from "@ai-assistant/db";
+import { createBillingClient } from "@ai-assistant/billing";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { analyzeDubVideo, type AnalyzeBilling } from "./dub-analyze-service.js";
 import { rewriteDubScript, type RewriteBilling } from "./dub-rewrite-service.js";
 import { buildKbContext } from "./dub-kb-context.js";

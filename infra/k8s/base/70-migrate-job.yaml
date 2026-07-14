@@ -4,7 +4,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: migrate
-  namespace: yunclaude
+  namespace: ai-assistant
 spec:
   backoffLimit: 1
   ttlSecondsAfterFinished: 600
@@ -15,10 +15,10 @@ spec:
         - name: image-pull-secret-placeholder
       containers:
         - name: migrate
-          image: yc-migrate
+          image: ai-assistant-migrate
           env:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: yc-api-secrets
+                  name: ai-assistant-api-secrets
                   key: DATABASE_URL

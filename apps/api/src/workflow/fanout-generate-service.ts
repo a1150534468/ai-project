@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import {
   FANOUT_MODEL,
   FANOUT_CONCURRENCY,

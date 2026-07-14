@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
-import { createBillingClient, InsufficientBalanceError } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { requireAdmin } from "./guard.js";
 import { writeAudit } from "./audit.js";
 

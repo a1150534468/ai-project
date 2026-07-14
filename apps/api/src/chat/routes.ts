@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
-import { getRedis } from "@yc/db";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
-import { createBillingClient, InsufficientBalanceError } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { getRedis } from "@ai-assistant/db";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
+import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import {
   ChatModelEmptyResponseError,
   ChatModelStreamTimeoutError,
@@ -24,7 +24,7 @@ import {
   type KbCitation,
 } from "../kb/retrieve.js";
 import type Anthropic from "@anthropic-ai/sdk";
-import { localTools } from "@yc/connector-protocol";
+import { localTools } from "@ai-assistant/connector-protocol";
 import { getDispatcher } from "../connector/hub.js";
 import { makeLocalExecTool } from "../connector/local-tools.js";
 import { pickActiveDevice } from "../connector/select-device.js";
@@ -69,6 +69,55 @@ const DEFAULT_KB_TOPK = 8;
 const DEFAULT_KB_MAX_CONTEXT_CHUNKS = 4;
 const DEFAULT_KB_MAX_CHUNKS_PER_DOCUMENT = 2;
 const SSE_HEARTBEAT_MS = 15_000;
+
+function upstreamErrorDetails(error: unknown): { status?: number; code: string; message: string } {
+  if (!error || typeof error !== "object") {
+    return { code: "", message: error instanceof Error ? error.message : String(error ?? "") };
+  }
+  const value = error as {
+    status?: unknown;
+    code?: unknown;
+    message?: unknown;
+    error?: { code?: unknown; message?: unknown };
+    cause?: { code?: unknown; message?: unknown };
+  };
+  const status = typeof value.status === "number" ? value.status : undefined;
+  const code = [value.code, value.error?.code, value.cause?.code]
+    .find((item): item is string => typeof item === "string") ?? "";
+  const message = [value.message, value.error?.message, value.cause?.message]
+    .find((item): item is string => typeof item === "string") ?? "";
+  return { status, code, message };
+}
+
+export function chatModelErrorMessage(error: unknown, provider: "bailian" | "anthropic"): string {
+  if (error instanceof ChatModelStreamTimeoutError) return "模型响应超时，请重试";
+  if (error instanceof ChatModelEmptyResponseError) return "模型未返回内容，请重试";
+
+  const details = upstreamErrorDetails(error);
+  const searchable = `${details.code} ${details.message}`;
+  const providerName = provider === "bailian" ? "百炼" : "模型服务";
+  if (details.status === 401 || /invalid[_ .-]?api[_ .-]?key|authentication/i.test(searchable)) {
+    return `${providerName} API Key 无效或已失效`;
+  }
+  if (/Model\.AccessDenied|access.?denied|permission/i.test(searchable)) {
+    return `${providerName}业务空间未授权该模型，请检查 Workspace ID、API Key 与模型权限`;
+  }
+  if (details.status === 404 || /model.*(not found|不存在)|invalid.*model/i.test(searchable)) {
+    return `${providerName}中不存在该模型或当前地域不可用`;
+  }
+  if (/ECONNREFUSED|ENOTFOUND|fetch failed|connection/i.test(searchable)) {
+    return `无法连接${providerName}，请检查接入地址与网络`;
+  }
+  return "生成失败，请重试";
+}
+
+const BAILIAN_MODEL_ALIASES = new Map<string, string>([
+  ["GLM-5.2", "glm-5.2"],
+]);
+
+export function providerModelId(model: string, provider: "bailian" | "anthropic"): string {
+  return provider === "bailian" ? (BAILIAN_MODEL_ALIASES.get(model) ?? model) : model;
+}
 
 const TOOL_LABELS: Record<string, string> = {
   terminal_exec: "执行命令",
@@ -282,8 +331,9 @@ export async function chatRoutes(app: FastifyInstance) {
     const requestedModel = parsed.data.model ?? cfg.defaultModel;
     const hasImageAttachment = parsed.data.attachments.some((a) => a.kind === "image" || isImageMime(a.mime));
     const modelResolution = resolveChatModel(requestedModel, hasImageAttachment);
-    const model = modelResolution.model;
-    if (!(await isModelEnabled(billing, model))) {
+    const billingModel = modelResolution.model;
+    const model = providerModelId(billingModel, cfg.provider);
+    if (!(await isModelEnabled(billing, billingModel))) {
       return reply.code(400).send({ error: "模型不可用" });
     }
 
@@ -323,7 +373,8 @@ export async function chatRoutes(app: FastifyInstance) {
       agentId: sessionAgent?.agentId,
       agentName: sessionAgent?.agentName,
       agentIcon: sessionAgent?.agentIcon,
-      model,
+      model: billingModel,
+      providerModel: model,
       requestedModel,
       fallbackReason: modelResolution.fallbackReason,
     });
@@ -362,11 +413,11 @@ export async function chatRoutes(app: FastifyInstance) {
           operationId: turnId,
           userId,
           type: "chat",
-          model,
+          model: billingModel,
           inputTokens: estimateInputTokens(parsed.data.message, preparedAttachments),
           maxOutputTokens: CHAT_RESERVE_OUTPUT_TOKENS,
         });
-        reservedTurn = { operationId: turnId, userId, model };
+        reservedTurn = { operationId: turnId, userId, model: billingModel };
       } catch (e) {
         if (e instanceof InsufficientBalanceError) {
           send("error", { message: "余额不足，请充值算力点", code: "INSUFFICIENT_BALANCE" });
@@ -568,7 +619,7 @@ export async function chatRoutes(app: FastifyInstance) {
         send("device", { deviceId: active.id, tools: mounted.tools.map((tool) => tool.name) });
       }
 
-      const modelMaxOutput = resolveModelMaxOutput(model);
+      const modelMaxOutput = resolveModelMaxOutput(billingModel);
       const result = await runTurn({
         client,
         model,
@@ -613,7 +664,7 @@ export async function chatRoutes(app: FastifyInstance) {
       await billing.settle({
         operationId: turnId,
         userId,
-        model,
+        model: billingModel,
         inputTokens: result.usage.inputTokens,
         outputTokens: result.usage.outputTokens,
       });
@@ -622,7 +673,7 @@ export async function chatRoutes(app: FastifyInstance) {
       // 持久化助手回复
       if (assistantText) {
         await prisma.message.create({
-          data: { sessionId, role: "assistant", content: assistantText, model },
+          data: { sessionId, role: "assistant", content: assistantText, model: billingModel },
         });
       }
       send("done", { sessionId });
@@ -644,11 +695,7 @@ export async function chatRoutes(app: FastifyInstance) {
     } catch (err) {
       await settleReservedTurnAsNoCharge();
       app.log.error(err);
-      const message = err instanceof ChatModelStreamTimeoutError
-        ? "模型响应超时，请重试"
-        : err instanceof ChatModelEmptyResponseError
-          ? "模型未返回内容，请重试"
-          : "生成失败，请重试";
+      const message = chatModelErrorMessage(err, cfg.provider);
       send("error", { message });
     } finally {
       if (heartbeat) clearInterval(heartbeat);

@@ -7,9 +7,9 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/vip"
 )
 
 func (w *Wallet) Settle(opID string, actual int64) error {

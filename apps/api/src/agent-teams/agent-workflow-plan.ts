@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { Prisma } from "@prisma/client";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { z } from "zod";
 import { buildWorkflowPlanPrompt } from "./agent-team-prompts.js";
 import { AGENT_WORKFLOW_MAX_STEPS } from "./agent-team-types.js";

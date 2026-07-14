@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
-	"yc-billing/internal/registry"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/registry"
+	"ai-assistant-billing/internal/vip"
 )
 
 type upsertVipLevelReq struct {

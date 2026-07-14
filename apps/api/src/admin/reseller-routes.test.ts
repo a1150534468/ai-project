@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 
 // billing 服务未起：打桩 createBillingClient，summaryByUsers 返回可控数据
-vi.mock("@yc/billing", async (orig) => {
-  const actual = await orig<typeof import("@yc/billing")>();
+vi.mock("@ai-assistant/billing", async (orig) => {
+  const actual = await orig<typeof import("@ai-assistant/billing")>();
   return {
     ...actual,
     createBillingClient: () => ({
@@ -15,7 +15,7 @@ vi.mock("@yc/billing", async (orig) => {
   };
 });
 
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { createAdmin } from "./service.js";
 import { signAdminToken } from "./token.js";

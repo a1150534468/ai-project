@@ -70,7 +70,7 @@ function sleep(ms: number): Promise<void> {
 // 浏览器窗口打开瞬间先展示的加载页，避免用户看到空白白屏误以为卡死。
 const LOADING_SPLASH_HTML = `<!doctype html><html lang="zh"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>云豆AI 浏览器</title>
+<title>AI 助手浏览器</title>
 <style>
   html,body{height:100%;margin:0}
   body{display:flex;align-items:center;justify-content:center;background:#f5f7fa;
@@ -120,7 +120,7 @@ export function shouldRecoverFromRenderExit(reason: string): boolean {
 export function failurePageUrl(reason: string, url: string): string {
   const html = `<!doctype html><html lang="zh"><head><meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>云豆AI 浏览器</title>
+<title>AI 助手浏览器</title>
 <style>
   html,body{height:100%;margin:0}
   body{display:flex;align-items:center;justify-content:center;background:#f5f7fa;
@@ -204,7 +204,7 @@ class ElectronBrowserAutomation implements BrowserAutomation {
 
   async screenshot(): Promise<string> {
     const win = await this.window();
-    const dir = await mkdtemp(join(tmpdir(), "yc-browser-"));
+    const dir = await mkdtemp(join(tmpdir(), "ai-assistant-browser-"));
     const file = join(dir, `screenshot-${Date.now()}.png`);
     const image = await win.webContents.capturePage();
     await writeFile(file, image.toPNG());
@@ -234,13 +234,13 @@ class ElectronBrowserAutomation implements BrowserAutomation {
       width: 1280,
       height: 900,
       show: true,
-      title: "云豆AI 浏览器",
+      title: "AI 助手浏览器",
       backgroundColor: "#f5f7fa",
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
         sandbox: true,
-        partition: "persist:yc-browser-tools",
+        partition: "persist:ai-assistant-browser-tools",
       },
     });
     this.win = win;
@@ -254,7 +254,7 @@ class ElectronBrowserAutomation implements BrowserAutomation {
     });
     // 固定窗口标题，避免被目标网页 <title> 覆盖成默认包名。
     win.on("page-title-updated", (event) => event.preventDefault());
-    win.setTitle("云豆AI 浏览器");
+    win.setTitle("AI 助手浏览器");
     const wc = win.webContents;
     wc.on("console-message", (_event, level, message, line, sourceId) => {
       this.pushConsole(`${new Date().toISOString()} level=${level} ${message} ${sourceId}:${line}`);

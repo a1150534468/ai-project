@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { getPrisma, getRedis } from "@yc/db";
-import { createBillingClient, InsufficientBalanceError } from "@yc/billing";
+import { getPrisma, getRedis } from "@ai-assistant/db";
+import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
 import { ecomMainImageResourceKey, ecomMainImageSize, type EcomMainRatio, type EcomMainStyleId } from "./ecom-main.js";
 import {

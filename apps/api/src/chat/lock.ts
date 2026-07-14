@@ -7,7 +7,7 @@ export async function acquireSessionLock(
   sessionId: string,
   ttlMs = 120_000,
 ): Promise<ReleaseFn | null> {
-  const key = `yc:lock:session:${sessionId}`;
+  const key = `ai-assistant:lock:session:${sessionId}`;
   const token = `${Date.now()}-${Math.floor(performance.now())}`;
   const ok = await redis.set(key, token, "PX", ttlMs, "NX");
   if (ok !== "OK") return null;

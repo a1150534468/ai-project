@@ -1,5 +1,5 @@
-import type { PrismaClient } from "@yc/db";
-import type { ConnectorTool } from "@yc/connector-protocol";
+import type { PrismaClient } from "@ai-assistant/db";
+import type { ConnectorTool } from "@ai-assistant/connector-protocol";
 import type { Prisma } from "@prisma/client";
 import { generateDeviceToken, hashToken } from "./token.js";
 

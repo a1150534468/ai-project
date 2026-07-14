@@ -78,7 +78,7 @@ describe("payment method and status panel", () => {
         payUrl: "https://pay.example/qr",
         method: "alipay",
         order: {
-          tradeNo: "yc123",
+          tradeNo: "ai123",
           userId: "u1",
           amountFen: 10,
           points: 10,
@@ -97,7 +97,7 @@ describe("payment method and status panel", () => {
     );
 
     expect(paymentSuccessMessage({
-      tradeNo: "yc123",
+      tradeNo: "ai123",
       userId: "u1",
       amountFen: 10,
       points: 10,
@@ -111,7 +111,7 @@ describe("payment method and status panel", () => {
     })).toBe("支付成功，已到账 10 点");
     // 视频点订单文案区分
     expect(paymentSuccessMessage({
-      tradeNo: "yc124",
+      tradeNo: "ai124",
       userId: "u1",
       amountFen: 23400,
       points: 23400,

@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type { Redis } from "ioredis";
 import { SCHED, SCHED_KEY } from "./config.js";
 import { computeNextRun } from "./schedule.js";

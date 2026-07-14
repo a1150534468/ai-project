@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
+	"ai-assistant-billing/internal/store"
 )
 
 func openTask5RegistrySQLiteStore(t *testing.T) *store.Store {

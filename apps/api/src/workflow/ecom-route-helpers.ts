@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import type { FastifyReply } from "fastify";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { segmentRecordSchema, type InlineImageInput, type ProductInput } from "./ecom-route-types.js";
 import { getEcomPlatform } from "./ecom-prompts.js";
 

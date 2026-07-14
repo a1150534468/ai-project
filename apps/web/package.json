@@ -1,5 +1,5 @@
 {
-  "name": "@yc/web",
+  "name": "@ai-assistant/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "@iconify/react": "^6.0.2",
     "@wangeditor/editor": "^5.1.23",
     "@wangeditor/editor-for-react": "^1.0.6",
-    "@yc/article-workflow": "workspace:*",
+    "@ai-assistant/article-workflow": "workspace:*",
     "motion": "^12.42.2",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",

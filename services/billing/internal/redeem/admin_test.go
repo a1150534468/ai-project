@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func TestGenerateBatchUnique(t *testing.T) {

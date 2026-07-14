@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowSourceFormat,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { useToast } from "../../motion";
 import {
   createArticleWorkflowProject,

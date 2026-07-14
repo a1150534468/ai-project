@@ -103,17 +103,17 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@yc/db", () => ({
+vi.mock("@ai-assistant/db", () => ({
   getPrisma: () => mocks.mockPrisma,
   getRedis: () => ({}),
 }));
 
-vi.mock("@yc/llm", () => ({
+vi.mock("@ai-assistant/llm", () => ({
   createLlmClient: () => ({}),
   loadLlmConfig: () => ({ defaultModel: "glm-5.2" }),
 }));
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   InsufficientBalanceError: class InsufficientBalanceError extends Error {},
   createBillingClient: () => mocks.mockBilling,
 }));

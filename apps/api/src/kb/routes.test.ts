@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { signToken } from "../auth/token.js";
 import { generateUniqueUid } from "../auth/uid.js";
-import * as billingModule from "@yc/billing";
+import * as billingModule from "@ai-assistant/billing";
 
-// Mock @yc/billing 在模块顶层
-vi.mock("@yc/billing", () => ({
+// Mock @ai-assistant/billing 在模块顶层
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: vi.fn(),
   InsufficientBalanceError: class extends Error {
     name = "InsufficientBalanceError";

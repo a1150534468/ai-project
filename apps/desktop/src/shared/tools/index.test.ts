@@ -7,7 +7,7 @@ import { __setBrowserAutomationForTest, type BrowserAutomation } from "./browser
 
 let dir = "";
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "yc-exec-"));
+  dir = await mkdtemp(join(tmpdir(), "ai-assistant-exec-"));
 });
 afterAll(async () => {
   await rm(dir, { recursive: true, force: true });

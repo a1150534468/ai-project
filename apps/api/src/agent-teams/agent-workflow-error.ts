@@ -1,4 +1,4 @@
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 
 // 从上游 AI 服务错误(如 Anthropic APIError)中读取 HTTP 状态码
 function upstreamStatus(error: unknown): number | null {

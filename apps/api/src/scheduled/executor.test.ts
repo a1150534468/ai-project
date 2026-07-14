@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { runScheduledTask } from "./executor.js";
 
 function makeDeps(taskOver: Record<string, unknown> = {}) {

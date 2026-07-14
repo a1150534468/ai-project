@@ -4,9 +4,9 @@ import (
 	"sync"
 	"testing"
 
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/vip"
 )
 
 func TestResourceRefundChargeIsIdempotent(t *testing.T) {

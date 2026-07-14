@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { getPrisma } from '@yc/db';
+import { getPrisma } from '@ai-assistant/db';
 import type { User, KnowledgeBase, Document } from '@prisma/client';
 import { claim, indexOnce, EmptyTextError, type IndexDeps } from './indexer.js';
 
@@ -176,7 +176,7 @@ describe('indexOnce', () => {
       parse: vi.fn().mockResolvedValue(mockText),
       chunk: vi.fn().mockReturnValue(mockChunks),
       embed: vi.fn().mockResolvedValue({
-        vector: new Array(4096).fill(0.1),
+        vector: new Array(1024).fill(0.1),
         tokens: 5,
       }),
       billing: mockBilling,
@@ -331,7 +331,7 @@ describe('indexOnce', () => {
       parse: vi.fn().mockResolvedValue(mockText),
       chunk: vi.fn().mockReturnValue([mockText]),
       embed: vi.fn().mockResolvedValue({
-        vector: new Array(4096).fill(0.2),
+        vector: new Array(1024).fill(0.2),
         tokens: 3,
       }),
       billing: mockBilling,
@@ -386,7 +386,7 @@ describe('indexOnce', () => {
         embedCalls++;
         await new Promise((r) => setTimeout(r, 10));
         return {
-          vector: new Array(4096).fill(0.3),
+          vector: new Array(1024).fill(0.3),
           tokens: 2,
         };
       }),

@@ -32,7 +32,7 @@ describe("dispatchDueTasks", () => {
     ]);
     await dispatchDueTasks(s.prisma as any, s.redis as any, s.exec, now);
     expect(s.redis.set).toHaveBeenCalledWith(
-      expect.stringContaining("yunclaude:sched:run:t1:"),
+      expect.stringContaining("ai-assistant:sched:run:t1:"),
       "1",
       "EX",
       expect.any(Number),

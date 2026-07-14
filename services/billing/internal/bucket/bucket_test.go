@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 func openBucketTestDB(t *testing.T) *gorm.DB {

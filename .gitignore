@@ -2,6 +2,7 @@ node_modules
 dist
 out
 .env
+.env.local
 .turbo
 .DS_Store
 *.tsbuildinfo

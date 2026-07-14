@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
-import { createBillingClient, type AdminOrderRow, type ListAdminOrdersParams } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { createBillingClient, type AdminOrderRow, type ListAdminOrdersParams } from "@ai-assistant/billing";
 import { requireAdmin } from "./guard.js";
 
 const listOrdersQuerySchema = z.object({

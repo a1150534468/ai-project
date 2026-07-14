@@ -4,7 +4,7 @@ import (
 	"errors"
 	"os"
 
-	"yc-billing/internal/billingmode"
+	"ai-assistant-billing/internal/billingmode"
 )
 
 type Config struct {

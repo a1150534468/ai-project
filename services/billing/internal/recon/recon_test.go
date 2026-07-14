@@ -4,12 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/pgtest"
-	"yc-billing/internal/store"
-	"yc-billing/internal/vip"
-	"yc-billing/internal/wallet"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/pgtest"
+	"ai-assistant-billing/internal/store"
+	"ai-assistant-billing/internal/vip"
+	"ai-assistant-billing/internal/wallet"
 )
 
 func newTestStore(t *testing.T) *store.Store {

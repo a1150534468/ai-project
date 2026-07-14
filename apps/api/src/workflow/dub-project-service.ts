@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import { DUB_STAGE } from "./dub-constants.js";
 import { resolveBgmObjectKey } from "./dub-bgm-service.js";
 import { mixBgmIntoVideo } from "./dub-ffmpeg.js";

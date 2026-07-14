@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type { Redis } from "ioredis";
 import type { SkyhumanConfig, FetchLike } from "./dub-skyhuman-client.js";
 import { finalizeSkyhumanTask, type FinalizeBilling, type StoredVideo } from "./dub-finalize.js";

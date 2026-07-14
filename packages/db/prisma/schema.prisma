@@ -118,7 +118,7 @@ model Memory {
   type       String                      @default("OTHER")
   importance Int                         @default(50)
   tags       Json                        @default("[]")
-  embedding  Unsupported("vector(4096)")
+  embedding  Unsupported("vector(1024)")
   metadata   Json?
   lastUsedAt DateTime?
   usedCount  Int                         @default(0)
@@ -280,7 +280,7 @@ model Chunk {
   kbId       String
   ordinal    Int
   content    String
-  embedding  Unsupported("vector(4096)")
+  embedding  Unsupported("vector(1024)")
   createdAt  DateTime                    @default(now())
   document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
@@ -638,7 +638,7 @@ model NovelVectorMemory {
   title       String                      @default("")
   content     String
   contentHash String
-  embedding   Unsupported("vector(4096)")
+  embedding   Unsupported("vector(1024)")
   createdAt   DateTime                    @default(now())
   updatedAt   DateTime                    @updatedAt
   project     NovelProject                @relation(fields: [projectId], references: [id], onDelete: Cascade)

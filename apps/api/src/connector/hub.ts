@@ -1,12 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
-import { getPrisma, getRedis } from "@yc/db";
+import { getPrisma, getRedis } from "@ai-assistant/db";
 import {
   clientMessageSchema,
   type ConnectorTool,
   type HubMessage,
   type ToolInvoke,
-} from "@yc/connector-protocol";
+} from "@ai-assistant/connector-protocol";
 import { createRegistry } from "./registry.js";
 import { createDispatcher, type Dispatcher } from "./dispatch.js";
 import {
@@ -17,8 +17,8 @@ import {
   openSession,
   closeSession,
 } from "../device/service.js";
-import { createBillingClient } from "@yc/billing";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createBillingClient } from "@ai-assistant/billing";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { runTurn } from "../agent/run.js";
 import { resolveBindingByDevice } from "../wechat/binding.js";
 import { runWechatTurn } from "../wechat/turn.js";
@@ -38,8 +38,8 @@ export interface HubConnCtx {
   resolveTool: (deviceId: string, id: string, data: string) => Promise<void> | void;
   rejectTool: (deviceId: string, id: string, code: string, message: string) => Promise<void> | void;
   verifyToken: (token: string) => Promise<{ id: string; userId: string } | null>;
-  onWechatInbound: (deviceId: string, msg: import("@yc/connector-protocol").WechatInbound) => Promise<void>;
-  onWechatStatus: (deviceId: string, msg: import("@yc/connector-protocol").WechatStatus) => Promise<void>;
+  onWechatInbound: (deviceId: string, msg: import("@ai-assistant/connector-protocol").WechatInbound) => Promise<void>;
+  onWechatStatus: (deviceId: string, msg: import("@ai-assistant/connector-protocol").WechatStatus) => Promise<void>;
   log?: { info: (obj: unknown, msg?: string) => void; warn: (obj: unknown, msg?: string) => void };
   registered: boolean;
   deviceId: string | null;
@@ -169,7 +169,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
       const owner = await registry.getLocation(deviceId);
       if (!owner) throw new Error("DEVICE_OFFLINE: 设备不在线");
       const payload: RemoteInvoke = { kind: "invoke", replyTo: INSTANCE_ID, deviceId, invoke };
-      await pub.publish(`yunclaude:conn:inbox:${owner}`, JSON.stringify(payload));
+      await pub.publish(`ai-assistant:conn:inbox:${owner}`, JSON.stringify(payload));
     },
     onPendingCreated: async (id, _deviceId, timeoutMs) => {
       try {
@@ -230,7 +230,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
       app.log.debug({ id: m.id, source }, "connector result ignored: local pending missing");
       return false;
     }
-    await pub.publish(`yunclaude:conn:inbox:${owner}`, JSON.stringify(m));
+    await pub.publish(`ai-assistant:conn:inbox:${owner}`, JSON.stringify(m));
     app.log.debug({ id: m.id, owner, source }, "connector result forwarded to pending owner");
     return true;
   };
@@ -253,7 +253,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
         localConn?.close();
       } else if (route === "remote") {
         const payload: RemoteDisconnect = { kind: "disconnect", deviceId, immediate: true };
-        await pub.publish(`yunclaude:conn:inbox:${owner}`, JSON.stringify(payload));
+        await pub.publish(`ai-assistant:conn:inbox:${owner}`, JSON.stringify(payload));
       }
     } catch (error) {
       if (error instanceof Error) {
@@ -276,7 +276,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
     runTurn: (
       binding: import("../wechat/binding.js").ResolvedBinding,
       text: string,
-      media: import("@yc/connector-protocol").WechatInbound["media"],
+      media: import("@ai-assistant/connector-protocol").WechatInbound["media"],
     ) =>
       runWechatTurn({
         prisma,
@@ -287,7 +287,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
         text,
         media,
       }),
-    sendToDevice: (deviceId: string, msg: import("@yc/connector-protocol").WechatSend) => {
+    sendToDevice: (deviceId: string, msg: import("@ai-assistant/connector-protocol").WechatSend) => {
       const c = local.get(deviceId);
       if (!c) return false;
       c.send(msg);
@@ -304,7 +304,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
   };
 
   // 订阅本实例 inbox：处理远端发来的 invoke / result / disconnect
-  await sub.subscribe(`yunclaude:conn:inbox:${INSTANCE_ID}`);
+  await sub.subscribe(`ai-assistant:conn:inbox:${INSTANCE_ID}`);
   sub.on("message", (_ch, raw) => {
     void (async () => {
       let m: RemoteInvoke | RemoteResult | RemoteDisconnect;
@@ -389,7 +389,7 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
         await registry.setLocation(deviceId, INSTANCE_ID);
         if (previousOwner && previousOwner !== INSTANCE_ID) {
           const payload: RemoteDisconnect = { kind: "disconnect", deviceId };
-          await pub.publish(`yunclaude:conn:inbox:${previousOwner}`, JSON.stringify(payload));
+          await pub.publish(`ai-assistant:conn:inbox:${previousOwner}`, JSON.stringify(payload));
         }
         await touchDevice(prisma, deviceId, appVersion, capabilities, tools);
         const s = await openSession(prisma, deviceId, userId, appVersion);
@@ -474,11 +474,11 @@ function forwardRemoteInvoke(
   })
     .then((data) => {
       const res: RemoteResult = { kind: "result", id: m.invoke.id, ok: true, data };
-      void pub.publish(`yunclaude:conn:inbox:${m.replyTo}`, JSON.stringify(res));
+      void pub.publish(`ai-assistant:conn:inbox:${m.replyTo}`, JSON.stringify(res));
     })
     .catch((err: Error) => {
       const [code, ...rest] = err.message.split(": ");
       const res: RemoteResult = { kind: "result", id: m.invoke.id, ok: false, code, message: rest.join(": ") };
-      void pub.publish(`yunclaude:conn:inbox:${m.replyTo}`, JSON.stringify(res));
+      void pub.publish(`ai-assistant:conn:inbox:${m.replyTo}`, JSON.stringify(res));
     });
 }

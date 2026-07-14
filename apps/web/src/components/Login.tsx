@@ -52,11 +52,11 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <div className="w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-              云
+              AI
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">云豆AI</h1>
-          <p className="text-gray-500 text-sm">您的全能 AI助手</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI 助手</h1>
+          <p className="text-gray-500 text-sm">您的全能 AI 助手</p>
         </div>
 
         {/* Login Card */}

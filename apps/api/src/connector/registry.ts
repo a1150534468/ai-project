@@ -8,11 +8,11 @@ const LOC_TTL_SEC = 120; // 心跳每 <60s 刷新，超时即视为掉线
 const PENDING_TTL_BUFFER_SEC = 60;
 
 function key(deviceId: string): string {
-  return `yunclaude:conn:loc:${deviceId}`;
+  return `ai-assistant:conn:loc:${deviceId}`;
 }
 
 function pendingKey(invocationId: string): string {
-  return `yunclaude:conn:pending:${invocationId}`;
+  return `ai-assistant:conn:pending:${invocationId}`;
 }
 
 export function createRegistry(redis: RedisLike) {

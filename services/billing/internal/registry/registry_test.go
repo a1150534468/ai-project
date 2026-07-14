@@ -3,11 +3,11 @@ package registry
 import (
 	"testing"
 
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/pgtest"
+	"ai-assistant-billing/internal/store"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/pgtest"
-	"yc-billing/internal/store"
 )
 
 func newStore(t *testing.T) *store.Store {
@@ -55,6 +55,14 @@ func TestSeedDefaultPopulatesPerMillionPrices(t *testing.T) {
 	if pr.InputPricePerMillion != 2000 || pr.OutputPricePerMillion != 2000 {
 		t.Fatalf("seed must expose per-million prices, got %+v", pr)
 	}
+
+	var bailian model.PriceRule
+	if err := st.DB.First(&bailian, "model = ?", "qwen3.7-plus").Error; err != nil {
+		t.Fatalf("find bailian model: %v", err)
+	}
+	if bailian.InputPriceRMBPerMillion != 2 || bailian.OutputPriceRMBPerMillion != 8 || bailian.CacheInputPriceRMBPerMillion != 0.4 {
+		t.Fatalf("bailian seed must preserve official RMB list prices, got %+v", bailian)
+	}
 }
 
 func TestSeedDefaultExposesOnlyChatModels(t *testing.T) {
@@ -76,12 +84,15 @@ func TestSeedDefaultExposesOnlyChatModels(t *testing.T) {
 	if !seen["GLM-5.2"] {
 		t.Fatal("default chat model must be enabled")
 	}
-	if seen["Qwen/Qwen3-VL-Embedding-8B"] {
+	if !seen["qwen3.7-plus"] {
+		t.Fatal("bailian default chat model must be enabled")
+	}
+	if seen["text-embedding-v4"] {
 		t.Fatal("embedding model must not appear in chat model list")
 	}
 
 	var embedding model.PriceRule
-	if err := st.DB.First(&embedding, "model = ?", "Qwen/Qwen3-VL-Embedding-8B").Error; err != nil {
+	if err := st.DB.First(&embedding, "model = ?", "text-embedding-v4").Error; err != nil {
 		t.Fatalf("embedding price rule missing: %v", err)
 	}
 	if !embedding.Enabled || embedding.CompletionRatio != 0 {

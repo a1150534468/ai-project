@@ -1,15 +1,18 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: yc-api-config
-  namespace: yunclaude
+  name: ai-assistant-api-config
+  namespace: ai-assistant
 data:
   NODE_ENV: "production"
   PORT: "8090"
-  LLM_BASE_URL: "https://llm-gateway.example.com"
-  LLM_DEFAULT_MODEL: "GLM-5.2"
-  EMBEDDING_MODEL: "Qwen/Qwen3-VL-Embedding-8B"
-  EMBEDDING_DIM: "4096"
+  LLM_PROVIDER: "bailian"
+  BAILIAN_REGION: "cn-beijing"
+  LLM_DEFAULT_MODEL: "qwen3.7-plus"
+  CHAT_MULTIMODAL_MODEL: "qwen3.7-plus"
+  EMBEDDING_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  EMBEDDING_MODEL: "text-embedding-v4"
+  EMBEDDING_DIM: "1024"
   BILLING_BASE_URL: "http://billing:8093"
   CORS_ORIGIN: "https://app.example.com,https://admin.example.com"
   # 知识库对象存储（S3 兼容）；AK/SK 在 Secret。同资源池走内网 endpoint。
@@ -23,7 +26,7 @@ data:
   LOCAL_BUSINESS_PROMO_FFMPEG_CONCURRENCY: "1"
   LOCAL_BUSINESS_PROMO_JOB_ATTEMPTS: "2"
   LOCAL_BUSINESS_PROMO_JOB_BACKOFF_MS: "30000"
-  # 视频/图片理解统一走 gemini 原生 inline_data（M3 听不见音轨；gemini 走 Anthropic video block 会被网关静默丢弃）
+  # 视频/图片理解旧工作流仍走 Gemini 原生协议；迁移该工作流时再切百炼全模态接口。
   VIDEO_ANALYZE_MODEL: "gemini-2.5-flash"
   # 数字人口播：飞天数字人（对口型）与小米 MiMo（TTS）的非敏感配置。
   # token/key 在 Secret（SKYHUMAN_API_TOKEN / SKYHUMAN_CALLBACK_SECRET / MIMO_API_KEY）。
@@ -35,8 +38,8 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: yc-billing-config
-  namespace: yunclaude
+  name: ai-assistant-billing-config
+  namespace: ai-assistant
 data:
   BILLING_PORT: "8093"
   # 易支付网关与回调基址非敏感；EPAY_PID/EPAY_KEY 在 Secret。

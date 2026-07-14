@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRedisWorkflowMutationLocker, type WorkflowMutationLocker } from "./ecom-route-mutation.js";
@@ -27,7 +27,7 @@ type MasterRequestPayload = typeof masterRequest & { referenceAssetIds?: string[
 const buildAsset = (id: string, userId = "u1"): AssetRow => ({ id, userId, requestId: id, requestIndex: 0, prompt: id, model: "gpt-image-2", size: "1024x1024", originalUrl: dataUrl, thumbnailUrl: dataUrl, objectKey: null, mime: "image/png", createdAt: new Date("2026-07-01T00:00:00.000Z") });
 const injectMaster = (app: Awaited<ReturnType<typeof createApp>>, payload: MasterRequestPayload = masterRequest) => app.inject({ method: "POST", url: "/api/workflow/ecom/master", payload });
 const injectRead = (app: Awaited<ReturnType<typeof createApp>>, path: "/api/workflow/ecom/current" | "/api/workflow/ecom/history") => app.inject({ method: "GET", url: path });
-const redisLockKey = (key: string) => `yc:lock:ecom-workflow:${key}`;
+const redisLockKey = (key: string) => `ai-assistant:lock:ecom-workflow:${key}`;
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;

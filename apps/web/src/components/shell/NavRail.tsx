@@ -145,8 +145,8 @@ export function NavRail({
               transition={{ duration: 0.2 }}
               className="flex-1"
             >
-              <p className="font-bold leading-tight text-gray-900">云豆AI</p>
-              <p className="text-xs text-gray-500">您的全能 AI助手</p>
+              <p className="font-bold leading-tight text-gray-900">AI 助手</p>
+              <p className="text-xs text-gray-500">您的全能 AI 助手</p>
             </motion.div>
           )}
         </AnimatePresence>

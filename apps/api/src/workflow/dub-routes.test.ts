@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { signToken } from "../auth/token.js";
 import { generateUniqueUid } from "../auth/uid.js";
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: vi.fn(() => ({
     chargeResource: vi.fn().mockResolvedValue({ charged: 1 }),
     settleVideoResource: vi.fn().mockResolvedValue({ settled: 1 }),

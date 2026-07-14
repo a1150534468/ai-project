@@ -1,7 +1,7 @@
 import Fastify from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { NovelGenerator } from "./novel-generation.js";
 import { novelWorkflowRoutes } from "./novel-routes.js";
 
@@ -864,6 +864,7 @@ describe("novel workflow routes", () => {
     vi.stubEnv("EMBEDDING_BASE_URL", "http://embedding.test");
     vi.stubEnv("EMBEDDING_API_KEY", "embedding-key");
     vi.stubEnv("EMBEDDING_MODEL", "embedding-model");
+    vi.stubEnv("EMBEDDING_DIM", "2");
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
       data: [{ embedding: [0.1, 0.2] }],
       usage: { total_tokens: 4 },

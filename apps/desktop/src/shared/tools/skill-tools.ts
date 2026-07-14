@@ -4,7 +4,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import { connectorToolSchema, type ConnectorTool } from "@yc/connector-protocol";
+import { connectorToolSchema, type ConnectorTool } from "@ai-assistant/connector-protocol";
 
 const manifestToolSchema = connectorToolSchema.extend({
   command: z.string().min(1),
@@ -34,7 +34,7 @@ export interface ExecuteSkillToolOptions {
 }
 
 export function defaultSkillsDir(): string {
-  return process.env.YUN_CLAUDE_SKILLS_DIR || join(homedir(), ".yun-claude", "skills");
+  return process.env.AI_ASSISTANT_SKILLS_DIR || join(homedir(), ".ai-assistant", "skills");
 }
 
 function marketToolName(marketId: string): string {
@@ -66,7 +66,7 @@ async function loadRuntimeTools(skillsDir: string): Promise<SkillRuntimeTool[]> 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const skillDir = resolve(skillsDir, entry.name);
-    const raw = await readFile(join(skillDir, "yun-claude-tool.json"), "utf8").catch((error: unknown) => {
+    const raw = await readFile(join(skillDir, "ai-assistant-tool.json"), "utf8").catch((error: unknown) => {
       if (isNodeCode(error, "ENOENT")) return null;
       throw error;
     });
@@ -167,7 +167,7 @@ function fallbackRunnerSource(skillName: string): string {
 }
 
 async function ensureFallbackManifest(skillDir: string, marketId: string, name: string): Promise<ConnectorTool> {
-  const manifestPath = join(skillDir, "yun-claude-tool.json");
+  const manifestPath = join(skillDir, "ai-assistant-tool.json");
   const existing = await readFile(manifestPath, "utf8").catch((error: unknown) => {
     if (isNodeCode(error, "ENOENT")) return null;
     throw error;
@@ -177,7 +177,7 @@ async function ensureFallbackManifest(skillDir: string, marketId: string, name: 
     return publicTool(manifest.tools[0]);
   }
 
-  const runnerName = "yun-claude-skill-runner.mjs";
+  const runnerName = "ai-assistant-skill-runner.mjs";
   await writeFile(join(skillDir, runnerName), fallbackRunnerSource(name), "utf8");
   const tool: ManifestTool = {
     name: marketToolName(marketId),

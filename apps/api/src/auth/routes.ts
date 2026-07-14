@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { signToken } from "./token.js";
 import { generateUniquePrefixedUid } from "./uid.js";
 

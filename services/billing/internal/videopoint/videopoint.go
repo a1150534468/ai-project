@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 var (

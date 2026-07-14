@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
-import { createBillingClient as makeBillingClient } from "@yc/billing";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
+import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
 import { FANOUT_TIMEOUT_MS } from "./fanout-dimensions.js";
 
 export type BillingReserveSettle = Pick<ReturnType<typeof makeBillingClient>, "reserve" | "settle">;

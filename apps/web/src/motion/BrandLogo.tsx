@@ -1,12 +1,12 @@
 import { motion, useReducedMotion } from "motion/react";
-import logo from "../assets/brand-logo.png";
+import logo from "../assets/brand-logo.svg";
 
 export function BrandLogo({ size = 40 }: { size?: number }) {
   const reduced = useReducedMotion();
   return (
     <motion.img
       src={logo}
-      alt="云豆AI"
+      alt="AI 助手"
       width={size}
       height={size}
       style={{ borderRadius: 11, boxShadow: "0 6px 16px rgba(10,132,255,0.28)" }}

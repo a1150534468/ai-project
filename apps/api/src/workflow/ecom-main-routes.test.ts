@@ -1,5 +1,5 @@
 import Fastify from "fastify";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ecomMainImageRoutes } from "./ecom-main-routes.js";
 

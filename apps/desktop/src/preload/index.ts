@@ -12,19 +12,19 @@ interface DesktopBridge {
 }
 
 const bridge: DesktopBridge = {
-  pairSessionToken: (token) => ipcRenderer.invoke("yc:pair-session-token", { token }),
-  getConnectorStatus: () => ipcRenderer.invoke("yc:connector-status"),
-  saveDocument: (filename, content) => ipcRenderer.invoke("yc:save-document", { filename, content }) as Promise<{ path: string }>,
-  revealPath: (path) => ipcRenderer.invoke("yc:reveal-path", { path }) as Promise<void>,
-  wechatBindStart: () => ipcRenderer.invoke("yc:wechat-bind-start"),
-  wechatBindStatus: () => ipcRenderer.invoke("yc:wechat-bind-status"),
-  wechatUnbind: () => ipcRenderer.invoke("yc:wechat-unbind"),
+  pairSessionToken: (token) => ipcRenderer.invoke("ai-assistant:pair-session-token", { token }),
+  getConnectorStatus: () => ipcRenderer.invoke("ai-assistant:connector-status"),
+  saveDocument: (filename, content) => ipcRenderer.invoke("ai-assistant:save-document", { filename, content }) as Promise<{ path: string }>,
+  revealPath: (path) => ipcRenderer.invoke("ai-assistant:reveal-path", { path }) as Promise<void>,
+  wechatBindStart: () => ipcRenderer.invoke("ai-assistant:wechat-bind-start"),
+  wechatBindStatus: () => ipcRenderer.invoke("ai-assistant:wechat-bind-status"),
+  wechatUnbind: () => ipcRenderer.invoke("ai-assistant:wechat-unbind"),
 };
 
-contextBridge.exposeInMainWorld("ycDesktop", bridge);
+contextBridge.exposeInMainWorld("aiAssistantDesktop", bridge);
 
 function readSessionToken(): string | null {
-  return window.localStorage.getItem("yc_token");
+  return window.localStorage.getItem("ai_assistant_token");
 }
 
 const autoPair = createAutoPairController({

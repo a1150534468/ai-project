@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 const codeAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789" // 去除易混 I/O/0/1

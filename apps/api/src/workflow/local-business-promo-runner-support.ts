@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import {
   isProgressStage,
   type LocalBusinessPromoBrief,

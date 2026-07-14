@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
-import { InsufficientBalanceError } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { SCHED } from "./config.js";
 import { validateCron, computeNextRun, checkMinInterval } from "./schedule.js";
 import { RateLimitedError, type AiDraftFn } from "./ai-draft-glue.js";

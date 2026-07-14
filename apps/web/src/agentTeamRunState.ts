@@ -1,6 +1,6 @@
 import type { AgentTeamMemberDto, AgentWorkflowRunDto, RecommendedAgentTeam } from "./agentTeamApi";
 
-export const AGENT_TEAM_ACTIVE_RUN_STORAGE_KEY = "yc_agent_team_active_run_id";
+export const AGENT_TEAM_ACTIVE_RUN_STORAGE_KEY = "ai_assistant_agent_team_active_run_id";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

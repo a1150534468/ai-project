@@ -1,8 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createBillingClient, InsufficientBalanceError } from "@yc/billing";
-import { getPrisma } from "@yc/db";
+import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
+import { getPrisma } from "@ai-assistant/db";
 import { createNovelGenerator, type NovelGenerator } from "./novel-generation.js";
 import { visibleCharCount } from "./novel-billable.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";

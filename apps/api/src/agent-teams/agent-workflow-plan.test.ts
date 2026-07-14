@@ -17,7 +17,7 @@ const mockBilling = vi.hoisted(() => ({
   settle: vi.fn(async () => ({ settled: 1 })),
 }));
 
-vi.mock("@yc/llm", () => ({
+vi.mock("@ai-assistant/llm", () => ({
   loadLlmConfig: () => ({ baseURL: "http://llm", apiKey: "key", defaultModel: "test-model" }),
   createLlmClient: () => ({
     messages: {
@@ -28,7 +28,7 @@ vi.mock("@yc/llm", () => ({
   }),
 }));
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: () => mockBilling,
 }));
 

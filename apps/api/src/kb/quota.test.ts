@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { myQuota, buyQuota, PackageNotFoundError } from "./quota.js";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 
 const prisma = getPrisma();
 

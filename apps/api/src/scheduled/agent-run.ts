@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type Anthropic from "@anthropic-ai/sdk";
-import { localTools } from "@yc/connector-protocol";
+import { localTools } from "@ai-assistant/connector-protocol";
 import { runTurn } from "../agent/run.js";
 import { execTool as execDefaultTool } from "../agent/tools.js";
 import { resolveAgent } from "../agents/service.js";

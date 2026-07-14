@@ -3,8 +3,8 @@ import type {
   ArticleWorkflowImageAsset,
   ArticleWorkflowImageRole,
   ArticleWorkflowImageSlot,
-} from "@yc/article-workflow";
-import { ARTICLE_WORKFLOW_IMAGE_SLOTS } from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
+import { ARTICLE_WORKFLOW_IMAGE_SLOTS } from "@ai-assistant/article-workflow";
 
 const SERIALIZER = new XMLSerializer();
 
@@ -67,7 +67,7 @@ export function findArticleImageBySlot(
 
 function buildImageSection(document: any, image: ArticleWorkflowImageAsset): any {
   const section = document.createElement("section");
-  section.setAttribute("data-yc-image-slot", image.slot);
+  section.setAttribute("data-ai-assistant-image-slot", image.slot);
   section.setAttribute(
     "style",
     image.role === "cover"
@@ -76,7 +76,7 @@ function buildImageSection(document: any, image: ArticleWorkflowImageAsset): any
   );
 
   const img = document.createElement("img");
-  img.setAttribute("data-yc-image-slot", image.slot);
+  img.setAttribute("data-ai-assistant-image-slot", image.slot);
   img.setAttribute("src", image.imageUrl.trim());
   img.setAttribute("alt", (image.alt.trim() || "文章配图").slice(0, 240));
   img.setAttribute(
@@ -94,8 +94,8 @@ function serializeBody(body: any): string {
 function findImageSlotElement(root: any, slot: ArticleWorkflowImageSlot): any {
   const nodes = Array.from(root.getElementsByTagName("*") as any[]) as any[];
   return nodes.find((node) =>
-    node.tagName.toLowerCase() === "section" && node.getAttribute("data-yc-image-slot") === slot,
-  ) ?? nodes.find((node) => node.getAttribute("data-yc-image-slot") === slot) ?? null;
+    node.tagName.toLowerCase() === "section" && node.getAttribute("data-ai-assistant-image-slot") === slot,
+  ) ?? nodes.find((node) => node.getAttribute("data-ai-assistant-image-slot") === slot) ?? null;
 }
 
 function replaceWithImageSection(root: any, slot: ArticleWorkflowImageSlot, image: ArticleWorkflowImageAsset) {

@@ -10,7 +10,7 @@ describe("Shell", () => {
     // 侧边栏默认态已改为缩进；这些用例断言展开态才可见的品牌/导航/充值文案，
     // 故显式置为展开（存 "false"）后再渲染
     localStorage.clear();
-    localStorage.setItem("yc:nav:collapsed", "false");
+    localStorage.setItem("ai-assistant:nav:collapsed", "false");
   });
 
   const baseProps = {
@@ -23,15 +23,15 @@ describe("Shell", () => {
   const renderShell = (ui: ReactElement) =>
     renderToStaticMarkup(<ToastProvider>{ui}</ToastProvider>);
 
-  it("renders the YunDou AI brand in the sidebar", () => {
+  it("renders the AI Assistant brand in the sidebar", () => {
     const html = renderShell(
       <Shell currentView="chat" onViewChange={vi.fn()} {...baseProps}>
         <div />
       </Shell>,
     );
 
-    expect(html).toContain("云豆AI");
-    expect(html).toContain("您的全能 AI助手");
+    expect(html).toContain("AI 助手");
+    expect(html).toContain("您的全能 AI 助手");
     expect(html).toContain("AI 视频");
   });
 

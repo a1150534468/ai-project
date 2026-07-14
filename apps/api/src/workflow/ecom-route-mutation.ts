@@ -36,7 +36,7 @@ export function createRedisWorkflowMutationLocker(
 ): WorkflowMutationLocker {
   return {
     async withLock<T>(key: string, run: () => Promise<T>): Promise<T> {
-      const lockKey = `yc:lock:ecom-workflow:${key}`;
+      const lockKey = `ai-assistant:lock:ecom-workflow:${key}`;
       const token = randomUUID();
       const acquired = await redis.set(lockKey, token, "PX", ttlMs, "NX");
       if (acquired !== "OK") throw new WorkflowMutationConflictError();

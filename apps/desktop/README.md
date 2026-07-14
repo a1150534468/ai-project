@@ -1,6 +1,6 @@
-# yun-claude 桌面客户端（C2a 核心）
+# AI 助手桌面客户端（C2a 核心）
 
-yun-claude 桌面客户端是 AI agent 平台的本地执行节点，通过 WebSocket 连接后端，为用户聊天提供本地文件系统、终端、搜索等工具集。
+AI 助手桌面客户端是 AI agent 平台的本地执行节点，通过 WebSocket 连接后端，为用户聊天提供本地文件系统、终端、搜索等工具集。
 
 ## 架构概览
 
@@ -34,8 +34,8 @@ yun-claude 桌面客户端是 AI agent 平台的本地执行节点，通过 WebS
 
 ```bash
 # 终端 1：API 服务（:8090，带 WS 服务）
-cd /Users/xingye/Ai/yun-claude
-pnpm --filter @yc/api dev
+cd /Users/xingye/Ai/ai-assistant
+pnpm --filter @ai-assistant/api dev
 ```
 
 预期输出：`Server running at http://localhost:8090`
@@ -44,7 +44,7 @@ pnpm --filter @yc/api dev
 
 ```bash
 # 终端 2：Web UI（:5173）
-pnpm --filter @yc/web dev
+pnpm --filter @ai-assistant/web dev
 ```
 
 访问 http://localhost:5173 进行注册/登录。
@@ -53,7 +53,7 @@ pnpm --filter @yc/web dev
 
 ```bash
 # 终端 3：桌面应用
-pnpm --filter @yc/desktop dev
+pnpm --filter @ai-assistant/desktop dev
 ```
 
 预期：Electron 窗口启动 → 自动加载 http://localhost:5173（或 http://localhost:8090/web）。
@@ -70,7 +70,7 @@ pnpm --filter @yc/desktop dev
    - 后端生成 `authToken`，保存至本地存储
 
 2. **配对触发**
-   - 在客户端中触发配对（如点击"配对此设备"按钮或调用 IPC `yc:pair`）
+   - 在客户端中触发配对（如点击"配对此设备"按钮或调用 IPC `ai-assistant:pair`）
    - 后端收到配对请求 → 生成 `deviceToken` → 触发 daemon 连接
    - daemon 主进程启动 WS 连接至 `ws://localhost:8090/ws/connector`
    - daemon 向后端发送 `register` 消息，包含 deviceId、deviceName、authToken
@@ -172,16 +172,16 @@ AI 显示结果："已将文件中的 'hello' 改成 'goodbye'"
 ```
 用户消息："在我的项目目录中搜索所有 TODO"
 ↓
-AI 响应：调用 fs_grep [pattern: "TODO", path: ~/Ai/yun-claude]
+AI 响应：调用 fs_grep [pattern: "TODO", path: ~/Ai/ai-assistant]
 ↓
-客户端执行：grep -r "TODO" ~/Ai/yun-claude
+客户端执行：grep -r "TODO" ~/Ai/ai-assistant
 ↓
 结果回灌，AI 总结所有 TODO 项
 ```
 
 **手动验证步骤：**
 
-1. 在聊天中输入："在 ~/Ai/yun-claude 中搜索所有 TODO 代码注释"
+1. 在聊天中输入："在 ~/Ai/ai-assistant 中搜索所有 TODO 代码注释"
 
 2. 观察：
    - AI 调用 `fs_grep` 工具
@@ -329,7 +329,7 @@ chown -R root /
 ```
 1. 用户点击"配对"
    ↓
-2. Web UI 调用 IPC (yc:pair)
+2. Web UI 调用 IPC (ai-assistant:pair)
    ↓
 3. Main Process 响应：
    - 调用后端 POST /api/device/pair?token=<authToken>
@@ -410,7 +410,7 @@ chown -R root /
 **A:** 检查后端是否运行：
 ```bash
 # 确认后端启动
-pnpm --filter @yc/api dev
+pnpm --filter @ai-assistant/api dev
 
 # 检查 WS 端点是否就绪
 curl -i http://localhost:8090/health
@@ -454,7 +454,7 @@ chmod u+w ~/Desktop/test.txt
 ### Q: 搜索（fs_grep）很慢？
 
 **A:** `fs_grep` 使用 `grep -r`，在大项目中可能很慢。优化：
-- 指定搜索目录，避免根目录：`~/Ai/yun-claude/apps` 比 `/`
+- 指定搜索目录，避免根目录：`~/Ai/ai-assistant/apps` 比 `/`
 - 排除大目录：`--exclude-dir=node_modules`
 - 限制文件类型：`--include="*.ts"`
 
@@ -469,7 +469,7 @@ Windows 发行使用 `electron-builder` 生成 NSIS 安装器，并用 `electron
 
 ```bash
 # 生成 Windows x64 安装器、latest.yml 和 blockmap
-YC_DESKTOP_UPDATE_URL="https://<public-oos-host>/desktop/win" pnpm --filter @yc/desktop dist:win
+AI_ASSISTANT_DESKTOP_UPDATE_URL="https://<public-oos-host>/desktop/win" pnpm --filter @ai-assistant/desktop dist:win
 
 # 上传 dist 目录中的 .exe / .blockmap / latest.yml 到 S3 兼容对象存储
 DESKTOP_RELEASE_S3_ENDPOINT="https://<endpoint>" \
@@ -477,10 +477,10 @@ DESKTOP_RELEASE_S3_BUCKET="<bucket>" \
 DESKTOP_RELEASE_S3_ACCESS_KEY_ID="[REDACTED]" \
 DESKTOP_RELEASE_S3_SECRET_ACCESS_KEY="[REDACTED]" \
 DESKTOP_RELEASE_S3_PREFIX="desktop/win" \
-pnpm --filter @yc/desktop publish:win
+pnpm --filter @ai-assistant/desktop publish:win
 ```
 
-`YC_DESKTOP_UPDATE_URL` 必须与对象存储公开访问路径一致，客户端会从该 URL
+`AI_ASSISTANT_DESKTOP_UPDATE_URL` 必须与对象存储公开访问路径一致，客户端会从该 URL
 拉取更新元数据。对象存储密钥只允许通过环境变量提供，不写入代码、配置或 Git。
 
 当前 Windows 安装器未接入 CA 代码签名，用户首次安装可能看到 SmartScreen 提示。
@@ -517,13 +517,13 @@ pnpm --filter @yc/desktop publish:win
 
 ```bash
 # 1. 启动后端
-pnpm --filter @yc/api dev
+pnpm --filter @ai-assistant/api dev
 
 # 2. 启动前端（可选）
-pnpm --filter @yc/web dev
+pnpm --filter @ai-assistant/web dev
 
 # 3. 启动桌面客户端
-pnpm --filter @yc/desktop dev
+pnpm --filter @ai-assistant/desktop dev
 
 # 4. 注册账户 → 配对 → 聊天测试
 ```

@@ -10,9 +10,9 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/billingmode"
-	"yc-billing/internal/model"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/billingmode"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/store"
 )
 
 var (

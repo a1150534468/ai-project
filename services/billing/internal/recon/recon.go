@@ -3,9 +3,9 @@ package recon
 import (
 	"time"
 
-	"yc-billing/internal/model"
-	"yc-billing/internal/store"
-	"yc-billing/internal/wallet"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/store"
+	"ai-assistant-billing/internal/wallet"
 )
 
 // Reconcile 扫描超时未结算的 reserved 记录，按实际=0 结算（全额退回预扣）

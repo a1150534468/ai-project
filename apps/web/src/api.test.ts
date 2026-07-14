@@ -191,7 +191,7 @@ describe("web api billing helpers", () => {
   });
 
   it("buyMembership sends the selected payment method", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "yc_mem" }), { status: 200 }));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "ai_mem" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     await buyMembership("token", 1, "wxpay");
@@ -208,7 +208,7 @@ describe("web api billing helpers", () => {
   it("getTopupOrder reads the current payment order status", async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       data: {
-        tradeNo: "yc123",
+        tradeNo: "ai123",
         userId: "u1",
         amountFen: 10,
         points: 10,
@@ -223,11 +223,11 @@ describe("web api billing helpers", () => {
     }), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    const order = await getTopupOrder("token", "yc123");
+    const order = await getTopupOrder("token", "ai123");
 
     expect(order.status).toBe("success");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/billing/topup/yc123",
+      "/api/billing/topup/ai123",
       expect.objectContaining({ method: "GET" }),
     );
   });

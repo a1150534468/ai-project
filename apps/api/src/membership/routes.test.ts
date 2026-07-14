@@ -8,7 +8,7 @@ const mockBilling = {
   myMemberships: vi.fn(),
 };
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: () => mockBilling,
 }));
 
@@ -31,7 +31,7 @@ beforeEach(() => {
 
 describe("用户会员路由", () => {
   it("POST /api/membership/buy 透传用户选择的支付方式", async () => {
-    mockBilling.buyMembership.mockResolvedValue({ payUrl: "http://pay.url", tradeNo: "yc_mem" });
+    mockBilling.buyMembership.mockResolvedValue({ payUrl: "http://pay.url", tradeNo: "ai_mem" });
     const app = await makeApp("current-user");
     const r = await app.inject({
       method: "POST",
@@ -39,7 +39,7 @@ describe("用户会员路由", () => {
       payload: { cardId: 1, method: "wxpay" },
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json().tradeNo).toBe("yc_mem");
+    expect(r.json().tradeNo).toBe("ai_mem");
     expect(mockBilling.buyMembership).toHaveBeenCalledWith("current-user", 1, "wxpay");
     await app.close();
   });

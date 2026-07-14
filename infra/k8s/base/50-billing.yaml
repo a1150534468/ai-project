@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: billing
-  namespace: yunclaude
+  namespace: ai-assistant
 spec:
   replicas: 1
   strategy:
@@ -17,12 +17,12 @@ spec:
         - name: image-pull-secret-placeholder
       containers:
         - name: billing
-          image: yc-billing
+          image: ai-assistant-billing
           ports:
             - containerPort: 8093
           envFrom:
-            - configMapRef: { name: yc-billing-config }
-            - secretRef: { name: yc-billing-secrets }
+            - configMapRef: { name: ai-assistant-billing-config }
+            - secretRef: { name: ai-assistant-billing-secrets }
           readinessProbe:
             httpGet: { path: /health, port: 8093 }
             initialDelaySeconds: 5
@@ -39,7 +39,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: billing
-  namespace: yunclaude
+  namespace: ai-assistant
 spec:
   selector: { app: billing }
   ports:

@@ -1,4 +1,4 @@
-import type { ConnectorTool, HubMessage } from "@yc/connector-protocol";
+import type { ConnectorTool, HubMessage } from "@ai-assistant/connector-protocol";
 import { handleHubMessage, nextBackoffMs, type DaemonCtx } from "./daemon.js";
 
 export interface MinimalSocket {

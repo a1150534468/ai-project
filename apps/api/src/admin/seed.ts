@@ -1,4 +1,4 @@
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { createAdmin } from "./service.js";
 
 async function main(): Promise<void> {

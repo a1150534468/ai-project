@@ -1,4 +1,4 @@
-module yc-billing
+module ai-assistant-billing
 
 go 1.25
 

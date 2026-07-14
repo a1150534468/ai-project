@@ -27,7 +27,7 @@ func NewEpay(pid, key, gateway, callbackBase string) (*Epay, error) {
 
 // GenTradeNo 生成我方交易号（唯一键，幂等到账依赖）
 func GenTradeNo() string {
-	return fmt.Sprintf("yc%d", time.Now().UnixNano())
+	return fmt.Sprintf("ai%d", time.Now().UnixNano())
 }
 
 // Purchase 返回支付跳转 URL（前端渲染二维码/跳转）

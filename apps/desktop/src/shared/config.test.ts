@@ -10,8 +10,8 @@ describe("loadConfig", () => {
   });
   it("env 覆盖且 https→wss", () => {
     const c = loadConfig({
-      YC_API_BASE: "https://api.example.com",
-      YC_WEB_URL: "https://app.example.com",
+      AI_ASSISTANT_API_BASE: "https://api.example.com",
+      AI_ASSISTANT_WEB_URL: "https://app.example.com",
     });
     expect(c.apiBase).toBe("https://api.example.com");
     expect(c.wsUrl).toBe("wss://api.example.com/ws/connector");

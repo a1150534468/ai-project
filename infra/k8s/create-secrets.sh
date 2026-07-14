@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 读 secrets.env（gitignore）幂等地【增量】写入 yunclaude ns 的两个 Secret。
+# 读 secrets.env（gitignore）幂等地【增量】写入 ai-assistant ns 的两个 Secret。
 #
 # ⚠️ 语义 = merge patch（只增改、绝不删）。历史教训：旧版用
 #   `kubectl create secret --dry-run=client -o yaml | kubectl apply -f -`
@@ -12,7 +12,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="${1:-$HERE/secrets.env}"
-NS=yunclaude
+NS=ai-assistant
 # context 陷阱：本机默认 context 可能是别的集群（如本地 kind），绝不能凭当前 context 写生产 Secret。
 # 新仓库不绑定旧集群；部署时必须显式指定 KUBE_CONTEXT。
 KCTX="${KUBE_CONTEXT:-}"
@@ -30,7 +30,8 @@ set -a; . "$ENV_FILE"; set +a
 : "${SESSION_SECRET:?缺 SESSION_SECRET}"
 : "${DATABASE_URL:?缺 DATABASE_URL}"
 : "${REDIS_URL:?缺 REDIS_URL}"
-: "${LLM_API_KEY:?缺 LLM_API_KEY}"
+: "${BAILIAN_WORKSPACE_ID:?缺 BAILIAN_WORKSPACE_ID}"
+: "${BAILIAN_API_KEY:?缺 BAILIAN_API_KEY}"
 : "${BILLING_INTERNAL_TOKEN:?缺 BILLING_INTERNAL_TOKEN}"
 : "${BILLING_DATABASE_URL:?缺 BILLING_DATABASE_URL}"
 : "${ADMIN_SESSION_SECRET:?缺 ADMIN_SESSION_SECRET}"
@@ -43,7 +44,7 @@ TMP="$(mktemp -d)"   # mktemp -d 默认 0700
 trap 'rm -rf "$TMP"' EXIT
 
 API_KEYS=(
-  SESSION_SECRET DATABASE_URL REDIS_URL LLM_API_KEY
+  SESSION_SECRET DATABASE_URL REDIS_URL BAILIAN_WORKSPACE_ID BAILIAN_API_KEY LLM_API_KEY
   IMAGE_API_KEY VIDEO_API_KEY TOAPIS_API_KEY
   BILLING_INTERNAL_TOKEN ADMIN_SESSION_SECRET
   S3_ACCESS_KEY S3_SECRET_KEY
@@ -78,7 +79,7 @@ PY
   python3 -c 'import json,sys; print("  " + sys.argv[2] + ": 已写入 " + ", ".join(sorted(json.load(open(sys.argv[1]))["stringData"])))' "$file" "$name"
 }
 
-patch_secret yc-api-secrets "${API_KEYS[@]}"
-patch_secret yc-billing-secrets "${BILLING_KEYS[@]}"
+patch_secret ai-assistant-api-secrets "${API_KEYS[@]}"
+patch_secret ai-assistant-billing-secrets "${BILLING_KEYS[@]}"
 
 echo "完成（merge patch：只增改，未删除任何既有 key）"

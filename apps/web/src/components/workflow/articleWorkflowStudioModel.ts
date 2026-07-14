@@ -2,7 +2,7 @@ import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowProjectStatus,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import type {
   ArticleWorkflowPricing,
   ArticleWorkflowPricingRow,

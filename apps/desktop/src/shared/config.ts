@@ -34,7 +34,7 @@ export function loadConfig(
   env: Record<string, string | undefined>,
   defaults: AppConfigDefaults = DEV_DEFAULTS
 ): AppConfig {
-  const apiBase = env.YC_API_BASE ?? defaults.apiBase;
-  const webUrl = env.YC_WEB_URL ?? defaults.webUrl;
+  const apiBase = env.AI_ASSISTANT_API_BASE ?? defaults.apiBase;
+  const webUrl = env.AI_ASSISTANT_WEB_URL ?? defaults.webUrl;
   return { apiBase, wsUrl: deriveWsUrl(apiBase), webUrl };
 }

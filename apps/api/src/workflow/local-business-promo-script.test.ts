@@ -7,7 +7,7 @@ const mockLlm = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("@yc/llm", () => ({
+vi.mock("@ai-assistant/llm", () => ({
   loadLlmConfig: () => ({ baseURL: "http://llm", apiKey: "k", defaultModel: "gpt-5.5" }),
   createLlmClient: () => ({ messages: { create: mockLlm.create } }),
 }));

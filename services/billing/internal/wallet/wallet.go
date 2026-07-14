@@ -3,7 +3,7 @@ package wallet
 import (
 	"errors"
 
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/store"
 )
 
 var (

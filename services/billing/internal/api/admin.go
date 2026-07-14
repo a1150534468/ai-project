@@ -9,12 +9,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/adjust"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/redeem"
-	"yc-billing/internal/registry"
-	"yc-billing/internal/resource"
+	"ai-assistant-billing/internal/adjust"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/redeem"
+	"ai-assistant-billing/internal/registry"
+	"ai-assistant-billing/internal/resource"
 )
 
 func (h *Handler) RegisterAdmin(r *gin.Engine) {

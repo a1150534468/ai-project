@@ -1,4 +1,4 @@
-// Package pgtest 为共享同一测试库(ycbilling)的各包提供跨进程串行化。
+// Package pgtest 为共享同一测试库(ai_assistant_billing)的各包提供跨进程串行化。
 //
 // billing 的多数集成测试都连到同一个 Postgres 并在准备数据前 TRUNCATE 共享表。
 // go test ./... 默认会把各包作为独立进程并行跑，导致它们互相清表污染、随机失败。
@@ -17,7 +17,7 @@ import (
 	"gorm.io/gorm"
 )
 
-const defaultBillingTestDSN = "postgres://ycbilling:billing-postgres-password-placeholder@localhost:5434/ycbilling?sslmode=disable"
+const defaultBillingTestDSN = "postgres://ai_assistant_billing:billing-postgres-password-placeholder@localhost:5434/ai_assistant_billing?sslmode=disable"
 
 // DSN returns the shared billing integration-test database URL.
 func DSN() string {
@@ -28,7 +28,7 @@ func DSN() string {
 }
 
 // serialLockKey 所有 billing 测试共用的固定 advisory lock key（任意常量即可）。
-const serialLockKey int64 = 0x79636231 // "ycb1"
+const serialLockKey int64 = 0x61696231 // "aib1"
 
 var (
 	once     sync.Once

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { createAdmin } from "./service.js";
 import { signAdminToken } from "./token.js";

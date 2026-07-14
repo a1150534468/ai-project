@@ -3,7 +3,7 @@ package analytics
 import (
 	"fmt"
 
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/store"
 )
 
 type Service struct{ st *store.Store }

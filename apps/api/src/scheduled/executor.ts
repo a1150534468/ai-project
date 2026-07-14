@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type { Redis } from "ioredis";
-import { InsufficientBalanceError, type createBillingClient } from "@yc/billing";
+import { InsufficientBalanceError, type createBillingClient } from "@ai-assistant/billing";
 import { SCHED, SCHED_KEY } from "./config.js";
 import { buildReport, type SkipReason } from "./report.js";
 import type { EmailSender } from "./email/sender.js";

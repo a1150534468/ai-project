@@ -8,6 +8,7 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY apps/admin/package.json apps/admin/package.json
+COPY packages/article-workflow/package.json packages/article-workflow/package.json
 COPY packages/billing/package.json packages/billing/package.json
 COPY packages/connector-protocol/package.json packages/connector-protocol/package.json
 COPY packages/db/package.json packages/db/package.json
@@ -16,7 +17,7 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 ARG VITE_API_BASE=https://api.example.com
 ENV VITE_API_BASE=${VITE_API_BASE}
-RUN pnpm --filter @yc/admin build
+RUN pnpm --filter @ai-assistant/admin build
 
 FROM nginx:alpine
 COPY --from=builder /repo/apps/admin/dist /usr/share/nginx/html

@@ -4,18 +4,18 @@ resources:
   - ../../base
 # release.sh 用 `kustomize edit set image` 或 sed 改 newTag；此处给默认 latest 占位。
 images:
-  - name: yc-api
+  - name: ai-assistant-api
     newName: registry.example.com/aiproject/api
     newTag: latest
-  - name: yc-web
+  - name: ai-assistant-web
     newName: registry.example.com/aiproject/web
     newTag: latest
-  - name: yc-admin
+  - name: ai-assistant-admin
     newName: registry.example.com/aiproject/admin
     newTag: latest
-  - name: yc-billing
+  - name: ai-assistant-billing
     newName: registry.example.com/aiproject/billing
     newTag: latest
-  - name: yc-migrate
+  - name: ai-assistant-migrate
     newName: registry.example.com/aiproject/migrate
     newTag: latest

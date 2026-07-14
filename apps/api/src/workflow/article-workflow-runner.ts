@@ -6,7 +6,7 @@ import {
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowSourceFormat,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import type { PrismaClient } from "@prisma/client";
 import { runReservedArticleTextTask } from "./article-workflow-billing.js";
 import { assertArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";

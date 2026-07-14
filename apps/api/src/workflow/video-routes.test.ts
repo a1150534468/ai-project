@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { videoWorkflowRoutes } from "./video-routes.js";
 

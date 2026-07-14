@@ -1,7 +1,7 @@
 import type { AgentOption, Session } from "./api";
 
-const NAV_COLLAPSED_KEY = "yc:nav:collapsed";
-const SELECTED_AGENT_KEY = "yc:agent:selected";
+const NAV_COLLAPSED_KEY = "ai-assistant:nav:collapsed";
+const SELECTED_AGENT_KEY = "ai-assistant:agent:selected";
 
 export function loadNavCollapsed(): boolean {
   if (typeof window === "undefined") return true;

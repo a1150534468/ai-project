@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { Prisma } from "@prisma/client";
-import { localTools } from "@yc/connector-protocol";
+import { localTools } from "@ai-assistant/connector-protocol";
 import { prepareChatAttachments, type ChatAttachmentPayload } from "../chat/attachments.js";
 import {
   describeKnowledgeBaseContext,

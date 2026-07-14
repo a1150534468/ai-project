@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Redis } from "ioredis";
 import type Anthropic from "@anthropic-ai/sdk";
-import { type createBillingClient } from "@yc/billing";
+import { type createBillingClient } from "@ai-assistant/billing";
 import { runTurn } from "../agent/run.js";
 import { SCHED } from "./config.js";
 import { consumeSchedAiQuota } from "./ratelimit.js";

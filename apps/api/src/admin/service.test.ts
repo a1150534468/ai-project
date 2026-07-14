@@ -1,5 +1,5 @@
 import { describe, it, expect, afterAll } from "vitest";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { createAdmin, verifyLogin, getAdminById, listAdmins, updateAdmin } from "./service.js";
 
 const prisma = getPrisma();

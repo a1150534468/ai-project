@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 
 export async function listEnabledBgmPresets(prisma: PrismaClient) {
   return prisma.dubBgmPreset.findMany({ where: { enabled: true }, orderBy: [{ sortOrder: "asc" }, { createdAt: "desc" }] });

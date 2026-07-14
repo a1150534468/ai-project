@@ -2,7 +2,7 @@ import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowSourceFormat,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { ARTICLE_SOURCE_PROMPT_BUDGET } from "./article-workflow-shared.js";
 
 function sourceFormatHint(sourceFormat: ArticleWorkflowSourceFormat): string {
@@ -64,7 +64,7 @@ export function buildArticleWorkflowLayoutSystemPrompt(): string {
     "The layout must be safe for direct paste into the WeChat official account editor.",
     "Prefer section containers, paragraph rhythm, modest borders/backgrounds, and mobile-friendly spacing.",
     "For every required image slot, output exactly one empty placeholder section like:",
-    '<section data-yc-image-slot="cover"></section>',
+    '<section data-ai-assistant-image-slot="cover"></section>',
     "Do not put visible text inside image placeholder sections.",
     "Do not wrap the answer in Markdown code fences.",
   ].join("\n");

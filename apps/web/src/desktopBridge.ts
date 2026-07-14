@@ -1,4 +1,4 @@
-// 桌面客户端（Electron）通过 preload 暴露到 window.ycDesktop 的能力桥接。
+// 桌面客户端（Electron）通过 preload 暴露到 window.aiAssistantDesktop 的能力桥接。
 // web 环境下这些方法不存在，调用方用 canSaveToDesktop() 特性检测后再用。
 
 export interface SaveDocumentResult {
@@ -19,7 +19,7 @@ export interface WechatUnbindResult {
   readonly ok: boolean;
 }
 
-interface YcDesktopBridge {
+interface AiAssistantDesktopBridge {
   readonly deviceId?: string;
   readonly saveDocument?: (filename: string, content: string) => Promise<SaveDocumentResult>;
   readonly revealPath?: (path: string) => Promise<void>;
@@ -28,9 +28,9 @@ interface YcDesktopBridge {
   readonly wechatUnbind?: () => Promise<WechatUnbindResult>;
 }
 
-function bridge(): YcDesktopBridge | undefined {
+function bridge(): AiAssistantDesktopBridge | undefined {
   if (typeof window === "undefined") return undefined;
-  return (window as unknown as { ycDesktop?: YcDesktopBridge }).ycDesktop;
+  return (window as unknown as { aiAssistantDesktop?: AiAssistantDesktopBridge }).aiAssistantDesktop;
 }
 
 export function canSaveToDesktop(): boolean {

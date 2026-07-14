@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { AgentWorkflowEvent, AgentWorkflowRun, AgentWorkflowStep, Prisma } from "@prisma/client";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { runTurn, type RunTurnToolEvent } from "../agent/run.js";
 import { describeTaskContext, readTaskContextFromSnapshot, type AgentTaskContext } from "./agent-task-context.js";
 import {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { seedPlatformChannel } from "./seed.js";
 
 describe("seedPlatformChannel", () => {

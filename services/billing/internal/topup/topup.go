@@ -6,11 +6,11 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
-	"yc-billing/internal/store"
-	"yc-billing/internal/videopoint"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
+	"ai-assistant-billing/internal/store"
+	"ai-assistant-billing/internal/videopoint"
 )
 
 // Service 充值服务：下单 + 到账

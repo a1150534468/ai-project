@@ -1,12 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { embed, cosine, loadEmbeddingConfig } from "../embedding-client.js";
 
-const hasEmbeddingEnv = !!(process.env.EMBEDDING_BASE_URL ?? process.env.LLM_BASE_URL)
-  && !!(process.env.EMBEDDING_API_KEY ?? process.env.LLM_API_KEY)
-  && !!process.env.EMBEDDING_MODEL;
+const hasEmbeddingEnv = !!(
+  process.env.EMBEDDING_API_KEY
+  || process.env.BAILIAN_API_KEY
+  || process.env.DASHSCOPE_API_KEY
+  || process.env.LLM_API_KEY
+);
 const shouldRunPoc = process.env.RUN_EMBEDDING_POC === "1" && hasEmbeddingEnv;
 
-describe.runIf(shouldRunPoc)("P0 记忆命门: NewAPI embeddings", () => {
+describe.runIf(shouldRunPoc)("P0 记忆命门: 当前配置的 embeddings provider", () => {
   it(
     "返回非空向量，维度与 EMBEDDING_DIM 一致，相关句相似度高于无关句",
     async () => {
@@ -21,7 +24,7 @@ describe.runIf(shouldRunPoc)("P0 记忆命门: NewAPI embeddings", () => {
       if (process.env.EMBEDDING_DIM) {
         expect(a.length).toBe(Number(process.env.EMBEDDING_DIM));
       }
-      console.log("EMBEDDING_DIM =", a.length); // ← 记下这个维度，用于 Task 2 建表
+      console.log("EMBEDDING_DIM =", a.length);
       expect(cosine(a, b)).toBeGreaterThan(cosine(a, c));
     },
     60_000,

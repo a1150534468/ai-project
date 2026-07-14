@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import type {
   ArticleWorkflowImageAsset,
   ArticleWorkflowImageSlot,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { callImageGeneration, loadImageGenerationConfig, storeWorkflowImage } from "./image-service.js";
 import { imageGenerationResourceKey, imageResolutionFromSize } from "./image-upstream-options.js";
 import {

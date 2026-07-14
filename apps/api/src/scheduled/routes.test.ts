@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
-import { getPrisma } from "@yc/db";
-import { InsufficientBalanceError } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { scheduledRoutes } from "./routes.js";
 import { RateLimitedError } from "./ai-draft-glue.js";
 

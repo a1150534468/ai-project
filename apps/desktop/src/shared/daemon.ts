@@ -1,4 +1,4 @@
-import type { HubMessage } from "@yc/connector-protocol";
+import type { HubMessage } from "@ai-assistant/connector-protocol";
 
 export interface DaemonCtx {
   send: (msg: unknown) => void;

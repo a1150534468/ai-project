@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { vi } from "vitest";
-import type { ArticleWorkflowImageAsset } from "@yc/article-workflow";
+import type { ArticleWorkflowImageAsset } from "@ai-assistant/article-workflow";
 import { articleWorkflowRoutes } from "./article-workflow-routes.js";
 
 export type ProjectRow = {
@@ -57,9 +57,9 @@ export function buildArticleWorkflowHtml(): string {
   return [
     '<section style="width:100%;max-width:667px;margin:0 auto;box-sizing:border-box;">',
     '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">开头第一段。</p>',
-    '<section data-yc-image-slot="cover"></section>',
+    '<section data-ai-assistant-image-slot="cover"></section>',
     '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">第二段继续说明。</p>',
-    '<section data-yc-image-slot="inline-1"></section>',
+    '<section data-ai-assistant-image-slot="inline-1"></section>',
     "</section>",
   ].join("");
 }

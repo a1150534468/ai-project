@@ -5,9 +5,9 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/vip"
 )
 
 func seedVipLevels(t *testing.T, db *gorm.DB) {

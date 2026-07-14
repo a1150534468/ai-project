@@ -21,7 +21,7 @@ export interface Session {
   permissions: Permission[];
 }
 
-const KEY = "yc_admin_session";
+const KEY = "ai_assistant_admin_session";
 
 export function can(s: Session | null, perm: Permission): boolean {
   if (!s) return false;

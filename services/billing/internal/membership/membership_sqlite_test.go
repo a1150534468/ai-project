@@ -7,8 +7,8 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/store"
 )
 
 func openMembershipSQLiteStore(t *testing.T) *store.Store {

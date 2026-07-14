@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { getPrisma } from '@yc/db';
+import { getPrisma } from '@ai-assistant/db';
 import type { User, KnowledgeBase } from '@prisma/client';
 import { reapOnce, startKbReaper } from './reaper.js';
 
@@ -327,7 +327,7 @@ describe('startKbReaper', () => {
         loadObject: async () => ({ buf: Buffer.from(''), mime: '', filename: '' }),
         parse: async () => '',
         chunk: () => [],
-        embed: async () => ({ vector: new Array(4096).fill(0), tokens: 0 }),
+        embed: async () => ({ vector: new Array(1024).fill(0), tokens: 0 }),
         billing: { settle: async () => {} },
         embeddingModel: 'test',
         workerId: 'test-worker',

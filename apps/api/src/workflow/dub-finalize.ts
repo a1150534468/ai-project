@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type { SkyhumanConfig, FetchLike } from "./dub-skyhuman-client.js";
 import * as skyClient from "./dub-skyhuman-client.js";
 import { DUB_TASK_STATUS, DUB_TASK_KIND } from "./dub-constants.js";

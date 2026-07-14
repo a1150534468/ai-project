@@ -14,7 +14,7 @@ const mockBilling = {
   getBalance: vi.fn(),
 };
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   InsufficientBalanceError: class InsufficientBalanceError extends Error {},
   createBillingClient: () => mockBilling,
 }));
@@ -184,7 +184,7 @@ describe("用户计费路由", () => {
   it("GET /api/billing/topup/:tradeNo 只允许查询当前登录用户的支付订单", async () => {
     mockBilling.getTopupOrder.mockResolvedValue({
       data: {
-        tradeNo: "yc123",
+        tradeNo: "ai123",
         userId: "current-user",
         amountFen: 100,
         points: 100,
@@ -198,10 +198,10 @@ describe("用户计费路由", () => {
       },
     });
     const app = await makeApp("current-user");
-    const r = await app.inject({ method: "GET", url: "/api/billing/topup/yc123?userId=hacker" });
+    const r = await app.inject({ method: "GET", url: "/api/billing/topup/ai123?userId=hacker" });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("success");
-    expect(mockBilling.getTopupOrder).toHaveBeenCalledWith("current-user", "yc123");
+    expect(mockBilling.getTopupOrder).toHaveBeenCalledWith("current-user", "ai123");
     await app.close();
   });
 });

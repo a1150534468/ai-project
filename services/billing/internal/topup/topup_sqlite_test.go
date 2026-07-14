@@ -6,10 +6,10 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
+	"ai-assistant-billing/internal/store"
 )
 
 func openTopupSQLiteStore(t *testing.T) *store.Store {

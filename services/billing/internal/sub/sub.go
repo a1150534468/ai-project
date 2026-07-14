@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/store"
 )
 
 // PlanConfig 定义订阅档位配置：ratio（组倍率）+ grant（月度发放积分）

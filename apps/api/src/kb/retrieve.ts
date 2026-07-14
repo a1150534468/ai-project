@@ -160,7 +160,7 @@ export function dedupeKbCitations(chunks: readonly RetrievedChunk[]): KbCitation
  *
  * @param prisma Prisma 客户端
  * @param kbIds 知识库 ID 数组
- * @param vector 查询向量（4096 维）
+ * @param vector 查询向量（默认 1024 维，与 EMBEDDING_DIM 一致）
  * @param topK 返回数量上限
  * @returns 检索结果数组
  */

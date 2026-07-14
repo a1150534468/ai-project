@@ -3,7 +3,7 @@ import {
   ARTICLE_WORKFLOW_GENERATION_MODES,
   ARTICLE_WORKFLOW_IMAGE_SLOTS,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { ARTICLE_MAX_SOURCE_LENGTH } from "./article-workflow-shared.js";
 
 const sourceFormatSchema = z.enum(ARTICLE_WORKFLOW_SOURCE_FORMATS);

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { requireAdmin } from "./guard.js";
 
 export async function adminAuditRoutes(app: FastifyInstance) {

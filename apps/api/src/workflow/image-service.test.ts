@@ -18,7 +18,7 @@ vi.mock("../storage/s3.js", async () => {
   const actual = await vi.importActual<typeof import("../storage/s3.js")>("../storage/s3.js");
   return {
     ...actual,
-    makeS3: vi.fn(() => ({ client: {} as never, bucket: "yc-kb" })),
+    makeS3: vi.fn(() => ({ client: {} as never, bucket: "ai-assistant-kb" })),
     putObject: vi.fn(async () => undefined),
   };
 });
@@ -262,7 +262,7 @@ describe("image service", () => {
       fetchFn: async () => new Response(null, { status: 500 }),
       env: {
         S3_ENDPOINT: "http://localhost:9000",
-        S3_BUCKET: "yc-kb",
+        S3_BUCKET: "ai-assistant-kb",
         S3_REGION: "us-east-1",
         S3_ACCESS_KEY: "test-s3-access-key",
         S3_SECRET_KEY: "test-s3-secret-key",

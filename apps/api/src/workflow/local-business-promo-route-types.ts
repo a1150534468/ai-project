@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
-import { createBillingClient } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { createBillingClient } from "@ai-assistant/billing";
 import {
   localBusinessPromoBriefSchema,
   localBusinessPromoMaterialsSchema,

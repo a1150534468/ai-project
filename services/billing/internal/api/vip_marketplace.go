@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"yc-billing/internal/model"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/vip"
 )
 
 func (h *Handler) vipSummary(c *gin.Context) {

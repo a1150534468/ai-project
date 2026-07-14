@@ -1,9 +1,9 @@
-const updateUrl = process.env.YC_DESKTOP_UPDATE_URL ?? "https://updates.example.com/desktop/win";
+const updateUrl = process.env.AI_ASSISTANT_DESKTOP_UPDATE_URL ?? "https://updates.example.com/desktop/win";
 
 /** @type {import("electron-builder").Configuration} */
 module.exports = {
-  appId: "com.example.aiproject.desktop",
-  productName: "云豆AI",
+  appId: "com.example.aiassistant.desktop",
+  productName: "AI 助手",
   asar: true,
   directories: {
     output: "dist",
@@ -38,7 +38,7 @@ module.exports = {
     ],
     icon: "resources/icon.png",
     // 文件名保持 ASCII 稳定，避免中文名在 CDN/OTA latest.yml 里出问题。
-    artifactName: "yun-claude-${version}-win-${arch}-setup.${ext}",
+    artifactName: "ai-assistant-${version}-win-${arch}-setup.${ext}",
     requestedExecutionLevel: "requireAdministrator",
   },
   nsis: {
@@ -49,7 +49,7 @@ module.exports = {
     allowToChangeInstallationDirectory: true,
     createDesktopShortcut: true,
     createStartMenuShortcut: true,
-    shortcutName: "云豆AI",
+    shortcutName: "AI 助手",
     deleteAppDataOnUninstall: false,
   },
 };

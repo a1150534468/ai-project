@@ -3,8 +3,8 @@ package adjust
 import (
 	"testing"
 
-	"yc-billing/internal/model"
-	"yc-billing/internal/videopoint"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/videopoint"
 )
 
 // TestAdjustVideo 覆盖管理端调视频点余额：充值、扣减、不足拒绝、幂等。

@@ -3,7 +3,7 @@ import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowSourceFormat,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { jsonrepair } from "jsonrepair";
 import type { ArticleWorkflowPlan } from "./article-workflow-schema.js";
 import { articleWorkflowPlanSchema } from "./article-workflow-schema.js";

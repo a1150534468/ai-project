@@ -1,12 +1,12 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
-import { createBillingClient } from "@yc/billing";
+import { createBillingClient } from "@ai-assistant/billing";
 import type { RunRow } from "./local-business-promo-route-types.js";
 
 export const LOCAL_BUSINESS_PROMO_REFUND_STATUS_NONE = "none";
 export const LOCAL_BUSINESS_PROMO_REFUND_STATUS_PENDING = "pending";
 export const LOCAL_BUSINESS_PROMO_REFUND_STATUS_REFUNDED = "refunded";
-const LOCAL_BUSINESS_PROMO_REFUND_REAPER_LOCK_KEY = "yunclaude:local-business-promo:refund-reaper:lock";
+const LOCAL_BUSINESS_PROMO_REFUND_REAPER_LOCK_KEY = "ai-assistant:local-business-promo:refund-reaper:lock";
 
 export type BillingForLocalBusinessPromoRefund = Pick<ReturnType<typeof createBillingClient>, "refundResource">;
 

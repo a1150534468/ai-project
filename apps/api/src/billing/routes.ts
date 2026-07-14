@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createBillingClient } from "@yc/billing";
+import { createBillingClient } from "@ai-assistant/billing";
 
 const topupSchema = z.object({
   amountFen: z.number().int().positive().optional(),

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { generateFanout } from "./fanout-generate-service.js";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { FanoutBrief } from "./fanout-types.js";
 
 const brief: FanoutBrief = {

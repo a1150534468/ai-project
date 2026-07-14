@@ -1,4 +1,4 @@
-import type { UserAggRow } from "@yc/billing";
+import type { UserAggRow } from "@ai-assistant/billing";
 
 type Agg = Record<string, UserAggRow>;
 const ZERO: UserAggRow = { totalRechargeFen: 0, totalRechargeOrders: 0, totalConsumptionPoints: 0 };

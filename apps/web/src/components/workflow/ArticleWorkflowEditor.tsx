@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import type { ArticleWorkflowGenerationMode } from "@yc/article-workflow";
+import type { ArticleWorkflowGenerationMode } from "@ai-assistant/article-workflow";
 import { useState, type RefObject } from "react";
 import { RippleButton } from "../../motion";
 import type { ArticleWorkflowPricing, ArticleWorkflowProject } from "../../workflowArticleApi";

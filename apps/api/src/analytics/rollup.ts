@@ -1,5 +1,5 @@
-import type { PrismaClient } from "@yc/db";
-import { createBillingClient } from "@yc/billing";
+import type { PrismaClient } from "@ai-assistant/db";
+import { createBillingClient } from "@ai-assistant/billing";
 import { computeRollup, addDays, COHORT_MAX_OFFSET, type RollupInput } from "./rollup-core.js";
 
 type Billing = ReturnType<typeof createBillingClient>;

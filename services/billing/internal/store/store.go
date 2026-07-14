@@ -3,7 +3,7 @@ package store
 import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/model"
 )
 
 type Store struct{ DB *gorm.DB }

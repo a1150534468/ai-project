@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
 export const ARTICLE_MAX_SOURCE_LENGTH = 200_000;

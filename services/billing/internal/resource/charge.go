@@ -8,11 +8,11 @@ import (
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/videopoint"
-	"yc-billing/internal/vip"
-	"yc-billing/internal/wallet"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/videopoint"
+	"ai-assistant-billing/internal/vip"
+	"ai-assistant-billing/internal/wallet"
 )
 
 func (s *Service) Charge(opID, userID, resourceKey string, units int64) (int64, error) {

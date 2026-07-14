@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { PrismaClient } from "@yc/db";
-import { localTools } from "@yc/connector-protocol";
+import type { PrismaClient } from "@ai-assistant/db";
+import { localTools } from "@ai-assistant/connector-protocol";
 import type { Dispatcher } from "../connector/dispatch.js";
 import { getDispatcher } from "../connector/hub.js";
 import { makeLocalExecTool } from "../connector/local-tools.js";

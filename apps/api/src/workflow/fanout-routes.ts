@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
-import { InsufficientBalanceError } from "@yc/billing";
+import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { authUserId } from "./ecom-route-helpers.js";
 import { extractFanoutBrief } from "./fanout-extract-service.js";
 import { generateFanout } from "./fanout-generate-service.js";

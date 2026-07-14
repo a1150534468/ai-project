@@ -1,6 +1,7 @@
-import { getPrisma } from '@yc/db';
+import { getPrisma } from '@ai-assistant/db';
 import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
+import { DEFAULT_EMBEDDING_DIMENSION } from '../memory/embedding-client.js';
 
 /**
  * 解析异常：文本为空或仅空白
@@ -17,9 +18,9 @@ export class EmptyTextError extends Error {
  * 向量转 pgvector 字面量 "[a,b,c]"
  * 包含有效性校验：维度检查 + 数值有效性
  */
-function toVectorLiteral(v: number[]): string {
-  if (!Array.isArray(v) || v.length !== 4096) {
-    throw new Error(`Invalid embedding dimension: expected 4096, got ${v.length}`);
+function toVectorLiteral(v: number[], expectedDimension: number): string {
+  if (!Array.isArray(v) || v.length !== expectedDimension) {
+    throw new Error(`Invalid embedding dimension: expected ${expectedDimension}, got ${v.length}`);
   }
   if (!v.every((n) => typeof n === 'number' && isFinite(n))) {
     throw new Error('Embedding contains non-finite or NaN values');
@@ -73,6 +74,8 @@ export interface IndexDeps {
    * 嵌入模型名（用于计费）
    */
   embeddingModel: string;
+  /** 向量维度，必须与数据库 vector(N) 一致。 */
+  embeddingDimension?: number;
   /**
    * 工作者 ID（用于分布式锁）
    */
@@ -216,7 +219,10 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
             ${doc.kbId},
             ${i},
             ${chunks[i]},
-            ${toVectorLiteral(embeds[i].vector)}::vector,
+            ${toVectorLiteral(
+              embeds[i].vector,
+              deps.embeddingDimension ?? DEFAULT_EMBEDDING_DIMENSION,
+            )}::vector,
             now()
           )
         `;

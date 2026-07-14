@@ -19,7 +19,7 @@ export interface PreparedChatAttachments {
   imageCount: number;
 }
 
-const MULTIMODAL_FALLBACK_MODEL = "MiniMax-M3";
+const MULTIMODAL_FALLBACK_MODEL = "qwen3.7-plus";
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
 const MAX_FILE_TEXT_CHARS = 12_000;
@@ -55,6 +55,9 @@ export function supportsVisionModel(model: string): boolean {
     "m3",
     "vision",
     "vl",
+    "omni",
+    "qwen3.7-plus",
+    "kimi-k2.7-code",
     "glm-4v",
     "gpt-4o",
     "gemini",
@@ -63,10 +66,14 @@ export function supportsVisionModel(model: string): boolean {
   ].some((keyword) => normalized.includes(keyword));
 }
 
-export function resolveChatModel(requestedModel: string, hasImage: boolean) {
+export function resolveChatModel(
+  requestedModel: string,
+  hasImage: boolean,
+  multimodalFallback = process.env.CHAT_MULTIMODAL_MODEL?.trim() || MULTIMODAL_FALLBACK_MODEL,
+) {
   if (hasImage && !supportsVisionModel(requestedModel)) {
     return {
-      model: MULTIMODAL_FALLBACK_MODEL,
+      model: multimodalFallback,
       requestedModel,
       fallbackReason: "image_requires_multimodal" as const,
     };

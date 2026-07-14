@@ -3,7 +3,7 @@ package config
 import (
 	"testing"
 
-	"yc-billing/internal/billingmode"
+	"ai-assistant-billing/internal/billingmode"
 )
 
 func setRequiredEnv(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
 )
 
 // ChargePoints 固定点数幂等扣减（用于知识库配额等固定成本扣费）。

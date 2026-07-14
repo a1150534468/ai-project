@@ -25,14 +25,14 @@ describe("billing client", () => {
     await expect(c.adminDeleteVipLevel(99)).rejects.toBeInstanceOf(BillingHttpError);
   });
   it("createTopup 返回 payUrl 和 tradeNo", async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "yc123" }), { status: 200 }));
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "ai123" }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
     const r = await c.createTopup({ userId: "u1", amountFen: 1900, method: "alipay" });
     expect(r.payUrl).toContain("http://pay.url");
-    expect(r.tradeNo).toBe("yc123");
+    expect(r.tradeNo).toBe("ai123");
   });
   it("createTopup 支持 packageId 下单", async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "yc_pkg" }), { status: 200 }));
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "ai_pkg" }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
     await c.createTopup({ userId: "u1", packageId: "standard", method: "alipay" });
     expect(fetchFn).toHaveBeenCalledWith(
@@ -44,7 +44,7 @@ describe("billing client", () => {
     );
   });
   it("createTopup 支持视频点自定义充值", async () => {
-    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "yc_video" }), { status: 200 }));
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "ai_video" }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
     await c.createTopup({ userId: "u1", accountType: "video", amountFen: 2500, method: "alipay" });
     expect(fetchFn).toHaveBeenCalledWith(
@@ -58,7 +58,7 @@ describe("billing client", () => {
   it("getTopupOrder 使用当前用户和交易号查询订单状态", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       data: {
-        tradeNo: "yc123",
+        tradeNo: "ai123",
         userId: "u1",
         amountFen: 100,
         points: 100,
@@ -72,11 +72,11 @@ describe("billing client", () => {
       },
     }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
-    const r = await c.getTopupOrder("u1", "yc123");
+    const r = await c.getTopupOrder("u1", "ai123");
     expect(r.data.status).toBe("success");
     expect(r.data.paymentMethod).toBe("wxpay");
     expect(fetchFn).toHaveBeenCalledWith(
-      "http://b/topup/u1/yc123",
+      "http://b/topup/u1/ai123",
       expect.objectContaining({ method: "GET" }),
     );
   });
@@ -187,7 +187,7 @@ describe("billing client", () => {
   });
 });
 
-describe("@yc/billing admin 扩展", () => {
+describe("@ai-assistant/billing admin 扩展", () => {
   it("generateCodes 透传并返回 codes", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ codes: ["A", "B"] }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
@@ -349,7 +349,7 @@ describe("@yc/billing admin 扩展", () => {
   });
 });
 
-describe("@yc/billing 分析方法", () => {
+describe("@ai-assistant/billing 分析方法", () => {
   it("analyticsDaily 返回 data", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ date: "2026-06-01", revenueFen: 100, topupCount: 1, grantedPoints: 10, consumedPoints: 5, payingUsers: 1, newPayingUsers: 1 }] }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
@@ -372,7 +372,7 @@ describe("@yc/billing 分析方法", () => {
   });
 });
 
-describe("@yc/billing 资源价/汇率", () => {
+describe("@ai-assistant/billing 资源价/汇率", () => {
   it("listResourcePrices 返回 data", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ resourceKey: "websearch", pricingType: "PER_CALL", rate: 10, perUnits: 1, enabled: true }] }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
@@ -454,14 +454,14 @@ describe("@yc/billing 资源价/汇率", () => {
   });
   it("listAdminOrders 拼接筛选参数并返回订单汇总", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
-      data: [{ id: 1, tradeNo: "yc1", userId: "u1", amountFen: 100, points: 700, provider: "epay", paymentMethod: "alipay", status: "success", kind: "points", cardId: 0, createdAt: "2026-07-02T08:16:00Z", paidAt: "2026-07-02T08:16:10Z" }],
+      data: [{ id: 1, tradeNo: "ai1", userId: "u1", amountFen: 100, points: 700, provider: "epay", paymentMethod: "alipay", status: "success", kind: "points", cardId: 0, createdAt: "2026-07-02T08:16:00Z", paidAt: "2026-07-02T08:16:10Z" }],
       total: 1,
       summary: { total: 1, successCount: 1, pendingCount: 0, closedCount: 0, successAmountFen: 100, successPoints: 700, payingUsers: 1 },
     }), { status: 200 }));
     const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn });
     const r = await c.listAdminOrders({ userIds: ["u1", "u2"], status: "success", kind: "points", limit: 50, offset: 0 });
     expect(r.summary.successAmountFen).toBe(100);
-    expect(r.data[0].tradeNo).toBe("yc1");
+    expect(r.data[0].tradeNo).toBe("ai1");
     expect(fetchFn).toHaveBeenCalledWith(
       "http://b/internal/admin/orders?userIds=u1%2Cu2&status=success&kind=points&limit=50",
       expect.objectContaining({ method: "GET" }),
@@ -483,7 +483,7 @@ describe("@yc/billing 资源价/汇率", () => {
   });
 });
 
-describe("@yc/billing 月卡管理", () => {
+describe("@ai-assistant/billing 月卡管理", () => {
   it("listMembershipCards 返回 data", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({
       data: [{ id: 1, name: "月卡", priceFen: 30000, durationDays: 30, cadence: "DAILY", grantPoints: 1000, enabled: true, createdAt: "2026-06-28T10:00:00Z", updatedAt: "2026-06-28T10:00:00Z" }]

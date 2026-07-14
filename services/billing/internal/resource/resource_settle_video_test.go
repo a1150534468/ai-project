@@ -3,8 +3,8 @@ package resource
 import (
 	"testing"
 
-	"yc-billing/internal/model"
-	"yc-billing/internal/videopoint"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/videopoint"
 )
 
 // TestSettleVideoIO 覆盖「自动时长」预扣最大 15s → 按实际输出秒结算、退回差额。

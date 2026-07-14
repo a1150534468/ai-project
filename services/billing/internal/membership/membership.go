@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/store"
 )
 
 type Service struct{ st *store.Store }

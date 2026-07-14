@@ -3,11 +3,11 @@ package registry
 import (
 	"errors"
 
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
+	"ai-assistant-billing/internal/store"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
-	"yc-billing/internal/store"
 )
 
 // 默认模型 seed（仅在缺失时插入；倍率为占位，运营上线收费前经 admin 调整）。
@@ -16,8 +16,16 @@ const defaultDisplay = "GLM 5.2"
 const defaultModelRatio = 0.002
 const defaultCompletionRatio = 1
 
-const embeddingModel = "Qwen/Qwen3-VL-Embedding-8B"
-const embeddingDisplay = "Qwen3-VL Embedding 8B"
+// 百炼对话助手默认模型。价格取中国内地标准原价（阶梯的 <=256k 档），
+// 促销折扣不写入长期计费规则，避免活动结束后倒挂。
+const bailianChatModel = "qwen3.7-plus"
+const bailianChatDisplay = "Qwen3.7 Plus"
+const bailianChatInputRMBPerMillion = 2.0
+const bailianChatOutputRMBPerMillion = 8.0
+const bailianChatCacheInputRMBPerMillion = 0.4
+
+const embeddingModel = "text-embedding-v4"
+const embeddingDisplay = "百炼 Text Embedding V4"
 const embeddingModelRatio = 0.00002 // embedding 模型按单位 token 定价，典型比例较小
 const embeddingCompletionRatio = 0  // embedding 无输出 token
 
@@ -137,7 +145,25 @@ func normalizePriceRule(r *model.PriceRule, ratio int64) bool {
 
 // SeedDefault 幂等：仅当模型不存在时插入，绝不覆盖运营已设值。
 func (s *Service) SeedDefault() error {
+	ratio := resource.New(s.st).RechargeRatio()
+	bailianPricingRMB := RMBPricing{
+		InputPriceRMBPerMillion:       bailianChatInputRMBPerMillion,
+		OutputPriceRMBPerMillion:      bailianChatOutputRMBPerMillion,
+		CacheInputPriceRMBPerMillion:  bailianChatCacheInputRMBPerMillion,
+		CacheOutputPriceRMBPerMillion: bailianChatOutputRMBPerMillion,
+	}
+	bailianPricing := PricingFromRMB(bailianPricingRMB, ratio)
+	bailianModelRatio, bailianCompletionRatio := legacyRatios(bailianPricing)
 	models := []model.PriceRule{
+		{
+			Model: bailianChatModel, DisplayName: bailianChatDisplay,
+			ModelRatio: bailianModelRatio, CompletionRatio: bailianCompletionRatio,
+			InputPricePerMillion: bailianPricing.InputPricePerMillion, OutputPricePerMillion: bailianPricing.OutputPricePerMillion,
+			CacheInputPricePerMillion: bailianPricing.CacheInputPricePerMillion, CacheOutputPricePerMillion: bailianPricing.CacheOutputPricePerMillion,
+			InputPriceRMBPerMillion: bailianPricingRMB.InputPriceRMBPerMillion, OutputPriceRMBPerMillion: bailianPricingRMB.OutputPriceRMBPerMillion,
+			CacheInputPriceRMBPerMillion: bailianPricingRMB.CacheInputPriceRMBPerMillion, CacheOutputPriceRMBPerMillion: bailianPricingRMB.CacheOutputPriceRMBPerMillion,
+			Enabled: true,
+		},
 		{
 			Model: defaultModel, DisplayName: defaultDisplay,
 			ModelRatio: defaultModelRatio, CompletionRatio: defaultCompletionRatio,
@@ -162,6 +188,8 @@ func (s *Service) SeedDefault() error {
 				"model_ratio": m.ModelRatio, "completion_ratio": m.CompletionRatio,
 				"input_price_per_million": m.InputPricePerMillion, "output_price_per_million": m.OutputPricePerMillion,
 				"cache_input_price_per_million": m.CacheInputPricePerMillion, "cache_output_price_per_million": m.CacheOutputPricePerMillion,
+				"input_price_rmb_per_million": m.InputPriceRMBPerMillion, "output_price_rmb_per_million": m.OutputPriceRMBPerMillion,
+				"cache_input_price_rmb_per_million": m.CacheInputPriceRMBPerMillion, "cache_output_price_rmb_per_million": m.CacheOutputPriceRMBPerMillion,
 				"enabled": m.Enabled,
 			}).Error; err != nil {
 				return err

@@ -2,8 +2,8 @@ package registry
 
 import (
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
 )
 
 type MarketplaceMeta struct {

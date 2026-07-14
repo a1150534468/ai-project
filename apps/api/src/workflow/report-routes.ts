@@ -1,12 +1,12 @@
 import { z } from "zod";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import type { PrismaClient } from "@yc/db";
-import { createBillingClient } from "@yc/billing";
+import type { PrismaClient } from "@ai-assistant/db";
+import { createBillingClient } from "@ai-assistant/billing";
 import { authUserId } from "./ecom-route-helpers.js";
 import { parseDocument } from "../kb/parse.js";
 import { runReportTask } from "./report-runner.js";
 import { makeS3 } from "../storage/s3.js";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 
 const DEFAULT_MODEL = "MiniMax-M3";
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;

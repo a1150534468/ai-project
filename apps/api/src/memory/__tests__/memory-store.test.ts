@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { insertMemory, queryMemory, deleteMemory } from "../memory-store.js";
 import type { MemoryShape } from "../memory-types.js";
 
 const prisma = getPrisma();
-const DIM = Number(process.env.EMBEDDING_DIM ?? 8);
+const DIM = Number(process.env.EMBEDDING_DIM ?? 1024);
 const vec = (seed: number) => Array.from({ length: DIM }, (_, i) => Math.sin(seed + i));
 const memory = (text: string): MemoryShape => ({
   title: text,
@@ -14,8 +14,8 @@ const memory = (text: string): MemoryShape => ({
   tags: [],
 });
 
-// Only run this test when EMBEDDING_DIM matches pgvector column dimension (4096)
-describe.skipIf(DIM !== 4096)("memory-store (pgvector)", () => {
+// Only run this test when EMBEDDING_DIM matches pgvector column dimension (1024)
+describe.skipIf(DIM !== 1024)("memory-store (pgvector)", () => {
   beforeEach(async () => {
     await prisma.$executeRawUnsafe('TRUNCATE "Memory"');
   });

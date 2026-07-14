@@ -19,6 +19,6 @@ export const SCHED = {
 } as const;
 
 export const SCHED_KEY = {
-  slot: (taskId: string, slotIso: string) => `yunclaude:sched:run:${taskId}:${slotIso}`,
-  active: (taskId: string) => `yunclaude:sched:active:${taskId}`,
+  slot: (taskId: string, slotIso: string) => `ai-assistant:sched:run:${taskId}:${slotIso}`,
+  active: (taskId: string) => `ai-assistant:sched:active:${taskId}`,
 } as const;

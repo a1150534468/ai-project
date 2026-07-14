@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { createBillingClient } from "@yc/billing";
+import { createBillingClient } from "@ai-assistant/billing";
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
 

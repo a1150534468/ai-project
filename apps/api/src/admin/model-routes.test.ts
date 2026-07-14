@@ -14,7 +14,7 @@ const mockBilling = {
 
 const requireAdminCalls: string[] = [];
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: () => mockBilling,
 }));
 
@@ -27,7 +27,7 @@ vi.mock("./guard.js", () => ({
   },
 }));
 
-vi.mock("@yc/db", () => ({
+vi.mock("@ai-assistant/db", () => ({
   getPrisma: () => ({}),
 }));
 

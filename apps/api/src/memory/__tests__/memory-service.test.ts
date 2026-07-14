@@ -130,7 +130,7 @@ describe("memory-service", () => {
     it("extractMemoryActions ADD → 每条 embed → queryMemory 检查是否去重 > 0.95 skip", async () => {
       const actions = [
         { event: "ADD" as const, text: "用户喜欢 TypeScript" },
-        { event: "ADD" as const, text: "用户在做 yun-claude 项目" },
+        { event: "ADD" as const, text: "用户在做 AI 助手项目" },
       ];
       const mockVec1 = [0.1, 0.2];
       const mockVec2 = [0.3, 0.4];
@@ -164,14 +164,14 @@ describe("memory-service", () => {
 
       expect(embeddingClient.embed).toHaveBeenCalledTimes(2);
       expect(embeddingClient.embed).toHaveBeenNthCalledWith(1, cfg, "用户喜欢 TypeScript");
-      expect(embeddingClient.embed).toHaveBeenNthCalledWith(2, cfg, "用户在做 yun-claude 项目");
+      expect(embeddingClient.embed).toHaveBeenNthCalledWith(2, cfg, "用户在做 AI 助手项目");
       expect(memoryStore.queryMemory).toHaveBeenCalledTimes(2);
       expect(memoryStore.insertMemory).toHaveBeenCalledTimes(1);
       expect(memoryStore.insertMemory).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({
-          text: "用户在做 yun-claude 项目",
-          title: "用户在做 yun-claude 项目",
+          text: "用户在做 AI 助手项目",
+          title: "用户在做 AI 助手项目",
           type: "OTHER",
         }),
         mockVec2,
@@ -452,7 +452,7 @@ describe("memory-service", () => {
     });
 
     it("all queryMemory scores > 0.95 → 所有 ADD 去重跳过，无 insert", async () => {
-      const facts = ["用户喜欢 TypeScript", "用户正在做 yun-claude 项目"];
+      const facts = ["用户喜欢 TypeScript", "用户正在做 AI 助手项目"];
       const mockVec1 = [0.1, 0.2];
       const mockVec2 = [0.3, 0.4];
 

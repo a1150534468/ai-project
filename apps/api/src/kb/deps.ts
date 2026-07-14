@@ -1,5 +1,5 @@
-import { getPrisma } from "@yc/db";
-import { createBillingClient } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { createBillingClient } from "@ai-assistant/billing";
 import { getObject, putObject, type S3 } from "../storage/s3.js";
 import { fetchUrl, assertSafeUrl } from "./url-fetch.js";
 import { parseDocument } from "./parse.js";
@@ -57,6 +57,7 @@ export async function buildIndexDeps(
       settle: (arg) => billing.settle(arg),
     },
     embeddingModel: embCfg.model,
+    embeddingDimension: embCfg.dimension,
     workerId: `${process.pid}-${os.hostname()}-${randomUUID()}`,
   };
 }

@@ -1,4 +1,4 @@
-import type { WechatInbound, WechatStatus } from "@yc/connector-protocol";
+import type { WechatInbound, WechatStatus } from "@ai-assistant/connector-protocol";
 import { chunkText } from "./chunk.js";
 import type { createILinkApi } from "./ilink-api.js";
 

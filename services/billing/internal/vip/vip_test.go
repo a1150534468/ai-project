@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/pgtest"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/pgtest"
+	"ai-assistant-billing/internal/store"
 )
 
 func openTestDB(t *testing.T) *gorm.DB {

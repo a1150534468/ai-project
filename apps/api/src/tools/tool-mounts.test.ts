@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TOOL_FS_READ, TOOL_TERMINAL_EXEC, type ConnectorTool } from "@yc/connector-protocol";
+import { TOOL_FS_READ, TOOL_TERMINAL_EXEC, type ConnectorTool } from "@ai-assistant/connector-protocol";
 import { availableInstalledToolNames, selectMountedTools } from "./tool-mounts.js";
 
 const skillTool: ConnectorTool = {

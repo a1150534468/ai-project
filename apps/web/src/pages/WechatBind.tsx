@@ -130,15 +130,15 @@ export default function WechatBind({ token }: WechatBindProps) {
     stopPolling();
 
     try {
-      // deviceId 从桌面连接器状态取（preload 未把 deviceId 直接挂 window.ycDesktop，需经 IPC 查）
+      // deviceId 从桌面连接器状态取（preload 未把 deviceId 直接挂 window.aiAssistantDesktop，需经 IPC 查）
       const bridge =
         typeof window !== "undefined"
           ? (window as unknown as {
-              ycDesktop?: {
+              aiAssistantDesktop?: {
                 deviceId?: string;
                 getConnectorStatus?: () => Promise<{ activeDeviceId?: string; registeredDeviceId?: string }>;
               };
-            }).ycDesktop
+            }).aiAssistantDesktop
           : undefined;
       const status = await bridge?.getConnectorStatus?.().catch(() => undefined);
       const deviceId = status?.activeDeviceId || status?.registeredDeviceId || bridge?.deviceId;
@@ -192,7 +192,7 @@ export default function WechatBind({ token }: WechatBindProps) {
           <Icon icon="mdi:information-outline" className="text-4xl text-gray-400 mb-4 mx-auto" />
           <h2 className="text-lg font-semibold text-gray-900 mb-2">请在桌面客户端使用</h2>
           <p className="text-sm text-gray-600">
-            微信接入功能仅在桌面客户端中可用，请在 yun-claude 桌面应用中打开本页面。
+            微信接入功能仅在桌面客户端中可用，请在 AI 助手桌面应用中打开本页面。
           </p>
         </div>
       </div>
@@ -206,7 +206,7 @@ export default function WechatBind({ token }: WechatBindProps) {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900 mb-2">微信接入</h1>
           <p className="text-sm text-gray-600">
-            将您的微信与 yun-claude Agent 绑定，实现便捷的微信对接。
+            将您的微信与 AI 助手绑定，实现便捷的微信对接。
           </p>
         </div>
 

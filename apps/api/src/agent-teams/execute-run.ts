@@ -1,5 +1,5 @@
 import { Prisma, type AgentWorkflowEvent, type AgentWorkflowRun, type AgentWorkflowStep, type PrismaClient } from "@prisma/client";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { AGENT_TEAM_RUN_STATUS } from "./agent-team-types.js";
 import { formatAgentWorkflowError } from "./agent-workflow-error.js";
 import { requestWorkflowPlan, workflowPlanErrorMessage, type WorkflowPlanStep } from "./agent-workflow-plan.js";
@@ -19,7 +19,7 @@ import {
   readTaskContextFromSnapshot,
   type AgentTaskContext,
 } from "./agent-task-context.js";
-import { localTools } from "@yc/connector-protocol";
+import { localTools } from "@ai-assistant/connector-protocol";
 import { getDispatcher } from "../connector/hub.js";
 import { makeLocalExecTool } from "../connector/local-tools.js";
 import { pickActiveDevice } from "../connector/select-device.js";

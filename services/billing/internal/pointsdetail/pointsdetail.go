@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/membership"
-	"yc-billing/internal/model"
+	"ai-assistant-billing/internal/membership"
+	"ai-assistant-billing/internal/model"
 )
 
 type Period struct {

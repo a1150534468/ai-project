@@ -13,7 +13,7 @@ import { discoverSkillTools } from "../shared/tools/skill-tools.js";
 import { login, pairDevice } from "../shared/pairing.js";
 import { makeTokenStore, confirmHighRisk } from "./electron-deps.js";
 import { startAutoUpdateChecks } from "./updater.js";
-import { localTools, TOOL_SKILL_MARKET_INSTALL } from "@yc/connector-protocol";
+import { localTools, TOOL_SKILL_MARKET_INSTALL } from "@ai-assistant/connector-protocol";
 import { sessionUserIdFromToken, shouldReuseRegisteredDevice } from "../shared/connector-session.js";
 import { makeWechatStore } from "./wechat-store.js";
 import { createILinkApi } from "../shared/wechat/ilink-api.js";

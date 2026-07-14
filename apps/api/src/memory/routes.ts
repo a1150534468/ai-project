@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { embed, loadEmbeddingConfig } from "./embedding-client.js";
 import { search } from "./memory-service.js";
 import {

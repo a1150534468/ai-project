@@ -1,6 +1,6 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { getPrisma } from "@yc/db";
-import type { PrismaClient } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import { verifyAdminToken } from "./token.js";
 import { getAdminById } from "./service.js";
 import { hasPermission, type Permission } from "./permissions.js";

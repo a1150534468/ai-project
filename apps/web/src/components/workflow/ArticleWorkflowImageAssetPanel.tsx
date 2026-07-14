@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import type { ArticleWorkflowImageAsset } from "@yc/article-workflow";
+import type { ArticleWorkflowImageAsset } from "@ai-assistant/article-workflow";
 
 interface ArticleWorkflowImageAssetPanelProps {
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];

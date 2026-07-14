@@ -1,6 +1,6 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type { Redis } from "ioredis";
-import { createBillingClient } from "@yc/billing";
+import { createBillingClient } from "@ai-assistant/billing";
 import { runRollup, defaultWindow } from "./rollup.js";
 
 // 每小时 tick；本地 02 点 + 当日去重锁 触发一次 rollup（最近 31 天窗口）。
@@ -13,7 +13,7 @@ export function startAnalyticsRollup(prisma: PrismaClient, redis: Redis): NodeJS
     const now = new Date();
     if (now.getHours() !== 2) return;
     const today = now.toISOString().slice(0, 10);
-    const got = await redis.set(`yunclaude:analytics:rollup:lock:${today}`, "1", "EX", 7200, "NX");
+    const got = await redis.set(`ai-assistant:analytics:rollup:lock:${today}`, "1", "EX", 7200, "NX");
     if (got !== "OK") return;
     try {
       await runRollup(prisma, billing, defaultWindow(today));

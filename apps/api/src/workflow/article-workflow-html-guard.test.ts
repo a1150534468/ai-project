@@ -6,7 +6,7 @@ describe("article-workflow html guard", () => {
     const html = [
       '<section style="width:100%;max-width:667px;margin:0 auto;box-sizing:border-box;">',
       '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">开头第一段。</p>',
-      '<section data-yc-image-slot="cover"></section>',
+      '<section data-ai-assistant-image-slot="cover"></section>',
       '<p style="font-size:16px;line-height:1.8em;margin:0 0 16px 0;">第二段继续说明。</p>',
       "</section>",
     ].join("");
@@ -15,7 +15,7 @@ describe("article-workflow html guard", () => {
       html,
       expectedVisibleText: "开头第一段。\n第二段继续说明。",
       requiredImageSlots: ["cover"],
-    })).toContain('data-yc-image-slot="cover"');
+    })).toContain('data-ai-assistant-image-slot="cover"');
   });
 
   it("rejects blacklisted tags and changed visible text", () => {

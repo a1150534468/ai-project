@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
-import { createBillingClient as makeBillingClient } from "@yc/billing";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
+import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
 
 const SKILL_PATH = fileURLToPath(new URL("./video-prompt-skill.md", import.meta.url));
 let skillCache: string | null = null;

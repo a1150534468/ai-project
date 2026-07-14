@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { z } from "zod";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import {
   activateComicScriptVersion,
   comicProjectStoreFromPrisma,

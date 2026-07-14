@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ToolInvoke, ToolErrorCode } from "@yc/connector-protocol";
+import type { ToolInvoke, ToolErrorCode } from "@ai-assistant/connector-protocol";
 
 export interface DispatchArgs {
   deviceId: string;

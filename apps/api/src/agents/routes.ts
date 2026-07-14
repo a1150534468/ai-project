@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { Redis } from "ioredis";
 import { z } from "zod";
-import { getPrisma, getRedis } from "@yc/db";
+import { getPrisma, getRedis } from "@ai-assistant/db";
 import { generateCustomAgent, listCustomAgents, publicPresetAgents, renameAgent, deleteAgentCascade, regenerateAgentAvatar, agentAvatarUrlOf, setAgentAvatarUrl, avatarPublicUrl } from "./service.js";
 import { consumeAvatarQuota } from "./ratelimit.js";
 import { normalizeAvatarImage, AvatarImageError, AVATAR_MIME } from "./image.js";

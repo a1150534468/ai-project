@@ -14,14 +14,14 @@ const mockBilling = vi.hoisted(() => ({
   settle: vi.fn(async () => ({ settled: 1 })),
 }));
 
-vi.mock("@yc/llm", () => ({
+vi.mock("@ai-assistant/llm", () => ({
   loadLlmConfig: () => ({ baseURL: "http://llm", apiKey: "key", defaultModel: "fallback-model" }),
   createLlmClient: () => ({
     messages: { create: mockLlm.create },
   }),
 }));
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: () => mockBilling,
 }));
 

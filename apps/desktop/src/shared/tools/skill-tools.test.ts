@@ -6,11 +6,11 @@ import { discoverSkillTools, executeSkillTool, installMarketSkillTool } from "./
 
 describe("skill tools", () => {
   it("扫描本地 skill manifest 并按 manifest 执行命令", async () => {
-    const root = await mkdtemp(join(tmpdir(), "yc-skill-"));
+    const root = await mkdtemp(join(tmpdir(), "ai-assistant-skill-"));
     const skillDir = join(root, "10270");
     await mkdir(skillDir, { recursive: true });
     await writeFile(
-      join(skillDir, "yun-claude-tool.json"),
+      join(skillDir, "ai-assistant-tool.json"),
       JSON.stringify({
         tools: [{
           name: "skill_10270",
@@ -53,7 +53,7 @@ describe("skill tools", () => {
   });
 
   it("安装市场 skill 时创建可注册的本地 manifest", async () => {
-    const root = await mkdtemp(join(tmpdir(), "yc-skill-install-"));
+    const root = await mkdtemp(join(tmpdir(), "ai-assistant-skill-install-"));
     const output = await installMarketSkillTool(
       { marketId: "10270", name: "投资社区" },
       { skillsDir: root, timeoutMs: 5000 },

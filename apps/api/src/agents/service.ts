@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type Anthropic from "@anthropic-ai/sdk";
-import { loadLlmConfig, createLlmClient } from "@yc/llm";
+import { loadLlmConfig, createLlmClient } from "@ai-assistant/llm";
 import { getPresetAgent, loadAgentPresets } from "./presets.js";
 import { CUSTOM_AGENT_ICON } from "./icons.js";
 import { generateAvatarSvg } from "./avatar.js";

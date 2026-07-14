@@ -1,6 +1,6 @@
-import { createBillingClient } from "@yc/billing";
-import { getPrisma } from "@yc/db";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
+import { createBillingClient } from "@ai-assistant/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type { FastifyInstance } from "fastify";
 import { canRecoverArticleProject, DEFAULT_ARTICLE_MODEL, scheduledRunner, ARTICLE_HISTORY_LIMIT, type ArticleWorkflowBilling, type ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import {

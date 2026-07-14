@@ -55,11 +55,11 @@ export async function streamChat(
   attachments?: ChatAttachmentPayload[],
   toolIds?: string[],
 ): Promise<void> {
-  // 桌面 app 会把「当前这台连接器」的 deviceId 暴露到 window.ycDesktop.deviceId，
+  // 桌面 app 会把「当前这台连接器」的 deviceId 暴露到 window.aiAssistantDesktop.deviceId，
   // 带上它后端就能把工具派给用户正在操作的这台（多设备登录同一账号时不再派错机器）。
   const deviceId =
     typeof window !== "undefined"
-      ? (window as unknown as { ycDesktop?: { deviceId?: string } }).ycDesktop?.deviceId
+      ? (window as unknown as { aiAssistantDesktop?: { deviceId?: string } }).aiAssistantDesktop?.deviceId
       : undefined;
   const r = await fetch("/api/chat", {
     method: "POST",

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { fsRead, fsWrite, fsEdit, fsList, fsStat, fsMkdir, fsMove, fsDelete, fsCopy } from "./fs.js";
 
 let dir = "";
-beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), "yc-fs-")); });
+beforeAll(async () => { dir = await mkdtemp(join(tmpdir(), "ai-assistant-fs-")); });
 afterAll(async () => { await rm(dir, { recursive: true, force: true }); });
 
 describe("fs tools", () => {

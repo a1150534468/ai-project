@@ -9,7 +9,7 @@ describe("导航折叠状态持久化", () => {
   it("显式存了 false 才展开", () => { saveNavCollapsed(false); expect(loadNavCollapsed()).toBe(false); });
   it("存了 true 就读到 true", () => { saveNavCollapsed(true); expect(loadNavCollapsed()).toBe(true); });
   it("localStorage 里是垃圾 → 回落缩进(true)", () => {
-    localStorage.setItem("yc:nav:collapsed", "maybe");
+    localStorage.setItem("ai-assistant:nav:collapsed", "maybe");
     expect(loadNavCollapsed()).toBe(true);
   });
 });

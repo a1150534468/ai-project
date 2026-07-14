@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
-import { createLlmClient, loadLlmConfig } from "@yc/llm";
-import { createBillingClient as makeBillingClient } from "@yc/billing";
+import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
+import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
 import {
   countLocalBusinessPromoSpeechChars,
   directionLabel,

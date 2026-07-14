@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import {
   clampImportance,
   type MemoryRecord,

@@ -16,7 +16,7 @@ class MockBillingHttpError extends Error {
   }
 }
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   BillingHttpError: MockBillingHttpError,
   createBillingClient: () => mockBilling,
 }));
@@ -30,7 +30,7 @@ vi.mock("./guard.js", () => ({
   },
 }));
 
-vi.mock("@yc/db", () => ({
+vi.mock("@ai-assistant/db", () => ({
   getPrisma: () => ({}),
 }));
 

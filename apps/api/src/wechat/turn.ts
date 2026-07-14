@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { runTurn as RunTurnFn } from "../agent/run.js";
 import type { ResolvedBinding } from "./binding.js";

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
-import { getPrisma, getRedis } from "@yc/db";
-import { createBillingClient, InsufficientBalanceError } from "@yc/billing";
+import { getPrisma, getRedis } from "@ai-assistant/db";
+import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { buildEcomPrompt, ECOM_PLATFORMS, ECOM_TEMPLATES, getEcomPlatform, getEcomTemplate } from "./ecom-prompts.js";
 import { ecomMasterResourceKey, ecomSegmentResourceKey, ecomSizeForResolution } from "./ecom-resolution.js";
 import { authUserId, buildSegmentRecord, ECOM_RESOURCE_KEYS, findCurrentWorkflow, findWorkflowOrReply, imageDataUrl, listRecentWorkflows, loadOwnedReferenceImages, loadReferenceImage, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "./ecom-route-helpers.js";

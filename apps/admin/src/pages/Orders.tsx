@@ -112,7 +112,7 @@ export function OrdersPage() {
               value={filters.tradeNo}
               onChange={(e) => updateFilter("tradeNo", e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && search()}
-              placeholder="yc..."
+              placeholder="ai..."
             />
           </Field>
           <Field label="状态">

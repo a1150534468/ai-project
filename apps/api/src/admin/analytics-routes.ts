@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getPrisma, getRedis } from "@yc/db";
-import { createBillingClient } from "@yc/billing";
+import { getPrisma, getRedis } from "@ai-assistant/db";
+import { createBillingClient } from "@ai-assistant/billing";
 import { requireAdmin } from "./guard.js";
 import { writeAudit } from "./audit.js";
 import { runRollup } from "../analytics/rollup.js";

@@ -11,10 +11,10 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"yc-billing/internal/model"
-	"yc-billing/internal/resource"
-	"yc-billing/internal/store"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/resource"
+	"ai-assistant-billing/internal/store"
+	"ai-assistant-billing/internal/vip"
 )
 
 func openTask5APISQLiteStore(t *testing.T) *store.Store {

@@ -7,10 +7,10 @@ import (
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/pgtest"
-	"yc-billing/internal/store"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/pgtest"
+	"ai-assistant-billing/internal/store"
 )
 
 // newStore 打开测试数据库，清理表。如果数据库不可用，跳过测试。

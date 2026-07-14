@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import type { PrismaClient } from "@prisma/client";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { callImageGeneration, loadImageGenerationConfig } from "./image-service.js";
 import { findComicVideoModel, listComicVideoModels } from "./comic-video-models.js";
 import { loadSeedanceConfig, pollSeedanceVideoTask, submitSeedanceVideoTask } from "./comic-video-service.js";

@@ -3,8 +3,8 @@ package resource
 import (
 	"testing"
 
-	"yc-billing/internal/model"
-	"yc-billing/internal/videopoint"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/videopoint"
 )
 
 // TestQuoteVideoIO 覆盖复合计价：cost = 输入秒 × 输入单价 + 输出秒 × 输出单价（ceil）。

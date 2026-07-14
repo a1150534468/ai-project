@@ -13,11 +13,11 @@ const mockPrisma = {
 
 const requireAdminCalls: string[] = [];
 
-vi.mock("@yc/billing", () => ({
+vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: () => mockBilling,
 }));
 
-vi.mock("@yc/db", () => ({
+vi.mock("@ai-assistant/db", () => ({
   getPrisma: () => mockPrisma,
 }));
 
@@ -67,7 +67,7 @@ describe("admin 订单管理路由", () => {
       ]);
     mockBilling.listAdminOrders.mockResolvedValue({
       data: [
-        { id: 1, tradeNo: "yc1", userId: "u1", amountFen: 100, points: 700, provider: "epay", paymentMethod: "alipay", status: "success", kind: "points", cardId: 0, createdAt: "2026-07-02T08:16:00Z", paidAt: "2026-07-02T08:16:10Z" },
+        { id: 1, tradeNo: "ai1", userId: "u1", amountFen: 100, points: 700, provider: "epay", paymentMethod: "alipay", status: "success", kind: "points", cardId: 0, createdAt: "2026-07-02T08:16:00Z", paidAt: "2026-07-02T08:16:10Z" },
       ],
       total: 1,
       summary: { total: 1, successCount: 1, pendingCount: 0, closedCount: 0, successAmountFen: 100, successPoints: 700, payingUsers: 1 },

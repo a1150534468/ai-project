@@ -1,5 +1,5 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { verifyAdminToken } from "../admin/token.js";
 import { getAdminById } from "../admin/service.js";
 

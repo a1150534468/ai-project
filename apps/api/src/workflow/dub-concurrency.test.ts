@@ -18,15 +18,15 @@ describe("dub-concurrency 信号量", () => {
     expect(await acquireSkySlot(r, 2)).toBe(true);
     expect(await acquireSkySlot(r, 2)).toBe(true);
     expect(await acquireSkySlot(r, 2)).toBe(false); // 第 3 个超限
-    expect(r.store.get("yunclaude:dub:sky:inflight")).toBe(2); // 回退后仍为 2
+    expect(r.store.get("ai-assistant:dub:sky:inflight")).toBe(2); // 回退后仍为 2
   });
 
   it("release 递减不为负", async () => {
     const r = fakeRedis();
     await acquireSkySlot(r, 2);
     await releaseSkySlot(r);
-    expect(r.store.get("yunclaude:dub:sky:inflight")).toBe(0);
+    expect(r.store.get("ai-assistant:dub:sky:inflight")).toBe(0);
     await releaseSkySlot(r); // 再减不为负
-    expect(r.store.get("yunclaude:dub:sky:inflight")).toBe(0);
+    expect(r.store.get("ai-assistant:dub:sky:inflight")).toBe(0);
   });
 });

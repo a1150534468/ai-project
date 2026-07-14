@@ -33,7 +33,7 @@ export function snapshotScript(): string {
         .slice(0, 80)
         .map((el) => {
           const ref = "b" + nextRef++;
-          el.setAttribute("data-yc-browser-ref", ref);
+          el.setAttribute("data-ai-assistant-browser-ref", ref);
           return {
             ref,
             tag: el.tagName.toLowerCase(),
@@ -60,7 +60,7 @@ export function clickScript(target: BrowserTarget): string {
       const byText = (text) => Array.from(document.querySelectorAll("a,button,[role=button],input,textarea,select,[onclick],[tabindex]"))
         .find((el) => ((el.innerText || el.textContent || el.getAttribute("aria-label") || el.getAttribute("placeholder") || "").trim()).includes(text));
       const el = target.ref
-        ? document.querySelector('[data-yc-browser-ref="' + target.ref + '"]')
+        ? document.querySelector('[data-ai-assistant-browser-ref="' + target.ref + '"]')
         : target.selector
           ? document.querySelector(target.selector)
           : target.text
@@ -81,7 +81,7 @@ export function typeScript(target: BrowserTypeTarget): string {
       const value = ${scriptString(target.value)};
       const submit = ${target.submit ? "true" : "false"};
       const el = target.ref
-        ? document.querySelector('[data-yc-browser-ref="' + target.ref + '"]')
+        ? document.querySelector('[data-ai-assistant-browser-ref="' + target.ref + '"]')
         : target.selector
           ? document.querySelector(target.selector)
           : null;

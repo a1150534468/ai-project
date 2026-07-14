@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"gorm.io/gorm"
-	"yc-billing/internal/bucket"
-	"yc-billing/internal/model"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/bucket"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/vip"
 )
 
 func (w *Wallet) Reserve(opID, userID, typ, modelName string, reserve int64) (int64, error) {

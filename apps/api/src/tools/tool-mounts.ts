@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { connectorToolSchema, type ConnectorTool } from "@yc/connector-protocol";
+import { connectorToolSchema, type ConnectorTool } from "@ai-assistant/connector-protocol";
 import { z } from "zod";
 
 export interface InstalledToolSummary {

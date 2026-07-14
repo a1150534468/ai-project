@@ -1,5 +1,5 @@
 import { DOMParser } from "@xmldom/xmldom";
-import type { ArticleWorkflowImageSlot } from "@yc/article-workflow";
+import type { ArticleWorkflowImageSlot } from "@ai-assistant/article-workflow";
 import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
 
 const ALLOWED_TAGS = new Set([
@@ -64,7 +64,7 @@ const ALLOWED_ATTRS = new Set([
   "xmlns",
   "colspan",
   "rowspan",
-  "data-yc-image-slot",
+  "data-ai-assistant-image-slot",
   "target",
   "rel",
 ]);
@@ -134,7 +134,7 @@ function walk(node: any, requiredSlots: Set<string>) {
     if (name === "style") validateStyle(attr.value);
   }
 
-  const slot = element.getAttribute("data-yc-image-slot")?.trim();
+  const slot = element.getAttribute("data-ai-assistant-image-slot")?.trim();
   if (slot) requiredSlots.delete(slot);
   Array.from(element.childNodes).forEach((child) => walk(child, requiredSlots));
 }

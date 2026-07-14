@@ -1,5 +1,5 @@
 import argon2 from "argon2";
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 
 export interface AdminSummary {
   id: string;

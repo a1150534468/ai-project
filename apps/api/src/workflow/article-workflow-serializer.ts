@@ -4,7 +4,7 @@ import type {
   ArticleWorkflowImageAsset,
   ArticleWorkflowProjectStatus,
   ArticleWorkflowSourceFormat,
-} from "@yc/article-workflow";
+} from "@ai-assistant/article-workflow";
 import { articleWorkflowImageManifestItemSchema } from "./article-workflow-schema.js";
 import type { ArticleProjectRow, ArticleWorkflowPersistedProject } from "./article-workflow-shared.js";
 

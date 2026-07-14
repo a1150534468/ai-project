@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
-import { getPrisma } from "@yc/db";
-import { createBillingClient, type UserAggRow } from "@yc/billing";
+import { getPrisma } from "@ai-assistant/db";
+import { createBillingClient, type UserAggRow } from "@ai-assistant/billing";
 import { requireReseller } from "./guard.js";
 import { getVisibilityConfig } from "./service.js";
 import { computeChannelSummary, buildUserRows } from "./stats.js";

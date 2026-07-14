@@ -9,7 +9,7 @@ import type {
   LocalBusinessPromoSubtitleStyle,
 } from "./local-business-promo-core.js";
 
-const OVERLAY_FONT_FAMILY = "YCBusinessPromo";
+const OVERLAY_FONT_FAMILY = "AIAssistantBusinessPromo";
 const OVERLAY_FONT_PATHS = [
   "/System/Library/Fonts/Hiragino Sans GB.ttc",
   "/System/Library/Fonts/STHeiti Medium.ttc",

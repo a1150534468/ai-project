@@ -3,11 +3,11 @@ import multipart from "@fastify/multipart";
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
 import FormData from "form-data";
 import sharp from "sharp";
-import { getPrisma } from "@yc/db";
+import { getPrisma } from "@ai-assistant/db";
 import { generateUniqueUid } from "../auth/uid.js";
 import { agentRoutes } from "./routes.js";
 
-vi.mock("@yc/llm", () => ({
+vi.mock("@ai-assistant/llm", () => ({
   loadLlmConfig: () => ({ baseURL: "http://llm", apiKey: "key", defaultModel: "GLM-5.2" }),
   createLlmClient: () => ({
     messages: {

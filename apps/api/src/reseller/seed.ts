@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@yc/db";
+import type { PrismaClient } from "@ai-assistant/db";
 
 const PLATFORM_CODE = process.env.PLATFORM_CHANNEL_CODE ?? "GF";
 

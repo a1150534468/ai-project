@@ -98,13 +98,13 @@ describe("AgentRail", () => {
   });
 
   it("localStorage 有 selectedAgentId → 直接进对话列表态", () => {
-    localStorage.setItem("yc:agent:selected", "c1");
+    localStorage.setItem("ai-assistant:agent:selected", "c1");
     render(<AgentRail {...props} />);
     expect(screen.getByText("合同审查")).toBeTruthy();
   });
 
   it("localStorage 里的 Agent 已不存在 → 回落到 Agent 列表态", () => {
-    localStorage.setItem("yc:agent:selected", "已删掉");
+    localStorage.setItem("ai-assistant:agent:selected", "已删掉");
     render(<AgentRail {...props} />);
     expect(screen.getByPlaceholderText("搜索 Agent")).toBeTruthy();
   });

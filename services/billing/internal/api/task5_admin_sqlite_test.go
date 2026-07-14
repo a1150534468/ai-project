@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"yc-billing/internal/model"
-	"yc-billing/internal/vip"
+	"ai-assistant-billing/internal/model"
+	"ai-assistant-billing/internal/vip"
 )
 
 func TestAdminDeleteVipLevelReturnsConflictWhenOccupied(t *testing.T) {
