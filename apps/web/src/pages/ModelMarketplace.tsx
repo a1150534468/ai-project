@@ -132,17 +132,47 @@ function VipSummaryBadge({ vip }: { vip: VipSummary | null }) {
 }
 
 export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
+  const tags = model.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
+  const openAIOnly = tags.includes("openai-only");
+  const tagLabels: Record<string, string> = {
+    "free-quota": "免费额度",
+    chat: "对话",
+    coding: "编程",
+    reasoning: "推理",
+    vision: "视觉",
+    "tool-use": "工具调用",
+    preview: "预览版",
+    versioned: "固定版本",
+    ocr: "OCR",
+    document: "文档",
+  };
+  const visibleTags = tags
+    .filter((tag) => tagLabels[tag])
+    .sort((a, b) => Number(b === "free-quota") - Number(a === "free-quota"))
+    .slice(0, 5);
   return (
     <article className="rounded-2xl border border-gray-100 bg-white p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-[#1d1d1f]">{model.displayName || "未命名模型"}</h3>
         </div>
-        <span className="inline-flex flex-none items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-          <Icon icon="mdi:check-circle-outline" className="text-sm" aria-hidden />
-          可用
+        <span className={`inline-flex flex-none items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+          openAIOnly ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+        }`}>
+          <Icon icon={openAIOnly ? "mdi:api" : "mdi:check-circle-outline"} className="text-sm" aria-hidden />
+          {openAIOnly ? "仅 OpenAI 接口" : "对话可用"}
         </span>
       </div>
+
+      {visibleTags.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {visibleTags.map((tag) => (
+            <span key={tag} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+              {tagLabels[tag]}
+            </span>
+          ))}
+        </div>
+      )}
 
       <p className="mt-4 min-h-10 text-sm leading-5 text-gray-600">
         {model.description || "该模型暂未配置介绍"}

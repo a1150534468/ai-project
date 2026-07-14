@@ -10,20 +10,6 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-// 默认模型 seed（仅在缺失时插入；倍率为占位，运营上线收费前经 admin 调整）。
-const defaultModel = "GLM-5.2"
-const defaultDisplay = "GLM 5.2"
-const defaultModelRatio = 0.002
-const defaultCompletionRatio = 1
-
-// 百炼对话助手默认模型。价格取中国内地标准原价（阶梯的 <=256k 档），
-// 促销折扣不写入长期计费规则，避免活动结束后倒挂。
-const bailianChatModel = "qwen3.7-plus"
-const bailianChatDisplay = "Qwen3.7 Plus"
-const bailianChatInputRMBPerMillion = 2.0
-const bailianChatOutputRMBPerMillion = 8.0
-const bailianChatCacheInputRMBPerMillion = 0.4
-
 const embeddingModel = "text-embedding-v4"
 const embeddingDisplay = "百炼 Text Embedding V4"
 const embeddingModelRatio = 0.00002 // embedding 模型按单位 token 定价，典型比例较小
@@ -143,46 +129,44 @@ func normalizePriceRule(r *model.PriceRule, ratio int64) bool {
 	return backfilledRMB
 }
 
-// SeedDefault 幂等：仅当模型不存在时插入，绝不覆盖运营已设值。
+// SeedDefault 幂等：缺失模型才插入；旧种子行仅回填空白的广场元数据，
+// 绝不覆盖运营已经调整的价格、展示名或广场配置。
 func (s *Service) SeedDefault() error {
 	ratio := resource.New(s.st).RechargeRatio()
-	bailianPricingRMB := RMBPricing{
-		InputPriceRMBPerMillion:       bailianChatInputRMBPerMillion,
-		OutputPriceRMBPerMillion:      bailianChatOutputRMBPerMillion,
-		CacheInputPriceRMBPerMillion:  bailianChatCacheInputRMBPerMillion,
-		CacheOutputPriceRMBPerMillion: bailianChatOutputRMBPerMillion,
+	models := make([]model.PriceRule, 0, len(bailianFreeModelSpecs)+1)
+	for _, spec := range bailianFreeModelSpecs {
+		pricing := PricingFromRMB(spec.Pricing, ratio)
+		modelRatio, completionRatio := legacyRatios(pricing)
+		capabilityTags := spec.CapabilityTags + ",anthropic"
+		if spec.OpenAIOnly {
+			capabilityTags = spec.CapabilityTags + ",openai-only"
+		}
+		models = append(models, model.PriceRule{
+			Model: spec.Model, DisplayName: spec.DisplayName,
+			ModelRatio: modelRatio, CompletionRatio: completionRatio,
+			InputPricePerMillion: pricing.InputPricePerMillion, OutputPricePerMillion: pricing.OutputPricePerMillion,
+			CacheInputPricePerMillion: pricing.CacheInputPricePerMillion, CacheOutputPricePerMillion: pricing.CacheOutputPricePerMillion,
+			InputPriceRMBPerMillion: spec.Pricing.InputPriceRMBPerMillion, OutputPriceRMBPerMillion: spec.Pricing.OutputPriceRMBPerMillion,
+			CacheInputPriceRMBPerMillion: spec.Pricing.CacheInputPriceRMBPerMillion, CacheOutputPriceRMBPerMillion: spec.Pricing.CacheOutputPriceRMBPerMillion,
+			Description: spec.Description, CapabilityTags: capabilityTags,
+			ContextWindow: spec.ContextWindow, MaxOutputTokens: spec.MaxOutputTokens,
+			UseCases: spec.UseCases, MarketplaceSortOrder: spec.SortOrder,
+			ShowInMarketplace: true, Enabled: true,
+		})
 	}
-	bailianPricing := PricingFromRMB(bailianPricingRMB, ratio)
-	bailianModelRatio, bailianCompletionRatio := legacyRatios(bailianPricing)
-	models := []model.PriceRule{
-		{
-			Model: bailianChatModel, DisplayName: bailianChatDisplay,
-			ModelRatio: bailianModelRatio, CompletionRatio: bailianCompletionRatio,
-			InputPricePerMillion: bailianPricing.InputPricePerMillion, OutputPricePerMillion: bailianPricing.OutputPricePerMillion,
-			CacheInputPricePerMillion: bailianPricing.CacheInputPricePerMillion, CacheOutputPricePerMillion: bailianPricing.CacheOutputPricePerMillion,
-			InputPriceRMBPerMillion: bailianPricingRMB.InputPriceRMBPerMillion, OutputPriceRMBPerMillion: bailianPricingRMB.OutputPriceRMBPerMillion,
-			CacheInputPriceRMBPerMillion: bailianPricingRMB.CacheInputPriceRMBPerMillion, CacheOutputPriceRMBPerMillion: bailianPricingRMB.CacheOutputPriceRMBPerMillion,
-			Enabled: true,
-		},
-		{
-			Model: defaultModel, DisplayName: defaultDisplay,
-			ModelRatio: defaultModelRatio, CompletionRatio: defaultCompletionRatio,
-			InputPricePerMillion: defaultModelRatio * 1_000_000, OutputPricePerMillion: defaultModelRatio * defaultCompletionRatio * 1_000_000,
-			Enabled: true,
-		},
-		{
-			Model: embeddingModel, DisplayName: embeddingDisplay,
-			ModelRatio: embeddingModelRatio, CompletionRatio: embeddingCompletionRatio,
-			InputPricePerMillion: embeddingModelRatio * 1_000_000, OutputPricePerMillion: 0,
-			Enabled: true,
-		},
-	}
+	models = append(models, model.PriceRule{
+		Model: embeddingModel, DisplayName: embeddingDisplay,
+		ModelRatio: embeddingModelRatio, CompletionRatio: embeddingCompletionRatio,
+		InputPricePerMillion: embeddingModelRatio * 1_000_000, OutputPricePerMillion: 0,
+		Enabled: true,
+	})
 	for _, m := range models {
-		var n int64
-		if err := s.st.DB.Model(&model.PriceRule{}).Where("model = ?", m.Model).Count(&n).Error; err != nil {
+		var existing model.PriceRule
+		err := s.st.DB.First(&existing, "model = ?", m.Model).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		if n == 0 {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			if err := s.st.DB.Model(&model.PriceRule{}).Create(map[string]any{
 				"model": m.Model, "display_name": m.DisplayName,
 				"model_ratio": m.ModelRatio, "completion_ratio": m.CompletionRatio,
@@ -190,8 +174,31 @@ func (s *Service) SeedDefault() error {
 				"cache_input_price_per_million": m.CacheInputPricePerMillion, "cache_output_price_per_million": m.CacheOutputPricePerMillion,
 				"input_price_rmb_per_million": m.InputPriceRMBPerMillion, "output_price_rmb_per_million": m.OutputPriceRMBPerMillion,
 				"cache_input_price_rmb_per_million": m.CacheInputPriceRMBPerMillion, "cache_output_price_rmb_per_million": m.CacheOutputPriceRMBPerMillion,
-				"enabled": m.Enabled,
+				"description": m.Description, "capability_tags": m.CapabilityTags,
+				"context_window": m.ContextWindow, "max_output_tokens": m.MaxOutputTokens,
+				"use_cases": m.UseCases, "marketplace_sort_order": m.MarketplaceSortOrder,
+				"show_in_marketplace": m.ShowInMarketplace,
+				"enabled":             m.Enabled,
 			}).Error; err != nil {
+				return err
+			}
+			continue
+		}
+		// One-time backfill for rows created by the old seed. Once an operator has
+		// configured any marketplace metadata, subsequent starts leave it alone.
+		if m.ShowInMarketplace && !existing.ShowInMarketplace && existing.Description == "" &&
+			existing.CapabilityTags == "" && existing.ContextWindow == 0 && existing.MaxOutputTokens == 0 &&
+			existing.UseCases == "" && existing.MarketplaceSortOrder == 0 {
+			updates := map[string]any{
+				"description": m.Description, "capability_tags": m.CapabilityTags,
+				"context_window": m.ContextWindow, "max_output_tokens": m.MaxOutputTokens,
+				"use_cases": m.UseCases, "marketplace_sort_order": m.MarketplaceSortOrder,
+				"show_in_marketplace": true,
+			}
+			if existing.DisplayName == "" {
+				updates["display_name"] = m.DisplayName
+			}
+			if err := s.st.DB.Model(&model.PriceRule{}).Where("model = ?", m.Model).Updates(updates).Error; err != nil {
 				return err
 			}
 		}
@@ -219,9 +226,9 @@ func (s *Service) ListAll() ([]model.PriceRule, error) {
 func (s *Service) ListEnabled() ([]model.PriceRule, error) {
 	var rows []model.PriceRule
 	err := s.st.DB.Where(
-		"enabled = ? AND (completion_ratio > 0 OR output_price_per_million > 0 OR cache_output_price_per_million > 0)",
-		true,
-	).Order("model asc").Find(&rows).Error
+		"enabled = ? AND show_in_marketplace = ? AND capability_tags NOT LIKE ? AND (completion_ratio > 0 OR output_price_per_million > 0 OR cache_output_price_per_million > 0)",
+		true, true, "%openai-only%",
+	).Order("marketplace_sort_order asc, model asc").Find(&rows).Error
 	if err != nil {
 		return rows, err
 	}

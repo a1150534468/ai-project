@@ -31,12 +31,12 @@ func TestSeedDefaultIdempotent(t *testing.T) {
 		t.Fatalf("seed1: %v", err)
 	}
 	// 运营改了倍率
-	st.DB.Model(&model.PriceRule{}).Where("model = ?", "GLM-5.2").Update("model_ratio", 9.9)
+	st.DB.Model(&model.PriceRule{}).Where("model = ?", "qwen3.7-plus").Update("model_ratio", 9.9)
 	if err := s.SeedDefault(); err != nil { // 二次 seed 不得覆盖
 		t.Fatalf("seed2: %v", err)
 	}
 	var pr model.PriceRule
-	st.DB.First(&pr, "model = ?", "GLM-5.2")
+	st.DB.First(&pr, "model = ?", "qwen3.7-plus")
 	if pr.ModelRatio != 9.9 {
 		t.Fatalf("seed must not overwrite operator value, got %v", pr.ModelRatio)
 	}
@@ -48,20 +48,15 @@ func TestSeedDefaultPopulatesPerMillionPrices(t *testing.T) {
 	if err := s.SeedDefault(); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	var pr model.PriceRule
-	if err := st.DB.First(&pr, "model = ?", "GLM-5.2").Error; err != nil {
-		t.Fatalf("find: %v", err)
-	}
-	if pr.InputPricePerMillion != 2000 || pr.OutputPricePerMillion != 2000 {
-		t.Fatalf("seed must expose per-million prices, got %+v", pr)
-	}
-
 	var bailian model.PriceRule
 	if err := st.DB.First(&bailian, "model = ?", "qwen3.7-plus").Error; err != nil {
 		t.Fatalf("find bailian model: %v", err)
 	}
 	if bailian.InputPriceRMBPerMillion != 2 || bailian.OutputPriceRMBPerMillion != 8 || bailian.CacheInputPriceRMBPerMillion != 0.4 {
 		t.Fatalf("bailian seed must preserve official RMB list prices, got %+v", bailian)
+	}
+	if !bailian.ShowInMarketplace || bailian.MarketplaceSortOrder != 10 || bailian.Description == "" {
+		t.Fatalf("bailian seed must expose marketplace metadata, got %+v", bailian)
 	}
 }
 
@@ -81,11 +76,17 @@ func TestSeedDefaultExposesOnlyChatModels(t *testing.T) {
 	for _, e := range enabled {
 		seen[e.Model] = true
 	}
-	if !seen["GLM-5.2"] {
-		t.Fatal("default chat model must be enabled")
-	}
 	if !seen["qwen3.7-plus"] {
 		t.Fatal("bailian default chat model must be enabled")
+	}
+	if len(seen) != 17 {
+		t.Fatalf("chat model list must contain the 17 Anthropic-compatible free models, got %d: %+v", len(seen), seen)
+	}
+	if seen["GLM-5.2"] {
+		t.Fatal("legacy uppercase alias must not appear in the chat model list")
+	}
+	if seen["qwen3.7-max-preview"] || seen["qwen3.7-max-2026-05-17"] {
+		t.Fatal("OpenAI-only preview models must not appear in the Anthropic chat model list")
 	}
 	if seen["text-embedding-v4"] {
 		t.Fatal("embedding model must not appear in chat model list")
@@ -97,6 +98,46 @@ func TestSeedDefaultExposesOnlyChatModels(t *testing.T) {
 	}
 	if !embedding.Enabled || embedding.CompletionRatio != 0 {
 		t.Fatalf("embedding price rule must stay enabled for kb pricing with zero completion ratio, got %+v", embedding)
+	}
+}
+
+func TestSeedDefaultBackfillsOldBailianMarketplaceMetadataOnce(t *testing.T) {
+	st := newStore(t)
+	s := New(st)
+	if err := s.UpsertRMB("qwen3.7-plus", "Operator Name", RMBPricing{
+		InputPriceRMBPerMillion: 3, OutputPriceRMBPerMillion: 9,
+	}, true); err != nil {
+		t.Fatalf("old seed: %v", err)
+	}
+	if err := s.SeedDefault(); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+
+	var row model.PriceRule
+	if err := st.DB.First(&row, "model = ?", "qwen3.7-plus").Error; err != nil {
+		t.Fatalf("find: %v", err)
+	}
+	if !row.ShowInMarketplace || row.Description == "" || row.MarketplaceSortOrder != 10 {
+		t.Fatalf("old seed metadata was not backfilled: %+v", row)
+	}
+	if row.DisplayName != "Operator Name" || row.InputPriceRMBPerMillion != 3 || row.OutputPriceRMBPerMillion != 9 {
+		t.Fatalf("metadata backfill must preserve operator display and pricing: %+v", row)
+	}
+
+	if err := s.UpdateMarketplace("qwen3.7-plus", MarketplaceMeta{
+		Description: "Operator description", CapabilityTags: "chat", UseCases: "Operator use case",
+		MarketplaceSortOrder: 99, ShowInMarketplace: false,
+	}); err != nil {
+		t.Fatalf("operator metadata: %v", err)
+	}
+	if err := s.SeedDefault(); err != nil {
+		t.Fatalf("seed2: %v", err)
+	}
+	if err := st.DB.First(&row, "model = ?", "qwen3.7-plus").Error; err != nil {
+		t.Fatalf("find2: %v", err)
+	}
+	if row.ShowInMarketplace || row.Description != "Operator description" || row.MarketplaceSortOrder != 99 {
+		t.Fatalf("second seed must preserve operator marketplace metadata: %+v", row)
 	}
 }
 

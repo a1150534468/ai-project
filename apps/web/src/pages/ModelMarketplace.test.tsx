@@ -37,4 +37,23 @@ describe("ModelCard", () => {
     expect(html).toContain("Claude/opus 4.8");
     expect(html).not.toContain("claude-opus-4-8");
   });
+
+  it("labels free quota and OpenAI-only models without presenting them as chat options", () => {
+    const html = renderToStaticMarkup(<ModelCard model={marketplaceModel({
+      tags: "reasoning,preview,free-quota,openai-only",
+    })} />);
+
+    expect(html).toContain("免费额度");
+    expect(html).toContain("预览版");
+    expect(html).toContain("仅 OpenAI 接口");
+    expect(html).not.toContain("对话可用");
+  });
+
+  it("keeps the free-quota label visible when a model has many capability tags", () => {
+    const html = renderToStaticMarkup(<ModelCard model={marketplaceModel({
+      tags: "chat,coding,reasoning,vision,tool-use,free-quota,anthropic",
+    })} />);
+
+    expect(html).toContain("免费额度");
+  });
 });

@@ -54,6 +54,7 @@ export function supportsVisionModel(model: string): boolean {
     "minimax-m3",
     "m3",
     "vision",
+    "ocr",
     "vl",
     "omni",
     "qwen3.7-plus",

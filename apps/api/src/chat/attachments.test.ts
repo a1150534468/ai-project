@@ -17,6 +17,10 @@ describe("chat attachments", () => {
       model: "qwen3.7-plus",
       fallbackReason: null,
     });
+    expect(resolveChatModel("qwen3.5-ocr", true)).toMatchObject({
+      model: "qwen3.5-ocr",
+      fallbackReason: null,
+    });
   });
 
   it("allows overriding the multimodal fallback for a deployed Bailian catalog", () => {
