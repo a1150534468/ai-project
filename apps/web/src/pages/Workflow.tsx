@@ -8,6 +8,7 @@ import {
   getImageWorkflowPricing,
   getWorkflowImageState,
   optimizeWorkflowPrompt,
+  uploadWorkflowImageReference,
   type ImageWorkflowPricing,
   type WorkflowImageAsset,
   type WorkflowImageTask,
@@ -20,6 +21,7 @@ import { ArticleWorkflowStudio } from "../components/workflow/ArticleWorkflowStu
 import { ScheduledTaskStudio } from "../components/workflow/ScheduledTaskStudio";
 import { EcomHistorySidebar } from "../components/workflow/EcomHistorySidebar";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
+import { readFileAsInlineImage } from "../components/workflow/ecomWorkflowStudioModel";
 import { LocalBusinessPromoWorkflowStudio } from "../components/workflow/LocalBusinessPromoWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
 import type { EcomMainJob } from "../workflowEcomMainApi";
@@ -30,6 +32,7 @@ import {
   buildImageSize,
   createImageTask,
   type ImageAspectRatio,
+  type ImageModel,
   type ImageResolution,
   parseImageCount,
   type ImageTask,
@@ -39,7 +42,11 @@ import {
 const DEFAULT_PROMPT = "陶瓷浅色餐盘，米白色桌布，绿色植物虚化背景，夏日野餐氛围，品牌感强，现代餐饮视觉设计。";
 const DEFAULT_ASPECT_RATIO: ImageAspectRatio = "1:1";
 const DEFAULT_RESOLUTION: ImageResolution = "1K";
+const DEFAULT_IMAGE_MODEL: ImageModel = "qwen-image-2.0-pro-2026-04-22";
 const TASK_POLL_MS = 3000;
+const IMAGE_MAX_REFERENCE_COUNT = 3;
+const IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
+const IMAGE_REFERENCE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff", "image/gif"]);
 
 interface WorkflowProps {
   readonly token: string;
@@ -92,12 +99,15 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>(DEFAULT_ASPECT_RATIO);
   const [resolution, setResolution] = useState<ImageResolution>(DEFAULT_RESOLUTION);
+  const [imageModel, setImageModel] = useState<ImageModel>(DEFAULT_IMAGE_MODEL);
   const [countInput, setCountInput] = useState("1");
   const [selectedQuickCount, setSelectedQuickCount] = useState(1);
   const [tasks, setTasks] = useState<readonly ImageTask[]>([]);
   const [images, setImages] = useState<readonly WorkflowImageAsset[]>([]);
   const [previewRequestId, setPreviewRequestId] = useState<string | null>(null);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
+  const [referenceImages, setReferenceImages] = useState<readonly WorkflowImageAsset[]>([]);
+  const [isUploadingReference, setIsUploadingReference] = useState(false);
   const [cancellingTaskIds, setCancellingTaskIds] = useState<readonly string[]>([]);
   const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState | null>(null);
   const [imagePricing, setImagePricing] = useState<ImageWorkflowPricing | null>(null);
@@ -188,6 +198,11 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
       return;
     }
 
+    if (imageModel === "gpt-image-2" && referenceImages.length > 0) {
+      setError("GPT Image 2 当前只支持文生图；使用参考图请切换到 Qwen Image 2.0 Pro");
+      return;
+    }
+
     const parsedCount = parseImageCount(countInput);
     if (!parsedCount.ok) {
       setError(parsedCount.error);
@@ -212,9 +227,11 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
       try {
         const result = await generateWorkflowImages(token, {
           requestId,
+          model: imageModel,
           prompt: trimmedPrompt,
           size,
           resolution,
+          referenceAssetIds: referenceImages.map((image) => image.id),
           count: parsedCount.value,
         });
         setImages(result.recent);
@@ -228,6 +245,49 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
         setTasks((prev) => prev.map((item) => (item.id === requestId ? advanceImageTaskStatus(item, "failed") : item)));
       }
     })();
+  };
+
+  const handleReferenceUpload = (file: File) => {
+    if (imageModel === "gpt-image-2") {
+      setError("GPT Image 2 当前只支持文生图；上传参考图请切换到 Qwen Image 2.0 Pro");
+      return;
+    }
+    if (isUploadingReference || referenceImages.length >= IMAGE_MAX_REFERENCE_COUNT) return;
+    const mime = file.type.toLowerCase();
+    if (!IMAGE_REFERENCE_MIME_TYPES.has(mime)) {
+      setError("参考图仅支持 JPG、PNG、WEBP、BMP、TIFF 或 GIF");
+      return;
+    }
+    if (file.size <= 0 || file.size > IMAGE_REFERENCE_MAX_BYTES) {
+      setError("参考图大小需在 10MB 以内");
+      return;
+    }
+    setError("");
+    setNotice("");
+    setIsUploadingReference(true);
+    void (async () => {
+      try {
+        const inlineImage = await readFileAsInlineImage(file);
+        const asset = await uploadWorkflowImageReference(token, inlineImage);
+        setReferenceImages((current) => current.some((item) => item.id === asset.id)
+          ? current
+          : [...current, asset].slice(0, IMAGE_MAX_REFERENCE_COUNT));
+        setNotice("参考图已上传，生成时将作为画面参考");
+        toast.show("ok", "参考图已上传");
+      } catch (uploadError) {
+        const message = errorMessage(uploadError, "上传参考图失败");
+        setError(message);
+        toast.show("err", message);
+      } finally {
+        setIsUploadingReference(false);
+      }
+    })();
+  };
+
+  const handleRemoveReference = (assetId: string) => {
+    setReferenceImages((current) => current.filter((image) => image.id !== assetId));
+    setError("");
+    setNotice("");
   };
 
   // 点击任务卡片：切到该任务的预览
@@ -336,6 +396,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
           {activeModuleId === "image" ? (
           <ImageWorkflowStudio
             prompt={prompt}
+            model={imageModel}
             size={size}
             aspectRatio={aspectRatio}
             resolution={resolution}
@@ -352,9 +413,18 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
             cancellingTaskIds={cancellingTaskIds}
             isOptimizingPrompt={isOptimizingPrompt}
             estimatedPointCost={estimatedImagePointCost}
+            referenceImages={referenceImages}
+            isUploadingReference={isUploadingReference}
             onPromptChange={(value) => {
               setPrompt(value);
               setError("");
+            }}
+            onModelChange={(value) => {
+              setImageModel(value);
+              setError("");
+              setNotice(value === "gpt-image-2" && referenceImages.length > 0
+                ? "已保留参考图，但 GPT Image 2 暂不支持参考图；提交前请切回 Qwen Image"
+                : "");
             }}
             onAspectRatioChange={setAspectRatio}
             onResolutionChange={setResolution}
@@ -367,6 +437,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
             onOptimizePrompt={handleOptimizePrompt}
             onDownloadOne={openSingleDownload}
             onDownloadAll={openAllDownloads}
+            onReferenceUpload={handleReferenceUpload}
+            onRemoveReference={handleRemoveReference}
           />
         ) : activeModuleId === "novel" ? (
           <NovelWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />

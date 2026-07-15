@@ -336,19 +336,20 @@ model ImageAsset {
 }
 
 model ImageGenerationTask {
-  id             String   @id @default(cuid())
-  userId         String
-  requestId      String   @unique
-  prompt         String
-  model          String
-  size           String
-  count          Int
-  status         String   @default("running")
-  completedCount Int      @default(0)
-  error          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id @default(cuid())
+  userId            String
+  requestId         String   @unique
+  prompt            String
+  model             String
+  size              String
+  referenceAssetIds String[] @default([])
+  count             Int
+  status            String   @default("running")
+  completedCount    Int      @default(0)
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([status, updatedAt])

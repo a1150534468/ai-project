@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import { enqueueNovelEngineStep, enqueueNovelGenerationTask } from "./queue.js";
 
 const OUTBOX_BATCH_SIZE = 50;
+export const NOVEL_INTERRUPTED_WORK_MS = 90_000;
 
 export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new Date()): Promise<number> {
   const rows = await prisma.novelCommandOutbox.findMany({
@@ -40,7 +41,7 @@ export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new D
   return sent;
 }
 
-export async function recoverInterruptedNovelSteps(prisma: PrismaClient, staleBefore = new Date(Date.now() - 5 * 60_000)): Promise<number> {
+export async function recoverInterruptedNovelSteps(prisma: PrismaClient, staleBefore = new Date(Date.now() - NOVEL_INTERRUPTED_WORK_MS)): Promise<number> {
   const stale = await prisma.novelRunStep.findMany({
     where: { status: "running", updatedAt: { lt: staleBefore } },
     select: { id: true, runId: true, priority: true },
@@ -70,7 +71,7 @@ export async function recoverInterruptedNovelSteps(prisma: PrismaClient, staleBe
 export async function recoverInterruptedNovelTasks(
   prisma: PrismaClient,
   queuedBefore = new Date(Date.now() - 60_000),
-  runningBefore = new Date(Date.now() - 5 * 60_000),
+  runningBefore = new Date(Date.now() - NOVEL_INTERRUPTED_WORK_MS),
 ): Promise<number> {
   const tasks = await prisma.novelTask.findMany({
     where: {

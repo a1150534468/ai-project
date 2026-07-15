@@ -99,6 +99,7 @@ export interface NovelRunSnapshot {
   readonly currentChapter: number | null;
   readonly targetChapters: number;
   readonly targetCharsPerChapter: number;
+  readonly autoReview: boolean;
   readonly completedChapters: number;
   readonly consecutiveFailures: number;
   readonly pauseRequested: boolean;

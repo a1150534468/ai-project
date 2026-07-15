@@ -2,13 +2,23 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js";
-import { upstreamImageOptions } from "./image-upstream-options.js";
 
-const DEFAULT_IMAGE_MODEL = "gpt-image-2";
+export const QWEN_IMAGE_MODEL = "qwen-image-2.0-pro-2026-04-22";
+export const GPT_IMAGE_MODEL = "gpt-image-2";
+export const IMAGE_GENERATION_MODELS = [QWEN_IMAGE_MODEL, GPT_IMAGE_MODEL] as const;
+const DEFAULT_IMAGE_MODEL = QWEN_IMAGE_MODEL;
+const DEFAULT_GPT_IMAGE_GENERATION_ENDPOINT = "https://api.ai-pixel.online/v1/images/generations";
+const DEFAULT_BAILIAN_REGION = "cn-beijing";
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const DEFAULT_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
-const IMAGE_GENERATIONS_PATH = "/images/generations";
-const IMAGE_EDITS_PATH = "/images/edits";
+const BAILIAN_IMAGE_GENERATION_PATH = "/api/v1/services/aigc/multimodal-generation/generation";
+const QWEN_IMAGE_MIN_PIXELS = 512 * 512;
+const QWEN_IMAGE_MAX_PIXELS = 2048 * 2048;
+const QWEN_IMAGE_MAX_INPUT_BYTES = 10 * 1024 * 1024;
+const GPT_IMAGE_MIN_PIXELS = 655_360;
+const GPT_IMAGE_MAX_PIXELS = 8_294_400;
+const GPT_IMAGE_MAX_EDGE = 3_840;
+const GPT_IMAGE_MAX_ASPECT_RATIO = 3;
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -16,7 +26,10 @@ export interface ImageGenerationConfig {
   readonly endpoint: string;
   readonly apiKey: string;
   readonly model: string;
+  readonly protocol: "bailian" | "openai";
 }
+
+export type ImageGenerationModel = typeof IMAGE_GENERATION_MODELS[number];
 
 export type GeneratedImage = { readonly kind: "url"; readonly url: string } | { readonly kind: "b64"; readonly b64: string; readonly mime: string };
 
@@ -70,31 +83,32 @@ function trimTrailingSlash(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
-function endpointFromBase(baseURL: string, path: string): string {
+function endpointFromBase(baseURL: string): string {
   const base = trimTrailingSlash(baseURL);
-  return base.endsWith("/v1") ? `${base}${path}` : `${base}/v1${path}`;
+  if (base.endsWith(BAILIAN_IMAGE_GENERATION_PATH)) return base;
+  if (base.endsWith("/api/v1")) return `${base}${BAILIAN_IMAGE_GENERATION_PATH.slice("/api/v1".length)}`;
+  return `${base}${BAILIAN_IMAGE_GENERATION_PATH}`;
 }
 
 function baseURLFromEnv(env: NodeJS.ProcessEnv): string {
-  return (env.IMAGE_BASE_URL ?? env.LLM_BASE_URL ?? "").trim();
+  return (env.IMAGE_BASE_URL ?? "").trim();
 }
 
-function deriveEditEndpoint(generationEndpoint: string): string | null {
-  if (generationEndpoint.endsWith(IMAGE_GENERATIONS_PATH)) return `${generationEndpoint.slice(0, -IMAGE_GENERATIONS_PATH.length)}${IMAGE_EDITS_PATH}`;
-  if (/\/generations\/?$/.test(generationEndpoint)) return generationEndpoint.replace(/\/generations\/?$/, "/edits");
-  return null;
+function workspaceImageEndpoint(env: NodeJS.ProcessEnv): string | null {
+  const workspaceId = env.BAILIAN_WORKSPACE_ID?.trim();
+  if (!workspaceId) return null;
+  const region = env.BAILIAN_REGION?.trim() || DEFAULT_BAILIAN_REGION;
+  return `https://${workspaceId}.${region}.maas.aliyuncs.com${BAILIAN_IMAGE_GENERATION_PATH}`;
 }
 
 function generationEndpointFromEnv(env: NodeJS.ProcessEnv): string {
   const explicit = env.IMAGE_GENERATION_ENDPOINT?.trim();
   if (explicit) return explicit;
   const baseURL = baseURLFromEnv(env);
-  if (!baseURL) throw new Error("IMAGE_BASE_URL/LLM_BASE_URL required");
-  return endpointFromBase(baseURL, IMAGE_GENERATIONS_PATH);
-}
-
-function hasImageEditEndpointInputs(env: NodeJS.ProcessEnv): boolean {
-  return Boolean(env.IMAGE_EDIT_ENDPOINT?.trim() || env.IMAGE_GENERATION_ENDPOINT?.trim() || baseURLFromEnv(env));
+  if (baseURL) return endpointFromBase(baseURL);
+  const workspaceEndpoint = workspaceImageEndpoint(env);
+  if (workspaceEndpoint) return workspaceEndpoint;
+  throw new Error("BAILIAN_WORKSPACE_ID or IMAGE_GENERATION_ENDPOINT/IMAGE_BASE_URL required for image generation");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -121,10 +135,60 @@ async function fetchWithTimeout(
   }
 }
 
-function appendBinaryImage(form: FormData, fieldName: string, image: ImageBinaryInput, fallbackName: string): void {
+function dataUrlForImageInput(image: ImageBinaryInput): string {
   const mime = image.mime?.trim().startsWith("image/") ? image.mime.trim() : "image/png";
-  const filename = image.filename?.trim() || fallbackName;
-form.append(fieldName, new Blob([Buffer.from(image.b64, "base64")], { type: mime }), filename);
+  const bytes = Buffer.from(image.b64, "base64");
+  if (bytes.byteLength > QWEN_IMAGE_MAX_INPUT_BYTES) throw new Error("Qwen image input must not exceed 10MB");
+  return `data:${mime};base64,${image.b64}`;
+}
+
+function qwenImageSize(size: string | undefined): string | undefined {
+  const normalized = size?.trim();
+  if (!normalized || normalized === "auto") return undefined;
+  const match = /^(\d+)[x*](\d+)$/i.exec(normalized);
+  if (!match) throw new Error(`Qwen image size must use widthxheight format: ${normalized}`);
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  const pixels = width * height;
+  if (!Number.isSafeInteger(pixels) || pixels < QWEN_IMAGE_MIN_PIXELS || pixels > QWEN_IMAGE_MAX_PIXELS) {
+    throw new Error(`Qwen image size must contain between 512*512 and 2048*2048 total pixels: ${normalized}`);
+  }
+  return `${width}*${height}`;
+}
+
+function qwenImageParameters(size: string | undefined): Record<string, unknown> {
+  const parameters: Record<string, unknown> = {
+    n: 1,
+    prompt_extend: true,
+    watermark: false,
+  };
+  const qwenSize = qwenImageSize(size);
+  if (qwenSize) parameters.size = qwenSize;
+  return parameters;
+}
+
+function gptImageSize(size: string | undefined): string | undefined {
+  const normalized = size?.trim();
+  if (!normalized || normalized === "auto") return normalized || undefined;
+  const match = /^(\d+)[x*](\d+)$/i.exec(normalized);
+  if (!match) throw new Error(`GPT image size must use widthxheight format: ${normalized}`);
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  const pixels = width * height;
+  const shortEdge = Math.min(width, height);
+  const longEdge = Math.max(width, height);
+  if (
+    !Number.isSafeInteger(pixels)
+    || width % 16 !== 0
+    || height % 16 !== 0
+    || longEdge > GPT_IMAGE_MAX_EDGE
+    || longEdge / shortEdge > GPT_IMAGE_MAX_ASPECT_RATIO
+    || pixels < GPT_IMAGE_MIN_PIXELS
+    || pixels > GPT_IMAGE_MAX_PIXELS
+  ) {
+    throw new Error(`GPT image size is outside gpt-image-2 resolution constraints: ${normalized}`);
+  }
+  return `${width}x${height}`;
 }
 
 function publicBaseFromEnv(env: NodeJS.ProcessEnv): string {
@@ -175,22 +239,41 @@ async function fetchRemoteImage(
 }
 
 export function loadImageGenerationConfig(env: NodeJS.ProcessEnv = process.env): ImageGenerationConfig {
-  const apiKey = (env.IMAGE_API_KEY ?? env.LLM_API_KEY ?? "").trim();
-  if (!apiKey) throw new Error("IMAGE_API_KEY/LLM_API_KEY required");
+  const model = (env.IMAGE_GENERATION_MODEL ?? DEFAULT_IMAGE_MODEL).trim() || DEFAULT_IMAGE_MODEL;
+  return loadImageGenerationConfigForModel(model, env);
+}
+
+export function loadImageGenerationConfigForModel(
+  model: string,
+  env: NodeJS.ProcessEnv = process.env,
+): ImageGenerationConfig {
+  if (model === GPT_IMAGE_MODEL) {
+    const apiKey = env.GPT_IMAGE_API_KEY?.trim() || "";
+    if (!apiKey) throw new Error("GPT_IMAGE_API_KEY required for gpt-image-2");
+    return {
+      endpoint: env.GPT_IMAGE_GENERATION_ENDPOINT?.trim() || DEFAULT_GPT_IMAGE_GENERATION_ENDPOINT,
+      apiKey,
+      model: GPT_IMAGE_MODEL,
+      protocol: "openai",
+    };
+  }
+  const apiKey = env.IMAGE_API_KEY?.trim()
+    || env.BAILIAN_API_KEY?.trim()
+    || env.DASHSCOPE_API_KEY?.trim()
+    || "";
+  if (!apiKey) throw new Error("IMAGE_API_KEY/BAILIAN_API_KEY/DASHSCOPE_API_KEY required");
   return {
     endpoint: generationEndpointFromEnv(env),
     apiKey,
-    model: (env.IMAGE_GENERATION_MODEL ?? DEFAULT_IMAGE_MODEL).trim() || DEFAULT_IMAGE_MODEL,
+    model,
+    protocol: "bailian",
   };
 }
 
 export function loadImageEditEndpoint(env: NodeJS.ProcessEnv = process.env): string {
   const explicit = env.IMAGE_EDIT_ENDPOINT?.trim();
   if (explicit) return explicit;
-  const generationEndpoint = generationEndpointFromEnv(env);
-  const derived = deriveEditEndpoint(generationEndpoint);
-  if (derived) return derived;
-  throw new Error("IMAGE_EDIT_ENDPOINT required when IMAGE_GENERATION_ENDPOINT is not a recognized images/generations endpoint");
+  return generationEndpointFromEnv(env);
 }
 
 export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -199,15 +282,32 @@ export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env):
 }
 
 export function extractGeneratedImage(payload: unknown): GeneratedImage {
-  if (!isRecord(payload) || !Array.isArray(payload.data) || payload.data.length === 0) throw new Error("image response missing data");
-  const first = payload.data[0];
-  if (!isRecord(first)) throw new Error("image response item invalid");
-  if (typeof first.url === "string" && first.url.length > 0) return { kind: "url", url: first.url };
-  if (typeof first.b64_json === "string" && first.b64_json.length > 0) {
-    const mime = typeof first.mime_type === "string" && first.mime_type.startsWith("image/") ? first.mime_type : "image/png";
-    return { kind: "b64", b64: first.b64_json, mime };
+  if (!isRecord(payload)) throw new Error("image response invalid");
+
+  // Keep accepting the former OpenAI-compatible response so custom relays do not
+  // break while deployments migrate to the native Bailian endpoint.
+  if (Array.isArray(payload.data) && payload.data.length > 0) {
+    const first = payload.data[0];
+    if (!isRecord(first)) throw new Error("image response item invalid");
+    if (typeof first.url === "string" && first.url.length > 0) return { kind: "url", url: first.url };
+    if (typeof first.b64_json === "string" && first.b64_json.length > 0) {
+      const mime = typeof first.mime_type === "string" && first.mime_type.startsWith("image/") ? first.mime_type : "image/png";
+      return { kind: "b64", b64: first.b64_json, mime };
+    }
   }
-  throw new Error("image response has no url or b64_json");
+
+  const output = payload.output;
+  if (isRecord(output) && Array.isArray(output.choices)) {
+    for (const choice of output.choices) {
+      if (!isRecord(choice) || !isRecord(choice.message) || !Array.isArray(choice.message.content)) continue;
+      for (const content of choice.message.content) {
+        if (isRecord(content) && typeof content.image === "string" && content.image.length > 0) {
+          return { kind: "url", url: content.image };
+        }
+      }
+    }
+  }
+  throw new Error("image response has no generated image URL");
 }
 
 export async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
@@ -226,10 +326,20 @@ export async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryO
 }
 
 export async function callImageGeneration(args: CallImageGenerationArgs): Promise<GeneratedImage> {
-  const body: Record<string, string | number> = { model: args.config.model, prompt: args.prompt, n: 1, response_format: "b64_json" };
-  const upstreamOptions = upstreamImageOptions(args.size);
-  if (upstreamOptions.size !== "auto") body.size = upstreamOptions.size;
-  if (upstreamOptions.resolution) body.resolution = upstreamOptions.resolution;
+  const body = args.config.protocol === "openai"
+    ? {
+        model: args.config.model,
+        prompt: args.prompt,
+        n: 1,
+        size: gptImageSize(args.size),
+      }
+    : {
+        model: args.config.model,
+        input: {
+          messages: [{ role: "user", content: [{ text: args.prompt }] }],
+        },
+        parameters: qwenImageParameters(args.size),
+      };
   const response = await fetchWithTimeout(args.fetchFn, args.config.endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
@@ -243,22 +353,27 @@ export async function callImageGeneration(args: CallImageGenerationArgs): Promis
 }
 
 export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedImage> {
-  const form = new FormData();
-  form.set("model", args.config.model);
-  form.set("prompt", args.prompt);
-  form.set("n", "1");
-  if (args.size) form.set("size", args.size);
-  args.referenceImages.forEach((image, index) => appendBinaryImage(form, "image[]", image, `reference-${index + 1}.png`));
-  if (args.mask) appendBinaryImage(form, "mask", args.mask, "mask.png");
-  const derivedEndpoint = deriveEditEndpoint(args.config.endpoint);
-  const endpoint = args.endpoint ?? derivedEndpoint ?? (args.env && hasImageEditEndpointInputs(args.env) ? loadImageEditEndpoint(args.env) : null);
-  if (!endpoint) {
-    throw new Error("image edit endpoint is not derivable from config.endpoint; pass endpoint or use IMAGE_EDIT_ENDPOINT");
+  if (args.config.protocol !== "bailian") {
+    throw new Error("gpt-image-2 reference editing is not configured; use Qwen Image for reference images");
   }
+  if (args.referenceImages.length < 1 || args.referenceImages.length > 3) {
+    throw new Error("Qwen image editing requires 1 to 3 reference images");
+  }
+  if (args.mask) throw new Error("Qwen image editing does not support a separate mask input");
+  const content = args.referenceImages.map((image) => ({ image: dataUrlForImageInput(image) }));
+  const body = {
+    model: args.config.model,
+    input: {
+      messages: [{ role: "user", content: [...content, { text: args.prompt }] }],
+    },
+    parameters: qwenImageParameters(args.size),
+  };
+  const configuredEditEndpoint = args.env?.IMAGE_EDIT_ENDPOINT?.trim();
+  const endpoint = args.endpoint ?? configuredEditEndpoint ?? args.config.endpoint;
   const response = await fetchWithTimeout(args.fetchFn, endpoint, {
     method: "POST",
-    headers: { authorization: `Bearer ${args.config.apiKey}` },
-    body: form,
+    headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+    body: JSON.stringify(body),
   }, loadImageAttemptTimeoutMs(args.env), args.signal);
   if (!response.ok) {
     const text = await response.text().catch(() => "");

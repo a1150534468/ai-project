@@ -7,6 +7,7 @@ import {
   extractGeneratedImage,
   loadImageEditEndpoint,
   loadImageGenerationConfig,
+  loadImageGenerationConfigForModel,
   retryUntilSuccess,
   storeWorkflowImage,
   type ImageGenerationConfig,
@@ -23,11 +24,12 @@ vi.mock("../storage/s3.js", async () => {
   };
 });
 
-function createConfig(endpoint = "https://image.test/v1/images/generations"): ImageGenerationConfig {
+function createConfig(endpoint = "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"): ImageGenerationConfig {
   return {
     endpoint,
     apiKey: "image-key",
-    model: "gpt-image-2",
+    model: "qwen-image-2.0-pro-2026-04-22",
+    protocol: "bailian",
   };
 }
 
@@ -36,6 +38,12 @@ describe("image service", () => {
     delete process.env.IMAGE_BASE_URL;
     delete process.env.IMAGE_GENERATION_ENDPOINT;
     delete process.env.IMAGE_API_KEY;
+    delete process.env.GPT_IMAGE_API_KEY;
+    delete process.env.GPT_IMAGE_GENERATION_ENDPOINT;
+    delete process.env.BAILIAN_WORKSPACE_ID;
+    delete process.env.BAILIAN_REGION;
+    delete process.env.BAILIAN_API_KEY;
+    delete process.env.DASHSCOPE_API_KEY;
     delete process.env.LLM_BASE_URL;
     delete process.env.LLM_API_KEY;
     delete process.env.S3_ENDPOINT;
@@ -44,39 +52,97 @@ describe("image service", () => {
     delete process.env.S3_SECRET_KEY;
   });
 
-  it("loads image generation config from image or llm env values", () => {
+  it("loads the native Bailian image endpoint and credentials", () => {
     expect(loadImageGenerationConfig({
-      IMAGE_BASE_URL: "https://image.test",
-      IMAGE_API_KEY: "image-key",
+      BAILIAN_WORKSPACE_ID: "ws-123",
+      BAILIAN_REGION: "cn-beijing",
+      BAILIAN_API_KEY: "bailian-key",
+      IMAGE_API_KEY: "",
     })).toEqual({
-      endpoint: "https://image.test/v1/images/generations",
-      apiKey: "image-key",
-      model: "gpt-image-2",
+      endpoint: "https://ws-123.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      apiKey: "bailian-key",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      protocol: "bailian",
     });
 
     expect(loadImageGenerationConfig({
-      LLM_BASE_URL: "https://llm.test/v1",
-      LLM_API_KEY: "llm-key",
+      IMAGE_BASE_URL: "https://image.test/api/v1",
+      IMAGE_API_KEY: "image-key",
       IMAGE_GENERATION_MODEL: "custom-image-model",
     })).toEqual({
-      endpoint: "https://llm.test/v1/images/generations",
-      apiKey: "llm-key",
+      endpoint: "https://image.test/api/v1/services/aigc/multimodal-generation/generation",
+      apiKey: "image-key",
       model: "custom-image-model",
+      protocol: "bailian",
     });
 
     expect(loadImageGenerationConfig({
       IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
-      LLM_API_KEY: "llm-key",
+      DASHSCOPE_API_KEY: "dashscope-key",
     })).toEqual({
       endpoint: "https://relay.test/custom-endpoint",
-      apiKey: "llm-key",
-      model: "gpt-image-2",
+      apiKey: "dashscope-key",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      protocol: "bailian",
     });
   });
 
-  it("posts normalized json to the image generations endpoint", async () => {
+  it("loads and calls the OpenAI-compatible GPT Image 2 generation endpoint", async () => {
+    const config = loadImageGenerationConfigForModel("gpt-image-2", {
+      GPT_IMAGE_API_KEY: "gpt-image-key",
+      GPT_IMAGE_GENERATION_ENDPOINT: "https://pixel.test/v1/images/generations",
+    });
+    expect(config).toEqual({
+      endpoint: "https://pixel.test/v1/images/generations",
+      apiKey: "gpt-image-key",
+      model: "gpt-image-2",
+      protocol: "openai",
+    });
+    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      data: [{ b64_json: PNG_B64 }],
+    }), { status: 200 }));
+
+    await expect(callImageGeneration({
+      config,
+      prompt: "minimal product photo",
+      size: "2048x1152",
+      fetchFn,
+    })).resolves.toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
+
+    expect(fetchFn).toHaveBeenCalledWith(
+      "https://pixel.test/v1/images/generations",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: "Bearer gpt-image-key" },
+      }),
+    );
+    expect(JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body))).toEqual({
+      model: "gpt-image-2",
+      prompt: "minimal product photo",
+      n: 1,
+      size: "2048x1152",
+    });
+  });
+
+  it("does not send reference edits to an unconfigured GPT endpoint", async () => {
+    await expect(callImageEdit({
+      config: {
+        endpoint: "https://pixel.test/v1/images/generations",
+        apiKey: "gpt-image-key",
+        model: "gpt-image-2",
+        protocol: "openai",
+      },
+      prompt: "edit",
+      referenceImages: [{ b64: PNG_B64, mime: "image/png" }],
+      fetchFn: vi.fn(),
+    })).rejects.toThrow("reference editing is not configured");
+  });
+
+  it("posts native Bailian multimodal JSON and extracts its image URL", async () => {
     const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
-      new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 })
+      new Response(JSON.stringify({
+        output: { choices: [{ message: { content: [{ image: "https://image.test/result.png" }] } }] },
+      }), { status: 200 })
     );
 
     const image = await callImageGeneration({
@@ -86,10 +152,10 @@ describe("image service", () => {
       fetchFn,
     });
 
-    expect(image).toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
+    expect(image).toEqual({ kind: "url", url: "https://image.test/result.png" });
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn).toHaveBeenCalledWith(
-      "https://image.test/v1/images/generations",
+      "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
       expect.objectContaining({
         method: "POST",
         headers: {
@@ -101,25 +167,31 @@ describe("image service", () => {
     const [, init] = fetchFn.mock.calls[0] ?? [];
     const body = JSON.parse(String(init?.body)) as {
       readonly model: string;
-      readonly prompt: string;
-      readonly n: number;
-      readonly response_format: string;
-      readonly size: string;
-      readonly resolution: string;
+      readonly input: { readonly messages: readonly [{ readonly role: string; readonly content: readonly [{ readonly text: string }] }] };
+      readonly parameters: { readonly n: number; readonly prompt_extend: boolean; readonly watermark: boolean; readonly size: string };
     };
     expect(body).toEqual({
-      model: "gpt-image-2",
-      prompt: "ceramic plate",
-      n: 1,
-      response_format: "b64_json",
-      size: "16:9",
-      resolution: "2k",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      input: { messages: [{ role: "user", content: [{ text: "ceramic plate" }] }] },
+      parameters: { n: 1, prompt_extend: true, watermark: false, size: "2048*1152" },
     });
   });
 
-  it("posts multipart edits with exactly two reference images and preserves raw output size", async () => {
+  it("rejects output sizes beyond Qwen Image 2.0's total-pixel limit", async () => {
+    const fetchFn = vi.fn();
+
+    await expect(callImageGeneration({
+      config: createConfig(),
+      prompt: "oversized poster",
+      size: "3840x2160",
+      fetchFn,
+    })).rejects.toThrow("between 512*512 and 2048*2048 total pixels");
+    expect(fetchFn).not.toHaveBeenCalled();
+  });
+
+  it("posts Qwen edits as multimodal JSON with base64 reference images", async () => {
     const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
-      new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 })
+      new Response(JSON.stringify({ output: { choices: [{ message: { content: [{ image: "https://image.test/edited.png" }] } }] } }), { status: 200 })
     );
     const firstReference = Buffer.from("segment-a").toString("base64");
     const secondReference = Buffer.from("segment-b").toString("base64");
@@ -135,28 +207,22 @@ describe("image service", () => {
       ],
     });
 
-    expect(image).toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
+    expect(image).toEqual({ kind: "url", url: "https://image.test/edited.png" });
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(fetchFn.mock.calls[0]?.[0]).toBe("https://image.test/v1/images/edits");
+    expect(fetchFn.mock.calls[0]?.[0]).toBe("https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
     const [, init] = fetchFn.mock.calls[0] ?? [];
     expect(init?.method).toBe("POST");
-    expect(init?.headers).toEqual({ authorization: "Bearer image-key" });
-    expect(init?.body).toBeInstanceOf(FormData);
-    const form = init?.body;
-    if (!(form instanceof FormData)) throw new Error("expected FormData body");
-    expect(form.get("model")).toBe("gpt-image-2");
-    expect(form.get("prompt")).toBe("extend the poster");
-    expect(form.get("n")).toBe("1");
-    expect(form.get("size")).toBe("1024x1024");
-    const images = form.getAll("image[]");
-    expect(images).toHaveLength(2);
-    expect(images[0]).toBeInstanceOf(File);
-    expect(images[1]).toBeInstanceOf(File);
-    if (!(images[0] instanceof File) || !(images[1] instanceof File)) {
-      throw new Error("expected image[] files");
-    }
-    expect(await images[0].text()).toBe("segment-a");
-    expect(await images[1].text()).toBe("segment-b");
+    expect(init?.headers).toEqual({ "content-type": "application/json", authorization: "Bearer image-key" });
+    const body = JSON.parse(String(init?.body));
+    expect(body).toEqual({
+      model: "qwen-image-2.0-pro-2026-04-22",
+      input: { messages: [{ role: "user", content: [
+        { image: `data:image/png;base64,${firstReference}` },
+        { image: `data:image/png;base64,${secondReference}` },
+        { text: "extend the poster" },
+      ] }] },
+      parameters: { n: 1, prompt_extend: true, watermark: false, size: "1024*1024" },
+    });
   });
 
   it("preserves explicit width-height and auto sizes for image edits", async () => {
@@ -180,22 +246,19 @@ describe("image service", () => {
       referenceImages: [reference],
     });
 
-    const firstForm = fetchFn.mock.calls[0]?.[1]?.body;
-    const secondForm = fetchFn.mock.calls[1]?.[1]?.body;
-    if (!(firstForm instanceof FormData) || !(secondForm instanceof FormData)) {
-      throw new Error("expected FormData bodies");
-    }
-    expect(firstForm.get("size")).toBe("1024x1536");
-    expect(secondForm.get("size")).toBe("auto");
+    const firstBody = JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body));
+    const secondBody = JSON.parse(String(fetchFn.mock.calls[1]?.[1]?.body));
+    expect(firstBody.parameters.size).toBe("1024*1536");
+    expect(secondBody.parameters).not.toHaveProperty("size");
   });
 
-  it("derives the edit endpoint from config even when env is provided but empty", async () => {
+  it("uses the same native multimodal endpoint for generation and editing", async () => {
     const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
       new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 })
     );
 
     const image = await callImageEdit({
-      config: createConfig("https://image.test/v1/images/generations"),
+      config: createConfig("https://image.test/native-generation"),
       prompt: "extend reliably",
       fetchFn,
       env: {},
@@ -204,34 +267,24 @@ describe("image service", () => {
 
     expect(image).toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
     expect(fetchFn).toHaveBeenCalledWith(
-      "https://image.test/v1/images/edits",
+      "https://image.test/native-generation",
       expect.objectContaining({ method: "POST" }),
     );
   });
 
-  it("prefers explicit image edit endpoint and derives edits from recognizable generation endpoints", () => {
+  it("prefers an explicit edit endpoint and otherwise uses the native generation endpoint", () => {
     expect(loadImageEditEndpoint({
       IMAGE_EDIT_ENDPOINT: "https://relay.test/v1/images/edits",
     })).toBe("https://relay.test/v1/images/edits");
 
     expect(loadImageEditEndpoint({
-      IMAGE_GENERATION_ENDPOINT: "https://relay.test/v1/images/generations",
-    })).toBe("https://relay.test/v1/images/edits");
-
-    expect(loadImageEditEndpoint({
-      IMAGE_GENERATION_ENDPOINT: "https://relay.test/v1/generations",
-    })).toBe("https://relay.test/v1/edits");
-  });
-
-  it("throws a clear error when edit endpoint cannot be derived from an explicit generation endpoint", () => {
-    expect(() => loadImageEditEndpoint({
       IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
-    })).toThrow("IMAGE_EDIT_ENDPOINT required when IMAGE_GENERATION_ENDPOINT is not a recognized images/generations endpoint");
+    })).toBe("https://relay.test/custom-endpoint");
   });
 
   it("throws when the upstream image payload has no url or b64 output", () => {
     expect(() => extractGeneratedImage({ data: [{ revised_prompt: "missing image" }] })).toThrow(
-      "image response has no url or b64_json",
+      "image response has no generated image URL",
     );
   });
 

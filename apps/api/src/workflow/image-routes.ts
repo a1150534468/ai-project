@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -7,19 +7,33 @@ import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type Anthropic from "@anthropic-ai/sdk";
-import { deleteObject, loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
-import { imageGenerationResourceKey, imageResolutionFromSize, normalizeImageSize, upstreamImageOptions } from "./image-upstream-options.js";
+import { deleteObject, getObject, loadS3Config, makeS3, type S3Config } from "../storage/s3.js";
+import { imageGenerationResourceKey, imageResolutionFromSize, normalizeImageSize } from "./image-upstream-options.js";
+import {
+  callImageEdit as callImageEditService,
+  callImageGeneration as callImageGenerationService,
+  GPT_IMAGE_MODEL,
+  IMAGE_GENERATION_MODELS,
+  loadImageGenerationConfig,
+  loadImageGenerationConfigForModel,
+  QWEN_IMAGE_MODEL,
+  storeWorkflowImage as storeWorkflowImageService,
+  type GeneratedImage,
+  type ImageGenerationConfig,
+} from "./image-service.js";
+import { loadOwnedReferenceImages } from "./ecom-route-helpers.js";
 import { resolveImagePricing, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
 
-const DEFAULT_IMAGE_MODEL = "gpt-image-2";
 const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";
 const IMAGE_KEEP_LIMIT = 50;
 const IMAGE_TASK_KEEP_LIMIT = 12;
 const IMAGE_MAX_COUNT = 8;
+const IMAGE_MAX_REFERENCE_COUNT = 3;
+const IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_RETRY_DELAY_MS = 3000;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const DEFAULT_STALE_TASK_MS = DEFAULT_ATTEMPT_TIMEOUT_MS + DEFAULT_RETRY_DELAY_MS + 30_000;
-const DEFAULT_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
+const IMAGE_BLOB_URL_TTL_MS = 15 * 60_000;
 const ECOM_IMAGE_REQUEST_PREFIX = "ecom-";
 const IMAGE_TASK_STATUS = {
   running: "running",
@@ -30,10 +44,28 @@ const IMAGE_TASK_STATUS = {
 
 const imageRequestSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
+  model: z.enum(IMAGE_GENERATION_MODELS).default(QWEN_IMAGE_MODEL),
   prompt: z.string().trim().min(1).max(4000),
   size: z.string().trim().min(1).max(32).default("1024x1024"),
-  resolution: z.enum(["1K", "2K", "4K"]).optional(),
+  resolution: z.enum(["1K", "2K"]).optional(),
+  referenceAssetIds: z.array(z.string().trim().min(1).max(128)).max(IMAGE_MAX_REFERENCE_COUNT).default([]),
   count: z.number().int().min(1).max(IMAGE_MAX_COUNT),
+});
+
+const imageReferenceSchema = z.object({
+  image: z.object({
+    b64: z.string().trim().min(1),
+    mime: z.string().trim().regex(/^image\/[A-Za-z0-9.+-]+$/).optional(),
+  }),
+});
+
+const imageBlobParamsSchema = z.object({
+  imageId: z.string().trim().min(1).max(128),
+});
+
+const imageBlobQuerySchema = z.object({
+  exp: z.coerce.number().int().positive(),
+  sig: z.string().trim().min(1).max(128),
 });
 
 type ImageGenerationRequest = z.infer<typeof imageRequestSchema>;
@@ -80,23 +112,7 @@ interface ImageWorkflowRouteDeps {
   readonly retryDelayMs?: number;
   readonly maxAttempts?: number;
   readonly staleTaskMs?: number;
-}
-
-interface ImageGenerationConfig {
-  readonly endpoint: string;
-  readonly apiKey: string;
-  readonly model: string;
-}
-
-type GeneratedImage =
-  | { readonly kind: "url"; readonly url: string }
-  | { readonly kind: "b64"; readonly b64: string; readonly mime: string };
-
-interface StoredImage {
-  readonly originalUrl: string;
-  readonly thumbnailUrl: string;
-  readonly mime: string;
-  readonly objectKey: string | null;
+  readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
 }
 
 interface ImageGenerationTaskRow {
@@ -106,6 +122,7 @@ interface ImageGenerationTaskRow {
   readonly prompt: string;
   readonly model: string;
   readonly size: string;
+  readonly referenceAssetIds?: readonly string[];
   readonly count: number;
   readonly status: string;
   readonly completedCount: number;
@@ -132,32 +149,9 @@ class ImageTaskStoppedError extends Error {
 
 const activeGenerationTasks = new Map<string, AbortController>();
 
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "");
-}
-
-function imageEndpointFromEnv(env: NodeJS.ProcessEnv): string {
-  const explicit = env.IMAGE_GENERATION_ENDPOINT?.trim();
-  if (explicit) return explicit;
-  const baseURL = (env.IMAGE_BASE_URL ?? env.LLM_BASE_URL ?? "").trim();
-  if (!baseURL) throw new Error("IMAGE_BASE_URL/LLM_BASE_URL required");
-  const base = trimTrailingSlash(baseURL);
-  return base.endsWith("/v1") ? `${base}/images/generations` : `${base}/v1/images/generations`;
-}
-
-function loadImageGenerationConfig(env: NodeJS.ProcessEnv = process.env): ImageGenerationConfig {
-  const apiKey = (env.IMAGE_API_KEY ?? env.LLM_API_KEY ?? "").trim();
-  if (!apiKey) throw new Error("IMAGE_API_KEY/LLM_API_KEY required");
-  return {
-    endpoint: imageEndpointFromEnv(env),
-    apiKey,
-    model: (env.IMAGE_GENERATION_MODEL ?? DEFAULT_IMAGE_MODEL).trim() || DEFAULT_IMAGE_MODEL,
-  };
-}
-
-function tryLoadImageGenerationConfig(): ImageGenerationConfig | null {
+function tryLoadImageGenerationConfig(model?: string): ImageGenerationConfig | null {
   try {
-    return loadImageGenerationConfig();
+    return model ? loadImageGenerationConfigForModel(model) : loadImageGenerationConfig();
   } catch {
     return null;
   }
@@ -171,26 +165,6 @@ function loadStaleTaskMs(env: NodeJS.ProcessEnv = process.env): number {
 export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_ATTEMPT_TIMEOUT_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_ATTEMPT_TIMEOUT_MS;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function extractGeneratedImage(payload: unknown): GeneratedImage {
-  if (!isRecord(payload) || !Array.isArray(payload.data) || payload.data.length === 0) {
-    throw new Error("image response missing data");
-  }
-  const first = payload.data[0];
-  if (!isRecord(first)) throw new Error("image response item invalid");
-  if (typeof first.url === "string" && first.url.length > 0) {
-    return { kind: "url", url: first.url };
-  }
-  if (typeof first.b64_json === "string" && first.b64_json.length > 0) {
-    const mime = typeof first.mime_type === "string" && first.mime_type.startsWith("image/") ? first.mime_type : "image/png";
-    return { kind: "b64", b64: first.b64_json, mime };
-  }
-  throw new Error("image response has no url or b64_json");
 }
 
 async function fetchWithTimeout(
@@ -220,29 +194,7 @@ async function callImageGeneration(
   fetchFn: typeof fetch,
   signal?: AbortSignal,
 ): Promise<GeneratedImage> {
-  const body: Record<string, unknown> = {
-    model: cfg.model,
-    prompt,
-    n: 1,
-    response_format: "b64_json",
-  };
-  const upstreamOptions = upstreamImageOptions(size);
-  if (upstreamOptions.size !== "auto") body.size = upstreamOptions.size;
-  if (upstreamOptions.resolution) body.resolution = upstreamOptions.resolution;
-  const response = await fetchWithTimeout(fetchFn, cfg.endpoint, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${cfg.apiKey}`,
-    },
-    body: JSON.stringify(body),
-  }, loadImageAttemptTimeoutMs(), signal);
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    const message = `image relay ${response.status}${text ? ` ${text.slice(0, 160)}` : ""}`;
-    throw new Error(message);
-  }
-  return extractGeneratedImage(await response.json());
+  return callImageGenerationService({ config: cfg, prompt, size, fetchFn, signal });
 }
 
 async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryOptions): Promise<T> {
@@ -260,21 +212,6 @@ async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryOptions)
   }
 }
 
-function encodeObjectKey(key: string): string {
-  return key.split("/").map(encodeURIComponent).join("/");
-}
-
-function publicObjectUrl(cfg: S3Config, key: string, env: NodeJS.ProcessEnv = process.env): string {
-  const configuredBase = (env.IMAGE_S3_PUBLIC_BASE_URL ?? env.S3_PUBLIC_BASE_URL ?? "").trim();
-  const encodedKey = encodeObjectKey(key);
-  if (configuredBase) return `${trimTrailingSlash(configuredBase)}/${encodedKey}`;
-  const endpoint = new URL(cfg.endpoint);
-  if (cfg.forcePathStyle) {
-    return `${trimTrailingSlash(cfg.endpoint)}/${encodeURIComponent(cfg.bucket)}/${encodedKey}`;
-  }
-  return `${endpoint.protocol}//${cfg.bucket}.${endpoint.host}/${encodedKey}`;
-}
-
 function tryLoadS3(env: NodeJS.ProcessEnv = process.env): { readonly cfg: S3Config; readonly s3: ReturnType<typeof makeS3> } | null {
   try {
     const cfg = loadS3Config(env);
@@ -282,44 +219,6 @@ function tryLoadS3(env: NodeJS.ProcessEnv = process.env): { readonly cfg: S3Conf
   } catch {
     return null;
   }
-}
-
-async function fetchRemoteImage(url: string, fetchFn: typeof fetch): Promise<{ readonly buffer: Buffer; readonly mime: string }> {
-  const response = await fetchWithTimeout(fetchFn, url, { method: "GET" }, 60_000);
-  if (!response.ok) throw new Error(`image download ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const maxBytes = Number(process.env.IMAGE_MAX_BYTES) || DEFAULT_IMAGE_MAX_BYTES;
-  if (buffer.byteLength > maxBytes) throw new Error("image too large");
-  const contentType = response.headers.get("content-type") ?? "image/png";
-  return { buffer, mime: contentType.startsWith("image/") ? contentType : "image/png" };
-}
-
-async function storeGeneratedImage(
-  image: GeneratedImage,
-  userId: string,
-  requestId: string,
-  requestIndex: number,
-  fetchFn: typeof fetch,
-): Promise<StoredImage> {
-  const loaded = tryLoadS3();
-  if (image.kind === "url" && !loaded) {
-    return { originalUrl: image.url, thumbnailUrl: image.url, mime: "image/png", objectKey: null };
-  }
-
-  const binary = image.kind === "b64"
-    ? { buffer: Buffer.from(image.b64, "base64"), mime: image.mime }
-    : await fetchRemoteImage(image.url, fetchFn);
-
-  if (!loaded) {
-    const dataUrl = `data:${binary.mime};base64,${binary.buffer.toString("base64")}`;
-    return { originalUrl: dataUrl, thumbnailUrl: dataUrl, mime: binary.mime, objectKey: null };
-  }
-
-  const extension = binary.mime.includes("jpeg") || binary.mime.includes("jpg") ? "jpg" : "png";
-  const key = `workflow/images/${userId}/${requestId}/${requestIndex}-${randomUUID()}.${extension}`;
-  await putObject(loaded.s3, key, binary.buffer, binary.mime, { acl: "public-read" });
-  const url = publicObjectUrl(loaded.cfg, key);
-  return { originalUrl: url, thumbnailUrl: url, mime: binary.mime, objectKey: key };
 }
 
 async function pruneImages(prisma: PrismaClient, userId: string): Promise<void> {
@@ -352,14 +251,57 @@ async function listRecentImages(prisma: PrismaClient, userId: string) {
       size: true,
       originalUrl: true,
       thumbnailUrl: true,
+      objectKey: true,
       mime: true,
       createdAt: true,
     },
   });
 }
 
-function serializeImageRow<Row extends { readonly createdAt: Date }>(row: Row): Omit<Row, "createdAt"> & { readonly createdAt: string } {
-  return { ...row, createdAt: row.createdAt.toISOString() };
+function imageBlobSigningSecret(): string {
+  const secret = process.env.SESSION_SECRET?.trim();
+  if (!secret || secret.length < 32) throw new Error("SESSION_SECRET 必须 ≥32 字节");
+  return secret;
+}
+
+function imageBlobSignaturePayload(imageId: string, objectKey: string, exp: number): string {
+  return `${imageId}\n${objectKey}\n${exp}`;
+}
+
+function imageBlobUrl(imageId: string, objectKey: string): string {
+  const exp = Date.now() + IMAGE_BLOB_URL_TTL_MS;
+  const sig = createHmac("sha256", imageBlobSigningSecret())
+    .update(imageBlobSignaturePayload(imageId, objectKey, exp))
+    .digest("base64url");
+  const query = new URLSearchParams({ exp: String(exp), sig });
+  return `/api/workflow/images/${encodeURIComponent(imageId)}/blob?${query.toString()}`;
+}
+
+function hasValidImageBlobAccess(imageId: string, objectKey: string, exp: number, sig: string): boolean {
+  if (exp < Date.now()) return false;
+  const expected = createHmac("sha256", imageBlobSigningSecret())
+    .update(imageBlobSignaturePayload(imageId, objectKey, exp))
+    .digest("base64url");
+  const actualBuffer = Buffer.from(sig);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function serializeImageRow<Row extends {
+  readonly id: string;
+  readonly originalUrl: string;
+  readonly thumbnailUrl: string;
+  readonly objectKey?: string | null;
+  readonly createdAt: Date;
+}>(row: Row) {
+  const { objectKey, createdAt, ...publicRow } = row;
+  const blobUrl = objectKey ? imageBlobUrl(row.id, objectKey) : null;
+  return {
+    ...publicRow,
+    originalUrl: blobUrl ?? row.originalUrl,
+    thumbnailUrl: blobUrl ?? row.thumbnailUrl,
+    createdAt: createdAt.toISOString(),
+  };
 }
 
 function serializeTask(row: ImageGenerationTaskRow) {
@@ -369,6 +311,7 @@ function serializeTask(row: ImageGenerationTaskRow) {
     prompt: row.prompt,
     model: row.model,
     size: row.size,
+    referenceAssetIds: [...(row.referenceAssetIds ?? [])],
     count: row.count,
     status: row.status as ImageTaskStatus,
     completedCount: row.completedCount,
@@ -380,7 +323,7 @@ function serializeTask(row: ImageGenerationTaskRow) {
 
 function completedTaskFromAssets(
   userId: string,
-  request: ImageGenerationRequest,
+  request: Omit<ImageGenerationRequest, "resolution">,
   cfg: ImageGenerationConfig,
   assets: readonly { readonly createdAt: Date; readonly model?: string }[],
 ): ImageGenerationTaskRow {
@@ -392,6 +335,7 @@ function completedTaskFromAssets(
     prompt: request.prompt,
     model: assets[0]?.model ?? cfg.model,
     size: request.size,
+    referenceAssetIds: request.referenceAssetIds,
     count: request.count,
     status: IMAGE_TASK_STATUS.completed,
     completedCount: Math.min(assets.length, request.count),
@@ -453,7 +397,7 @@ async function optimizeImagePrompt(prompt: string): Promise<OptimizedPromptResul
     system: "你是商业图片生成提示词优化器。只输出优化后的中文提示词，不要解释，不要 Markdown。",
     messages: [{
       role: "user",
-      content: `把下面的生图提示词优化成适合 gpt-image-2 的高质量商业图片提示词。保留用户主体，不增加违背原意的元素，补充构图、光线、材质、风格和画面质量要求。\n\n原始提示词：${prompt}`,
+      content: `把下面的生图提示词优化成适合 Qwen Image 2.0 Pro 的高质量商业图片提示词。保留用户主体，不增加违背原意的元素，补充构图、光线、材质、风格和画面质量要求。\n\n原始提示词：${prompt}`,
     }],
   });
   const text = response.content
@@ -521,15 +465,35 @@ async function runImageGenerationTask(args: {
     });
     const existingIndexes = new Set(existing.map((row) => row.requestIndex));
     const missingIndexes = Array.from({ length: task.count }, (_value, index) => index).filter((index) => !existingIndexes.has(index));
+    const referenceAssetIds = task.referenceAssetIds ?? [];
+    const referenceImages = referenceAssetIds.length > 0
+      ? await loadOwnedReferenceImages(prisma, task.userId, referenceAssetIds, fetchFn)
+      : null;
     let completedCount = existing.length;
     await updateTask(prisma, task.id, { status: IMAGE_TASK_STATUS.running, completedCount, error: null });
 
     await Promise.all(missingIndexes.map(async (requestIndex) => {
       const stored = await retryUntilSuccess(async () => {
         await assertImageTaskRunning(prisma, task.id);
-        const generated = await callImageGeneration(cfg, task.prompt, task.size, fetchFn, args.signal);
+        const generated = referenceImages
+          ? await callImageEditService({
+              config: cfg,
+              prompt: task.prompt,
+              referenceImages,
+              fetchFn,
+              size: task.size,
+              signal: args.signal,
+            })
+          : await callImageGeneration(cfg, task.prompt, task.size, fetchFn, args.signal);
         await assertImageTaskRunning(prisma, task.id);
-        const storedImage = await storeGeneratedImage(generated, task.userId, task.requestId, requestIndex, fetchFn);
+        const storedImage = await storeWorkflowImageService({
+          image: generated,
+          userId: task.userId,
+          requestId: task.requestId,
+          requestIndex,
+          fetchFn,
+          signal: args.signal,
+        });
         await assertImageTaskRunning(prisma, task.id);
         return storedImage;
       }, {
@@ -631,7 +595,6 @@ async function resumeStaleTasks(args: {
   readonly prisma: PrismaClient;
   readonly billing: BillingForImages;
   readonly fetchFn: typeof fetch;
-  readonly cfg: ImageGenerationConfig | null;
   readonly tasks: readonly ImageGenerationTaskRow[];
   readonly scheduleTask: ScheduleTask;
   readonly retryDelayMs: number;
@@ -640,12 +603,12 @@ async function resumeStaleTasks(args: {
   readonly onResume: (task: ImageGenerationTaskRow) => void;
   readonly onAttemptFailure: (task: ImageGenerationTaskRow, error: unknown, attempt: number) => void;
 }): Promise<number> {
-  const cfg = args.cfg;
-  if (!cfg) return 0;
   const staleTasks = args.tasks.filter((task) =>
     !activeGenerationTasks.has(task.requestId) && isStaleRunningTask(task, args.staleTaskMs)
   );
   const resumed = await Promise.all(staleTasks.map(async (task) => {
+    const cfg = tryLoadImageGenerationConfig(task.model);
+    if (!cfg) return 0;
     const claimed = await claimStaleTask(args.prisma, task);
     if (!claimed) return 0;
     args.onResume(claimed);
@@ -674,6 +637,7 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     token: process.env.BILLING_INTERNAL_TOKEN!,
   });
   const fetchFn = deps.fetchFn ?? fetch;
+  const loadStoredImage = deps.loadStoredImage ?? ((objectKey: string) => getObject(makeS3(loadS3Config()), objectKey));
   const promptOptimizer = deps.promptOptimizer ?? optimizeImagePrompt;
   const scheduleTask = deps.scheduleTask ?? ((work: () => Promise<void>) => {
     void work().catch((error) => app.log.error(error));
@@ -686,7 +650,6 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
       prisma,
       billing,
       fetchFn,
-      cfg: tryLoadImageGenerationConfig(),
       tasks,
       scheduleTask,
       retryDelayMs,
@@ -705,11 +668,73 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     });
   }
 
+  app.get("/api/workflow/images/:imageId/blob", async (req, reply) => {
+    const params = imageBlobParamsSchema.safeParse(req.params);
+    const query = imageBlobQuerySchema.safeParse(req.query);
+    if (!params.success || !query.success) return reply.code(400).send({ error: "图片地址不合法" });
+    const image = await prisma.imageAsset.findUnique({
+      where: { id: params.data.imageId },
+      select: { id: true, objectKey: true, mime: true },
+    });
+    if (!image?.objectKey) return reply.code(404).send({ error: "图片不存在" });
+    if (!hasValidImageBlobAccess(image.id, image.objectKey, query.data.exp, query.data.sig)) {
+      return reply.code(401).send({ error: "图片地址已失效" });
+    }
+    try {
+      const buffer = await loadStoredImage(image.objectKey);
+      const mime = image.mime.startsWith("image/") ? image.mime : "image/png";
+      return reply.header("Cache-Control", "private, max-age=300").type(mime).send(buffer);
+    } catch (error) {
+      app.log.error(error);
+      return reply.code(502).send({ error: "图片加载失败" });
+    }
+  });
+
   app.get("/api/workflow/images", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
     const rows = await listRecentImages(prisma, userId);
     return { success: true, data: rows.map(serializeImageRow) };
+  });
+
+  app.post("/api/workflow/images/references", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const parsed = imageReferenceSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "参考图参数不合法" });
+    const bytes = Buffer.from(parsed.data.image.b64, "base64");
+    if (bytes.byteLength === 0 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) {
+      return reply.code(400).send({ error: "参考图大小需在 10MB 以内" });
+    }
+    const mime = parsed.data.image.mime?.startsWith("image/") ? parsed.data.image.mime : "image/png";
+    const requestId = `ecom-reference:${randomUUID()}`;
+    try {
+      const stored = await storeWorkflowImageService({
+        image: { kind: "b64", b64: parsed.data.image.b64, mime },
+        userId,
+        requestId,
+        requestIndex: 0,
+        fetchFn,
+      });
+      const row = await prisma.imageAsset.create({
+        data: {
+          userId,
+          requestId,
+          requestIndex: 0,
+          prompt: "image_reference_upload",
+          model: "image_reference_upload",
+          size: "reference",
+          originalUrl: stored.originalUrl,
+          thumbnailUrl: stored.thumbnailUrl,
+          objectKey: stored.objectKey,
+          mime: stored.mime,
+        },
+      });
+      return { success: true, data: { asset: serializeImageRow(row) } };
+    } catch (uploadError) {
+      app.log.error(uploadError);
+      return reply.code(502).send({ error: "上传参考图失败" });
+    }
   });
 
   app.get("/api/workflow/images/pricing", async (req, reply) => {
@@ -851,9 +876,32 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     const parsed = imageRequestSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
-    const cfg = loadImageGenerationConfig();
+    const requestedModel = parsed.data.model;
+    let cfg: ImageGenerationConfig;
+    try {
+      cfg = loadImageGenerationConfigForModel(requestedModel);
+    } catch (configError) {
+      app.log.error({ err: configError, model: requestedModel }, "image generation model is not configured");
+      return reply.code(503).send({ error: `${requestedModel} 暂未配置` });
+    }
     const normalizedSize = normalizeImageSize(parsed.data.size);
-    const request = { ...parsed.data, size: normalizedSize, resolution: imageResolutionFromSize(normalizedSize, parsed.data.resolution) };
+    const resolution = imageResolutionFromSize(normalizedSize, parsed.data.resolution);
+    if (requestedModel === QWEN_IMAGE_MODEL && resolution === "4K") {
+      return reply.code(400).send({ error: "Qwen Image 2.0 Pro 最高支持 2K 输出" });
+    }
+    const request = { ...parsed.data, size: normalizedSize, resolution };
+    if (requestedModel === GPT_IMAGE_MODEL && request.referenceAssetIds.length > 0) {
+      return reply.code(400).send({ error: "gpt-image-2 当前只接入了图片生成接口；参考图请切换到 Qwen Image" });
+    }
+    if (request.referenceAssetIds.length > 0) {
+      const referenceAssets = await prisma.imageAsset.findMany({
+        where: { userId, id: { in: [...request.referenceAssetIds] } },
+        select: { id: true },
+      });
+      if (referenceAssets.length !== request.referenceAssetIds.length) {
+        return reply.code(400).send({ error: "参考图不存在或无权使用" });
+      }
+    }
     const chargedOperationId = `image:${request.requestId}`;
     const existingTask = await prisma.imageGenerationTask.findFirst({
       where: { userId, requestId: request.requestId },
@@ -905,6 +953,7 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
           prompt: request.prompt,
           model: cfg.model,
           size: request.size,
+          referenceAssetIds: request.referenceAssetIds,
           count: request.count,
           status: IMAGE_TASK_STATUS.running,
           completedCount: existing.length,

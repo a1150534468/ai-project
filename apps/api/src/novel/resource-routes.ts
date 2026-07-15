@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { createBillingClient } from "@ai-assistant/billing";
+import { completedNovelChapterCount } from "@ai-assistant/novel-workflow";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { captureNovelStructuredSnapshot, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
@@ -743,14 +744,16 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     const project = await requireProject(prisma, userId, parsed.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     const [chapters, openForeshadows, storylines, debts, facts, characters] = await Promise.all([
-      prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" }, select: { chapterIndex: true, title: true, tensionScore: true, plotTension: true, emotionalTension: true, pacingTension: true, qualityScore: true, billableChars: true } }),
+      prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" }, select: { chapterIndex: true, title: true, content: true, tensionScore: true, plotTension: true, emotionalTension: true, pacingTension: true, qualityScore: true, billableChars: true } }),
       prisma.novelForeshadowItem.count({ where: { projectId: project.id, status: { in: ["open", "hinted"] } } }),
       prisma.novelStoryline.count({ where: { projectId: project.id, status: "active" } }),
       prisma.novelNarrativeDebt.count({ where: { projectId: project.id, status: "open" } }),
       prisma.novelKnowledgeFact.count({ where: { projectId: project.id, status: "confirmed" } }),
       prisma.novelCharacter.count({ where: { projectId: project.id } }),
     ]);
-    return { success: true, data: { project: { storyPhase: project.storyPhase, autopilotStatus: project.autopilotStatus, currentBranch: project.currentBranch }, stats: { chapters: chapters.length, totalChars: chapters.reduce((sum, chapter) => sum + chapter.billableChars, 0), openForeshadows, storylines, debts, facts, characters }, tensionCurve: chapters } };
+    const completedChapters = completedNovelChapterCount(chapters);
+    const completedRows = chapters.filter((chapter) => chapter.chapterIndex <= completedChapters);
+    return { success: true, data: { project: { storyPhase: project.storyPhase, autopilotStatus: project.autopilotStatus, currentBranch: project.currentBranch }, stats: { chapters: completedChapters, totalChars: completedRows.reduce((sum, chapter) => sum + chapter.billableChars, 0), openForeshadows, storylines, debts, facts, characters }, tensionCurve: completedRows } };
   });
 
   app.get("/api/workflow/novels/projects/:projectId/checkpoints", async (req, reply) => {

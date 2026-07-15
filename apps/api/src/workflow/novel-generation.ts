@@ -54,11 +54,25 @@ export function createNovelGenerator(env: NodeJS.ProcessEnv = process.env): Nove
     if (input.onChunk) {
       const stream = client.messages.stream(request);
       let pending = Promise.resolve();
+      let chunkError: unknown;
       stream.on("text", (chunk) => {
-        pending = pending.then(() => input.onChunk!(chunk));
+        pending = pending.then(async () => {
+          try {
+            await input.onChunk!(chunk);
+          } catch (error) {
+            chunkError = error;
+            stream.abort();
+            throw error;
+          }
+        });
       });
-      response = await stream.finalMessage();
-      await pending;
+      try {
+        response = await stream.finalMessage();
+        await pending;
+      } catch (error) {
+        await pending.catch(() => undefined);
+        throw chunkError ?? error;
+      }
     } else {
       response = await client.messages.create(request);
     }

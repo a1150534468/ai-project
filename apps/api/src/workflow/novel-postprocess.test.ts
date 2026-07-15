@@ -18,4 +18,32 @@ describe("novel postprocess", () => {
     expect(result.foreshadowItems[0]?.title).toContain("赵虎为何知道锁灵坠");
     expect(result.consistencyStatus.chapterAssets.eventCards.length).toBeGreaterThan(0);
   });
+
+  it("keeps only the final hook question instead of turning dialogue into five foreshadows", () => {
+    const result = buildNovelChapterPostprocessPayload({
+      projectTitle: "寒泉烬",
+      chapterIndex: 5,
+      title: "追兵",
+      content: "“你懂硬件？”赵虎问。“你在干嘛？”林岚没有回答。门外忽然传来脚步声。来的人究竟是谁？",
+      knownCharacters: ["林岚", "赵虎"],
+      knownLocations: [],
+    });
+
+    expect(result.summary.openThreads).toEqual(["来的人究竟是谁？"]);
+    expect(result.foreshadowItems).toHaveLength(1);
+  });
+
+  it("does not register a rhetorical taunt as a durable open thread", () => {
+    const result = buildNovelChapterPostprocessPayload({
+      projectTitle: "寒泉烬",
+      chapterIndex: 6,
+      title: "打断点",
+      content: "追兵堵住出口。苏橙看着机械键盘发抖：“不用脑机辅助，真写啊？”",
+      knownCharacters: ["苏橙"],
+      knownLocations: [],
+    });
+
+    expect(result.summary.openThreads).toEqual([]);
+    expect(result.foreshadowItems).toEqual([]);
+  });
 });

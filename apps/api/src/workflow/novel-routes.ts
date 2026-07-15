@@ -638,12 +638,8 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
           status: item.status,
           relatedCharacter: item.relatedCharacter,
         },
-        update: {
-          description: item.description,
-          expectedPayoffChapter: item.expectedPayoffChapter,
-          status: item.status,
-          relatedCharacter: item.relatedCharacter,
-        },
+        // Preserve the original introduction and editorial status on repeat mentions.
+        update: {},
       }) ?? Promise.resolve()));
       return chapter;
     });

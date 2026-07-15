@@ -20,6 +20,7 @@ import { createDefaultNovelDraft, novelCreateGenre, novelCreateTitle, type Novel
 import { NovelLibraryPage } from "../novel/NovelLibraryPage";
 import { NovelSetupWizard } from "../novel/NovelSetupWizard";
 import { NovelWorkbenchShell } from "../novel/NovelWorkbenchShell";
+import { novelProjectIdFromHash } from "../../novelRoute";
 
 interface NovelWorkflowStudioProps {
   readonly token: string;
@@ -121,6 +122,18 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
   }, [applyDetail, applyWorkbench, token]);
 
   useEffect(() => { void loadProjects(); }, [loadProjects]);
+  useEffect(() => {
+    const projectId = novelProjectIdFromHash(window.location.hash);
+    if (!projectId) return undefined;
+    let active = true;
+    setBusy("open");
+    void refreshProject(projectId).then((loaded) => {
+      if (!active) return;
+      setBusy("");
+      if (loaded) setView("workbench");
+    });
+    return () => { active = false; };
+  }, [refreshProject]);
   useEffect(() => {
     if (!detail?.tasks.some((task) => isActiveTask(task.status))) return undefined;
     const timer = window.setInterval(() => void refreshProject(detail.project.id, true), 2200);

@@ -37,15 +37,20 @@ interface ImageTaskRow {
 type ImageAssetFindManyWhere = {
   readonly userId?: string;
   readonly requestId?: string;
+  readonly id?: { readonly in: readonly string[] };
   readonly NOT?: { readonly requestId?: { readonly startsWith: string } };
 };
 
 function createPrismaMock(rows: ImageRow[] = [], tasks: ImageTaskRow[] = []) {
   return {
     imageAsset: {
+      findUnique: vi.fn(async (args: { where: { id: string } }) =>
+        rows.find((row) => row.id === args.where.id) ?? null
+      ),
       findMany: vi.fn(async (args: { where?: ImageAssetFindManyWhere; orderBy?: Record<string, string>; take?: number; skip?: number }) => {
         let result = rows.filter((row) => !args.where?.userId || row.userId === args.where.userId);
         if (args.where?.requestId) result = result.filter((row) => row.requestId === args.where?.requestId);
+        if (args.where?.id?.in) result = result.filter((row) => args.where?.id?.in.includes(row.id));
         if (args.where?.NOT?.requestId?.startsWith) {
           const prefix = args.where.NOT.requestId.startsWith;
           result = result.filter((row) => !row.requestId.startsWith(prefix));
@@ -60,6 +65,11 @@ function createPrismaMock(rows: ImageRow[] = [], tasks: ImageTaskRow[] = []) {
       }),
       upsert: vi.fn(async (args: { create: Omit<ImageRow, "id" | "createdAt"> }) => {
         const row = { ...args.create, id: `img-${rows.length + 1}`, createdAt: new Date("2026-06-30T08:00:00.000Z") };
+        rows.push(row);
+        return row;
+      }),
+      create: vi.fn(async (args: { data: Omit<ImageRow, "id" | "createdAt"> }) => {
+        const row = { ...args.data, id: `img-${rows.length + 1}`, createdAt: new Date("2026-06-30T08:00:00.000Z") };
         rows.push(row);
         return row;
       }),
@@ -141,6 +151,7 @@ async function createApp(options: {
   readonly promptOptimizer?: (prompt: string) => Promise<string>;
   readonly retryDelayMs?: number;
   readonly staleTaskMs?: number;
+  readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
@@ -158,6 +169,7 @@ async function createApp(options: {
     retryDelayMs: options.retryDelayMs ?? 1,
     maxAttempts: 3,
     staleTaskMs: options.staleTaskMs,
+    loadStoredImage: options.loadStoredImage,
   });
   await app.ready();
   return app;
@@ -167,7 +179,16 @@ beforeEach(() => {
   process.env.LLM_BASE_URL = "https://llm.test";
   process.env.LLM_API_KEY = "test-key";
   process.env.LLM_DEFAULT_MODEL = "GLM-5.2";
-  process.env.IMAGE_GENERATION_MODEL = "gpt-image-2";
+  process.env.BAILIAN_WORKSPACE_ID = "workspace";
+  process.env.BAILIAN_REGION = "cn-beijing";
+  process.env.BAILIAN_API_KEY = "bailian-key";
+  process.env.IMAGE_GENERATION_MODEL = "qwen-image-2.0-pro-2026-04-22";
+  process.env.SESSION_SECRET = "x".repeat(32);
+  delete process.env.IMAGE_BASE_URL;
+  delete process.env.IMAGE_GENERATION_ENDPOINT;
+  delete process.env.IMAGE_API_KEY;
+  delete process.env.GPT_IMAGE_API_KEY;
+  delete process.env.GPT_IMAGE_GENERATION_ENDPOINT;
   delete process.env.IMAGE_PROMPT_OPTIMIZER_MODEL;
   delete process.env.S3_ENDPOINT;
   delete process.env.S3_BUCKET;
@@ -176,6 +197,75 @@ beforeEach(() => {
 });
 
 describe("image workflow routes", () => {
+  it("uploads a reference image and returns an asset for the picker", async () => {
+    const prisma = createPrismaMock();
+    const app = await createApp({ prisma, billing: createBillingMock(), fetchFn: vi.fn() as unknown as typeof fetch });
+    const b64 = Buffer.from("reference-png").toString("base64");
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/references",
+      payload: { image: { b64, mime: "image/png" } },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.asset).toMatchObject({
+      requestId: expect.stringMatching(/^ecom-reference:/),
+      originalUrl: `data:image/png;base64,${b64}`,
+      mime: "image/png",
+    });
+    expect(prisma.imageAsset.create).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("serves existing private object images through a signed same-origin url", async () => {
+    const objectKey = "workflow/images/u1/req-private/0-result.png";
+    const storedBytes = Buffer.from("private-image-bytes");
+    const prisma = createPrismaMock([{
+      id: "img-private",
+      userId: "u1",
+      requestId: "req-private",
+      requestIndex: 0,
+      prompt: "产品宣传图",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: `http://localhost:9000/private/${objectKey}`,
+      thumbnailUrl: `http://localhost:9000/private/${objectKey}`,
+      objectKey,
+      mime: "image/png",
+      createdAt: new Date("2026-07-15T06:43:06.790Z"),
+    }]);
+    const loadStoredImage = vi.fn(async () => storedBytes);
+    const app = await createApp({
+      prisma,
+      billing: createBillingMock(),
+      fetchFn: vi.fn() as unknown as typeof fetch,
+      loadStoredImage,
+    });
+
+    const listResponse = await app.inject({ method: "GET", url: "/api/workflow/images" });
+    expect(listResponse.statusCode).toBe(200);
+    const image = listResponse.json().data[0] as { originalUrl: string; thumbnailUrl: string; objectKey?: string };
+    expect(image.originalUrl).toMatch(/^\/api\/workflow\/images\/img-private\/blob\?/);
+    expect(image.thumbnailUrl).toBe(image.originalUrl);
+    expect(image.objectKey).toBeUndefined();
+
+    const blobResponse = await app.inject({ method: "GET", url: image.originalUrl });
+    expect(blobResponse.statusCode).toBe(200);
+    expect(blobResponse.headers["content-type"]).toContain("image/png");
+    expect(blobResponse.rawPayload.equals(storedBytes)).toBe(true);
+    expect(loadStoredImage).toHaveBeenCalledWith(objectKey);
+
+    const tamperedUrl = new URL(image.originalUrl, "http://localhost");
+    tamperedUrl.searchParams.set("sig", "invalid");
+    const tamperedResponse = await app.inject({
+      method: "GET",
+      url: `${tamperedUrl.pathname}${tamperedUrl.search}`,
+    });
+    expect(tamperedResponse.statusCode).toBe(401);
+    await app.close();
+  });
+
   it("starts a persistent image task and completes it in the background", async () => {
     const prisma = createPrismaMock();
     const billing = createBillingMock({ chargeResource: vi.fn(async () => ({ charged: 20 })) });
@@ -209,14 +299,126 @@ describe("image workflow routes", () => {
     expect(imagesResponse.json().data).toHaveLength(2);
     const requestBody = JSON.parse((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string) as {
       model: string;
-      response_format?: string;
+      input?: { messages?: { content?: { text?: string }[] }[] };
     };
-    expect(requestBody.model).toBe("gpt-image-2");
-    expect(requestBody.response_format).toBe("b64_json");
+    expect(requestBody.model).toBe("qwen-image-2.0-pro-2026-04-22");
+    expect(requestBody.input?.messages?.[0]?.content?.[0]?.text).toBe("陶瓷餐盘");
     await app.close();
   });
 
-  it("passes ratio and resolution to upstream for supported preset output sizes", async () => {
+  it("selects GPT Image 2 and sends the OpenAI-compatible generation body", async () => {
+    process.env.GPT_IMAGE_API_KEY = "gpt-image-key";
+    process.env.GPT_IMAGE_GENERATION_ENDPOINT = "https://pixel.test/v1/images/generations";
+    const prisma = createPrismaMock();
+    const billing = createBillingMock();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ b64_json: Buffer.from("gpt-png").toString("base64") }],
+    }), { status: 200 })) as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: {
+        requestId: "req-gpt-image-2",
+        model: "gpt-image-2",
+        prompt: "极简产品摄影",
+        size: "2048x1152",
+        count: 1,
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data.task.model).toBe("gpt-image-2");
+    await scheduled[0];
+    expect((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe("https://pixel.test/v1/images/generations");
+    expect(JSON.parse(String((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body))).toEqual({
+      model: "gpt-image-2",
+      prompt: "极简产品摄影",
+      n: 1,
+      size: "2048x1152",
+    });
+    await app.close();
+  });
+
+  it("rejects GPT Image 2 reference inputs before billing", async () => {
+    process.env.GPT_IMAGE_API_KEY = "gpt-image-key";
+    const referenceB64 = Buffer.from("reference-png").toString("base64");
+    const prisma = createPrismaMock([{
+      id: "ref-gpt",
+      userId: "u1",
+      requestId: "ecom-reference:ref-gpt",
+      requestIndex: 0,
+      prompt: "image_reference_upload",
+      model: "image_reference_upload",
+      size: "reference",
+      originalUrl: `data:image/png;base64,${referenceB64}`,
+      thumbnailUrl: `data:image/png;base64,${referenceB64}`,
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T07:00:00.000Z"),
+    }]);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: {
+        requestId: "req-gpt-reference",
+        model: "gpt-image-2",
+        prompt: "编辑参考图",
+        size: "1024x1024",
+        referenceAssetIds: ["ref-gpt"],
+        count: 1,
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain("只接入了图片生成接口");
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("uses uploaded references through the Qwen image editing request", async () => {
+    const referenceB64 = Buffer.from("reference-png").toString("base64");
+    const prisma = createPrismaMock([{
+      id: "ref-1",
+      userId: "u1",
+      requestId: "ecom-reference:ref-1",
+      requestIndex: 0,
+      prompt: "image_reference_upload",
+      model: "image_reference_upload",
+      size: "reference",
+      originalUrl: `data:image/png;base64,${referenceB64}`,
+      thumbnailUrl: `data:image/png;base64,${referenceB64}`,
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T07:00:00.000Z"),
+    }]);
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })) as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing: createBillingMock(), fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-with-reference", prompt: "保留杯子造型，改成户外场景", size: "1024x1024", referenceAssetIds: ["ref-1"], count: 1 },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data.task.referenceAssetIds).toEqual(["ref-1"]);
+    await scheduled[0];
+    const body = JSON.parse(String((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body.input.messages[0].content).toEqual([
+      { image: `data:image/png;base64,${referenceB64}` },
+      { text: "保留杯子造型，改成户外场景" },
+    ]);
+    await app.close();
+  });
+
+  it("passes Qwen's width-height size to the native upstream", async () => {
     const prisma = createPrismaMock();
     const billing = createBillingMock();
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })) as typeof fetch;
@@ -232,11 +434,9 @@ describe("image workflow routes", () => {
     expect(response.statusCode).toBe(202);
     await scheduled[0];
     const requestBody = JSON.parse((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0][1].body as string) as {
-      size?: string;
-      resolution?: string;
+      parameters?: { size?: string };
     };
-    expect(requestBody.size).toBe("16:9");
-    expect(requestBody.resolution).toBe("2k");
+    expect(requestBody.parameters?.size).toBe("2048*1152");
     expect(response.json().data.task.size).toBe("2048x1152");
     expect(billing.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k" }));
     await app.close();
@@ -344,7 +544,7 @@ describe("image workflow routes", () => {
       userId: "u1",
       requestId: "req-running",
       prompt: "小龙虾",
-      model: "gpt-image-2",
+      model: "qwen-image-2.0-pro-2026-04-22",
       size: "1024x1024",
       count: 4,
       status: "running",
@@ -374,7 +574,7 @@ describe("image workflow routes", () => {
       userId: "u1",
       requestId: "req-stale",
       prompt: "商业美食摄影",
-      model: "gpt-image-2",
+      model: "qwen-image-2.0-pro-2026-04-22",
       size: "1024x1024",
       count: 1,
       status: "running",
@@ -400,6 +600,41 @@ describe("image workflow routes", () => {
       status: "completed",
       completedCount: 1,
     });
+    await app.close();
+  });
+
+  it("resumes a stale GPT Image task with its persisted provider instead of the default model", async () => {
+    process.env.GPT_IMAGE_API_KEY = "gpt-image-key";
+    process.env.GPT_IMAGE_GENERATION_ENDPOINT = "https://pixel.test/v1/images/generations";
+    const prisma = createPrismaMock([], [{
+      id: "task-stale-gpt",
+      userId: "u1",
+      requestId: "req-stale-gpt",
+      prompt: "极简产品摄影",
+      model: "gpt-image-2",
+      size: "1024x1024",
+      count: 1,
+      status: "running",
+      completedCount: 0,
+      error: null,
+      createdAt: new Date("2026-06-29T07:00:00.000Z"),
+      updatedAt: new Date("2026-06-29T07:00:00.000Z"),
+    }]);
+    const billing = createBillingMock();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ b64_json: Buffer.from("gpt-png").toString("base64") }],
+    }), { status: 200 })) as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled, staleTaskMs: 1 });
+
+    expect((await app.inject({ method: "GET", url: "/api/workflow/images/state" })).statusCode).toBe(200);
+    expect(scheduled).toHaveLength(1);
+    await scheduled[0];
+    expect((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toBe("https://pixel.test/v1/images/generations");
+    const body = JSON.parse(String((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body).toMatchObject({ model: "gpt-image-2", prompt: "极简产品摄影" });
+    expect(body).not.toHaveProperty("input");
+    expect(billing.chargeResource).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -568,6 +803,25 @@ describe("image workflow routes", () => {
 
     expect(response.statusCode).toBe(400);
     expect(billing.chargeResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects 4K output because Qwen Image 2.0 Pro supports at most 2K", async () => {
+    const prisma = createPrismaMock();
+    const billing = createBillingMock();
+    const fetchFn = vi.fn() as unknown as typeof fetch;
+    const app = await createApp({ prisma, billing, fetchFn });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-4k-output", prompt: "小龙虾", size: "3840x2160", count: 1 },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain("最高支持 2K");
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(fetchFn).not.toHaveBeenCalled();
     await app.close();
   });
 

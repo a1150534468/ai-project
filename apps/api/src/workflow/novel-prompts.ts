@@ -58,7 +58,7 @@ export function buildNovelUserPrompt(input: NovelPromptInput): string {
       input.chapterTitle ? `章节标题：${input.chapterTitle}` : "",
       input.chapterSummary ? `章节要求：${input.chapterSummary}` : "",
       input.contextText ? `已定设定与大纲：\n${input.contextText}` : "",
-      `目标长度：约 ${input.targetChars ?? 3000} 个汉字。`,
+      `目标长度：约 ${input.targetChars ?? 3000} 个汉字；正文不得少于 ${Math.round((input.targetChars ?? 3000) * 0.9)} 个汉字，建议控制在 ${input.targetChars ?? 3000}–${Math.round((input.targetChars ?? 3000) * 1.1)} 个汉字。`,
       "请输出节奏完整、可直接展示给用户的正文。",
     ].filter(Boolean).join("\n\n");
   }

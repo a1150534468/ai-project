@@ -10,7 +10,10 @@ out
 # Go binaries
 /services/billing/billing
 infra/k8s/secrets.env
-docs/
+docs/*
+!docs/development/
+docs/development/*
+!docs/development/novel-workflow-e2e-audit-2026-07-15.md
 # 发版编排脚本：仅本地保留，不入库（rsync/scp 用显式 exclude 不看 gitignore，不影响发版）
 scripts/deploy.sh
 scripts/release.sh

@@ -1,13 +1,16 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma, getRedis } from "@ai-assistant/db";
+import { completedNovelChapterCount, nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import { novelAssistedRunSchema, novelAutopilotStartSchema } from "@ai-assistant/novel-workflow/contracts";
-import { novelRunChannel, serializeNovelRunEvent } from "./events.js";
+import { appendNovelRunEvent, novelRunChannel, serializeNovelRunEvent } from "./events.js";
 import { dispatchNovelOutboxBatch } from "./outbox.js";
 import { createNovelRun, createNextNovelStep, serializeNovelRun } from "./run-store.js";
 import { registerNovelResourceRoutes } from "./resource-routes.js";
 import { registerNovelExportRoutes } from "./export.js";
+import { buildNovelRevisionGuidance } from "./revision.js";
 
 const projectParamsSchema = z.object({ projectId: z.string().min(1) });
 const runParamsSchema = projectParamsSchema.extend({ runId: z.string().min(1) });
@@ -29,8 +32,15 @@ function activeRunConflict(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
 
-export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?: PrismaClient } = {}) {
+export async function novelEngineRoutes(app: FastifyInstance, options: {
+  prisma?: PrismaClient;
+  billing?: { refundResource: (operationId: string) => Promise<unknown> };
+} = {}) {
   const prisma = options.prisma ?? getPrisma();
+  const billing = options.billing ?? createBillingClient({
+    baseUrl: process.env.BILLING_BASE_URL!,
+    token: process.env.BILLING_INTERNAL_TOKEN!,
+  });
 
   app.post("/api/workflow/novels/projects/:projectId/runs/assisted", async (req, reply) => {
     const userId = userIdOf(req);
@@ -68,8 +78,16 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await ownedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
-    const latest = await prisma.novelChapter.findFirst({ where: { projectId: project.id }, orderBy: { chapterIndex: "desc" } });
-    const startChapter = body.data.startChapter ?? (latest?.chapterIndex ?? 0) + 1;
+    const chapters = await prisma.novelChapter.findMany({
+      where: { projectId: project.id },
+      orderBy: { chapterIndex: "asc" },
+      select: { chapterIndex: true, content: true },
+    });
+    const expectedStartChapter = nextNovelChapterIndex(chapters);
+    if (body.data.startChapter !== undefined && body.data.startChapter !== expectedStartChapter) {
+      return reply.code(409).send({ error: `下一篇未完成章节是第 ${expectedStartChapter} 章，请刷新后重试` });
+    }
+    const startChapter = expectedStartChapter;
     if (startChapter > body.data.targetChapters) return reply.code(400).send({ error: "起始章节不能超过目标章节" });
     try {
       const created = await createNovelRun({
@@ -80,6 +98,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
         startChapter,
         targetChapters: body.data.targetChapters,
         targetCharsPerChapter: body.data.targetCharsPerChapter,
+        completedChapters: completedNovelChapterCount(chapters),
         autoReview: body.data.autoReview,
       });
       await prisma.novelProject.update({
@@ -115,11 +134,45 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
       include: { steps: { orderBy: { sequence: "asc" } } },
     });
     if (!run) return reply.code(404).send({ error: "运行不存在" });
+    const tasks = run.steps.length ? await prisma.novelTask.findMany({
+      where: { targetId: { in: run.steps.map((step) => step.id) } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        targetId: true,
+        status: true,
+        progressPercent: true,
+        progressStage: true,
+        progressMessage: true,
+        streamedChars: true,
+        updatedAt: true,
+      },
+    }) : [];
+    const latestTaskByStep = new Map<string, typeof tasks[number]>();
+    for (const task of tasks) {
+      if (task.targetId && !latestTaskByStep.has(task.targetId)) latestTaskByStep.set(task.targetId, task);
+    }
     return {
       success: true,
       data: {
         run: serializeNovelRun(run),
-        steps: run.steps.map((step) => ({ ...step, createdAt: step.createdAt.toISOString(), updatedAt: step.updatedAt.toISOString(), startedAt: step.startedAt?.toISOString() ?? null, completedAt: step.completedAt?.toISOString() ?? null })),
+        steps: run.steps.map((step) => {
+          const task = latestTaskByStep.get(step.id);
+          return {
+            ...step,
+            createdAt: step.createdAt.toISOString(),
+            updatedAt: step.updatedAt.toISOString(),
+            startedAt: step.startedAt?.toISOString() ?? null,
+            completedAt: step.completedAt?.toISOString() ?? null,
+            taskProgress: task ? {
+              status: task.status,
+              percent: task.progressPercent,
+              stage: task.progressStage,
+              message: task.progressMessage,
+              streamedChars: task.streamedChars,
+              updatedAt: task.updatedAt.toISOString(),
+            } : null,
+          };
+        }),
       },
     };
   });
@@ -143,9 +196,55 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
     if (!run) return reply.code(404).send({ error: "运行不存在" });
-    const updated = await prisma.novelRun.update({ where: { id: run.id }, data: { cancelRequested: true, status: "cancelled", completedAt: new Date() } });
-    await prisma.novelRunStep.updateMany({ where: { runId: run.id, status: "queued" }, data: { status: "cancelled", completedAt: new Date() } });
-    await prisma.novelProject.update({ where: { id: run.projectId }, data: { autopilotStatus: "cancelled" } });
+    const activeSteps = await prisma.novelRunStep.findMany({
+      where: { runId: run.id, status: { in: ["queued", "running", "failed"] } },
+      select: { id: true },
+    });
+    const stepIds = activeSteps.map((step) => step.id);
+    const activeTasks = stepIds.length ? await prisma.novelTask.findMany({
+      where: { targetId: { in: stepIds }, status: { in: ["queued", "running"] } },
+      select: { id: true, operationId: true },
+    }) : [];
+    const cancelledAt = new Date();
+    const [, updated] = await prisma.$transaction([
+      prisma.novelRunStep.updateMany({ where: { runId: run.id, status: { in: ["queued", "running", "failed"] } }, data: { status: "cancelled", error: "用户已取消", workerId: null, completedAt: cancelledAt } }),
+      prisma.novelRun.update({ where: { id: run.id }, data: { cancelRequested: true, status: "cancelled", completedAt: cancelledAt } }),
+      prisma.novelTask.updateMany({ where: { id: { in: activeTasks.map((task) => task.id) } }, data: { status: "cancelled", error: "用户已取消", progressStage: "cancelled", progressMessage: "用户已取消", cancelledAt } }),
+      prisma.novelCommandOutbox.updateMany({ where: { runId: run.id, status: { in: ["pending", "dispatching"] } }, data: { status: "cancelled", lastError: "用户已取消" } }),
+      prisma.novelProject.update({ where: { id: run.projectId }, data: { autopilotStatus: "cancelled" } }),
+    ]);
+    await Promise.all(activeTasks.map((task) => billing.refundResource(task.operationId).catch((error) => {
+      app.log.warn({ err: error, taskId: task.id, runId: run.id }, "novel run cancellation refund failed");
+    })));
+    await appendNovelRunEvent({ prisma, runId: run.id, type: "runStatusChanged", stage: "cancelled", step: null, chapterNumber: run.currentChapter, progress: 100, payload: { reason: "cancelRequested" } });
+    return { success: true, data: { run: serializeNovelRun(updated) } };
+  });
+
+  app.post("/api/workflow/novels/projects/:projectId/runs/:runId/revise", async (req, reply) => {
+    const userId = userIdOf(req);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
+    if (!run) return reply.code(404).send({ error: "运行不存在" });
+    if (run.status !== "awaitingReview" || !run.currentChapter) return reply.code(409).send({ error: "只有等待审阅的章节可以请求 AI 修订" });
+    const chapter = await prisma.novelChapter.findUnique({
+      where: { projectId_chapterIndex: { projectId: run.projectId, chapterIndex: run.currentChapter } },
+      select: { reviewStatus: true, aiActionItems: true, billableChars: true },
+    });
+    if (!chapter || chapter.reviewStatus === "approved") return reply.code(409).send({ error: "当前章节无需返修，请直接恢复运行" });
+    const activeStep = await prisma.novelRunStep.findFirst({ where: { runId: run.id, status: { in: ["queued", "running"] } } });
+    if (activeStep) return reply.code(409).send({ error: "当前已有返修步骤在执行" });
+    const actionItems = Array.isArray(chapter.aiActionItems) ? chapter.aiActionItems.filter((item): item is string => typeof item === "string") : [];
+    const revisionGuidance = buildNovelRevisionGuidance({ billableChars: chapter.billableChars, targetChars: run.targetCharsPerChapter, actionItems });
+    await createNextNovelStep({ prisma, runId: run.id, kind: "writeChapter", chapterNumber: run.currentChapter, priority: run.mode === "assisted" ? 1 : 5, input: { revisionGuidance } });
+    const updated = await prisma.novelRun.update({
+      where: { id: run.id },
+      data: { pauseRequested: false, consecutiveFailures: 0, status: "queued", error: null, completedAt: null },
+    });
+    await prisma.novelProject.update({ where: { id: run.projectId }, data: { autopilotStatus: "queued" } });
+    await appendNovelRunEvent({ prisma, runId: run.id, type: "runStatusChanged", stage: "queued", step: "writeChapter", chapterNumber: run.currentChapter, progress: 0, payload: { reason: "aiRevisionRequested", revisionGuidance } });
+    await dispatchNovelOutboxBatch(prisma).catch((error) => app.log.warn({ err: error }, "novel revision dispatch deferred"));
     return { success: true, data: { run: serializeNovelRun(updated) } };
   });
 
@@ -157,6 +256,25 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
     if (!run) return reply.code(404).send({ error: "运行不存在" });
     if (run.status === "cancelled" || run.status === "completed") return reply.code(409).send({ error: "该运行已结束，不能恢复" });
+    if (run.status === "awaitingReview") {
+      const chapter = run.currentChapter ? await prisma.novelChapter.findUnique({
+        where: { projectId_chapterIndex: { projectId: run.projectId, chapterIndex: run.currentChapter } },
+        select: { reviewStatus: true },
+      }) : null;
+      if (!chapter || chapter.reviewStatus !== "approved") {
+        return reply.code(409).send({ error: "请先在章节质检中完成人工审阅并标记为通过" });
+      }
+      if (run.mode === "assisted" || (run.currentChapter ?? 0) >= run.targetChapters) {
+        const completedAt = new Date();
+        const completed = await prisma.novelRun.update({
+          where: { id: run.id },
+          data: { pauseRequested: false, status: "completed", error: null, completedAt },
+        });
+        await prisma.novelProject.update({ where: { id: run.projectId }, data: { autopilotStatus: "completed" } });
+        await appendNovelRunEvent({ prisma, runId: run.id, type: "runCompleted", stage: "completed", step: "finalizeChapter", chapterNumber: run.currentChapter, progress: 100, payload: { reason: "humanReviewApproved" } });
+        return { success: true, data: { run: serializeNovelRun(completed) } };
+      }
+    }
     const pending = await prisma.novelRunStep.findFirst({ where: { runId: run.id, status: { in: ["queued", "failed"] } }, orderBy: { sequence: "desc" } });
     if (pending) {
       await prisma.$transaction([
@@ -168,7 +286,11 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
         }),
       ]);
     } else if (run.mode === "autopilot" && (run.currentChapter ?? 0) < run.targetChapters) {
-      await createNextNovelStep({ prisma, runId: run.id, kind: "prepareChapter", chapterNumber: (run.currentChapter ?? 0) + 1, priority: 5 });
+      const chapters = await prisma.novelChapter.findMany({ where: { projectId: run.projectId }, select: { chapterIndex: true, content: true }, orderBy: { chapterIndex: "asc" } });
+      const nextChapter = nextNovelChapterIndex(chapters);
+      await createNextNovelStep({ prisma, runId: run.id, kind: "prepareChapter", chapterNumber: nextChapter, priority: 5 });
+    } else if (!pending) {
+      return reply.code(409).send({ error: "当前运行没有可恢复的步骤" });
     }
     const updated = await prisma.novelRun.update({ where: { id: run.id }, data: { pauseRequested: false, cancelRequested: false, consecutiveFailures: 0, status: "queued", error: null, completedAt: null } });
     await prisma.novelProject.update({ where: { id: run.projectId }, data: { autopilotStatus: "queued" } });
@@ -184,8 +306,14 @@ export async function novelEngineRoutes(app: FastifyInstance, options: { prisma?
     if (!params.success || !query.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
     if (!run) return reply.code(404).send({ error: "运行不存在" });
-    const events = await prisma.novelRunEvent.findMany({ where: { runId: run.id, sequence: { gt: query.data.after } }, orderBy: { sequence: "asc" }, take: 500 });
-    return { success: true, data: { events: events.map(serializeNovelRunEvent), cursor: events.at(-1)?.sequence ?? query.data.after } };
+    const initialTail = query.data.after === 0;
+    const events = await prisma.novelRunEvent.findMany({
+      where: { runId: run.id, sequence: { gt: query.data.after } },
+      orderBy: { sequence: initialTail ? "desc" : "asc" },
+      take: initialTail ? 200 : 500,
+    });
+    const ordered = initialTail ? events.reverse() : events;
+    return { success: true, data: { events: ordered.map(serializeNovelRunEvent), cursor: ordered.at(-1)?.sequence ?? query.data.after } };
   });
 
   app.get("/api/workflow/novels/projects/:projectId/runs/:runId/events/stream", async (req, reply) => {

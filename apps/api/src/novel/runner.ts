@@ -3,6 +3,8 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import {
+  completedNovelChapterCount,
+  decideNovelReview,
   evaluateNovelQualityGate,
   resolveNovelStoryPhase,
   type NovelPipelineStepKind,
@@ -21,6 +23,7 @@ import type { NovelTargetKind } from "../workflow/novel-types.js";
 import { appendNovelRunEvent } from "./events.js";
 import { createNextNovelStep } from "./run-store.js";
 import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
+import { buildNovelRevisionGuidance, MAX_AUTOMATIC_NOVEL_REVISIONS } from "./revision.js";
 
 function record(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -96,6 +99,7 @@ async function executeStepBody(args: {
       readonly userId: string;
       readonly mode: string;
       readonly targetCharsPerChapter: number;
+      readonly autoReview: boolean;
     };
   };
 }): Promise<Record<string, unknown>> {
@@ -173,6 +177,7 @@ async function executeStepBody(args: {
     const chapter = await prisma.novelChapter.findUniqueOrThrow({
       where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: chapterNumber } },
     });
+    const revisionGuidance = stringArray(input.revisionGuidance as Prisma.JsonValue | undefined);
     let chunkBuffer = "";
     const emitChunk = async (force = false) => {
       if (!chunkBuffer || (!force && Array.from(chunkBuffer).length < 160)) return;
@@ -190,7 +195,7 @@ async function executeStepBody(args: {
       payload: {
         chapterIndex: chapterNumber,
         title: chapter.title,
-        summary: chapter.summary,
+        summary: [chapter.outline || chapter.summary, revisionGuidance.length ? `本次为质量返修，必须解决：${revisionGuidance.join("；")}` : ""].filter(Boolean).join("\n"),
         targetChars: step.run.targetCharsPerChapter,
       },
       estimateChars: estimateReserveChars("chapter", step.run.targetCharsPerChapter),
@@ -222,6 +227,8 @@ async function executeStepBody(args: {
       tensionScore: quality.tensionScore / 100,
       highSeverityIssues,
       criticalIssues: 0,
+      contentChars: chapter.billableChars || Array.from(chapter.content).filter((char) => /\S/u.test(char)).length,
+      targetChars: step.run.targetCharsPerChapter,
     });
     await prisma.$transaction([
       prisma.novelQualityReport.deleteMany({ where: { projectId: project.id, chapterNumber, runId: step.run.id } }),
@@ -308,11 +315,24 @@ async function executeStepBody(args: {
       where: { projectId: project.id, chapterNumber, runId: step.run.id },
       orderBy: { createdAt: "desc" },
     });
+    const issues = Array.isArray(report?.issues) ? report.issues : [];
+    const gateReasons = report ? evaluateNovelQualityGate({
+      consistencyScore: report.consistencyScore / 100,
+      styleScore: report.styleScore / 100,
+      tensionScore: report.tensionScore / 100,
+      highSeverityIssues: issues.filter((issue) => record(issue as Prisma.JsonValue).severity === "high").length,
+      criticalIssues: 0,
+      contentChars: chapter.billableChars || Array.from(chapter.content).filter((char) => /\S/u.test(char)).length,
+      targetChars: step.run.targetCharsPerChapter,
+    }).reasons : ["缺少章节质量报告"];
+    const gatePassed = Boolean(report?.gatePassed);
+    const review = decideNovelReview({ mode: step.run.mode as "assisted" | "autopilot", autoReview: step.run.autoReview, gatePassed });
+    const reviewStatus = review.chapterReviewStatus;
     await prisma.novelChapter.update({
       where: { id: chapter.id },
-      data: { status: "ready", reviewStatus: report?.gatePassed ? "approved" : "revise", reviewedAt: new Date() },
+      data: { status: "ready", reviewStatus, reviewedAt: reviewStatus === "approved" ? new Date() : null },
     });
-    return { chapterNumber, gatePassed: Boolean(report?.gatePassed), qualityScore: report?.overallScore ?? 0 };
+    return { chapterNumber, gatePassed, gateReasons, qualityScore: report?.overallScore ?? 0 };
   }
 
   throw new Error(`unsupported novel pipeline step: ${kind}`);
@@ -372,10 +392,15 @@ export async function executeNovelEngineStep(args: {
 
   try {
     const output = await executeStepBody({ prisma, billing, step: initial });
-    await prisma.$transaction([
-      prisma.novelRunStep.update({ where: { id: initial.id }, data: { status: "succeeded", progress: 100, output: output as Prisma.InputJsonValue, completedAt: new Date(), error: null } }),
-      prisma.novelRun.update({ where: { id: initial.runId }, data: { consecutiveFailures: 0, error: null } }),
-    ]);
+    const committed = await prisma.$transaction(async (tx) => {
+      const step = await tx.novelRunStep.updateMany({
+        where: { id: initial.id, status: "running", workerId },
+        data: { status: "succeeded", progress: 100, output: output as Prisma.InputJsonValue, completedAt: new Date(), error: null },
+      });
+      if (step.count === 1) await tx.novelRun.update({ where: { id: initial.runId }, data: { consecutiveFailures: 0, error: null } });
+      return step.count === 1;
+    });
+    if (!committed) return;
     await appendNovelRunEvent({
       prisma,
       runId: initial.runId,
@@ -388,21 +413,20 @@ export async function executeNovelEngineStep(args: {
     });
 
     const freshRun = await prisma.novelRun.findUniqueOrThrow({ where: { id: initial.runId } });
-    if (freshRun.cancelRequested || freshRun.pauseRequested) {
-      const requestedStatus = freshRun.cancelRequested ? "cancelled" as const : "paused" as const;
+    if (freshRun.cancelRequested) {
       await prisma.$transaction([
-        prisma.novelRun.update({ where: { id: freshRun.id }, data: { status: requestedStatus, completedAt: requestedStatus === "cancelled" ? new Date() : null } }),
-        prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { autopilotStatus: requestedStatus } }),
+        prisma.novelRun.update({ where: { id: freshRun.id }, data: { status: "cancelled", completedAt: new Date() } }),
+        prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { autopilotStatus: "cancelled" } }),
       ]);
       await appendNovelRunEvent({
         prisma,
         runId: freshRun.id,
         type: "runStatusChanged",
-        stage: requestedStatus,
+        stage: "cancelled",
         step: initial.kind as NovelPipelineStepKind,
         chapterNumber: initial.chapterNumber,
         progress: 100,
-        payload: { reason: freshRun.cancelRequested ? "cancelRequested" : "pauseRequested" },
+        payload: { reason: "cancelRequested" },
       });
       return;
     }
@@ -415,24 +439,81 @@ export async function executeNovelEngineStep(args: {
         chapterNumber: freshRun.currentChapter,
         priority: freshRun.mode === "assisted" ? 1 : 5,
       });
+      if (freshRun.pauseRequested) {
+        await prisma.$transaction([
+          prisma.novelRun.update({ where: { id: freshRun.id }, data: { status: "paused" } }),
+          prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { autopilotStatus: "paused" } }),
+        ]);
+        await appendNovelRunEvent({ prisma, runId: freshRun.id, type: "runStatusChanged", stage: "paused", step: next, chapterNumber: freshRun.currentChapter, progress: 0, payload: { reason: "pauseRequested" } });
+      }
       return;
     }
 
     const gatePassed = output.gatePassed !== false;
-    const completedCount = await prisma.novelChapter.count({ where: { projectId: freshRun.projectId, status: "ready" } });
+    const gateReasons = Array.isArray(output.gateReasons) ? output.gateReasons.filter((reason): reason is string => typeof reason === "string") : [];
+    const progressChapters = await prisma.novelChapter.findMany({
+      where: { projectId: freshRun.projectId },
+      select: { chapterIndex: true, content: true },
+      orderBy: { chapterIndex: "asc" },
+    });
+    const completedCount = completedNovelChapterCount(progressChapters);
     const completedChapter = freshRun.currentChapter ?? initial.chapterNumber ?? completedCount;
     const phase = resolveNovelStoryPhase(completedCount, freshRun.targetChapters);
+    if (freshRun.mode === "autopilot" && freshRun.autoReview && !gatePassed) {
+      const successfulWrites = await prisma.novelRunStep.count({
+        where: { runId: freshRun.id, chapterNumber: completedChapter, kind: "writeChapter", status: "succeeded" },
+      });
+      const completedAutomaticRevisions = Math.max(0, successfulWrites - 1);
+      if (completedAutomaticRevisions < MAX_AUTOMATIC_NOVEL_REVISIONS) {
+        const chapterForRevision = await prisma.novelChapter.findUniqueOrThrow({
+          where: { projectId_chapterIndex: { projectId: freshRun.projectId, chapterIndex: completedChapter } },
+          select: { billableChars: true, aiActionItems: true },
+        });
+        const actionItems = Array.isArray(chapterForRevision.aiActionItems) ? chapterForRevision.aiActionItems.filter((item): item is string => typeof item === "string") : [];
+        const revisionGuidance = buildNovelRevisionGuidance({
+          billableChars: chapterForRevision.billableChars,
+          targetChars: freshRun.targetCharsPerChapter,
+          actionItems,
+          gateReasons,
+        });
+        const revisionAttempt = completedAutomaticRevisions + 1;
+        await createNextNovelStep({
+          prisma,
+          runId: freshRun.id,
+          kind: "writeChapter",
+          chapterNumber: completedChapter,
+          priority: 5,
+          input: { revisionGuidance },
+          runData: { status: "queued", completedChapters: completedCount, consecutiveFailures: 0, error: null, completedAt: null },
+        });
+        await prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { storyPhase: phase.phase, autopilotStatus: "queued" } });
+        await appendNovelRunEvent({
+          prisma,
+          runId: freshRun.id,
+          type: "runStatusChanged",
+          stage: "queued",
+          step: "writeChapter",
+          chapterNumber: completedChapter,
+          progress: 0,
+          payload: { reason: "autoRevisionRequested", revisionAttempt, maxRevisionAttempts: MAX_AUTOMATIC_NOVEL_REVISIONS, gateReasons, revisionGuidance },
+        });
+        return;
+      }
+    }
     if (freshRun.mode === "autopilot" && freshRun.autoReview && gatePassed && completedChapter < freshRun.targetChapters) {
+      const nextStatus = freshRun.pauseRequested ? "paused" as const : "queued" as const;
       await prisma.$transaction([
-        prisma.novelRun.update({ where: { id: freshRun.id }, data: { completedChapters: completedCount, currentChapter: completedChapter + 1, status: "queued", currentStep: "prepareChapter" } }),
-        prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { storyPhase: phase.phase, autopilotStatus: "queued" } }),
+        prisma.novelRun.update({ where: { id: freshRun.id }, data: { completedChapters: completedCount, currentChapter: completedChapter + 1, status: nextStatus, currentStep: "prepareChapter" } }),
+        prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { storyPhase: phase.phase, autopilotStatus: nextStatus } }),
       ]);
-      await appendNovelRunEvent({ prisma, runId: freshRun.id, type: "chapterCompleted", stage: "queued", step: "finalizeChapter", chapterNumber: completedChapter, progress: 100, payload: { nextChapter: completedChapter + 1 } });
+      await appendNovelRunEvent({ prisma, runId: freshRun.id, type: "chapterCompleted", stage: nextStatus, step: "finalizeChapter", chapterNumber: completedChapter, progress: 100, payload: { nextChapter: completedChapter + 1 } });
       await createNextNovelStep({ prisma, runId: freshRun.id, kind: "prepareChapter", chapterNumber: completedChapter + 1, priority: 5 });
+      if (freshRun.pauseRequested) await appendNovelRunEvent({ prisma, runId: freshRun.id, type: "runStatusChanged", stage: "paused", step: "prepareChapter", chapterNumber: completedChapter + 1, progress: 0, payload: { reason: "pauseRequested" } });
       return;
     }
 
-    const finalStatus = freshRun.mode === "assisted" || !gatePassed ? "awaitingReview" : "completed";
+    const review = decideNovelReview({ mode: freshRun.mode as "assisted" | "autopilot", autoReview: freshRun.autoReview, gatePassed });
+    const finalStatus = review.requiresHumanReview ? "awaitingReview" : "completed";
     await prisma.$transaction([
       prisma.novelRun.update({ where: { id: freshRun.id }, data: { status: finalStatus, completedChapters: completedCount, completedAt: finalStatus === "completed" ? new Date() : null } }),
       prisma.novelProject.update({ where: { id: freshRun.projectId }, data: { storyPhase: phase.phase, autopilotStatus: finalStatus } }),
@@ -445,7 +526,7 @@ export async function executeNovelEngineStep(args: {
       step: "finalizeChapter",
       chapterNumber: completedChapter,
       progress: 100,
-      payload: { gatePassed },
+      payload: { gatePassed, gateReasons, reason: review.reason ?? "targetCompleted" },
     });
   } catch (error) {
     const message = safeMessage(error);
@@ -468,6 +549,13 @@ export async function executeNovelEngineStep(args: {
       return;
     }
     const latest = await prisma.novelRun.findUniqueOrThrow({ where: { id: initial.runId } });
+    if (latest.cancelRequested || latest.status === "cancelled") {
+      await prisma.$transaction([
+        prisma.novelRunStep.update({ where: { id: initial.id }, data: { status: "cancelled", error: "用户已取消", workerId: null, completedAt: new Date() } }),
+        prisma.novelProject.update({ where: { id: initial.run.projectId }, data: { autopilotStatus: "cancelled" } }),
+      ]);
+      return;
+    }
     const failures = latest.consecutiveFailures + 1;
     const circuitOpen = failures >= 3;
     await prisma.$transaction([

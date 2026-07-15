@@ -435,6 +435,7 @@ export interface WorkflowImageTask {
   prompt: string;
   model: string;
   size: string;
+  referenceAssetIds: string[];
   count: number;
   status: "running" | "completed" | "failed" | "cancelled";
   completedCount: number;
@@ -445,9 +446,11 @@ export interface WorkflowImageTask {
 
 export interface GenerateWorkflowImagesPayload {
   requestId: string;
+  model: "qwen-image-2.0-pro-2026-04-22" | "gpt-image-2";
   prompt: string;
   size: string;
   resolution?: "1K" | "2K" | "4K";
+  referenceAssetIds?: string[];
   count: number;
 }
 
@@ -469,6 +472,20 @@ export async function listWorkflowImages(token: string): Promise<WorkflowImageAs
   if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取生图历史失败"), r.status);
   const resp = (await r.json()) as { data: WorkflowImageAsset[] };
   return resp.data ?? [];
+}
+
+export async function uploadWorkflowImageReference(
+  token: string,
+  image: { readonly b64: string; readonly mime?: string },
+): Promise<WorkflowImageAsset> {
+  const r = await fetch("/api/workflow/images/references", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ image }),
+  });
+  if (!r.ok) throw new ApiError(await readErrorMessage(r, "上传参考图失败"), r.status);
+  const resp = (await r.json()) as { data: { asset: WorkflowImageAsset } };
+  return resp.data.asset;
 }
 
 export async function getWorkflowImageState(token: string): Promise<WorkflowImageState> {
@@ -901,6 +918,14 @@ export interface NovelEngineStep {
   updatedAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  taskProgress: {
+    status: string;
+    percent: number;
+    stage: string;
+    message: string | null;
+    streamedChars: number;
+    updatedAt: string;
+  } | null;
 }
 
 async function novelEngineRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
@@ -942,7 +967,7 @@ export async function getNovelEngineRun(token: string, projectId: string, runId:
   return novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}`);
 }
 
-export async function controlNovelEngineRun(token: string, projectId: string, runId: string, action: "pause" | "resume" | "cancel"): Promise<NovelEngineRun> {
+export async function controlNovelEngineRun(token: string, projectId: string, runId: string, action: "pause" | "resume" | "cancel" | "revise"): Promise<NovelEngineRun> {
   const data = await novelEngineRequest<{ run: NovelEngineRun }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/${action}`, { method: "POST" });
   return data.run;
 }

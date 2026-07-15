@@ -43,15 +43,34 @@ const STEP_LABELS: Record<string, string> = {
   finalizeChapter: "状态推进",
 };
 const PIPELINE_ORDER = ["prepareChapter", "assembleContext", "writeChapter", "validateContent", "auditVoice", "postprocessChapter", "scoreTension", "finalizeChapter"] as const;
+const STEP_HEARTBEAT_STALE_MS = 90_000;
 
-function eventText(event: NovelEngineEvent): string {
+export function novelRunEventText(event: NovelEngineEvent): string {
   const payload = event.payload as Record<string, unknown>;
   if (typeof payload.error === "string") return payload.error;
+  if (event.type === "runQueued") return "运行已入队";
+  if (event.type === "runStatusChanged") {
+    if (payload.reason === "autoRevisionRequested") return `质量门禁未通过，自动返修 ${String(payload.revisionAttempt ?? "-")}/${String(payload.maxRevisionAttempts ?? "-")}`;
+    if (payload.reason === "aiRevisionRequested") return "已提交 AI 修订重检";
+    return STATUS_LABELS[event.stage] ?? event.stage;
+  }
   if (event.type === "chapterCompleted") return `第 ${event.chapterNumber ?? "-"} 章完成`;
   if (event.type === "runCompleted") return "目标章节已经完成";
-  if (event.type === "reviewRequired") return "质量门禁要求人工审阅";
+  if (event.type === "reviewRequired") {
+    if (payload.reason === "assistedCompletion") return "辅助写作完成，等待人工确认";
+    if (payload.reason === "manualReviewPolicy") return "自动续写已关闭，等待人工确认";
+    const reasons = Array.isArray(payload.gateReasons) ? payload.gateReasons.filter((reason): reason is string => typeof reason === "string") : [];
+    return reasons.length ? `质量门禁未通过：${reasons.join("；")}` : "质量门禁未通过，等待人工审阅";
+  }
   if (event.type === "chapterChunk" && typeof payload.text === "string") return payload.text;
+  if (event.type === "stepStarted") return "开始";
+  if (event.type === "stepCompleted") return "完成";
   return STEP_LABELS[event.step ?? ""] ?? event.type;
+}
+
+export function novelRunEventScope(event: NovelEngineEvent): string {
+  if (["runQueued", "runStatusChanged", "runCompleted", "reviewRequired", "chapterCompleted"].includes(event.type)) return "运行";
+  return event.step ? STEP_LABELS[event.step] ?? event.step : event.type;
 }
 
 function compactEvents(current: NovelEngineEvent[], next: NovelEngineEvent): NovelEngineEvent[] {
@@ -82,13 +101,25 @@ export function NovelRunCockpit({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const cursorRef = useRef(0);
+  const onProjectChangedRef = useRef(onProjectChanged);
+
+  useEffect(() => {
+    onProjectChangedRef.current = onProjectChanged;
+  }, [onProjectChanged]);
 
   const activeRun = useMemo(() => runs.find((run) => run.id === activeRunId) ?? runs[0] ?? null, [activeRunId, runs]);
   const streamedDraft = useMemo(() => events
-    .filter((event) => event.type === "chapterChunk" && typeof (event.payload as Record<string, unknown>).text === "string")
+    .filter((event) => event.type === "chapterChunk" && event.chapterNumber === activeRun?.currentChapter && typeof (event.payload as Record<string, unknown>).text === "string")
     .map((event) => String((event.payload as Record<string, unknown>).text))
-    .join("")
-    .slice(-12_000), [events]);
+    .join(""), [activeRun?.currentChapter, events]);
+  const logEvents = useMemo(() => events.filter((event) => event.type !== "chapterChunk"), [events]);
+
+  useEffect(() => {
+    if (!activeRun) return;
+    setTargetChapters(String(activeRun.targetChapters));
+    setTargetChars(String(activeRun.targetCharsPerChapter));
+    setAutoReview(activeRun.autoReview);
+  }, [activeRun?.id, activeRun?.targetChapters, activeRun?.targetCharsPerChapter, activeRun?.autoReview]);
 
   const load = useCallback(async (selectLatest = false) => {
     const [nextRuns, nextDashboard] = await Promise.all([
@@ -148,7 +179,7 @@ export function NovelRunCockpit({
               cursorRef.current = Math.max(cursorRef.current, event.sequence);
               setEvents((current) => compactEvents(current, event));
               if (event.type === "chapterCompleted" || event.type === "runCompleted" || event.type === "reviewRequired") {
-                onProjectChanged?.();
+                onProjectChangedRef.current?.();
                 void load();
               }
             },
@@ -161,7 +192,7 @@ export function NovelRunCockpit({
       }
     })();
     return () => controller.abort();
-  }, [activeRun?.id, load, onProjectChanged, projectId, token]);
+  }, [activeRun?.id, load, projectId, token]);
 
   const start = async () => {
     const chapters = Number.parseInt(targetChapters, 10);
@@ -180,6 +211,7 @@ export function NovelRunCockpit({
       const run = await startNovelAutopilotRun(token, projectId, { targetChapters: chapters, targetCharsPerChapter: chars, startChapter: nextChapter, autoReview });
       setRuns((current) => [run, ...current.filter((item) => item.id !== run.id)]);
       setActiveRunId(run.id);
+      onProjectChanged?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "启动全托管失败");
     } finally {
@@ -187,7 +219,7 @@ export function NovelRunCockpit({
     }
   };
 
-  const control = async (action: "pause" | "resume" | "cancel") => {
+  const control = async (action: "pause" | "resume" | "cancel" | "revise") => {
     if (!activeRun) return;
     setBusy(action);
     setError("");
@@ -240,8 +272,9 @@ export function NovelRunCockpit({
   };
 
   const canStart = !runs.some((run) => BOOK_LOCKING_STATUSES.has(run.status));
-  const completed = activeRun?.completedChapters ?? dashboard?.stats.chapters ?? 0;
-  const target = activeRun?.targetChapters ?? (Number.parseInt(targetChapters, 10) || 1);
+  const liveRun = activeRun && BOOK_LOCKING_STATUSES.has(activeRun.status) ? activeRun : null;
+  const completed = liveRun?.completedChapters ?? dashboard?.stats.chapters ?? 0;
+  const target = liveRun?.targetChapters ?? (Number.parseInt(targetChapters, 10) || 1);
   const percent = Math.min(100, Math.round((completed / Math.max(target, 1)) * 100));
 
   return (
@@ -260,6 +293,7 @@ export function NovelRunCockpit({
             {canStart && <button type="button" onClick={() => void start()} disabled={busy === "start"} className="h-9 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">{busy === "start" ? "启动中" : "启动全托管"}</button>}
             {activeRun && ACTIVE_STATUSES.has(activeRun.status) && <button type="button" onClick={() => void control("pause")} disabled={Boolean(busy)} className="h-9 rounded-lg border border-amber-200 px-4 text-sm font-semibold text-amber-700">暂停</button>}
             {activeRun && (activeRun.status === "paused" || activeRun.status === "failed" || activeRun.status === "awaitingReview") && <button type="button" onClick={() => void control("resume")} disabled={Boolean(busy)} className="h-9 rounded-lg bg-brand px-4 text-sm font-semibold text-white">恢复</button>}
+            {activeRun?.status === "awaitingReview" && <button type="button" onClick={() => void control("revise")} disabled={Boolean(busy)} className="h-9 rounded-lg border border-brand/30 px-4 text-sm font-semibold text-brand-ink disabled:opacity-50">{busy === "revise" ? "提交中" : "AI 修订重检"}</button>}
             {activeRun && !["completed", "cancelled"].includes(activeRun.status) && <button type="button" onClick={() => void control("cancel")} disabled={Boolean(busy)} className="h-9 rounded-lg border border-red-200 px-4 text-sm font-semibold text-red-600">停止</button>}
           </div>
         </div>
@@ -270,7 +304,7 @@ export function NovelRunCockpit({
         {view === "cockpit" && <><div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
             ["运行状态", STATUS_LABELS[activeRun?.status ?? dashboard?.project.autopilotStatus ?? ""] ?? "未启动", "mdi:engine-outline"],
-            ["当前位置", activeRun?.currentChapter ? `第 ${activeRun.currentChapter} 章` : "等待规划", "mdi:map-marker-path"],
+            ["当前位置", liveRun?.currentChapter ? `第 ${liveRun.currentChapter} 章` : `第 ${nextChapter} 章（下一章）`, "mdi:map-marker-path"],
             ["完成章节", `${completed}/${target}`, "mdi:book-check-outline"],
             ["开放伏笔", `${dashboard?.stats.openForeshadows ?? 0} 条`, "mdi:source-branch"],
             ["叙事阶段", dashboard?.project.storyPhase ?? "opening", "mdi:chart-timeline-variant"],
@@ -297,13 +331,14 @@ export function NovelRunCockpit({
         <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5">
           <div className="flex items-center justify-between"><h3 className="font-semibold text-[#1d1d1f]">实时管线</h3><span className="text-xs text-[#8a8a8f]">步骤可断点恢复</span></div>
           {streamedDraft && <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-brand/20 bg-[#fbfefd] p-4 [scrollbar-width:thin]"><p className="mb-2 text-xs font-semibold text-brand-ink">正文流式预览</p><p className="whitespace-pre-wrap text-sm leading-7 text-[#343438]">{streamedDraft}</p></div>}
-          <div className="mt-5 overflow-x-auto pb-2 [scrollbar-width:thin]"><div className="flex min-w-[1180px] items-center">{PIPELINE_ORDER.map((kind, index) => { const step = [...steps].reverse().find((item) => item.kind === kind); const state = step?.status ?? "waiting"; return <div key={kind} className="contents"><div className={`w-32 shrink-0 rounded-2xl border p-3 text-center ${state === "running" ? "border-brand bg-brand-soft ring-2 ring-brand/15" : state === "succeeded" ? "border-emerald-200 bg-emerald-50" : state === "failed" ? "border-red-200 bg-red-50" : "border-[#e1e6e4] bg-[#fafbfb]"}`}><span className={`mx-auto grid h-8 w-8 place-items-center rounded-full text-xs font-bold ${state === "succeeded" ? "bg-emerald-500 text-white" : state === "running" ? "bg-brand text-white" : state === "failed" ? "bg-red-500 text-white" : "bg-[#e8ecea] text-[#7a8380]"}`}>{state === "succeeded" ? <Icon icon="mdi:check" /> : index + 1}</span><p className="mt-2 text-xs font-semibold">{STEP_LABELS[kind]}</p><p className="mt-1 text-[10px] text-[#7a8380]">{state === "waiting" ? "等待" : state} · {step?.progress ?? 0}%</p>{step?.error && <p className="mt-1 line-clamp-2 text-[9px] text-red-600">{step.error}</p>}</div>{index < PIPELINE_ORDER.length - 1 && <div className={`h-0.5 w-5 shrink-0 ${state === "succeeded" ? "bg-emerald-400" : "bg-[#dfe4e2]"}`}><Icon icon="mdi:chevron-right" className="-ml-0.5 -mt-[9px] text-lg text-[#9aa29f]" /></div>}</div>; })}</div></div>
+          <div className="mt-5 overflow-x-auto pb-2 [scrollbar-width:thin]"><div className="flex min-w-[1180px] items-center">{PIPELINE_ORDER.map((kind, index) => { const step = [...steps].reverse().find((item) => item.kind === kind); const state = step?.status ?? "waiting"; const taskProgress = step?.taskProgress; const progress = state === "running" ? Math.max(step?.progress ?? 0, taskProgress?.percent ?? 0) : step?.progress ?? 0; const heartbeatAt = taskProgress?.updatedAt ?? step?.updatedAt; const heartbeatStale = state === "running" && heartbeatAt ? Date.now() - new Date(heartbeatAt).getTime() > STEP_HEARTBEAT_STALE_MS : false; const activity = state === "running" ? taskProgress?.message || (heartbeatStale ? "心跳延迟，系统正在自动恢复" : "Worker 心跳正常，步骤执行中") : ""; return <div key={kind} className="contents"><div className={`w-32 shrink-0 rounded-2xl border p-3 text-center ${state === "running" ? "border-brand bg-brand-soft ring-2 ring-brand/15" : state === "succeeded" ? "border-emerald-200 bg-emerald-50" : state === "failed" ? "border-red-200 bg-red-50" : "border-[#e1e6e4] bg-[#fafbfb]"}`}><span className={`mx-auto grid h-8 w-8 place-items-center rounded-full text-xs font-bold ${state === "succeeded" ? "bg-emerald-500 text-white" : state === "running" ? "bg-brand text-white" : state === "failed" ? "bg-red-500 text-white" : "bg-[#e8ecea] text-[#7a8380]"}`}>{state === "succeeded" ? <Icon icon="mdi:check" /> : index + 1}</span><p className="mt-2 text-xs font-semibold">{STEP_LABELS[kind]}</p><p className="mt-1 text-[10px] text-[#7a8380]">{state === "waiting" ? "等待" : state} · {Math.round(progress)}%</p>{activity && <p className={`mt-1 line-clamp-3 text-[9px] ${heartbeatStale ? "text-amber-700" : "text-brand-ink"}`}>{activity}</p>}{taskProgress && taskProgress.streamedChars > 0 && <p className="mt-1 text-[9px] text-[#64706b]">已接收 {taskProgress.streamedChars.toLocaleString("zh-CN")} 字</p>}{step?.error && <p className="mt-1 line-clamp-2 text-[9px] text-red-600">{step.error}</p>}</div>{index < PIPELINE_ORDER.length - 1 && <div className={`h-0.5 w-5 shrink-0 ${state === "succeeded" ? "bg-emerald-400" : "bg-[#dfe4e2]"}`}><Icon icon="mdi:chevron-right" className="-ml-0.5 -mt-[9px] text-lg text-[#9aa29f]" /></div>}</div>; })}</div></div>
         </section>
         <section className="flex min-h-[360px] flex-col rounded-[14px] border border-[#20252b] bg-[#111418] p-4 text-[#d7e0e8]">
           <div className="flex items-center justify-between"><h3 className="text-sm font-semibold">运行日志</h3><span className="text-xs text-[#7f8b96]">SSE · #{cursorRef.current}</span></div>
           <div className="mt-3 flex-1 space-y-2 overflow-y-auto font-mono text-xs [scrollbar-width:thin]">
-            {events.map((event) => <p key={event.id} className="break-words"><span className="text-[#6ed7c8]">[{event.sequence}]</span> <span className="text-[#8da2b3]">{event.step ? STEP_LABELS[event.step] ?? event.step : event.type}</span> {eventText(event)}</p>)}
-            {events.length === 0 && <p className="text-[#7f8b96]">等待运行事件…</p>}
+            {logEvents.map((event) => <p key={event.id} className="break-words"><span className="text-[#6ed7c8]">[{event.sequence}]</span> <span className="text-[#8da2b3]">{novelRunEventScope(event)}</span> {novelRunEventText(event)}</p>)}
+            {logEvents.length === 0 && events.length > 0 && <p className="text-[#7f8b96]">正文正在流式生成，流程事件将在步骤完成后继续更新…</p>}
+            {events.length === 0 && <p className="text-[#7f8b96]">正在加载最近运行事件…</p>}
           </div>
         </section>
       </div>}

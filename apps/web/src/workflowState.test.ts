@@ -14,20 +14,20 @@ import {
 describe("workflowState", () => {
   it("exposes the requested aspect ratios and resolutions", () => {
     expect(IMAGE_ASPECT_RATIO_OPTIONS.map((option) => option.value)).toEqual(["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9"]);
-    expect(IMAGE_RESOLUTION_OPTIONS.map((option) => option.value)).toEqual(["1K", "2K", "4K"]);
+    expect(IMAGE_RESOLUTION_OPTIONS.map((option) => option.value)).toEqual(["1K", "2K"]);
   });
 
   it("builds the backend size from aspect ratio and resolution", () => {
     expect(buildImageSize("1:1", "1K")).toBe("1024x1024");
     expect(buildImageSize("3:2", "1K")).toBe("1536x1024");
     expect(buildImageSize("16:9", "2K")).toBe("2048x1152");
-    expect(buildImageSize("9:16", "4K")).toBe("2160x3840");
-    expect(buildImageSize("21:9", "4K")).toBe("3840x1648");
+    expect(buildImageSize("9:16", "2K")).toBe("1152x2048");
+    expect(buildImageSize("21:9", "2K")).toBe("2688x1152");
   });
 
   it("keeps compatibility size options derived from ratio and resolution", () => {
-    expect(IMAGE_SIZE_OPTIONS.map((option) => option.value)).toContain("3840x2160");
-    expect(IMAGE_SIZE_OPTIONS.map((option) => option.value)).toContain("3840x1648");
+    expect(IMAGE_SIZE_OPTIONS.map((option) => option.value)).not.toContain("3840x2160");
+    expect(IMAGE_SIZE_OPTIONS.map((option) => option.value)).not.toContain("3840x1648");
   });
 
   it("marks image, novel, commerce, fanout, article workflow, local business promo, comic, and scheduled task modules available", () => {

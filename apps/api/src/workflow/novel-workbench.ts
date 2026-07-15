@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import { buildNovelGenerationContext } from "./novel-context-builder.js";
 import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-workbench-types.js";
 
@@ -138,7 +139,7 @@ export async function getNovelWorkbench(prisma: PrismaClient, userId: string, pr
   const foreshadowItems = foreshadowRows.map((item) => serializeForeshadow(item as Parameters<typeof serializeForeshadow>[0]));
   const totalWords = serializedChapters.reduce((sum, chapter) => sum + Array.from(chapter.content || "").filter((char) => /\S/u.test(char)).length, 0);
   const finishedChapters = serializedChapters.filter((chapter) => chapter.content.trim()).length;
-  const focusChapterNumber = (serializedChapters.filter((chapter) => chapter.content.trim()).at(-1)?.chapterIndex ?? 0) + 1;
+  const focusChapterNumber = nextNovelChapterIndex(serializedChapters);
   const reviewFeedback = serializedChapters
     .filter((chapter) => chapter.chapterIndex < focusChapterNumber)
     .sort((a, b) => b.chapterIndex - a.chapterIndex)

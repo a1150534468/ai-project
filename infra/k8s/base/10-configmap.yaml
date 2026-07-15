@@ -21,7 +21,9 @@ data:
   S3_BUCKET: "aiproject-assets"
   S3_PUBLIC_BASE_URL: "https://assets.example.com"
   S3_FORCE_PATH_STYLE: "false"
-  IMAGE_GENERATION_MODEL: "gpt-image-2"
+  # 生图复用同一业务空间的 BAILIAN_WORKSPACE_ID / BAILIAN_API_KEY，直连百炼原生多模态接口。
+  IMAGE_GENERATION_MODEL: "qwen-image-2.0-pro-2026-04-22"
+  GPT_IMAGE_GENERATION_ENDPOINT: "https://api.ai-pixel.online/v1/images/generations"
   LOCAL_BUSINESS_PROMO_WORKER_CONCURRENCY: "2"
   LOCAL_BUSINESS_PROMO_FFMPEG_CONCURRENCY: "1"
   LOCAL_BUSINESS_PROMO_JOB_ATTEMPTS: "2"

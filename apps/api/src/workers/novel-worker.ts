@@ -58,7 +58,7 @@ async function main() {
         if (stepCount > 0 || taskCount > 0) console.warn(`[novel-worker] recovered ${stepCount} interrupted step(s), ${taskCount} generation task(s)`);
       })
       .catch((error) => console.error(`[novel-worker] recovery error: ${error instanceof Error ? error.message : String(error)}`));
-  }, 60_000);
+  }, 15_000);
   lastDispatchAt = Date.now();
   ready = true;
 

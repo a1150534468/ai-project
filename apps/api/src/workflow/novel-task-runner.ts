@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import { billableCharCount, formatGeneratedNovelDisplayText, parseRequiredGeneratedNovelValue, visibleCharCount } from "./novel-billable.js";
 import type { NovelGenerator } from "./novel-generation.js";
 import { NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS, type NovelSetupTargetKind, type NovelTargetKind } from "./novel-types.js";
@@ -590,6 +591,8 @@ async function saveGeneratedResult(args: {
       await tx.novelChapterVersion.create({
         data: { chapterId: chapter.id, title, content: displayText, billableChars, operationId: task.operationId },
       });
+      await tx.novelKnowledgeFact.deleteMany({ where: { projectId: task.projectId, chapterIndex } });
+      await tx.novelForeshadowItem.deleteMany({ where: { projectId: task.projectId, introducedInChapterId: chapter.id, introducedInChapterIndex: chapterIndex } });
       const txWithAssets = tx as typeof tx & {
         novelKnowledgeFact?: { upsert: (args: unknown) => Promise<unknown> };
         novelForeshadowItem?: { upsert: (args: unknown) => Promise<unknown> };
@@ -634,14 +637,9 @@ async function saveGeneratedResult(args: {
           status: item.status,
           relatedCharacter: item.relatedCharacter,
         },
-        update: {
-          introducedInChapterId: chapter.id,
-          introducedInChapterIndex: item.introducedInChapterIndex ?? chapterIndex,
-          description: item.description,
-          expectedPayoffChapter: item.expectedPayoffChapter,
-          status: item.status,
-          relatedCharacter: item.relatedCharacter,
-        },
+        // A repeated mention must not rewrite where the foreshadow was first introduced
+        // or reopen an item that an editor already resolved.
+        update: {},
       }) ?? Promise.resolve()));
     } else if (targetKind === "chapterRewrite") {
       const chapter = await tx.novelChapter.findUnique({ where: { projectId_chapterIndex: { projectId: task.projectId, chapterIndex } } });
@@ -781,6 +779,7 @@ export async function runNovelTask(args: {
     }, 5000);
     const expectedChars = expectedStreamChars(targetKind, payload, project.targetChapters);
     const onChunk = async (chunk: string) => {
+      await assertTaskActive(prisma, task.id);
       if (streamedChars === 0 && waitTimer) {
         clearInterval(waitTimer);
         waitTimer = undefined;
@@ -878,9 +877,10 @@ export async function runNovelTask(args: {
 }
 
 export async function nextChapterIndex(prisma: PrismaClient, projectId: string): Promise<number> {
-  const last = await prisma.novelChapter.findFirst({
+  const chapters = await prisma.novelChapter.findMany({
     where: { projectId },
-    orderBy: { chapterIndex: "desc" },
+    orderBy: { chapterIndex: "asc" },
+    select: { chapterIndex: true, content: true },
   });
-  return (last?.chapterIndex ?? 0) + 1;
+  return nextNovelChapterIndex(chapters);
 }

@@ -34,11 +34,19 @@ export interface ImageResolutionOption {
   readonly label: string;
 }
 
+export interface ImageModelOption {
+  readonly value: ImageModel;
+  readonly label: string;
+  readonly supportsReferenceImages: boolean;
+}
+
 const IMAGE_ASPECT_RATIO_VALUES = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9"] as const;
-const IMAGE_RESOLUTION_VALUES = ["1K", "2K", "4K"] as const;
+const IMAGE_RESOLUTION_VALUES = ["1K", "2K"] as const;
+const IMAGE_MODEL_VALUES = ["qwen-image-2.0-pro-2026-04-22", "gpt-image-2"] as const;
 
 export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIO_VALUES[number];
 export type ImageResolution = typeof IMAGE_RESOLUTION_VALUES[number];
+export type ImageModel = typeof IMAGE_MODEL_VALUES[number];
 
 export type ImageTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
 
@@ -88,18 +96,22 @@ export const IMAGE_ASPECT_RATIO_OPTIONS: readonly ImageAspectRatioOption[] = [
 export const IMAGE_RESOLUTION_OPTIONS: readonly ImageResolutionOption[] = [
   { value: "1K", label: "1K" },
   { value: "2K", label: "2K" },
-  { value: "4K", label: "4K" },
+] as const;
+
+export const IMAGE_MODEL_OPTIONS: readonly ImageModelOption[] = [
+  { value: "qwen-image-2.0-pro-2026-04-22", label: "Qwen Image 2.0 Pro", supportsReferenceImages: true },
+  { value: "gpt-image-2", label: "GPT Image 2", supportsReferenceImages: false },
 ] as const;
 
 const IMAGE_SIZE_BY_RATIO_AND_RESOLUTION = {
-  "1:1": { "1K": "1024x1024", "2K": "2048x2048", "4K": "2880x2880" },
-  "4:3": { "1K": "1024x768", "2K": "2048x1536", "4K": "3312x2480" },
-  "3:4": { "1K": "768x1024", "2K": "1536x2048", "4K": "2480x3312" },
-  "3:2": { "1K": "1536x1024", "2K": "2048x1360", "4K": "3520x2336" },
-  "2:3": { "1K": "1024x1536", "2K": "1360x2048", "4K": "2336x3520" },
-  "16:9": { "1K": "1536x864", "2K": "2048x1152", "4K": "3840x2160" },
-  "9:16": { "1K": "864x1536", "2K": "1152x2048", "4K": "2160x3840" },
-  "21:9": { "1K": "2016x864", "2K": "2688x1152", "4K": "3840x1648" },
+  "1:1": { "1K": "1024x1024", "2K": "2048x2048" },
+  "4:3": { "1K": "1024x768", "2K": "2048x1536" },
+  "3:4": { "1K": "768x1024", "2K": "1536x2048" },
+  "3:2": { "1K": "1536x1024", "2K": "2048x1360" },
+  "2:3": { "1K": "1024x1536", "2K": "1360x2048" },
+  "16:9": { "1K": "1536x864", "2K": "2048x1152" },
+  "9:16": { "1K": "864x1536", "2K": "1152x2048" },
+  "21:9": { "1K": "2016x864", "2K": "2688x1152" },
 } as const satisfies Record<ImageAspectRatio, Record<ImageResolution, string>>;
 
 export const IMAGE_SIZE_OPTIONS: readonly ImageSizeOption[] = IMAGE_ASPECT_RATIO_OPTIONS.flatMap((ratioOption) =>
@@ -122,6 +134,10 @@ export function isImageAspectRatio(value: string): value is ImageAspectRatio {
 
 export function isImageResolution(value: string): value is ImageResolution {
   return IMAGE_RESOLUTION_OPTIONS.some((option) => option.value === value);
+}
+
+export function isImageModel(value: string): value is ImageModel {
+  return IMAGE_MODEL_OPTIONS.some((option) => option.value === value);
 }
 
 export const WORKFLOW_MODULES: readonly WorkflowModule[] = [

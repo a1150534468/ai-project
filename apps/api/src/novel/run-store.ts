@@ -15,6 +15,7 @@ export function serializeNovelRun(run: {
   readonly currentChapter: number | null;
   readonly targetChapters: number;
   readonly targetCharsPerChapter: number;
+  readonly autoReview: boolean;
   readonly completedChapters: number;
   readonly consecutiveFailures: number;
   readonly pauseRequested: boolean;
@@ -32,6 +33,7 @@ export function serializeNovelRun(run: {
     currentChapter: run.currentChapter,
     targetChapters: run.targetChapters,
     targetCharsPerChapter: run.targetCharsPerChapter,
+    autoReview: run.autoReview,
     completedChapters: run.completedChapters,
     consecutiveFailures: run.consecutiveFailures,
     pauseRequested: run.pauseRequested,
@@ -50,6 +52,7 @@ export async function createNovelRun(args: {
   readonly startChapter: number;
   readonly targetChapters: number;
   readonly targetCharsPerChapter: number;
+  readonly completedChapters?: number;
   readonly autoReview: boolean;
   readonly input?: Record<string, unknown>;
 }) {
@@ -67,6 +70,7 @@ export async function createNovelRun(args: {
         startChapter: args.startChapter,
         targetChapters: args.targetChapters,
         targetCharsPerChapter: args.targetCharsPerChapter,
+        completedChapters: args.completedChapters ?? 0,
         autoReview: args.autoReview,
       },
     });
@@ -114,6 +118,7 @@ export async function createNextNovelStep(args: {
   readonly chapterNumber: number | null;
   readonly input?: Record<string, unknown>;
   readonly priority: number;
+  readonly runData?: Prisma.NovelRunUpdateInput;
 }) {
   return args.prisma.$transaction(async (tx) => {
     const aggregate = await tx.novelRunStep.aggregate({ where: { runId: args.runId }, _max: { sequence: true } });
@@ -139,7 +144,7 @@ export async function createNextNovelStep(args: {
     });
     await tx.novelRun.update({
       where: { id: run.id },
-      data: { currentStep: args.kind, currentChapter: args.chapterNumber ?? run.currentChapter },
+      data: { ...args.runData, currentStep: args.kind, currentChapter: args.chapterNumber ?? run.currentChapter },
     });
     return step;
   });

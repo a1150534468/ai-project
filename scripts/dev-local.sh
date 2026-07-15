@@ -37,6 +37,8 @@ export NOVEL_WORKER_HEALTH_PORT="${NOVEL_WORKER_HEALTH_PORT:-8091}"
 
 echo "[1/4] 启动 Docker 数据层（不重建已有容器和数据卷）..."
 docker compose -f docker-compose.dev.yml up -d --no-recreate postgres redis billing-postgres minio
+echo "按 S3_BUCKET 初始化本地对象存储..."
+docker compose -f docker-compose.dev.yml run --rm minio-init
 
 wait_for_postgres() {
   local service="$1"

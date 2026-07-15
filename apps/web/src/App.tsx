@@ -33,6 +33,7 @@ import { AgentPicker } from "./components/AgentPicker";
 import { Modal } from "./motion";
 import { toChatMessages, type ChatMessage, type ToolActivity } from "./chatState";
 import { attachmentLabels } from "./chatAttachments";
+import { novelProjectIdFromHash } from "./novelRoute";
 
 interface Citation {
   docs: Array<{ docName: string; ordinal: number }>;
@@ -54,8 +55,8 @@ function sessionAgentOption(session?: Session): AgentOption | null {
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem("ai_assistant_token") ?? "");
   const [authView, setAuthView] = useState<"login" | "register">("login");
-  const [view, setView] = useState<ViewType>("chat");
-  const [workflowModule, setWorkflowModule] = useState<WorkflowModuleId>("image");
+  const [view, setView] = useState<ViewType>(() => novelProjectIdFromHash(window.location.hash) ? "workflow" : "chat");
+  const [workflowModule, setWorkflowModule] = useState<WorkflowModuleId>(() => novelProjectIdFromHash(window.location.hash) ? "novel" : "image");
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [draftSessionKey, setDraftSessionKey] = useState(newDraftKey);
   const [balance, setBalance] = useState<number | null>(null);

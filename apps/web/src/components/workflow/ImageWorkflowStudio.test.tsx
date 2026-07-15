@@ -69,6 +69,7 @@ function renderStudio({
   return renderToStaticMarkup(
     <ImageWorkflowStudio
       prompt="新的生成任务"
+      model="qwen-image-2.0-pro-2026-04-22"
       size="1024x1024"
       aspectRatio={"1:1" satisfies ImageAspectRatio}
       resolution={"1K" satisfies ImageResolution}
@@ -83,7 +84,10 @@ function renderStudio({
       generatingCount={1}
       isOptimizingPrompt={false}
       estimatedPointCost={estimatedPointCost}
+      referenceImages={[]}
+      isUploadingReference={false}
       onPromptChange={vi.fn()}
+      onModelChange={vi.fn()}
       onAspectRatioChange={vi.fn()}
       onResolutionChange={vi.fn()}
       onCountInputChange={vi.fn()}
@@ -95,6 +99,8 @@ function renderStudio({
       onOptimizePrompt={vi.fn()}
       onDownloadOne={vi.fn()}
       onDownloadAll={vi.fn()}
+      onReferenceUpload={vi.fn()}
+      onRemoveReference={vi.fn()}
     />,
   );
 }
@@ -119,6 +125,7 @@ describe("ImageWorkflowStudio", () => {
     expect(html).toContain('aria-haspopup="listbox"');
     expect(html).toContain("1:1");
     expect(html).toContain("1K");
+    expect(html).toContain("Qwen Image 2.0 Pro");
   });
 
   it("renders estimated point cost hint when pricing is available", () => {

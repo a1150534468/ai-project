@@ -46,6 +46,10 @@ CHAT_MULTIMODAL_MODEL=qwen3.7-plus
 
 长期记忆、知识库和小说向量记忆默认复用同一个 `BAILIAN_API_KEY`，通过 `https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings` 调用 `text-embedding-v4`，固定输出 1024 维向量。数据库迁移会清除旧 4096 维派生向量、保留原始文档，并为三张向量表建立 HNSW 余弦索引。
 
+图片生成与编辑默认复用 `BAILIAN_WORKSPACE_ID`、`BAILIAN_REGION` 和 `BAILIAN_API_KEY`，直连百炼原生多模态接口，默认模型为 `qwen-image-2.0-pro-2026-04-22`。如图片使用独立百炼凭据，可设置 `IMAGE_API_KEY`，如需覆盖入口可设置 `IMAGE_BASE_URL` 或完整的 `IMAGE_GENERATION_ENDPOINT`。Qwen Image 2.0 的输出总像素范围为 `512*512` 至 `2048*2048`。
+
+主生图工作台还可选择 `gpt-image-2`，通过 OpenAI Images API 兼容协议调用 `GPT_IMAGE_GENERATION_ENDPOINT`（默认 `https://api.ai-pixel.online/v1/images/generations`），凭据使用 `GPT_IMAGE_API_KEY`。当前该通道只配置了文生图 generations 接口；带参考图的编辑任务需选择 Qwen Image，避免把图片误发到未经确认的 edits 地址。
+
 真实向量链路可用仓库 POC 验证：
 
 ```bash

@@ -7,6 +7,7 @@ import type {
 } from "./novel-workbench-types.js";
 
 const ACTION_HINT_RE = /(发现|得知|看到|进入|离开|追查|追踪|质问|交手|对峙|决定|揭开|暴露|潜入|逃离|收到|确认|锁定|怀疑|救下|袭击|反击|谈判|搜查|击退)/u;
+const OPEN_THREAD_HINT_RE = /(谁|为何|为什么|究竟|真相|秘密|目的|身份|何处|哪里|怎么会|如何|什么)/u;
 
 function dedupe(values: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -49,7 +50,10 @@ export function buildNovelChapterSummaryPayload(content: string): NovelChapterSu
   return {
     summary: summaryParts.join("").slice(0, 220),
     keyEvents,
-    openThreads: dedupe(sentences.filter((sentence) => /[？?]/u.test(sentence))).slice(0, 5),
+    // Only the chapter-ending question can represent a durable narrative thread.
+    // Dialogue questions elsewhere in the chapter are usually local interaction,
+    // not foreshadowing that should enter the long-running story ledger.
+    openThreads: dedupe(sentences.slice(-5).filter((sentence) => /[？?]/u.test(sentence) && OPEN_THREAD_HINT_RE.test(sentence)).reverse()).slice(0, 1),
   };
 }
 
@@ -116,7 +120,7 @@ export function buildNovelChapterPostprocessPayload(args: {
     expectedPayoffChapter: args.chapterIndex + 3,
     status: "open" as const,
     relatedCharacter: "",
-  })).slice(0, 5);
+  })).slice(0, 1);
   const risks: string[] = [];
   if (quality.metrics.wordCount < 500) risks.push("章节字数偏低，可能影响节奏展开");
   if (args.knownCharacters.length > 0 && !args.knownCharacters.slice(0, 3).some((name) => args.content.includes(name))) risks.push("本章未触达主要角色，可能与主线推进脱节");

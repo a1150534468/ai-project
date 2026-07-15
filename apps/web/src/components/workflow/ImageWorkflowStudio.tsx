@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
 import { RippleButton, spring } from "../../motion";
@@ -5,10 +6,13 @@ import { InAppSelect } from "../agent-teams/InAppSelect";
 import {
   IMAGE_ASPECT_RATIO_OPTIONS,
   IMAGE_MAX_COUNT,
+  IMAGE_MODEL_OPTIONS,
   IMAGE_RESOLUTION_OPTIONS,
   isImageAspectRatio,
+  isImageModel,
   isImageResolution,
   type ImageAspectRatio,
+  type ImageModel,
   type ImageResolution,
   type ImageTask,
   type ImageTaskStatus,
@@ -17,6 +21,7 @@ import type { WorkflowImageAsset } from "../../api";
 
 interface ImageWorkflowStudioProps {
   readonly prompt: string;
+  readonly model: ImageModel;
   readonly size: string;
   readonly aspectRatio: ImageAspectRatio;
   readonly resolution: ImageResolution;
@@ -33,7 +38,10 @@ interface ImageWorkflowStudioProps {
   readonly cancellingTaskIds?: readonly string[];
   readonly isOptimizingPrompt: boolean;
   readonly estimatedPointCost?: number | null;
+  readonly referenceImages: readonly WorkflowImageAsset[];
+  readonly isUploadingReference: boolean;
   readonly onPromptChange: (value: string) => void;
+  readonly onModelChange: (value: ImageModel) => void;
   readonly onAspectRatioChange: (value: ImageAspectRatio) => void;
   readonly onResolutionChange: (value: ImageResolution) => void;
   readonly onCountInputChange: (value: string) => void;
@@ -45,6 +53,8 @@ interface ImageWorkflowStudioProps {
   readonly onOptimizePrompt: () => void;
   readonly onDownloadOne: (image: WorkflowImageAsset) => void;
   readonly onDownloadAll: () => void;
+  readonly onReferenceUpload: (file: File) => void;
+  readonly onRemoveReference: (assetId: string) => void;
 }
 
 const QUICK_COUNTS = [1, 2, 4, 8] as const;
@@ -79,6 +89,7 @@ function countByStatus(tasks: readonly ImageTask[], status: ImageTaskStatus): nu
 
 export function ImageWorkflowStudio({
   prompt,
+  model,
   size,
   aspectRatio,
   resolution,
@@ -95,7 +106,10 @@ export function ImageWorkflowStudio({
   cancellingTaskIds = [],
   isOptimizingPrompt,
   estimatedPointCost = null,
+  referenceImages,
+  isUploadingReference,
   onPromptChange,
+  onModelChange,
   onAspectRatioChange,
   onResolutionChange,
   onCountInputChange,
@@ -107,11 +121,15 @@ export function ImageWorkflowStudio({
   onOptimizePrompt,
   onDownloadOne,
   onDownloadAll,
+  onReferenceUpload,
+  onRemoveReference,
 }: ImageWorkflowStudioProps) {
+  const referenceInputRef = useRef<HTMLInputElement>(null);
   const loadingSlots = isGenerating ? Array.from({ length: Math.max(generatingCount, 1) }, (_value, index) => index) : [];
   const visiblePreviewImages = previewImages.slice(0, 6);
   const emptySlots = !isGenerating && visiblePreviewImages.length === 0 ? Array.from({ length: 6 }, (_value, index) => index) : [];
   const cancellingTaskSet = new Set(cancellingTaskIds);
+  const supportsReferenceImages = IMAGE_MODEL_OPTIONS.find((option) => option.value === model)?.supportsReferenceImages ?? false;
 
   const activeTaskCount = tasks.filter((task) => task.status === "queued" || task.status === "running").length;
 
@@ -120,6 +138,19 @@ export function ImageWorkflowStudio({
       <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
         <div className="mb-4 flex items-center justify-between gap-4">
           <h2 className="text-lg font-semibold text-[#1d1d1f]">生图配置</h2>
+        </div>
+
+        <div className="mb-3 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          模型
+          <InAppSelect
+            icon="mdi:creation-outline"
+            label="模型"
+            value={model}
+            options={IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+            onChange={(value) => {
+              if (isImageModel(value)) onModelChange(value);
+            }}
+          />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -225,11 +256,53 @@ export function ImageWorkflowStudio({
         </div>
 
         <div className="mt-4 grid gap-2">
-          <p className="text-sm font-semibold text-[#1d1d1f]">参考图 (0/5)</p>
-          <button type="button" className="flex h-10 items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f]">
-            <Icon icon="mdi:plus" className="text-base" aria-hidden />
-            上传参考图
+          <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceImages.length}/3)</p>
+          <button
+            type="button"
+            onClick={() => referenceInputRef.current?.click()}
+            disabled={!supportsReferenceImages || isUploadingReference || referenceImages.length >= 3}
+            className="flex h-10 items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] hover:border-brand/50 hover:text-brand-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+          >
+            <Icon icon={isUploadingReference ? "mdi:loading" : "mdi:plus"} className={`text-base ${isUploadingReference ? "animate-spin" : ""}`} aria-hidden />
+            {isUploadingReference
+              ? "上传中"
+              : !supportsReferenceImages
+                ? "当前模型不支持参考图"
+                : referenceImages.length >= 3
+                  ? "已达上限"
+                  : "上传参考图"}
           </button>
+          <input
+            ref={referenceInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif"
+            hidden
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              if (file) onReferenceUpload(file);
+              event.currentTarget.value = "";
+            }}
+          />
+          {!supportsReferenceImages && (
+            <p className="text-xs leading-5 text-[#8a8a8f]">GPT Image 2 当前仅配置了文生图接口；参考图编辑请使用 Qwen Image 2.0 Pro。</p>
+          )}
+          {referenceImages.length > 0 && (
+            <div className="flex flex-wrap gap-2" aria-label="已上传参考图">
+              {referenceImages.map((image, index) => (
+                <div key={image.id} className="group relative h-16 w-16 overflow-hidden rounded-[8px] border border-[#d2d2d7] bg-[#f5f5f7]">
+                  <img src={image.thumbnailUrl || image.originalUrl} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    aria-label={`移除参考图 ${index + 1}`}
+                    onClick={() => onRemoveReference(image.id)}
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-red-600 group-hover:opacity-100"
+                  >
+                    <Icon icon="mdi:close" className="text-sm" aria-hidden />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="mt-4 grid gap-2">

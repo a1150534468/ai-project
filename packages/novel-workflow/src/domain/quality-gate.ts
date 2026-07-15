@@ -4,6 +4,8 @@ export interface NovelQualityGateInput {
   readonly tensionScore: number;
   readonly highSeverityIssues: number;
   readonly criticalIssues: number;
+  readonly contentChars?: number;
+  readonly targetChars?: number;
 }
 
 export interface NovelQualityGateResult {
@@ -19,6 +21,9 @@ export function evaluateNovelQualityGate(input: NovelQualityGateInput): NovelQua
   if (input.styleScore < 0.6) reasons.push("文风评分低于 60%");
   if (input.tensionScore < 0.35) reasons.push("章节张力过低");
   if (input.highSeverityIssues > 2) reasons.push("高严重度问题超过 2 项");
+  if ((input.targetChars ?? 0) > 0 && (input.contentChars ?? 0) < input.targetChars! * 0.8) {
+    reasons.push(`正文字数 ${input.contentChars ?? 0}，低于目标 ${input.targetChars} 的 80%`);
+  }
   const score = Math.round((input.consistencyScore * 0.45 + input.styleScore * 0.3 + input.tensionScore * 0.25) * 100);
   return { passed: reasons.length === 0, score, reasons };
 }

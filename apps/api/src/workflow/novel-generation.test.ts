@@ -83,4 +83,24 @@ describe("novel generation", () => {
     expect(result.text).toBe("第一段第二段");
     expect(messagesCreate).not.toHaveBeenCalled();
   });
+
+  it("aborts the upstream stream when a chunk callback detects cancellation", async () => {
+    const listeners: Array<(chunk: string) => void> = [];
+    const abort = vi.fn();
+    messagesStream.mockReturnValue({
+      abort,
+      on: vi.fn((_event: string, listener: (chunk: string) => void) => { listeners.push(listener); }),
+      finalMessage: vi.fn(async () => {
+        listeners.forEach((listener) => listener("不应继续保存"));
+        return { content: [{ type: "text", text: "不应继续保存" }] };
+      }),
+    });
+    const stopped = new Error("任务已取消");
+    await expect(createNovelGenerator({})({
+      targetKind: "chapter",
+      projectTitle: "寒泉烬",
+      onChunk: vi.fn(async () => { throw stopped; }),
+    })).rejects.toBe(stopped);
+    expect(abort).toHaveBeenCalledTimes(1);
+  });
 });

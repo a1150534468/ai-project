@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const { enqueueNovelEngineStep, enqueueNovelGenerationTask } = vi.hoisted(() => ({ enqueueNovelEngineStep: vi.fn(), enqueueNovelGenerationTask: vi.fn() }));
 vi.mock("./queue.js", () => ({ enqueueNovelEngineStep, enqueueNovelGenerationTask }));
 
-import { dispatchNovelOutboxBatch, recoverInterruptedNovelSteps, recoverInterruptedNovelTasks } from "./outbox.js";
+import { dispatchNovelOutboxBatch, NOVEL_INTERRUPTED_WORK_MS, recoverInterruptedNovelSteps, recoverInterruptedNovelTasks } from "./outbox.js";
 
 describe("novel outbox", () => {
   beforeEach(() => {
@@ -59,6 +59,7 @@ describe("novel outbox", () => {
   });
 
   it("recovers stale running steps transactionally", async () => {
+    expect(NOVEL_INTERRUPTED_WORK_MS).toBe(90_000);
     const stepUpdate = vi.fn(async () => undefined);
     const outboxUpsert = vi.fn(async () => undefined);
     const tx = {
