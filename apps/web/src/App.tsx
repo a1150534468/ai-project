@@ -578,7 +578,6 @@ export default function App() {
         workflowModule={workflowModule}
         onSelectWorkflowSub={handleSelectWorkflowSub}
         balance={balance}
-        userName="用户"
         onLogout={() => setToken("")}
         token={token}
         agents={agents}

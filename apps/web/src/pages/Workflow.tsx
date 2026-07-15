@@ -367,8 +367,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
   };
 
   return (
-    <div className={`min-h-full bg-[#f5f5f7] ${activeModuleId === "novel" ? "" : "px-4 py-6 lg:px-6 lg:py-6"}`}>
-      <div className={`mx-auto flex flex-col gap-4 lg:flex-row lg:items-start ${activeModuleId === "novel" ? "max-w-none" : "max-w-[1480px]"}`}>
+    <div className={`${activeModuleId === "novel" ? "h-full min-h-0 overflow-hidden" : "min-h-full px-4 py-6 lg:px-6 lg:py-6"} bg-[#f5f5f7]`}>
+      <div className={`mx-auto flex flex-col gap-4 lg:flex-row ${activeModuleId === "novel" ? "h-full min-h-0 max-w-none" : "max-w-[1480px] lg:items-start"}`}>
         {activeModuleId === "commerce-long-image" && (
           <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-3 lg:sticky lg:top-6 lg:w-[236px] lg:flex-none">
             <EcomHistorySidebar
@@ -386,7 +386,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
           </aside>
         )}
 
-        <main className="min-w-0 flex-1">
+        <main className={`min-w-0 flex-1 ${activeModuleId === "novel" ? "h-full min-h-0 overflow-hidden" : ""}`}>
           {activeModuleId !== "novel" && <header className="mb-4">
             <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
             <h1 className="page-title text-[24px]">{activeModule.title}</h1>

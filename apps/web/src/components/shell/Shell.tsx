@@ -17,7 +17,6 @@ interface ShellProps {
   workflowModule?: WorkflowModuleId;
   onSelectWorkflowSub?: (id: WorkflowSubId) => void;
   balance?: number | null;
-  userName?: string;
   onLogout?: () => void;
   token: string;
   agents: { presets: AgentOption[]; custom: AgentOption[] };
@@ -39,7 +38,6 @@ export default function Shell({
   workflowModule,
   onSelectWorkflowSub,
   balance = null,
-  userName = "用户",
   onLogout,
   token,
   agents,
@@ -107,16 +105,6 @@ export default function Shell({
       )}
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Header */}
-        <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-4 lg:px-8 flex-none">
-          <div className="flex-1" />
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2 px-3 py-1">
-              <span className="text-xs text-gray-600 font-medium">{userName}</span>
-            </div>
-          </div>
-        </header>
-
         <nav className="border-b border-gray-100 bg-white px-4 py-3 lg:hidden">
           <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {NAV_ITEMS.flatMap((item) =>
@@ -159,7 +147,7 @@ export default function Shell({
         </nav>
 
         {/* Content Area */}
-        <div className={`flex-1 min-h-0 ${currentView === "chat" || currentView === "memory" ? "overflow-hidden" : "overflow-y-auto"}`}>
+        <div className={`flex-1 min-h-0 ${currentView === "chat" || currentView === "memory" || (currentView === "workflow" && workflowModule === "novel") ? "overflow-hidden" : "overflow-y-auto"}`}>
           {children}
         </div>
       </main>
