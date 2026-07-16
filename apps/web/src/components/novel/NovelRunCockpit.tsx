@@ -15,6 +15,7 @@ import {
   type NovelEngineStep,
   type NovelNarrativeDashboard,
 } from "../../api";
+import { NovelScoreTrend } from "./NovelScoreTrend";
 
 const ACTIVE_STATUSES = new Set(["queued", "planning", "writing", "validating", "postprocessing"]);
 const BOOK_LOCKING_STATUSES = new Set([...ACTIVE_STATUSES, "awaitingReview", "paused", "failed"]);
@@ -71,6 +72,12 @@ export function novelRunEventText(event: NovelEngineEvent): string {
 export function novelRunEventScope(event: NovelEngineEvent): string {
   if (["runQueued", "runStatusChanged", "runCompleted", "reviewRequired", "chapterCompleted"].includes(event.type)) return "运行";
   return event.step ? STEP_LABELS[event.step] ?? event.step : event.type;
+}
+
+export function novelRunEventTime(createdAt: string): string {
+  const date = new Date(createdAt);
+  if (Number.isNaN(date.getTime())) return "--:--:--";
+  return [date.getHours(), date.getMinutes(), date.getSeconds()].map((value) => String(value).padStart(2, "0")).join(":");
 }
 
 function compactEvents(current: NovelEngineEvent[], next: NovelEngineEvent): NovelEngineEvent[] {
@@ -333,7 +340,7 @@ export function NovelRunCockpit({
         ["活跃故事线", dashboard?.stats.storylines ?? 0, "主线、支线与暗线", "mdi:timeline-text-outline"],
       ].map(([label, value, hint, icon]) => <article key={String(label)} className="rounded-2xl border border-[#e1e6e4] bg-white p-5"><Icon icon={String(icon)} className="text-2xl text-brand-ink" /><p className="mt-3 text-xs font-semibold text-[#858e8b]">{label}</p><p className="mt-1 text-3xl font-semibold">{value}</p><p className="mt-2 text-xs text-[#6e7774]">{hint}</p></article>)}</div>}
 
-      {view === "dashboard" && <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-2xl border border-[#e1e6e4] bg-white p-5 [scrollbar-gutter:stable] [scrollbar-width:thin]"><div><h3 className="font-semibold">章节张力 / 质量仪表盘</h3><p className="mt-1 text-xs text-[#7d8683]">柱高为总张力，圆点显示质量门禁分。</p></div><div className="mt-6 flex h-72 items-end gap-2 overflow-x-auto border-b border-l border-[#e1e6e4] p-3">{dashboard?.tensionCurve.map((chapter) => <div key={chapter.chapterIndex} className="relative flex min-w-10 flex-1 flex-col items-center justify-end" title={`第${chapter.chapterIndex}章 · 张力${chapter.tensionScore} · 质量${chapter.qualityScore}`}><span className="absolute w-3 rounded-full border-2 border-white bg-emerald-500 shadow" style={{ bottom: `${Math.max(4, chapter.qualityScore * 2.2)}px`, height: 12 }} /><div className="w-full max-w-10 rounded-t bg-brand/70" style={{ height: `${Math.max(4, chapter.tensionScore * 2.2)}px` }} /><span className="mt-2 text-[10px] text-[#8a9390]">{chapter.chapterIndex}</span></div>)}{!dashboard?.tensionCurve.length && <p className="m-auto text-sm text-[#8a9390]">生成章节后显示趋势</p>}</div></section>}
+      {view === "dashboard" && <section className="min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-2xl border border-[#e1e6e4] bg-white p-5 [scrollbar-gutter:stable] [scrollbar-width:thin]"><div><h3 className="font-semibold">章节张力 / 质量仪表盘</h3><p className="mt-1 text-xs text-[#7d8683]">柱高为总张力，圆点显示质量门禁分。</p></div><div className="mt-6"><NovelScoreTrend rows={dashboard?.tensionCurve ?? []} /></div></section>}
 
       {(view === "cockpit" || view === "operations") && <div className={`min-h-0 flex-1 overscroll-contain ${view === "operations" ? "overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]" : "overflow-y-auto xl:overflow-hidden"}`}>
         <div className={`grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.8fr)] ${view === "operations" ? "min-h-[360px]" : "xl:h-full xl:min-h-0"}`}>
@@ -345,7 +352,7 @@ export function NovelRunCockpit({
         <section className="flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-[14px] border border-[#20252b] bg-[#111418] p-4 text-[#d7e0e8] xl:min-h-0">
           <div className="flex flex-none items-center justify-between gap-3"><h3 className="flex items-center gap-2 text-sm font-semibold"><span className="h-2 w-2 rounded-full bg-[#59d5c5] shadow-[0_0_0_4px_rgba(89,213,197,0.1)]" />运行日志</h3><span className="whitespace-nowrap text-[10px] text-[#7f8b96]">SSE 实时跟随 · #{cursorRef.current}</span></div>
           <div ref={logScrollRef} onScroll={(event) => { const element = event.currentTarget; logFollowingRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48; }} className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain pr-1 font-mono text-xs leading-5 [scrollbar-gutter:stable] [scrollbar-width:thin]">
-            {logEvents.map((event) => <p key={event.id} className="break-words"><span className="text-[#6ed7c8]">[{event.sequence}]</span> <span className="text-[#8da2b3]">{novelRunEventScope(event)}</span> {novelRunEventText(event)}</p>)}
+            {logEvents.map((event) => <p key={event.id} className="break-words"><span className="text-[#6ed7c8]" title={new Date(event.createdAt).toLocaleString("zh-CN")}>[{novelRunEventTime(event.createdAt)}]</span> <span className="text-[#8da2b3]">{novelRunEventScope(event)}</span> {novelRunEventText(event)}</p>)}
             {logEvents.length === 0 && events.length > 0 && <p className="text-[#7f8b96]">正文正在流式生成，流程事件将在步骤完成后继续更新…</p>}
             {events.length === 0 && <p className="text-[#7f8b96]">正在加载最近运行事件…</p>}
           </div>

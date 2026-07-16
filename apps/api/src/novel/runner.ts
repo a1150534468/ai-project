@@ -281,33 +281,26 @@ async function executeStepBody(args: {
           },
         });
       }
-      await tx.novelNarrativeDebt.deleteMany({ where: { projectId: project.id, introducedChapter: chapterNumber } });
-      for (const thread of stringArray(chapter.openThreads)) {
-        await tx.novelNarrativeDebt.create({
-          data: {
-            projectId: project.id,
-            debtType: "openThread",
-            title: thread.slice(0, 120),
-            description: thread,
-            introducedChapter: chapterNumber,
-            dueChapter: chapterNumber + 3,
-          },
-        });
-      }
     });
     return { narrativeEvents: eventCards.length, openThreads: stringArray(chapter.openThreads).length };
   }
 
   if (kind === "scoreTension") {
     const quality = buildNovelQualityDiagnostics(chapter.content);
-    const plot = Math.min(100, Math.round(quality.tensionScore * 1.05));
-    const emotional = Math.min(100, Math.round(quality.tensionScore * (quality.metrics.dialogueRatio > 0.1 ? 1 : 0.8)));
-    const pacing = Math.min(100, Math.round((quality.score + quality.tensionScore) / 2));
+    const plot = quality.tensionDimensions.plot;
+    const emotional = quality.tensionDimensions.emotional;
+    const pacing = quality.tensionDimensions.pacing;
     await prisma.novelChapter.update({
       where: { id: chapter.id },
-      data: { tensionScore: quality.tensionScore, plotTension: plot, emotionalTension: emotional, pacingTension: pacing },
+      data: {
+        tensionScore: quality.tensionScore,
+        plotTension: plot,
+        emotionalTension: emotional,
+        pacingTension: pacing,
+        generationMeta: { ...record(chapter.generationMeta), tensionScoringVersion: quality.tensionDimensions.scoringVersion },
+      },
     });
-    return { tensionScore: quality.tensionScore, plotTension: plot, emotionalTension: emotional, pacingTension: pacing };
+    return { tensionScore: quality.tensionScore, plotTension: plot, emotionalTension: emotional, pacingTension: pacing, scoringVersion: quality.tensionDimensions.scoringVersion };
   }
 
   if (kind === "finalizeChapter") {

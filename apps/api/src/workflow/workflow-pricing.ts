@@ -1,6 +1,4 @@
-import { ecomMasterResourceKey, ecomSegmentResourceKey } from "./ecom-resolution.js";
 import { ECOM_RESOURCE_KEYS } from "./ecom-route-helpers.js";
-import { ecomMainImageResourceKey } from "./ecom-main.js";
 import { imageGenerationResourceKey, type ImageResolutionLabel } from "./image-upstream-options.js";
 
 export interface WorkflowResourcePriceRow {
@@ -43,7 +41,7 @@ function imagePriceFallback(resolution: ImageResolutionLabel): WorkflowResourceP
 
 function ecomMasterPriceFallback(resolution: ImageResolutionLabel): WorkflowResourcePriceRow {
   return {
-    resourceKey: ecomMasterResourceKey(resolution),
+    resourceKey: imageGenerationResourceKey(resolution),
     displayName: `电商长图母版 ${resolution}`,
     pricingType: "PER_UNIT",
     rate: ECOM_DEFAULT_RATE[resolution],
@@ -54,7 +52,7 @@ function ecomMasterPriceFallback(resolution: ImageResolutionLabel): WorkflowReso
 
 function ecomSegmentPriceFallback(resolution: ImageResolutionLabel): WorkflowResourcePriceRow {
   return {
-    resourceKey: ecomSegmentResourceKey(resolution),
+    resourceKey: imageGenerationResourceKey(resolution),
     displayName: `电商长图分段 ${resolution}`,
     pricingType: "PER_UNIT",
     rate: ECOM_DEFAULT_RATE[resolution],
@@ -110,7 +108,7 @@ const ECOM_MAIN_IMAGE_DEFAULT_RATE: Readonly<Record<ImageResolutionLabel, number
 
 function ecomMainImagePriceFallback(resolution: ImageResolutionLabel): WorkflowResourcePriceRow {
   return {
-    resourceKey: ecomMainImageResourceKey(resolution),
+    resourceKey: imageGenerationResourceKey(resolution),
     displayName: `电商主图 ${resolution}`,
     pricingType: "PER_UNIT",
     rate: ECOM_MAIN_IMAGE_DEFAULT_RATE[resolution],

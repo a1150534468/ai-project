@@ -28,6 +28,41 @@ export function parseGeneratedNovelValue(raw: unknown): unknown {
   }
 }
 
+function parseTitledChapterText(value: string): { title: string; content: string } | null {
+  const normalized = value.replace(/\r\n?/gu, "\n").trim();
+  const matched = /^(?:章节标题|标题)\s*[:：]\s*([^\n]{2,80})\n+([\s\S]+)$/u.exec(normalized);
+  if (!matched) return null;
+  const title = matched[1]!.replace(/^[《“「『]|[》”」』]$/gu, "").trim().slice(0, 80);
+  const content = matched[2]!.trim();
+  return title && content ? { title, content } : null;
+}
+
+export function isPlaceholderNovelChapterTitle(value: string): boolean {
+  return /^第\s*\d+\s*章$/u.test(value.trim());
+}
+
+export function inferNovelChapterTitle(content: string, chapterIndex: number): string {
+  const sentences = content.replace(/\r\n?/gu, "\n").split(/(?<=[。！？?!])|\n+/u).map((item) => item.trim()).filter((item) => item.length >= 4);
+  const keywords = /(真相|秘密|协议|逻辑锁|源码|碎片|反击|追踪|死循环|崩溃|危机|抹杀|觉醒|背叛|决战|逃亡|交易|悬赏|锚点|陷阱|突破)/u;
+  const boilerplate = /(物理法则锁定率|神经元负载|冷却泵|隐秘节点·起源机房)/u;
+  const selected = [...sentences].sort((a, b) => {
+    const score = (value: string) => (keywords.test(value) ? 5 : 0) - (boilerplate.test(value) ? 4 : 0) - Math.abs(Array.from(value).length - 16) / 20;
+    return score(b) - score(a);
+  })[0] ?? "";
+  const clauses = selected.split(/[，,。！？?!；;]/u).map((item) => item.replace(/^[“”「」『』\s]+|[“”「」『』\s]+$/gu, "").trim()).filter((item) => item.length >= 4);
+  const candidate = clauses.find((item) => keywords.test(item) && !boilerplate.test(item)) ?? clauses.find((item) => !boilerplate.test(item)) ?? clauses[0] ?? "";
+  const compact = candidate.replace(/^(?:但|然而|此刻|随后|突然|最终)/u, "").trim();
+  return Array.from(compact).slice(0, 18).join("") || `未命名转折${chapterIndex}`;
+}
+
+export function resolveNovelChapterTitle(args: { requestedTitle: string; generatedTitle?: string; content: string; chapterIndex: number }): string {
+  const requested = args.requestedTitle.trim();
+  if (requested && !isPlaceholderNovelChapterTitle(requested)) return requested;
+  const generated = (args.generatedTitle ?? "").trim().slice(0, 80);
+  if (generated && !isPlaceholderNovelChapterTitle(generated)) return generated;
+  return inferNovelChapterTitle(args.content, args.chapterIndex);
+}
+
 export class InvalidGeneratedNovelJsonError extends Error {
   constructor() {
     super("AI 生成结果不是完整 JSON，已取消保存，请重新生成。");
@@ -37,6 +72,7 @@ export class InvalidGeneratedNovelJsonError extends Error {
 
 export function parseRequiredGeneratedNovelValue(kind: NovelTargetKind, raw: unknown): unknown {
   const parsed = parseGeneratedNovelValue(raw);
+  if (kind === "chapter" && typeof parsed === "string") return parseTitledChapterText(parsed) ?? parsed;
   if (kind !== "chapter" && kind !== "chapterRewrite" && !isRecord(parsed)) throw new InvalidGeneratedNovelJsonError();
   return parsed;
 }

@@ -12,7 +12,6 @@ export const ECOM_MAIN_RATIO_OPTIONS: readonly { readonly value: EcomMainRatio; 
 export const ECOM_MAIN_RESOLUTION_OPTIONS: readonly { readonly value: EcomMainResolution; readonly label: string }[] = [
   { value: "1K", label: "1K 标清" },
   { value: "2K", label: "2K 高清" },
-  { value: "4K", label: "4K 超清" },
 ];
 
 export const ECOM_MAIN_STYLE_OPTIONS: readonly { readonly value: EcomMainStyleId; readonly label: string }[] = [

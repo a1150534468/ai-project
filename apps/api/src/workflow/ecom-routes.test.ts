@@ -191,6 +191,8 @@ describe("ecom workflow routes", () => {
     expect(reference.statusCode).toBe(200);
     expect(prisma.__state.assets.at(-1)?.userId).toBe("u1");
     expect(reference.json().data.asset.originalUrl).toContain("data:image/png;base64,");
+    const tooManyReferences = await app.inject({ method: "POST", url: "/api/workflow/ecom/master", payload: { ...masterRequest, referenceAssetIds: ["1", "2", "3", "4"] } });
+    expect(tooManyReferences.statusCode).toBe(400);
     await app.close();
   });
 
@@ -223,25 +225,25 @@ describe("ecom workflow routes", () => {
     const successBilling = createBillingMock(), successApp = await createApp({ billing: successBilling }), success = await injectMaster(successApp);
     const chargedMasterOperationId = successBilling.chargeResource.mock.calls[0]?.[0]?.operationId as string;
     expect(success.statusCode).toBe(200); expect(successBilling.chargeResource).toHaveBeenCalledTimes(1);
-    expect(successBilling.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "ecom_master_generation_1k" }));
+    expect(successBilling.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_1k" }));
     expect(success.json().data.workflow.billingOperationIds).toEqual([chargedMasterOperationId]);
     expect(success.json().data.workflow.masterAsset?.originalUrl).toBe(dataUrl);
     await successApp.close();
 
     const failedBilling = createBillingMock(), failedApp = await createApp({ billing: failedBilling, services: { callImageGeneration: vi.fn(async () => { throw new Error("upstream failed"); }) } }), failed = await injectMaster(failedApp);
-    expect(failed.statusCode).toBe(502); expect(failedBilling.chargeResource).not.toHaveBeenCalled(); expect(failedBilling.refundResource).not.toHaveBeenCalled();
+    expect(failed.statusCode).toBe(502); expect(failedBilling.chargeResource).toHaveBeenCalledTimes(1); expect(failedBilling.refundResource).toHaveBeenCalledTimes(1);
     await failedApp.close();
 
     let attempts = 0;
     const retryBilling = createBillingMock(), retryApp = await createApp({ billing: retryBilling, services: { callImageGeneration: vi.fn(async () => { attempts += 1; if (attempts === 1) throw new Error("temporary"); return { kind: "b64", b64: pngB64, mime: "image/png" }; }) } }), retry = await injectMaster(retryApp);
     expect(retry.statusCode).toBe(200); expect(attempts).toBe(2); expect(retryBilling.chargeResource).toHaveBeenCalledTimes(1);
-    expect(retryBilling.chargeResource).toHaveBeenLastCalledWith(expect.objectContaining({ resourceKey: "ecom_master_generation_1k" }));
+    expect(retryBilling.chargeResource).toHaveBeenLastCalledWith(expect.objectContaining({ resourceKey: "image_generation_1k" }));
     await retryApp.close();
     const referenceAsset = buildAsset("asset-ref-1"), refBilling = createBillingMock(), refServices = createServices();
     const refApp = await createApp({ prisma: createPrismaMock({ assets: [referenceAsset] }), billing: refBilling, services: refServices }), refResponse = await injectMaster(refApp, { ...masterRequest, referenceAssetIds: [referenceAsset.id] });
     expect(refResponse.statusCode).toBe(200); expect(refServices.callImageGeneration).not.toHaveBeenCalled();
     expect(refServices.callImageEdit).toHaveBeenCalledWith(expect.objectContaining({ referenceImages: [expect.objectContaining({ b64: pngB64, mime: "image/png" })] }));
-    expect(refBilling.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "ecom_master_generation_1k" }));
+    expect(refBilling.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_1k" }));
     await refApp.close();
   });
 
@@ -255,7 +257,7 @@ describe("ecom workflow routes", () => {
     expect(master.statusCode).toBe(200);
     expect(master.json().data.workflow.resolution).toBe("4K");
     expect(masterServices.callImageGeneration).toHaveBeenCalledWith(expect.objectContaining({ size: "2480x3312" }));
-    expect(masterBilling.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "ecom_master_generation_4k" }));
+    expect(masterBilling.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_4k" }));
     await masterApp.close();
 
     const segmentBilling = createBillingMock();
@@ -269,7 +271,7 @@ describe("ecom workflow routes", () => {
 
     expect(segment.statusCode).toBe(200);
     expect(segmentServices.callImageEdit).toHaveBeenCalledWith(expect.objectContaining({ size: "2480x3312" }));
-    expect(segmentBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_4k")).toHaveLength(3);
+    expect(segmentBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_4k")).toHaveLength(3);
     await segmentApp.close();
   });
 
@@ -289,7 +291,7 @@ describe("ecom workflow routes", () => {
     const storeFailBilling = createBillingMock(), storeFailPrisma = createPrismaMock();
     const storeFailApp = await createApp({ prisma: storeFailPrisma, billing: storeFailBilling, services: { storeWorkflowImage: vi.fn(async () => { throw new Error("store failed"); }) } });
     const storeFail = await injectMaster(storeFailApp);
-    expect(storeFail.statusCode).toBe(502); expect(storeFailBilling.chargeResource).not.toHaveBeenCalled(); expect(storeFailBilling.refundResource).not.toHaveBeenCalled();
+    expect(storeFail.statusCode).toBe(502); expect(storeFailBilling.chargeResource).toHaveBeenCalledTimes(1); expect(storeFailBilling.refundResource).toHaveBeenCalledTimes(1);
     await storeFailApp.close();
     const chargeFailBilling = createBillingMock(), chargeFailPrisma = createPrismaMock();
     chargeFailBilling.chargeResource.mockRejectedValueOnce(new Error("billing down"));
@@ -312,7 +314,7 @@ describe("ecom workflow routes", () => {
     const successApp = await createApp({ prisma: createPrismaMock({ assets, workflows: [masterPayload] }), billing: successBilling, services: successServices });
     const success = await successApp.inject({ method: "POST", url: "/api/workflow/ecom/wf-seeded/segments/confirm" });
     expect(success.statusCode).toBe(200);
-    expect(successBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_1k")).toHaveLength(3);
+    expect(successBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_1k")).toHaveLength(3);
     expect(successServices.callImageEdit.mock.calls.map(([args]) => (args as { referenceImages: { b64: string }[] }).referenceImages.length)).toEqual([1, 2, 2]);
     const segmentPrompts = successServices.callImageEdit.mock.calls.map(([args]) => (args as { prompt: string }).prompt);
     expect(new Set(segmentPrompts).size).toBe(3);
@@ -328,14 +330,15 @@ describe("ecom workflow routes", () => {
     const retryBilling = createBillingMock(), retryApp = await createApp({ prisma: createPrismaMock({ assets, workflows: [seedWorkflow()] }), billing: retryBilling, services: { callImageEdit: vi.fn(async () => { callCount += 1; if (callCount === 2) throw new Error("temporary"); return { kind: "b64", b64: pngB64, mime: "image/png" }; }) } });
     const retry = await retryApp.inject({ method: "POST", url: "/api/workflow/ecom/wf-seeded/segments/confirm" });
     expect(retry.statusCode).toBe(200);
-    expect(retryBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_1k")).toHaveLength(3);
+    expect(retryBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_1k")).toHaveLength(3);
     await retryApp.close();
 
     const failedBilling = createBillingMock(), failedEdit = vi.fn().mockResolvedValueOnce({ kind: "b64", b64: pngB64, mime: "image/png" }).mockRejectedValue(new Error("segment two failed"));
     const failedApp = await createApp({ prisma: createPrismaMock({ assets, workflows: [seedWorkflow()] }), billing: failedBilling, services: { callImageEdit: failedEdit } });
     const failed = await failedApp.inject({ method: "POST", url: "/api/workflow/ecom/wf-seeded/segments/confirm" });
     expect(failed.statusCode).toBe(502);
-    expect(failedBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_1k")).toHaveLength(1);
+    expect(failedBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_1k")).toHaveLength(2);
+    expect(failedBilling.refundResource).toHaveBeenCalledTimes(1);
     expect(failedEdit.mock.calls).toHaveLength(3);
     await failedApp.close();
     const insufficientBilling = createBillingMock(); insufficientBilling.chargeResource.mockRejectedValueOnce(new InsufficientBalanceError());
@@ -351,7 +354,7 @@ describe("ecom workflow routes", () => {
     const redraw = await app.inject({ method: "POST", url: "/api/workflow/ecom/wf-seeded/segments/1/redraw" });
     const redrawOperationId = billing.chargeResource.mock.calls[0]?.[0]?.operationId as string;
     expect(redraw.statusCode).toBe(200);
-    expect(billing.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_1k")).toHaveLength(1);
+    expect(billing.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_1k")).toHaveLength(1);
     expect(redraw.json().data.workflow.billingOperationIds).toContain(redrawOperationId);
     const stitch = await app.inject({ method: "POST", url: "/api/workflow/ecom/wf-seeded/stitch", payload: { image: { b64: pngB64, mime: "image/png" } } }), stitchOperationId = billing.chargeResource.mock.calls[1]?.[0]?.operationId as string;
     expect(stitch.statusCode).toBe(200);
@@ -412,7 +415,7 @@ describe("ecom workflow routes", () => {
     expect(redrawDone.statusCode).toBe(200);
     expect(redrawServices.callImageEdit).toHaveBeenCalledTimes(1);
     expect(redrawServices.storeWorkflowImage).toHaveBeenCalledTimes(1);
-    expect(redrawBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_1k")).toHaveLength(1);
+    expect(redrawBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_1k")).toHaveLength(1);
     await redrawAppA.close();
     await redrawAppB.close();
 
@@ -549,7 +552,7 @@ describe("ecom workflow routes", () => {
     const confirmApp = await createApp({ prisma: createPrismaMock({ assets: confirmAssets, workflows: [confirmWorkflow] }), billing: confirmBilling, services: confirmServices });
     const confirm = await confirmApp.inject({ method: "POST", url: "/api/workflow/ecom/wf-seeded/segments/confirm" });
     expect(confirm.statusCode).toBe(200);
-    expect(confirmBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "ecom_segment_generation_1k")).toHaveLength(5);
+    expect(confirmBilling.chargeResource.mock.calls.filter(([args]) => (args as { resourceKey: string }).resourceKey === "image_generation_1k")).toHaveLength(5);
     const prompts = confirmServices.callImageEdit.mock.calls.map(([args]) => (args as { prompt: string }).prompt);
     expect(prompts[0]).toContain("分段名称：第 1 段（共 5 段）「首屏」");
     expect(prompts[2]).toContain("分段名称：第 3 段（共 5 段）「中段」");

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { EcomWorkflowStudioView, createEcomMasterPayload, createEcomWorkflowActions } from "./EcomWorkflowStudio";
 import { stitchEcomSegments } from "./ecomWorkflowStitch";
-import { ECOM_RESOLUTION_OPTIONS, canSaveEcomStitchedPreview, hasAllSegmentUrls, isEcomWorkflowMutating } from "./ecomWorkflowStudioModel";
+import { ECOM_MAX_REFERENCE_COUNT, ECOM_RESOLUTION_OPTIONS, canSaveEcomStitchedPreview, hasAllSegmentUrls, isEcomWorkflowMutating } from "./ecomWorkflowStudioModel";
 import type { WorkflowEcomImageAsset, WorkflowEcomPlatform, WorkflowEcomSegment, WorkflowEcomTemplate, WorkflowEcomWorkflow } from "../../workflowEcomApi";
 
 const platforms: readonly WorkflowEcomPlatform[] = [{ id: "taobao", name: "淘宝", market: "domestic" }, { id: "amazon", name: "Amazon", market: "foreign" }];
@@ -201,6 +201,11 @@ describe("EcomWorkflowStudioView", () => {
 });
 
 describe("createEcomMasterPayload", () => {
+  it("keeps ecommerce controls within the reused Qwen image capabilities", () => {
+    expect(ECOM_RESOLUTION_OPTIONS.map((option) => option.value)).toEqual(["1K", "2K"]);
+    expect(ECOM_MAX_REFERENCE_COUNT).toBe(3);
+  });
+
   it("keeps the selected foreign platform in submitted payload", () => {
     expect(createEcomMasterPayload({
       platformId: "amazon",

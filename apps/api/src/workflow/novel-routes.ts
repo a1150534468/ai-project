@@ -7,6 +7,8 @@ import { createNovelGenerator, type NovelGenerator } from "./novel-generation.js
 import { visibleCharCount } from "./novel-billable.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload, estimateNovelModificationRate } from "./novel-review.js";
+import { syncNovelContinuityAssetsForChapter } from "../novel/continuity-assets.js";
+import { syncNovelNarrativeLedgersForChapter } from "../novel/narrative-ledger.js";
 import { dispatchNovelOutboxBatch } from "../novel/outbox.js";
 import { NOVEL_COVER_RESOURCE_KEY, NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS } from "./novel-types.js";
 import { getNovelWorkbench, serializeNovelWorkbenchChapter } from "./novel-workbench.js";
@@ -322,7 +324,7 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const active = await prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind, status: { in: ["queued", "running"] } } });
     if (active) return reply.code(409).send({ error: "该设置步骤正在生成" });
     try {
-      const task = await reserveAndCreateTask({ prisma, billing, userId, projectId: project.id, targetKind, payload: { prompt: body.data.prompt }, estimateChars: estimateReserveChars(targetKind), delivery: taskDelivery });
+      const task = await reserveAndCreateTask({ prisma, billing, userId, projectId: project.id, targetKind, payload: { prompt: body.data.prompt, ...(targetKind === "setupPlot" ? { targetCount: project.targetChapters } : {}) }, estimateChars: estimateReserveChars(targetKind, undefined, project.targetChapters), delivery: taskDelivery });
       enqueue(task);
       return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
     } catch (error) {
@@ -488,6 +490,30 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     return { success: true, data: { versions } };
   });
 
+  app.get("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/generation-requests", async (req, reply) => {
+    const userId = (req as unknown as { userId: string }).userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = chapterParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedProject(prisma, userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const chapter = await prisma.novelChapter.findUnique({
+      where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } },
+      select: { id: true },
+    });
+    if (!chapter) return reply.code(404).send({ error: "章节不存在" });
+    const requests = await prisma.novelGenerationRequest.findMany({
+      where: { projectId: project.id, chapterIndex: params.data.chapterIndex },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    });
+    return { success: true, data: { requests: requests.map((request) => ({
+      ...request,
+      createdAt: request.createdAt.toISOString(),
+      updatedAt: request.updatedAt.toISOString(),
+    })) } };
+  });
+
   app.post("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/versions/:versionId/restore", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
@@ -597,7 +623,6 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
       });
       const txWithAssets = tx as typeof tx & {
         novelKnowledgeFact?: { upsert: (args: unknown) => Promise<unknown> };
-        novelForeshadowItem?: { upsert: (args: unknown) => Promise<unknown> };
       };
       await Promise.all(postprocess.facts.map((fact) => txWithAssets.novelKnowledgeFact?.upsert({
         where: {
@@ -626,21 +651,24 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
           status: fact.status,
         },
       }) ?? Promise.resolve()));
-      await Promise.all(postprocess.foreshadowItems.map((item) => txWithAssets.novelForeshadowItem?.upsert({
-        where: { projectId_title: { projectId: project.id, title: item.title } },
-        create: {
-          projectId: project.id,
-          introducedInChapterId: current.id,
-          introducedInChapterIndex: item.introducedInChapterIndex ?? current.chapterIndex,
-          title: item.title,
-          description: item.description,
-          expectedPayoffChapter: item.expectedPayoffChapter,
-          status: item.status,
-          relatedCharacter: item.relatedCharacter,
-        },
-        // Preserve the original introduction and editorial status on repeat mentions.
-        update: {},
-      }) ?? Promise.resolve()));
+      await syncNovelNarrativeLedgersForChapter({
+        store: tx,
+        projectId: project.id,
+        chapterId: current.id,
+        chapterIndex: current.chapterIndex,
+        content: current.content,
+        foreshadowItems: postprocess.foreshadowItems,
+      });
+      await syncNovelContinuityAssetsForChapter({
+        store: tx,
+        projectId: project.id,
+        chapterIndex: current.chapterIndex,
+        title: current.title,
+        content: current.content,
+        eventCards: postprocess.consistencyStatus.chapterAssets.eventCards,
+        knownCharacters: knownCharacters.map((item) => item.name),
+        knownLocations: knownLocations.map((item) => item.name),
+      });
       return chapter;
     });
     return { success: true, data: { chapter: serializeNovelWorkbenchChapter(saved) } };

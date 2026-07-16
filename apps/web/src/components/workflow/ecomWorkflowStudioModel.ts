@@ -96,8 +96,10 @@ export type EcomWorkflowMutationState = {
 export const ECOM_RESOLUTION_OPTIONS: readonly { readonly value: WorkflowEcomResolution; readonly label: string; readonly size: string }[] = [
   { value: "1K", label: "1K", size: "768x1024" },
   { value: "2K", label: "2K", size: "1536x2048" },
-  { value: "4K", label: "4K", size: "2480x3312" },
 ] as const;
+
+/** 与现有 Qwen Image 编辑链路保持一致，避免第 4 张起稳定生成失败。 */
+export const ECOM_MAX_REFERENCE_COUNT = 3;
 
 function parseSellingPoints(input: string): readonly string[] {
   return input

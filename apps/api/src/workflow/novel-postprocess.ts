@@ -8,6 +8,11 @@ import type {
 
 const ACTION_HINT_RE = /(发现|得知|看到|进入|离开|追查|追踪|质问|交手|对峙|决定|揭开|暴露|潜入|逃离|收到|确认|锁定|怀疑|救下|袭击|反击|谈判|搜查|击退)/u;
 const OPEN_THREAD_HINT_RE = /(谁|为何|为什么|究竟|真相|秘密|目的|身份|何处|哪里|怎么会|如何|什么)/u;
+const DURABLE_UNKNOWN_RE = /(真相|秘密|身份|目的|幕后|未知|谜底|无法.{0,8}(?:解析|理解|确认)|尚未|仍未|未被回收|究竟|为何|为什么)/u;
+const FUTURE_PRESSURE_RE = /(必须|即将|将要|要彻底|准备再次|真正的.{0,10}(?:猎手|敌人)|刚刚才露出|才刚刚开始|猎杀.{0,8}开始|倒计时|覆写全人类|物理锚点)/u;
+const STORY_OBJECT_RE = /(逻辑锁|锚点|协议|源码|代码|碎片|节点|猎手|猎杀|架构师|覆写|意识|神经元|苏明|哥哥)/u;
+const EXPLICIT_MISSION_RE = /(必须|要彻底).{0,100}(?:锚点|救出|切断|前往|进入|解开)/u;
+const LOW_VALUE_THREAD_RE = /(真写啊|敢接这单悬赏|他在干嘛|就这|想杀我|想抹杀我|你懂硬件|有Bug，就必须被修复|逻辑风暴，才刚刚开始)/u;
 
 function dedupe(values: readonly string[]): string[] {
   const seen = new Set<string>();
@@ -37,6 +42,23 @@ function keyEventsFromSentences(sentences: readonly string[]): string[] {
   return dedupe(scored.length ? scored : sentences.slice(0, 3).map((sentence) => sentence.slice(0, 180))).slice(0, 4);
 }
 
+function durableOpenThreads(sentences: readonly string[]): string[] {
+  const tail = sentences.slice(-12);
+  const candidates = tail.map((sentence, index) => {
+    const compact = sentence.replace(/\s+/gu, " ").trim();
+    if (LOW_VALUE_THREAD_RE.test(compact) || compact.length < 8) return { sentence: compact, score: -1, index };
+    let score = 0;
+    if (/[？?]/u.test(compact) && OPEN_THREAD_HINT_RE.test(compact)) score += 4;
+    if (DURABLE_UNKNOWN_RE.test(compact)) score += 3;
+    if (FUTURE_PRESSURE_RE.test(compact)) score += 3;
+    if (STORY_OBJECT_RE.test(compact)) score += 1;
+    if (EXPLICIT_MISSION_RE.test(compact)) score += 2;
+    if (score >= 4 && index >= tail.length - 3) score += 1;
+    return { sentence: compact.slice(0, 220), score, index };
+  }).filter((item) => item.score >= 4).sort((a, b) => b.score - a.score || b.index - a.index);
+  return dedupe(candidates.map((item) => item.sentence)).slice(0, 1);
+}
+
 export function buildNovelChapterSummaryPayload(content: string): NovelChapterSummaryPayload {
   const normalized = (content || "").replace(/\s+/g, " ").trim();
   if (!normalized) return { summary: "", keyEvents: [], openThreads: [] };
@@ -50,10 +72,9 @@ export function buildNovelChapterSummaryPayload(content: string): NovelChapterSu
   return {
     summary: summaryParts.join("").slice(0, 220),
     keyEvents,
-    // Only the chapter-ending question can represent a durable narrative thread.
-    // Dialogue questions elsewhere in the chapter are usually local interaction,
-    // not foreshadowing that should enter the long-running story ledger.
-    openThreads: dedupe(sentences.slice(-5).filter((sentence) => /[？?]/u.test(sentence) && OPEN_THREAD_HINT_RE.test(sentence)).reverse()).slice(0, 1),
+    // Only a high-signal ending question, unresolved reveal, or explicit future pressure
+    // becomes a durable thread. Routine dialogue and recurring catchphrases are excluded.
+    openThreads: durableOpenThreads(sentences),
   };
 }
 
@@ -117,7 +138,7 @@ export function buildNovelChapterPostprocessPayload(args: {
     introducedInChapterIndex: args.chapterIndex,
     title: thread.slice(0, 80),
     description: thread.slice(0, 220),
-    expectedPayoffChapter: args.chapterIndex + 3,
+    expectedPayoffChapter: args.chapterIndex + (/[？?]/u.test(thread) ? 3 : 5),
     status: "open" as const,
     relatedCharacter: "",
   })).slice(0, 1);

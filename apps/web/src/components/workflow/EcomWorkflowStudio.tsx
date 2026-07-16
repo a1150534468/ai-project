@@ -13,6 +13,7 @@ import type {
 } from "../../workflowEcomApi";
 import { stitchEcomSegments } from "./ecomWorkflowStitch";
 import {
+  ECOM_MAX_REFERENCE_COUNT,
   FALLBACK_PLATFORMS,
   FALLBACK_TEMPLATES,
   ECOM_RESOLUTION_OPTIONS,
@@ -273,14 +274,14 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       onSellingPointsChange={(value) => { setSellingPointsInput(value); clearFeedback(); }}
       onExtraChange={(value) => { setExtra(value); clearFeedback(); }}
       onReferenceUpload={(file) => {
-        if (referenceAssets.length + remoteReferenceCount >= 5) return;
+        if (referenceAssets.length + remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT) return;
         clearFeedback();
         setIsUploadingReference(true);
         void (async () => {
           try {
             const inlineImage = await readFileAsInlineImage(file);
             const asset = await client.createWorkflowEcomReference(token, inlineImage);
-            setReferenceAssets((current) => current.some((item) => item.id === asset.id) ? current : [...current, asset].slice(0, 5));
+            setReferenceAssets((current) => current.some((item) => item.id === asset.id) ? current : [...current, asset].slice(0, ECOM_MAX_REFERENCE_COUNT));
             setNotice("参考图已上传");
           } catch (uploadError) {
             setError(formatEcomError(uploadError, "上传参考图失败"));

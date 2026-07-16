@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createNovelGenerator } from "./novel-generation.js";
+import { buildNovelPreparedRequest, createNovelGenerator } from "./novel-generation.js";
 
 const messagesCreate = vi.hoisted(() => vi.fn());
 const messagesStream = vi.hoisted(() => vi.fn());
@@ -65,6 +65,29 @@ describe("novel generation", () => {
       temperature: 0.55,
       messages: [{ role: "user", content: "项目级章节提示词" }],
     }));
+  });
+
+  it("persists exactly the request that is sent to the model", async () => {
+    const onRequestPrepared = vi.fn(async () => undefined);
+    await createNovelGenerator({})({
+      targetKind: "chapter",
+      projectTitle: "寒泉烬",
+      chapterIndex: 3,
+      chapterTitle: "夜门",
+      promptOverride: "不可变的实际提示词",
+      modelOverride: "audit-model",
+      temperatureOverride: 0.4,
+      onRequestPrepared,
+    });
+    const prepared = buildNovelPreparedRequest({ targetKind: "chapter", projectTitle: "寒泉烬", chapterIndex: 3, chapterTitle: "夜门", promptOverride: "不可变的实际提示词", temperatureOverride: 0.4 }, "audit-model");
+    expect(onRequestPrepared).toHaveBeenCalledWith(prepared);
+    expect(messagesCreate).toHaveBeenCalledWith({
+      model: prepared.model,
+      max_tokens: prepared.maxTokens,
+      temperature: prepared.temperature,
+      system: prepared.systemPrompt,
+      messages: [{ role: "user", content: prepared.userPrompt }],
+    });
   });
 
   it("forwards streamed chapter chunks before returning the final message", async () => {

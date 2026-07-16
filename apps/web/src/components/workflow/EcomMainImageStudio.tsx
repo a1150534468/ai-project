@@ -86,7 +86,11 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
         });
         const result = await client.createEcomMainJob(token, payload);
         setJob(result.job);
-        setNotice(result.job.stage === "partial" ? "部分主图生成失败，可对失败图重绘" : "主图已生成");
+        if (result.job.stage === "partial") {
+          setError(`部分主图生成失败，可对失败图重绘${result.job.error ? `：${result.job.error}` : ""}`);
+        } else {
+          setNotice("主图已生成");
+        }
         onActivity?.();
         onBalanceRefresh?.();
       } catch (submitError) {

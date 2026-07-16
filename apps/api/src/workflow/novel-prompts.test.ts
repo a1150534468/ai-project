@@ -15,9 +15,11 @@ describe("novel prompts", () => {
     expect(prompt).toContain("不得改变已锁定的故事梗概");
   });
 
-  it("builds the story-tree setup prompt", () => {
-    const prompt = buildNovelUserPrompt({ targetKind: "setupPlot", projectTitle: "寒泉烬" });
+  it("builds the story-tree setup prompt with exact chapter coverage", () => {
+    const prompt = buildNovelUserPrompt({ targetKind: "setupPlot", projectTitle: "寒泉烬", targetCount: 30 });
     expect(prompt).toContain("主线、支线与暗线");
     expect(prompt).toContain("部卷幕章故事树");
+    expect(prompt).toContain("目标章节总数：30 章");
+    expect(prompt).toContain("第 1 章连续覆盖到第 30 章");
   });
 });

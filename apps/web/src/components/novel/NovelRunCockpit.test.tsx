@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NovelIntelligenceWorkspace } from "./NovelIntelligenceWorkspace";
-import { NovelRunCockpit, novelRunEventScope, novelRunEventText } from "./NovelRunCockpit";
+import { NovelRunCockpit, novelRunEventScope, novelRunEventText, novelRunEventTime } from "./NovelRunCockpit";
 import type { NovelEngineEvent } from "../../api";
 
 describe("novel engine workbench", () => {
@@ -41,5 +41,11 @@ describe("novel engine workbench", () => {
 
     expect(novelRunEventScope(event)).toBe("运行");
     expect(novelRunEventText(event)).toBe("已暂停");
+  });
+
+  it("formats event prefixes as local 24-hour time", () => {
+    const local = new Date(2026, 6, 16, 6, 53, 42).toISOString();
+    expect(novelRunEventTime(local)).toBe("06:53:42");
+    expect(novelRunEventTime("invalid")).toBe("--:--:--");
   });
 });

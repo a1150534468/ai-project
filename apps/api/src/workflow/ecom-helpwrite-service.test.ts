@@ -12,13 +12,16 @@ describe("helpWriteEcomField", () => {
   it("生成卖点文案：reserve+settle 都调用，返回文本", async () => {
     const billing = makeBilling();
     const llm = makeLlm("紧凑机身：省空间\n大容量：1.2L 水箱");
-    const text = await helpWriteEcomField({ field: "sellingPoints", productName: "咖啡机", category: "厨房电器", userId: "u1", billing: billing as never, llm: llm as never });
+    const text = await helpWriteEcomField({ field: "sellingPoints", productName: "咖啡机", category: "厨房电器", userId: "u1", billing: billing as never, llm: llm as never, model: "qwen3.7-plus" });
     expect(text).toContain("紧凑机身");
     expect(billing.reserve).toHaveBeenCalledTimes(1);
     expect(billing.settle).toHaveBeenCalledTimes(1);
     // 用商品名称+类目构造用户消息
     const callArg = (llm.messages.create as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(JSON.stringify(callArg)).toContain("咖啡机");
+    expect(callArg.model).toBe("qwen3.7-plus");
+    expect(billing.reserve).toHaveBeenCalledWith(expect.objectContaining({ model: "qwen3.7-plus" }));
+    expect(billing.settle).toHaveBeenCalledWith(expect.objectContaining({ model: "qwen3.7-plus" }));
   });
   it("额外说明：把已有卖点带进 prompt", async () => {
     const billing = makeBilling();

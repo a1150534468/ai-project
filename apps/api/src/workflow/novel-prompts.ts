@@ -32,12 +32,21 @@ export interface NovelPromptInput {
   readonly promptOverride?: string;
   readonly modelOverride?: string;
   readonly temperatureOverride?: number;
+  readonly onRequestPrepared?: (request: NovelPreparedRequest) => Promise<void>;
   readonly onChunk?: (chunk: string) => Promise<void>;
+}
+
+export interface NovelPreparedRequest {
+  readonly model: string;
+  readonly maxTokens: number;
+  readonly temperature?: number;
+  readonly systemPrompt: string;
+  readonly userPrompt: string;
 }
 
 export function buildNovelSystemPrompt(targetKind: NovelTargetKind): string {
   if (targetKind === "chapter") {
-    return "你是中文长篇小说写作助手。只输出章节正文，若使用 JSON 也只能包含 title 和 content 字段，不要解释，不要 Markdown。";
+    return "你是中文长篇小说写作助手。第一行必须是“标题：具体章名”，空一行后输出章节正文；章名需为2到20字且不得使用“第N章”占位名。不要解释，不要 Markdown 或 JSON。";
   }
   if (targetKind === "chapterRewrite") {
     return "你是中文长篇小说精修助手。只输出改写后的选区正文，不要标题、解释、Markdown 或 JSON；必须保持与选区前后文自然衔接。";
@@ -82,6 +91,7 @@ export function buildNovelUserPrompt(input: NovelPromptInput): string {
       `设置步骤：${input.targetKind}`,
       `生成目标：${SETUP_GUIDANCE[input.targetKind]}`,
       `输出结构：${SETUP_OUTPUT_FIELDS[input.targetKind]}`,
+      input.targetKind === "setupPlot" && input.targetCount ? `目标章节总数：${input.targetCount} 章。volumes 内的 chapters 必须从第 1 章连续覆盖到第 ${input.targetCount} 章，不得缺章、跳号或提前写“大结局”；每章必须有具体 title。` : "",
       input.userPrompt ? `作者补充：${input.userPrompt}` : "",
       input.contextText ? `已确认资料：\n${input.contextText}` : "",
       "严格输出一个完整 JSON 对象；键名使用输出结构指定的英文键，不要 Markdown、注释或解释。",

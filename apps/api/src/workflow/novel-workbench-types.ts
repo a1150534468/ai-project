@@ -29,6 +29,12 @@ export interface NovelQualityIssue {
 export interface NovelQualityDiagnostics {
   readonly score: number;
   readonly tensionScore: number;
+  readonly tensionDimensions: {
+    readonly plot: number;
+    readonly emotional: number;
+    readonly pacing: number;
+    readonly scoringVersion: string;
+  };
   readonly rhythmStatus: "steady" | "needs_tune" | "unstable";
   readonly styleRisk: "low" | "medium" | "high";
   readonly endingHook: boolean;

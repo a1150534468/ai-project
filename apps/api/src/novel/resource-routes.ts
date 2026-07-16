@@ -6,6 +6,9 @@ import { z } from "zod";
 import { captureNovelStructuredSnapshot, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 import { syncNovelSetupAssets } from "./structured-sync.js";
 import { refreshNovelVectorMemoryBestEffort } from "../workflow/novel-task-runner.js";
+import { backfillNovelContinuityAssets } from "./continuity-assets.js";
+import { backfillNovelNarrativeLedgers } from "./narrative-ledger.js";
+import { recalculateNovelChapterScores } from "./score-backfill.js";
 
 const projectParams = z.object({ projectId: z.string().min(1) });
 const entityParams = projectParams.extend({ entityId: z.string().min(1) });
@@ -586,7 +589,7 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelProp.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
     if (!found) return reply.code(404).send({ error: "道具不存在" });
-    const prop = await prisma.novelProp.update({ where: { id: found.id }, data: { ...body.data, ...(body.data.metadata ? { metadata: json(body.data.metadata) } : {}) } as Prisma.NovelPropUncheckedUpdateInput });
+    const prop = await prisma.novelProp.update({ where: { id: found.id }, data: { ...body.data, ...(body.data.metadata ? { metadata: json(body.data.metadata) } : {}), source: "manual" } as Prisma.NovelPropUncheckedUpdateInput });
     return { success: true, data: { prop } };
   });
 
@@ -620,15 +623,32 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
-    const [timeline, foreshadows, debts, events, causalEdges, facts] = await Promise.all([
+    const [timeline, foreshadows, debts, events, causalEdges, facts, foreshadowEvents] = await Promise.all([
       prisma.novelTimelineEvent.findMany({ where: { projectId: params.data.projectId }, orderBy: [{ chapterNumber: "asc" }, { createdAt: "asc" }] }),
-      prisma.novelForeshadowItem.findMany({ where: { projectId: params.data.projectId }, orderBy: [{ status: "asc" }, { expectedPayoffChapter: "asc" }] }),
+      prisma.novelForeshadowItem.findMany({ where: { projectId: params.data.projectId }, include: { events: { orderBy: { chapterIndex: "asc" } } }, orderBy: [{ status: "asc" }, { expectedPayoffChapter: "asc" }] }),
       prisma.novelNarrativeDebt.findMany({ where: { projectId: params.data.projectId }, orderBy: [{ status: "asc" }, { dueChapter: "asc" }] }),
       prisma.novelNarrativeEvent.findMany({ where: { projectId: params.data.projectId }, orderBy: [{ chapterNumber: "asc" }, { createdAt: "asc" }] }),
       prisma.novelCausalEdge.findMany({ where: { projectId: params.data.projectId }, orderBy: { createdAt: "asc" } }),
       prisma.novelKnowledgeFact.findMany({ where: { projectId: params.data.projectId }, orderBy: { updatedAt: "desc" }, take: 200 }),
+      prisma.novelForeshadowEvent.findMany({ where: { projectId: params.data.projectId }, orderBy: [{ chapterIndex: "asc" }, { createdAt: "asc" }] }),
     ]);
-    return { success: true, data: { timeline, foreshadows, debts, events, causalEdges, facts } };
+    return { success: true, data: { timeline, foreshadows, debts, events, causalEdges, facts, foreshadowEvents } };
+  });
+
+  app.post("/api/workflow/novels/projects/:projectId/narrative-assets/backfill", async (req, reply) => {
+    const userId = userIdOf(req);
+    const params = projectParams.safeParse(req.params);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
+    if (await hasActiveNovelRun(prisma, params.data.projectId)) return reply.code(409).send({ error: "作品正在生成中，请等待运行结束后再补齐叙事资产" });
+    const [continuity, ledgers, scores] = await Promise.all([
+      backfillNovelContinuityAssets({ prisma, projectId: params.data.projectId }),
+      backfillNovelNarrativeLedgers({ prisma, projectId: params.data.projectId }),
+      recalculateNovelChapterScores({ prisma, projectId: params.data.projectId }),
+    ]);
+    await refreshNovelVectorMemoryBestEffort(prisma, params.data.projectId);
+    return { success: true, data: { ...continuity, ...ledgers, ...scores } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/timeline", async (req, reply) => {
@@ -651,7 +671,7 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelTimelineEvent.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
     if (!found) return reply.code(404).send({ error: "时间线事件不存在" });
-    const event = await prisma.novelTimelineEvent.update({ where: { id: found.id }, data: body.data });
+    const event = await prisma.novelTimelineEvent.update({ where: { id: found.id }, data: { ...body.data, source: "manual", sourceKey: null } });
     return { success: true, data: { event } };
   });
 
@@ -686,7 +706,7 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelForeshadowItem.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
     if (!found) return reply.code(404).send({ error: "伏笔不存在" });
-    const item = await prisma.novelForeshadowItem.update({ where: { id: found.id }, data: body.data });
+    const item = await prisma.novelForeshadowItem.update({ where: { id: found.id }, data: { ...body.data, source: "manual", sourceKey: null } });
     return { success: true, data: { item } };
   });
 
@@ -721,7 +741,7 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelNarrativeDebt.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
     if (!found) return reply.code(404).send({ error: "叙事债务不存在" });
-    const debt = await prisma.novelNarrativeDebt.update({ where: { id: found.id }, data: body.data });
+    const debt = await prisma.novelNarrativeDebt.update({ where: { id: found.id }, data: { ...body.data, source: "manual", sourceKey: null } });
     return { success: true, data: { debt } };
   });
 

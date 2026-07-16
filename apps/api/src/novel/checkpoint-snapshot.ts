@@ -11,7 +11,7 @@ function dataRows<T>(value: unknown, projectId: string): T[] {
 }
 
 export async function captureNovelStructuredSnapshot(store: SnapshotStore, projectId: string) {
-  const [bible, worldDimensions, styleNotes, structureNodes, characters, characterRelations, locations, timelineEvents, storylines, storylineMilestones, props, propEvents, narrativeEvents, causalEdges, narrativeDebts, entityStates, knowledgeFacts, foreshadowItems] = await Promise.all([
+  const [bible, worldDimensions, styleNotes, structureNodes, characters, characterRelations, locations, timelineEvents, storylines, storylineMilestones, props, propEvents, narrativeEvents, causalEdges, narrativeDebts, entityStates, knowledgeFacts, foreshadowItems, foreshadowEvents] = await Promise.all([
     store.novelBible.findUnique({ where: { projectId }, select: { id: true, premiseLock: true, genreLock: true, worldPresetLock: true, version: true } }),
     store.novelWorldDimension.findMany({ where: { projectId }, select: { id: true, bibleId: true, dimensionKey: true, title: true, summary: true, details: true, position: true } }),
     store.novelStyleNote.findMany({ where: { projectId }, select: { id: true, bibleId: true, category: true, title: true, content: true, position: true } }),
@@ -19,19 +19,20 @@ export async function captureNovelStructuredSnapshot(store: SnapshotStore, proje
     store.novelCharacter.findMany({ where: { projectId }, select: { id: true, name: true, role: true, gender: true, age: true, description: true, appearance: true, personality: true, publicProfile: true, coreBelief: true, coreMotivation: true, innerLack: true, moralTaboos: true, voiceStyle: true, state: true } }),
     store.novelCharacterRelation.findMany({ where: { projectId }, select: { id: true, fromCharacterId: true, toCharacterId: true, relationType: true, description: true, strength: true, state: true } }),
     store.novelLocation.findMany({ where: { projectId }, select: { id: true, name: true, description: true, rules: true, metadata: true } }),
-    store.novelTimelineEvent.findMany({ where: { projectId }, select: { id: true, chapterNumber: true, timeLabel: true, title: true, description: true, participants: true } }),
+    store.novelTimelineEvent.findMany({ where: { projectId }, select: { id: true, chapterNumber: true, timeLabel: true, title: true, description: true, participants: true, source: true, sourceKey: true } }),
     store.novelStoryline.findMany({ where: { projectId }, select: { id: true, title: true, storylineType: true, status: true, goal: true, conflict: true, promiseTags: true, aliases: true } }),
     store.novelStorylineMilestone.findMany({ where: { projectId }, select: { id: true, storylineId: true, chapterNumber: true, title: true, description: true, status: true } }),
-    store.novelProp.findMany({ where: { projectId }, select: { id: true, name: true, description: true, owner: true, location: true, status: true, metadata: true } }),
-    store.novelPropEvent.findMany({ where: { projectId }, select: { id: true, propId: true, chapterNumber: true, eventType: true, description: true, stateAfter: true } }),
+    store.novelProp.findMany({ where: { projectId }, select: { id: true, name: true, description: true, owner: true, location: true, status: true, metadata: true, source: true } }),
+    store.novelPropEvent.findMany({ where: { projectId }, select: { id: true, propId: true, chapterNumber: true, eventType: true, description: true, stateAfter: true, source: true, sourceKey: true } }),
     store.novelNarrativeEvent.findMany({ where: { projectId }, select: { id: true, chapterNumber: true, eventType: true, title: true, description: true, actors: true, locations: true, tags: true, tension: true } }),
     store.novelCausalEdge.findMany({ where: { projectId }, select: { id: true, fromEventId: true, toEventId: true, relationType: true, confidence: true, evidence: true } }),
-    store.novelNarrativeDebt.findMany({ where: { projectId }, select: { id: true, debtType: true, title: true, description: true, introducedChapter: true, dueChapter: true, status: true, severity: true } }),
+    store.novelNarrativeDebt.findMany({ where: { projectId }, select: { id: true, debtType: true, title: true, description: true, introducedChapter: true, dueChapter: true, status: true, severity: true, foreshadowId: true, resolvedInChapter: true, resolutionEvidence: true, source: true, sourceKey: true } }),
     store.novelEntityState.findMany({ where: { projectId }, select: { id: true, entityType: true, entityKey: true, chapterNumber: true, state: true, sourceExcerpt: true } }),
     store.novelKnowledgeFact.findMany({ where: { projectId }, select: { id: true, chapterIndex: true, subject: true, predicate: true, object: true, sourceExcerpt: true, confidence: true, status: true } }),
-    store.novelForeshadowItem.findMany({ where: { projectId }, select: { id: true, introducedInChapterIndex: true, title: true, description: true, expectedPayoffChapter: true, status: true, relatedCharacter: true } }),
+    store.novelForeshadowItem.findMany({ where: { projectId }, select: { id: true, introducedInChapterIndex: true, title: true, description: true, expectedPayoffChapter: true, status: true, relatedCharacter: true, source: true, sourceKey: true, lastMentionedChapter: true, resolvedInChapterIndex: true, resolutionEvidence: true } }),
+    store.novelForeshadowEvent.findMany({ where: { projectId }, select: { id: true, foreshadowId: true, chapterIndex: true, action: true, evidence: true, confidence: true, source: true, sourceKey: true } }),
   ]);
-  return { bible, worldDimensions, styleNotes, structureNodes, characters, characterRelations, locations, timelineEvents, storylines, storylineMilestones, props, propEvents, narrativeEvents, causalEdges, narrativeDebts, entityStates, knowledgeFacts, foreshadowItems };
+  return { bible, worldDimensions, styleNotes, structureNodes, characters, characterRelations, locations, timelineEvents, storylines, storylineMilestones, props, propEvents, narrativeEvents, causalEdges, narrativeDebts, entityStates, knowledgeFacts, foreshadowItems, foreshadowEvents };
 }
 
 export async function restoreNovelStructuredSnapshot(tx: Prisma.TransactionClient, projectId: string, value: unknown): Promise<void> {
@@ -44,6 +45,7 @@ export async function restoreNovelStructuredSnapshot(tx: Prisma.TransactionClien
     tx.novelStorylineMilestone.deleteMany({ where: { projectId } }),
     tx.novelPropEvent.deleteMany({ where: { projectId } }),
     tx.novelCausalEdge.deleteMany({ where: { projectId } }),
+    tx.novelForeshadowEvent.deleteMany({ where: { projectId } }),
   ]);
   await Promise.all([
     tx.novelStructureNode.deleteMany({ where: { projectId } }),
@@ -85,10 +87,13 @@ export async function restoreNovelStructuredSnapshot(tx: Prisma.TransactionClien
     create(dataRows<Prisma.NovelStorylineCreateManyInput>(snapshot.storylines, projectId), tx.novelStoryline),
     create(dataRows<Prisma.NovelPropCreateManyInput>(snapshot.props, projectId), tx.novelProp),
     create(dataRows<Prisma.NovelNarrativeEventCreateManyInput>(snapshot.narrativeEvents, projectId), tx.novelNarrativeEvent),
-    create(dataRows<Prisma.NovelNarrativeDebtCreateManyInput>(snapshot.narrativeDebts, projectId), tx.novelNarrativeDebt),
     create(dataRows<Prisma.NovelEntityStateCreateManyInput>(snapshot.entityStates, projectId), tx.novelEntityState),
     create(dataRows<Prisma.NovelKnowledgeFactCreateManyInput>(snapshot.knowledgeFacts, projectId), tx.novelKnowledgeFact),
     create(dataRows<Prisma.NovelForeshadowItemCreateManyInput>(snapshot.foreshadowItems, projectId), tx.novelForeshadowItem),
+  ]);
+  await Promise.all([
+    create(dataRows<Prisma.NovelNarrativeDebtCreateManyInput>(snapshot.narrativeDebts, projectId), tx.novelNarrativeDebt),
+    create(dataRows<Prisma.NovelForeshadowEventCreateManyInput>(snapshot.foreshadowEvents, projectId), tx.novelForeshadowEvent),
   ]);
   await Promise.all([
     create(dataRows<Prisma.NovelCharacterRelationCreateManyInput>(snapshot.characterRelations, projectId), tx.novelCharacterRelation),

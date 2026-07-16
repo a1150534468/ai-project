@@ -29,4 +29,21 @@ describe("novel text analysis", () => {
     expect(result.issues.map((item) => item.code)).toContain("low_word_count");
     expect(result.clicheHits).toContain("嘴角微微上扬");
   });
+
+  it("uses normalized evidence instead of saturating long chapters at 100", () => {
+    const calm = buildNovelQualityDiagnostics("清晨的院子很安静。林岚整理书架。她把旧信放回抽屉，随后出门散步。".repeat(80));
+    const tense = buildNovelQualityDiagnostics("警报忽然爆炸！林岚遭到追杀，她冲出走廊反击。门后究竟是谁？危险正在逼近，秘密即将暴露！".repeat(35));
+
+    expect(calm.tensionScore).toBeLessThan(tense.tensionScore);
+    expect(tense.tensionScore).toBeLessThan(100);
+    expect(tense.tensionDimensions.plot).not.toBe(tense.tensionDimensions.emotional);
+    expect(tense.tensionDimensions.scoringVersion).toBe("density-v2");
+  });
+
+  it("does not award tension merely for chapter length", () => {
+    const short = buildNovelQualityDiagnostics("林岚坐在窗边看雨。她把茶杯放回桌面。".repeat(10));
+    const long = buildNovelQualityDiagnostics("林岚坐在窗边看雨。她把茶杯放回桌面。".repeat(120));
+
+    expect(Math.abs(long.tensionScore - short.tensionScore)).toBeLessThanOrEqual(3);
+  });
 });

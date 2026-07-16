@@ -1076,10 +1076,28 @@ export interface NovelNarrativeAssets {
   events: Array<Record<string, unknown>>;
   causalEdges: Array<Record<string, unknown>>;
   facts: Array<Record<string, unknown>>;
+  foreshadowEvents: Array<Record<string, unknown>>;
 }
 
 export async function getNovelNarrativeAssets(token: string, projectId: string): Promise<NovelNarrativeAssets> {
   return novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/narrative-assets`);
+}
+
+export interface NovelContinuityBackfillResult {
+  chapters: number;
+  timelineEvents: number;
+  props: number;
+  propEvents: number;
+  foreshadows: number;
+  foreshadowEvents: number;
+  debts: number;
+  reinforced: number;
+  resolved: number;
+  rescoredChapters: number;
+}
+
+export async function backfillNovelNarrativeAssets(token: string, projectId: string): Promise<NovelContinuityBackfillResult> {
+  return novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/narrative-assets/backfill`, { method: "POST" });
 }
 
 export interface NovelChapterVersion {
@@ -1090,6 +1108,35 @@ export interface NovelChapterVersion {
   billableChars: number;
   operationId: string | null;
   createdAt: string;
+}
+
+export interface NovelGenerationRequest {
+  id: string;
+  projectId: string;
+  chapterId: string | null;
+  chapterIndex: number | null;
+  taskId: string;
+  runId: string | null;
+  stepId: string | null;
+  targetKind: string;
+  attempt: number;
+  systemPrompt: string;
+  userPrompt: string;
+  model: string;
+  temperature: number | null;
+  maxTokens: number;
+  templateId: string | null;
+  templateVersion: number | null;
+  requestHash: string;
+  status: string;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function listNovelGenerationRequests(token: string, projectId: string, chapterIndex: number): Promise<NovelGenerationRequest[]> {
+  const data = await novelEngineRequest<{ requests: NovelGenerationRequest[] }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/generation-requests`);
+  return data.requests;
 }
 
 export async function listNovelChapterVersions(token: string, projectId: string, chapterIndex: number): Promise<NovelChapterVersion[]> {

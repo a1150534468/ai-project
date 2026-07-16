@@ -3,6 +3,14 @@ import type { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import { registerNovelResourceRoutes } from "./resource-routes.js";
 
+const backfillNovelContinuityAssets = vi.hoisted(() => vi.fn());
+const backfillNovelNarrativeLedgers = vi.hoisted(() => vi.fn());
+const recalculateNovelChapterScores = vi.hoisted(() => vi.fn());
+
+vi.mock("./continuity-assets.js", () => ({ backfillNovelContinuityAssets }));
+vi.mock("./narrative-ledger.js", () => ({ backfillNovelNarrativeLedgers }));
+vi.mock("./score-backfill.js", () => ({ recalculateNovelChapterScores }));
+
 function checkpointPrisma(active = false) {
   const projectUpdate = vi.fn(async () => ({}));
   const chapterCreate = vi.fn(async () => ({}));
@@ -41,6 +49,26 @@ async function appFor(prisma: PrismaClient) {
 }
 
 describe("novel checkpoint resources", () => {
+  it("backfills timeline and prop lifecycle assets from existing chapters", async () => {
+    backfillNovelContinuityAssets.mockResolvedValue({ chapters: 30, timelineEvents: 120, props: 8, propEvents: 24 });
+    backfillNovelNarrativeLedgers.mockResolvedValue({ chapters: 30, foreshadows: 3, foreshadowEvents: 7, debts: 2, reinforced: 2, resolved: 1 });
+    recalculateNovelChapterScores.mockResolvedValue({ rescoredChapters: 30 });
+    const prisma = {
+      novelProject: { findFirst: vi.fn(async () => ({ id: "project-1", userId: "user-1" })) },
+      novelRun: { findFirst: vi.fn(async () => null) },
+    } as unknown as PrismaClient;
+    const app = await appFor(prisma);
+
+    const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/narrative-assets/backfill" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ chapters: 30, timelineEvents: 120, props: 8, propEvents: 24, foreshadows: 3, foreshadowEvents: 7, debts: 2, reinforced: 2, resolved: 1, rescoredChapters: 30 });
+    expect(backfillNovelContinuityAssets).toHaveBeenCalledWith({ prisma, projectId: "project-1" });
+    expect(backfillNovelNarrativeLedgers).toHaveBeenCalledWith({ prisma, projectId: "project-1" });
+    expect(recalculateNovelChapterScores).toHaveBeenCalledWith({ prisma, projectId: "project-1" });
+    await app.close();
+  });
+
   it("returns the latest failed setup task so the wizard can explain and retry it", async () => {
     const failedTask = {
       id: "task-1",

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError } from "../../apiError";
 import {
   ECOM_MAIN_RATIO_OPTIONS,
+  ECOM_MAIN_RESOLUTION_OPTIONS,
   ECOM_MAIN_STYLE_OPTIONS,
   ECOM_MAIN_COUNT_OPTIONS,
   buildCreateMainPayload,
@@ -15,6 +16,7 @@ describe("ecomMainImageModel", () => {
     expect(ECOM_MAIN_RATIO_OPTIONS.map((o) => o.value)).toContain("1:1");
     expect(ECOM_MAIN_STYLE_OPTIONS.map((o) => o.value)).toContain("custom");
     expect(ECOM_MAIN_COUNT_OPTIONS).toHaveLength(8);
+    expect(ECOM_MAIN_RESOLUTION_OPTIONS.map((o) => o.value)).toEqual(["1K", "2K"]);
   });
   it("payload：卖点按行拆分、去空、trim", () => {
     const payload = buildCreateMainPayload({

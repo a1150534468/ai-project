@@ -4,6 +4,7 @@ import {
   extractBillableText,
   formatGeneratedNovelDisplayText,
   parseRequiredGeneratedNovelValue,
+  resolveNovelChapterTitle,
   visibleCharCount,
 } from "./novel-billable.js";
 
@@ -38,5 +39,17 @@ describe("novel billable text", () => {
     const raw = { title: "第一章", content: "雨夜里，林岚推开旧门。" };
     expect(extractBillableText("chapter", raw)).toBe("雨夜里，林岚推开旧门。");
     expect(billableCharCount("chapter", raw)).toBe(11);
+  });
+
+  it("parses the streaming-friendly chapter title header without saving it into the body", () => {
+    const parsed = parseRequiredGeneratedNovelValue("chapter", "标题：逆向追踪\n\n林岚按下回车键。") as { title: string; content: string };
+    expect(parsed).toEqual({ title: "逆向追踪", content: "林岚按下回车键。" });
+    expect(formatGeneratedNovelDisplayText("chapter", parsed)).toBe("林岚按下回车键。");
+  });
+
+  it("preserves planned titles and replaces placeholder titles", () => {
+    expect(resolveNovelChapterTitle({ requestedTitle: "锁灵坠", generatedTitle: "模型另拟标题", content: "正文", chapterIndex: 2 })).toBe("锁灵坠");
+    expect(resolveNovelChapterTitle({ requestedTitle: "第 25 章", generatedTitle: "初代源码的秘密", content: "正文", chapterIndex: 25 })).toBe("初代源码的秘密");
+    expect(resolveNovelChapterTitle({ requestedTitle: "第 26 章", content: "林岚发现逻辑锁背后的秘密。", chapterIndex: 26 })).not.toMatch(/^第\s*26\s*章$/u);
   });
 });

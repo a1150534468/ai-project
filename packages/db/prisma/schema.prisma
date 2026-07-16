@@ -656,6 +656,8 @@ model NovelProject {
   qualityReports        NovelQualityReport[]
   checkpoints           NovelCheckpoint[]
   promptTemplates       NovelPromptTemplate[]
+  generationRequests    NovelGenerationRequest[]
+  foreshadowEvents      NovelForeshadowEvent[]
   bible                 NovelBible?
   worldDimensions       NovelWorldDimension[]
   styleNotes            NovelStyleNote[]
@@ -767,6 +769,8 @@ model NovelChapter {
   project          NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   versions         NovelChapterVersion[]
   qualityReports   NovelQualityReport[]
+  generationRequests NovelGenerationRequest[]
+  foreshadowEvents NovelForeshadowEvent[]
 
   @@unique([projectId, chapterIndex])
   @@index([projectId, updatedAt])
@@ -803,11 +807,19 @@ model NovelForeshadowItem {
   expectedPayoffChapter    Int          @default(0)
   status                   String       @default("open")
   relatedCharacter         String       @default("")
+  source                   String       @default("manual")
+  sourceKey                String?
+  lastMentionedChapter     Int?
+  resolvedInChapterIndex   Int?
+  resolutionEvidence       String       @default("")
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
   project                  NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  events                   NovelForeshadowEvent[]
+  narrativeDebts           NovelNarrativeDebt[]
 
   @@unique([projectId, title])
+  @@unique([projectId, sourceKey])
   @@index([projectId, status])
   @@index([projectId, expectedPayoffChapter])
 }
@@ -849,10 +861,42 @@ model NovelTask {
   project         NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   outboxCommand   NovelCommandOutbox?
+  generationRequest NovelGenerationRequest?
 
   @@index([userId, updatedAt])
   @@index([projectId, updatedAt])
   @@index([status, updatedAt])
+}
+
+model NovelGenerationRequest {
+  id              String       @id @default(cuid())
+  projectId       String
+  chapterId       String?
+  chapterIndex    Int?
+  taskId          String       @unique
+  runId           String?
+  stepId          String?
+  targetKind      String
+  attempt         Int          @default(1)
+  systemPrompt    String
+  userPrompt      String
+  model           String
+  temperature     Float?
+  maxTokens       Int
+  templateId      String?
+  templateVersion Int?
+  requestHash     String
+  status          String       @default("submitted")
+  error           String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  project         NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  chapter         NovelChapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  task            NovelTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, chapterIndex, createdAt])
+  @@index([chapterId, createdAt])
+  @@index([runId, createdAt])
 }
 
 model NovelRun {
@@ -1052,10 +1096,13 @@ model NovelTimelineEvent {
   title         String
   description   String       @default("")
   participants  Json         @default("[]")
+  source        String       @default("manual")
+  sourceKey     String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, sourceKey])
   @@index([projectId, chapterNumber])
 }
 
@@ -1104,6 +1151,7 @@ model NovelProp {
   location    String           @default("")
   status      String           @default("active")
   metadata    Json             @default("{}")
+  source      String           @default("manual")
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   project     NovelProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1120,10 +1168,13 @@ model NovelPropEvent {
   eventType     String
   description   String       @default("")
   stateAfter    Json         @default("{}")
+  source        String       @default("manual")
+  sourceKey     String?
   createdAt     DateTime     @default(now())
   project       NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
   prop          NovelProp    @relation(fields: [propId], references: [id], onDelete: Cascade)
 
+  @@unique([projectId, sourceKey])
   @@index([projectId, chapterNumber])
   @@index([propId, createdAt])
 }
@@ -1173,11 +1224,40 @@ model NovelNarrativeDebt {
   dueChapter        Int?
   status            String       @default("open")
   severity          String       @default("medium")
+  foreshadowId      String?
+  resolvedInChapter Int?
+  resolutionEvidence String      @default("")
+  source            String       @default("manual")
+  sourceKey         String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   project           NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  foreshadow        NovelForeshadowItem? @relation(fields: [foreshadowId], references: [id], onDelete: SetNull)
 
+  @@unique([projectId, sourceKey])
   @@index([projectId, status, dueChapter])
+  @@index([foreshadowId])
+}
+
+model NovelForeshadowEvent {
+  id            String                @id @default(cuid())
+  projectId     String
+  foreshadowId  String
+  chapterId     String?
+  chapterIndex  Int
+  action        String
+  evidence      String                @default("")
+  confidence    Float                 @default(0.7)
+  source        String                @default("chapterPostprocess")
+  sourceKey     String?
+  createdAt     DateTime              @default(now())
+  project       NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  foreshadow    NovelForeshadowItem    @relation(fields: [foreshadowId], references: [id], onDelete: Cascade)
+  chapter       NovelChapter?         @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, sourceKey])
+  @@index([foreshadowId, chapterIndex])
+  @@index([projectId, chapterIndex])
 }
 
 model NovelEntityState {

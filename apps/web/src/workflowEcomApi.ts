@@ -140,7 +140,8 @@ export async function getWorkflowEcomOptions(token: string): Promise<{
 export async function createWorkflowEcomReference(token: string, image: WorkflowEcomInlineImageInput): Promise<WorkflowEcomImageAsset> {
   const data = await requestWorkflowEcom<{ readonly asset: WorkflowEcomImageAsset }>({
     token,
-    path: "/api/workflow/ecom/references",
+    // 复用现有生图模块的参考图上传、大小校验与对象存储链路。
+    path: "/api/workflow/images/references",
     method: "POST",
     fallback: "上传参考图失败",
     body: { image },

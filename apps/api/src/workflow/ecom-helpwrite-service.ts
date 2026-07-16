@@ -3,7 +3,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
 
-const HELP_WRITE_MODEL = "MiniMax-M3";
+const LEGACY_HELP_WRITE_MODEL = "MiniMax-M3";
 const MAX_OUTPUT_TOKENS = 800;
 const TIMEOUT_MS = 60_000;
 
@@ -23,6 +23,8 @@ export interface HelpWriteInput {
   readonly userId: string;
   readonly billing?: BillingReserveSettle;
   readonly llm?: LlmClientLike;
+  /** Tests and dedicated deployments may override the shared LLM default. */
+  readonly model?: string;
 }
 
 function buildSystem(field: HelpWriteField): string {
@@ -53,12 +55,20 @@ export async function helpWriteEcomField(input: HelpWriteInput): Promise<string>
   const system = buildSystem(input.field);
   const user = buildUser({ ...input, productName });
   const billing = input.billing ?? defaultBilling();
+  // 电商文案复用全站 LLM 通道。此前固定 MiniMax-M3，在百炼作为主通道时
+  // 会把一个未授权模型发给百炼并稳定返回 502。
+  const llmConfig = input.llm ? null : loadLlmConfig();
+  const model = input.model?.trim()
+    || process.env.ECOM_HELP_WRITE_MODEL?.trim()
+    || llmConfig?.defaultModel
+    || process.env.LLM_DEFAULT_MODEL?.trim()
+    || LEGACY_HELP_WRITE_MODEL;
   const operationId = `ecom-helpwrite:${randomUUID()}`;
-  await billing.reserve({ operationId, userId: input.userId, type: "chat", model: HELP_WRITE_MODEL, inputTokens: estimateInputTokens(system, user), maxOutputTokens: MAX_OUTPUT_TOKENS });
-  const client = input.llm ?? createLlmClient(loadLlmConfig());
+  await billing.reserve({ operationId, userId: input.userId, type: "chat", model, inputTokens: estimateInputTokens(system, user), maxOutputTokens: MAX_OUTPUT_TOKENS });
+  const client = input.llm ?? createLlmClient(llmConfig!);
   try {
     const resp = await client.messages.create(
-      { model: HELP_WRITE_MODEL, max_tokens: MAX_OUTPUT_TOKENS, system, messages: [{ role: "user", content: user }] },
+      { model, max_tokens: MAX_OUTPUT_TOKENS, system, messages: [{ role: "user", content: user }] },
       { timeout: TIMEOUT_MS },
     );
     const text = resp.content
@@ -67,10 +77,10 @@ export async function helpWriteEcomField(input: HelpWriteInput): Promise<string>
       .join("")
       .trim();
     if (!text) throw new Error("empty help-write result");
-    await billing.settle({ operationId, userId: input.userId, model: HELP_WRITE_MODEL, inputTokens: resp.usage?.input_tokens ?? estimateInputTokens(system, user), outputTokens: resp.usage?.output_tokens ?? 0 });
+    await billing.settle({ operationId, userId: input.userId, model, inputTokens: resp.usage?.input_tokens ?? estimateInputTokens(system, user), outputTokens: resp.usage?.output_tokens ?? 0 });
     return text;
   } catch (err) {
-    await billing.settle({ operationId, userId: input.userId, model: HELP_WRITE_MODEL, inputTokens: 0, outputTokens: 0 }).catch(() => undefined);
+    await billing.settle({ operationId, userId: input.userId, model, inputTokens: 0, outputTokens: 0 }).catch(() => undefined);
     throw err;
   }
 }

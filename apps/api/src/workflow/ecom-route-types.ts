@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { PrismaClient } from "@prisma/client";
 import { ECOM_MAX_SEGMENTS, ECOM_MIN_SEGMENTS } from "./ecom-prompts.js";
 import type { ImageGenerationConfig, GeneratedImage, StoredImage } from "./image-service.js";
+import { IMAGE_MAX_REFERENCE_COUNT } from "./image-service.js";
 import type { WorkflowMutationLocker } from "./ecom-route-mutation.js";
 import type { WorkflowResourcePriceRow } from "./workflow-pricing.js";
 
@@ -23,7 +24,7 @@ export const masterRequestSchema = z.object({
   resolution: z.enum(["1K", "2K", "4K"]).default("1K"),
   segmentCount: z.coerce.number().int().min(ECOM_MIN_SEGMENTS).max(ECOM_MAX_SEGMENTS).default(3),
   product: productSchema,
-  referenceAssetIds: z.array(z.string().trim().min(1).max(128)).max(8).default([]),
+  referenceAssetIds: z.array(z.string().trim().min(1).max(128)).max(IMAGE_MAX_REFERENCE_COUNT).default([]),
 });
 
 // adopt-master 复用已生成的主图作为母版：母版图已选定，商品名称可留空（分段对空产品信息有兜底），

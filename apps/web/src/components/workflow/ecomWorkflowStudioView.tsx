@@ -14,6 +14,7 @@ import type {
   WorkflowEcomTemplateId,
   WorkflowEcomWorkflow,
 } from "../../workflowEcomApi";
+import { ECOM_MAX_REFERENCE_COUNT } from "./ecomWorkflowStudioModel";
 
 export type EcomWorkflowStudioViewSegment = {
   readonly index: number;
@@ -198,8 +199,8 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         {!props.hideProductForm && (
           <div className="mt-4 rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({props.referenceAssets.length + props.remoteReferenceCount}/5)</p>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= 5} className="h-10 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+              <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({props.referenceAssets.length + props.remoteReferenceCount}/{ECOM_MAX_REFERENCE_COUNT})</p>
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
                 {props.isUploadingReference ? "上传中" : "上传参考图"}
               </button>
             </div>

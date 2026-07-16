@@ -46,4 +46,18 @@ describe("novel postprocess", () => {
     expect(result.summary.openThreads).toEqual([]);
     expect(result.foreshadowItems).toEqual([]);
   });
+
+  it("registers an unresolved statement hook even when it is not phrased as a question", () => {
+    const result = buildNovelChapterPostprocessPayload({
+      projectTitle: "寒泉烬",
+      chapterIndex: 7,
+      title: "活体代码",
+      content: "屏幕上的暗红源码完全无法被解析。林岚知道，真正的猎手刚刚才露出獠牙。",
+      knownCharacters: ["林岚"],
+      knownLocations: [],
+    });
+
+    expect(result.summary.openThreads).toHaveLength(1);
+    expect(result.summary.openThreads[0]).toMatch(/无法被解析|真正的猎手/);
+  });
 });

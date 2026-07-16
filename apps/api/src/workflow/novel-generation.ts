@@ -1,6 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
-import { buildNovelSystemPrompt, buildNovelUserPrompt, type NovelPromptInput } from "./novel-prompts.js";
+import { buildNovelSystemPrompt, buildNovelUserPrompt, type NovelPreparedRequest, type NovelPromptInput } from "./novel-prompts.js";
 
 export interface NovelGenerationResult {
   readonly text: string;
@@ -27,6 +27,16 @@ export function novelGenerationMaxTokens(input: NovelPromptInput): number {
   return 10_000;
 }
 
+export function buildNovelPreparedRequest(input: NovelPromptInput, model: string): NovelPreparedRequest {
+  return {
+    model,
+    maxTokens: novelGenerationMaxTokens(input),
+    ...(typeof input.temperatureOverride === "number" ? { temperature: Math.max(0, Math.min(2, input.temperatureOverride)) } : {}),
+    systemPrompt: buildNovelSystemPrompt(input.targetKind),
+    userPrompt: input.promptOverride?.trim() || buildNovelUserPrompt(input),
+  };
+}
+
 function extractResponseText(response: { content: Array<Anthropic.ContentBlock> }): string {
   return response.content
     .filter((block): block is Anthropic.TextBlock => block.type === "text")
@@ -40,16 +50,18 @@ export function createNovelGenerator(env: NodeJS.ProcessEnv = process.env): Nove
     const cfg = loadLlmConfig(env);
     const client = createLlmClient(cfg);
     const model = input.modelOverride?.trim() || resolveNovelTextModel(env, cfg.defaultModel);
+    const prepared = buildNovelPreparedRequest(input, model);
     const request = {
-      model,
-      max_tokens: novelGenerationMaxTokens(input),
-      ...(typeof input.temperatureOverride === "number" ? { temperature: Math.max(0, Math.min(2, input.temperatureOverride)) } : {}),
-      system: buildNovelSystemPrompt(input.targetKind),
+      model: prepared.model,
+      max_tokens: prepared.maxTokens,
+      ...(prepared.temperature === undefined ? {} : { temperature: prepared.temperature }),
+      system: prepared.systemPrompt,
       messages: [{
         role: "user" as const,
-        content: input.promptOverride?.trim() || buildNovelUserPrompt(input),
+        content: prepared.userPrompt,
       }],
     };
+    await input.onRequestPrepared?.(prepared);
     let response: { content: Array<Anthropic.ContentBlock> };
     if (input.onChunk) {
       const stream = client.messages.stream(request);

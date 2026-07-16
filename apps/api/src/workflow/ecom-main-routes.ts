@@ -3,7 +3,8 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
-import { ecomMainImageResourceKey, ecomMainImageSize, type EcomMainRatio, type EcomMainStyleId } from "./ecom-main.js";
+import { ecomMainImageSize, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
+import { imageGenerationResourceKey } from "./image-upstream-options.js";
 import {
   authUserId,
   loadOwnedReferenceImages,
@@ -27,7 +28,7 @@ import {
 } from "./image-service.js";
 import { getEcomPlatform } from "./ecom-prompts.js";
 
-const REFERENCE_MODEL = "ecom_main_image";
+const LEGACY_ECOM_MAIN_MODEL = "ecom_main_image";
 type Prisma = ReturnType<typeof getPrisma>;
 type MainJobRow = NonNullable<Awaited<ReturnType<Prisma["ecomMainImageJob"]["findFirst"]>>>;
 type MainImageRecord = {
@@ -129,52 +130,43 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
 
   async function commitMainImage(args: {
     readonly job: MainJobRow;
+    readonly operationId: string;
     readonly index: number;
     readonly record: Pick<MainImageRecord, "index" | "theme" | "sceneRequirement" | "copyRequirement">;
     readonly stored: { originalUrl: string; thumbnailUrl: string; objectKey: string | null; mime: string };
     readonly prompt: string;
     readonly size: string;
+    readonly model: string;
   }): Promise<MainJobRow> {
-    const operationId = `ecom-main:${args.job.id}:${args.index}:${randomUUID()}`;
-    await billing.chargeResource({ operationId, userId: args.job.userId, resourceKey: ecomMainImageResourceKey(args.job.resolution), units: 1 });
-    try {
-      return await prisma.$transaction(async (tx) => {
-        const asset = await tx.imageAsset.create({
-          data: {
-            userId: args.job.userId,
-            requestId: operationId,
-            requestIndex: 0,
-            prompt: args.prompt,
-            model: REFERENCE_MODEL,
-            size: args.size,
-            originalUrl: args.stored.originalUrl,
-            thumbnailUrl: args.stored.thumbnailUrl,
-            objectKey: args.stored.objectKey,
-            mime: args.stored.mime,
-          },
-        });
-        const images = parseImages(args.job.images).map((image) =>
-          image.index === args.index
-            ? { ...args.record, index: args.index, assetId: asset.id, originalUrl: args.stored.originalUrl, thumbnailUrl: args.stored.thumbnailUrl, status: "ready" as const }
-            : image,
-        );
-        const updated = await tx.ecomMainImageJob.updateMany({
-          where: { id: args.job.id, userId: args.job.userId, updatedAt: args.job.updatedAt },
-          data: { images, billingOperationIds: [...args.job.billingOperationIds, operationId], error: null },
-        });
-        if (updated.count !== 1) throw new WorkflowMutationConflictError();
-        const next = await tx.ecomMainImageJob.findFirst({ where: { id: args.job.id, userId: args.job.userId } });
-        if (!next) throw new Error("job not found");
-        return next;
+    return prisma.$transaction(async (tx) => {
+      const asset = await tx.imageAsset.create({
+        data: {
+          userId: args.job.userId,
+          requestId: args.operationId,
+          requestIndex: 0,
+          prompt: args.prompt,
+          model: args.model,
+          size: args.size,
+          originalUrl: args.stored.originalUrl,
+          thumbnailUrl: args.stored.thumbnailUrl,
+          objectKey: args.stored.objectKey,
+          mime: args.stored.mime,
+        },
       });
-    } catch (error) {
-      try {
-        await billing.refundResource(operationId);
-      } catch (refundError) {
-        throw new RefundCompensationError(operationId, `${safeErrorMessage(error)}；退款失败：${safeErrorMessage(refundError)}`);
-      }
-      throw error;
-    }
+      const images = parseImages(args.job.images).map((image) =>
+        image.index === args.index
+          ? { ...args.record, index: args.index, assetId: asset.id, originalUrl: args.stored.originalUrl, thumbnailUrl: args.stored.thumbnailUrl, status: "ready" as const }
+          : image,
+      );
+      const updated = await tx.ecomMainImageJob.updateMany({
+        where: { id: args.job.id, userId: args.job.userId, updatedAt: args.job.updatedAt },
+        data: { images, billingOperationIds: [...args.job.billingOperationIds, args.operationId], error: null },
+      });
+      if (updated.count !== 1) throw new WorkflowMutationConflictError();
+      const next = await tx.ecomMainImageJob.findFirst({ where: { id: args.job.id, userId: args.job.userId } });
+      if (!next) throw new Error("job not found");
+      return next;
+    });
   }
 
   async function generateOneImage(job: MainJobRow, index: number): Promise<MainJobRow> {
@@ -190,24 +182,42 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
       index,
     });
     const size = ecomMainImageSize(job.ratio as EcomMainRatio, job.resolution as never);
-    const referenceImages = job.referenceAssetIds.length > 0 ? await loadOwnedReferenceImages(prisma, job.userId, job.referenceAssetIds, fetchFn) : null;
-    const config = loadImageGenerationConfig();
-    const image = await retryUntilSuccess(
-      () =>
-        referenceImages
-          ? callImageEdit({ config, prompt: built.prompt, referenceImages: referenceImages as readonly { mime: string; b64: string }[], fetchFn, size })
-          : callImageGeneration({ config, prompt: built.prompt, size, fetchFn }),
-      { retryDelayMs, maxAttempts },
-    );
-    const stored = await storeWorkflowImage({ image, userId: job.userId, requestId: `ecom-main:${job.id}:${index}:${randomUUID()}`, requestIndex: 0, fetchFn });
-    return commitMainImage({
-      job,
-      index,
-      size,
-      prompt: built.prompt,
-      record: { index, theme: built.theme, sceneRequirement: built.sceneRequirement, copyRequirement: built.copyRequirement },
-      stored,
+    const operationId = `ecom-main:${job.id}:${index}:${randomUUID()}`;
+    await billing.chargeResource({
+      operationId,
+      userId: job.userId,
+      resourceKey: imageGenerationResourceKey(job.resolution as EcomMainResolution),
+      units: 1,
     });
+    try {
+      const referenceImages = job.referenceAssetIds.length > 0 ? await loadOwnedReferenceImages(prisma, job.userId, job.referenceAssetIds, fetchFn) : null;
+      const config = loadImageGenerationConfig();
+      const image = await retryUntilSuccess(
+        () =>
+          referenceImages
+            ? callImageEdit({ config, prompt: built.prompt, referenceImages: referenceImages as readonly { mime: string; b64: string }[], fetchFn, size })
+            : callImageGeneration({ config, prompt: built.prompt, size, fetchFn }),
+        { retryDelayMs, maxAttempts },
+      );
+      const stored = await storeWorkflowImage({ image, userId: job.userId, requestId: operationId, requestIndex: 0, fetchFn });
+      return await commitMainImage({
+        job,
+        operationId,
+        index,
+        size,
+        prompt: built.prompt,
+        model: config.model || LEGACY_ECOM_MAIN_MODEL,
+        record: { index, theme: built.theme, sceneRequirement: built.sceneRequirement, copyRequirement: built.copyRequirement },
+        stored,
+      });
+    } catch (error) {
+      try {
+        await billing.refundResource(operationId);
+      } catch (refundError) {
+        throw new RefundCompensationError(operationId, `${safeErrorMessage(error)}；退款失败：${safeErrorMessage(refundError)}`);
+      }
+      throw error;
+    }
   }
 
   app.get("/api/workflow/ecom/main/pricing", async (req, reply) => {
@@ -295,11 +305,27 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
           try {
             job = await generateOneImage(job, index);
           } catch (error) {
-            if (error instanceof InsufficientBalanceError || error instanceof RefundCompensationError) throw error;
+            const fatalBillingError = error instanceof InsufficientBalanceError || error instanceof RefundCompensationError;
             anyFailed = true;
-            const images = parseImages(job.images).map((image) => (image.index === index ? { ...image, status: "failed" as const } : image));
-            const updated = await prisma.ecomMainImageJob.update({ where: { id: job.id }, data: { images, error: safeErrorMessage(error) } });
+            const images = parseImages(job.images).map((image) =>
+              image.index === index || (fatalBillingError && image.status === "pending")
+                ? { ...image, status: "failed" as const }
+                : image,
+            );
+            const hasReadyImage = images.some((image) => image.status === "ready");
+            const updated = await prisma.ecomMainImageJob.update({
+              where: { id: job.id },
+              data: {
+                images,
+                error: safeErrorMessage(error),
+                ...(fatalBillingError ? { stage: hasReadyImage ? "partial" : "failed" } : {}),
+                ...(error instanceof RefundCompensationError
+                  ? { billingOperationIds: [...job.billingOperationIds, error.operationId] }
+                  : {}),
+              },
+            });
             job = updated as MainJobRow;
+            if (fatalBillingError) throw error;
           }
         }
         const finalStage = anyFailed ? "partial" : "ready";

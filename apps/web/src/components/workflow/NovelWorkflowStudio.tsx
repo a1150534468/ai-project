@@ -4,6 +4,7 @@ import {
   analyzeNovelChapter,
   createNovelProject,
   deleteNovelProject,
+  getNovelEngineRun,
   getNovelProject,
   getNovelWorkbench,
   listNovelProjects,
@@ -37,6 +38,8 @@ function errorMessage(error: unknown, fallback: string): string {
 function isActiveTask(status: string): boolean {
   return status === "queued" || status === "running";
 }
+
+const ACTIVE_RUN_STATUSES = new Set(["queued", "planning", "writing", "validating", "postprocessing"]);
 
 function upsertChapter(chapters: readonly NovelChapter[], chapter: NovelChapter): NovelChapter[] {
   return [...chapters.filter((item) => item.id !== chapter.id && item.chapterIndex !== chapter.chapterIndex), chapter].sort((a, b) => a.chapterIndex - b.chapterIndex);
@@ -82,6 +85,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
   const [chapterSaveStatus, setChapterSaveStatus] = useState<ChapterSaveStatus>("idle");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
+  const [watchedRunId, setWatchedRunId] = useState("");
   const [reviewSaving, setReviewSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
@@ -139,6 +143,40 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     const timer = window.setInterval(() => void refreshProject(detail.project.id, true), 2200);
     return () => window.clearInterval(timer);
   }, [detail, refreshProject]);
+
+  useEffect(() => {
+    if (!detail || !watchedRunId) return undefined;
+    let cancelled = false;
+    let polling = false;
+    const projectId = detail.project.id;
+    const poll = async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const next = await getNovelEngineRun(token, projectId, watchedRunId);
+        if (cancelled) return;
+        if (ACTIVE_RUN_STATUSES.has(next.run.status)) return;
+        await refreshProject(projectId, true);
+        if (cancelled) return;
+        setWatchedRunId((current) => current === watchedRunId ? "" : current);
+        if (next.run.status === "awaitingReview" || next.run.status === "completed") {
+          setNotice(`第 ${next.run.currentChapter ?? "-"} 章生成完成，正文已刷新`);
+        } else if (next.run.status === "failed") {
+          setError(next.run.error || "章节生成失败");
+        }
+      } catch (reason) {
+        if (!cancelled) setError(errorMessage(reason, "刷新章节生成状态失败"));
+      } finally {
+        polling = false;
+      }
+    };
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1600);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [detail?.project.id, refreshProject, token, watchedRunId]);
 
   useEffect(() => {
     if (!selectedChapter) {
@@ -231,7 +269,8 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     if (chars < 500 || chars > 12_000) { setError("章节目标字数需在 500 到 12000 之间"); return; }
     setBusy("generate"); setError("");
     try {
-      await startNovelAssistedRun(token, detail.project.id, { chapterIndex: selectedChapter.chapterIndex, title: chapterTitle.trim(), summary: [chapterOutline, generationHint].filter(Boolean).join("\n\n"), targetChars: chars });
+      const run = await startNovelAssistedRun(token, detail.project.id, { chapterIndex: selectedChapter.chapterIndex, title: chapterTitle.trim(), summary: [chapterOutline, generationHint].filter(Boolean).join("\n\n"), targetChars: chars });
+      setWatchedRunId(run.id);
       setNotice("章节已交给独立 Novel Worker，运行进度会持续刷新"); onBalanceRefresh?.();
     } catch (reason) { setError(errorMessage(reason, "提交章节生成失败")); }
     finally { setBusy(""); }

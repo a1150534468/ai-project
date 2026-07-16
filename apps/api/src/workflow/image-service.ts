@@ -6,6 +6,9 @@ import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js
 export const QWEN_IMAGE_MODEL = "qwen-image-2.0-pro-2026-04-22";
 export const GPT_IMAGE_MODEL = "gpt-image-2";
 export const IMAGE_GENERATION_MODELS = [QWEN_IMAGE_MODEL, GPT_IMAGE_MODEL] as const;
+/** Qwen Image 编辑接口与现有生图工作台共同遵守的参考图上限。 */
+export const IMAGE_MAX_REFERENCE_COUNT = 3;
+export const IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
 const DEFAULT_IMAGE_MODEL = QWEN_IMAGE_MODEL;
 const DEFAULT_GPT_IMAGE_GENERATION_ENDPOINT = "https://api.ai-pixel.online/v1/images/generations";
 const DEFAULT_BAILIAN_REGION = "cn-beijing";
@@ -14,7 +17,6 @@ const DEFAULT_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
 const BAILIAN_IMAGE_GENERATION_PATH = "/api/v1/services/aigc/multimodal-generation/generation";
 const QWEN_IMAGE_MIN_PIXELS = 512 * 512;
 const QWEN_IMAGE_MAX_PIXELS = 2048 * 2048;
-const QWEN_IMAGE_MAX_INPUT_BYTES = 10 * 1024 * 1024;
 const GPT_IMAGE_MIN_PIXELS = 655_360;
 const GPT_IMAGE_MAX_PIXELS = 8_294_400;
 const GPT_IMAGE_MAX_EDGE = 3_840;
@@ -138,7 +140,7 @@ async function fetchWithTimeout(
 function dataUrlForImageInput(image: ImageBinaryInput): string {
   const mime = image.mime?.trim().startsWith("image/") ? image.mime.trim() : "image/png";
   const bytes = Buffer.from(image.b64, "base64");
-  if (bytes.byteLength > QWEN_IMAGE_MAX_INPUT_BYTES) throw new Error("Qwen image input must not exceed 10MB");
+  if (bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) throw new Error("Qwen image input must not exceed 10MB");
   return `data:${mime};base64,${image.b64}`;
 }
 
@@ -356,8 +358,8 @@ export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedI
   if (args.config.protocol !== "bailian") {
     throw new Error("gpt-image-2 reference editing is not configured; use Qwen Image for reference images");
   }
-  if (args.referenceImages.length < 1 || args.referenceImages.length > 3) {
-    throw new Error("Qwen image editing requires 1 to 3 reference images");
+  if (args.referenceImages.length < 1 || args.referenceImages.length > IMAGE_MAX_REFERENCE_COUNT) {
+    throw new Error(`Qwen image editing requires 1 to ${IMAGE_MAX_REFERENCE_COUNT} reference images`);
   }
   if (args.mask) throw new Error("Qwen image editing does not support a separate mask input");
   const content = args.referenceImages.map((image) => ({ image: dataUrlForImageInput(image) }));

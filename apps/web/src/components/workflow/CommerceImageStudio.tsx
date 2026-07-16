@@ -6,7 +6,7 @@ import * as workflowEcomApi from "../../workflowEcomApi";
 import type { WorkflowEcomImageAsset, WorkflowEcomPlatform, WorkflowEcomPlatformId, WorkflowEcomWorkflow } from "../../workflowEcomApi";
 import { helpWriteEcom, getCurrentEcomMainJob, listEcomMainHistory, type EcomHelpWriteField, type EcomMainJob } from "../../workflowEcomMainApi";
 import { DownloadLinkDialog, type DownloadDialogState } from "../ui/DownloadLinkDialog";
-import { FALLBACK_PLATFORMS, formatEcomError, readFileAsInlineImage } from "./ecomWorkflowStudioModel";
+import { ECOM_MAX_REFERENCE_COUNT, FALLBACK_PLATFORMS, formatEcomError, readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { EcomWorkflowStudio } from "./EcomWorkflowStudio";
 import { EcomMainImageStudio } from "./EcomMainImageStudio";
 
@@ -82,14 +82,14 @@ export function CommerceImageStudio({
   }, [tab, token]);
 
   const handleUpload = (file: File) => {
-    if (referenceAssets.length >= 5) return;
+    if (referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT) return;
     setUploadError("");
     setIsUploading(true);
     void (async () => {
       try {
         const inlineImage = await readFileAsInlineImage(file);
         const asset = await workflowEcomApi.createWorkflowEcomReference(token, inlineImage);
-        setReferenceAssets((current) => current.some((item) => item.id === asset.id) ? current : [...current, asset].slice(0, 5));
+        setReferenceAssets((current) => current.some((item) => item.id === asset.id) ? current : [...current, asset].slice(0, ECOM_MAX_REFERENCE_COUNT));
       } catch (error) {
         setUploadError(formatEcomError(error, "上传参考图失败"));
       } finally {
@@ -187,8 +187,8 @@ export function CommerceImageStudio({
 
         <div className="mt-4 rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceAssets.length}/5)</p>
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= 5} className="h-10 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+            <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
+            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
               {isUploading ? "上传中" : "上传参考图"}
             </button>
           </div>

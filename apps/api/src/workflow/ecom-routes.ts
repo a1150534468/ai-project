@@ -3,12 +3,13 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { buildEcomPrompt, ECOM_PLATFORMS, ECOM_TEMPLATES, getEcomPlatform, getEcomTemplate } from "./ecom-prompts.js";
-import { ecomMasterResourceKey, ecomSegmentResourceKey, ecomSizeForResolution } from "./ecom-resolution.js";
-import { authUserId, buildSegmentRecord, ECOM_RESOURCE_KEYS, findCurrentWorkflow, findWorkflowOrReply, imageDataUrl, listRecentWorkflows, loadOwnedReferenceImages, loadReferenceImage, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "./ecom-route-helpers.js";
+import { ecomSizeForResolution, type EcomResolution } from "./ecom-resolution.js";
+import { imageGenerationResourceKey } from "./image-upstream-options.js";
+import { authUserId, buildSegmentRecord, ECOM_RESOURCE_KEYS, findCurrentWorkflow, findWorkflowOrReply, listRecentWorkflows, loadOwnedReferenceImages, loadReferenceImage, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "./ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, workflowCreateMutationKey, workflowMutationKey, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { adoptMasterRequestSchema, imageBodySchema, masterRequestSchema, segmentParamsSchema, workflowParamsSchema, type EcomRouteDeps } from "./ecom-route-types.js";
 import { resolveEcomPricing } from "./workflow-pricing.js";
-import { callImageEdit as callImageEditService, callImageGeneration as callImageGenerationService, loadImageGenerationConfig as loadImageGenerationConfigService, retryUntilSuccess as retryUntilSuccessService, storeWorkflowImage as storeWorkflowImageService } from "./image-service.js";
+import { callImageEdit as callImageEditService, callImageGeneration as callImageGenerationService, IMAGE_REFERENCE_MAX_BYTES, loadImageGenerationConfig as loadImageGenerationConfigService, retryUntilSuccess as retryUntilSuccessService, storeWorkflowImage as storeWorkflowImageService } from "./image-service.js";
 
 const DEFAULT_SIZE = "1024x1024", DEFAULT_ECOM_MAX_ATTEMPTS = 2, REFERENCE_MODEL = "ecom_reference_upload", REFERENCE_PROMPT = "ecom_reference_upload";
 type EcomWorkflowRow = NonNullable<Awaited<ReturnType<ReturnType<typeof getPrisma>["ecomWorkflow"]["findFirst"]>>>;
@@ -16,46 +17,56 @@ type StoredWorkflowImage = Awaited<ReturnType<NonNullable<EcomRouteDeps["storeWo
 
 async function commitArtifact(args: {
   readonly prisma: ReturnType<typeof getPrisma>;
+  readonly workflow: EcomWorkflowRow;
+  readonly operationId: string;
+  readonly size: string;
+  readonly prompt: string;
+  readonly model: string;
+  readonly stored: StoredWorkflowImage;
+  readonly updateWorkflow: (assetId: string, createdAt: Date) => Parameters<ReturnType<typeof getPrisma>["ecomWorkflow"]["update"]>[0]["data"];
+}) {
+  return args.prisma.$transaction(async (tx) => {
+    const asset = await tx.imageAsset.create({
+      data: {
+        userId: args.workflow.userId,
+        requestId: args.operationId,
+        requestIndex: 0,
+        prompt: args.prompt,
+        model: args.model,
+        size: args.size,
+        originalUrl: args.stored.originalUrl,
+        thumbnailUrl: args.stored.thumbnailUrl,
+        objectKey: args.stored.objectKey,
+        mime: args.stored.mime,
+      },
+    });
+    const updated = await tx.ecomWorkflow.updateMany({
+      where: { id: args.workflow.id, userId: args.workflow.userId, updatedAt: args.workflow.updatedAt },
+      data: args.updateWorkflow(asset.id, asset.createdAt),
+    });
+    if (updated.count !== 1) throw new WorkflowMutationConflictError();
+    const workflow = await tx.ecomWorkflow.findFirst({ where: { id: args.workflow.id, userId: args.workflow.userId } });
+    if (!workflow) throw new Error("workflow not found");
+    return { asset, workflow };
+  });
+}
+
+async function runChargedOperation<T>(args: {
+  readonly prisma: ReturnType<typeof getPrisma>;
   readonly billing: NonNullable<EcomRouteDeps["billing"]>;
   readonly workflow: EcomWorkflowRow;
   readonly operationId: string;
   readonly resourceKey: string;
-  readonly size: string;
-  readonly prompt: string;
-  readonly stored: StoredWorkflowImage;
-  readonly updateWorkflow: (assetId: string, createdAt: Date) => Parameters<ReturnType<typeof getPrisma>["ecomWorkflow"]["update"]>[0]["data"];
-}) {
+  readonly work: () => Promise<T>;
+}): Promise<T> {
   await args.billing.chargeResource({ operationId: args.operationId, userId: args.workflow.userId, resourceKey: args.resourceKey, units: 1 });
   try {
-    return await args.prisma.$transaction(async (tx) => {
-      const asset = await tx.imageAsset.create({
-        data: {
-          userId: args.workflow.userId,
-          requestId: args.operationId,
-          requestIndex: 0,
-          prompt: args.prompt,
-          model: REFERENCE_MODEL,
-          size: args.size,
-          originalUrl: args.stored.originalUrl,
-          thumbnailUrl: args.stored.thumbnailUrl,
-          objectKey: args.stored.objectKey,
-          mime: args.stored.mime,
-        },
-      });
-      const updated = await tx.ecomWorkflow.updateMany({
-        where: { id: args.workflow.id, userId: args.workflow.userId, updatedAt: args.workflow.updatedAt },
-        data: args.updateWorkflow(asset.id, asset.createdAt),
-      });
-      if (updated.count !== 1) throw new WorkflowMutationConflictError();
-      const workflow = await tx.ecomWorkflow.findFirst({ where: { id: args.workflow.id, userId: args.workflow.userId } });
-      if (!workflow) throw new Error("workflow not found");
-      return { asset, workflow };
-    });
-  } catch (artifactError) {
+    return await args.work();
+  } catch (operationError) {
     try {
       await args.billing.refundResource(args.operationId);
     } catch (refundError) {
-      const detail = `${safeErrorMessage(artifactError)}；退款失败：${safeErrorMessage(refundError)}`;
+      const detail = `${safeErrorMessage(operationError)}；退款失败：${safeErrorMessage(refundError)}`;
       try {
         await args.prisma.ecomWorkflow.update({
           where: { id: args.workflow.id },
@@ -69,7 +80,7 @@ async function commitArtifact(args: {
       }
       throw new RefundCompensationError(args.operationId, detail);
     }
-    throw artifactError;
+    throw operationError;
   }
 }
 
@@ -109,28 +120,37 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     const operationId = `ecom-master:${workflow.id}:${randomUUID()}`;
     const size = ecomSizeForResolution(workflow.resolution);
     const referenceImages = workflow.referenceAssetIds.length > 0 ? await loadOwnedReferenceImages(prisma, workflow.userId, workflow.referenceAssetIds, fetchFn) : null;
-    const image = await retryUntilSuccess(
-      () => referenceImages
-        ? callImageEdit({ config: loadImageGenerationConfig(), prompt, referenceImages, fetchFn, size })
-        : callImageGeneration({ config: loadImageGenerationConfig(), prompt, size, fetchFn }),
-      { retryDelayMs, maxAttempts },
-    );
-    const stored = await storeWorkflowImage({ image, userId: workflow.userId, requestId: operationId, requestIndex: 0, fetchFn });
-    return commitArtifact({
+    const config = loadImageGenerationConfig();
+    return runChargedOperation({
       prisma,
       billing,
       workflow,
       operationId,
-      resourceKey: ecomMasterResourceKey(workflow.resolution),
-      size,
-      prompt,
-      stored,
-      updateWorkflow: (assetId) => ({
-        masterAssetId: assetId,
-        stage: "master_ready",
-        error: null,
-        billingOperationIds: [...workflow.billingOperationIds, operationId],
-      }),
+      resourceKey: imageGenerationResourceKey(workflow.resolution as EcomResolution),
+      work: async () => {
+        const image = await retryUntilSuccess(
+          () => referenceImages
+            ? callImageEdit({ config, prompt, referenceImages, fetchFn, size })
+            : callImageGeneration({ config, prompt, size, fetchFn }),
+          { retryDelayMs, maxAttempts },
+        );
+        const stored = await storeWorkflowImage({ image, userId: workflow.userId, requestId: operationId, requestIndex: 0, fetchFn });
+        return commitArtifact({
+          prisma,
+          workflow,
+          operationId,
+          size,
+          prompt,
+          model: config.model || REFERENCE_MODEL,
+          stored,
+          updateWorkflow: (assetId) => ({
+            masterAssetId: assetId,
+            stage: "master_ready",
+            error: null,
+            billingOperationIds: [...workflow.billingOperationIds, operationId],
+          }),
+        });
+      },
     });
   }
 
@@ -144,24 +164,33 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     const prompt = buildEcomPrompt({ platformId: workflow.platform, templateId: workflow.template, kind: "segment", segmentIndex: index, segmentCount: workflow.segmentCount, ...product });
     const referenceImages = await loadOwnedReferenceImages(prisma, workflow.userId, ids, fetchFn);
     const size = ecomSizeForResolution(workflow.resolution);
-    const image = await retryUntilSuccess(() => callImageEdit({ config: loadImageGenerationConfig(), prompt, referenceImages, fetchFn, size }), { retryDelayMs, maxAttempts });
+    const config = loadImageGenerationConfig();
     const operationId = `ecom-segment:${workflow.id}:${index}:${randomUUID()}`;
-    const stored = await storeWorkflowImage({ image, userId: workflow.userId, requestId: operationId, requestIndex: 0, fetchFn });
-    const committed = await commitArtifact({
+    const committed = await runChargedOperation({
       prisma,
       billing,
       workflow,
       operationId,
-      resourceKey: ecomSegmentResourceKey(workflow.resolution),
-      size,
-      prompt,
-      stored,
-      updateWorkflow: (assetId, createdAt) => ({
-        segments: [...segments.filter((item) => item.index !== index), buildSegmentRecord({ index, assetId, originalUrl: stored.originalUrl, thumbnailUrl: stored.thumbnailUrl, prompt, createdAt })].sort((a, b) => a.index - b.index),
-        stage: stageAfterSuccess,
-        error: null,
-        billingOperationIds: [...workflow.billingOperationIds, operationId],
-      }),
+      resourceKey: imageGenerationResourceKey(workflow.resolution as EcomResolution),
+      work: async () => {
+        const image = await retryUntilSuccess(() => callImageEdit({ config, prompt, referenceImages, fetchFn, size }), { retryDelayMs, maxAttempts });
+        const stored = await storeWorkflowImage({ image, userId: workflow.userId, requestId: operationId, requestIndex: 0, fetchFn });
+        return commitArtifact({
+          prisma,
+          workflow,
+          operationId,
+          size,
+          prompt,
+          model: config.model || REFERENCE_MODEL,
+          stored,
+          updateWorkflow: (assetId, createdAt) => ({
+            segments: [...segments.filter((item) => item.index !== index), buildSegmentRecord({ index, assetId, originalUrl: stored.originalUrl, thumbnailUrl: stored.thumbnailUrl, prompt, createdAt })].sort((a, b) => a.index - b.index),
+            stage: stageAfterSuccess,
+            error: null,
+            billingOperationIds: [...workflow.billingOperationIds, operationId],
+          }),
+        });
+      },
     });
     return committed.workflow;
   }
@@ -192,21 +221,31 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     const userId = authUserId(req as { userId?: string }, reply); if (!userId) return;
     const parsed = imageBodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
-    const row = await prisma.imageAsset.create({
-      data: {
-        userId,
-        requestId: `ecom-reference:${randomUUID()}`,
-        requestIndex: 0,
-        prompt: REFERENCE_PROMPT,
-        model: REFERENCE_MODEL,
-        size: DEFAULT_SIZE,
-        originalUrl: imageDataUrl(parsed.data.image),
-        thumbnailUrl: imageDataUrl(parsed.data.image),
-        objectKey: null,
-        mime: parsed.data.image.mime?.startsWith("image/") ? parsed.data.image.mime : "image/png",
-      },
-    });
-    return { success: true, data: { asset: serializeAsset(row) } };
+    const bytes = Buffer.from(parsed.data.image.b64, "base64");
+    if (bytes.byteLength === 0 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) return reply.code(400).send({ error: "参考图大小需在 10MB 以内" });
+    const mime = parsed.data.image.mime?.startsWith("image/") ? parsed.data.image.mime : "image/png";
+    const requestId = `ecom-reference:${randomUUID()}`;
+    try {
+      const stored = await storeWorkflowImage({ image: { kind: "b64", b64: parsed.data.image.b64, mime }, userId, requestId, requestIndex: 0, fetchFn });
+      const row = await prisma.imageAsset.create({
+        data: {
+          userId,
+          requestId,
+          requestIndex: 0,
+          prompt: REFERENCE_PROMPT,
+          model: REFERENCE_MODEL,
+          size: DEFAULT_SIZE,
+          originalUrl: stored.originalUrl,
+          thumbnailUrl: stored.thumbnailUrl,
+          objectKey: stored.objectKey,
+          mime: stored.mime,
+        },
+      });
+      return { success: true, data: { asset: serializeAsset(row) } };
+    } catch (uploadError) {
+      app.log.error(uploadError);
+      return reply.code(502).send({ error: "上传参考图失败" });
+    }
   });
 
   app.post("/api/workflow/ecom/master", async (req, reply) => {
@@ -314,17 +353,25 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     try {
       const committed = await workflowMutationLocker.withLock(workflowMutationKey(workflow.id), async () => {
         const operationId = `ecom-stitch:${workflow.id}:${randomUUID()}`;
-        const stored = await storeWorkflowImage({ image: { kind: "b64", b64: body.data.image.b64, mime: body.data.image.mime ?? "image/png" }, userId, requestId: operationId, requestIndex: 0, fetchFn });
-        return commitArtifact({
+        return runChargedOperation({
           prisma,
           billing,
           workflow,
           operationId,
           resourceKey: ECOM_RESOURCE_KEYS.stitch,
-          size: ecomSizeForResolution(workflow.resolution),
-          prompt: "ecom_stitch",
-          stored,
-          updateWorkflow: (assetId) => ({ stitchedAssetId: assetId, stage: "stitched", error: null, billingOperationIds: [...workflow.billingOperationIds, operationId] }),
+          work: async () => {
+            const stored = await storeWorkflowImage({ image: { kind: "b64", b64: body.data.image.b64, mime: body.data.image.mime ?? "image/png" }, userId, requestId: operationId, requestIndex: 0, fetchFn });
+            return commitArtifact({
+              prisma,
+              workflow,
+              operationId,
+              size: ecomSizeForResolution(workflow.resolution),
+              prompt: "ecom_stitch",
+              model: "ecom_stitch",
+              stored,
+              updateWorkflow: (assetId) => ({ stitchedAssetId: assetId, stage: "stitched", error: null, billingOperationIds: [...workflow.billingOperationIds, operationId] }),
+            });
+          },
         });
       });
       return { success: true, data: { workflow: await loadSerializedWorkflow(prisma, committed.workflow) } };

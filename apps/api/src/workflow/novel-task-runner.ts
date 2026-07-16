@@ -1,14 +1,17 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
-import { billableCharCount, formatGeneratedNovelDisplayText, parseRequiredGeneratedNovelValue, visibleCharCount } from "./novel-billable.js";
+import { billableCharCount, formatGeneratedNovelDisplayText, parseRequiredGeneratedNovelValue, resolveNovelChapterTitle, visibleCharCount } from "./novel-billable.js";
 import type { NovelGenerator } from "./novel-generation.js";
+import type { NovelPreparedRequest } from "./novel-prompts.js";
 import { NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS, type NovelSetupTargetKind, type NovelTargetKind } from "./novel-types.js";
 import { buildNovelGenerationContext, buildNovelEnhancedContextText } from "./novel-context-builder.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload } from "./novel-review.js";
 import { buildNovelVectorMemoryContext, refreshNovelVectorMemory } from "./novel-vector-memory.js";
 import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-workbench-types.js";
+import { syncNovelContinuityAssetsForChapter } from "../novel/continuity-assets.js";
+import { syncNovelNarrativeLedgersForChapter } from "../novel/narrative-ledger.js";
 import { syncNovelSetupAssets } from "../novel/structured-sync.js";
 
 export interface BillingForNovels {
@@ -515,7 +518,8 @@ async function saveGeneratedResult(args: {
   if (isChapterTarget && !project) throw new Error("novel project not found");
   const chapterIndex = isChapterTarget ? Number(payload.chapterIndex) || 1 : 0;
   const generatedTitle = targetKind === "chapter" && isRecord(args.parsed) && typeof args.parsed.title === "string" ? args.parsed.title.trim() : "";
-  const title = isChapterTarget ? generatedTitle || String(payload.title || `第 ${chapterIndex} 章`) : "";
+  const requestedTitle = isChapterTarget ? String(payload.title || `第 ${chapterIndex} 章`) : "";
+  const title = targetKind === "chapter" ? resolveNovelChapterTitle({ requestedTitle, generatedTitle, content: displayText, chapterIndex }) : requestedTitle;
   const [knownCharacters, knownLocations] = targetKind === "chapter" ? await Promise.all([
     prisma.novelCharacter.findMany({ where: { projectId: task.projectId }, select: { name: true }, take: 50 }),
     prisma.novelLocation.findMany({ where: { projectId: task.projectId }, select: { name: true }, take: 50 }),
@@ -588,14 +592,15 @@ async function saveGeneratedResult(args: {
           lastTaskId: task.id,
         },
       });
+      if (title !== requestedTitle) {
+        await tx.novelStructureNode.updateMany({ where: { projectId: task.projectId, nodeType: "chapter", number: chapterIndex }, data: { title } });
+      }
       await tx.novelChapterVersion.create({
         data: { chapterId: chapter.id, title, content: displayText, billableChars, operationId: task.operationId },
       });
       await tx.novelKnowledgeFact.deleteMany({ where: { projectId: task.projectId, chapterIndex } });
-      await tx.novelForeshadowItem.deleteMany({ where: { projectId: task.projectId, introducedInChapterId: chapter.id, introducedInChapterIndex: chapterIndex } });
       const txWithAssets = tx as typeof tx & {
         novelKnowledgeFact?: { upsert: (args: unknown) => Promise<unknown> };
-        novelForeshadowItem?: { upsert: (args: unknown) => Promise<unknown> };
       };
       await Promise.all((postprocess?.facts ?? []).map((fact) => txWithAssets.novelKnowledgeFact?.upsert({
         where: {
@@ -625,22 +630,26 @@ async function saveGeneratedResult(args: {
           status: fact.status,
         },
       }) ?? Promise.resolve()));
-      await Promise.all((postprocess?.foreshadowItems ?? []).map((item) => txWithAssets.novelForeshadowItem?.upsert({
-        where: { projectId_title: { projectId: task.projectId, title: item.title } },
-        create: {
+      if (postprocess) {
+        await syncNovelNarrativeLedgersForChapter({
+          store: tx,
           projectId: task.projectId,
-          introducedInChapterId: chapter.id,
-          introducedInChapterIndex: item.introducedInChapterIndex ?? chapterIndex,
-          title: item.title,
-          description: item.description,
-          expectedPayoffChapter: item.expectedPayoffChapter,
-          status: item.status,
-          relatedCharacter: item.relatedCharacter,
-        },
-        // A repeated mention must not rewrite where the foreshadow was first introduced
-        // or reopen an item that an editor already resolved.
-        update: {},
-      }) ?? Promise.resolve()));
+          chapterId: chapter.id,
+          chapterIndex,
+          content: displayText,
+          foreshadowItems: postprocess.foreshadowItems,
+        });
+        await syncNovelContinuityAssetsForChapter({
+          store: tx,
+          projectId: task.projectId,
+          chapterIndex,
+          title,
+          content: displayText,
+          eventCards: postprocess.consistencyStatus.chapterAssets.eventCards,
+          knownCharacters: knownCharacters.map((item) => item.name),
+          knownLocations: knownLocations.map((item) => item.name),
+        });
+      }
     } else if (targetKind === "chapterRewrite") {
       const chapter = await tx.novelChapter.findUnique({ where: { projectId_chapterIndex: { projectId: task.projectId, chapterIndex } } });
       if (!chapter) throw new Error("chapter not found for rewrite");
@@ -741,7 +750,7 @@ export async function runNovelTask(args: {
       progressMessage: "上下文已就绪，正在构建本步骤生成指令",
     });
     const promptStore = prisma as PrismaClient & {
-      novelPromptTemplate?: { findUnique: (args: unknown) => Promise<{ content: string; model: string; temperature: number } | null> };
+      novelPromptTemplate?: { findUnique: (args: unknown) => Promise<{ id: string; content: string; model: string; temperature: number; activeVersion: number } | null> };
     };
     const template = await promptStore.novelPromptTemplate?.findUnique({
       where: { projectId_nodeKey: { projectId: project.id, nodeKey: promptNodeKey(targetKind) } },
@@ -802,6 +811,39 @@ export async function runNovelTask(args: {
       lastPersistedAt = now;
       lastPersistedChars = streamedChars;
     };
+    let requestRecorded = false;
+    const persistPreparedRequest = async (prepared: NovelPreparedRequest) => {
+      const [chapter, step, previousAttempts] = await Promise.all([
+        chapterIndex ? prisma.novelChapter.findUnique({ where: { projectId_chapterIndex: { projectId: project.id, chapterIndex } }, select: { id: true } }) : null,
+        task.targetId ? prisma.novelRunStep.findUnique({ where: { id: task.targetId }, select: { id: true, runId: true, attempt: true } }) : null,
+        chapterIndex ? prisma.novelGenerationRequest.count({ where: { projectId: project.id, chapterIndex, targetKind } }) : Promise.resolve(0),
+      ]);
+      const requestHash = createHash("sha256").update(JSON.stringify(prepared)).digest("hex");
+      await prisma.novelGenerationRequest.upsert({
+        where: { taskId: task.id },
+        create: {
+          projectId: project.id,
+          chapterId: chapter?.id ?? null,
+          chapterIndex: chapterIndex ?? null,
+          taskId: task.id,
+          runId: step?.runId ?? null,
+          stepId: step?.id ?? null,
+          targetKind,
+          attempt: step ? Math.max(1, step.attempt) : previousAttempts + 1,
+          systemPrompt: prepared.systemPrompt,
+          userPrompt: prepared.userPrompt,
+          model: prepared.model,
+          temperature: prepared.temperature ?? null,
+          maxTokens: prepared.maxTokens,
+          templateId: template?.id ?? null,
+          templateVersion: template?.activeVersion ?? null,
+          requestHash,
+          status: "submitted",
+        },
+        update: {},
+      });
+      requestRecorded = true;
+    };
     let result: Awaited<ReturnType<NovelGenerator>>;
     try {
       result = await generator({
@@ -827,8 +869,13 @@ export async function runNovelTask(args: {
         }) : undefined,
         modelOverride: templateModel || undefined,
         temperatureOverride: template?.temperature,
+        onRequestPrepared: persistPreparedRequest,
         onChunk,
       });
+      if (requestRecorded) await prisma.novelGenerationRequest.updateMany({ where: { taskId: task.id }, data: { status: "succeeded", error: null } });
+    } catch (error) {
+      if (requestRecorded) await prisma.novelGenerationRequest.updateMany({ where: { taskId: task.id }, data: { status: "failed", error: safeErrorMessage(error) } }).catch(() => undefined);
+      throw error;
     } finally {
       if (waitTimer) clearInterval(waitTimer);
       await waitHeartbeat;

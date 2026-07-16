@@ -47,14 +47,14 @@ describe("resolveEcomPricing", () => {
     expect(pricing.master["1K"].rate).toBe(10);
     expect(pricing.segment["4K"].rate).toBe(40);
     expect(pricing.stitch.rate).toBe(1);
-    expect(pricing.master["2K"].resourceKey).toBe("ecom_master_generation_2k");
-    expect(pricing.segment["2K"].resourceKey).toBe("ecom_segment_generation_2k");
+    expect(pricing.master["2K"].resourceKey).toBe("image_generation_2k");
+    expect(pricing.segment["2K"].resourceKey).toBe("image_generation_2k");
     expect(pricing.stitch.resourceKey).toBe("ecom_stitch");
   });
 
   it("后台费率覆盖对应资源", async () => {
     const listResourcePrices = vi.fn(async () => ({
-      data: [overrideRow("ecom_master_generation_1k", 15), overrideRow("ecom_stitch", 5)],
+      data: [overrideRow("image_generation_1k", 15), overrideRow("ecom_stitch", 5)],
     }));
     const pricing = await resolveEcomPricing({ listResourcePrices });
     expect(pricing.master["1K"].rate).toBe(15);
@@ -66,7 +66,7 @@ describe("resolveEcomPricing", () => {
 describe("resolveEcomMainImagePricing", () => {
   it("无 billing 覆盖时回落默认 10/20/40", async () => {
     const pricing = await resolveEcomMainImagePricing({});
-    expect(pricing["1K"].resourceKey).toBe("ecom_main_image_generation_1k");
+    expect(pricing["1K"].resourceKey).toBe("image_generation_1k");
     expect(pricing["1K"].rate).toBe(10);
     expect(pricing["2K"].rate).toBe(20);
     expect(pricing["4K"].rate).toBe(40);
@@ -74,10 +74,10 @@ describe("resolveEcomMainImagePricing", () => {
 
   it("后台覆盖费率生效但 resourceKey 以默认为准", async () => {
     const listResourcePrices = vi.fn(async () => ({
-      data: [overrideRow("ecom_main_image_generation_2k", 99)],
+      data: [overrideRow("image_generation_2k", 99)],
     }));
     const pricing = await resolveEcomMainImagePricing({ listResourcePrices });
     expect(pricing["2K"].rate).toBe(99);
-    expect(pricing["2K"].resourceKey).toBe("ecom_main_image_generation_2k");
+    expect(pricing["2K"].resourceKey).toBe("image_generation_2k");
   });
 });

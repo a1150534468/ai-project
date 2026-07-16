@@ -226,16 +226,19 @@ describe("ecom main image routes", () => {
     expect(job.stage).toBe("partial");
     expect(job.images.filter((i: { status: string }) => i.status === "ready")).toHaveLength(1);
     expect(job.images.filter((i: { status: string }) => i.status === "failed")).toHaveLength(1);
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
-    expect(billing.refundResource).toHaveBeenCalledTimes(0);
+    expect(billing.chargeResource).toHaveBeenCalledTimes(2);
+    expect(billing.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_1k" }));
+    expect(billing.refundResource).toHaveBeenCalledTimes(1);
   });
 
   it("余额不足 402", async () => {
     const billing = createBilling({ charge: async () => { throw new InsufficientBalanceError(); } });
-    const { app } = await createApp({ billing });
+    const { app, prisma } = await createApp({ billing });
     const res = await app.inject({ method: "POST", url: "/api/workflow/ecom/main", payload: baseRequest });
     expect(res.statusCode).toBe(402);
     expect(res.json().error).toContain("积分");
+    expect(prisma.__state.jobs[0]?.stage).toBe("failed");
+    expect(prisma.__state.jobs[0]?.images.every((image) => image.status === "failed")).toBe(true);
   });
 
   it("并发锁冲突 409", async () => {
@@ -283,6 +286,8 @@ describe("ecom main image routes", () => {
     const { app } = await createApp();
     const res = await app.inject({ method: "POST", url: "/api/workflow/ecom/main", payload: { ...baseRequest, count: 99 } });
     expect(res.statusCode).toBe(400);
+    const tooManyReferences = await app.inject({ method: "POST", url: "/api/workflow/ecom/main", payload: { ...baseRequest, referenceAssetIds: ["1", "2", "3", "4"] } });
+    expect(tooManyReferences.statusCode).toBe(400);
   });
 
   it("重绘不存在的 job 返回 404", async () => {
