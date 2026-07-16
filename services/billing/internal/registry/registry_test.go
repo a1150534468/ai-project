@@ -79,8 +79,8 @@ func TestSeedDefaultExposesOnlyChatModels(t *testing.T) {
 	if !seen["qwen3.7-plus"] {
 		t.Fatal("bailian default chat model must be enabled")
 	}
-	if len(seen) != 17 {
-		t.Fatalf("chat model list must contain the 17 Anthropic-compatible free models, got %d: %+v", len(seen), seen)
+	if len(seen) != 24 {
+		t.Fatalf("chat model list must contain 17 Bailian and 7 AI Pixel models, got %d: %+v", len(seen), seen)
 	}
 	if seen["GLM-5.2"] {
 		t.Fatal("legacy uppercase alias must not appear in the chat model list")
@@ -90,6 +90,14 @@ func TestSeedDefaultExposesOnlyChatModels(t *testing.T) {
 	}
 	if seen["text-embedding-v4"] {
 		t.Fatal("embedding model must not appear in chat model list")
+	}
+	for _, modelName := range []string{
+		"codex-auto-review", "gpt-5.4", "gpt-5.4-mini", "gpt-5.5",
+		"gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra",
+	} {
+		if !seen[modelName] {
+			t.Fatalf("selected AI Pixel model missing from chat list: %s", modelName)
+		}
 	}
 
 	var embedding model.PriceRule

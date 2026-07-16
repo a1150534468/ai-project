@@ -47,7 +47,7 @@ export function NovelLibraryPage({
   };
 
   return (
-    <section className="mx-auto grid w-full max-w-[1500px] gap-8 px-4 py-6 lg:px-7">
+    <section className="mx-auto grid w-full max-w-[1500px] gap-8 px-4 pb-32 pt-6 lg:px-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-ink"><Icon icon="mdi:bookshelf" /> Novel Studio</p>
@@ -68,7 +68,7 @@ export function NovelLibraryPage({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3"><h2 className="text-xl font-semibold text-[#202725]">我的书目</h2><span className="rounded-full bg-[#eaf1ef] px-2.5 py-1 text-xs font-semibold text-[#62706c]">{visible.length} 本</span></div>
           <div className="flex flex-wrap gap-2">
-            <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-[#69726f] shadow-sm"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 bg-transparent outline-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
+            <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-[#69726f] shadow-sm transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
             {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-600">删除选中 ({selected.length})</button>}
           </div>
         </div>

@@ -133,8 +133,11 @@ func normalizePriceRule(r *model.PriceRule, ratio int64) bool {
 // 绝不覆盖运营已经调整的价格、展示名或广场配置。
 func (s *Service) SeedDefault() error {
 	ratio := resource.New(s.st).RechargeRatio()
-	models := make([]model.PriceRule, 0, len(bailianFreeModelSpecs)+1)
-	for _, spec := range bailianFreeModelSpecs {
+	chatSpecs := make([]chatModelSpec, 0, len(bailianFreeModelSpecs)+len(pixelChatModelSpecs))
+	chatSpecs = append(chatSpecs, bailianFreeModelSpecs...)
+	chatSpecs = append(chatSpecs, pixelChatModelSpecs...)
+	models := make([]model.PriceRule, 0, len(chatSpecs)+1)
+	for _, spec := range chatSpecs {
 		pricing := PricingFromRMB(spec.Pricing, ratio)
 		modelRatio, completionRatio := legacyRatios(pricing)
 		capabilityTags := spec.CapabilityTags + ",anthropic"

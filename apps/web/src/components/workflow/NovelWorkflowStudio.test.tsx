@@ -21,6 +21,8 @@ describe("NovelWorkflowStudio", () => {
     expect(html).toContain("市场分区");
     expect(html).toContain("目标篇幅");
     expect(html).toContain("建档并进入设置向导");
+    expect(html).toContain('data-novel-scroll-region="library"');
+    expect(html).toContain("overflow-y-auto");
     expect(html).not.toContain("核心要求");
     expect(html).not.toContain("是否金手指");
     expect(html).not.toContain("频道");

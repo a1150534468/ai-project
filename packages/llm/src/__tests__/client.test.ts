@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   buildBailianBaseURL,
@@ -72,6 +72,35 @@ describe("loadLlmConfig", () => {
       BAILIAN_API_KEY: "sk-test",
     } as NodeJS.ProcessEnv)).toThrow("unsupported LLM_PROVIDER: openai");
   });
+
+  it("adds the ChatGPT model route and reuses the image provider key", () => {
+    expect(loadLlmConfig({
+      LLM_PROVIDER: "bailian",
+      BAILIAN_WORKSPACE_ID: "ws-123",
+      BAILIAN_API_KEY: "bailian-key",
+      GPT_IMAGE_API_KEY: "shared-pixel-key",
+      CHATGPT_BASE_URL: "https://pixel.test",
+    } as NodeJS.ProcessEnv)).toMatchObject({
+      modelRoutes: expect.arrayContaining([
+        {
+          model: "codex-auto-review",
+          baseURL: "https://pixel.test",
+          apiKey: "shared-pixel-key",
+        },
+        {
+          model: "gpt-5.6-terra",
+          baseURL: "https://pixel.test",
+          apiKey: "shared-pixel-key",
+        },
+      ]),
+    });
+    expect(loadLlmConfig({
+      LLM_PROVIDER: "bailian",
+      BAILIAN_WORKSPACE_ID: "ws-123",
+      BAILIAN_API_KEY: "bailian-key",
+      GPT_IMAGE_API_KEY: "shared-pixel-key",
+    } as NodeJS.ProcessEnv).modelRoutes).toHaveLength(7);
+  });
 });
 
 describe("buildBailianBaseURL", () => {
@@ -92,6 +121,49 @@ describe("createLlmClient", () => {
 
     expect(client).toBeInstanceOf(Anthropic);
     expect(client.baseURL).toBe("https://ws-123.cn-beijing.maas.aliyuncs.com/apps/anthropic");
+  });
+
+  it("routes only the configured ChatGPT model to its Anthropic-compatible endpoint", async () => {
+    const requestUrls: string[] = [];
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      requestUrls.push(String(input));
+      return new Response(JSON.stringify({
+        id: "msg-test",
+        type: "message",
+        role: "assistant",
+        model: "test-model",
+        content: [{ type: "text", text: "OK" }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const client = createLlmClient({
+        provider: "bailian",
+        baseURL: "https://bailian.test/apps/anthropic",
+        apiKey: "bailian-key",
+        defaultModel: "qwen3.7-plus",
+        modelRoutes: [{ model: "gpt-5.4-mini", baseURL: "https://pixel.test", apiKey: "pixel-key" }],
+      });
+
+      await client.messages.create({
+        model: "gpt-5.4-mini",
+        max_tokens: 16,
+        messages: [{ role: "user", content: "hello" }],
+      });
+      await client.messages.create({
+        model: "qwen3.7-plus",
+        max_tokens: 16,
+        messages: [{ role: "user", content: "hello" }],
+      });
+
+      expect(requestUrls[0]).toBe("https://pixel.test/v1/messages");
+      expect(requestUrls[1]).toBe("https://bailian.test/apps/anthropic/v1/messages");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 

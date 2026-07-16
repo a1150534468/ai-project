@@ -5,6 +5,8 @@ describe("chatModelErrorMessage", () => {
   it("returns actionable Bailian credential and workspace errors", () => {
     expect(chatModelErrorMessage({ status: 401, code: "invalid_api_key" }, "bailian"))
       .toBe("百炼 API Key 无效或已失效");
+    expect(chatModelErrorMessage({ status: 401, code: "invalid_api_key" }, "ai-pixel"))
+      .toBe("AI Pixel API Key 无效或已失效");
     expect(chatModelErrorMessage({ code: "Model.AccessDenied" }, "bailian"))
       .toContain("Workspace ID、API Key 与模型权限");
   });

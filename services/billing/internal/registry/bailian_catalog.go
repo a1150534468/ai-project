@@ -1,10 +1,11 @@
 package registry
 
-// bailianModelSpec is the single source of truth for the Bailian models that
+// chatModelSpec describes a model exposed in the marketplace and chat picker.
+// bailianFreeModelSpecs is the source of truth for the Bailian models that
 // currently carry free quota in the Beijing workspace. Prices are the regular
 // China-mainland list prices per one million tokens; temporary promotions are
 // deliberately excluded so billing does not become stale when they expire.
-type bailianModelSpec struct {
+type chatModelSpec struct {
 	Model           string
 	DisplayName     string
 	Description     string
@@ -26,7 +27,7 @@ func bailianPricing(input, output, cacheInput float64) RMBPricing {
 	}
 }
 
-var bailianFreeModelSpecs = []bailianModelSpec{
+var bailianFreeModelSpecs = []chatModelSpec{
 	{
 		Model: "qwen3.7-plus", DisplayName: "Qwen3.7 Plus",
 		Description:    "能力与成本均衡的百炼主力模型，支持长上下文、深度思考、视觉理解和工具调用。",

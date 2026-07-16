@@ -89,13 +89,15 @@ function upstreamErrorDetails(error: unknown): { status?: number; code: string; 
   return { status, code, message };
 }
 
-export function chatModelErrorMessage(error: unknown, provider: "bailian" | "anthropic"): string {
+type ChatErrorProvider = "bailian" | "anthropic" | "ai-pixel";
+
+export function chatModelErrorMessage(error: unknown, provider: ChatErrorProvider): string {
   if (error instanceof ChatModelStreamTimeoutError) return "模型响应超时，请重试";
   if (error instanceof ChatModelEmptyResponseError) return "模型未返回内容，请重试";
 
   const details = upstreamErrorDetails(error);
   const searchable = `${details.code} ${details.message}`;
-  const providerName = provider === "bailian" ? "百炼" : "模型服务";
+  const providerName = provider === "bailian" ? "百炼" : provider === "ai-pixel" ? "AI Pixel" : "模型服务";
   if (details.status === 401 || /invalid[_ .-]?api[_ .-]?key|authentication/i.test(searchable)) {
     return `${providerName} API Key 无效或已失效`;
   }
@@ -333,6 +335,9 @@ export async function chatRoutes(app: FastifyInstance) {
     const modelResolution = resolveChatModel(requestedModel, hasImageAttachment);
     const billingModel = modelResolution.model;
     const model = providerModelId(billingModel, cfg.provider);
+    const errorProvider: ChatErrorProvider = cfg.modelRoutes?.some((route) => route.model === billingModel)
+      ? "ai-pixel"
+      : cfg.provider;
     if (!(await isModelEnabled(billing, billingModel))) {
       return reply.code(400).send({ error: "模型不可用" });
     }
@@ -695,7 +700,7 @@ export async function chatRoutes(app: FastifyInstance) {
     } catch (err) {
       await settleReservedTurnAsNoCharge();
       app.log.error(err);
-      const message = chatModelErrorMessage(err, cfg.provider);
+      const message = chatModelErrorMessage(err, errorProvider);
       send("error", { message });
     } finally {
       if (heartbeat) clearInterval(heartbeat);

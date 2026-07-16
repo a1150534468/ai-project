@@ -50,6 +50,8 @@ CHAT_MULTIMODAL_MODEL=qwen3.7-plus
 
 主生图工作台还可选择 `gpt-image-2`，通过 OpenAI Images API 兼容协议调用 `GPT_IMAGE_GENERATION_ENDPOINT`（默认 `https://api.ai-pixel.online/v1/images/generations`），凭据使用 `GPT_IMAGE_API_KEY`。当前该通道只配置了文生图 generations 接口；带参考图的编辑任务需选择 Qwen Image，避免把图片误发到未经确认的 edits 地址。
 
+对话助手额外接入 AI Pixel 的 Anthropic Messages 兼容接口。当前只开放 `codex-auto-review`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`，不会把上游列表中的旧 GPT、音频、Realtime 或图片模型混入对话选项。默认地址为 `CHATGPT_BASE_URL=https://api.ai-pixel.online`；`CHATGPT_API_KEY` 未配置时复用 `GPT_IMAGE_API_KEY`。
+
 真实向量链路可用仓库 POC 验证：
 
 ```bash
