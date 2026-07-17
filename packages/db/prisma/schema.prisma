@@ -1655,6 +1655,13 @@ model ReportTask {
   @@index([userId, createdAt])
 }
 
+/// 全局用户端菜单显隐配置。未落库的菜单项由应用层目录提供默认值。
+model ClientMenuVisibility {
+  key       String   @id
+  visible   Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
 model Avatar {
   id              String   @id @default(cuid())
   userId          String

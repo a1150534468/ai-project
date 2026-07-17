@@ -8,6 +8,7 @@ import type { WorkflowModuleId } from "../../workflowState";
 import { Icon } from "@iconify/react";
 import { loadNavCollapsed, saveNavCollapsed } from "../../shellState";
 import { spring } from "../../motion";
+import { isClientMenuVisible, type ClientMenuVisibility } from "../../clientMenu";
 
 export type { ViewType, WorkflowSubId } from "./NavRail";
 
@@ -30,6 +31,7 @@ interface ShellProps {
   onAgentsChanged: () => void;
   agentPanelCollapsed?: boolean;
   onRequestCollapseAgentPanel?: () => void;
+  menuVisibility?: ClientMenuVisibility;
 }
 
 export default function Shell({
@@ -51,10 +53,17 @@ export default function Shell({
   onAgentsChanged,
   agentPanelCollapsed = false,
   onRequestCollapseAgentPanel,
+  menuVisibility,
   children,
 }: ShellProps & { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(loadNavCollapsed);
   const reduceMotion = useReducedMotion();
+  const visibleNavItems = NAV_ITEMS.filter((item) =>
+    isClientMenuVisible(menuVisibility, `nav.${item.id}`),
+  );
+  const visibleWorkflowSubItems = WORKFLOW_SUB_ITEMS.filter((sub) =>
+    isClientMenuVisible(menuVisibility, `workflow.${sub.id}`),
+  );
 
   const toggleCollapsed = () => {
     setCollapsed((prev) => {
@@ -85,6 +94,7 @@ export default function Shell({
           onLogout={onLogout}
           collapsed={collapsed}
           onToggleCollapsed={toggleCollapsed}
+          menuVisibility={menuVisibility}
         />
       </motion.aside>
 
@@ -107,9 +117,9 @@ export default function Shell({
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <nav className="border-b border-gray-100 bg-white px-4 py-3 lg:hidden">
           <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {NAV_ITEMS.flatMap((item) =>
+            {visibleNavItems.flatMap((item) =>
               item.id === "workflow"
-                ? WORKFLOW_SUB_ITEMS.filter((sub) => !sub.developing).map((sub) => {
+                ? visibleWorkflowSubItems.filter((sub) => !sub.developing).map((sub) => {
                     const active = isWorkflowSubActive(currentView, workflowModule, sub);
                     return (
                       <button

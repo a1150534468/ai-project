@@ -51,6 +51,7 @@ import { reportRoutes } from "./workflow/report-routes.js";
 import { articleWorkflowRoutes } from "./workflow/article-workflow-routes.js";
 import { analyticsRoutes } from "./admin/analytics-routes.js";
 import { adminResellerRoutes } from "./admin/reseller-routes.js";
+import { clientMenuRoutes } from "./admin/client-menu-routes.js";
 import { resellerRoutes } from "./reseller/routes.js";
 import { kbRoutes } from "./kb/routes.js";
 import { wechatRoutes } from "./wechat/routes.js";
@@ -160,6 +161,7 @@ export async function buildServer() {
   await app.register(adminKnowledgeRoutes);
   await app.register(analyticsRoutes);
   await app.register(adminResellerRoutes);
+  await app.register(clientMenuRoutes);
   await app.register(resellerRoutes);
   await registerHub(app);
 

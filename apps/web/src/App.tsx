@@ -34,6 +34,14 @@ import { Modal } from "./motion";
 import { toChatMessages, type ChatMessage, type ToolActivity } from "./chatState";
 import { attachmentLabels } from "./chatAttachments";
 import { novelProjectIdFromHash } from "./novelRoute";
+import {
+  DEFAULT_CLIENT_MENU_VISIBILITY,
+  clientMenuKeyForView,
+  firstVisibleClientView,
+  getClientMenuVisibility,
+  isClientMenuVisible,
+  type ClientMenuVisibility,
+} from "./clientMenu";
 
 interface Citation {
   docs: Array<{ docName: string; ordinal: number }>;
@@ -73,6 +81,7 @@ export default function App() {
   const [agentPanelCollapsed, setAgentPanelCollapsed] = useState(false);
   const [preferredModel, setPreferredModel] = useState(() => localStorage.getItem("preferredModel") ?? "");
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem("preferredModel") ?? "");
+  const [menuVisibility, setMenuVisibility] = useState<ClientMenuVisibility>(DEFAULT_CLIENT_MENU_VISIBILITY);
   const selectSessionRequestRef = useRef(0);
   const activeSessionKey = sessionId ?? draftSessionKey;
   const activeSessionKeyRef = useRef(activeSessionKey);
@@ -139,6 +148,42 @@ export default function App() {
   useEffect(() => {
     void refreshAgents().catch(() => {});
   }, [refreshAgents]);
+
+  useEffect(() => {
+    if (!token) {
+      setMenuVisibility(DEFAULT_CLIENT_MENU_VISIBILITY);
+      return;
+    }
+    const refresh = () => {
+      void getClientMenuVisibility(token).then(setMenuVisibility).catch(() => {
+        setMenuVisibility(DEFAULT_CLIENT_MENU_VISIBILITY);
+      });
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    refresh();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    const mainKey = clientMenuKeyForView(view);
+    const mainVisible = mainKey === null || isClientMenuVisible(menuVisibility, mainKey);
+    const workflowVisible = isClientMenuVisible(menuVisibility, "nav.workflow");
+    const subVisible = view === "report"
+      ? isClientMenuVisible(menuVisibility, "workflow.report")
+      : view === "workflow"
+        ? isClientMenuVisible(menuVisibility, `workflow.${workflowModule}`)
+        : true;
+    if (!mainVisible || ((view === "workflow" || view === "report") && (!workflowVisible || !subVisible))) {
+      setView(firstVisibleClientView(menuVisibility));
+    }
+  }, [menuVisibility, view, workflowModule]);
 
   useEffect(() => {
     if (!token) return;
@@ -591,6 +636,7 @@ export default function App() {
         onAgentsChanged={handleAgentsChanged}
         agentPanelCollapsed={agentPanelCollapsed}
         onRequestCollapseAgentPanel={() => setAgentPanelCollapsed(true)}
+        menuVisibility={menuVisibility}
       >
         {renderContent()}
       </Shell>

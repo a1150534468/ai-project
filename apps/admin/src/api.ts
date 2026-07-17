@@ -249,6 +249,25 @@ export async function deleteAnnouncement(id: string): Promise<void> {
   await req("DELETE", `/api/admin/announcements/${id}`);
 }
 
+// —— 用户端菜单 ——
+export interface ClientMenuItem {
+  key: string;
+  label: string;
+  group: "main" | "workflow";
+  defaultVisible: boolean;
+  visible: boolean;
+}
+export async function listClientMenus(): Promise<ClientMenuItem[]> {
+  return (await req<{ data: ClientMenuItem[] }>("GET", "/api/admin/client-menu")).data;
+}
+export async function updateClientMenu(key: string, visible: boolean): Promise<ClientMenuItem> {
+  return (await req<{ data: ClientMenuItem }>(
+    "PATCH",
+    `/api/admin/client-menu/${encodeURIComponent(key)}`,
+    { visible },
+  )).data;
+}
+
 // —— 管理员（超管）——
 export interface AdminRow {
   id: string;

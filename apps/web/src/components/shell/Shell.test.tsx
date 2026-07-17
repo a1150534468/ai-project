@@ -57,4 +57,21 @@ describe("Shell", () => {
     expect(html).toContain("模型广场");
     expect(html).toContain("text-gray-900 font-600");
   });
+
+  it("hides configured main and workflow menu entries", () => {
+    const html = renderShell(
+      <Shell
+        currentView="chat"
+        onViewChange={vi.fn()}
+        menuVisibility={{ "nav.models": false, "workflow.report": false }}
+        {...baseProps}
+      >
+        <div />
+      </Shell>,
+    );
+
+    expect(html).not.toContain("模型广场");
+    expect(html).not.toContain("AI 智能报告");
+    expect(html).toContain("生图模块");
+  });
 });

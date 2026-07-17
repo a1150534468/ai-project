@@ -5,6 +5,7 @@ import { AnimatedNumber, BrandLogo, SpendBurst, spring, computeSpendBurst } from
 import { WORKFLOW_MODULES, type WorkflowModuleId } from "../../workflowState";
 import { HoverPopover } from "./HoverPopover";
 import { WorkflowFlyout } from "./WorkflowFlyout";
+import { isClientMenuVisible, type ClientMenuVisibility } from "../../clientMenu";
 
 export type ViewType = "chat" | "models" | "kb" | "tool-market" | "workflow" | "video" | "digital-human" | "report" | "agent-teams" | "billing" | "memory" | "settings" | "wechat";
 
@@ -78,6 +79,7 @@ interface NavRailProps {
   onLogout?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
+  menuVisibility?: ClientMenuVisibility;
 }
 
 export function NavRail({
@@ -89,6 +91,7 @@ export function NavRail({
   onLogout,
   collapsed = false,
   onToggleCollapsed,
+  menuVisibility,
 }: NavRailProps) {
   const reduce = useReducedMotion();
 
@@ -103,6 +106,12 @@ export function NavRail({
     if (sub.developing) return;
     onSelectWorkflowSub?.(sub.id);
   };
+  const visibleNavItems = NAV_ITEMS.filter((item) =>
+    isClientMenuVisible(menuVisibility, `nav.${item.id}`),
+  );
+  const visibleWorkflowSubItems = WORKFLOW_SUB_ITEMS.filter((sub) =>
+    isClientMenuVisible(menuVisibility, `workflow.${sub.id}`),
+  );
 
   // SpendBurst state
   const [burstActive, setBurstActive] = useState(false);
@@ -171,12 +180,12 @@ export function NavRail({
 
       {/* Navigation */}
       <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {NAV_ITEMS.map((item) => {
+        {visibleNavItems.map((item) => {
           if (item.id === "workflow") {
             // 工作流项
             const workflowFlyout = (
               <WorkflowFlyout
-                items={WORKFLOW_SUB_ITEMS}
+                items={visibleWorkflowSubItems}
                 isActive={(sub) => isWorkflowSubActive(currentView, workflowModule, sub)}
                 onSelect={handleWorkflowSubClick}
               />
@@ -228,7 +237,7 @@ export function NavRail({
                     className="overflow-hidden"
                   >
                     <div className="ml-4 space-y-0.5 border-l border-gray-100 pl-3">
-                      {WORKFLOW_SUB_ITEMS.map((sub, idx) => {
+                      {visibleWorkflowSubItems.map((sub, idx) => {
                         const active = isWorkflowSubActive(currentView, workflowModule, sub);
                         return (
                           <motion.button
