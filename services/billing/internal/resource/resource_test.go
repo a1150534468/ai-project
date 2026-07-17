@@ -137,6 +137,14 @@ func newStore(t *testing.T) *store.Store {
 	return &store.Store{DB: db}
 }
 
+func TestKbDefaultQuotaIsOneGiB(t *testing.T) {
+	st := newStore(t)
+	s := New(st)
+	if got := s.KbDefaultQuota(); got != 1024*1024*1024 {
+		t.Fatalf("default KB quota=%d, want 1GiB", got)
+	}
+}
+
 func TestQuote(t *testing.T) {
 	st := newStore(t)
 	s := New(st)

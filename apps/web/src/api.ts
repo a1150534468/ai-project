@@ -644,6 +644,7 @@ export interface NovelProjectDetail {
     genre: string;
     premise: string;
     settings: Record<string, unknown>;
+    generationPrefs: Record<string, unknown>;
     targetChapters: number;
     targetCharsPerChapter: number;
     setupStage: number;
@@ -803,7 +804,7 @@ export async function getNovelWorkbench(token: string, projectId: string): Promi
   return resp.data;
 }
 
-export async function updateNovelProject(token: string, projectId: string, payload: { title?: string; genre?: string }): Promise<NovelProjectDetail> {
+export async function updateNovelProject(token: string, projectId: string, payload: { title?: string; genre?: string; writingModel?: string }): Promise<NovelProjectDetail> {
   const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
     headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
@@ -1541,6 +1542,7 @@ export interface KnowledgeBase {
   name: string;
   description?: string;
   ownerType: string;
+  systemKey?: string;
   latticeCount?: number;
 }
 
@@ -1594,6 +1596,11 @@ export interface KbDocument {
   sizeBytes: number;
   chunkCount: number;
   error?: string;
+  sourceType?: string;
+  sourceUri?: string;
+  mime?: string;
+  sourceModule?: string;
+  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
@@ -1678,13 +1685,6 @@ export interface KbQuotaData {
     membershipBytes: number;
     grantBytes: number;
   };
-  packages: Array<{
-    id: string;
-    name: string;
-    bytes: number;
-    durationDays: number;
-    pricePoints: number;
-  }>;
 }
 
 export interface KbQuotaResponse {
@@ -1699,28 +1699,6 @@ export async function getKbQuota(token: string): Promise<KbQuotaData> {
   });
   if (!r.ok) throw new Error("获取配额失败");
   const resp = (await r.json()) as KbQuotaResponse;
-  return resp.data;
-}
-
-export interface BuyKbQuotaResponse {
-  success: boolean;
-  data: {
-    effective: number;
-    grantId: string;
-  };
-}
-
-export async function buyKbQuota(token: string, packageId: string): Promise<BuyKbQuotaResponse["data"]> {
-  const r = await fetch("/api/kb/quota/buy", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ packageId }),
-  });
-  if (r.status === 402) throw new Error("积分不足");
-  if (r.status === 404) throw new Error("配额包不存在");
-  if (r.status === 502) throw new Error("计费服务不可用");
-  if (!r.ok) throw new Error("购买配额失败");
-  const resp = (await r.json()) as BuyKbQuotaResponse;
   return resp.data;
 }
 

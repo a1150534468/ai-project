@@ -13,12 +13,13 @@ import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-
 import { syncNovelContinuityAssetsForChapter } from "../novel/continuity-assets.js";
 import { syncNovelNarrativeLedgersForChapter } from "../novel/narrative-ledger.js";
 import { syncNovelSetupAssets } from "../novel/structured-sync.js";
+import { findEnabledNovelModel, novelWritingModel, type NovelPlatformModel } from "./novel-models.js";
 
 export interface BillingForNovels {
   reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
   settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
-  listModels?: () => Promise<{ data: Array<{ model: string; enabled: boolean }> }>;
+  listModels?: () => Promise<{ data: NovelPlatformModel[] }>;
 }
 
 export interface NovelTaskRow {
@@ -208,6 +209,7 @@ export async function getProjectDetail(prisma: PrismaClient, userId: string, pro
       genre: project.genre,
       premise: project.premise,
       settings: project.settings,
+      generationPrefs: project.generationPrefs,
       targetChapters: project.targetChapters,
       targetCharsPerChapter: project.targetCharsPerChapter,
       setupStage: project.setupStage,
@@ -755,13 +757,15 @@ export async function runNovelTask(args: {
     const template = await promptStore.novelPromptTemplate?.findUnique({
       where: { projectId_nodeKey: { projectId: project.id, nodeKey: promptNodeKey(targetKind) } },
     }) ?? null;
-    let templateModel = template?.model || "";
-    if (templateModel && billing.listModels) {
+    const templateModel = template?.model || "";
+    let requestedModel = templateModel || novelWritingModel(project.generationPrefs);
+    if (requestedModel && billing.listModels) {
       try {
         const models = await billing.listModels();
-        if (!models.data.some((item) => item.enabled && item.model === templateModel)) templateModel = "";
+        const selected = findEnabledNovelModel(models.data, requestedModel);
+        if (!selected || (!templateModel && selected.showInMarketplace !== true)) requestedModel = "";
       } catch {
-        templateModel = "";
+        requestedModel = "";
       }
     }
     await updateTaskProgress(prisma, task.id, {
@@ -867,7 +871,7 @@ export async function runNovelTask(args: {
           targetChars: Number(payload.targetChars) || 3000,
           userPrompt: String(payload.prompt || ""),
         }) : undefined,
-        modelOverride: templateModel || undefined,
+        modelOverride: requestedModel || undefined,
         temperatureOverride: template?.temperature,
         onRequestPrepared: persistPreparedRequest,
         onChunk,

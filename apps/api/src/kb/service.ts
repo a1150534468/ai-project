@@ -96,6 +96,9 @@ export async function renameKb(
   patch: { name?: string; description?: string }
 ): Promise<KnowledgeBase> {
   const kb = await assertKbOwner(prisma, kbId, userId);
+  if (kb.systemKey) {
+    throw new ForbiddenError("系统知识库不能重命名");
+  }
 
   const updateData: { name?: string; description?: string } = {};
   if (patch.name !== undefined) {
@@ -123,7 +126,10 @@ export async function deleteKb(
   userId: string
 ): Promise<void> {
   // Verify ownership
-  await assertKbOwner(prisma, kbId, userId);
+  const kb = await assertKbOwner(prisma, kbId, userId);
+  if (kb.systemKey) {
+    throw new ForbiddenError("系统知识库不能删除");
+  }
 
   // Delete from S3
   await deletePrefix(s3, `kb/${kbId}/`);

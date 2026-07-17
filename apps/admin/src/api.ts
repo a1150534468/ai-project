@@ -511,29 +511,6 @@ export async function deleteKbDoc(kbId: string, docId: string): Promise<void> {
   await req("DELETE", `/api/admin/kb/${kbId}/documents/${docId}`);
 }
 
-// —— 知识库配额包 ——
-export interface QuotaPackage {
-  id: string;
-  name: string;
-  bytes: number;
-  durationDays: number;
-  pricePoints: number;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-export async function listQuotaPackages(): Promise<QuotaPackage[]> {
-  return (await req<{ data: QuotaPackage[] }>("GET", "/api/admin/kb-quota-packages")).data;
-}
-export async function createQuotaPackage(a: { name: string; bytes: number; durationDays: number; pricePoints: number; enabled: boolean }): Promise<void> {
-  await req("POST", "/api/admin/kb-quota-packages", a);
-}
-export async function updateQuotaPackage(id: string, a: Partial<{ name: string; bytes: number; durationDays: number; pricePoints: number; enabled: boolean }>): Promise<void> {
-  await req("PATCH", `/api/admin/kb-quota-packages/${id}`, a);
-}
-export async function deleteQuotaPackage(id: string): Promise<void> {
-  await req("DELETE", `/api/admin/kb-quota-packages/${id}`);
-}
 export async function grantUserKbQuota(userId: string, a: { bytes: number; expiresAt?: string; note?: string }): Promise<void> {
   await req("POST", `/api/admin/users/${userId}/kb-quota`, a);
 }

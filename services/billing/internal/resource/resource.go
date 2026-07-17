@@ -103,7 +103,7 @@ const defaultRechargeRatio = 100
 const rechargePackagesKey = "recharge_packages"
 
 const kbDefaultQuotaKey = "kb_default_quota_bytes"
-const defaultKbQuotaBytes = int64(104857600) // 100MB
+const defaultKbQuotaBytes = int64(1073741824) // 1GB
 
 const defaultImageResourceKey = "image_generation"
 const defaultImageResourceRate = 10.0
@@ -493,7 +493,7 @@ func (s *Service) SetRechargePackages(pkgs []RechargePackage) error {
 	}).Create(&model.PlatformConfig{Key: rechargePackagesKey, Value: string(raw)}).Error
 }
 
-// KbDefaultQuota 知识库默认配额（字节），缺失返回默认 100MB。
+// KbDefaultQuota 知识库默认配额（字节），缺失返回默认 1GB。
 func (s *Service) KbDefaultQuota() int64 {
 	var c model.PlatformConfig
 	if err := s.st.DB.First(&c, "key = ?", kbDefaultQuotaKey).Error; err != nil {

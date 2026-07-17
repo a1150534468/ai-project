@@ -5,13 +5,14 @@ import { NovelRunCockpit, novelRunEventScope, novelRunEventText, novelRunEventTi
 import type { NovelEngineEvent } from "../../api";
 
 describe("novel engine workbench", () => {
-  it("renders autopilot controls, resilient pipeline state, and all exports", () => {
+  it("renders one focused autopilot view without the duplicate operations tab", () => {
     const html = renderToStaticMarkup(<NovelRunCockpit token="token" projectId="project-1" nextChapter={1} />);
     expect(html).toContain("全托管驾驶舱");
     expect(html).toContain("启动全托管");
     expect(html).toContain("实时管线");
     expect(html).toContain("SSE");
-    for (const format of ["markdown", "docx", "epub", "pdf"]) expect(html).toContain(format);
+    expect(html).not.toContain("监控与 DAG");
+    expect(html).not.toContain("作品导入与导出");
   });
 
   it("renders narrative intelligence, checkpoints, and prompt tooling", () => {

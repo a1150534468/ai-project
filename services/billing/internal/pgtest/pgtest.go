@@ -1,4 +1,4 @@
-// Package pgtest 为共享同一测试库(ai_assistant_billing)的各包提供跨进程串行化。
+// Package pgtest 为共享同一独立测试库(ai_assistant_billing_test)的各包提供跨进程串行化。
 //
 // billing 的多数集成测试都连到同一个 Postgres 并在准备数据前 TRUNCATE 共享表。
 // go test ./... 默认会把各包作为独立进程并行跑，导致它们互相清表污染、随机失败。
@@ -14,16 +14,63 @@ import (
 	"sync"
 	"testing"
 
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-const defaultBillingTestDSN = "postgres://ai_assistant_billing:billing-postgres-password-placeholder@localhost:5434/ai_assistant_billing?sslmode=disable"
+const (
+	defaultBillingAdminDSN = "postgres://ai_assistant_billing:billing-postgres-password-placeholder@localhost:5434/postgres?sslmode=disable"
+	defaultBillingTestDSN  = "postgres://ai_assistant_billing:billing-postgres-password-placeholder@localhost:5434/ai_assistant_billing_test?sslmode=disable"
+	testDatabaseName       = "ai_assistant_billing_test"
+)
+
+var ensureDatabaseOnce sync.Once
+
+// ensureDefaultTestDatabase best-effort 创建本地专用测试库。显式配置
+// BILLING_TEST_DATABASE_URL 时完全不介入，由 CI/调用方管理对应数据库。
+func ensureDefaultTestDatabase() {
+	ensureDatabaseOnce.Do(func() {
+		db, err := gorm.Open(postgres.Open(defaultBillingAdminDSN), &gorm.Config{})
+		if err != nil {
+			return
+		}
+		sqlDB, err := db.DB()
+		if err != nil {
+			return
+		}
+		defer sqlDB.Close()
+
+		conn, err := sqlDB.Conn(context.Background())
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		// 多个 go test 包会并行启动；会话锁保证只由一个进程建库。
+		const createDBLock int64 = 0x61696232 // "aib2"
+		if _, err := conn.ExecContext(context.Background(), "SELECT pg_advisory_lock($1)", createDBLock); err != nil {
+			return
+		}
+		defer conn.ExecContext(context.Background(), "SELECT pg_advisory_unlock($1)", createDBLock) //nolint:errcheck
+
+		var exists bool
+		if err := conn.QueryRowContext(
+			context.Background(),
+			"SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1)",
+			testDatabaseName,
+		).Scan(&exists); err != nil || exists {
+			return
+		}
+		// 数据库名是上方固定常量，不拼接任何外部输入。
+		_, _ = conn.ExecContext(context.Background(), `CREATE DATABASE ai_assistant_billing_test`)
+	})
+}
 
 // DSN returns the shared billing integration-test database URL.
 func DSN() string {
 	if dsn := strings.TrimSpace(os.Getenv("BILLING_TEST_DATABASE_URL")); dsn != "" {
 		return dsn
 	}
+	ensureDefaultTestDatabase()
 	return defaultBillingTestDSN
 }
 

@@ -46,7 +46,6 @@ let noPermToken = "";
 // 收集清理用的 id
 const createdAdminIds: string[] = [];
 const createdKbIds: string[] = [];
-const createdPackageIds: string[] = [];
 const createdUserIds: string[] = [];
 const createdGrantIds: string[] = [];
 
@@ -134,10 +133,8 @@ afterAll(async () => {
   for (const grantId of createdGrantIds) {
     await prisma.kbQuotaGrant.deleteMany({ where: { id: grantId } });
   }
-  // 删 package
-  for (const pkgId of createdPackageIds) {
-    await prisma.kbQuotaPackage.deleteMany({ where: { id: pkgId } });
-  }
+  // 新用户会自动获得 AI 产物系统库。
+  await prisma.knowledgeBase.deleteMany({ where: { userId: { in: createdUserIds } } });
   // 删 user
   for (const uid of createdUserIds) {
     await prisma.user.deleteMany({ where: { id: uid } });
@@ -393,65 +390,14 @@ describe("admin 知识库管理路由", () => {
     });
   });
 
-  describe("配额包 CRUD", () => {
-    it("POST /api/admin/kb-quota-packages 建配额包成功", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/admin/kb-quota-packages",
-        headers: { authorization: `Bearer ${superAdminToken}`, "content-type": "application/json" },
-        payload: { name: "1GB包", bytes: 1073741824, durationDays: 30, pricePoints: 100, enabled: true },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as any;
-      expect(body.success).toBe(true);
-      expect(body.data.name).toBe("1GB包");
-      createdPackageIds.push(body.data.id);
-    });
-
-    it("GET /api/admin/kb-quota-packages 列配额包", async () => {
+  describe("配额包已下线", () => {
+    it("不再注册配额包管理端点", async () => {
       const r = await app.inject({
         method: "GET",
         url: "/api/admin/kb-quota-packages",
         headers: { authorization: `Bearer ${superAdminToken}` },
       });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as any;
-      expect(body.success).toBe(true);
-      expect(Array.isArray(body.data)).toBe(true);
-    });
-
-    it("PATCH /api/admin/kb-quota-packages/:id 改配额包成功", async () => {
-      const pkg = await prisma.kbQuotaPackage.create({
-        data: { name: "Original", bytes: 1000000, durationDays: 30, pricePoints: 50, enabled: true },
-      });
-      createdPackageIds.push(pkg.id);
-
-      const r = await app.inject({
-        method: "PATCH",
-        url: `/api/admin/kb-quota-packages/${pkg.id}`,
-        headers: { authorization: `Bearer ${superAdminToken}`, "content-type": "application/json" },
-        payload: { name: "Updated Package", enabled: false },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as any;
-      expect(body.data.name).toBe("Updated Package");
-      expect(body.data.enabled).toBe(false);
-    });
-
-    it("DELETE /api/admin/kb-quota-packages/:id 删配额包成功", async () => {
-      const pkg = await prisma.kbQuotaPackage.create({
-        data: { name: "To Delete", bytes: 1000000, durationDays: 30, pricePoints: 50, enabled: true },
-      });
-
-      const r = await app.inject({
-        method: "DELETE",
-        url: `/api/admin/kb-quota-packages/${pkg.id}`,
-        headers: { authorization: `Bearer ${superAdminToken}` },
-      });
-      expect(r.statusCode).toBe(204);
-
-      const check = await prisma.kbQuotaPackage.findUnique({ where: { id: pkg.id } });
-      expect(check).toBeNull();
+      expect(r.statusCode).toBe(404);
     });
   });
 

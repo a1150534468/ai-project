@@ -175,6 +175,19 @@ describe("知识库路由", () => {
 
       await prisma.knowledgeBase.delete({ where: { id: kb.id } });
     });
+
+    it("AI 产物系统库不能重命名", async () => {
+      const kb = await prisma.knowledgeBase.findFirstOrThrow({
+        where: { userId, systemKey: "AI_ARTIFACTS" },
+      });
+      const r = await app.inject({
+        method: "PATCH",
+        url: `/api/kb/${kb.id}`,
+        headers: { authorization: auth },
+        payload: { name: "改名" },
+      });
+      expect(r.statusCode).toBe(403);
+    });
   });
 
   describe("DELETE /api/kb/:id", () => {
@@ -205,6 +218,31 @@ describe("知识库路由", () => {
 
       const found = await prisma.knowledgeBase.findUnique({ where: { id: kb.id } });
       expect(found).toBeNull();
+    });
+
+    it("AI 产物系统库不能删除", async () => {
+      const kb = await prisma.knowledgeBase.findFirstOrThrow({
+        where: { userId, systemKey: "AI_ARTIFACTS" },
+      });
+      const r = await app.inject({
+        method: "DELETE",
+        url: `/api/kb/${kb.id}`,
+        headers: { authorization: auth },
+      });
+      expect(r.statusCode).toBe(403);
+      expect(await prisma.knowledgeBase.findUnique({ where: { id: kb.id } })).not.toBeNull();
+    });
+  });
+
+  describe("知识库配额包已下线", () => {
+    it("购买端点返回 404", async () => {
+      const r = await app.inject({
+        method: "POST",
+        url: "/api/kb/quota/buy",
+        headers: { authorization: auth },
+        payload: { packageId: "removed" },
+      });
+      expect(r.statusCode).toBe(404);
     });
   });
 

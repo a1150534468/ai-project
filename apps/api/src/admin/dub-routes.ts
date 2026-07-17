@@ -18,7 +18,7 @@ export async function adminDubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  // BGM 预制 = 官方素材，权限归口 KNOWLEDGE_MANAGE（与官方知识库/配额包一致），不新增权限项。
+  // BGM 预制 = 官方素材，权限归口 KNOWLEDGE_MANAGE（与官方知识库一致），不新增权限项。
   app.get("/api/admin/dub/bgm", { preHandler: requireAdmin("KNOWLEDGE_MANAGE") }, async () => {
     return { success: true, data: await listAllBgmPresets(getPrisma()) };
   });

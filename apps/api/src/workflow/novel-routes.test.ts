@@ -241,6 +241,27 @@ describe("PlotPilot novel workflow routes", () => {
     await app.close();
   });
 
+  it("stores only a marketplace model compatible with novel generation", async () => {
+    const state = createPrismaMock();
+    state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: {}, generationPrefs: { temperature: 0.7 }, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 5, setupCompleted: true, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
+    const billing = createBillingMock({
+      listModels: vi.fn(async () => ({ data: [
+        { model: "qwen3.7-plus", enabled: true, tags: "chat,anthropic", showInMarketplace: true },
+        { model: "preview-only", enabled: true, tags: "chat,openai-only", showInMarketplace: true },
+      ] })),
+    });
+    const app = await createApp({ prisma: state.prisma, billing });
+
+    const selected = await app.inject({ method: "PATCH", url: "/api/workflow/novels/projects/project-1", payload: { writingModel: "qwen3.7-plus" } });
+    expect(selected.statusCode).toBe(200);
+    expect(selected.json().data.project.generationPrefs).toEqual({ temperature: 0.7, writingModel: "qwen3.7-plus" });
+
+    const incompatible = await app.inject({ method: "PATCH", url: "/api/workflow/novels/projects/project-1", payload: { writingModel: "preview-only" } });
+    expect(incompatible.statusCode).toBe(400);
+    expect(state.rows.projects[0].generationPrefs.writingModel).toBe("qwen3.7-plus");
+    await app.close();
+  });
+
   it("runs Bible setup in the worker path and writes five world dimensions plus style notes", async () => {
     const state = createPrismaMock();
     state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: { worldPreset: "宗门世界" }, generationPrefs: {}, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 1, setupCompleted: false, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
@@ -262,11 +283,14 @@ describe("PlotPilot novel workflow routes", () => {
       return { model: "server-model", text: generatedText };
     });
     const scheduled: Promise<void>[] = [];
-    const app = await createApp({ prisma: state.prisma, billing: createBillingMock(), generator, scheduled });
+    const billing = createBillingMock({ listModels: vi.fn(async () => ({ data: [{ model: "qwen3.7-plus", enabled: true, tags: "chat,anthropic", showInMarketplace: true }] })) });
+    const app = await createApp({ prisma: state.prisma, billing, generator, scheduled });
+    const modelSwitch = await app.inject({ method: "PATCH", url: "/api/workflow/novels/projects/project-1", payload: { writingModel: "qwen3.7-plus" } });
+    expect(modelSwitch.statusCode).toBe(200);
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/setup/bible/generate", payload: { prompt: "冷峻克制" } });
     expect(response.statusCode).toBe(202);
     await scheduled[0];
-    expect(generator).toHaveBeenCalledWith(expect.objectContaining({ targetKind: "setupBible" }));
+    expect(generator).toHaveBeenCalledWith(expect.objectContaining({ targetKind: "setupBible", modelOverride: "qwen3.7-plus" }));
     expect(state.rows.worldDimensions).toHaveLength(5);
     expect(state.rows.styleNotes.map((item) => item.title)).toContain("叙事声音");
     expect(state.rows.projects[0].setupStage).toBe(2);

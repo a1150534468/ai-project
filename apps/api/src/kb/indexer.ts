@@ -41,7 +41,7 @@ export interface IndexDeps {
    * 加载文档内容（FILE/URL/TEXT）
    * loadObject 由调用方注入，indexer 不直接耦合 S3/fetch
    */
-  loadObject: (doc: { sourceType: string; sourceUri: string | null }) => Promise<{
+  loadObject: (doc: { sourceType: string; sourceUri: string | null; content: string | null }) => Promise<{
     buf: Buffer;
     mime: string;
     filename: string;
@@ -169,6 +169,7 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
     const { buf, mime, filename } = await deps.loadObject({
       sourceType: doc.sourceType,
       sourceUri: doc.sourceUri,
+      content: doc.content,
     });
 
     // 4. parse 解析
@@ -230,7 +231,8 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
     });
 
     // 8. 计费 settle（仅 USER 库）
-    if (kb.ownerType === 'USER' && kb.userId) {
+    // 自动归档产物是平台能力，不重复向用户收取知识库索引费用。
+    if (kb.ownerType === 'USER' && kb.userId && !doc.sourceModule) {
       try {
         await deps.billing.settle({
           operationId: doc.opId ?? docId,

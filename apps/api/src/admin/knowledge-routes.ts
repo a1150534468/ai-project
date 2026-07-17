@@ -20,22 +20,6 @@ const kbUpdateSchema = z.object({
   description: z.string().max(1000).optional(),
 });
 
-const quotaPackageSchema = z.object({
-  name: z.string().min(1).max(255),
-  bytes: z.number().int().positive(),
-  durationDays: z.number().int().nonnegative(),
-  pricePoints: z.number().int().positive(),
-  enabled: z.boolean(),
-});
-
-const quotaPackageUpdateSchema = z.object({
-  name: z.string().min(1).max(255).optional(),
-  bytes: z.number().int().positive().optional(),
-  durationDays: z.number().int().nonnegative().optional(),
-  pricePoints: z.number().int().positive().optional(),
-  enabled: z.boolean().optional(),
-});
-
 const userQuotaGrantSchema = z.object({
   bytes: z.number().int().positive(), // 仅允许正数（扩容）
   expiresAt: z.string().datetime().nullable().optional(),
@@ -273,101 +257,6 @@ export async function adminKnowledgeRoutes(app: FastifyInstance) {
 
       const me = (req as unknown as { admin: { id: string } }).admin;
       await writeAudit(prisma, me.id, "KB_DOC_DELETE", id, { docId, name: doc.name });
-
-      return reply.code(204).send();
-    },
-  );
-
-  // =====================
-  // 配额包 CRUD
-  // =====================
-
-  // GET /api/admin/kb-quota-packages - 列全部配额包
-  app.get(
-    "/api/admin/kb-quota-packages",
-    { preHandler: requireAdmin("KNOWLEDGE_MANAGE") },
-    async (_req, _reply) => {
-      const packages = await prisma.kbQuotaPackage.findMany({
-        orderBy: { createdAt: "desc" },
-      });
-      return { success: true, data: packages };
-    },
-  );
-
-  // POST /api/admin/kb-quota-packages - 建配额包
-  app.post(
-    "/api/admin/kb-quota-packages",
-    { preHandler: requireAdmin("KNOWLEDGE_MANAGE") },
-    async (req, reply) => {
-      const p = quotaPackageSchema.safeParse(req.body);
-      if (!p.success) return reply.code(400).send({ error: "参数不合法" });
-
-      const pkg = await prisma.kbQuotaPackage.create({
-        data: {
-          name: p.data.name,
-          bytes: p.data.bytes,
-          durationDays: p.data.durationDays,
-          pricePoints: p.data.pricePoints,
-          enabled: p.data.enabled,
-        },
-      });
-
-      const me = (req as unknown as { admin: { id: string } }).admin;
-      await writeAudit(prisma, me.id, "KB_QUOTA_PKG_CREATE", pkg.id, p.data);
-
-      return { success: true, data: pkg };
-    },
-  );
-
-  // PATCH /api/admin/kb-quota-packages/:id - 改配额包
-  app.patch(
-    "/api/admin/kb-quota-packages/:id",
-    { preHandler: requireAdmin("KNOWLEDGE_MANAGE") },
-    async (req, reply) => {
-      const { id } = req.params as { id: string };
-      const p = quotaPackageUpdateSchema.safeParse(req.body);
-      if (!p.success) return reply.code(400).send({ error: "参数不合法" });
-
-      const existingPkg = await prisma.kbQuotaPackage.findUnique({ where: { id } });
-      if (!existingPkg) {
-        return reply.code(404).send({ error: "配额包不存在" });
-      }
-
-      const updateData: Record<string, unknown> = {};
-      if (p.data.name !== undefined) updateData.name = p.data.name;
-      if (p.data.bytes !== undefined) updateData.bytes = p.data.bytes;
-      if (p.data.durationDays !== undefined) updateData.durationDays = p.data.durationDays;
-      if (p.data.pricePoints !== undefined) updateData.pricePoints = p.data.pricePoints;
-      if (p.data.enabled !== undefined) updateData.enabled = p.data.enabled;
-
-      const updated = await prisma.kbQuotaPackage.update({
-        where: { id },
-        data: updateData as any,
-      });
-
-      const me = (req as unknown as { admin: { id: string } }).admin;
-      await writeAudit(prisma, me.id, "KB_QUOTA_PKG_UPDATE", id, updateData);
-
-      return { success: true, data: updated };
-    },
-  );
-
-  // DELETE /api/admin/kb-quota-packages/:id - 删配额包
-  app.delete(
-    "/api/admin/kb-quota-packages/:id",
-    { preHandler: requireAdmin("KNOWLEDGE_MANAGE") },
-    async (req, reply) => {
-      const { id } = req.params as { id: string };
-
-      const existingPkg = await prisma.kbQuotaPackage.findUnique({ where: { id } });
-      if (!existingPkg) {
-        return reply.code(404).send({ error: "配额包不存在" });
-      }
-
-      await prisma.kbQuotaPackage.delete({ where: { id } });
-
-      const me = (req as unknown as { admin: { id: string } }).admin;
-      await writeAudit(prisma, me.id, "KB_QUOTA_PKG_DELETE", id, { name: existingPkg.name });
 
       return reply.code(204).send();
     },

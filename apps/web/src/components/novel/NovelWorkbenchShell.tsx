@@ -9,6 +9,7 @@ import { NovelRunCockpit } from "./NovelRunCockpit";
 import { NovelIntelligenceWorkspace } from "./NovelIntelligenceWorkspace";
 import { NovelPromptWorkbench } from "./NovelPromptWorkbench";
 import { NovelBibleWorkspace } from "./NovelBibleWorkspace";
+import { NovelModelSelector } from "./NovelModelSelector";
 
 export type NovelWorkspace = "writing" | "story" | "bible" | "autopilot" | "prompts";
 
@@ -40,6 +41,8 @@ export function NovelWorkbenchShell({
   isGenerating,
   isRewriting,
   isReviewSaving,
+  writingModel,
+  isModelSaving,
   notice,
   error,
   onBackToLibrary,
@@ -58,6 +61,7 @@ export function NovelWorkbenchShell({
   onAnalyze,
   onSaveReview,
   onVersionRestored,
+  onWritingModelChange,
 }: {
   readonly token: string;
   readonly detail: NovelProjectDetail;
@@ -74,6 +78,8 @@ export function NovelWorkbenchShell({
   readonly isGenerating: boolean;
   readonly isRewriting: boolean;
   readonly isReviewSaving: boolean;
+  readonly writingModel: string;
+  readonly isModelSaving: boolean;
   readonly notice: string;
   readonly error: string;
   readonly onBackToLibrary: () => void;
@@ -92,6 +98,7 @@ export function NovelWorkbenchShell({
   readonly onAnalyze: () => void;
   readonly onSaveReview: (payload: { status?: "pending" | "approved" | "revise"; reviewNotes?: string; regenerateAi?: boolean }) => void;
   readonly onVersionRestored: (chapter: NovelChapter) => void;
+  readonly onWritingModelChange: (model: string, displayName: string) => void;
 }) {
   const [workspace, setWorkspace] = useState<NovelWorkspace>("writing");
   const [structure, setStructure] = useState<NovelStructureNode[]>([]);
@@ -113,7 +120,7 @@ export function NovelWorkbenchShell({
       <header className="flex-none border-b border-[#dfe5e2] bg-white">
         <div className="flex min-h-14 flex-col gap-3 px-3 py-2 lg:flex-row lg:items-center lg:justify-between lg:px-4">
           <div className="flex min-w-0 items-center gap-3"><button type="button" onClick={onBackToLibrary} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d9dfdd] text-[#64706b]" title="返回书库"><Icon icon="mdi:arrow-left" /></button><div className="min-w-0"><div className="flex items-center gap-2"><h1 className="truncate text-base font-semibold text-[#202825]">{detail.project.title}</h1><span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-[10px] font-semibold text-brand-ink">{phaseLabel(detail.project.storyPhase)}</span>{activeRun && <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold text-brand-ink"><span className="h-2 w-2 animate-pulse rounded-full bg-brand" />后台生成中</span>}</div><p className="mt-0.5 truncate text-[10px] text-[#89928f]">{detail.project.genre} · {detail.project.currentBranch} 世界线</p></div></div>
-          <div className="flex items-center gap-4 overflow-x-auto [scrollbar-width:none]"><div className="flex shrink-0 items-center gap-5 text-center">{[[totalWords.toLocaleString("zh-CN"), "总字数"], [`${completed}/${detail.project.targetChapters}`, "章节"], [`${progress}%`, "进度"]].map(([value, label]) => <div key={label}><p className="text-sm font-semibold text-[#303936]">{value}</p><p className="text-[9px] text-[#8d9693]">{label}</p></div>)}</div><div className="h-8 w-px shrink-0 bg-[#e2e7e5]" /><button type="button" onClick={onOpenSetup} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#6b7671] hover:bg-[#f0f3f2]" title="作品设置"><Icon icon="mdi:cog-outline" /></button><button type="button" onClick={onRefresh} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#6b7671] hover:bg-[#f0f3f2]" title="刷新"><Icon icon="mdi:refresh" /></button></div>
+          <div className="flex items-center gap-4 overflow-x-auto [scrollbar-width:none]"><NovelModelSelector token={token} value={writingModel} saving={isModelSaving} onChange={onWritingModelChange} /><div className="flex shrink-0 items-center gap-5 text-center">{[[totalWords.toLocaleString("zh-CN"), "总字数"], [`${completed}/${detail.project.targetChapters}`, "章节"], [`${progress}%`, "进度"]].map(([value, label]) => <div key={label}><p className="text-sm font-semibold text-[#303936]">{value}</p><p className="text-[9px] text-[#8d9693]">{label}</p></div>)}</div><div className="h-8 w-px shrink-0 bg-[#e2e7e5]" /><button type="button" onClick={onOpenSetup} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#6b7671] hover:bg-[#f0f3f2]" title="作品设置"><Icon icon="mdi:cog-outline" /></button><button type="button" onClick={onRefresh} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-[#6b7671] hover:bg-[#f0f3f2]" title="刷新"><Icon icon="mdi:refresh" /></button></div>
         </div>
         <div className="flex items-center gap-1 overflow-x-auto border-t border-[#eef1f0] px-3 py-1.5 [scrollbar-width:none]">{WORKSPACES.map((item) => <button key={item.id} type="button" onClick={() => setWorkspace(item.id)} className={`group flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${workspace === item.id ? "bg-brand-soft text-brand-ink" : "text-[#65706c] hover:bg-[#f2f5f4]"}`}><Icon icon={item.icon} /><span>{item.label}</span><span className={`hidden text-[9px] font-normal xl:inline ${workspace === item.id ? "text-brand-ink/70" : "text-[#9aa19f]"}`}>{item.hint}</span></button>)}<div className="flex-1" />{workspace === "writing" && <div className="hidden items-center gap-1 xl:flex"><button type="button" onClick={() => setLeftOpen((value) => !value)} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${leftOpen ? "bg-[#eef2f0] text-brand-ink" : "text-[#7c8582]"}`} title="切换结构栏"><Icon icon="mdi:dock-left" /></button><button type="button" onClick={() => setRightOpen((value) => !value)} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightOpen ? "bg-[#eef2f0] text-brand-ink" : "text-[#7c8582]"}`} title="切换情报栏"><Icon icon="mdi:dock-right" /></button></div>}</div>
       </header>

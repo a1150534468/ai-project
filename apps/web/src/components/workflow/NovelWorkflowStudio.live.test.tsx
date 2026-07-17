@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   saveNovelChapter: vi.fn(),
   saveNovelChapterReview: vi.fn(),
   startNovelAssistedRun: vi.fn(),
+  updateNovelProject: vi.fn(),
 }));
 
 vi.mock("../../api", async (importOriginal) => ({
@@ -25,7 +26,7 @@ vi.mock("../../api", async (importOriginal) => ({
 vi.mock("../novel/NovelLibraryPage", () => ({ NovelLibraryPage: () => <div>书库</div> }));
 vi.mock("../novel/NovelSetupWizard", () => ({ NovelSetupWizard: () => null }));
 vi.mock("../novel/NovelWorkbenchShell", () => ({
-  NovelWorkbenchShell: (props: { chapterContent: string; onGenerate: () => void }) => <div><button type="button" onClick={props.onGenerate}>生成正文</button><div data-testid="chapter-content">{props.chapterContent}</div></div>,
+  NovelWorkbenchShell: (props: { chapterContent: string; writingModel: string; onGenerate: () => void; onWritingModelChange: (model: string, displayName: string) => void }) => <div><button type="button" onClick={props.onGenerate}>生成正文</button><button type="button" onClick={() => props.onWritingModelChange("qwen3.7-plus", "Qwen3.7 Plus")}>切换模型</button><div data-testid="chapter-content">{props.chapterContent}</div><div data-testid="writing-model">{props.writingModel}</div></div>,
 }));
 
 const project = {
@@ -34,6 +35,7 @@ const project = {
   genre: "科幻",
   premise: "程序员重构世界。",
   settings: {},
+  generationPrefs: {},
   targetChapters: 31,
   targetCharsPerChapter: 3000,
   setupStage: 5,
@@ -94,6 +96,7 @@ describe("NovelWorkflowStudio live run refresh", () => {
     api.startNovelAssistedRun.mockResolvedValue({ id: "run-31", status: "queued", currentChapter: 31 });
     api.getNovelEngineRun.mockResolvedValue({ run: { id: "run-31", status: "awaitingReview", currentChapter: 31, error: null }, steps: [] });
     api.saveNovelChapter.mockImplementation(async (_token: string, _projectId: string, _chapterIndex: number, payload: { content?: string }) => chapter(payload.content ?? "", "2026-07-16T00:04:00.000Z"));
+    api.updateNovelProject.mockResolvedValue({ ...detail("", "2026-07-16T00:00:00.000Z"), project: { ...project, generationPrefs: { writingModel: "qwen3.7-plus" } } });
   });
 
   afterEach(() => {
@@ -111,5 +114,13 @@ describe("NovelWorkflowStudio live run refresh", () => {
     await waitFor(() => expect(screen.getByTestId("chapter-content")).toHaveTextContent("这是生成完成后的第 31 章正文。"));
     expect(api.getNovelProject.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(api.getNovelWorkbench.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("persists a project writing model and reflects it in the workbench", async () => {
+    render(<NovelWorkflowStudio token="token" />);
+    fireEvent.click(await screen.findByRole("button", { name: "切换模型" }));
+
+    await waitFor(() => expect(api.updateNovelProject).toHaveBeenCalledWith("token", "project-1", { writingModel: "qwen3.7-plus" }));
+    await waitFor(() => expect(screen.getByTestId("writing-model")).toHaveTextContent("qwen3.7-plus"));
   });
 });

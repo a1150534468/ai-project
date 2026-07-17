@@ -6,8 +6,10 @@ import { NovelSetupWizard } from "./NovelSetupWizard";
 
 const api = vi.hoisted(() => ({
   completeNovelSetup: vi.fn(),
+  exportNovelProject: vi.fn(),
   generateNovelSetup: vi.fn(),
   getNovelSetup: vi.fn(),
+  importNovelProject: vi.fn(),
   saveNovelSetup: vi.fn(),
 }));
 
@@ -19,6 +21,7 @@ const project: NovelProjectDetail["project"] = {
   genre: "东方玄幻",
   premise: "沈氏后人追查家族旧案。",
   settings: {},
+  generationPrefs: {},
   targetChapters: 100,
   targetCharsPerChapter: 3000,
   setupStage: 1,
@@ -68,7 +71,9 @@ describe("NovelSetupWizard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.completeNovelSetup.mockResolvedValue({ id: project.id, setupStage: 5, setupCompleted: true });
+    api.exportNovelProject.mockResolvedValue(new Blob(["# 寒泉烬"]));
     api.generateNovelSetup.mockResolvedValue({});
+    api.importNovelProject.mockResolvedValue({});
     api.saveNovelSetup.mockResolvedValue(undefined);
   });
 
@@ -194,11 +199,27 @@ describe("NovelSetupWizard", () => {
     api.getNovelSetup.mockResolvedValue(completedSetup);
 
     renderWizard({ setupStage: 5, setupCompleted: true });
-    await screen.findByText("叙事基座已经就绪");
+    await screen.findByText("作品设置已生效");
     fireEvent.click(screen.getByRole("button", { name: /1\. 文风 \/ 世界观/ }));
 
     await waitFor(() => expect(screen.getByText("灵力守恒")).toBeVisible());
     expect(screen.getByRole("button", { name: /1\. 文风 \/ 世界观/ })).toHaveAttribute("aria-current", "step");
     expect(api.getNovelSetup).toHaveBeenCalledTimes(1);
+  });
+
+  it("在已完成作品的设置页集中提供导入与全部导出格式", async () => {
+    api.getNovelSetup.mockResolvedValue({
+      ...generatedBible,
+      project: { id: project.id, setupStage: 5, setupCompleted: true },
+    } satisfies NovelSetupPayload);
+
+    renderWizard({ setupStage: 5, setupCompleted: true });
+
+    expect(await screen.findByTestId("novel-project-file-actions")).toBeVisible();
+    expect(screen.getByLabelText("导入 Markdown 或 TXT")).toBeInTheDocument();
+    for (const format of ["markdown", "docx", "epub", "pdf"]) {
+      expect(screen.getByRole("button", { name: format })).toBeVisible();
+    }
+    expect(screen.queryByRole("button", { name: "进入作品工作台" })).not.toBeInTheDocument();
   });
 });

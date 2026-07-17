@@ -27,6 +27,13 @@ export async function buildIndexDeps(
   return {
     prisma,
     loadObject: async (doc) => {
+      if (doc.sourceType === "ARTIFACT") {
+        return {
+          buf: Buffer.from(doc.content ?? "", "utf8"),
+          mime: "text/plain",
+          filename: "artifact.txt",
+        };
+      }
       if (doc.sourceType === "FILE" || doc.sourceType === "TEXT") {
         // FILE 和 TEXT 都存在 S3，sourceUri 是 S3 key
         const buf = await getObject(s3, doc.sourceUri!);

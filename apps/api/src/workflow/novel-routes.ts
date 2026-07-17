@@ -12,6 +12,7 @@ import { syncNovelNarrativeLedgersForChapter } from "../novel/narrative-ledger.j
 import { dispatchNovelOutboxBatch } from "../novel/outbox.js";
 import { NOVEL_COVER_RESOURCE_KEY, NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS } from "./novel-types.js";
 import { getNovelWorkbench, serializeNovelWorkbenchChapter } from "./novel-workbench.js";
+import { findEnabledNovelModel, withNovelWritingModel } from "./novel-models.js";
 import {
   estimateReserveChars,
   getProjectDetail,
@@ -89,6 +90,7 @@ const createProjectSchema = z.object({
 const updateProjectSchema = z.object({
   title: z.string().trim().min(1).max(80).optional(),
   genre: z.string().trim().max(40).optional(),
+  writingModel: z.string().trim().max(128).optional(),
 });
 const chapterGenerateSchema = z.object({
   chapterIndex: z.number().int().min(1).max(9999).optional(),
@@ -271,11 +273,24 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
+    if (body.data.writingModel) {
+      if (!billing.listModels) return reply.code(503).send({ error: "模型目录暂不可用" });
+      try {
+        const models = await billing.listModels();
+        const selected = findEnabledNovelModel(models.data, body.data.writingModel);
+        if (!selected || selected.showInMarketplace !== true) {
+          return reply.code(400).send({ error: "所选模型当前不可用于小说创作" });
+        }
+      } catch (error) {
+        return reply.code(502).send(billingUnavailable(app, error, "获取模型目录失败"));
+      }
+    }
     await prisma.novelProject.update({
       where: { id: project.id },
       data: {
         ...(body.data.title !== undefined ? { title: body.data.title } : {}),
         ...(body.data.genre !== undefined ? { genre: body.data.genre } : {}),
+        ...(body.data.writingModel !== undefined ? { generationPrefs: jsonValue(withNovelWritingModel(project.generationPrefs, body.data.writingModel)) } : {}),
       },
     });
     const detail = await getProjectDetail(prisma, userId, project.id);

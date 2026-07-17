@@ -240,6 +240,7 @@ model KnowledgeBase {
   id          String     @id @default(cuid())
   ownerType   String // "USER" | "OFFICIAL"
   userId      String?
+  systemKey   String?
   name        String
   description String?
   createdAt   DateTime   @default(now())
@@ -248,14 +249,16 @@ model KnowledgeBase {
 
   @@index([userId])
   @@index([ownerType])
+  @@unique([userId, systemKey])
 }
 
 model Document {
   id         String        @id @default(cuid())
   kbId       String
   name       String
-  sourceType String // "FILE" | "URL" | "TEXT"
+  sourceType String // "FILE" | "URL" | "TEXT" | "ARTIFACT"
   sourceUri  String?
+  content    String?
   mime       String?
   sizeBytes  Int?
   status     String        @default("pending") // pending|indexing|indexed|failed
@@ -263,6 +266,9 @@ model Document {
   chunkCount Int           @default(0)
   tokensUsed Int           @default(0)
   opId       String?
+  sourceModule String?
+  sourceId     String?
+  metadata     Json?
   lockedBy   String?
   lockedAt   DateTime?
   attempts   Int           @default(0)
@@ -273,6 +279,7 @@ model Document {
 
   @@index([kbId])
   @@index([status])
+  @@unique([sourceModule, sourceId])
 }
 
 model Chunk {
@@ -289,22 +296,11 @@ model Chunk {
   @@index([documentId])
 }
 
-model KbQuotaPackage {
-  id           String   @id @default(cuid())
-  name         String
-  bytes        Int
-  durationDays Int      @default(0)
-  pricePoints  Int
-  enabled      Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-}
-
 model KbQuotaGrant {
   id        String    @id @default(cuid())
   userId    String
   bytes     Int
-  source    String // PURCHASE | ADMIN
+  source    String // PURCHASE (历史授予) | ADMIN
   expiresAt DateTime?
   opId      String?   @unique
   note      String?

@@ -11,7 +11,6 @@ import {
   addKbFile,
   deleteKbDocument,
   getKbQuota,
-  buyKbQuota,
 } from "../api";
 import { RippleButton, Stagger, StaggerItem, useToast } from "../motion";
 
@@ -20,6 +19,19 @@ interface KnowledgePageProps {
   token: string;
   onViewChange: (view: string) => void;
 }
+
+const artifactModuleLabels: Record<string, string> = {
+  image: "AI 图片 / 电商图",
+  video: "AI 视频",
+  audio: "AI 音频",
+  novel: "小说章节",
+  article: "AI 文章",
+  comic_script: "漫画剧本",
+  promo_script: "宣传片脚本",
+  dub: "AI 口播",
+  agent_workflow: "智能体任务",
+  scheduled_report: "定时任务报告",
+};
 
 export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
   const toast = useToast();
@@ -225,19 +237,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
     }
   };
 
-  const handleBuyQuotaPackage = async (packageId: string) => {
-    try {
-      setMessage("");
-      await buyKbQuota(token, packageId);
-      const quota = await getKbQuota(token);
-      setKbQuota(quota);
-      toast.show("ok", "购买成功");
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "未知错误";
-      toast.show("err", `购买失败: ${errorMsg}`);
-    }
-  };
-
   useEffect(() => {
     handleLoadKbs();
   }, []);
@@ -251,6 +250,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
   const officialKbs = kbList.filter((kb) => kb.ownerType === "OFFICIAL");
   const selectedKb = kbList.find((kb) => kb.id === selectedKbId);
   const isOfficialKb = selectedKb?.ownerType === "OFFICIAL";
+  const isSystemKb = Boolean(selectedKb?.systemKey);
   const fileAccept = [
     ".txt",
     ".md",
@@ -312,29 +312,10 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
               <p className="text-sm font-medium text-gray-800">{formatBytes(kbQuota.breakdown.membershipBytes)}</p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="text-xs font-bold text-gray-500 uppercase mb-1">已购配额</p>
+              <p className="text-xs font-bold text-gray-500 uppercase mb-1">额外配额</p>
               <p className="text-sm font-medium text-gray-800">{formatBytes(kbQuota.breakdown.grantBytes)}</p>
             </div>
           </div>
-
-          {/* Buy packages */}
-          {kbQuota.packages.length > 0 && (
-            <div className="pt-4 space-y-2">
-              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">购买配额包</h4>
-              <div className="grid grid-cols-1 gap-2">
-                {kbQuota.packages.map((pkg) => (
-                  <RippleButton
-                    key={pkg.id}
-                    onClick={() => handleBuyQuotaPackage(pkg.id)}
-                    className="w-full px-4 py-2.5 text-sm text-left font-medium bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-between"
-                  >
-                    <span>{pkg.name} · {formatBytes(pkg.bytes)}</span>
-                    <span className="text-brand-ink font-semibold">{pkg.pricePoints} 积分</span>
-                  </RippleButton>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -398,6 +379,11 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-gray-900 truncate">{kb.name}</p>
+                        {kb.systemKey && (
+                          <span className="mt-1 inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">
+                            自动归档
+                          </span>
+                        )}
                         {kb.description && (
                           <p className="text-xs text-gray-500 line-clamp-1 mt-1">{kb.description}</p>
                         )}
@@ -406,7 +392,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    {!kb.systemKey && <div className="flex gap-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -427,7 +413,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                       >
                         删除
                       </button>
-                    </div>
+                    </div>}
                   </div>
                 ))
               )}
@@ -485,7 +471,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                   <p className="text-sm text-gray-600 leading-relaxed">{selectedKb.description}</p>
                 )}
 
-                {!isOfficialKb && (
+                {!isOfficialKb && !isSystemKb && (
                   <div className="pt-4 space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block rounded-lg border border-gray-200 bg-white p-4 text-sm">
@@ -558,6 +544,14 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                     </RippleButton>
                   </div>
                 )}
+                {isSystemKb && (
+                  <div className="rounded-lg border border-brand/10 bg-brand-soft p-4">
+                    <p className="text-sm font-semibold text-brand-ink">自动归档已开启</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">
+                      生图、电商图、音视频、小说、文章、剧本、智能体任务和定时报告会自动保存；媒体复用原文件，不会重复占用空间。
+                    </p>
+                  </div>
+                )}
                 {isOfficialKb && (
                   <div className="rounded-lg border border-brand/10 bg-brand-soft p-4">
                     <p className="text-sm font-semibold text-brand-ink">官方知识库</p>
@@ -585,6 +579,11 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-gray-900 truncate">{doc.name}</p>
+                                {doc.sourceModule && (
+                                  <p className="mt-1 text-xs text-gray-500">
+                                    AI 自动归档 · {artifactModuleLabels[doc.sourceModule] ?? doc.sourceModule}
+                                  </p>
+                                )}
                                 <div className="flex items-center gap-2 mt-2">
                                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
                                     <Icon
@@ -621,6 +620,16 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                               <span className="text-gray-400">
                                 {new Date(doc.createdAt).toLocaleDateString("zh-CN")}
                               </span>
+                              {doc.sourceUri && (
+                                <a
+                                  href={doc.sourceUri}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="font-medium text-brand-ink hover:underline"
+                                >
+                                  打开产物
+                                </a>
+                              )}
                             </div>
 
                             {doc.error && (

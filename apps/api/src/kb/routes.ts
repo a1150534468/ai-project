@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
-import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
+import { createBillingClient } from "@ai-assistant/billing";
 import {
   createKb,
   listKbsForUser,
@@ -15,7 +15,7 @@ import { buildIndexDeps } from "./deps.js";
 import { indexOnce } from "./indexer.js";
 import { storeAndCreateDocument, IngestError } from "./ingest.js";
 import { makeS3, deleteObject } from "../storage/s3.js";
-import { myQuota, buyQuota, PackageNotFoundError } from "./quota.js";
+import { myQuota } from "./quota.js";
 
 const createKbSchema = z.object({
   name: z.string().min(1).max(255),
@@ -25,10 +25,6 @@ const createKbSchema = z.object({
 const renameKbSchema = z.object({
   name: z.string().min(1).max(255).optional(),
   description: z.string().max(1000).optional(),
-});
-
-const buyQuotaSchema = z.object({
-  packageId: z.string().min(1),
 });
 
 export async function kbRoutes(app: FastifyInstance) {
@@ -133,6 +129,11 @@ export async function kbRoutes(app: FastifyInstance) {
           sizeBytes: true,
           chunkCount: true,
           error: true,
+          sourceType: true,
+          sourceUri: true,
+          mime: true,
+          sourceModule: true,
+          metadata: true,
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },
@@ -269,32 +270,4 @@ export async function kbRoutes(app: FastifyInstance) {
     }
   });
 
-  // POST /api/kb/quota/buy
-  app.post("/api/kb/quota/buy", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
-
-    const parsed = buyQuotaSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: "参数不合法" });
-    }
-
-    try {
-      const result = await buyQuota(prisma, {
-        chargePoints: (args) => billing.chargePoints(args),
-        getUserKbQuota: (uid) => billing.getUserKbQuota(uid),
-      }, userId, parsed.data.packageId);
-      return reply.send({ success: true, data: result });
-    } catch (err) {
-      if (err instanceof PackageNotFoundError) {
-        return reply.code(404).send({ error: "配额包不存在或已停用" });
-      }
-      if (err instanceof Error && err.name === "InsufficientBalanceError") {
-        return reply.code(402).send({ error: "积分不足，请充值" });
-      }
-      // Other errors (billing service unavailable, DB failure, etc)
-      app.log.error(err);
-      return reply.code(502).send({ error: "计费服务不可用" });
-    }
-  });
 }
