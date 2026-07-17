@@ -595,8 +595,6 @@ export interface NovelChapter {
   summary: string;
   outline?: string;
   generationHint?: string;
-  executionPlan?: unknown;
-  microBeats?: unknown[];
   content: string;
   rawContent?: string;
   openThreads?: string[];
@@ -835,7 +833,7 @@ export async function saveNovelChapter(
   token: string,
   projectId: string,
   chapterIndex: number,
-  payload: { title: string; summary: string; content: string; outline?: string; generationHint?: string; executionPlan?: unknown; microBeats?: unknown[] },
+  payload: { title: string; summary: string; content: string; outline?: string; generationHint?: string },
 ): Promise<NovelChapter> {
   const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}`, {
     method: "PUT",

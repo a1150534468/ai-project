@@ -34,8 +34,6 @@ export function NovelWorkbenchShell({
   chapterSummary,
   chapterOutline,
   generationHint,
-  executionPlan,
-  microBeats,
   chapterContent,
   targetChars,
   saveStatus,
@@ -53,8 +51,6 @@ export function NovelWorkbenchShell({
   onSummaryChange,
   onOutlineChange,
   onGenerationHintChange,
-  onExecutionPlanChange,
-  onMicroBeatsChange,
   onContentChange,
   onTargetCharsChange,
   onGenerate,
@@ -72,8 +68,6 @@ export function NovelWorkbenchShell({
   readonly chapterSummary: string;
   readonly chapterOutline: string;
   readonly generationHint: string;
-  readonly executionPlan: unknown;
-  readonly microBeats: unknown[];
   readonly chapterContent: string;
   readonly targetChars: string;
   readonly saveStatus: "idle" | "saving" | "saved" | "error";
@@ -91,8 +85,6 @@ export function NovelWorkbenchShell({
   readonly onSummaryChange: (value: string) => void;
   readonly onOutlineChange: (value: string) => void;
   readonly onGenerationHintChange: (value: string) => void;
-  readonly onExecutionPlanChange: (value: unknown) => void;
-  readonly onMicroBeatsChange: (value: unknown[]) => void;
   readonly onContentChange: (value: string) => void;
   readonly onTargetCharsChange: (value: string) => void;
   readonly onGenerate: () => void;
@@ -131,7 +123,7 @@ export function NovelWorkbenchShell({
       <main className="min-h-0 flex-1">
         {workspace === "writing" ? <div className={`grid h-full min-h-0 grid-cols-1 overflow-hidden ${leftOpen && rightOpen ? "xl:grid-cols-[230px_minmax(0,1fr)_290px] 2xl:grid-cols-[250px_minmax(0,1fr)_310px]" : leftOpen ? "xl:grid-cols-[230px_minmax(0,1fr)] 2xl:grid-cols-[250px_minmax(0,1fr)]" : rightOpen ? "xl:grid-cols-[minmax(0,1fr)_290px] 2xl:grid-cols-[minmax(0,1fr)_310px]" : ""}`}>
           {leftOpen && <NovelStructureSidebar nodes={structure} chapters={chapters} selectedChapterId={selectedChapterId} runningChapter={runningChapter} onSelectChapter={onSelectChapter} onCreateChapter={onCreateChapter} onOpenPlanning={() => setWorkspace("story")} />}
-          <NovelChapterDesk token={token} projectId={detail.project.id} chapter={selectedChapter} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} executionPlan={executionPlan} microBeats={microBeats} chapterContent={chapterContent} targetChars={targetChars} saveStatus={saveStatus} isGenerating={isGenerating} isRewriting={isRewriting} onTitleChange={onTitleChange} onSummaryChange={onSummaryChange} onOutlineChange={onOutlineChange} onGenerationHintChange={onGenerationHintChange} onExecutionPlanChange={onExecutionPlanChange} onMicroBeatsChange={onMicroBeatsChange} onContentChange={onContentChange} onTargetCharsChange={onTargetCharsChange} onGenerate={onGenerate} onRewrite={onRewrite} onAnalyze={onAnalyze} onVersionRestored={onVersionRestored} />
+          <NovelChapterDesk token={token} projectId={detail.project.id} chapter={selectedChapter} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} chapterContent={chapterContent} targetChars={targetChars} saveStatus={saveStatus} isGenerating={isGenerating} isRewriting={isRewriting} onTitleChange={onTitleChange} onSummaryChange={onSummaryChange} onOutlineChange={onOutlineChange} onGenerationHintChange={onGenerationHintChange} onContentChange={onContentChange} onTargetCharsChange={onTargetCharsChange} onGenerate={onGenerate} onRewrite={onRewrite} onAnalyze={onAnalyze} onVersionRestored={onVersionRestored} />
           {rightOpen && <NovelContextInspector token={token} projectId={detail.project.id} chapter={selectedChapter} workbench={workbench} isReviewSaving={isReviewSaving} onSaveReview={onSaveReview} onAnalyze={onAnalyze} />}
         </div> : workspace === "autopilot" ? <div className="h-full min-h-0 overflow-hidden p-4 sm:p-6"><NovelRunCockpit token={token} projectId={detail.project.id} nextChapter={nextNovelChapterIndex(chapters)} onProjectChanged={onRefresh} /></div> : <div className="h-full overscroll-contain overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]">{workspace === "story" ? <div className="p-4 sm:p-6"><NovelIntelligenceWorkspace token={token} projectId={detail.project.id} showPrompts={false} /></div> : workspace === "bible" ? <NovelBibleWorkspace token={token} projectId={detail.project.id} onOpenSetup={onOpenSetup} /> : <div className="p-4 sm:p-6"><NovelPromptWorkbench token={token} projectId={detail.project.id} /></div>}</div>}
       </main>

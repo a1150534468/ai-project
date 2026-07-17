@@ -27,9 +27,17 @@ describe("NovelChapterDesk prompt audit", () => {
   it("shows the exact system and user prompts sent for the selected chapter", async () => {
     render(<NovelChapterDesk
       chapter={{ id: "chapter-1", volumeIndex: 1, chapterIndex: 1, title: "第一章", summary: "", content: "正文", status: "ready", billableChars: 2, lastTaskId: "task-1", updatedAt: "2026-07-16T06:00:00.000Z" }}
-      token="token" projectId="project-1" chapterTitle="第一章" chapterSummary="" chapterOutline="" generationHint="" executionPlan={{}} microBeats={[]} chapterContent="正文" targetChars="3000" saveStatus="saved" isGenerating={false} isRewriting={false}
-      onTitleChange={vi.fn()} onSummaryChange={vi.fn()} onOutlineChange={vi.fn()} onGenerationHintChange={vi.fn()} onExecutionPlanChange={vi.fn()} onMicroBeatsChange={vi.fn()} onContentChange={vi.fn()} onTargetCharsChange={vi.fn()} onGenerate={vi.fn()} onRewrite={vi.fn()} onAnalyze={vi.fn()} onVersionRestored={vi.fn()}
+      token="token" projectId="project-1" chapterTitle="第一章" chapterSummary="" chapterOutline="" generationHint="" chapterContent="正文" targetChars="3000" saveStatus="saved" isGenerating={false} isRewriting={false}
+      onTitleChange={vi.fn()} onSummaryChange={vi.fn()} onOutlineChange={vi.fn()} onGenerationHintChange={vi.fn()} onContentChange={vi.fn()} onTargetCharsChange={vi.fn()} onGenerate={vi.fn()} onRewrite={vi.fn()} onAnalyze={vi.fn()} onVersionRestored={vi.fn()}
     />);
+
+    expect(screen.queryByRole("button", { name: "执行剧本" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "微节拍" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /写作要求/ }));
+    expect(screen.getByText("章节大纲")).toBeVisible();
+    expect(screen.getByText("生成约束")).toBeVisible();
+    expect(screen.queryByText("执行剧本（结构化）")).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: /提示词记录/ }));
 
     expect(await screen.findByText("系统提示词原文")).toBeVisible();

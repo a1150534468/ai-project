@@ -78,8 +78,6 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
   const [chapterSummary, setChapterSummary] = useState("");
   const [chapterOutline, setChapterOutline] = useState("");
   const [generationHint, setGenerationHint] = useState("");
-  const [executionPlan, setExecutionPlan] = useState<unknown>({});
-  const [microBeats, setMicroBeats] = useState<unknown[]>([]);
   const [chapterContent, setChapterContent] = useState("");
   const [targetChars, setTargetChars] = useState("3000");
   const [chapterSaveStatus, setChapterSaveStatus] = useState<ChapterSaveStatus>("idle");
@@ -180,26 +178,24 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
 
   useEffect(() => {
     if (!selectedChapter) {
-      setChapterTitle(""); setChapterSummary(""); setChapterOutline(""); setGenerationHint(""); setExecutionPlan({}); setMicroBeats([]); setChapterContent(""); setChapterSaveStatus("idle");
+      setChapterTitle(""); setChapterSummary(""); setChapterOutline(""); setGenerationHint(""); setChapterContent(""); setChapterSaveStatus("idle");
       return;
     }
     setChapterTitle(selectedChapter.title);
     setChapterSummary(selectedChapter.summary);
     setChapterOutline(selectedChapter.outline ?? selectedChapter.summary);
     setGenerationHint(selectedChapter.generationHint ?? "");
-    setExecutionPlan(selectedChapter.executionPlan ?? {});
-    setMicroBeats(Array.isArray(selectedChapter.microBeats) ? selectedChapter.microBeats : []);
     setChapterContent(selectedChapter.content);
     setChapterSaveStatus("idle");
   }, [selectedChapter?.id, selectedChapter?.updatedAt]);
 
   useEffect(() => {
     if (!detail || !selectedChapter) return undefined;
-    const unchanged = chapterTitle.trim() === selectedChapter.title && chapterSummary.trim() === selectedChapter.summary && chapterOutline === (selectedChapter.outline ?? selectedChapter.summary) && generationHint === (selectedChapter.generationHint ?? "") && JSON.stringify(executionPlan ?? {}) === JSON.stringify(selectedChapter.executionPlan ?? {}) && JSON.stringify(microBeats) === JSON.stringify(selectedChapter.microBeats ?? []) && chapterContent === selectedChapter.content;
+    const unchanged = chapterTitle.trim() === selectedChapter.title && chapterSummary.trim() === selectedChapter.summary && chapterOutline === (selectedChapter.outline ?? selectedChapter.summary) && generationHint === (selectedChapter.generationHint ?? "") && chapterContent === selectedChapter.content;
     if (unchanged) return undefined;
     setChapterSaveStatus("saving");
     const timer = window.setTimeout(() => {
-      void saveNovelChapter(token, detail.project.id, selectedChapter.chapterIndex, { title: chapterTitle.trim(), summary: chapterSummary.trim(), outline: chapterOutline, generationHint, executionPlan, microBeats, content: chapterContent })
+      void saveNovelChapter(token, detail.project.id, selectedChapter.chapterIndex, { title: chapterTitle.trim(), summary: chapterSummary.trim(), outline: chapterOutline, generationHint, content: chapterContent })
         .then((saved) => {
           setDetail((current) => current && current.project.id === detail.project.id ? { ...current, chapters: upsertChapter(current.chapters, saved) } : current);
           setWorkbench((current) => current && current.project.id === detail.project.id ? { ...current, chapters: upsertChapter(current.chapters, saved) } : current);
@@ -208,7 +204,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
         .catch((reason) => { setChapterSaveStatus("error"); setError(errorMessage(reason, "自动保存章节失败")); });
     }, 850);
     return () => window.clearTimeout(timer);
-  }, [chapterContent, chapterOutline, chapterSummary, chapterTitle, detail?.project.id, executionPlan, generationHint, microBeats, selectedChapter, token]);
+  }, [chapterContent, chapterOutline, chapterSummary, chapterTitle, detail?.project.id, generationHint, selectedChapter, token]);
 
   const createProject = async () => {
     if (createDraft.premise.trim().length < 10) { setError("请先用一段话写清故事梗概"); return; }
@@ -255,7 +251,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     const chapterIndex = (chapters.at(-1)?.chapterIndex ?? 0) + 1;
     setBusy("new-chapter");
     try {
-      const saved = await saveNovelChapter(token, detail.project.id, chapterIndex, { title: `第 ${chapterIndex} 章`, summary: "", outline: "", generationHint: "", executionPlan: {}, microBeats: [], content: "" });
+      const saved = await saveNovelChapter(token, detail.project.id, chapterIndex, { title: `第 ${chapterIndex} 章`, summary: "", outline: "", generationHint: "", content: "" });
       setDetail((current) => current ? { ...current, chapters: upsertChapter(current.chapters, saved) } : current);
       setWorkbench((current) => current ? { ...current, chapters: upsertChapter(current.chapters, saved) } : current);
       setSelectedChapterId(saved.id);
@@ -322,5 +318,5 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
 
   if (view === "library" || !detail) return <><div data-novel-scroll-region="library" className="h-full min-h-0 overflow-y-auto overscroll-contain [scroll-padding-bottom:8rem] [scrollbar-gutter:stable] [scrollbar-width:thin]"><NovelLibraryPage projects={projects} loading={loading} draft={createDraft} isCreating={busy === "create"} error={error} onDraftChange={setCreateDraft} onCreate={() => void createProject()} onOpenProject={(id) => void openProject(id)} onDeleteProject={removeProject} /></div>{setupOpen && detail && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onBalanceRefresh={onBalanceRefresh} />}</>;
 
-  return <><NovelWorkbenchShell token={token} detail={detail} workbench={workbench} selectedChapter={selectedChapter} selectedChapterId={selectedChapterId} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} executionPlan={executionPlan} microBeats={microBeats} chapterContent={chapterContent} targetChars={targetChars} saveStatus={chapterSaveStatus} isGenerating={busy === "generate"} isRewriting={busy === "rewrite"} isReviewSaving={reviewSaving} notice={notice} error={error} onBackToLibrary={() => { setView("library"); setDetail(null); setWorkbench(null); void loadProjects(); window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`); }} onOpenSetup={() => setSetupOpen(true)} onRefresh={() => void refreshProject(detail.project.id, true)} onSelectChapter={setSelectedChapterId} onCreateChapter={() => void createChapter()} onTitleChange={setChapterTitle} onSummaryChange={setChapterSummary} onOutlineChange={setChapterOutline} onGenerationHintChange={setGenerationHint} onExecutionPlanChange={setExecutionPlan} onMicroBeatsChange={setMicroBeats} onContentChange={setChapterContent} onTargetCharsChange={setTargetChars} onGenerate={() => void generateChapter()} onRewrite={rewriteChapterSelection} onAnalyze={analyzeChapter} onSaveReview={saveReview} onVersionRestored={applyRestoredVersion} />{setupOpen && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onBalanceRefresh={onBalanceRefresh} />}</>;
+  return <><NovelWorkbenchShell token={token} detail={detail} workbench={workbench} selectedChapter={selectedChapter} selectedChapterId={selectedChapterId} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} chapterContent={chapterContent} targetChars={targetChars} saveStatus={chapterSaveStatus} isGenerating={busy === "generate"} isRewriting={busy === "rewrite"} isReviewSaving={reviewSaving} notice={notice} error={error} onBackToLibrary={() => { setView("library"); setDetail(null); setWorkbench(null); void loadProjects(); window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`); }} onOpenSetup={() => setSetupOpen(true)} onRefresh={() => void refreshProject(detail.project.id, true)} onSelectChapter={setSelectedChapterId} onCreateChapter={() => void createChapter()} onTitleChange={setChapterTitle} onSummaryChange={setChapterSummary} onOutlineChange={setChapterOutline} onGenerationHintChange={setGenerationHint} onContentChange={setChapterContent} onTargetCharsChange={setTargetChars} onGenerate={() => void generateChapter()} onRewrite={rewriteChapterSelection} onAnalyze={analyzeChapter} onSaveReview={saveReview} onVersionRestored={applyRestoredVersion} />{setupOpen && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onBalanceRefresh={onBalanceRefresh} />}</>;
 }

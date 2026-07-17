@@ -48,9 +48,15 @@ export function NovelContextInspector({ token, projectId, chapter, workbench, is
   }, [projectId, token]);
 
   const highlights = workbench?.workbenchHighlights ?? {};
-  const focus = record(highlights.focusCard);
-  const beats = Array.isArray(highlights.microBeats) ? highlights.microBeats.map(record) : [];
-  const alerts = Array.isArray(highlights.continuityAlerts) ? highlights.continuityAlerts.map(record) : [];
+  const snapshot = record(chapter?.contextSnapshot);
+  const snapshotFocus = record(snapshot.focusCard);
+  const snapshotBeats = Array.isArray(snapshot.microBeats) ? snapshot.microBeats.map(record) : [];
+  const snapshotAlerts = Array.isArray(snapshot.continuityAlerts) ? snapshot.continuityAlerts.map(record) : [];
+  const highlightChapterNumber = Number(highlights.focusChapterNumber);
+  const highlightsMatchChapter = Boolean(chapter && Number.isFinite(highlightChapterNumber) && highlightChapterNumber === chapter.chapterIndex);
+  const focus = Object.keys(snapshotFocus).length > 0 ? snapshotFocus : highlightsMatchChapter ? record(highlights.focusCard) : {};
+  const beats = snapshotBeats.length > 0 ? snapshotBeats : highlightsMatchChapter && Array.isArray(highlights.microBeats) ? highlights.microBeats.map(record) : [];
+  const alerts = snapshotAlerts.length > 0 ? snapshotAlerts : highlightsMatchChapter && Array.isArray(highlights.continuityAlerts) ? highlights.continuityAlerts.map(record) : [];
   const quality = record(chapter?.consistencyJson);
   const qualityDetail = record(quality.quality);
   const worldDimensions = useMemo(() => {
@@ -64,7 +70,7 @@ export function NovelContextInspector({ token, projectId, chapter, workbench, is
       <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-3 [scrollbar-gutter:stable] [scrollbar-width:thin]">
         {tab === "context" && <div className="grid gap-3">
           <section className="rounded-xl border border-[#e2e7e5] bg-white p-3"><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-brand-ink">Chapter Mission</p><h3 className="mt-1 text-sm font-semibold text-[#303936]">第 {chapter?.chapterIndex ?? "-"} 章 · {chapter?.title || "未选择"}</h3><div className="mt-3 grid gap-2 text-xs leading-5 text-[#626c68]"><p><span className="font-semibold text-[#3c4642]">任务：</span>{text(focus.mission) || chapter?.outline || chapter?.summary || "推进主线"}</p><p><span className="font-semibold text-[#3c4642]">冲突：</span>{text(focus.conflict) || "维持场景压力"}</p><p><span className="font-semibold text-[#3c4642]">钩子：</span>{text(focus.endingHook) || "留下下一步问题"}</p></div></section>
-          <section className="rounded-xl border border-[#e2e7e5] bg-white p-3"><div className="flex items-center justify-between"><h4 className="text-xs font-semibold text-[#303936]">执行节拍</h4><span className="text-[10px] text-[#8c9592]">{beats.length} 个</span></div><div className="mt-2 grid gap-2">{beats.slice(0, 6).map((beat, index) => <div key={index} className="rounded-lg bg-[#f4f7f5] p-2"><p className="text-[11px] font-semibold text-[#43504b]">{text(beat.index) || index + 1}. {text(beat.label)} · {text(beat.targetWords)}字</p><p className="mt-1 text-[10px] leading-4 text-[#74807b]">{text(beat.objective)}</p></div>)}{!beats.length && <p className="py-4 text-center text-[11px] text-[#929b98]">生成执行剧本后显示微节拍</p>}</div></section>
+          <section className="rounded-xl border border-[#e2e7e5] bg-white p-3"><div className="flex items-center justify-between"><h4 className="text-xs font-semibold text-[#303936]">本章微节拍</h4><span className="text-[10px] text-[#8c9592]">{beats.length} 个</span></div><div className="mt-2 grid gap-2">{beats.slice(0, 6).map((beat, index) => <div key={index} className="rounded-lg bg-[#f4f7f5] p-2"><p className="text-[11px] font-semibold text-[#43504b]">{text(beat.index) || index + 1}. {text(beat.label)} · {text(beat.targetWords)}字</p><p className="mt-1 text-[10px] leading-4 text-[#74807b]">{text(beat.objective)}</p></div>)}{!beats.length && <p className="py-4 text-center text-[11px] text-[#929b98]">生成正文后显示本章实际使用的微节拍</p>}</div></section>
           <section className="rounded-xl border border-[#e2e7e5] bg-white p-3"><h4 className="text-xs font-semibold text-[#303936]">连续性提醒</h4><div className="mt-2 grid gap-2">{alerts.slice(0, 5).map((item, index) => <p key={index} className="rounded-lg bg-amber-50 p-2 text-[10px] leading-4 text-amber-800"><span className="font-semibold">{text(item.title)}</span> · {text(item.detail)}</p>)}{!alerts.length && <p className="text-[11px] text-[#929b98]">当前没有连续性风险</p>}</div></section>
           {props.length > 0 && <section className="rounded-xl border border-[#e2e7e5] bg-white p-3"><h4 className="text-xs font-semibold text-[#303936]">本书道具</h4><div className="mt-2 flex flex-wrap gap-1.5">{props.slice(0, 8).map((item, index) => <span key={text(item.id) || index} className="rounded-full bg-[#edf2f0] px-2 py-1 text-[10px] text-[#5d6864]">{text(item.name)}</span>)}</div></section>}
         </div>}
