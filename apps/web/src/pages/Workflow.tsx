@@ -24,6 +24,7 @@ import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio"
 import { readFileAsInlineImage } from "../components/workflow/ecomWorkflowStudioModel";
 import { LocalBusinessPromoWorkflowStudio } from "../components/workflow/LocalBusinessPromoWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
+import { CodexPetStudio } from "../components/workflow/CodexPetStudio";
 import type { EcomMainJob } from "../workflowEcomMainApi";
 import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
 import {
@@ -52,6 +53,8 @@ interface WorkflowProps {
   readonly token: string;
   readonly activeModuleId: WorkflowModuleId;
   readonly onBalanceRefresh?: () => void;
+  readonly initialCodexPetProjectId?: string | null;
+  readonly onOpenKnowledgeDocument?: (documentId: string) => void;
 }
 
 function createRequestId(): string {
@@ -94,7 +97,7 @@ function remainingImageCount(tasks: readonly ImageTask[]): number {
     .reduce((sum, task) => sum + Math.max(task.count - (task.completedCount ?? 0), 0), 0);
 }
 
-export default function Workflow({ token, activeModuleId, onBalanceRefresh }: WorkflowProps) {
+export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument }: WorkflowProps) {
   const toast = useToast();
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>(DEFAULT_ASPECT_RATIO);
@@ -198,11 +201,6 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
       return;
     }
 
-    if (imageModel === "gpt-image-2" && referenceImages.length > 0) {
-      setError("GPT Image 2 当前只支持文生图；使用参考图请切换到 Qwen Image 2.0 Pro");
-      return;
-    }
-
     const parsedCount = parseImageCount(countInput);
     if (!parsedCount.ok) {
       setError(parsedCount.error);
@@ -248,10 +246,6 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
   };
 
   const handleReferenceUpload = (file: File) => {
-    if (imageModel === "gpt-image-2") {
-      setError("GPT Image 2 当前只支持文生图；上传参考图请切换到 Qwen Image 2.0 Pro");
-      return;
-    }
     if (isUploadingReference || referenceImages.length >= IMAGE_MAX_REFERENCE_COUNT) return;
     const mime = file.type.toLowerCase();
     if (!IMAGE_REFERENCE_MIME_TYPES.has(mime)) {
@@ -387,7 +381,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
         )}
 
         <main className={`min-w-0 flex-1 ${activeModuleId === "novel" ? "h-full min-h-0 overflow-hidden" : ""}`}>
-          {activeModuleId !== "novel" && <header className="mb-4">
+          {activeModuleId !== "novel" && activeModuleId !== "codex-pet" && <header className="mb-4">
             <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
             <h1 className="page-title text-[24px]">{activeModule.title}</h1>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
@@ -422,9 +416,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
             onModelChange={(value) => {
               setImageModel(value);
               setError("");
-              setNotice(value === "gpt-image-2" && referenceImages.length > 0
-                ? "已保留参考图，但 GPT Image 2 暂不支持参考图；提交前请切回 Qwen Image"
-                : "");
+              setNotice("");
             }}
             onAspectRatioChange={setAspectRatio}
             onResolutionChange={setResolution}
@@ -442,6 +434,13 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh }: Wo
           />
         ) : activeModuleId === "novel" ? (
           <NovelWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
+        ) : activeModuleId === "codex-pet" ? (
+          <CodexPetStudio
+            token={token}
+            initialProjectId={initialCodexPetProjectId}
+            onBalanceRefresh={onBalanceRefresh}
+            onOpenKnowledgeDocument={onOpenKnowledgeDocument}
+          />
         ) : activeModuleId === "commerce-long-image" ? (
           <CommerceImageStudio
             token={token}

@@ -51,6 +51,11 @@ model User {
   dubProjects                 DubProject[]
   scheduledTasks              ScheduledTask[]
   scheduledTaskRuns           ScheduledTaskRun[]
+  codexPetProjects            CodexPetProject[]
+  codexPetRuns                CodexPetRun[]
+  codexPetJobs                CodexPetJob[]
+  codexPetArtifacts           CodexPetArtifact[]
+  codexPetEvents              CodexPetEvent[]
 
   @@index([channelId])
 }
@@ -276,10 +281,186 @@ model Document {
   updatedAt  DateTime      @updatedAt
   kb         KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
   chunks     Chunk[]
+  codexPetRun CodexPetRun?
 
   @@index([kbId])
   @@index([status])
   @@unique([sourceModule, sourceId])
+}
+
+model CodexPetProject {
+  id                   String             @id @default(cuid())
+  userId               String
+  name                 String
+  description          String             @default("")
+  prompt               String             @default("")
+  stylePreset          String             @default("auto")
+  styleNotes           String             @default("")
+  referenceAssetIds    String[]           @default([])
+  autoContinue         Boolean            @default(false)
+  status               String             @default("draft")
+  latestRunId          String?
+  createIdempotencyKey String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs                 CodexPetRun[]
+  jobs                 CodexPetJob[]
+  artifacts            CodexPetArtifact[]
+  events               CodexPetEvent[]
+
+  @@unique([userId, createIdempotencyKey])
+  @@index([userId, updatedAt])
+  @@index([userId, status])
+}
+
+model CodexPetRun {
+  id                         String             @id @default(cuid())
+  projectId                  String
+  userId                     String
+  idempotencyKey             String?
+  inputSnapshot              Json               @default("{}")
+  status                     String             @default("queued")
+  progressStage              String             @default("queued")
+  progressPercent            Int                @default(0)
+  progressMessage            String?
+  autoContinue               Boolean            @default(false)
+  colorKey                   String?
+  billingOperationId         String?            @unique
+  billingPoints              Int                @default(0)
+  billingChargeStatus        String             @default("pending")
+  billingChargeAttemptCount  Int                @default(0)
+  billingChargeError         String?
+  billingChargeLastAttemptAt DateTime?
+  billingChargeNextRetryAt   DateTime?
+  billingChargeLeaseUntil    DateTime?
+  billingChargedAt           DateTime?
+  billingActivatedAt         DateTime?
+  billingRefundedAt          DateTime?
+  billingRefundStatus        String             @default("none")
+  billingRefundError         String?
+  billingRefundRetryCount    Int                @default(0)
+  billingRefundLastAttemptAt DateTime?
+  billingRefundNextRetryAt   DateTime?
+  cancelRequested            Boolean            @default(false)
+  hasSuccessfulImage         Boolean            @default(false)
+  selectedBaseArtifactId     String?
+  spritesheetArtifactId      String?
+  packageArtifactId          String?
+  previewArtifactId          String?
+  validationReport           Json?
+  requestedModel             String             @default("gpt-image-2")
+  actualModels               String[]           @default([])
+  usage                      Json?
+  knowledgeDocumentId        String?            @unique
+  lastEventSequence          Int                @default(0)
+  workerId                   String?
+  heartbeatAt                DateTime?
+  startedAt                  DateTime?
+  completedAt                DateTime?
+  error                      String?
+  createdAt                  DateTime           @default(now())
+  updatedAt                  DateTime           @updatedAt
+  project                    CodexPetProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeDocument          Document?          @relation(fields: [knowledgeDocumentId], references: [id], onDelete: SetNull)
+  jobs                       CodexPetJob[]
+  artifacts                  CodexPetArtifact[]
+  events                     CodexPetEvent[]
+
+  @@unique([projectId, idempotencyKey])
+  @@index([projectId, createdAt])
+  @@index([userId, updatedAt])
+  @@index([status, updatedAt])
+  @@index([billingChargeStatus, billingChargeNextRetryAt])
+  @@index([billingRefundStatus, billingRefundNextRetryAt])
+}
+
+model CodexPetJob {
+  id                String             @id @default(cuid())
+  projectId         String
+  runId             String
+  userId            String
+  key               String
+  kind              String
+  status            String             @default("queued")
+  dependencyKeys    String[]           @default([])
+  attempt           Int                @default(0)
+  maxAttempts       Int                @default(3)
+  input             Json               @default("{}")
+  output            Json?
+  providerMetadata  Json?
+  inputArtifactIds  String[]           @default([])
+  outputArtifactIds String[]           @default([])
+  error             String?
+  workerId          String?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  project           CodexPetProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run               CodexPetRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artifacts         CodexPetArtifact[]
+
+  @@unique([runId, key])
+  @@index([projectId, createdAt])
+  @@index([userId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model CodexPetArtifact {
+  id        String          @id @default(cuid())
+  projectId String
+  runId     String
+  userId    String
+  jobId     String?
+  kind      String
+  name      String          @default("")
+  status    String          @default("ready")
+  objectKey String          @unique
+  mime      String
+  sizeBytes Int
+  width     Int?
+  height    Int?
+  checksum  String?
+  metadata  Json            @default("{}")
+  expiresAt DateTime?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  project   CodexPetProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run       CodexPetRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job       CodexPetJob?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([projectId, createdAt])
+  @@index([runId, kind, createdAt])
+  @@index([userId, createdAt])
+  @@index([jobId])
+  @@index([expiresAt])
+}
+
+model CodexPetEvent {
+  id        String          @id @default(cuid())
+  projectId String
+  runId     String
+  userId    String
+  sequence  Int
+  type      String
+  stage     String
+  jobKey    String?
+  message   String?
+  progress  Int             @default(0)
+  payload   Json            @default("{}")
+  createdAt DateTime        @default(now())
+  project   CodexPetProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run       CodexPetRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, sequence])
+  @@index([projectId, createdAt])
+  @@index([runId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Chunk {

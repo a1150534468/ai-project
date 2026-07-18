@@ -26,6 +26,8 @@ import { membershipUserRoutes } from "./membership/routes.js";
 import { agentRoutes } from "./agents/routes.js";
 import { agentTeamRoutes } from "./agent-teams/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image-routes.js";
+import { codexPetRoutes } from "./workflow/codex-pet-routes.js";
+import { enqueueCodexPetProjectCleanup } from "./workflow/codex-pet-cleanup.js";
 import { videoWorkflowRoutes } from "./workflow/video-routes.js";
 import { dubRoutes } from "./workflow/dub-routes.js";
 import { adminDubRoutes } from "./admin/dub-routes.js";
@@ -70,6 +72,7 @@ import { runScheduledTask } from "./scheduled/executor.js";
 import { createRunAgent } from "./scheduled/agent-run.js";
 import { createEmailSender, type SmtpEnv } from "./scheduled/email/sender.js";
 import { createAiDraft } from "./scheduled/ai-draft-glue.js";
+import { apiDocsEnabled, registerOpenApi, registerOpenApiUi } from "./docs/openapi.js";
 
 function readCookieValue(header: string | undefined, name: string): string | null {
   if (!header) return null;
@@ -95,6 +98,10 @@ export async function buildServer() {
     logger: true,
     bodyLimit: Number(process.env.API_BODY_LIMIT_BYTES) || 30 * 1024 * 1024,
   });
+
+  const docsEnabled = apiDocsEnabled();
+  // Swagger 必须先于业务路由注册，才能完整收集 Fastify 路由。
+  if (docsEnabled) await registerOpenApi(app);
 
   // CORS：生产用 CORS_ORIGIN（逗号分隔白名单）；未设置时 dev 放开
   const corsOrigin = process.env.CORS_ORIGIN
@@ -130,6 +137,7 @@ export async function buildServer() {
   await app.register(agentRoutes, { redis: getRedis() });
   await app.register(agentTeamRoutes);
   await app.register(imageWorkflowRoutes);
+  await app.register((instance) => codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }));
   await app.register(videoWorkflowRoutes);
   await app.register(dubRoutes);
   await app.register(ecomWorkflowRoutes);
@@ -195,6 +203,8 @@ export async function buildServer() {
   await app.register(scheduledRoutes, {
     aiDraft: createAiDraft({ redis: getRedis(), billing: schedBilling, client: schedLlm }),
   });
+
+  if (docsEnabled) await registerOpenApiUi(app);
 
   // 飞天数字人任务 reaper：仅在配置了 SKYHUMAN_API_TOKEN 时启动（未配置则该功能整体不可用，不拖垮服务）
   if (process.env.SKYHUMAN_API_TOKEN) {

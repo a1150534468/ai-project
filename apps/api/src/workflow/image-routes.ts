@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -12,10 +13,11 @@ import { imageGenerationResourceKey, imageResolutionFromSize, normalizeImageSize
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,
-  GPT_IMAGE_MODEL,
   IMAGE_GENERATION_MODELS,
   IMAGE_MAX_REFERENCE_COUNT,
   IMAGE_REFERENCE_MAX_BYTES,
+  IMAGE_REFERENCE_MIME_TYPES,
+  isRetryableImageGenerationError,
   loadImageGenerationConfig,
   loadImageGenerationConfigForModel,
   QWEN_IMAGE_MODEL,
@@ -31,6 +33,7 @@ const IMAGE_KEEP_LIMIT = 50;
 const IMAGE_TASK_KEEP_LIMIT = 12;
 const IMAGE_MAX_COUNT = 8;
 const DEFAULT_RETRY_DELAY_MS = 3000;
+const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const DEFAULT_STALE_TASK_MS = DEFAULT_ATTEMPT_TIMEOUT_MS + DEFAULT_RETRY_DELAY_MS + 30_000;
 const IMAGE_BLOB_URL_TTL_MS = 15 * 60_000;
@@ -41,7 +44,6 @@ const IMAGE_TASK_STATUS = {
   failed: "failed",
   cancelled: "cancelled",
 } as const;
-
 const imageRequestSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
   model: z.enum(IMAGE_GENERATION_MODELS).default(QWEN_IMAGE_MODEL),
@@ -135,6 +137,7 @@ interface RetryOptions {
   readonly retryDelayMs: number;
   readonly maxAttempts?: number;
   readonly onRetry?: (error: unknown, attempt: number) => Promise<void>;
+  readonly shouldStop?: (error: unknown) => boolean;
 }
 
 class ImageTaskStoppedError extends Error {
@@ -165,6 +168,11 @@ function loadStaleTaskMs(env: NodeJS.ProcessEnv = process.env): number {
 export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_ATTEMPT_TIMEOUT_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_ATTEMPT_TIMEOUT_MS;
+}
+
+export function loadImageMaxAttempts(env: NodeJS.ProcessEnv = process.env): number {
+  const value = Number(env.IMAGE_MAX_ATTEMPTS);
+  return Number.isInteger(value) && value > 0 ? Math.min(10, value) : DEFAULT_MAX_ATTEMPTS;
 }
 
 async function fetchWithTimeout(
@@ -205,6 +213,7 @@ async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryOptions)
       return await fn();
     } catch (error) {
       if (error instanceof ImageTaskStoppedError) throw error;
+      if (options.shouldStop?.(error)) throw error;
       if (options.maxAttempts && attempts >= options.maxAttempts) throw error;
       await options.onRetry?.(error, attempts);
       await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs));
@@ -499,6 +508,7 @@ async function runImageGenerationTask(args: {
       }, {
         retryDelayMs: args.retryDelayMs,
         maxAttempts: args.maxAttempts,
+        shouldStop: (error) => !isRetryableImageGenerationError(error),
         onRetry: async (error, attempt) => {
           await assertImageTaskRunning(prisma, task.id);
           args.onAttemptFailure?.(error, attempt);
@@ -643,6 +653,10 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     void work().catch((error) => app.log.error(error));
   });
   const retryDelayMs = deps.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS;
+  // Keep ordinary image jobs bounded as well. A missing dependency injection
+  // value must not turn a persistent 429/timeout into an infinite background
+  // task; callers can still choose a different bounded value explicitly.
+  const maxAttempts = deps.maxAttempts ?? loadImageMaxAttempts();
   const staleTaskMs = deps.staleTaskMs ?? loadStaleTaskMs();
 
   async function resumeTasksIfNeeded(tasks: readonly ImageGenerationTaskRow[]): Promise<number> {
@@ -653,7 +667,7 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
       tasks,
       scheduleTask,
       retryDelayMs,
-      maxAttempts: deps.maxAttempts,
+      maxAttempts,
       staleTaskMs,
       onResume: (task) => {
         app.log.warn({ requestId: task.requestId }, "resuming stale image generation task");
@@ -706,7 +720,16 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     if (bytes.byteLength === 0 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) {
       return reply.code(400).send({ error: "参考图大小需在 10MB 以内" });
     }
-    const mime = parsed.data.image.mime?.startsWith("image/") ? parsed.data.image.mime : "image/png";
+    const mime = (parsed.data.image.mime?.split(";", 1)[0]?.trim().toLowerCase() || "image/png");
+    if (!IMAGE_REFERENCE_MIME_TYPES.has(mime)) {
+      return reply.code(400).send({ error: "参考图仅支持 JPG、PNG、WEBP、BMP、TIFF 或 GIF" });
+    }
+    try {
+      const metadata = await sharp(bytes, { limitInputPixels: 40_000_000, animated: false }).metadata();
+      if (!metadata.width || !metadata.height) throw new Error("missing dimensions");
+    } catch {
+      return reply.code(400).send({ error: "参考图不是可读取的图片，或像素尺寸过大" });
+    }
     const requestId = `ecom-reference:${randomUUID()}`;
     try {
       const stored = await storeWorkflowImageService({
@@ -890,9 +913,6 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
       return reply.code(400).send({ error: "Qwen Image 2.0 Pro 最高支持 2K 输出" });
     }
     const request = { ...parsed.data, size: normalizedSize, resolution };
-    if (requestedModel === GPT_IMAGE_MODEL && request.referenceAssetIds.length > 0) {
-      return reply.code(400).send({ error: "gpt-image-2 当前只接入了图片生成接口；参考图请切换到 Qwen Image" });
-    }
     if (request.referenceAssetIds.length > 0) {
       const referenceAssets = await prisma.imageAsset.findMany({
         where: { userId, id: { in: [...request.referenceAssetIds] } },
@@ -974,7 +994,7 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
         cfg,
         task,
         retryDelayMs,
-        maxAttempts: deps.maxAttempts,
+        maxAttempts,
         signal,
         onAttemptFailure: (error, attempt) => {
           app.log.warn({

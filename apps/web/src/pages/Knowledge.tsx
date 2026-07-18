@@ -13,11 +13,19 @@ import {
   getKbQuota,
 } from "../api";
 import { RippleButton, Stagger, StaggerItem, useToast } from "../motion";
+import {
+  createCodexPetInstallLink,
+  downloadCodexPetPackage,
+  getCodexPetProject,
+  type CodexPetProjectDetail,
+} from "../codexPetApi";
 
 
 interface KnowledgePageProps {
   token: string;
   onViewChange: (view: string) => void;
+  initialDocumentId?: string | null;
+  onOpenCodexPetProject?: (projectId: string) => void;
 }
 
 const artifactModuleLabels: Record<string, string> = {
@@ -31,9 +39,10 @@ const artifactModuleLabels: Record<string, string> = {
   dub: "AI 口播",
   agent_workflow: "智能体任务",
   scheduled_report: "定时任务报告",
+  codex_pet: "Codex 桌宠",
 };
 
-export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
+export default function Knowledge({ token, onViewChange, initialDocumentId, onOpenCodexPetProject }: KnowledgePageProps) {
   const toast = useToast();
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
   const [selectedKbId, setSelectedKbId] = useState<string | undefined>();
@@ -43,12 +52,16 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
   const [kbQuota, setKbQuota] = useState<KbQuotaData | undefined>();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
+  const openedDocumentIdRef = useRef<string | null>(null);
+  const scrolledDocumentIdRef = useRef<string | null>(null);
+  const requestedCodexPetProjectIdsRef = useRef(new Set<string>());
   const [kbUploadFiles, setKbUploadFiles] = useState<readonly File[]>([]);
   const [kbUploadProgress, setKbUploadProgress] = useState(0);
   const [kbUploadFailures, setKbUploadFailures] = useState<readonly string[]>([]);
   const [uploadingKbFiles, setUploadingKbFiles] = useState(false);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [codexPetDetails, setCodexPetDetails] = useState<Record<string, CodexPetProjectDetail>>({});
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return "0 B";
@@ -237,9 +250,79 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
     }
   };
 
+  const handleInstallCodexPet = async (projectId: string, runId: string) => {
+    try {
+      const result = await createCodexPetInstallLink(token, projectId, runId);
+      const anchor = document.createElement("a");
+      anchor.href = result.installUrl;
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (err) {
+      toast.show("err", `安装失败: ${err instanceof Error ? err.message : "未知错误"}`);
+    }
+  };
+
+  const handleDownloadCodexPet = async (projectId: string, runId: string) => {
+    try {
+      const result = await downloadCodexPetPackage(token, projectId, runId);
+      const url = URL.createObjectURL(result.blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = result.filename;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      toast.show("err", `下载失败: ${err instanceof Error ? err.message : "未知错误"}`);
+    }
+  };
+
   useEffect(() => {
     handleLoadKbs();
   }, []);
+
+  useEffect(() => {
+    if (!initialDocumentId) {
+      openedDocumentIdRef.current = null;
+      scrolledDocumentIdRef.current = null;
+      return;
+    }
+    if (kbList.length === 0 || openedDocumentIdRef.current === initialDocumentId) return;
+    const artifactsKb = kbList.find((kb) => kb.systemKey === "AI_ARTIFACTS");
+    if (!artifactsKb) return;
+    openedDocumentIdRef.current = initialDocumentId;
+    scrolledDocumentIdRef.current = null;
+    void handleSelectKb(artifactsKb);
+  }, [initialDocumentId, kbList]);
+
+  useEffect(() => {
+    if (!initialDocumentId
+      || scrolledDocumentIdRef.current === initialDocumentId
+      || !kbDocuments.some((doc) => doc.id === initialDocumentId)) return;
+    scrolledDocumentIdRef.current = initialDocumentId;
+    window.requestAnimationFrame(() => document.getElementById(`kb-document-${initialDocumentId}`)?.scrollIntoView({ behavior: "smooth", block: "center" }));
+  }, [initialDocumentId, kbDocuments]);
+
+  useEffect(() => {
+    const projectIds = [...new Set(kbDocuments.flatMap((doc) => {
+      if (doc.sourceModule !== "codex_pet") return [];
+      const projectId = doc.metadata?.projectId;
+      return typeof projectId === "string" && projectId ? [projectId] : [];
+    }))].filter((projectId) => !codexPetDetails[projectId] && !requestedCodexPetProjectIdsRef.current.has(projectId));
+    if (projectIds.length === 0) return;
+    projectIds.forEach((projectId) => requestedCodexPetProjectIdsRef.current.add(projectId));
+    let disposed = false;
+    void Promise.all(projectIds.map(async (projectId) => {
+      try { return [projectId, await getCodexPetProject(token, projectId)] as const; } catch { return null; }
+    })).then((entries) => {
+      if (disposed) return;
+      setCodexPetDetails((current) => ({ ...current, ...Object.fromEntries(entries.filter((entry): entry is readonly [string, CodexPetProjectDetail] => Boolean(entry))) }));
+    });
+    return () => { disposed = true; };
+  }, [codexPetDetails, kbDocuments, token]);
 
   useEffect(() => {
     folderInputRef.current?.setAttribute("webkitdirectory", "");
@@ -548,7 +631,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                   <div className="rounded-lg border border-brand/10 bg-brand-soft p-4">
                     <p className="text-sm font-semibold text-brand-ink">自动归档已开启</p>
                     <p className="mt-1 text-sm leading-6 text-gray-600">
-                      生图、电商图、音视频、小说、文章、剧本、智能体任务和定时报告会自动保存；媒体复用原文件，不会重复占用空间。
+                      生图、电商图、音视频、小说、文章、剧本、Codex 桌宠、智能体任务和定时报告会自动保存；媒体复用原文件，不会重复占用空间。
                     </p>
                   </div>
                 )}
@@ -571,6 +654,12 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                     <Stagger className="space-y-3 max-h-96 overflow-y-auto">
                       {kbDocuments.map((doc) => {
                         const statusConfig = getStatusPill(doc.status);
+                        const projectId = typeof doc.metadata?.projectId === "string" ? doc.metadata.projectId : null;
+                        const runId = typeof doc.metadata?.runId === "string" ? doc.metadata.runId : null;
+                        const previewArtifactId = typeof doc.metadata?.previewArtifactId === "string" ? doc.metadata.previewArtifactId : null;
+                        const petDetail = projectId ? codexPetDetails[projectId] : undefined;
+                        const petPreview = previewArtifactId ? petDetail?.artifacts.find((artifact) => artifact.id === previewArtifactId) : undefined;
+                        const petPreviewUrl = petPreview?.previewUrl ?? petPreview?.url ?? petPreview?.thumbnailUrl ?? null;
                         return (
                           <StaggerItem
                             key={doc.id}
@@ -578,7 +667,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-semibold text-gray-900 truncate">{doc.name}</p>
+                                <p id={`kb-document-${doc.id}`} className="text-sm font-semibold text-gray-900 truncate">{doc.name}</p>
                                 {doc.sourceModule && (
                                   <p className="mt-1 text-xs text-gray-500">
                                     AI 自动归档 · {artifactModuleLabels[doc.sourceModule] ?? doc.sourceModule}
@@ -607,6 +696,23 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                                 删除
                               </button>
                             </div>
+
+                            {doc.sourceModule === "codex_pet" && projectId && runId && (
+                              <div className="rounded-lg border border-brand/10 bg-white p-3">
+                                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                  {petPreviewUrl ? (
+                                    <img src={petPreviewUrl} alt={`${doc.name} 桌宠预览`} className="h-24 w-24 rounded-lg border border-gray-100 bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:16px_16px] object-contain [image-rendering:auto]" />
+                                  ) : (
+                                    <div className="grid h-24 w-24 place-items-center rounded-lg bg-gray-50 text-3xl text-gray-300"><Icon icon="mdi:egg-easter" aria-hidden /></div>
+                                  )}
+                                  <div className="flex flex-1 flex-wrap gap-2">
+                                    <button onClick={() => onOpenCodexPetProject?.(projectId)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">打开桌宠项目</button>
+                                    <button onClick={() => void handleInstallCodexPet(projectId, runId)} className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover">安装到 Codex</button>
+                                    <button onClick={() => void handleDownloadCodexPet(projectId, runId)} className="rounded-lg border border-brand/20 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-brand-soft">下载兼容包</button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
 
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-600">
                               <span className="flex items-center gap-1">

@@ -83,14 +83,22 @@ describe("ImageWorkflowStudio reference upload", () => {
     expect(onReferenceUpload).toHaveBeenCalledWith(file);
   });
 
-  it("disables reference uploads for GPT Image 2", () => {
+  it("keeps reference uploads available for GPT Image 2 edits", () => {
+    const onReferenceUpload = vi.fn();
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-    act(() => root?.render(<ImageWorkflowStudio {...props({ model: "gpt-image-2" })} />));
+    act(() => root?.render(<ImageWorkflowStudio {...props({ model: "gpt-image-2", onReferenceUpload })} />));
 
-    const uploadButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("当前模型不支持参考图"));
-    expect(uploadButton?.disabled).toBe(true);
-    expect(container.textContent).toContain("参考图编辑请使用 Qwen Image 2.0 Pro");
+    const uploadButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("上传参考图"));
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(uploadButton?.disabled).toBe(false);
+    expect(input?.disabled).toBe(false);
+
+    if (!input) throw new Error("reference upload input missing");
+    const file = new File(["png"], "gpt-reference.png", { type: "image/png" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    act(() => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(onReferenceUpload).toHaveBeenCalledWith(file);
   });
 });

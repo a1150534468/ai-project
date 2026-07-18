@@ -11,6 +11,8 @@ out
 /services/billing/billing
 infra/k8s/secrets.env
 docs/*
+!docs/api-reference.md
+!docs/codex-pet-workflow.md
 !docs/development/
 docs/development/*
 !docs/development/novel-workflow-e2e-audit-2026-07-15.md

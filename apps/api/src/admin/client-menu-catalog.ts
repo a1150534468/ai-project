@@ -25,6 +25,7 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
   { key: "workflow.image", label: "生图模块", group: "workflow", defaultVisible: true },
   { key: "workflow.novel", label: "小说模块", group: "workflow", defaultVisible: true },
   { key: "workflow.commerce-long-image", label: "AI 电商图", group: "workflow", defaultVisible: true },
+  { key: "workflow.codex-pet", label: "Codex 桌宠工坊", group: "workflow", defaultVisible: false },
   { key: "workflow.report", label: "AI 智能报告", group: "workflow", defaultVisible: false },
   { key: "workflow.fanout", label: "文案裂变", group: "workflow", defaultVisible: false },
   { key: "workflow.article-workflow", label: "公众号图文工作流", group: "workflow", defaultVisible: false },

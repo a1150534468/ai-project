@@ -6,6 +6,7 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "8090"
+  API_DOCS_ENABLED: "true"
   LLM_PROVIDER: "bailian"
   BAILIAN_REGION: "cn-beijing"
   LLM_DEFAULT_MODEL: "qwen3.7-plus"

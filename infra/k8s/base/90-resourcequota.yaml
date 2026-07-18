@@ -5,12 +5,13 @@ metadata:
   namespace: ai-assistant
 spec:
   hard:
-    # API HPA 满副本 + 两个小说 Worker + Worker/API 滚动发布需要并存空间。
-    requests.cpu: "6"
-    requests.memory: 8Gi
-    # limits 留 headroom：API HPA 与小说 Worker 同时 surge 时仍可完成滚动发布。
-    limits.cpu: "20"
-    limits.memory: 18Gi
+    # API HPA 满副本、两个小说 Worker、Codex 桌宠 Worker 与迁移 Job
+    # 的稳态 requests 已超过 8Gi。这里同时为各 Deployment 的滚动
+    # surge 留空间，避免新增桌宠 Worker 后发版卡在 ResourceQuota。
+    requests.cpu: "10"
+    requests.memory: 14Gi
+    limits.cpu: "24"
+    limits.memory: 28Gi
     pods: "30"
 ---
 apiVersion: v1

@@ -283,9 +283,6 @@ export function ImageWorkflowStudio({
               event.currentTarget.value = "";
             }}
           />
-          {!supportsReferenceImages && (
-            <p className="text-xs leading-5 text-[#8a8a8f]">GPT Image 2 当前仅配置了文生图接口；参考图编辑请使用 Qwen Image 2.0 Pro。</p>
-          )}
           {referenceImages.length > 0 && (
             <div className="flex flex-wrap gap-2" aria-label="已上传参考图">
               {referenceImages.map((image, index) => (

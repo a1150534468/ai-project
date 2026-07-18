@@ -34,6 +34,11 @@ export BILLING_PORT="${BILLING_PORT:-8093}"
 export BILLING_BASE_URL="${BILLING_BASE_URL:-http://localhost:${BILLING_PORT}}"
 export API_PROXY_TARGET="${API_PROXY_TARGET:-http://localhost:${PORT}}"
 export NOVEL_WORKER_HEALTH_PORT="${NOVEL_WORKER_HEALTH_PORT:-8091}"
+export CODEX_PET_WORKER_HEALTH_PORT="${CODEX_PET_WORKER_HEALTH_PORT:-8092}"
+# Local development may use HTTP so the signed-artifact route can be exercised
+# without a TLS proxy. Production validation in codex-pet-routes still requires
+# an explicit HTTPS CODEX_PET_PUBLIC_BASE_URL.
+export CODEX_PET_PUBLIC_BASE_URL="${CODEX_PET_PUBLIC_BASE_URL:-http://localhost:${PORT}}"
 
 echo "[1/4] 启动 Docker 数据层（不重建已有容器和数据卷）..."
 docker compose -f docker-compose.dev.yml up -d --no-recreate postgres redis billing-postgres minio
@@ -84,6 +89,7 @@ echo "[3/4] 启动本机服务..."
 run_background bash -lc 'cd "$1/services/billing" && exec go run .' _ "$ROOT_DIR"
 run_background pnpm --filter @ai-assistant/api dev
 run_background pnpm --filter @ai-assistant/api worker:novel:dev
+run_background pnpm --filter @ai-assistant/api worker:codex-pet:dev
 run_background env PORT=5174 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/web dev
 run_background env PORT=5175 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/admin dev
 
@@ -93,6 +99,7 @@ echo "  Admin:   http://localhost:5175"
 echo "  API:     http://localhost:${PORT}"
 echo "  Billing: http://localhost:${BILLING_PORT}"
 echo "  Novel Worker health: http://localhost:${NOVEL_WORKER_HEALTH_PORT}"
+echo "  Codex Pet Worker health: http://localhost:${CODEX_PET_WORKER_HEALTH_PORT}"
 echo "按 Ctrl+C 停止本机服务；Docker 数据层会继续运行。"
 
 while true; do

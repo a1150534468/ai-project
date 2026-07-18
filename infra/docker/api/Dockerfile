@@ -19,6 +19,7 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/article-workflow/package.json packages/article-workflow/package.json
 COPY packages/billing/package.json packages/billing/package.json
+COPY packages/codex-pet-pipeline/package.json packages/codex-pet-pipeline/package.json
 COPY packages/connector-protocol/package.json packages/connector-protocol/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/llm/package.json packages/llm/package.json

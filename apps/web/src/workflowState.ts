@@ -2,6 +2,7 @@ export type WorkflowModuleId =
   | "image"
   | "novel"
   | "commerce-long-image"
+  | "codex-pet"
   | "local-business-promo"
   | "fanout"
   | "article-workflow"
@@ -100,7 +101,7 @@ export const IMAGE_RESOLUTION_OPTIONS: readonly ImageResolutionOption[] = [
 
 export const IMAGE_MODEL_OPTIONS: readonly ImageModelOption[] = [
   { value: "qwen-image-2.0-pro-2026-04-22", label: "Qwen Image 2.0 Pro", supportsReferenceImages: true },
-  { value: "gpt-image-2", label: "GPT Image 2", supportsReferenceImages: false },
+  { value: "gpt-image-2", label: "GPT Image 2", supportsReferenceImages: true },
 ] as const;
 
 const IMAGE_SIZE_BY_RATIO_AND_RESOLUTION = {
@@ -160,6 +161,13 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
     title: "AI 电商图",
     description: "电商主图 + 详情长图，一次出图",
     icon: "mdi:view-agenda-outline",
+    status: "available",
+  },
+  {
+    id: "codex-pet",
+    title: "Codex 桌宠工坊",
+    description: "参考图或文字生成，可直接安装到 Codex",
+    icon: "mdi:egg-easter",
     status: "available",
   },
   {

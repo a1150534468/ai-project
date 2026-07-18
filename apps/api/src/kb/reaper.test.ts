@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { getPrisma } from '@ai-assistant/db';
 import type { User, KnowledgeBase } from '@prisma/client';
+import { indexOnce, EmptyTextError, type IndexDeps } from './indexer.js';
 import { reapOnce, startKbReaper } from './reaper.js';
 
 const prisma = getPrisma();
@@ -312,6 +313,125 @@ describe('reapOnce', () => {
     }
     expect(ourKbCount).toBeGreaterThanOrEqual(0);
     expect(ourKbCount).toBeLessThanOrEqual(2);
+  });
+
+  it('自动重试 indexer 留下的瞬时失败，并沿用 operationId 只结算一次', async () => {
+    const isolatedKb = await prisma.knowledgeBase.create({
+      data: {
+        ownerType: 'USER',
+        userId: testUser.id,
+        name: `Transient retry KB ${Date.now()}`,
+      },
+    });
+    createdKbIds.push(isolatedKb.id);
+    const doc = await prisma.document.create({
+      data: {
+        kbId: isolatedKb.id,
+        name: 'reaper-transient.txt',
+        sourceType: 'TEXT',
+        sourceUri: 'memory://reaper-transient',
+        status: 'pending',
+        opId: `op-reaper-transient-${Date.now()}`,
+      },
+    });
+    createdDocIds.push(doc.id);
+
+    const text = 'reaper 应该恢复这次瞬时失败';
+    let embedAttempts = 0;
+    const billing = { settle: vi.fn().mockResolvedValue({}) };
+    const deps: IndexDeps = {
+      prisma,
+      loadObject: vi.fn().mockResolvedValue({
+        buf: Buffer.from(text),
+        mime: 'text/plain',
+        filename: doc.name,
+      }),
+      parse: vi.fn().mockResolvedValue(text),
+      chunk: vi.fn().mockReturnValue([text]),
+      embed: vi.fn(async () => {
+        embedAttempts++;
+        if (embedAttempts === 1) throw new Error('temporary embedding outage');
+        return { vector: new Array(1024).fill(0.5), tokens: 9 };
+      }),
+      billing,
+      embeddingModel: 'embedding-v1',
+      workerId: 'worker-reaper-transient',
+    };
+
+    await indexOnce(deps, doc.id, { maxAttempts: 3 });
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
+      .toMatchObject({ status: 'pending', attempts: 1 });
+    expect(billing.settle).not.toHaveBeenCalled();
+
+    await reapOnce(prisma, {
+      leaseMs: 300000,
+      maxAttempts: 3,
+      batchSize: 1000,
+      runIndex: async (candidateId) => {
+        if (candidateId === doc.id) {
+          await indexOnce(deps, candidateId, { maxAttempts: 3 });
+        }
+      },
+    });
+
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
+      .toMatchObject({ status: 'indexed', attempts: 2, chunkCount: 1, error: null });
+    expect(billing.settle).toHaveBeenCalledTimes(1);
+    expect(billing.settle).toHaveBeenCalledWith(expect.objectContaining({ operationId: doc.opId }));
+  });
+
+  it('永久失败不会被 reaper 再次执行', async () => {
+    const isolatedKb = await prisma.knowledgeBase.create({
+      data: {
+        ownerType: 'USER',
+        userId: testUser.id,
+        name: `Permanent failure KB ${Date.now()}`,
+      },
+    });
+    createdKbIds.push(isolatedKb.id);
+    const doc = await prisma.document.create({
+      data: {
+        kbId: isolatedKb.id,
+        name: 'empty.txt',
+        sourceType: 'TEXT',
+        sourceUri: 'memory://empty-permanent',
+        status: 'pending',
+        opId: `op-reaper-permanent-${Date.now()}`,
+      },
+    });
+    createdDocIds.push(doc.id);
+
+    const billing = { settle: vi.fn().mockResolvedValue({}) };
+    const deps: IndexDeps = {
+      prisma,
+      loadObject: vi.fn().mockResolvedValue({
+        buf: Buffer.alloc(0),
+        mime: 'text/plain',
+        filename: doc.name,
+      }),
+      parse: vi.fn().mockRejectedValue(new EmptyTextError('文本为空')),
+      chunk: vi.fn(),
+      embed: vi.fn(),
+      billing,
+      embeddingModel: 'embedding-v1',
+      workerId: 'worker-reaper-permanent',
+    };
+
+    await indexOnce(deps, doc.id, { maxAttempts: 3 });
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
+      .toMatchObject({ status: 'failed', attempts: 1, error: '文本为空' });
+    expect(billing.settle).toHaveBeenCalledTimes(1);
+
+    const runIndex = vi.fn(async (_candidateId: string) => undefined);
+    await reapOnce(prisma, {
+      leaseMs: 300000,
+      maxAttempts: 3,
+      batchSize: 1000,
+      runIndex,
+    });
+
+    expect(runIndex.mock.calls.map(([candidateId]) => candidateId)).not.toContain(doc.id);
+    expect(billing.settle).toHaveBeenCalledTimes(1);
   });
 });
 

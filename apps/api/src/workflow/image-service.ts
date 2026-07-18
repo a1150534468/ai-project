@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
+import sharp from "sharp";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js";
 
@@ -9,6 +10,14 @@ export const IMAGE_GENERATION_MODELS = [QWEN_IMAGE_MODEL, GPT_IMAGE_MODEL] as co
 /** Qwen Image 编辑接口与现有生图工作台共同遵守的参考图上限。 */
 export const IMAGE_MAX_REFERENCE_COUNT = 3;
 export const IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
+export const IMAGE_REFERENCE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/bmp",
+  "image/tiff",
+  "image/gif",
+]);
 const DEFAULT_IMAGE_MODEL = QWEN_IMAGE_MODEL;
 const DEFAULT_GPT_IMAGE_GENERATION_ENDPOINT = "https://api.ai-pixel.online/v1/images/generations";
 const DEFAULT_BAILIAN_REGION = "cn-beijing";
@@ -35,6 +44,87 @@ export type ImageGenerationModel = typeof IMAGE_GENERATION_MODELS[number];
 
 export type GeneratedImage = { readonly kind: "url"; readonly url: string } | { readonly kind: "b64"; readonly b64: string; readonly mime: string };
 
+export interface ImageGenerationUsage {
+  readonly inputTokens: number;
+  readonly imageInputTokens: number;
+  readonly textInputTokens: number;
+  readonly outputTokens: number;
+  readonly imageOutputTokens: number;
+  readonly totalTokens: number;
+}
+
+export interface ImageGenerationResult {
+  readonly image: GeneratedImage;
+  /** Safe, bounded correlation ID from an allowlisted upstream response header. */
+  readonly upstreamRequestId: string | null;
+  readonly requestedModel: string;
+  readonly actualModel: string;
+  readonly requestedSize: string;
+  readonly actualSize: string;
+  readonly requestedQuality: string;
+  readonly actualQuality: string;
+  readonly usage: ImageGenerationUsage | null;
+}
+
+export type ImageGenerationErrorCategory =
+  | "rate_limit"
+  | "timeout"
+  | "upstream"
+  | "moderation"
+  | "invalid_request"
+  | "authentication"
+  | "cancelled"
+  | "network"
+  | "unknown";
+
+export interface ImageGenerationErrorClassification {
+  readonly category: ImageGenerationErrorCategory;
+  readonly retryable: boolean;
+  readonly status: number | null;
+  readonly code: string | null;
+  readonly type: string | null;
+  readonly upstreamRequestId: string | null;
+}
+
+export class ImageGenerationUpstreamError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+  readonly type: string | null;
+  readonly category: ImageGenerationErrorCategory;
+  readonly retryable: boolean;
+  readonly upstreamRequestId: string | null;
+
+  constructor(
+    status: number,
+    message: string,
+    code: string | null = null,
+    type: string | null = null,
+    upstreamRequestId: string | null = null,
+  ) {
+    super(message);
+    this.name = "ImageGenerationUpstreamError";
+    this.status = status;
+    this.code = code;
+    this.type = type;
+    this.upstreamRequestId = sanitizeImageUpstreamRequestId(upstreamRequestId);
+    const classification = classifyUpstreamFailure(status, code, type, message);
+    this.category = classification.category;
+    this.retryable = classification.retryable;
+  }
+}
+
+export class ImageGenerationTimeoutError extends Error {
+  readonly timeoutMs: number;
+  readonly category = "timeout" as const;
+  readonly retryable = true;
+
+  constructor(timeoutMs: number) {
+    super(`image request timed out after ${timeoutMs}ms`);
+    this.name = "ImageGenerationTimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
 export interface StoredImage { readonly originalUrl: string; readonly thumbnailUrl: string; readonly mime: string; readonly objectKey: string | null; }
 
 export interface RetryOptions {
@@ -44,22 +134,24 @@ export interface RetryOptions {
   readonly shouldStop?: (error: unknown) => boolean;
 }
 
-interface ImageBinaryInput {
+export interface ImageBinaryInput {
   readonly b64: string;
   readonly mime?: string;
   readonly filename?: string;
 }
 
-interface CallImageGenerationArgs {
+export interface CallImageGenerationArgs {
   readonly config: ImageGenerationConfig;
   readonly prompt: string;
   readonly size: string;
   readonly fetchFn: FetchLike;
   readonly signal?: AbortSignal;
   readonly env?: NodeJS.ProcessEnv;
+  readonly quality?: "low" | "medium" | "high" | "auto";
+  readonly outputFormat?: "png" | "jpeg" | "webp";
 }
 
-interface CallImageEditArgs {
+export interface CallImageEditArgs {
   readonly config: ImageGenerationConfig;
   readonly prompt: string;
   readonly referenceImages: readonly ImageBinaryInput[];
@@ -69,9 +161,11 @@ interface CallImageEditArgs {
   readonly signal?: AbortSignal;
   readonly env?: NodeJS.ProcessEnv;
   readonly endpoint?: string;
+  readonly quality?: "low" | "medium" | "high" | "auto";
+  readonly outputFormat?: "png" | "jpeg" | "webp";
 }
 
-interface StoreWorkflowImageArgs {
+export interface StoreWorkflowImageArgs {
   readonly image: GeneratedImage;
   readonly userId: string;
   readonly requestId: string;
@@ -79,6 +173,30 @@ interface StoreWorkflowImageArgs {
   readonly fetchFn: FetchLike;
   readonly signal?: AbortSignal;
   readonly env?: NodeJS.ProcessEnv;
+  readonly namespace?: string;
+  readonly acl?: "public-read" | "private";
+}
+
+/** Validate a persisted workflow-image key before a worker or route reads S3. */
+export function isVerifiedWorkflowImageObjectKey(value: string): boolean {
+  const key = value.trim();
+  if (key !== value || !key.startsWith("workflow/") || key.includes("\\")) return false;
+  if ([...key].some((character) => {
+    const code = character.charCodeAt(0);
+    return code < 0x20 || code === 0x7f;
+  })) return false;
+  const segments = key.split("/");
+  return segments.length >= 4
+    && !key.endsWith("/")
+    && !segments.some((segment) => !segment || segment === "." || segment === "..");
+}
+
+export function isVerifiedWorkflowImageObjectKeyForUser(value: string, userId: string): boolean {
+  if (!isVerifiedWorkflowImageObjectKey(value) || !userId.trim()) return false;
+  const segments = value.split("/");
+  return segments[0] === "workflow"
+    && (segments[1] === "images" || segments[1] === "codex-pets")
+    && segments[2] === userId;
 }
 
 function trimTrailingSlash(value: string): string {
@@ -117,6 +235,180 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function stringField(record: Record<string, unknown>, key: string): string {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
+}
+
+function numberField(record: Record<string, unknown>, key: string): number {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+const IMAGE_UPSTREAM_REQUEST_ID_HEADERS = [
+  "x-request-id",
+  "x-openai-request-id",
+  "x-dashscope-request-id",
+  "request-id",
+  "x-amzn-requestid",
+  "x-amz-request-id",
+  "x-goog-request-id",
+  "cf-ray",
+  "traceparent",
+] as const;
+
+/**
+ * Request IDs are safe observability metadata, not arbitrary response text.
+ * Reject whitespace, control characters and unbounded values so an upstream
+ * cannot turn a correlation header into a log-injection or secret channel.
+ */
+export function sanitizeImageUpstreamRequestId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if (/^(?:sk-|bearer(?:[._:/+=-]|$)|api[_-]?key)/i.test(normalized)) return null;
+  return normalized.length >= 1
+    && normalized.length <= 200
+    && /^[A-Za-z0-9][A-Za-z0-9._:/+=-]*$/.test(normalized)
+    ? normalized
+    : null;
+}
+
+export function imageUpstreamRequestIdFromHeaders(headers: Headers): string | null {
+  for (const header of IMAGE_UPSTREAM_REQUEST_ID_HEADERS) {
+    const requestId = sanitizeImageUpstreamRequestId(headers.get(header));
+    if (requestId) return requestId;
+  }
+  return null;
+}
+
+function classifyUpstreamFailure(
+  status: number,
+  code: string | null,
+  type: string | null,
+  message: string,
+): Pick<ImageGenerationErrorClassification, "category" | "retryable"> {
+  const signal = `${code ?? ""} ${type ?? ""} ${message}`.toLowerCase();
+  if (
+    signal.includes("moderation")
+    || signal.includes("content_policy")
+    || signal.includes("safety")
+    || signal.includes("blocked_prompt")
+  ) {
+    return { category: "moderation", retryable: false };
+  }
+  if (status === 401 || status === 403) return { category: "authentication", retryable: false };
+  if (status === 408) return { category: "timeout", retryable: true };
+  if (status === 429) return { category: "rate_limit", retryable: true };
+  if (status >= 500) return { category: "upstream", retryable: true };
+  if (status >= 400) return { category: "invalid_request", retryable: false };
+  return { category: "unknown", retryable: false };
+}
+
+function errorName(error: unknown): string {
+  return isRecord(error) && typeof error.name === "string" ? error.name : "";
+}
+
+export function classifyImageGenerationError(error: unknown): ImageGenerationErrorClassification {
+  if (error instanceof ImageGenerationUpstreamError) {
+    return {
+      category: error.category,
+      retryable: error.retryable,
+      status: error.status,
+      code: error.code,
+      type: error.type,
+      upstreamRequestId: error.upstreamRequestId,
+    };
+  }
+  if (error instanceof ImageGenerationTimeoutError) {
+    return { category: "timeout", retryable: true, status: null, code: null, type: null, upstreamRequestId: null };
+  }
+  if (errorName(error) === "AbortError") {
+    return { category: "cancelled", retryable: false, status: null, code: null, type: null, upstreamRequestId: null };
+  }
+  if (error instanceof TypeError) {
+    return { category: "network", retryable: true, status: null, code: null, type: null, upstreamRequestId: null };
+  }
+  // Storage and malformed-success-response errors can be transient. Preserve the
+  // existing retry behavior unless the image client can classify the failure.
+  return { category: "unknown", retryable: true, status: null, code: null, type: null, upstreamRequestId: null };
+}
+
+export function isRetryableImageGenerationError(error: unknown): boolean {
+  return classifyImageGenerationError(error).retryable;
+}
+
+function usageFromPayload(payload: unknown): ImageGenerationUsage | null {
+  if (!isRecord(payload) || !isRecord(payload.usage)) return null;
+  const usage = payload.usage;
+  const inputDetails = isRecord(usage.input_tokens_details) ? usage.input_tokens_details : {};
+  const outputDetails = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : {};
+  return {
+    inputTokens: numberField(usage, "input_tokens"),
+    imageInputTokens: numberField(inputDetails, "image_tokens"),
+    textInputTokens: numberField(inputDetails, "text_tokens"),
+    outputTokens: numberField(usage, "output_tokens"),
+    imageOutputTokens: numberField(outputDetails, "image_tokens"),
+    totalTokens: numberField(usage, "total_tokens"),
+  };
+}
+
+async function decodedImageSize(image: GeneratedImage): Promise<string | null> {
+  if (image.kind !== "b64") return null;
+  try {
+    const metadata = await sharp(Buffer.from(image.b64, "base64"), { limitInputPixels: GPT_IMAGE_MAX_PIXELS }).metadata();
+    return metadata.width && metadata.height ? `${metadata.width}x${metadata.height}` : null;
+  } catch {
+    // Some compatible relays return a declared size alongside an opaque or
+    // temporarily malformed payload. The caller still gets that safe fallback.
+    return null;
+  }
+}
+
+async function detailedResult(
+  payload: unknown,
+  request: { readonly model: string; readonly size?: string; readonly quality?: string },
+  upstreamRequestId: string | null,
+): Promise<ImageGenerationResult> {
+  const record = isRecord(payload) ? payload : {};
+  const image = extractGeneratedImage(payload);
+  const decodedSize = await decodedImageSize(image);
+  return {
+    image,
+    upstreamRequestId,
+    requestedModel: request.model,
+    actualModel: stringField(record, "model") || request.model,
+    requestedSize: request.size || "auto",
+    actualSize: decodedSize || stringField(record, "size") || request.size || "auto",
+    requestedQuality: request.quality || "auto",
+    actualQuality: stringField(record, "quality") || request.quality || "auto",
+    usage: usageFromPayload(payload),
+  };
+}
+
+async function upstreamError(response: Response): Promise<ImageGenerationUpstreamError> {
+  const text = await response.text().catch(() => "");
+  let code: string | null = null;
+  let type: string | null = null;
+  let detail = text.slice(0, 300);
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (isRecord(parsed) && isRecord(parsed.error)) {
+      code = stringField(parsed.error, "code") || null;
+      type = stringField(parsed.error, "type") || null;
+      detail = stringField(parsed.error, "message").slice(0, 300) || detail;
+    }
+  } catch {
+    // Keep the safe truncated text response.
+  }
+  return new ImageGenerationUpstreamError(
+    response.status,
+    `image relay ${response.status}${detail ? ` ${detail}` : ""}`,
+    code,
+    type,
+    imageUpstreamRequestIdFromHeaders(response.headers),
+  );
+}
+
 async function fetchWithTimeout(
   fetchFn: FetchLike,
   url: string,
@@ -126,22 +418,72 @@ async function fetchWithTimeout(
 ): Promise<Response> {
   const controller = new AbortController();
   const abort = () => controller.abort();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener("abort", abort, { once: true });
   try {
     return await fetchFn(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (timedOut && !signal?.aborted) throw new ImageGenerationTimeoutError(timeoutMs);
+    throw error;
   } finally {
     signal?.removeEventListener("abort", abort);
     clearTimeout(timer);
   }
 }
 
-function dataUrlForImageInput(image: ImageBinaryInput): string {
+function validatedImageInput(image: ImageBinaryInput, label: string): { readonly bytes: Buffer; readonly mime: string } {
   const mime = image.mime?.trim().startsWith("image/") ? image.mime.trim() : "image/png";
   const bytes = Buffer.from(image.b64, "base64");
-  if (bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) throw new Error("Qwen image input must not exceed 10MB");
-  return `data:${mime};base64,${image.b64}`;
+  if (bytes.byteLength <= 0 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) {
+    throw new Error(`${label} must be between 1 byte and ${IMAGE_REFERENCE_MAX_BYTES} bytes`);
+  }
+  return { bytes, mime };
+}
+
+const OPENAI_EDIT_NATIVE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/jpg", "image/webp"]);
+
+async function openAiEditImagePart(
+  image: ImageBinaryInput,
+  label: string,
+  fallbackFilename: string,
+): Promise<{ readonly bytes: Buffer; readonly mime: string; readonly filename: string }> {
+  const validated = validatedImageInput(image, label);
+  const normalizedMime = validated.mime.toLowerCase().split(";", 1)[0]!;
+  if (OPENAI_EDIT_NATIVE_MIME_TYPES.has(normalizedMime)) {
+    return { bytes: validated.bytes, mime: normalizedMime === "image/jpg" ? "image/jpeg" : normalizedMime, filename: image.filename || fallbackFilename };
+  }
+  try {
+    // GPT Image edits accepts PNG/JPEG/WebP. Normalize legacy BMP/TIFF/GIF or
+    // other uploaded raster formats in the shared provider adapter so both the
+    // ordinary image studio and Codex-pet workflow behave identically. GIFs
+    // intentionally use their first frame as a stable visual reference.
+    const bytes = await sharp(validated.bytes, { limitInputPixels: 40_000_000, animated: false })
+      .rotate()
+      .resize({ width: 2_048, height: 2_048, fit: "inside", withoutEnlargement: true })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+    if (bytes.byteLength <= 0 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) {
+      throw new Error("normalized image exceeds the 10MB provider limit");
+    }
+    const base = (image.filename || fallbackFilename).replace(/\.[A-Za-z0-9]+$/, "");
+    return { bytes, mime: "image/png", filename: `${base || "reference"}.png` };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`${label} could not be normalized for GPT Image edits: ${detail}`);
+  }
+}
+
+function dataUrlForImageInput(image: ImageBinaryInput): string {
+  const { bytes, mime } = validatedImageInput(image, "Qwen image input");
+  // Re-encode decoded bytes so malformed or whitespace-heavy base64 never gets
+  // forwarded verbatim to the provider.
+  const b64 = bytes.toString("base64");
+  return `data:${mime};base64,${b64}`;
 }
 
 function qwenImageSize(size: string | undefined): string | undefined {
@@ -278,6 +620,30 @@ export function loadImageEditEndpoint(env: NodeJS.ProcessEnv = process.env): str
   return generationEndpointFromEnv(env);
 }
 
+export function loadGptImageEditEndpoint(
+  env: NodeJS.ProcessEnv = process.env,
+  generationEndpoint = env.GPT_IMAGE_GENERATION_ENDPOINT?.trim() || DEFAULT_GPT_IMAGE_GENERATION_ENDPOINT,
+): string {
+  const explicit = env.GPT_IMAGE_EDIT_ENDPOINT?.trim();
+  if (explicit) return explicit;
+  try {
+    const url = new URL(generationEndpoint);
+    const pathname = trimTrailingSlash(url.pathname);
+    if (pathname.endsWith("/generations")) {
+      url.pathname = `${pathname.slice(0, -"/generations".length)}/edits`;
+    } else if (!pathname.endsWith("/edits")) {
+      url.pathname = `${pathname}/edits`;
+    }
+    return url.toString();
+  } catch {
+    const endpoint = trimTrailingSlash(generationEndpoint);
+    if (endpoint.endsWith("/edits")) return endpoint;
+    return endpoint.endsWith("/generations")
+      ? `${endpoint.slice(0, -"/generations".length)}/edits`
+      : `${endpoint}/edits`;
+  }
+}
+
 export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_ATTEMPT_TIMEOUT_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_ATTEMPT_TIMEOUT_MS;
@@ -327,13 +693,17 @@ export async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryO
   }
 }
 
-export async function callImageGeneration(args: CallImageGenerationArgs): Promise<GeneratedImage> {
+export async function callImageGenerationDetailed(args: CallImageGenerationArgs): Promise<ImageGenerationResult> {
+  const requestedQuality = args.quality ?? "auto";
+  const requestedFormat = args.outputFormat ?? "png";
   const body = args.config.protocol === "openai"
     ? {
         model: args.config.model,
         prompt: args.prompt,
         n: 1,
         size: gptImageSize(args.size),
+        quality: requestedQuality,
+        output_format: requestedFormat,
       }
     : {
         model: args.config.model,
@@ -347,19 +717,58 @@ export async function callImageGeneration(args: CallImageGenerationArgs): Promis
     headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
     body: JSON.stringify(body),
   }, loadImageAttemptTimeoutMs(args.env), args.signal);
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`image relay ${response.status}${text ? ` ${text.slice(0, 160)}` : ""}`);
-  }
-  return extractGeneratedImage(await response.json());
+  if (!response.ok) throw await upstreamError(response);
+  const payload = await response.json();
+  return await detailedResult(
+    payload,
+    { model: args.config.model, size: args.size, quality: requestedQuality },
+    imageUpstreamRequestIdFromHeaders(response.headers),
+  );
 }
 
-export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedImage> {
-  if (args.config.protocol !== "bailian") {
-    throw new Error("gpt-image-2 reference editing is not configured; use Qwen Image for reference images");
-  }
+export async function callImageGeneration(args: CallImageGenerationArgs): Promise<GeneratedImage> {
+  return (await callImageGenerationDetailed(args)).image;
+}
+
+export async function callImageEditDetailed(args: CallImageEditArgs): Promise<ImageGenerationResult> {
   if (args.referenceImages.length < 1 || args.referenceImages.length > IMAGE_MAX_REFERENCE_COUNT) {
-    throw new Error(`Qwen image editing requires 1 to ${IMAGE_MAX_REFERENCE_COUNT} reference images`);
+    throw new Error(`image editing requires 1 to ${IMAGE_MAX_REFERENCE_COUNT} reference images`);
+  }
+  if (args.config.protocol === "openai") {
+    const env = args.env ?? process.env;
+    const endpoint = args.endpoint ?? loadGptImageEditEndpoint(env, args.config.endpoint);
+    const apiKey = env.GPT_IMAGE_EDIT_API_KEY?.trim() || args.config.apiKey;
+    const requestedSize = gptImageSize(args.size) || "auto";
+    const requestedQuality = args.quality ?? "auto";
+    const outputFormat = args.outputFormat ?? "png";
+    const form = new FormData();
+    form.set("model", args.config.model);
+    form.set("prompt", args.prompt);
+    form.set("size", requestedSize);
+    form.set("quality", requestedQuality);
+    form.set("output_format", outputFormat);
+    const referenceParts = await Promise.all(args.referenceImages.map((image, index) => (
+      openAiEditImagePart(image, `reference image ${index + 1}`, `reference-${index + 1}.png`)
+    )));
+    referenceParts.forEach(({ bytes, mime, filename }) => {
+      form.append("image[]", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
+    });
+    if (args.mask) {
+      const { bytes, mime, filename } = await openAiEditImagePart(args.mask, "mask image", "mask.png");
+      form.set("mask", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
+    }
+    const response = await fetchWithTimeout(args.fetchFn, endpoint, {
+      method: "POST",
+      headers: { authorization: `Bearer ${apiKey}` },
+      body: form,
+    }, loadImageAttemptTimeoutMs(env), args.signal);
+    if (!response.ok) throw await upstreamError(response);
+    const payload = await response.json();
+    return await detailedResult(
+      payload,
+      { model: args.config.model, size: requestedSize, quality: requestedQuality },
+      imageUpstreamRequestIdFromHeaders(response.headers),
+    );
   }
   if (args.mask) throw new Error("Qwen image editing does not support a separate mask input");
   const content = args.referenceImages.map((image) => ({ image: dataUrlForImageInput(image) }));
@@ -377,16 +786,25 @@ export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedI
     headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
     body: JSON.stringify(body),
   }, loadImageAttemptTimeoutMs(args.env), args.signal);
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(`image relay ${response.status}${text ? ` ${text.slice(0, 160)}` : ""}`);
-  }
-  return extractGeneratedImage(await response.json());
+  if (!response.ok) throw await upstreamError(response);
+  const payload = await response.json();
+  return await detailedResult(
+    payload,
+    { model: args.config.model, size: args.size, quality: args.quality },
+    imageUpstreamRequestIdFromHeaders(response.headers),
+  );
+}
+
+export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedImage> {
+  return (await callImageEditDetailed(args)).image;
 }
 
 export async function storeWorkflowImage(args: StoreWorkflowImageArgs): Promise<StoredImage> {
   const env = args.env ?? process.env;
   const loaded = tryLoadS3(env);
+  if (args.acl === "private" && !loaded) {
+    throw new Error("private workflow image storage requires S3 configuration");
+  }
   if (args.image.kind === "url" && !loaded) {
     return { originalUrl: args.image.url, thumbnailUrl: args.image.url, mime: "image/png", objectKey: null };
   }
@@ -397,10 +815,20 @@ export async function storeWorkflowImage(args: StoreWorkflowImageArgs): Promise<
     const dataUrl = dataUrlForBinary(binary);
     return { originalUrl: dataUrl, thumbnailUrl: dataUrl, mime: binary.mime, objectKey: null };
   }
-  const extension = binary.mime.includes("jpeg") || binary.mime.includes("jpg") ? "jpg" : "png";
-  const key = `workflow/images/${args.userId}/${args.requestId}/${args.requestIndex}-${randomUUID()}.${extension}`;
-  await putObject(loaded.s3, key, binary.buffer, binary.mime, { acl: "public-read" });
-  const url = shouldInlineStoredImageForLocalEndpoint(loaded.cfg, env)
+  const extension = binary.mime.includes("webp")
+    ? "webp"
+    : binary.mime.includes("jpeg") || binary.mime.includes("jpg")
+      ? "jpg"
+      : "png";
+  const namespace = args.namespace?.trim().replace(/^\/+|\/+$/g, "") || "workflow/images";
+  if (!/^[A-Za-z0-9._/-]+$/.test(namespace) || namespace.split("/").some((part) => part === "." || part === "..")) {
+    throw new Error("workflow image namespace is invalid");
+  }
+  const key = `${namespace}/${args.userId}/${args.requestId}/${args.requestIndex}-${randomUUID()}.${extension}`;
+  await putObject(loaded.s3, key, binary.buffer, binary.mime, args.acl === "private" ? {} : { acl: "public-read" });
+  const url = args.acl === "private"
+    ? ""
+    : shouldInlineStoredImageForLocalEndpoint(loaded.cfg, env)
     ? dataUrlForBinary(binary)
     : publicObjectUrl(loaded.cfg, key, env);
   return { originalUrl: url, thumbnailUrl: url, mime: binary.mime, objectKey: key };

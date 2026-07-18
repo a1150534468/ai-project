@@ -377,6 +377,7 @@ func TestEnsureDefaultResourcePricesSeedsNovelResources(t *testing.T) {
 		{"local_business_promo_render_25s", "本地商家宣传成片生成 25 秒", "PER_CALL", 25},
 		{"local_business_promo_render_40s", "本地商家宣传成片生成 40 秒", "PER_CALL", 40},
 		{"local_business_promo_render_60s", "本地商家宣传成片生成 60 秒", "PER_CALL", 60},
+		{"codex_pet_v2_package", "Codex 桌宠 v2 套餐", "PER_CALL", 200},
 	} {
 		var row model.ResourcePrice
 		if err := st.DB.First(&row, "resource_key = ?", tc.key).Error; err != nil {

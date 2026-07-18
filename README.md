@@ -16,6 +16,9 @@ pnpm dev
 - Admin：<http://localhost:5175>
 - API：<http://localhost:8090>
 - Billing：<http://localhost:8093>
+- Codex 桌宠 Worker 健康检查：<http://localhost:8092/health>
+- Swagger 接口文档：<http://localhost:8090/docs>（[使用与分组说明](docs/api-reference.md)）
+- Codex 桌宠部署与验收：[docs/codex-pet-workflow.md](docs/codex-pet-workflow.md)
 
 `Ctrl+C` 只停止本机业务服务，Docker 数据层会保留。需要停止数据层时运行：
 
@@ -48,7 +51,7 @@ CHAT_MULTIMODAL_MODEL=qwen3.7-plus
 
 图片生成与编辑默认复用 `BAILIAN_WORKSPACE_ID`、`BAILIAN_REGION` 和 `BAILIAN_API_KEY`，直连百炼原生多模态接口，默认模型为 `qwen-image-2.0-pro-2026-04-22`。如图片使用独立百炼凭据，可设置 `IMAGE_API_KEY`，如需覆盖入口可设置 `IMAGE_BASE_URL` 或完整的 `IMAGE_GENERATION_ENDPOINT`。Qwen Image 2.0 的输出总像素范围为 `512*512` 至 `2048*2048`。
 
-主生图工作台还可选择 `gpt-image-2`，通过 OpenAI Images API 兼容协议调用 `GPT_IMAGE_GENERATION_ENDPOINT`（默认 `https://api.ai-pixel.online/v1/images/generations`），凭据使用 `GPT_IMAGE_API_KEY`。当前该通道只配置了文生图 generations 接口；带参考图的编辑任务需选择 Qwen Image，避免把图片误发到未经确认的 edits 地址。
+主生图工作台还可选择 `gpt-image-2`，通过 OpenAI Images API 兼容协议调用 `GPT_IMAGE_GENERATION_ENDPOINT`（默认 `https://api.ai-pixel.online/v1/images/generations`），凭据使用 `GPT_IMAGE_API_KEY`。带 1～3 张参考图时会复用同一生图模块，通过 multipart `image[]` 调用 `GPT_IMAGE_EDIT_ENDPOINT`；该地址未配置时会从 generations 地址推导 `/edits`，`GPT_IMAGE_EDIT_API_KEY` 未配置时复用 generation key。真实 edits POC 只在部署、网关切换或模型升级时通过 `RUN_GPT_IMAGE_EDIT_POC=1` 显式运行。
 
 对话助手额外接入 AI Pixel 的 Anthropic Messages 兼容接口。当前只开放 `codex-auto-review`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`，不会把上游列表中的旧 GPT、音频、Realtime 或图片模型混入对话选项。默认地址为 `CHATGPT_BASE_URL=https://api.ai-pixel.online`；`CHATGPT_API_KEY` 未配置时复用 `GPT_IMAGE_API_KEY`。
 

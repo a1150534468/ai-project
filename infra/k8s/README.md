@@ -30,14 +30,18 @@ kubectl create secret tls app-tls -n ai-assistant \
   --cert=<fullchain.pem> --key=<privkey.pem>
 # 4) 业务 Secret
 cp secrets.env.example secrets.env && vi secrets.env   # 填百炼业务空间 ID 与 BAILIAN_API_KEY
-./create-secrets.sh
+KUBE_CONTEXT=<your-context> ./create-secrets.sh
 ```
 
 ## 三、发版
 
+`scripts/release.sh` 是运维环境持有、不会提交到仓库的编排脚本。它必须遵守以下契约：先构建并推送同一版本的镜像，删除固定名 `migrate` Job，单独应用迁移并等待 Complete，然后才滚动 API、各 Worker 和前端。不能用一次裸 `kubectl apply -k` 代替迁移门禁。
+
 ```bash
 REGISTRY_PASSWORD='<registry-password>' ../../scripts/release.sh 1.0.0
 ```
+
+回滚到不含 Codex 桌宠的旧 API 镜像前，先隐藏 `workflow.codex-pet`、停止新运行、等待或取消存量运行，并 scale/delete `deployment/codex-pet-worker`；普通 apply 不会自动删除新增 Deployment。
 
 ## 四、入口接线（云厂商控制台，一次性）
 
@@ -69,6 +73,6 @@ REGISTRY_PASSWORD='<registry-password>' ../../scripts/release.sh 1.0.0
 1. 百炼目标业务空间的 API Key 页面创建新 Key
 2. 编辑 secrets.env 设 BAILIAN_API_KEY=<新key>
 3. `KUBE_CONTEXT=<your-context> ./create-secrets.sh`（更新 ai-assistant-api-secrets）
-4. kubectl rollout restart deploy/api -n ai-assistant
-5. kubectl rollout status deploy/api -n ai-assistant 等全副本 ready
+4. `kubectl rollout restart deploy/api deploy/local-business-promo-worker deploy/novel-worker deploy/codex-pet-worker -n ai-assistant`
+5. 依次确认上述 Deployment 全部 rollout 完成且 Codex 桌宠 Worker `/health` 返回 200
 6. 百炼控制台吊销旧 Key

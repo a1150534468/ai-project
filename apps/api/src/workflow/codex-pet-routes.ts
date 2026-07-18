@@ -1,0 +1,2167 @@
+import { Buffer } from "node:buffer";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import type { PrismaClient } from "@prisma/client";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import sharp from "sharp";
+import { z } from "zod";
+import { createBillingClient } from "@ai-assistant/billing";
+import { getPrisma, getRedis } from "@ai-assistant/db";
+import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { enqueueCodexPetRun } from "./codex-pet-queue.js";
+import {
+  IMAGE_REFERENCE_MAX_BYTES,
+  IMAGE_REFERENCE_MIME_TYPES,
+  isVerifiedWorkflowImageObjectKeyForUser,
+} from "./image-service.js";
+import { isCodexPetArtifactObjectKey, isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
+import { CODEX_PET_STYLES } from "./codex-pet-prompts.js";
+import { sanitizeCodexPetDiagnosticText, sanitizeCodexPetEventPayload } from "./codex-pet-events.js";
+import {
+  CODEX_PET_KNOWLEDGE_SOURCE_MODULE,
+  CODEX_PET_KNOWLEDGE_SYSTEM_KEY,
+} from "./codex-pet-archive.js";
+import {
+  codexPetPendingBillingFields,
+  reconcileCodexPetRunBilling,
+} from "./codex-pet-billing.js";
+
+export const CODEX_PET_RESOURCE_KEY = "codex_pet_v2_package";
+export const CODEX_PET_PUBLIC_ARTIFACT_PURPOSE = "codex-pet-install";
+export const CODEX_PET_PREVIEW_ARTIFACT_PURPOSE = "codex-pet-preview";
+export const CODEX_PET_INSTALL_URL_TTL_SECONDS = 30 * 60;
+export const CODEX_PET_PREVIEW_URL_TTL_SECONDS = 15 * 60;
+export const CODEX_PET_EVENT_CHANNEL_PREFIX = "codex-pet:run:";
+
+// Signed preview URLs are intentionally unauthenticated for a short period,
+// so never serve an active document format such as SVG inline. Codex-pet
+// artifacts are raster outputs; this response-boundary allowlist protects
+// against malformed/legacy rows or provider content-type spoofing turning the
+// API origin into an XSS host.
+const SAFE_RASTER_IMAGE_MIMES = new Set([
+  "image/png",
+  "image/webp",
+  "image/jpeg",
+  "image/jpg",
+  "image/gif",
+  "image/avif",
+]);
+
+const DEFAULT_PRICE = {
+  resourceKey: CODEX_PET_RESOURCE_KEY,
+  displayName: "Codex v2 桌宠制作套餐",
+  pricingType: "PER_CALL" as const,
+  rate: 200,
+  perUnits: 1,
+  enabled: true,
+};
+
+const ACTIVE_RUN_STATUSES = [
+  "queued",
+  "base_generating",
+  "awaiting_base_review",
+  "standard_generating",
+  "direction_generating",
+  "validating",
+  "repairing",
+  "packaging",
+  "archiving",
+] as const;
+
+const TERMINAL_RUN_STATUSES = ["ready", "failed", "cancelled"] as const;
+const EDITABLE_PROJECT_STATUSES = ["draft", "awaiting_base_review"] as const;
+const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
+
+const idSchema = z.string().trim().min(1).max(128).regex(ID_PATTERN);
+const idempotencyKeySchema = z.string().trim().min(8).max(128).regex(ID_PATTERN);
+const projectParamsSchema = z.object({ projectId: idSchema });
+const runParamsSchema = z.object({ projectId: idSchema, runId: idSchema });
+const publicArtifactParamsSchema = z.object({ artifactId: idSchema });
+const publicArtifactQuerySchema = z.object({
+  exp: z.coerce.number().int().positive(),
+  sig: z.string().trim().min(32).max(128),
+  purpose: z.enum(["install", "preview"]).default("install"),
+});
+const eventsQuerySchema = z.object({
+  after: z.coerce.number().int().min(0).default(0),
+});
+const deliveryRunQuerySchema = z.object({
+  runId: idSchema.optional(),
+});
+
+const projectFieldsSchema = z.object({
+  name: z.string().trim().min(1).max(30),
+  description: z.string().trim().max(500).default(""),
+  prompt: z.string().trim().max(4_000).default(""),
+  stylePreset: z.enum(CODEX_PET_STYLES).default("auto"),
+  styleNotes: z.string().trim().max(1_000).default(""),
+  referenceAssetIds: z.array(idSchema).max(3).default([]),
+  autoContinue: z.boolean().default(false),
+});
+
+const createProjectSchema = projectFieldsSchema.extend({
+  idempotencyKey: idempotencyKeySchema.optional(),
+}).superRefine((value, context) => {
+  if (new Set(value.referenceAssetIds).size !== value.referenceAssetIds.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["referenceAssetIds"], message: "参考图不能重复" });
+  }
+});
+
+const updateProjectSchema = projectFieldsSchema.partial().superRefine((value, context) => {
+  if (value.referenceAssetIds && new Set(value.referenceAssetIds).size !== value.referenceAssetIds.length) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["referenceAssetIds"], message: "参考图不能重复" });
+  }
+});
+
+const startRunSchema = z.object({ idempotencyKey: idempotencyKeySchema.optional() }).default({});
+const baseSelectionSchema = z.union([
+  z.object({ artifactId: idSchema }).strict(),
+  z.object({ autoSelect: z.literal(true) }).strict(),
+  z.object({ regenerate: z.literal(true) }).strict(),
+]);
+
+type ResourcePrice = {
+  readonly resourceKey: string;
+  readonly displayName: string;
+  readonly pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
+  readonly rate: number;
+  readonly perUnits: number;
+  readonly enabled: boolean;
+};
+
+export interface CodexPetBilling {
+  readonly chargeResource: (args: {
+    readonly operationId: string;
+    readonly userId: string;
+    readonly resourceKey: string;
+    readonly units: number;
+  }) => Promise<{ readonly charged: number }>;
+  readonly refundResource: (operationId: string) => Promise<{ readonly success: boolean }>;
+  readonly listResourcePrices?: () => Promise<{ readonly data: readonly ResourcePrice[] }>;
+}
+
+export interface CodexPetArtifactShape {
+  readonly id: string;
+  readonly projectId: string;
+  readonly runId: string;
+  readonly userId: string;
+  readonly jobId: string | null;
+  readonly kind: string;
+  readonly name: string;
+  readonly status: string;
+  readonly objectKey: string;
+  readonly mime: string;
+  readonly sizeBytes: number;
+  readonly width: number | null;
+  readonly height: number | null;
+  readonly metadata: unknown;
+  readonly expiresAt: Date | null;
+  readonly createdAt: Date;
+}
+
+export interface CodexPetRouteDeps {
+  readonly prisma?: PrismaClient;
+  readonly billing?: CodexPetBilling;
+  /** Must enqueue BullMQ with jobId=runId. */
+  readonly enqueueRun?: (runId: string) => Promise<void>;
+  /** Wakes a local/remote worker so AbortSignal and the persisted flag both take effect. */
+  readonly requestCancellation?: (runId: string) => Promise<void> | void;
+  /** Optional Redis notifier; database persistence remains authoritative. */
+  readonly notifyRunEvent?: (runId: string) => Promise<void> | void;
+  /** Optional Redis subscriber. SSE always retains database polling as a fallback. */
+  readonly subscribeRunEvents?: (
+    runId: string,
+    onMessage: () => void,
+  ) => Promise<(() => Promise<void> | void) | void>;
+  readonly loadArtifact?: (objectKey: string) => Promise<Buffer>;
+  /** Revalidates persisted reference bytes before a project can use them. */
+  readonly validateReferenceAsset?: (asset: {
+    readonly id: string;
+    readonly userId: string;
+    readonly objectKey: string;
+    readonly mime: string;
+  }) => Promise<boolean>;
+  /** Required durable retry hook for every project-deletion path. */
+  readonly enqueueProjectCleanup?: (input: { readonly userId: string; readonly projectId: string }) => Promise<void>;
+  readonly artifactPreviewUrl?: (
+    artifact: CodexPetArtifactShape,
+    context: { readonly userId: string; readonly projectId: string },
+  ) => Promise<string | null> | string | null;
+  readonly signingSecret?: string;
+  readonly publicBaseUrl?: string;
+  readonly now?: () => Date;
+  readonly ssePollIntervalMs?: number;
+  readonly sseHeartbeatIntervalMs?: number;
+  /** Testable connection lifetime; production waits for the raw response to close. */
+  readonly waitForSseDisconnect?: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+}
+
+type ProjectShape = {
+  readonly id: string;
+  readonly userId: string;
+  readonly name: string;
+  readonly description: string;
+  readonly prompt: string;
+  readonly stylePreset: string;
+  readonly styleNotes: string;
+  readonly referenceAssetIds: readonly string[];
+  readonly autoContinue: boolean;
+  readonly status: string;
+  readonly latestRunId: string | null;
+  readonly createIdempotencyKey: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
+
+type RunShape = {
+  readonly id: string;
+  readonly projectId: string;
+  readonly userId: string;
+  readonly idempotencyKey: string | null;
+  readonly status: string;
+  readonly progressStage: string;
+  readonly progressPercent: number;
+  readonly progressMessage: string | null;
+  readonly autoContinue: boolean;
+  readonly colorKey: string | null;
+  readonly billingOperationId: string | null;
+  readonly billingPoints: number;
+  readonly billingChargeStatus: string;
+  readonly billingChargeAttemptCount: number;
+  readonly billingChargeError: string | null;
+  readonly billingChargeNextRetryAt: Date | null;
+  readonly billingChargedAt: Date | null;
+  readonly billingActivatedAt: Date | null;
+  readonly billingRefundedAt: Date | null;
+  readonly billingRefundStatus: string;
+  readonly cancelRequested: boolean;
+  readonly hasSuccessfulImage: boolean;
+  readonly selectedBaseArtifactId: string | null;
+  readonly spritesheetArtifactId: string | null;
+  readonly packageArtifactId: string | null;
+  readonly previewArtifactId: string | null;
+  readonly validationReport: unknown;
+  readonly requestedModel: string;
+  readonly actualModels: readonly string[];
+  readonly usage: unknown;
+  readonly knowledgeDocumentId: string | null;
+  readonly lastEventSequence: number;
+  readonly workerId?: string | null;
+  readonly error: string | null;
+  readonly startedAt: Date | null;
+  readonly completedAt: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+};
+
+type EventShape = {
+  readonly id: string;
+  readonly sequence: number;
+  readonly type: string;
+  readonly stage: string;
+  readonly jobKey: string | null;
+  readonly message: string | null;
+  readonly progress: number;
+  readonly payload: unknown;
+  readonly createdAt: Date;
+};
+
+class ActiveCodexPetRunError extends Error {
+  readonly runId: string;
+
+  constructor(runId: string) {
+    super("当前账号已有正在制作的桌宠");
+    this.name = "ActiveCodexPetRunError";
+    this.runId = runId;
+  }
+}
+
+function userIdOf(request: unknown): string {
+  return (request as { readonly userId?: string }).userId?.trim() ?? "";
+}
+
+function recordOf(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function safeDiagnostic(error: unknown): string {
+  return sanitizeCodexPetDiagnosticText(
+    error instanceof Error ? error.message : String(error),
+    1_000,
+  );
+}
+
+function safeDate(value: Date | null): string | null {
+  return value ? value.toISOString() : null;
+}
+
+function serializeProject(project: ProjectShape) {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    prompt: project.prompt,
+    stylePreset: project.stylePreset,
+    styleNotes: project.styleNotes,
+    referenceAssetIds: [...project.referenceAssetIds],
+    autoContinue: project.autoContinue,
+    status: project.status,
+    latestRunId: project.latestRunId,
+    createdAt: project.createdAt.toISOString(),
+    updatedAt: project.updatedAt.toISOString(),
+  };
+}
+
+function serializeProjectSummary(project: ProjectShape) {
+  const serialized = serializeProject(project);
+  return {
+    id: serialized.id,
+    name: serialized.name,
+    description: serialized.description,
+    stylePreset: serialized.stylePreset,
+    status: serialized.status,
+    latestRunId: serialized.latestRunId,
+    createdAt: serialized.createdAt,
+    updatedAt: serialized.updatedAt,
+  };
+}
+
+function serializeRun(run: RunShape) {
+  return {
+    id: run.id,
+    projectId: run.projectId,
+    status: run.status,
+    progressStage: run.progressStage,
+    progressPercent: run.progressPercent,
+    progressMessage: run.progressMessage,
+    autoContinue: run.autoContinue,
+    colorKey: run.colorKey,
+    billingPoints: run.billingPoints,
+    billingChargeStatus: run.billingChargeStatus,
+    billingChargeAttemptCount: run.billingChargeAttemptCount,
+    billingChargeError: run.billingChargeError,
+    billingChargeNextRetryAt: safeDate(run.billingChargeNextRetryAt),
+    billingChargedAt: safeDate(run.billingChargedAt),
+    billingActivatedAt: safeDate(run.billingActivatedAt),
+    billingRefundedAt: safeDate(run.billingRefundedAt),
+    billingRefundStatus: run.billingRefundStatus,
+    cancelRequested: run.cancelRequested,
+    hasSuccessfulImage: run.hasSuccessfulImage,
+    selectedBaseArtifactId: run.selectedBaseArtifactId,
+    spritesheetArtifactId: run.spritesheetArtifactId,
+    packageArtifactId: run.packageArtifactId,
+    previewArtifactId: run.previewArtifactId,
+    validationReport: run.validationReport,
+    requestedModel: run.requestedModel,
+    actualModels: [...run.actualModels],
+    usage: run.usage,
+    knowledgeDocumentId: run.knowledgeDocumentId,
+    lastEventSequence: run.lastEventSequence,
+    error: run.error,
+    startedAt: safeDate(run.startedAt),
+    completedAt: safeDate(run.completedAt),
+    createdAt: run.createdAt.toISOString(),
+    updatedAt: run.updatedAt.toISOString(),
+  };
+}
+
+function serializeJob(job: {
+  readonly id: string;
+  readonly key: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly error: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}) {
+  return {
+    id: job.id,
+    key: job.key,
+    kind: job.kind,
+    status: job.status,
+    attempt: job.attempt,
+    maxAttempts: job.maxAttempts,
+    error: job.error,
+    createdAt: job.createdAt.toISOString(),
+    updatedAt: job.updatedAt.toISOString(),
+  };
+}
+
+function serializeEvent(event: EventShape) {
+  return {
+    id: event.id,
+    sequence: event.sequence,
+    type: event.type,
+    stage: event.stage,
+    jobKey: event.jobKey,
+    message: event.message ? sanitizeCodexPetDiagnosticText(event.message, 1_000) : null,
+    progress: event.progress,
+    // Events are normally sanitized on write; sanitize again at the read
+    // boundary so a legacy/corrupt row cannot expose keys, signed URLs, or
+    // embedded image data through SSE or the replay endpoint.
+    payload: sanitizeCodexPetEventPayload(recordOf(event.payload)),
+    createdAt: event.createdAt.toISOString(),
+  };
+}
+
+function safeSseEventName(value: string): string {
+  return /^[A-Za-z0-9._-]{1,100}$/.test(value) ? value : "message";
+}
+
+async function serializeArtifact(
+  artifact: CodexPetArtifactShape,
+  deps: CodexPetRouteDeps,
+  context: { readonly userId: string; readonly projectId: string },
+) {
+  const configuredPreviewUrl = isSafeRasterImageMime(artifact.mime)
+    ? await deps.artifactPreviewUrl?.(artifact, context)
+    : null;
+  const previewUrl = configuredPreviewUrl === undefined
+    ? defaultArtifactPreviewUrl(artifact, deps)
+    : configuredPreviewUrl;
+  return {
+    id: artifact.id,
+    projectId: artifact.projectId,
+    runId: artifact.runId,
+    jobId: artifact.jobId,
+    kind: artifact.kind,
+    name: artifact.name,
+    status: artifact.status,
+    mime: artifact.mime,
+    sizeBytes: artifact.sizeBytes,
+    width: artifact.width,
+    height: artifact.height,
+    metadata: recordOf(artifact.metadata),
+    expiresAt: safeDate(artifact.expiresAt),
+    createdAt: artifact.createdAt.toISOString(),
+    url: previewUrl,
+    previewUrl,
+    thumbnailUrl: previewUrl,
+  };
+}
+
+function isSafeRasterImageMime(mime: string): boolean {
+  return SAFE_RASTER_IMAGE_MIMES.has(mime.split(";", 1)[0]!.trim().toLowerCase());
+}
+
+function defaultArtifactPreviewUrl(artifact: CodexPetArtifactShape, deps: CodexPetRouteDeps): string | null {
+  if (artifact.status !== "ready" || !isSafeRasterImageMime(artifact.mime) || !hasOwnedArtifactObjectKey(artifact)) return null;
+  const currentTime = deps.now?.() ?? new Date();
+  if (artifact.expiresAt && artifact.expiresAt.getTime() <= currentTime.getTime()) return null;
+  let secret: string;
+  try {
+    secret = signingSecret(deps);
+  } catch {
+    return null;
+  }
+  const expiresAtSeconds = Math.floor(currentTime.getTime() / 1_000) + CODEX_PET_PREVIEW_URL_TTL_SECONDS;
+  const signature = signCodexPetArtifact(
+    artifact.id,
+    expiresAtSeconds,
+    secret,
+    CODEX_PET_PREVIEW_ARTIFACT_PURPOSE,
+  );
+  let origin = "";
+  try {
+    origin = publicBaseUrl(deps);
+  } catch {
+    // Same-origin relative URLs remain usable in local development.
+  }
+  return `${origin}/api/public/codex-pets/artifacts/${encodeURIComponent(artifact.id)}?exp=${expiresAtSeconds}&sig=${encodeURIComponent(signature)}&purpose=preview`;
+}
+
+export function codexPetRunEventChannel(runId: string): string {
+  return `${CODEX_PET_EVENT_CHANNEL_PREFIX}${runId}`;
+}
+
+export function deriveCodexPetRunId(userId: string, projectId: string, idempotencyKey: string): string {
+  const digest = createHash("sha256")
+    .update("codex-pet-run\0")
+    .update(userId)
+    .update("\0")
+    .update(projectId)
+    .update("\0")
+    .update(idempotencyKey)
+    .digest("hex")
+    .slice(0, 32);
+  return `cpr_${digest}`;
+}
+
+export function signCodexPetArtifact(
+  artifactId: string,
+  expiresAtSeconds: number,
+  secret: string,
+  purpose = CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
+): string {
+  return createHmac("sha256", secret)
+    .update(`v1:${purpose}:${artifactId}:${expiresAtSeconds}`)
+    .digest("base64url");
+}
+
+export function verifyCodexPetArtifactSignature(args: {
+  readonly artifactId: string;
+  readonly expiresAtSeconds: number;
+  readonly signature: string;
+  readonly secret: string;
+  readonly nowSeconds: number;
+  readonly purpose?: string;
+}): boolean {
+  if (args.expiresAtSeconds <= args.nowSeconds) return false;
+  const expected = signCodexPetArtifact(
+    args.artifactId,
+    args.expiresAtSeconds,
+    args.secret,
+    args.purpose ?? CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
+  );
+  const actualBuffer = Buffer.from(args.signature);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+export function codexPetValidationPassed(report: unknown): boolean {
+  const value = recordOf(report);
+  const passed = value.ok === true
+    || value.status === "passed"
+    || value.validationStatus === "passed";
+  const gateKeys = [
+    "atlas",
+    "deterministic",
+    "packagedSpritesheet",
+    "chromaDespill",
+    "visual",
+    "multimodal",
+    "final",
+    "finalVisualQa",
+    "blindDirectionValidation",
+    "directionRegistration",
+    "directionContinuity",
+    "row9PreGenerationGate",
+    "row10PreGenerationGate",
+  ];
+  const hasContradictoryGate = gateKeys.some((key) => {
+    const gate = recordOf(value[key]);
+    return gate.ok === false || gate.pass === false || gate.passed === false || gate.status === "failed";
+  });
+  const hasFailedDirection = Array.isArray(value.directionSemantics)
+    && value.directionSemantics.some((entry) => recordOf(entry).verdict === "fail");
+  // Delivery is a strict v2 contract.  Accepting an otherwise-passed legacy
+  // report with no explicit version can turn a malformed/old atlas into an
+  // install capability merely because its database row claims v2 geometry.
+  return passed
+    && value.spriteVersionNumber === 2
+    && !hasContradictoryGate
+    && !hasFailedDirection;
+}
+
+function isActiveRunStatus(status: string): boolean {
+  return (ACTIVE_RUN_STATUSES as readonly string[]).includes(status);
+}
+
+function isTerminalRunStatus(status: string): boolean {
+  return (TERMINAL_RUN_STATUSES as readonly string[]).includes(status);
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return recordOf(error).code === "P2002";
+}
+
+function resolveIdempotencyKey(
+  header: string | string[] | undefined,
+  body: string | undefined,
+): { readonly success: true; readonly value: string } | { readonly success: false } {
+  const headerValue = Array.isArray(header) ? header[0] : header;
+  const normalizedHeader = headerValue?.trim() || undefined;
+  if (normalizedHeader && body && normalizedHeader !== body) return { success: false };
+  const parsed = idempotencyKeySchema.safeParse(body ?? normalizedHeader);
+  return parsed.success ? { success: true, value: parsed.data } : { success: false };
+}
+
+function resolvePricing(rows: readonly ResourcePrice[]): ResourcePrice {
+  const configured = rows.find((row) => row.resourceKey === CODEX_PET_RESOURCE_KEY);
+  return configured
+    ? { ...DEFAULT_PRICE, ...configured, resourceKey: CODEX_PET_RESOURCE_KEY }
+    : DEFAULT_PRICE;
+}
+
+function signingSecret(deps: CodexPetRouteDeps): string {
+  const value = deps.signingSecret
+    ?? process.env.CODEX_PET_ARTIFACT_SIGNING_SECRET
+    ?? process.env.SESSION_SECRET;
+  if (!value || Buffer.byteLength(value) < 32) {
+    throw new Error("CODEX_PET_ARTIFACT_SIGNING_SECRET or SESSION_SECRET must be at least 32 bytes");
+  }
+  return value;
+}
+
+function publicBaseUrl(deps: CodexPetRouteDeps): string {
+  const value = deps.publicBaseUrl
+    ?? process.env.CODEX_PET_PUBLIC_BASE_URL
+    ?? process.env.API_PUBLIC_BASE_URL;
+  if (!value) throw new Error("CODEX_PET_PUBLIC_BASE_URL is required");
+  const url = new URL(value);
+  if (url.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && url.protocol === "http:")) {
+    throw new Error("CODEX_PET_PUBLIC_BASE_URL must use HTTPS");
+  }
+  return url.toString().replace(/\/$/, "");
+}
+
+function packageFilename(project: ProjectShape, artifact: CodexPetArtifactShape): string {
+  const metadata = recordOf(artifact.metadata);
+  const source = typeof metadata.petId === "string" ? metadata.petId : project.name;
+  const safe = source.normalize("NFKD").replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
+  return `${safe || "codex-pet"}.zip`;
+}
+
+function contentDisposition(filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+export async function validateCodexPetReferenceAsset(
+  asset: { readonly id: string; readonly userId: string; readonly objectKey: string; readonly mime: string },
+  load: (objectKey: string) => Promise<Buffer>,
+): Promise<boolean> {
+  if (!IMAGE_REFERENCE_MIME_TYPES.has(asset.mime.toLowerCase().split(";", 1)[0]!)
+    || !isVerifiedWorkflowImageObjectKeyForUser(asset.objectKey, asset.userId)) return false;
+  const bytes = await load(asset.objectKey);
+  if (bytes.byteLength < 1 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) return false;
+  try {
+    const metadata = await sharp(bytes, { limitInputPixels: 40_000_000, animated: false }).metadata();
+    return Boolean(metadata.width && metadata.height);
+  } catch {
+    return false;
+  }
+}
+
+function eventCursor(request: FastifyRequest, after: number): number {
+  const raw = request.headers["last-event-id"];
+  const header = Array.isArray(raw) ? raw[0] : raw;
+  const parsed = Number(header ?? 0);
+  return Math.max(after, Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0);
+}
+
+export function formatCodexPetSseEvent(event: EventShape): string {
+  return `id: ${event.sequence}\nevent: ${safeSseEventName(event.type)}\ndata: ${JSON.stringify(serializeEvent(event))}\n\n`;
+}
+
+async function defaultWaitForSseDisconnect(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  if (reply.raw.destroyed || reply.raw.writableEnded) return;
+  await new Promise<void>((resolve) => {
+    const onClose = () => resolve();
+    reply.raw.once("close", onClose);
+    reply.raw.once("error", onClose);
+  });
+}
+
+function assertFinalSpritesheet(artifact: CodexPetArtifactShape, currentTime = new Date()): boolean {
+  return artifact.status === "ready"
+    && artifact.kind === "spritesheet"
+    && artifact.width === 1_536
+    && artifact.height === 2_288
+    && (artifact.mime === "image/webp" || artifact.mime === "image/png")
+    && hasOwnedArtifactObjectKey(artifact)
+    && (!artifact.expiresAt || artifact.expiresAt.getTime() > currentTime.getTime());
+}
+
+function assertPackageArtifact(artifact: CodexPetArtifactShape, currentTime = new Date()): boolean {
+  return artifact.status === "ready"
+    && artifact.kind === "package"
+    && (artifact.mime === "application/zip" || artifact.mime === "application/x-zip-compressed")
+    && hasOwnedArtifactObjectKey(artifact)
+    && (!artifact.expiresAt || artifact.expiresAt.getTime() > currentTime.getTime());
+}
+
+function hasOwnedArtifactObjectKey(artifact: CodexPetArtifactShape): boolean {
+  return isCodexPetArtifactObjectKeyFor({
+    objectKey: artifact.objectKey,
+    userId: artifact.userId,
+    projectId: artifact.projectId,
+    runId: artifact.runId,
+  });
+}
+
+async function notifyEvent(app: FastifyInstance, deps: CodexPetRouteDeps, runId: string): Promise<void> {
+  try {
+    if (deps.notifyRunEvent) await deps.notifyRunEvent(runId);
+    else await getRedis().publish(codexPetRunEventChannel(runId), "route-event");
+  } catch (error) {
+    app.log.warn({ error: safeDiagnostic(error), runId }, "Codex pet Redis event notification failed; SSE database polling will recover");
+  }
+}
+
+async function defaultSubscribeRunEvents(runId: string, onMessage: () => void): Promise<() => Promise<void>> {
+  const subscriber = getRedis().duplicate();
+  const channel = codexPetRunEventChannel(runId);
+  const handleMessage = (receivedChannel: string) => {
+    if (receivedChannel === channel) onMessage();
+  };
+  // ioredis otherwise reports an unhandled error event when Redis is down;
+  // the failed subscribe is still surfaced and the caller falls back to DB.
+  const handleError = () => undefined;
+  subscriber.on("message", handleMessage);
+  subscriber.on("error", handleError);
+  try {
+    await subscriber.subscribe(channel);
+  } catch (error) {
+    subscriber.off("message", handleMessage);
+    subscriber.off("error", handleError);
+    subscriber.disconnect();
+    throw error;
+  }
+  return async () => {
+    subscriber.off("message", handleMessage);
+    subscriber.off("error", handleError);
+    await subscriber.unsubscribe(channel).catch(() => undefined);
+    subscriber.disconnect();
+  };
+}
+
+export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDeps = {}) {
+  const prisma = deps.prisma ?? getPrisma();
+  const billing = deps.billing ?? createBillingClient({
+    baseUrl: process.env.BILLING_BASE_URL!,
+    token: process.env.BILLING_INTERNAL_TOKEN!,
+  });
+  const enqueueRun = deps.enqueueRun ?? ((runId: string) => enqueueCodexPetRun({ runId }));
+  const now = deps.now ?? (() => new Date());
+  const loadArtifact = deps.loadArtifact ?? ((objectKey: string) => {
+    // The production loader is the last boundary before S3. Embedded tests
+    // may provide an in-memory loader with synthetic keys, but the real route
+    // must never follow a database row outside our private prefix.
+    // The caller performs the row-level ownership check before invoking this
+    // loader. Keep the generic namespace guard here as defense in depth.
+    if (!isCodexPetArtifactObjectKey(objectKey)) throw new Error("invalid Codex pet artifact object key");
+    return getObject(makeS3(loadS3Config()), objectKey);
+  });
+  const validateReferenceAsset = deps.validateReferenceAsset ?? ((asset: {
+    readonly id: string;
+    readonly userId: string;
+    readonly objectKey: string;
+    readonly mime: string;
+  }) => validateCodexPetReferenceAsset(
+    asset,
+    (objectKey) => getObject(makeS3(loadS3Config()), objectKey),
+  ));
+
+  async function ownedProject(userId: string, projectId: string) {
+    return prisma.codexPetProject.findFirst({ where: { id: projectId, userId } });
+  }
+
+  async function ownedRun(userId: string, projectId: string, runId: string) {
+    return prisma.codexPetRun.findFirst({ where: { id: runId, projectId, userId } });
+  }
+
+  async function validateReferenceAssets(userId: string, assetIds: readonly string[]): Promise<boolean> {
+    if (assetIds.length === 0) return true;
+    const assets = await prisma.imageAsset.findMany({
+      where: { userId, id: { in: [...assetIds] } },
+      select: { id: true, objectKey: true, mime: true },
+    });
+    if (assets.length !== assetIds.length) return false;
+    if (!assets.every((asset) => Boolean(asset.objectKey)
+      && IMAGE_REFERENCE_MIME_TYPES.has(asset.mime.toLowerCase().split(";", 1)[0]!))) return false;
+    const checks = await Promise.all(assets.map((asset) => validateReferenceAsset({
+      id: asset.id,
+      userId,
+      objectKey: asset.objectKey!,
+      mime: asset.mime,
+    }).catch(() => false)));
+    return checks.every(Boolean);
+  }
+
+  async function price(): Promise<ResourcePrice> {
+    const rows = billing.listResourcePrices ? (await billing.listResourcePrices()).data ?? [] : [];
+    return resolvePricing(rows);
+  }
+
+  async function createCancellation(
+    userId: string,
+    projectId: string,
+    runId: string,
+  ): Promise<{ readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean }> {
+    return prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-cancel:${runId}`);
+      await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', runId);
+      const current = await tx.codexPetRun.findFirst({ where: { id: runId, projectId, userId } });
+      if (!current) throw new Error("CODEX_PET_RUN_NOT_FOUND");
+      if (current.status === "ready" || current.status === "failed") throw new Error("CODEX_PET_RUN_TERMINAL");
+      const definitelyUncharged = current.billingActivatedAt === null
+        && (current.billingChargeStatus === "pending" || current.billingChargeStatus === "insufficient" || current.billingChargeStatus === "cancelled");
+      const chargeConfirmed = current.billingChargeStatus === "charged";
+      if (current.status === "cancelled") {
+        const attemptedAt = now();
+        if (definitelyUncharged && current.billingChargeStatus !== "cancelled") {
+          const released = await tx.codexPetRun.update({
+            where: { id: current.id },
+            data: {
+              billingChargeStatus: "cancelled",
+              billingChargeError: null,
+              billingChargeLeaseUntil: null,
+              billingChargeNextRetryAt: null,
+            },
+          });
+          return { run: released as RunShape, eventSequences: [], refundPending: false };
+        }
+        const refundEligible = chargeConfirmed
+          && !current.hasSuccessfulImage
+          // A legacy run may have reached base review before the
+          // hasSuccessfulImage marker was introduced. Its first cancellation
+          // intentionally leaves billingRefundStatus=none; require a durable
+          // refund intent here so a duplicate cancellation cannot infer a
+          // refund from the now-generic `cancelled` status and charge history.
+          && (current.billingRefundStatus === "pending" || current.billingRefundStatus === "failed")
+          && Boolean(current.billingOperationId)
+          && !current.billingRefundedAt;
+        const retryDue = !current.billingRefundNextRetryAt || current.billingRefundNextRetryAt <= attemptedAt;
+        if (!refundEligible || !retryDue) return { run: current as RunShape, eventSequences: [], refundPending: false };
+        const claimed = await tx.codexPetRun.update({
+          where: { id: current.id },
+          data: {
+            billingRefundStatus: "pending",
+            billingRefundError: null,
+            // This is a short durable lease. If the API process dies after
+            // commit, maintenance retries the idempotent billing operation.
+            billingRefundNextRetryAt: new Date(attemptedAt.getTime() + 60_000),
+          },
+        });
+        return { run: claimed as RunShape, eventSequences: [], refundPending: true };
+      }
+      if (current.workerId && current.cancelRequested) {
+        return { run: current as RunShape, eventSequences: [], refundPending: false };
+      }
+
+      // A live worker may still finish an image-generation request after this
+      // transaction begins. Persist the flag and let that worker decide the
+      // refund only after it has stopped, so the first-successful-image policy
+      // cannot race with a refund here.
+      if (current.workerId) {
+        const requested = await tx.codexPetRun.update({
+          where: { id: current.id },
+          data: {
+            cancelRequested: true,
+            progressMessage: "正在取消桌宠制作",
+            lastEventSequence: { increment: 1 },
+          },
+        });
+        await tx.codexPetEvent.create({
+          data: {
+            projectId,
+            runId,
+            userId,
+            sequence: requested.lastEventSequence,
+            type: "run.cancellation_requested",
+            stage: requested.progressStage,
+            message: "已请求取消桌宠制作，正在等待当前子任务停止",
+            progress: requested.progressPercent,
+            payload: {},
+          },
+        });
+        return { run: requested as RunShape, eventSequences: [requested.lastEventSequence], refundPending: false };
+      }
+
+      const cancelledAt = now();
+      // Never refund a merely pending/charging/uncertain operation. An
+      // idempotent charge may still settle later; the billing reconciler then
+      // records the confirmed charge and creates a fresh durable refund intent.
+      const refundPending = chargeConfirmed
+        && !current.hasSuccessfulImage
+        && current.status !== "awaiting_base_review"
+        && Boolean(current.billingOperationId)
+        && !current.billingRefundedAt;
+      const updated = await tx.codexPetRun.update({
+        where: { id: current.id },
+        data: {
+          cancelRequested: true,
+          status: "cancelled",
+          progressStage: "cancelled",
+          progressMessage: "用户已取消",
+          completedAt: cancelledAt,
+          lastEventSequence: { increment: 1 },
+          ...(definitelyUncharged ? {
+            billingChargeStatus: "cancelled",
+            billingChargeError: null,
+            billingChargeLeaseUntil: null,
+            billingChargeNextRetryAt: null,
+          } : {}),
+          ...(refundPending ? {
+            billingRefundStatus: "pending",
+            billingRefundError: null,
+            billingRefundNextRetryAt: new Date(cancelledAt.getTime() + 60_000),
+          } : {}),
+        },
+      });
+      await tx.codexPetEvent.create({
+        data: {
+          projectId,
+          runId,
+          userId,
+          sequence: updated.lastEventSequence,
+          type: "run.cancelled",
+          stage: "cancelled",
+          message: "用户已取消桌宠制作",
+          progress: updated.progressPercent,
+          payload: { refundEligible: !updated.hasSuccessfulImage },
+        },
+      });
+
+      await tx.codexPetProject.updateMany({
+        where: { id: projectId, userId, latestRunId: runId, status: { not: "deleting" } },
+        data: { status: definitelyUncharged ? "draft" : "cancelled" },
+      });
+      return { run: updated as RunShape, eventSequences: [updated.lastEventSequence], refundPending };
+    });
+  }
+
+  async function settleCancellationRefund(
+    result: { readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean },
+  ): Promise<{ readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean }> {
+    const operationId = result.run.billingOperationId;
+    if (!result.refundPending
+      || result.run.billingChargeStatus !== "charged"
+      || !operationId
+      || result.run.billingRefundedAt) return result;
+    const attemptedAt = now();
+    try {
+      const refund = await billing.refundResource(operationId);
+      if (!refund.success) throw new Error("billing refund was not accepted");
+      const settled = await prisma.$transaction(async (tx) => {
+        // Billing refunds are idempotent by operationId. This conditional DB
+        // transition ensures concurrent API/maintenance attempts create only
+        // one persisted billing.refunded event.
+        const transition = await tx.codexPetRun.updateMany({
+          where: { id: result.run.id, billingRefundedAt: null },
+          data: {
+            billingRefundedAt: attemptedAt,
+            billingRefundStatus: "refunded",
+            billingRefundError: null,
+            billingRefundLastAttemptAt: attemptedAt,
+            billingRefundRetryCount: { increment: 1 },
+            billingRefundNextRetryAt: null,
+            lastEventSequence: { increment: 1 },
+          },
+        });
+        const run = await tx.codexPetRun.findFirst({ where: { id: result.run.id } });
+        if (!run) throw new Error("CODEX_PET_RUN_NOT_FOUND");
+        if (transition.count === 0) return { run: run as RunShape, sequence: null as number | null };
+        await tx.codexPetEvent.create({
+          data: {
+            projectId: run.projectId,
+            runId: run.id,
+            userId: run.userId,
+            sequence: run.lastEventSequence,
+            type: "billing.refunded",
+            stage: run.status,
+            message: "套餐积分已全额退回",
+            progress: run.progressPercent,
+            payload: { operationId },
+          },
+        });
+        return { run: run as RunShape, sequence: run.lastEventSequence as number | null };
+      });
+      return {
+        run: settled.run,
+        eventSequences: settled.sequence === null ? result.eventSequences : [...result.eventSequences, settled.sequence],
+        refundPending: false,
+      };
+    } catch (error) {
+      // Cancellation was committed before the external call. Keep the durable
+      // pending marker even if billing or the success-record transaction
+      // fails; maintenance safely retries the same operationId.
+      await prisma.codexPetRun.updateMany({
+        where: { id: result.run.id, billingRefundedAt: null },
+        data: {
+          billingRefundStatus: "pending",
+          billingRefundError: error instanceof Error ? error.message.slice(0, 500) : "退款失败",
+          billingRefundRetryCount: { increment: 1 },
+          billingRefundLastAttemptAt: attemptedAt,
+          billingRefundNextRetryAt: new Date(attemptedAt.getTime() + 60_000),
+        },
+      }).catch(() => undefined);
+      app.log.warn({ runId: result.run.id }, "Codex pet cancellation refund deferred for retry");
+      const current = await prisma.codexPetRun.findFirst({ where: { id: result.run.id } }).catch(() => null);
+      return { ...result, run: (current as RunShape | null) ?? result.run, refundPending: true };
+    }
+  }
+
+  app.get("/api/workflow/codex-pets/pricing", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    try {
+      const pricing = await price();
+      return {
+        success: true,
+        data: {
+          pricing: {
+            ...pricing,
+            includedBaseCandidates: 2,
+            includedRepairAttempts: 2,
+          },
+        },
+      };
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error) }, "failed to load Codex pet pricing");
+      return reply.code(502).send({ error: "获取桌宠套餐价格失败" });
+    }
+  });
+
+  app.get("/api/workflow/codex-pets/projects", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const projects = await prisma.codexPetProject.findMany({
+      where: { userId },
+      orderBy: { updatedAt: "desc" },
+      take: 50,
+    });
+    return { success: true, data: { projects: projects.map((project) => serializeProjectSummary(project as ProjectShape)) } };
+  });
+
+  app.post("/api/workflow/codex-pets/projects", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const parsed = createProjectSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: "桌宠项目参数不合法", issues: parsed.error.flatten() });
+    const keyResult = parsed.data.idempotencyKey || request.headers["idempotency-key"]
+      ? resolveIdempotencyKey(request.headers["idempotency-key"], parsed.data.idempotencyKey)
+      : null;
+    if (keyResult && !keyResult.success) return reply.code(400).send({ error: "幂等键不合法或不一致" });
+    const idempotencyKey = keyResult?.value ?? null;
+
+    if (idempotencyKey) {
+      const existing = await prisma.codexPetProject.findFirst({ where: { userId, createIdempotencyKey: idempotencyKey } });
+      if (existing) return { success: true, data: { project: serializeProject(existing as ProjectShape) } };
+    }
+    if (!await validateReferenceAssets(userId, parsed.data.referenceAssetIds)) {
+      return reply.code(400).send({ error: "参考图不存在、无权使用或不是可用的已上传图片" });
+    }
+
+    try {
+      const project = await prisma.codexPetProject.create({
+        data: {
+          userId,
+          name: parsed.data.name,
+          description: parsed.data.description,
+          prompt: parsed.data.prompt,
+          stylePreset: parsed.data.stylePreset,
+          styleNotes: parsed.data.styleNotes,
+          referenceAssetIds: parsed.data.referenceAssetIds,
+          autoContinue: parsed.data.autoContinue,
+          createIdempotencyKey: idempotencyKey,
+          status: "draft",
+        },
+      });
+      return reply.code(201).send({ success: true, data: { project: serializeProject(project as ProjectShape) } });
+    } catch (error) {
+      if (idempotencyKey && isUniqueConstraintError(error)) {
+        const existing = await prisma.codexPetProject.findFirst({ where: { userId, createIdempotencyKey: idempotencyKey } });
+        if (existing) return { success: true, data: { project: serializeProject(existing as ProjectShape) } };
+      }
+      throw error;
+    }
+  });
+
+  app.get("/api/workflow/codex-pets/projects/:projectId", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+
+    const [runs, artifacts, referenceAssets] = await Promise.all([
+      prisma.codexPetRun.findMany({
+        where: { projectId: project.id, userId },
+        orderBy: { createdAt: "desc" },
+        take: 30,
+      }),
+      prisma.codexPetArtifact.findMany({
+        where: { projectId: project.id, userId },
+        orderBy: { createdAt: "desc" },
+        take: 300,
+      }),
+      project.referenceAssetIds.length
+        ? prisma.imageAsset.findMany({
+          where: { userId, id: { in: [...project.referenceAssetIds] } },
+          select: { id: true, mime: true, originalUrl: true, thumbnailUrl: true, createdAt: true },
+        })
+        : Promise.resolve([]),
+    ]);
+    const latestRun = project.latestRunId
+      ? runs.find((run) => run.id === project.latestRunId) ?? null
+      : runs[0] ?? null;
+    const jobs = latestRun
+      ? await prisma.codexPetJob.findMany({ where: { runId: latestRun.id, projectId: project.id, userId }, orderBy: { createdAt: "asc" } })
+      : [];
+    const serializedArtifacts = await Promise.all(artifacts
+      .filter((artifact) => artifact.status !== "superseded")
+      .map((artifact) => serializeArtifact(
+        artifact as CodexPetArtifactShape,
+        deps,
+        { userId, projectId: project.id },
+      )));
+    const projectData = {
+      ...serializeProject(project as ProjectShape),
+      referenceAssets: referenceAssets.map((asset) => ({
+        id: asset.id,
+        mime: asset.mime,
+        originalUrl: asset.originalUrl,
+        thumbnailUrl: asset.thumbnailUrl,
+        createdAt: asset.createdAt.toISOString(),
+      })),
+    };
+    return {
+      success: true,
+      data: {
+        detail: {
+          project: projectData,
+          latestRun: latestRun ? serializeRun(latestRun as RunShape) : null,
+          runs: runs.map((run) => serializeRun(run as RunShape)),
+          artifacts: serializedArtifacts,
+          jobs: jobs.map(serializeJob),
+        },
+      },
+    };
+  });
+
+  app.patch("/api/workflow/codex-pets/projects/:projectId", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(request.params);
+    const body = updateProjectSchema.safeParse(request.body);
+    if (!params.success || !body.success || Object.keys(body.data).length === 0) {
+      return reply.code(400).send({ error: "桌宠项目参数不合法" });
+    }
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    const blockingRun = await prisma.codexPetRun.findFirst({
+      where: {
+        projectId: project.id,
+        userId,
+        status: { in: [...ACTIVE_RUN_STATUSES] },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    if (project.status === "draft" && blockingRun) {
+      return reply.code(409).send({ error: "桌宠制作正在等待扣费或执行，不能修改输入" });
+    }
+    if (!(EDITABLE_PROJECT_STATUSES as readonly string[]).includes(project.status)) {
+      return reply.code(409).send({ error: "只有草稿或等待主形象确认的项目可以修改" });
+    }
+    if (body.data.referenceAssetIds && !await validateReferenceAssets(userId, body.data.referenceAssetIds)) {
+      return reply.code(400).send({ error: "参考图不存在、无权使用或不是可用的已上传图片" });
+    }
+    if (project.status === "draft") {
+      const updated = await prisma.codexPetProject.update({
+        where: { id: project.id, userId },
+        data: body.data,
+      });
+      return { success: true, data: { project: serializeProject(updated as ProjectShape) } };
+    }
+
+    if (!project.latestRunId) return reply.code(409).send({ error: "等待确认的运行不存在，请刷新后重试" });
+    const regenerated = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${project.latestRunId}`);
+      const current = await tx.codexPetProject.findFirst({ where: { id: project.id, userId } });
+      if (!current || current.status !== "awaiting_base_review" || !current.latestRunId) {
+        throw new Error("CODEX_PET_EDIT_STATE_CONFLICT");
+      }
+      const run = await tx.codexPetRun.findFirst({
+        where: { id: current.latestRunId, projectId: current.id, userId, status: "awaiting_base_review" },
+      });
+      if (!run) throw new Error("CODEX_PET_EDIT_STATE_CONFLICT");
+      const updatedProject = await tx.codexPetProject.update({
+        where: { id: current.id, userId },
+        data: { ...body.data, status: "base_generating" },
+      });
+      const inputSnapshot = {
+        name: updatedProject.name,
+        description: updatedProject.description,
+        prompt: updatedProject.prompt,
+        stylePreset: updatedProject.stylePreset,
+        styleNotes: updatedProject.styleNotes,
+        referenceAssetIds: updatedProject.referenceAssetIds,
+        autoContinue: updatedProject.autoContinue,
+        requestedModel: "gpt-image-2",
+      };
+      const supersededAt = now();
+      await tx.codexPetArtifact.updateMany({
+        where: {
+          projectId: current.id,
+          runId: run.id,
+          userId,
+          kind: "base_candidate",
+          status: "ready",
+        },
+        data: {
+          status: "superseded",
+          expiresAt: new Date(supersededAt.getTime() + 7 * 24 * 60 * 60_000),
+        },
+      });
+      await tx.codexPetJob.updateMany({
+        where: {
+          runId: run.id,
+          projectId: current.id,
+          userId,
+          key: { in: ["base-candidate-1", "base-candidate-2", "base-selection"] },
+        },
+        data: {
+          status: "queued",
+          attempt: 0,
+          inputArtifactIds: [],
+          outputArtifactIds: [],
+          output: {},
+          error: null,
+          workerId: null,
+          startedAt: null,
+          completedAt: null,
+        },
+      });
+      const updatedRun = await tx.codexPetRun.update({
+        where: { id: run.id },
+        data: {
+          inputSnapshot,
+          autoContinue: updatedProject.autoContinue,
+          colorKey: null,
+          selectedBaseArtifactId: null,
+          status: "base_generating",
+          progressStage: "base_generating",
+          progressPercent: 5,
+          progressMessage: "项目输入已更新，正在重新生成主形象候选",
+          error: null,
+          completedAt: null,
+          lastEventSequence: { increment: 1 },
+        },
+      });
+      await tx.codexPetEvent.create({
+        data: {
+          projectId: current.id,
+          runId: run.id,
+          userId,
+          sequence: updatedRun.lastEventSequence,
+          type: "stage.started",
+          stage: "base_generating",
+          message: "项目输入已更新，正在重新生成主形象候选",
+          progress: 5,
+          payload: { projectInputUpdated: true },
+        },
+      });
+      return { project: updatedProject as ProjectShape, run: updatedRun as RunShape };
+    }).catch((error) => {
+      if (error instanceof Error && error.message === "CODEX_PET_EDIT_STATE_CONFLICT") return null;
+      throw error;
+    });
+    if (!regenerated) return reply.code(409).send({ error: "项目状态已变化，请刷新后重试" });
+    try {
+      await enqueueRun(regenerated.run.id);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: regenerated.run.id }, "Codex pet edited base regeneration enqueue failed");
+      return reply.code(503).send({
+        error: "修改已保存，任务将由恢复程序自动入队",
+        retryable: true,
+        runId: regenerated.run.id,
+      });
+    }
+    await notifyEvent(app, deps, regenerated.run.id);
+    return reply.code(202).send({
+      success: true,
+      data: {
+        project: serializeProject(regenerated.project),
+        run: serializeRun(regenerated.run),
+        candidatesRegenerated: true,
+      },
+    });
+  });
+
+  app.delete("/api/workflow/codex-pets/projects/:projectId", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (!deps.enqueueProjectCleanup) {
+      app.log.error({ status: "cleanup_not_configured" }, "Codex pet durable project cleanup is not configured");
+      return reply.code(503).send({ error: "桌宠删除服务暂不可用，请稍后重试", retryable: true });
+    }
+    const marked = await prisma.$transaction(async (tx) => {
+      // Serialize with /start for this user. Once marked, every mutating
+      // project endpoint rejects the project while durable cleanup converges.
+      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+      return tx.codexPetProject.updateMany({
+        where: { id: project.id, userId },
+        data: { status: "deleting" },
+      });
+    });
+    if (marked.count === 0) return reply.code(404).send({ error: "桌宠项目不存在" });
+    const runs = await prisma.codexPetRun.findMany({ where: { projectId: project.id, userId }, orderBy: { createdAt: "desc" } });
+    const stillRunning = runs.filter((run) => isActiveRunStatus(run.status) || Boolean(run.workerId));
+    let waitingForWorker = stillRunning.some((run) => Boolean(run.workerId));
+    if (stillRunning.length > 0) {
+      for (const run of stillRunning) {
+        if (isActiveRunStatus(run.status)) {
+          try {
+            const cancellation = await settleCancellationRefund(await createCancellation(userId, project.id, run.id));
+            waitingForWorker ||= Boolean(cancellation.run.workerId);
+            await notifyEvent(app, deps, run.id);
+          } catch (error) {
+            if ((error as Error).message !== "CODEX_PET_RUN_TERMINAL") throw error;
+          }
+        }
+        try {
+          await deps.requestCancellation?.(run.id);
+        } catch (error) {
+          app.log.warn({ error: safeDiagnostic(error), runId: run.id }, "Codex pet cancellation signal failed; persisted flag remains authoritative");
+        }
+      }
+    }
+    try {
+      await deps.enqueueProjectCleanup({ userId, projectId: project.id });
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), status: "cleanup_enqueue_failed" }, "failed to enqueue durable Codex pet project cleanup");
+      return reply.code(503).send({ error: "桌宠删除任务暂未入队，请重试", retryable: true });
+    }
+    return reply.code(202).send({
+      success: true,
+      data: {
+        projectId: project.id,
+        deletionPending: true,
+        waitingForWorker,
+        message: waitingForWorker ? "已请求停止运行，worker 退出后将完成删除" : "删除任务已进入可靠清理队列",
+      },
+    });
+  });
+
+  app.post("/api/workflow/codex-pets/projects/:projectId/start", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(request.params);
+    const body = startRunSchema.safeParse(request.body ?? {});
+    if (!params.success || !body.success) return reply.code(400).send({ error: "启动参数不合法" });
+    const key = resolveIdempotencyKey(request.headers["idempotency-key"], body.data.idempotencyKey);
+    if (!key.success) return reply.code(400).send({ error: "启动制作必须提供一致且合法的幂等键" });
+
+    const initialProject = await ownedProject(userId, params.data.projectId);
+    if (!initialProject) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (initialProject.status === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能开始新制作" });
+    if (!initialProject.prompt.trim() && initialProject.referenceAssetIds.length === 0) {
+      return reply.code(400).send({ error: "请填写角色提示词或上传至少一张参考图" });
+    }
+    if (!await validateReferenceAssets(userId, initialProject.referenceAssetIds)) {
+      return reply.code(400).send({ error: "项目参考图不存在、无权使用或已失效" });
+    }
+    let pricing: ResourcePrice;
+    try {
+      pricing = await price();
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error) }, "failed to load Codex pet price before start");
+      return reply.code(502).send({ error: "桌宠套餐计费服务不可用" });
+    }
+    if (!pricing.enabled) return reply.code(409).send({ error: "Codex 桌宠套餐当前已停用" });
+    if (pricing.pricingType !== "PER_CALL") return reply.code(500).send({ error: "Codex 桌宠套餐计价配置错误" });
+
+    let transactionResult: { readonly project: ProjectShape; readonly run: RunShape; readonly created: boolean };
+    try {
+      transactionResult = await prisma.$transaction(async (tx) => {
+        // The lock serializes both equal and different idempotency keys for this user.
+        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+        const project = await tx.codexPetProject.findFirst({ where: { id: params.data.projectId, userId } });
+        if (!project) throw new Error("CODEX_PET_PROJECT_NOT_FOUND");
+        if (project.status === "deleting") throw new Error("CODEX_PET_PROJECT_DELETING");
+        const existing = await tx.codexPetRun.findFirst({
+          where: { projectId: project.id, userId, idempotencyKey: key.value },
+        });
+        if (existing) {
+          // An insufficient attempt is intentionally retryable with the same
+          // billing operation after a top-up.  It must not, however, be
+          // resurrected after another idempotency key has already started or
+          // completed a run.  Without this guard a stale browser retry could
+          // activate a second run and charge the fixed package twice.
+          if (existing.billingChargeStatus === "insufficient" && !existing.billingActivatedAt) {
+            if (project.status !== "draft") throw new Error("CODEX_PET_INSUFFICIENT_RETRY_CONFLICT");
+            const active = await tx.codexPetRun.findFirst({
+              where: {
+                id: { not: existing.id },
+                userId,
+                status: { in: [...ACTIVE_RUN_STATUSES] },
+              },
+              orderBy: { createdAt: "desc" },
+            });
+            if (active) throw new ActiveCodexPetRunError(active.id);
+            // No charge or visual task was ever activated, so edits made to
+            // the draft after an insufficient-balance response must become
+            // the authoritative input for the explicit same-key retry.  If we
+            // keep the original snapshot here, a user can top up, change the
+            // character/reference images, and still be charged for the stale
+            // first attempt's prompt.
+            const refreshed = await tx.codexPetRun.update({
+              where: { id: existing.id, projectId: project.id, userId },
+              data: {
+                inputSnapshot: {
+                  name: project.name,
+                  description: project.description,
+                  prompt: project.prompt,
+                  stylePreset: project.stylePreset,
+                  styleNotes: project.styleNotes,
+                  referenceAssetIds: project.referenceAssetIds,
+                  autoContinue: project.autoContinue,
+                  requestedModel: "gpt-image-2",
+                },
+                autoContinue: project.autoContinue,
+                requestedModel: "gpt-image-2",
+                error: null,
+              },
+            });
+            return { project: project as ProjectShape, run: refreshed as RunShape, created: false };
+          }
+          return { project: project as ProjectShape, run: existing as RunShape, created: false };
+        }
+
+        // A completed/failed/cancelled project is immutable from the start
+        // endpoint.  Re-running is intentionally exposed through “复制为新
+        // 项目”; allowing a direct start here would replace latestRunId on a
+        // ready project and could charge the user for an unrelated second
+        // delivery.  Keep the idempotent replay branch above so a retried
+        // request for an already-created run remains safe.
+        if (project.status !== "draft") throw new Error("CODEX_PET_PROJECT_NOT_DRAFT");
+
+        const active = await tx.codexPetRun.findFirst({
+          where: { userId, status: { in: [...ACTIVE_RUN_STATUSES] } },
+          orderBy: { createdAt: "desc" },
+        });
+        if (active) throw new ActiveCodexPetRunError(active.id);
+
+        const runId = deriveCodexPetRunId(userId, project.id, key.value);
+        const operationId = `codex-pet:${runId}`;
+        const createdAt = now();
+        const inputSnapshot = {
+          name: project.name,
+          description: project.description,
+          prompt: project.prompt,
+          stylePreset: project.stylePreset,
+          styleNotes: project.styleNotes,
+          referenceAssetIds: project.referenceAssetIds,
+          autoContinue: project.autoContinue,
+          requestedModel: "gpt-image-2",
+        };
+        const created = await tx.codexPetRun.create({
+          data: {
+            id: runId,
+            projectId: project.id,
+            userId,
+            idempotencyKey: key.value,
+            inputSnapshot,
+            autoContinue: project.autoContinue,
+            requestedModel: "gpt-image-2",
+            ...codexPetPendingBillingFields(operationId),
+            createdAt,
+          },
+        });
+        // The durable intent must commit before any external billing call. The
+        // reconciler activates the run and writes run.queued in a later short
+        // transaction only after the idempotent charge is confirmed.
+        return { project: project as ProjectShape, run: created as RunShape, created: true };
+      });
+    } catch (error) {
+      if (error instanceof ActiveCodexPetRunError) {
+        return reply.code(409).send({ error: error.message, activeRunId: error.runId });
+      }
+      if (error instanceof Error && error.message === "CODEX_PET_PROJECT_NOT_FOUND") {
+        return reply.code(404).send({ error: "桌宠项目不存在" });
+      }
+      if (error instanceof Error && error.message === "CODEX_PET_PROJECT_DELETING") {
+        return reply.code(409).send({ error: "桌宠项目正在删除，不能开始新制作" });
+      }
+      if (error instanceof Error && error.message === "CODEX_PET_PROJECT_NOT_DRAFT") {
+        return reply.code(409).send({ error: "只有草稿项目可以开始新的桌宠制作，请复制为新项目" });
+      }
+      if (error instanceof Error && error.message === "CODEX_PET_INSUFFICIENT_RETRY_CONFLICT") {
+        return reply.code(409).send({ error: "该未扣费运行已被后续项目状态取代，不能再次启动，请使用当前项目操作" });
+      }
+      app.log.error({ error: safeDiagnostic(error), status: "run_create_failed" }, "failed to create Codex pet run");
+      return reply.code(502).send({ error: "启动桌宠制作失败，请稍后重试" });
+    }
+
+    let billingResult: Awaited<ReturnType<typeof reconcileCodexPetRunBilling>>;
+    try {
+      billingResult = await reconcileCodexPetRunBilling({
+        prisma,
+        billing,
+        runId: transactionResult.run.id,
+        userId,
+        projectId: transactionResult.project.id,
+        // Retrying the same explicit idempotency key after a top-up reuses the
+        // original durable operation instead of creating another charge.
+        retryInsufficient: !transactionResult.created && transactionResult.run.billingChargeStatus === "insufficient",
+      });
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: transactionResult.run.id }, "Codex pet billing reconciliation failed");
+      return reply.code(503).send({
+        error: "套餐扣费状态已安全记录，正在等待自动确认；请使用同一幂等键重试",
+        retryable: true,
+        runId: transactionResult.run.id,
+      });
+    }
+
+    const [currentProject, currentRun] = await Promise.all([
+      ownedProject(userId, params.data.projectId),
+      ownedRun(userId, params.data.projectId, transactionResult.run.id),
+    ]);
+    if (!currentProject || !currentRun) return reply.code(404).send({ error: "桌宠项目或运行不存在" });
+    transactionResult = {
+      ...transactionResult,
+      project: currentProject as ProjectShape,
+      run: currentRun as RunShape,
+    };
+
+    if (billingResult.outcome === "insufficient") {
+      return reply.code(402).send({
+        error: "积分不足，请充值后使用同一幂等键重试",
+        retryable: true,
+        runId: currentRun.id,
+      });
+    }
+    if (billingResult.outcome === "charging"
+      || billingResult.outcome === "retry_scheduled"
+      || billingResult.outcome === "uncertain") {
+      return reply.code(202).send({
+        success: true,
+        data: {
+          project: serializeProject(transactionResult.project),
+          run: serializeRun(transactionResult.run),
+          billingPending: true,
+        },
+        error: "套餐扣费结果正在确认，任务尚未执行；系统会自动继续",
+        retryable: true,
+        runId: currentRun.id,
+        billingStatus: billingResult.chargeStatus,
+        retryAt: billingResult.retryAt?.toISOString() ?? null,
+      });
+    }
+    if (billingResult.outcome === "cancelled" || billingResult.outcome === "refund_pending") {
+      return reply.code(409).send({ error: "运行已取消或项目正在删除，任务不会启动", runId: currentRun.id });
+    }
+
+    try {
+      if (billingResult.shouldEnqueue) await enqueueRun(transactionResult.run.id);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: transactionResult.run.id }, "Codex pet run enqueue failed");
+      return reply.code(503).send({
+        error: "任务已记录且未重复扣费，但暂时未能入队；请使用同一幂等键重试",
+        retryable: true,
+        runId: transactionResult.run.id,
+      });
+    }
+    await notifyEvent(app, deps, transactionResult.run.id);
+    return reply.code(transactionResult.created ? 202 : 200).send({
+      success: true,
+      data: {
+        project: serializeProject(transactionResult.project),
+        run: serializeRun(transactionResult.run),
+      },
+    });
+  });
+
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/base-selection", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(request.params);
+    const body = baseSelectionSchema.safeParse(request.body);
+    if (!params.success || !body.success) return reply.code(400).send({ error: "主形象选择参数不合法" });
+    const run = await ownedRun(userId, params.data.projectId, params.data.runId);
+    if (!run) return reply.code(404).send({ error: "桌宠运行不存在" });
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (project.status === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能修改主形象" });
+
+    if ("regenerate" in body.data) {
+      if (run.status !== "awaiting_base_review" && run.status !== "base_generating") {
+        return reply.code(409).send({ error: "只有等待主形象确认时才能重生候选" });
+      }
+      const regenerated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
+        const mutableProject = await tx.codexPetProject.findFirst({
+          where: { id: run.projectId, userId, status: { not: "deleting" } },
+          select: { id: true },
+        });
+        if (!mutableProject) throw new Error("CODEX_PET_PROJECT_DELETING");
+        const current = await tx.codexPetRun.findFirst({ where: { id: run.id, projectId: run.projectId, userId } });
+        if (!current) throw new Error("CODEX_PET_RUN_NOT_FOUND");
+        // A concurrent retry that sees the already-reset state only needs to
+        // enqueue the same BullMQ job again; it must not invalidate new output.
+        if (current.status === "base_generating" && !current.selectedBaseArtifactId) {
+          return { run: current, reset: false };
+        }
+        if (current.status !== "awaiting_base_review") throw new Error("CODEX_PET_BASE_STATE_CONFLICT");
+        const supersededAt = now();
+        await tx.codexPetArtifact.updateMany({
+          where: {
+            projectId: current.projectId,
+            runId: current.id,
+            userId,
+            kind: "base_candidate",
+            status: "ready",
+          },
+          data: {
+            status: "superseded",
+            expiresAt: new Date(supersededAt.getTime() + 7 * 24 * 60 * 60_000),
+          },
+        });
+        await tx.codexPetJob.updateMany({
+          where: {
+            runId: current.id,
+            projectId: current.projectId,
+            userId,
+            key: { in: ["base-candidate-1", "base-candidate-2", "base-selection"] },
+          },
+          data: {
+            status: "queued",
+            attempt: 0,
+            outputArtifactIds: [],
+            error: null,
+            workerId: null,
+            startedAt: null,
+            completedAt: null,
+          },
+        });
+        const next = await tx.codexPetRun.update({
+          where: { id: current.id },
+          data: {
+            selectedBaseArtifactId: null,
+            status: "base_generating",
+            progressStage: "base_generating",
+            progressPercent: 5,
+            progressMessage: "正在重新生成两个主形象候选",
+            error: null,
+            completedAt: null,
+            lastEventSequence: { increment: 1 },
+          },
+        });
+        await tx.codexPetEvent.create({
+          data: {
+            projectId: current.projectId,
+            runId: current.id,
+            userId,
+            sequence: next.lastEventSequence,
+            type: "stage.started",
+            stage: "base_generating",
+            message: "正在重新生成两个主形象候选",
+            progress: 5,
+            payload: { regenerate: true },
+          },
+        });
+        await tx.codexPetProject.updateMany({
+          where: { id: current.projectId, userId, latestRunId: current.id },
+          data: { status: "base_generating" },
+        });
+        return { run: next, reset: true };
+      }).catch((error) => {
+        if (error instanceof Error && error.message === "CODEX_PET_BASE_STATE_CONFLICT") return null;
+        if (error instanceof Error && error.message === "CODEX_PET_PROJECT_DELETING") return "deleting" as const;
+        throw error;
+      });
+      if (regenerated === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能重生主形象" });
+      if (!regenerated) return reply.code(409).send({ error: "主形象确认状态已变化，请刷新后重试" });
+      try {
+        await enqueueRun(regenerated.run.id);
+      } catch (error) {
+        app.log.error({ error: safeDiagnostic(error), runId: regenerated.run.id }, "Codex pet base regeneration enqueue failed");
+        return reply.code(503).send({ error: "重生请求已保存，但暂时未能入队；请重试", retryable: true });
+      }
+      if (regenerated.reset) await notifyEvent(app, deps, regenerated.run.id);
+      return reply.code(regenerated.reset ? 202 : 200).send({
+        success: true,
+        data: { run: serializeRun(regenerated.run as RunShape) },
+      });
+    }
+
+    if ("autoSelect" in body.data) {
+      if (run.status !== "awaiting_base_review" && !(run.status === "base_generating" && run.autoContinue && !run.selectedBaseArtifactId)) {
+        return reply.code(409).send({ error: "当前运行不在可自动选择主形象的阶段" });
+      }
+      const delegated = await prisma.$transaction(async (tx) => {
+        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
+        const mutableProject = await tx.codexPetProject.findFirst({
+          where: { id: run.projectId, userId, status: { not: "deleting" } },
+          select: { id: true },
+        });
+        if (!mutableProject) throw new Error("CODEX_PET_PROJECT_DELETING");
+        const current = await tx.codexPetRun.findFirst({ where: { id: run.id, projectId: run.projectId, userId } });
+        if (!current) throw new Error("CODEX_PET_RUN_NOT_FOUND");
+        if (current.status === "base_generating" && current.autoContinue && !current.selectedBaseArtifactId) {
+          return { run: current, delegated: false };
+        }
+        if (current.status !== "awaiting_base_review") throw new Error("CODEX_PET_BASE_STATE_CONFLICT");
+        const next = await tx.codexPetRun.update({
+          where: { id: current.id },
+          data: {
+            autoContinue: true,
+            selectedBaseArtifactId: null,
+            status: "base_generating",
+            progressStage: "base_generating",
+            progressPercent: 15,
+            progressMessage: "视觉质检正在自动选择较优主形象",
+            lastEventSequence: { increment: 1 },
+          },
+        });
+        await tx.codexPetEvent.create({
+          data: {
+            projectId: current.projectId,
+            runId: current.id,
+            userId,
+            sequence: next.lastEventSequence,
+            type: "stage.started",
+            stage: "base_generating",
+            message: "视觉质检正在自动选择较优主形象",
+            progress: 15,
+            payload: { autoSelect: true },
+          },
+        });
+        await tx.codexPetProject.updateMany({
+          where: { id: current.projectId, userId, latestRunId: current.id },
+          data: { status: "base_generating" },
+        });
+        return { run: next, delegated: true };
+      }).catch((error) => {
+        if (error instanceof Error && error.message === "CODEX_PET_BASE_STATE_CONFLICT") return null;
+        if (error instanceof Error && error.message === "CODEX_PET_PROJECT_DELETING") return "deleting" as const;
+        throw error;
+      });
+      if (delegated === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能自动选择主形象" });
+      if (!delegated) return reply.code(409).send({ error: "主形象确认状态已变化，请刷新后重试" });
+      try {
+        await enqueueRun(delegated.run.id);
+      } catch (error) {
+        app.log.error({ error: safeDiagnostic(error), runId: delegated.run.id }, "Codex pet automatic base selection enqueue failed");
+        return reply.code(503).send({ error: "自动选择请求已保存，但暂时未能入队；请重试", retryable: true });
+      }
+      if (delegated.delegated) await notifyEvent(app, deps, delegated.run.id);
+      return reply.code(delegated.delegated ? 202 : 200).send({
+        success: true,
+        data: { run: serializeRun(delegated.run as RunShape) },
+      });
+    }
+
+    const candidates = await prisma.codexPetArtifact.findMany({
+      where: {
+        projectId: run.projectId,
+        runId: run.id,
+        userId,
+        kind: "base_candidate",
+        status: "ready",
+      },
+      orderBy: { createdAt: "asc" },
+    });
+    if (candidates.length === 0) return reply.code(409).send({ error: "当前运行没有可选择的主形象候选" });
+    if (!("artifactId" in body.data)) return reply.code(400).send({ error: "主形象选择参数不合法" });
+    const artifactId = body.data.artifactId;
+    const selected = candidates.find((candidate) => candidate.id === artifactId);
+    if (!selected) return reply.code(400).send({ error: "只能选择当前运行所属的主形象候选" });
+
+    if (run.status !== "awaiting_base_review") {
+      if (run.selectedBaseArtifactId !== selected.id || isTerminalRunStatus(run.status)) {
+        return reply.code(409).send({ error: "当前运行不在主形象确认阶段" });
+      }
+      try {
+        await enqueueRun(run.id);
+      } catch (error) {
+        app.log.error({ error: safeDiagnostic(error), runId: run.id }, "Codex pet continuation enqueue failed");
+        return reply.code(503).send({ error: "已保存主形象选择，但续跑暂时未入队；请重试", retryable: true });
+      }
+      return { success: true, data: { run: serializeRun(run as RunShape) } };
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
+      const mutableProject = await tx.codexPetProject.findFirst({
+        where: { id: run.projectId, userId, status: { not: "deleting" } },
+        select: { id: true },
+      });
+      if (!mutableProject) throw new Error("CODEX_PET_PROJECT_DELETING");
+      const current = await tx.codexPetRun.findFirst({ where: { id: run.id, projectId: run.projectId, userId } });
+      if (!current) throw new Error("CODEX_PET_RUN_NOT_FOUND");
+      if (current.status !== "awaiting_base_review") {
+        if (current.selectedBaseArtifactId === selected.id && !isTerminalRunStatus(current.status)) return current;
+        throw new Error("CODEX_PET_BASE_STATE_CONFLICT");
+      }
+      const currentSelected = await tx.codexPetArtifact.findFirst({
+        where: {
+          id: selected.id,
+          projectId: current.projectId,
+          runId: current.id,
+          userId,
+          kind: "base_candidate",
+          status: "ready",
+        },
+      });
+      if (!currentSelected) throw new Error("CODEX_PET_BASE_STATE_CONFLICT");
+      const next = await tx.codexPetRun.update({
+        where: { id: current.id },
+        data: {
+          selectedBaseArtifactId: selected.id,
+          status: "standard_generating",
+          progressStage: "standard_generating",
+          progressPercent: 15,
+          progressMessage: "主形象已确认，正在制作标准动作",
+          lastEventSequence: { increment: 1 },
+        },
+      });
+      await tx.codexPetEvent.create({
+        data: {
+          projectId: current.projectId,
+          runId: current.id,
+          userId,
+          sequence: next.lastEventSequence,
+          type: "stage.started",
+          stage: "standard_generating",
+          message: "主形象已确认，正在制作标准动作",
+          progress: 15,
+          payload: { selectedBaseArtifactId: selected.id, autoSelected: false },
+        },
+      });
+      const selectedArtifactUpdate = await tx.codexPetArtifact.updateMany({
+        where: {
+          id: selected.id,
+          projectId: current.projectId,
+          runId: current.id,
+          userId,
+          kind: "base_candidate",
+          status: "ready",
+        },
+        data: { expiresAt: null },
+      });
+      if (selectedArtifactUpdate.count !== 1) throw new Error("CODEX_PET_BASE_STATE_CONFLICT");
+      await tx.codexPetProject.updateMany({
+        where: { id: current.projectId, userId, latestRunId: current.id },
+        data: { status: "standard_generating" },
+      });
+      return next;
+    }).catch((error) => {
+      if (error instanceof Error && error.message === "CODEX_PET_BASE_STATE_CONFLICT") return null;
+      if (error instanceof Error && error.message === "CODEX_PET_PROJECT_DELETING") return "deleting" as const;
+      throw error;
+    });
+    if (updated === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能选择主形象" });
+    if (!updated) return reply.code(409).send({ error: "主形象确认状态已变化，请刷新后重试" });
+    try {
+      await enqueueRun(updated.id);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: updated.id }, "Codex pet continuation enqueue failed");
+      return reply.code(503).send({ error: "已保存主形象选择，但续跑暂时未入队；请重试", retryable: true });
+    }
+    await notifyEvent(app, deps, updated.id);
+    return reply.code(202).send({ success: true, data: { run: serializeRun(updated as RunShape) } });
+  });
+
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/cancel", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "取消参数不合法" });
+    try {
+      const result = await settleCancellationRefund(await createCancellation(userId, params.data.projectId, params.data.runId));
+      try {
+        await deps.requestCancellation?.(result.run.id);
+      } catch (error) {
+        app.log.warn({ error: safeDiagnostic(error), runId: result.run.id }, "Codex pet cancellation signal failed; persisted flag remains authoritative");
+      }
+      await notifyEvent(app, deps, result.run.id);
+      return { success: true, data: { run: serializeRun(result.run) } };
+    } catch (error) {
+      if (error instanceof Error && error.message === "CODEX_PET_RUN_NOT_FOUND") {
+        return reply.code(404).send({ error: "桌宠运行不存在" });
+      }
+      if (error instanceof Error && error.message === "CODEX_PET_RUN_TERMINAL") {
+        return reply.code(409).send({ error: "该桌宠运行已经结束，不能取消" });
+      }
+      throw error;
+    }
+  });
+
+  app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(request.params);
+    const query = eventsQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success) return reply.code(400).send({ error: "事件查询参数不合法" });
+    const run = await ownedRun(userId, params.data.projectId, params.data.runId);
+    if (!run) return reply.code(404).send({ error: "桌宠运行不存在" });
+    const initialTail = query.data.after === 0;
+    const events = await prisma.codexPetEvent.findMany({
+      where: { runId: run.id, projectId: run.projectId, userId, sequence: { gt: query.data.after } },
+      orderBy: { sequence: initialTail ? "desc" : "asc" },
+      take: initialTail ? 200 : 500,
+    });
+    const ordered = initialTail ? events.reverse() : events;
+    return {
+      success: true,
+      data: {
+        events: ordered.map((event) => serializeEvent(event as EventShape)),
+        cursor: ordered.at(-1)?.sequence ?? query.data.after,
+      },
+    };
+  });
+
+  app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events/stream", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(request.params);
+    const query = eventsQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success) return reply.code(400).send({ error: "事件流参数不合法" });
+    const run = await ownedRun(userId, params.data.projectId, params.data.runId);
+    if (!run) return reply.code(404).send({ error: "桌宠运行不存在" });
+
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    let cursor = eventCursor(request, query.data.after);
+    app.log.info({ runId: run.id, status: "opened" }, "Codex pet SSE connection opened");
+    let flushing = false;
+    const flush = async () => {
+      if (flushing || reply.raw.destroyed || reply.raw.writableEnded) return;
+      flushing = true;
+      try {
+        const events = await prisma.codexPetEvent.findMany({
+          where: { runId: run.id, projectId: run.projectId, userId, sequence: { gt: cursor } },
+          orderBy: { sequence: "asc" },
+          take: 200,
+        });
+        for (const event of events) {
+          reply.raw.write(formatCodexPetSseEvent(event as EventShape));
+          cursor = event.sequence;
+        }
+      } finally {
+        flushing = false;
+      }
+    };
+    const triggerFlush = () => {
+      void flush().catch((error) => app.log.warn({ error: safeDiagnostic(error), runId: run.id }, "Codex pet SSE database replay failed"));
+    };
+
+    let unsubscribe: (() => Promise<void> | void) | undefined;
+    let redisFallback = false;
+    try {
+      try {
+        const subscribe = deps.subscribeRunEvents ?? defaultSubscribeRunEvents;
+        unsubscribe = await subscribe(run.id, triggerFlush) ?? undefined;
+      } catch (error) {
+        redisFallback = true;
+        app.log.warn({ error: safeDiagnostic(error), runId: run.id }, "Codex pet SSE Redis subscription unavailable; polling database");
+      }
+      await flush();
+      const poller = setInterval(triggerFlush, deps.ssePollIntervalMs ?? 2_000);
+      const heartbeat = setInterval(() => {
+        if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.write(`: heartbeat ${Date.now()}\n\n`);
+      }, deps.sseHeartbeatIntervalMs ?? 15_000);
+      try {
+        await (deps.waitForSseDisconnect ?? defaultWaitForSseDisconnect)(request, reply);
+      } finally {
+        clearInterval(poller);
+        clearInterval(heartbeat);
+      }
+    } finally {
+      await unsubscribe?.();
+      app.log.info({ runId: run.id, status: "closed", redisFallback }, "Codex pet SSE connection closed");
+      if (!reply.raw.destroyed && !reply.raw.writableEnded) reply.raw.end();
+    }
+  });
+
+  async function readyProjectAssets(userId: string, projectId: string, requestedRunId?: string) {
+    const project = await ownedProject(userId, projectId);
+    const runId = requestedRunId ?? project?.latestRunId;
+    if (!project || !runId) return null;
+    const run = await prisma.codexPetRun.findFirst({
+      where: { id: runId, projectId: project.id, userId },
+    });
+    if (!run
+      || run.status !== "ready"
+      || !run.knowledgeDocumentId
+      || !run.spritesheetArtifactId
+      || !run.packageArtifactId
+      || !codexPetValidationPassed(run.validationReport)) return null;
+    const [spritesheet, packageArtifact, knowledgeDocument] = await Promise.all([
+      prisma.codexPetArtifact.findFirst({
+        where: { id: run.spritesheetArtifactId, runId: run.id, projectId: project.id, userId },
+      }),
+      prisma.codexPetArtifact.findFirst({
+        where: { id: run.packageArtifactId, runId: run.id, projectId: project.id, userId },
+      }),
+      prisma.document.findFirst({
+        where: {
+          id: run.knowledgeDocumentId,
+          sourceModule: CODEX_PET_KNOWLEDGE_SOURCE_MODULE,
+          sourceId: run.id,
+          kb: { userId, systemKey: CODEX_PET_KNOWLEDGE_SYSTEM_KEY },
+        },
+        select: { id: true },
+      }),
+    ]);
+    if (!spritesheet || !packageArtifact || !knowledgeDocument) return null;
+    const currentTime = now();
+    if (!assertFinalSpritesheet(spritesheet as CodexPetArtifactShape, currentTime)
+      || !assertPackageArtifact(packageArtifact as CodexPetArtifactShape, currentTime)) return null;
+    return {
+      project: project as ProjectShape,
+      run: run as RunShape,
+      spritesheet: spritesheet as CodexPetArtifactShape,
+      packageArtifact: packageArtifact as CodexPetArtifactShape,
+    };
+  }
+
+  app.post("/api/workflow/codex-pets/projects/:projectId/install-link", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
+    const query = deliveryRunQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: "运行参数不合法" });
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    const ready = await readyProjectAssets(userId, project.id, query.data.runId);
+    if (!ready) return reply.code(409).send({ error: "桌宠尚未完成验证、打包和知识库归档，暂不能安装" });
+    try {
+      const secret = signingSecret(deps);
+      const origin = publicBaseUrl(deps);
+      const expiresAtSeconds = Math.floor(now().getTime() / 1_000) + CODEX_PET_INSTALL_URL_TTL_SECONDS;
+      const signature = signCodexPetArtifact(ready.spritesheet.id, expiresAtSeconds, secret);
+      const imageUrl = `${origin}/api/public/codex-pets/artifacts/${encodeURIComponent(ready.spritesheet.id)}?exp=${expiresAtSeconds}&sig=${encodeURIComponent(signature)}`;
+      const installParams = new URLSearchParams({
+        name: ready.project.name,
+        imageUrl,
+        description: ready.project.description,
+        spriteVersionNumber: "2",
+      });
+      app.log.info({ runId: ready.run.id, status: "install_link_issued" }, "Codex pet install link issued");
+      return {
+        success: true,
+        data: {
+          installUrl: `codex://pets/install?${installParams.toString()}`,
+          imageUrl,
+          expiresAt: new Date(expiresAtSeconds * 1_000).toISOString(),
+        },
+      };
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), status: "install_signing_failed" }, "Codex pet install signing is not configured");
+      return reply.code(503).send({ error: "Codex 安装地址暂未配置" });
+    }
+  });
+
+  app.get("/api/workflow/codex-pets/projects/:projectId/download", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = projectParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
+    const query = deliveryRunQuerySchema.safeParse(request.query);
+    if (!query.success) return reply.code(400).send({ error: "运行参数不合法" });
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    const ready = await readyProjectAssets(userId, project.id, query.data.runId);
+    if (!ready) return reply.code(409).send({ error: "桌宠尚未完成验证、打包和知识库归档，暂不能下载" });
+    try {
+      const bytes = await loadArtifact(ready.packageArtifact.objectKey);
+      const filename = packageFilename(ready.project, ready.packageArtifact);
+      app.log.info({ runId: ready.run.id, status: "package_downloaded" }, "Codex pet package downloaded");
+      return reply
+        .header("Content-Disposition", contentDisposition(filename))
+        .header("Content-Length", String(bytes.byteLength))
+        .header("Cache-Control", "private, no-store")
+        .header("X-Content-Type-Options", "nosniff")
+        .type("application/zip")
+        .send(bytes);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: ready.run.id, status: "package_download_failed" }, "Codex pet package download failed");
+      return reply.code(502).send({ error: "桌宠兼容包读取失败" });
+    }
+  });
+
+  app.get("/api/public/codex-pets/artifacts/:artifactId", async (request, reply) => {
+    const params = publicArtifactParamsSchema.safeParse(request.params);
+    const query = publicArtifactQuerySchema.safeParse(request.query);
+    if (!params.success || !query.success) return reply.code(400).send({ error: "资源地址不合法" });
+    let secret: string;
+    try {
+      secret = signingSecret(deps);
+    } catch {
+      return reply.code(503).send({ error: "资源签名服务暂不可用" });
+    }
+    if (!verifyCodexPetArtifactSignature({
+      artifactId: params.data.artifactId,
+      expiresAtSeconds: query.data.exp,
+      signature: query.data.sig,
+      secret,
+      nowSeconds: Math.floor(now().getTime() / 1_000),
+      purpose: query.data.purpose === "preview"
+        ? CODEX_PET_PREVIEW_ARTIFACT_PURPOSE
+        : CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
+    })) {
+      return reply.code(401).send({ error: "资源地址已失效" });
+    }
+    const artifact = await prisma.codexPetArtifact.findFirst({
+      where: { id: params.data.artifactId },
+    });
+    const shape = artifact as CodexPetArtifactShape | null;
+    if (query.data.purpose === "preview") {
+      if (!shape
+        || shape.status !== "ready"
+        || !isSafeRasterImageMime(shape.mime)
+        || !hasOwnedArtifactObjectKey(shape)
+        || (shape.expiresAt !== null && shape.expiresAt.getTime() <= now().getTime())) {
+        return reply.code(404).send({ error: "桌宠预览不存在" });
+      }
+    } else {
+      if (!shape || !assertFinalSpritesheet(shape, now())) {
+        return reply.code(404).send({ error: "桌宠精灵图不存在" });
+      }
+      const run = await prisma.codexPetRun.findFirst({
+        where: {
+          id: shape.runId,
+          projectId: shape.projectId,
+          userId: shape.userId,
+          status: "ready",
+          spritesheetArtifactId: shape.id,
+        },
+      });
+      if (!run || !run.knowledgeDocumentId || !codexPetValidationPassed(run.validationReport)) {
+        return reply.code(404).send({ error: "桌宠精灵图不存在" });
+      }
+      // A knowledge document can be removed independently (the FK sets the
+      // run link to NULL). Re-check the ownership-scoped Document here so a
+      // previously issued install URL cannot continue delivering a pet after
+      // its archive has been intentionally deleted.
+      const document = await prisma.document.findFirst({
+        where: {
+          id: run.knowledgeDocumentId,
+          sourceModule: CODEX_PET_KNOWLEDGE_SOURCE_MODULE,
+          sourceId: run.id,
+          kb: { userId: run.userId, systemKey: CODEX_PET_KNOWLEDGE_SYSTEM_KEY },
+        },
+        select: { id: true },
+      });
+      if (!document) return reply.code(404).send({ error: "桌宠精灵图不存在" });
+    }
+    if (!shape) return reply.code(404).send({ error: "桌宠资源不存在" });
+    try {
+      const bytes = await loadArtifact(shape.objectKey);
+      const maxAge = Math.max(0, Math.min(300, query.data.exp - Math.floor(now().getTime() / 1_000)));
+      app.log.info({ runId: shape.runId, status: query.data.purpose === "preview" ? "preview_served" : "install_image_served" }, "Codex pet signed artifact served");
+      return reply
+        .header("Content-Length", String(bytes.byteLength))
+        .header("Cache-Control", `private, max-age=${maxAge}`)
+        .header("Content-Disposition", "inline")
+        .header("X-Content-Type-Options", "nosniff")
+        .type(shape.mime)
+        .send(bytes);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: shape.runId, status: "signed_artifact_read_failed" }, "Codex pet signed artifact read failed");
+      return reply.code(502).send({ error: "桌宠资源读取失败" });
+    }
+  });
+}

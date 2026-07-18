@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    setupFiles: ["@testing-library/jest-dom"],
+    setupFiles: ["@testing-library/jest-dom", "./src/test/setup.ts"],
   },
 });

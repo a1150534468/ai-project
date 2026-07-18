@@ -67,7 +67,9 @@ export async function reapOnce(
 }
 
 /**
- * Start KB reaper: periodically find and reindex stale/failed documents.
+ * Start KB reaper: periodically process pending documents and expired leases.
+ * Retryable index failures are returned to pending by indexOnce; permanent
+ * failures remain failed and are intentionally excluded from this loop.
  * Errors are logged, not propagated. Does not block between cycles.
  *
  * @returns { stop: () => void } to stop the reaper
@@ -80,7 +82,7 @@ export function startKbReaper(
   const leaseMs = opts?.leaseMs ?? parseInt(process.env.KB_INDEX_LEASE_MS ?? '300000', 10);
   const maxAttempts = opts?.maxAttempts ?? parseInt(process.env.KB_MAX_ATTEMPTS ?? '3', 10);
   const batchSize = opts?.batchSize ?? 20;
-  const runIndex = opts?.runIndex ?? ((docId: string) => indexOnce(deps, docId));
+  const runIndex = opts?.runIndex ?? ((docId: string) => indexOnce(deps, docId, { maxAttempts }));
 
   const timer = setInterval(async () => {
     try {

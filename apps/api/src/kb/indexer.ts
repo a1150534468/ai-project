@@ -15,15 +15,80 @@ export class EmptyTextError extends Error {
 }
 
 /**
+ * Deterministic input/structure failures cannot be repaired by running the
+ * same index job again. Keep them out of the reaper retry loop.
+ */
+class PermanentIndexError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PermanentIndexError';
+  }
+}
+
+function positiveInteger(value: number | undefined, fallback: number): number {
+  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value! : fallback;
+}
+
+function configuredMaxAttempts(override?: number): number {
+  const fromEnv = Number.parseInt(process.env.KB_MAX_ATTEMPTS ?? '3', 10);
+  return positiveInteger(override, positiveInteger(fromEnv, 3));
+}
+
+function upstreamStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const candidate = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    $metadata?: { httpStatusCode?: unknown };
+  };
+  const raw = candidate.status ?? candidate.statusCode ?? candidate.$metadata?.httpStatusCode;
+  if (typeof raw === 'number' && Number.isInteger(raw)) return raw;
+
+  const message = error instanceof Error ? error.message : '';
+  const match = message.match(/^HTTP\s+(\d{3})(?:\D|$)/i);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+/**
+ * Unknown failures get a bounded retry because storage, network, embedding,
+ * billing and database clients often surface transport failures as a plain
+ * Error. Known bad input is terminal immediately, while HTTP client errors
+ * are terminal except for the conventional transient status codes.
+ */
+function isRetryableIndexError(error: unknown): boolean {
+  if (error instanceof PermanentIndexError || error instanceof EmptyTextError) return false;
+  if (error instanceof Error && ['EmptyTextError', 'SsrfError'].includes(error.name)) return false;
+
+  const status = upstreamStatus(error);
+  if (status !== null) {
+    return status === 408 || status === 409 || status === 425 || status === 429 || status >= 500;
+  }
+
+  const message = error instanceof Error ? error.message : typeof error === 'string' ? error : '';
+  if (
+    message.startsWith('不支持的文件类型：') ||
+    message.startsWith('Unknown sourceType:') ||
+    message.startsWith('Document not found:') ||
+    message.startsWith('Redirect target blocked:') ||
+    message.startsWith('Too many redirects') ||
+    message.startsWith('Response exceeds max size')
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * 向量转 pgvector 字面量 "[a,b,c]"
  * 包含有效性校验：维度检查 + 数值有效性
  */
 function toVectorLiteral(v: number[], expectedDimension: number): string {
   if (!Array.isArray(v) || v.length !== expectedDimension) {
-    throw new Error(`Invalid embedding dimension: expected ${expectedDimension}, got ${v.length}`);
+    throw new PermanentIndexError(`Invalid embedding dimension: expected ${expectedDimension}, got ${v.length}`);
   }
   if (!v.every((n) => typeof n === 'number' && isFinite(n))) {
-    throw new Error('Embedding contains non-finite or NaN values');
+    throw new PermanentIndexError('Embedding contains non-finite or NaN values');
   }
   return `[${v.join(',')}]`;
 }
@@ -86,6 +151,11 @@ export interface IndexDeps {
   now?: () => Date;
 }
 
+export interface IndexOnceOptions {
+  /** Override the shared KB_MAX_ATTEMPTS value (primarily for reaper/tests). */
+  maxAttempts?: number;
+}
+
 /**
  * 原子抢占文档（防重复索引）
  *
@@ -141,10 +211,19 @@ export async function claim(
  * 8. 计费 settle（仅 USER 库）
  * 9. 置 status='indexed'
  *
- * 失败分支：catch 任何错误 → 置 status='failed' + error + 全额退款（仅 USER 库）
+ * 失败分支：
+ * - 确定性的输入/结构错误立即 failed；
+ * - 瞬时错误在 attempts < maxAttempts 时回到 pending，交 reaper 重试；
+ * - 瞬时错误耗尽次数后 failed。
+ * 仅终态失败才释放 USER 库预扣，避免一次瞬时失败先退款、后续成功却无法结算。
  */
-export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
+export async function indexOnce(
+  deps: IndexDeps,
+  docId: string,
+  options: IndexOnceOptions = {},
+): Promise<void> {
   const prisma = deps.prisma;
+  const maxAttempts = configuredMaxAttempts(options.maxAttempts);
 
   // 1. claim 抢占
   const leaseMs = parseInt(process.env.KB_INDEX_LEASE_MS ?? '300000', 10);
@@ -179,7 +258,7 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
     const chunks = deps.chunk(text);
 
     if (chunks.length === 0) {
-      throw new Error('No chunks after splitting');
+      throw new PermanentIndexError('No chunks after splitting');
     }
 
     // 6. 并发 embed（简单分批）
@@ -242,17 +321,12 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
           outputTokens: 0,
         });
       } catch (settleErr) {
-        // 计费失败视为严重异常，重新置为 failed 并全额退款
-        // 然后重新抛出让 reaper 按 attempts 重试
-        await prisma.document.update({
-          where: { id: docId },
-          data: {
-            status: 'failed',
-            error: `Billing settlement failed: ${settleErr instanceof Error ? settleErr.message : String(settleErr)}`,
-            lockedBy: null,
-          },
-        });
-        throw settleErr;
+        // 保持同一个 operationId 并交给有界重试；billing 端的幂等键
+        // 可以覆盖“服务端已提交但客户端超时”的不确定结果。
+        throw new Error(
+          `Billing settlement failed: ${settleErr instanceof Error ? settleErr.message : String(settleErr)}`,
+          { cause: settleErr },
+        );
       }
     }
 
@@ -264,34 +338,40 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
         chunkCount: chunks.length,
         tokensUsed: totalTokens,
         lockedBy: null,
+        lockedAt: null,
         error: null,
       },
     });
   } catch (err) {
-    // 失败分支：置 failed + 保存错误信息
     const errorMsg =
       err instanceof Error
         ? err.message
         : typeof err === 'string'
           ? err
           : 'Unknown error';
-
-    await prisma.document.update({
-      where: { id: docId },
-      data: {
-        status: 'failed',
-        error: errorMsg,
-        lockedBy: null,
-      },
-    });
-
-    // 全额退款（仅 USER 库）
     const doc = await prisma.document.findUnique({
       where: { id: docId },
       include: { kb: true },
     });
 
-    if (doc && doc.kb.ownerType === 'USER' && doc.kb.userId) {
+    // 文档可能在索引过程中被用户删除；没有终态需要再写。
+    if (!doc) return;
+
+    const retryable = isRetryableIndexError(err);
+    const willRetry = retryable && doc.attempts < maxAttempts;
+
+    await prisma.document.update({
+      where: { id: docId },
+      data: {
+        status: willRetry ? 'pending' : 'failed',
+        error: errorMsg,
+        lockedBy: null,
+        lockedAt: null,
+      },
+    });
+
+    // 瞬时失败期间保留原预扣；成功或最终失败只结算一次。
+    if (!willRetry && doc.kb.ownerType === 'USER' && doc.kb.userId && !doc.sourceModule) {
       try {
         await deps.billing.settle({
           operationId: doc.opId ?? docId,
@@ -301,11 +381,9 @@ export async function indexOnce(deps: IndexDeps, docId: string): Promise<void> {
           outputTokens: 0,
         });
       } catch (refundErr) {
-        // 退款失败：记录但继续（不重新抛，让 reaper 根据 attempts 重试索引）
-        // 注：此时 Document 已经 status=failed，下次重试会再次尝试退款
+        // 最终失败已经持久化；退款 API 使用相同 operationId，调用方可按
+        // 现有 billing 对账机制安全重放，不把永久失败重新送进索引 reaper。
       }
     }
-
-    // 不要再抛（让 reaper 按 attempts 重试）
   }
 }

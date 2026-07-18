@@ -8,7 +8,7 @@
 # 跑一次就会把它们连同 S3 AK/SK 一起抹掉 → 知识库/图片视频生成/数字人存储全崩。
 # 现在改为 merge patch，且【空值一律跳过】（避免用空串覆盖线上真实值）。
 #
-# 用法: ./create-secrets.sh [path-to-secrets.env]
+# 用法: KUBE_CONTEXT=<your-context> ./create-secrets.sh [path-to-secrets.env]
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ENV_FILE="${1:-$HERE/secrets.env}"
@@ -46,7 +46,8 @@ trap 'rm -rf "$TMP"' EXIT
 
 API_KEYS=(
   SESSION_SECRET DATABASE_URL REDIS_URL BAILIAN_WORKSPACE_ID BAILIAN_API_KEY LLM_API_KEY
-  IMAGE_API_KEY GPT_IMAGE_API_KEY CHATGPT_API_KEY VIDEO_API_KEY TOAPIS_API_KEY
+  IMAGE_API_KEY GPT_IMAGE_API_KEY GPT_IMAGE_EDIT_API_KEY CHATGPT_API_KEY VIDEO_API_KEY TOAPIS_API_KEY
+  CODEX_PET_ARTIFACT_SIGNING_SECRET
   BILLING_INTERNAL_TOKEN ADMIN_SESSION_SECRET
   S3_ACCESS_KEY S3_SECRET_KEY
   SKYHUMAN_API_TOKEN SKYHUMAN_CALLBACK_SECRET MIMO_API_KEY

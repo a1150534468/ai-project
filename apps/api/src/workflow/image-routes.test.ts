@@ -1,8 +1,9 @@
 import Fastify from "fastify";
+import sharp from "sharp";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
-import { imageWorkflowRoutes, loadImageAttemptTimeoutMs } from "./image-routes.js";
+import { imageWorkflowRoutes, loadImageAttemptTimeoutMs, loadImageMaxAttempts } from "./image-routes.js";
 
 interface ImageRow {
   id: string;
@@ -189,6 +190,8 @@ beforeEach(() => {
   delete process.env.IMAGE_API_KEY;
   delete process.env.GPT_IMAGE_API_KEY;
   delete process.env.GPT_IMAGE_GENERATION_ENDPOINT;
+  delete process.env.GPT_IMAGE_EDIT_API_KEY;
+  delete process.env.GPT_IMAGE_EDIT_ENDPOINT;
   delete process.env.IMAGE_PROMPT_OPTIMIZER_MODEL;
   delete process.env.S3_ENDPOINT;
   delete process.env.S3_BUCKET;
@@ -200,7 +203,7 @@ describe("image workflow routes", () => {
   it("uploads a reference image and returns an asset for the picker", async () => {
     const prisma = createPrismaMock();
     const app = await createApp({ prisma, billing: createBillingMock(), fetchFn: vi.fn() as unknown as typeof fetch });
-    const b64 = Buffer.from("reference-png").toString("base64");
+    const b64 = (await sharp({ create: { width: 8, height: 8, channels: 4, background: "#336699" } }).png().toBuffer()).toString("base64");
 
     const response = await app.inject({
       method: "POST",
@@ -215,6 +218,27 @@ describe("image workflow routes", () => {
       mime: "image/png",
     });
     expect(prisma.imageAsset.create).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("rejects unsupported or undecodable reference uploads before persistence", async () => {
+    const prisma = createPrismaMock();
+    const app = await createApp({ prisma, billing: createBillingMock(), fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const unsupported = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/references",
+      payload: { image: { b64: Buffer.from("<svg/>").toString("base64"), mime: "image/svg+xml" } },
+    });
+    expect(unsupported.statusCode).toBe(400);
+
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/references",
+      payload: { image: { b64: Buffer.from("not-a-png").toString("base64"), mime: "image/png" } },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(prisma.imageAsset.create).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -338,12 +362,17 @@ describe("image workflow routes", () => {
       prompt: "极简产品摄影",
       n: 1,
       size: "2048x1152",
+      quality: "auto",
+      output_format: "png",
     });
     await app.close();
   });
 
-  it("rejects GPT Image 2 reference inputs before billing", async () => {
+  it("runs GPT Image 2 reference inputs through the shared multipart edits endpoint", async () => {
     process.env.GPT_IMAGE_API_KEY = "gpt-image-key";
+    process.env.GPT_IMAGE_GENERATION_ENDPOINT = "https://pixel.test/v1/images/generations";
+    process.env.GPT_IMAGE_EDIT_API_KEY = "gpt-edit-key";
+    process.env.GPT_IMAGE_EDIT_ENDPOINT = "https://pixel.test/v1/images/edits";
     const referenceB64 = Buffer.from("reference-png").toString("base64");
     const prisma = createPrismaMock([{
       id: "ref-gpt",
@@ -360,7 +389,13 @@ describe("image workflow routes", () => {
       createdAt: new Date("2026-06-30T07:00:00.000Z"),
     }]);
     const billing = createBillingMock();
-    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      model: "gpt-image-2-codex",
+      quality: "auto",
+      data: [{ b64_json: Buffer.from("edited-png").toString("base64") }],
+    }), { status: 200 })) as unknown as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
 
     const response = await app.inject({
       method: "POST",
@@ -375,9 +410,20 @@ describe("image workflow routes", () => {
       },
     });
 
-    expect(response.statusCode).toBe(400);
-    expect(response.json().error).toContain("只接入了图片生成接口");
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data.task.referenceAssetIds).toEqual(["ref-gpt"]);
+    await scheduled[0];
+    const [url, init] = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toBe("https://pixel.test/v1/images/edits");
+    expect(init.headers).toEqual({ authorization: "Bearer gpt-edit-key" });
+    const form = init.body as FormData;
+    expect(form.get("model")).toBe("gpt-image-2");
+    expect(form.get("prompt")).toBe("编辑参考图");
+    expect(form.get("size")).toBe("1024x1024");
+    expect(form.getAll("image[]")).toHaveLength(1);
+    expect(billing.chargeResource).toHaveBeenCalledOnce();
+    const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
+    expect(tasksResponse.json().data[0]).toMatchObject({ status: "completed", completedCount: 1 });
     await app.close();
   });
 
@@ -446,6 +492,9 @@ describe("image workflow routes", () => {
     expect(loadImageAttemptTimeoutMs({})).toBe(600_000);
     expect(loadImageAttemptTimeoutMs({ IMAGE_ATTEMPT_TIMEOUT_MS: "90000" })).toBe(90_000);
     expect(loadImageAttemptTimeoutMs({ IMAGE_ATTEMPT_TIMEOUT_MS: "-1" })).toBe(600_000);
+    expect(loadImageMaxAttempts({})).toBe(3);
+    expect(loadImageMaxAttempts({ IMAGE_MAX_ATTEMPTS: "5" })).toBe(5);
+    expect(loadImageMaxAttempts({ IMAGE_MAX_ATTEMPTS: "0" })).toBe(3);
   });
 
   it("returns a completed task for legacy existing image assets without charging again", async () => {
@@ -786,6 +835,34 @@ describe("image workflow routes", () => {
       }),
     }));
     expect((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(2);
+    await app.close();
+  });
+
+  it("does not retry moderation failures and refunds the image task", async () => {
+    const prisma = createPrismaMock();
+    const billing = createBillingMock();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      error: {
+        code: "moderation_blocked",
+        type: "image_generation_error",
+        message: "request blocked by moderation",
+      },
+    }), { status: 400 })) as unknown as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-moderation", prompt: "blocked prompt", size: "1024x1024", count: 1 },
+    });
+
+    expect(response.statusCode).toBe(202);
+    await expect(scheduled[0]).rejects.toThrow("request blocked by moderation");
+    expect((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
+    expect(billing.refundResource).toHaveBeenCalledWith("image:req-moderation");
+    const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
+    expect(tasksResponse.json().data[0]).toMatchObject({ status: "failed", completedCount: 0 });
     await app.close();
   });
 

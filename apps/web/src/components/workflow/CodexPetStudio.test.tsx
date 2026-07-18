@@ -1,0 +1,627 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type {
+  CodexPetArtifact,
+  CodexPetEvent,
+  CodexPetPricing,
+  CodexPetProject,
+  CodexPetProjectDetail,
+  CodexPetProjectSummary,
+  CodexPetRun,
+} from "../../codexPetApi";
+import {
+  CODEX_PET_POLL_MS,
+  CODEX_PET_REFERENCE_MAX_BYTES,
+  CODEX_PET_STREAM_RECONNECT_MS,
+} from "./codexPetStudioModel";
+import { CodexPetStudio, type CodexPetStudioClient } from "./CodexPetStudio";
+
+const pricing: CodexPetPricing = {
+  resourceKey: "codex_pet_v2_package",
+  displayName: "Codex 桌宠 v2 套餐",
+  pricingType: "PER_CALL",
+  rate: 200,
+  perUnits: 1,
+  enabled: true,
+  includedBaseCandidates: 2,
+  includedRepairAttempts: 2,
+};
+
+function makeProject(overrides: Partial<CodexPetProject> = {}): CodexPetProject {
+  return {
+    id: "project-1",
+    name: "码仔",
+    description: "会陪伴写代码的薄荷机器人",
+    prompt: "一只薄荷色圆润机器人",
+    stylePreset: "pixel",
+    styleNotes: "清晰轮廓",
+    referenceAssetIds: [],
+    referenceAssets: [],
+    autoContinue: false,
+    status: "draft",
+    latestRunId: null,
+    createdAt: "2026-07-17T08:00:00.000Z",
+    updatedAt: "2026-07-17T08:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function summary(project: CodexPetProject): CodexPetProjectSummary {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    stylePreset: project.stylePreset,
+    status: project.status,
+    latestRunId: project.latestRunId,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  };
+}
+
+function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
+  return {
+    id: "run-1",
+    projectId: "project-1",
+    status: "awaiting_base_review",
+    progressStage: "awaiting_base_review",
+    progressPercent: 15,
+    progressMessage: "请选择主形象",
+    autoContinue: false,
+    colorKey: "#ff00ff",
+    billingPoints: 200,
+    billingRefundedAt: null,
+    cancelRequested: false,
+    hasSuccessfulImage: true,
+    selectedBaseArtifactId: null,
+    spritesheetArtifactId: null,
+    packageArtifactId: null,
+    previewArtifactId: null,
+    validationReport: null,
+    requestedModel: "gpt-image-2",
+    actualModels: ["gpt-image-2-codex"],
+    usage: { totalTokens: 321 },
+    knowledgeDocumentId: null,
+    lastEventSequence: 1,
+    error: null,
+    startedAt: "2026-07-17T08:01:00.000Z",
+    completedAt: null,
+    createdAt: "2026-07-17T08:01:00.000Z",
+    updatedAt: "2026-07-17T08:02:00.000Z",
+    ...overrides,
+  };
+}
+
+function artifact(id: string, kind: string, overrides: Partial<CodexPetArtifact> = {}): CodexPetArtifact {
+  return {
+    id,
+    projectId: "project-1",
+    runId: "run-1",
+    kind,
+    name: `${kind}.png`,
+    status: "ready",
+    mime: "image/png",
+    sizeBytes: 1_024,
+    width: 1536,
+    height: 1024,
+    metadata: {},
+    expiresAt: null,
+    createdAt: "2026-07-17T08:02:00.000Z",
+    previewUrl: `https://example.test/${id}.png`,
+    ...overrides,
+  };
+}
+
+function makeEvent(sequence: number, message: string): CodexPetEvent {
+  return {
+    sequence,
+    type: sequence === 1 ? "run.queued" : "preview.ready",
+    stage: sequence === 1 ? "queued" : "standard_generating",
+    jobKey: sequence === 1 ? null : "idle",
+    message,
+    progress: sequence * 10,
+    payload: {},
+    createdAt: "2026-07-17T08:02:00.000Z",
+  };
+}
+
+function makeClient(args: {
+  readonly project?: CodexPetProject;
+  readonly detail?: CodexPetProjectDetail;
+  readonly replay?: readonly CodexPetEvent[];
+  readonly streamEvent?: CodexPetEvent;
+} = {}): CodexPetStudioClient & Record<string, ReturnType<typeof vi.fn>> {
+  const project = args.project ?? makeProject();
+  const detail = args.detail ?? { project, latestRun: null, runs: [], artifacts: [], jobs: [] };
+  return {
+    getPricing: vi.fn().mockResolvedValue(pricing),
+    listProjects: vi.fn().mockResolvedValue([summary(project)]),
+    createProject: vi.fn().mockResolvedValue(project),
+    getProject: vi.fn().mockResolvedValue(detail),
+    updateProject: vi.fn().mockResolvedValue(project),
+    deleteProject: vi.fn().mockResolvedValue(undefined),
+    startRun: vi.fn().mockResolvedValue({ project: { ...project, status: "queued", latestRunId: "run-1" }, run: makeRun({ status: "queued" }) }),
+    selectBase: vi.fn().mockResolvedValue(makeRun({ status: "standard_generating", selectedBaseArtifactId: "base-2" })),
+    cancelRun: vi.fn().mockResolvedValue(makeRun({ cancelRequested: true })),
+    listEvents: vi.fn().mockImplementation(async (_token: string, _projectId: string, _runId: string, after = 0) => ({
+      events: (args.replay ?? []).filter((event) => event.sequence > after),
+      cursor: Math.max(after, ...(args.replay ?? []).map((event) => event.sequence)),
+    })),
+    streamEvents: vi.fn().mockImplementation(async (options: Parameters<CodexPetStudioClient["streamEvents"]>[0]) => {
+      if (args.streamEvent) options.onEvent(args.streamEvent);
+      await new Promise<void>((resolve) => {
+        if (options.signal?.aborted) resolve();
+        else options.signal?.addEventListener("abort", () => resolve(), { once: true });
+      });
+    }),
+    createInstallLink: vi.fn().mockResolvedValue({ installUrl: "codex://pets/install?name=%E7%A0%81%E4%BB%94" }),
+    downloadPackage: vi.fn().mockResolvedValue({ blob: new Blob(["zip"]), filename: "pet.zip" }),
+    uploadReference: vi.fn(),
+  } as CodexPetStudioClient & Record<string, ReturnType<typeof vi.fn>>;
+}
+
+async function flushEffects(iterations = 6): Promise<void> {
+  for (let index = 0; index < iterations; index += 1) {
+    await act(async () => { await Promise.resolve(); });
+  }
+}
+
+async function mountStudio(props: Parameters<typeof CodexPetStudio>[0]): Promise<{
+  readonly container: HTMLDivElement;
+  readonly root: Root;
+}> {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  await act(async () => { root.render(<CodexPetStudio {...props} />); });
+  await flushEffects();
+  return { container, root };
+}
+
+function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
+  const button = Array.from(container.querySelectorAll("button")).find((candidate) => candidate.textContent?.includes(text));
+  if (!(button instanceof HTMLButtonElement)) throw new Error(`Button not found: ${text}`);
+  return button;
+}
+
+describe("CodexPetStudio", () => {
+  beforeEach(() => {
+    Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.body.replaceChildren();
+    vi.restoreAllMocks();
+  });
+
+  it("renders the complete create contract before any network effect runs", () => {
+    const html = renderToStaticMarkup(<CodexPetStudio token="token" client={makeClient()} />);
+    expect(html).toContain("Codex 桌宠工坊");
+    expect(html).toContain("角色提示词");
+    expect(html).toContain("参考图");
+    expect(html).toContain("主形象生成后自动继续");
+    expect(html).toContain("创建草稿");
+    expect(html).toContain("开始制作");
+    expect(html).toContain("上传即表示你拥有参考图与角色的使用权");
+    expect(html).toContain("验证、打包与归档");
+    expect(html).toContain("事件会先持久化，再通过 SSE 实时推送");
+  });
+
+  it("opens the exact project requested by a knowledge-base jump even when it is not first in history", async () => {
+    const historyProject = makeProject({ id: "project-history", name: "历史桌宠" });
+    const targetProject = makeProject({ id: "project-from-knowledge", name: "知识库桌宠" });
+    const targetDetail: CodexPetProjectDetail = {
+      project: targetProject,
+      latestRun: null,
+      runs: [],
+      artifacts: [],
+      jobs: [],
+    };
+    const client = makeClient({ project: targetProject, detail: targetDetail });
+    vi.mocked(client.listProjects).mockResolvedValue([summary(historyProject)]);
+    const mounted = await mountStudio({
+      token: "token",
+      client,
+      initialProjectId: targetProject.id,
+    });
+
+    expect(client.getProject).toHaveBeenCalledWith("token", targetProject.id, expect.any(AbortSignal));
+    const nameInput = mounted.container.querySelector<HTMLInputElement>('input[placeholder="例如：码仔"]');
+    expect(nameInput?.value).toBe("知识库桌宠");
+    expect(nameInput?.disabled).toBe(false);
+
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("locks stale inputs while switching projects so they cannot overwrite the selected project", async () => {
+    const firstProject = makeProject({ id: "project-first", name: "第一个桌宠" });
+    const secondProject = makeProject({ id: "project-second", name: "第二个桌宠" });
+    let resolveSecond!: (detail: CodexPetProjectDetail) => void;
+    const secondDetail = new Promise<CodexPetProjectDetail>((resolve) => { resolveSecond = resolve; });
+    const client = makeClient({
+      project: firstProject,
+      detail: { project: firstProject, latestRun: null, runs: [], artifacts: [], jobs: [] },
+    });
+    vi.mocked(client.listProjects).mockResolvedValue([summary(firstProject), summary(secondProject)]);
+    vi.mocked(client.getProject).mockImplementation(async (_token, projectId) => {
+      if (projectId === secondProject.id) return secondDetail;
+      return { project: firstProject, latestRun: null, runs: [], artifacts: [], jobs: [] };
+    });
+    const mounted = await mountStudio({ token: "token", client, initialProjectId: firstProject.id });
+
+    await act(async () => { buttonByText(mounted.container, secondProject.name).click(); });
+    await flushEffects(2);
+
+    const staleNameInput = mounted.container.querySelector<HTMLInputElement>('input[placeholder="例如：码仔"]');
+    expect(staleNameInput?.value).toBe("");
+    expect(staleNameInput?.disabled).toBe(true);
+    expect(buttonByText(mounted.container, "保存草稿").disabled).toBe(true);
+    await act(async () => { buttonByText(mounted.container, "保存草稿").click(); });
+    expect(client.updateProject).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveSecond({ project: secondProject, latestRun: null, runs: [], artifacts: [], jobs: [] });
+      await secondDetail;
+    });
+    await flushEffects();
+    expect(staleNameInput?.value).toBe(secondProject.name);
+    expect(staleNameInput?.disabled).toBe(false);
+
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("restores base candidates and submits the explicitly selected candidate", async () => {
+    const run = makeRun();
+    const project = makeProject({ status: "awaiting_base_review", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [artifact("base-1", "base_candidate"), artifact("base-2", "base_candidate")],
+      jobs: [],
+    };
+    const client = makeClient({ project, detail });
+    const mounted = await mountStudio({ token: "token", client });
+
+    expect(mounted.container.textContent).toContain("主形象候选");
+    expect(mounted.container.textContent).toContain("QA 自动选优");
+    expect(mounted.container.textContent).toContain("重生候选");
+
+    await act(async () => { buttonByText(mounted.container, "重生候选").click(); });
+    await flushEffects();
+    expect(client.selectBase).toHaveBeenCalledWith("token", "project-1", "run-1", { regenerate: true });
+    vi.mocked(client.selectBase).mockClear();
+
+    await act(async () => { buttonByText(mounted.container, "候选 2").click(); });
+    await act(async () => { buttonByText(mounted.container, "使用所选形象并继续").click(); });
+    await flushEffects();
+
+    expect(client.selectBase).toHaveBeenCalledWith("token", "project-1", "run-1", { artifactId: "base-2" });
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("replays persisted events before opening the bearer-token SSE stream and accepts live events", async () => {
+    const run = makeRun({ status: "standard_generating", progressPercent: 20 });
+    const project = makeProject({ status: "standard_generating", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const client = makeClient({
+      project,
+      detail,
+      replay: [makeEvent(1, "已从数据库补发")],
+      streamEvent: makeEvent(2, "SSE 新预览已到达"),
+    });
+    const mounted = await mountStudio({ token: "bearer-token", client });
+
+    expect(mounted.container.textContent).toContain("已从数据库补发");
+    expect(mounted.container.textContent).toContain("SSE 新预览已到达");
+    expect(client.streamEvents).toHaveBeenCalledWith(expect.objectContaining({
+      token: "bearer-token",
+      projectId: "project-1",
+      runId: "run-1",
+      after: 1,
+    }));
+
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("replays the latest database gap before reconnecting SSE with the newest cursor after 1.2 seconds", async () => {
+    vi.useFakeTimers();
+    const run = makeRun({ status: "standard_generating", progressPercent: 20 });
+    const project = makeProject({ status: "standard_generating", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail });
+    const firstEvent = makeEvent(1, "首次数据库补发");
+    const recoveredEvent = makeEvent(2, "断线期间数据库补发");
+    vi.mocked(client.listEvents).mockImplementation(async (_token, _projectId, _runId, after = 0) => {
+      if (after < firstEvent.sequence) return { events: [firstEvent], cursor: firstEvent.sequence };
+      if (after < recoveredEvent.sequence) return { events: [recoveredEvent], cursor: recoveredEvent.sequence };
+      return { events: [], cursor: after };
+    });
+    vi.mocked(client.streamEvents)
+      .mockRejectedValueOnce(new Error("SSE disconnected"))
+      .mockImplementation(async (options: Parameters<CodexPetStudioClient["streamEvents"]>[0]) => {
+        await new Promise<void>((resolve) => {
+          if (options.signal?.aborted) resolve();
+          else options.signal?.addEventListener("abort", () => resolve(), { once: true });
+        });
+      });
+    const mounted = await mountStudio({ token: "bearer-token", client });
+
+    expect(client.streamEvents).toHaveBeenCalledTimes(1);
+    expect(client.streamEvents).toHaveBeenLastCalledWith(expect.objectContaining({ after: 1 }));
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(CODEX_PET_STREAM_RECONNECT_MS - 1); });
+    expect(client.streamEvents).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1); });
+    await flushEffects();
+
+    expect(client.listEvents).toHaveBeenCalledWith("bearer-token", "project-1", "run-1", 1, expect.any(AbortSignal));
+    expect(client.streamEvents).toHaveBeenCalledTimes(2);
+    expect(client.streamEvents).toHaveBeenLastCalledWith(expect.objectContaining({
+      token: "bearer-token",
+      projectId: "project-1",
+      runId: "run-1",
+      after: 2,
+    }));
+    expect(vi.mocked(client.listEvents).mock.invocationCallOrder[1]).toBeLessThan(
+      vi.mocked(client.streamEvents).mock.invocationCallOrder[1]!,
+    );
+    expect(mounted.container.textContent).toContain("断线期间数据库补发");
+
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("polls project detail and event gaps every 2.5 seconds as the SSE fallback", async () => {
+    vi.useFakeTimers();
+    const run = makeRun({ status: "direction_generating" });
+    const project = makeProject({ status: "direction_generating", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail, replay: [makeEvent(1, "排队中")] });
+    const mounted = await mountStudio({ token: "token", client });
+    const getProjectMock = vi.mocked(client.getProject);
+    const before = getProjectMock.mock.calls.length;
+
+    await act(async () => {
+      vi.advanceTimersByTime(CODEX_PET_POLL_MS);
+      await Promise.resolve();
+    });
+    await flushEffects();
+
+    expect(getProjectMock.mock.calls.length).toBeGreaterThan(before);
+    expect(client.listEvents).toHaveBeenCalledWith("token", "project-1", "run-1", 1);
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("allows an empty-visual draft to be saved but keeps the start gate strict", async () => {
+    const project = makeProject({ prompt: "" });
+    const detail: CodexPetProjectDetail = { project, latestRun: null, runs: [], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail });
+    const mounted = await mountStudio({ token: "token", client });
+
+    await act(async () => { buttonByText(mounted.container, "保存草稿").click(); });
+    await flushEffects();
+    expect(client.updateProject).toHaveBeenCalledWith("token", "project-1", expect.objectContaining({ prompt: "", referenceAssetIds: [] }));
+
+    await act(async () => { buttonByText(mounted.container, "开始制作").click(); });
+    expect(mounted.container.textContent).toContain("请填写角色提示词或上传至少一张参考图");
+    expect(client.startRun).not.toHaveBeenCalled();
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("rejects unsupported and oversized references, uploads at most three, and shows the rights notice", async () => {
+    const project = makeProject();
+    const detail: CodexPetProjectDetail = { project, latestRun: null, runs: [], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail });
+    vi.mocked(client.uploadReference).mockImplementation(async (_token, image) => ({
+      id: `reference-${vi.mocked(client.uploadReference).mock.calls.length}`,
+      name: "reference.png",
+      mime: image.mime ?? "image/png",
+      originalUrl: "https://example.test/reference.png",
+      thumbnailUrl: "https://example.test/reference-thumb.png",
+      createdAt: "2026-07-17T08:03:00.000Z",
+    }));
+    const mounted = await mountStudio({ token: "token", client });
+    const input = mounted.container.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!input) throw new Error("reference upload input missing");
+
+    expect(input.accept).toBe("image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif");
+    expect(mounted.container.textContent).toContain("0/3 · 每张 10MB");
+    expect(mounted.container.textContent).toContain("上传即表示你拥有参考图与角色的使用权");
+
+    const unsupported = new File(["svg"], "character.svg", { type: "image/svg+xml" });
+    Object.defineProperty(input, "files", { configurable: true, value: [unsupported] });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(mounted.container.textContent).toContain("参考图仅支持 JPG、PNG、WEBP、BMP、TIFF 或 GIF");
+    expect(client.uploadReference).not.toHaveBeenCalled();
+
+    const oversized = new File(["png"], "oversized.png", { type: "image/png" });
+    Object.defineProperty(oversized, "size", { configurable: true, value: CODEX_PET_REFERENCE_MAX_BYTES + 1 });
+    Object.defineProperty(input, "files", { configurable: true, value: [oversized] });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(mounted.container.textContent).toContain("参考图大小需在 10MB 以内");
+    expect(client.uploadReference).not.toHaveBeenCalled();
+
+    const validFiles = Array.from({ length: 4 }, (_, index) => new File(
+      [`png-${index}`],
+      `reference-${index + 1}.png`,
+      { type: "image/png" },
+    ));
+    Object.defineProperty(input, "files", { configurable: true, value: validFiles });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await vi.waitFor(() => expect(client.uploadReference).toHaveBeenCalledTimes(3));
+    });
+    await flushEffects();
+
+    expect(client.uploadReference).toHaveBeenCalledTimes(3);
+    expect(mounted.container.textContent).toContain("3/3 · 每张 10MB");
+    expect(mounted.container.querySelector('input[type="file"]')).toBeNull();
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("refreshes project detail after submitting a cancellation", async () => {
+    const run = makeRun({ status: "standard_generating", progressStage: "standard_generating" });
+    const project = makeProject({ status: "standard_generating", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail });
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const mounted = await mountStudio({ token: "token", client });
+    const callsBeforeCancel = vi.mocked(client.getProject).mock.calls.length;
+
+    await act(async () => { buttonByText(mounted.container, "取消运行").click(); });
+    await flushEffects();
+    expect(client.cancelRun).toHaveBeenCalledWith("token", "project-1", "run-1");
+    expect(vi.mocked(client.getProject).mock.calls.length).toBeGreaterThan(callsBeforeCancel);
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("hydrates the durable deleting tombstone when cleanup enqueue returns an error", async () => {
+    const project = makeProject();
+    const deletingProject = makeProject({ status: "deleting" });
+    const client = makeClient({
+      project,
+      detail: { project, latestRun: null, runs: [], artifacts: [], jobs: [] },
+    });
+    let detailReads = 0;
+    vi.mocked(client.getProject).mockImplementation(async () => {
+      detailReads += 1;
+      return detailReads === 1
+        ? { project, latestRun: null, runs: [], artifacts: [], jobs: [] }
+        : { project: deletingProject, latestRun: null, runs: [], artifacts: [], jobs: [] };
+    });
+    vi.mocked(client.deleteProject).mockRejectedValue(new Error("桌宠删除任务暂未入队，请重试"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const mounted = await mountStudio({ token: "token", client });
+
+    await act(async () => { buttonByText(mounted.container, "删除项目").click(); });
+    await flushEffects();
+
+    expect(client.deleteProject).toHaveBeenCalledWith("token", project.id);
+    expect(detailReads).toBeGreaterThan(1);
+    expect(mounted.container.textContent).toContain("正在删除");
+    expect(buttonByText(mounted.container, "开始制作").disabled).toBe(true);
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("withholds delivery when a ready run has no knowledge document", async () => {
+    const run = makeRun({
+      status: "ready",
+      progressPercent: 100,
+      spritesheetArtifactId: "sheet-1",
+      packageArtifactId: "zip-1",
+      validationReport: { ok: true, spriteVersionNumber: 2 },
+      knowledgeDocumentId: null,
+    });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [artifact("sheet-1", "spritesheet", { width: 1536, height: 2288 })],
+      jobs: [],
+    };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    expect(mounted.container.textContent).toContain("工作台保持在 98%");
+    expect(Array.from(mounted.container.querySelectorAll("button")).some((button) => button.textContent?.includes("安装到 Codex"))).toBe(false);
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("installs and opens the archived document only after the complete delivery gate passes", async () => {
+    const run = makeRun({
+      status: "ready",
+      progressPercent: 100,
+      spritesheetArtifactId: "sheet-1",
+      packageArtifactId: "zip-1",
+      previewArtifactId: "preview-1",
+      validationReport: { ok: true, spriteVersionNumber: 2, warnings: [] },
+      knowledgeDocumentId: "document-1",
+      completedAt: "2026-07-17T08:20:00.000Z",
+    });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [
+        artifact("sheet-1", "spritesheet", { width: 1536, height: 2288 }),
+        artifact("zip-1", "package", { mime: "application/zip" }),
+        artifact("preview-1", "animation_preview"),
+      ],
+      jobs: [],
+    };
+    const client = makeClient({ project, detail });
+    const onInstallUrl = vi.fn();
+    const onOpenKnowledgeDocument = vi.fn();
+    const mounted = await mountStudio({ token: "token", client, onInstallUrl, onOpenKnowledgeDocument });
+
+    expect(mounted.container.textContent).toContain("9 组标准动画");
+    expect(mounted.container.textContent).toContain("16 个观察方向");
+    expect(mounted.container.textContent).toContain("AI 产物 · 已归档");
+
+    await act(async () => { buttonByText(mounted.container, "安装到 Codex").click(); });
+    await flushEffects();
+    expect(client.createInstallLink).toHaveBeenCalledWith("token", "project-1");
+    expect(onInstallUrl).toHaveBeenCalledWith("codex://pets/install?name=%E7%A0%81%E4%BB%94");
+
+    await act(async () => { buttonByText(mounted.container, "在 AI 产物中查看").click(); });
+    expect(onOpenKnowledgeDocument).toHaveBeenCalledWith("document-1");
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("renders the nine current-run animation previews separately from the final contact sheet", async () => {
+    const run = makeRun({
+      status: "ready",
+      progressPercent: 100,
+      spritesheetArtifactId: "sheet-current",
+      packageArtifactId: "zip-current",
+      previewArtifactId: "contact-current",
+      validationReport: { ok: true, spriteVersionNumber: 2, warnings: [] },
+      knowledgeDocumentId: "document-current",
+    });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const states = ["idle", "running-right", "running-left", "waving", "jumping", "failed", "waiting", "running", "review"] as const;
+    const animationArtifacts = states.map((state, index) => artifact(`animation-${state}`, "animation_preview", {
+      runId: run.id,
+      metadata: { jobKey: `row-${state}` },
+      previewUrl: `https://example.test/${state}.webp`,
+      createdAt: `2026-07-17T08:0${index + 1}:00.000Z`,
+    }));
+    const oldRunArtifact = artifact("animation-old", "animation_preview", {
+      runId: "run-old",
+      metadata: { jobKey: "row-idle" },
+      previewUrl: "https://example.test/old.webp",
+    });
+    const contact = artifact("contact-current", "preview", {
+      runId: run.id,
+      previewUrl: "https://example.test/contact.png",
+      width: 768,
+      height: 1144,
+    });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [oldRunArtifact, ...animationArtifacts, contact],
+      jobs: [],
+    };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    const animationGrid = mounted.container.querySelector('[data-testid="codex-pet-standard-animations"]');
+    expect(animationGrid?.querySelectorAll("figure")).toHaveLength(9);
+    for (const state of states) {
+      const image = animationGrid?.querySelector<HTMLImageElement>(`[data-testid="codex-pet-animation-${state}"] img`);
+      expect(image?.src).toBe(`https://example.test/${state}.webp`);
+    }
+    const contactImage = mounted.container.querySelector<HTMLImageElement>('[data-testid="codex-pet-final-contact-sheet"] img');
+    expect(contactImage?.src).toBe("https://example.test/contact.png");
+    expect(mounted.container.querySelector('img[src="https://example.test/old.webp"]')).toBeNull();
+    await act(async () => { mounted.root.unmount(); });
+  });
+});

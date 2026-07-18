@@ -218,6 +218,184 @@ describe('indexOnce', () => {
     });
   });
 
+  it('Codex 桌宠自动归档在成功索引时不重复计费', async () => {
+    const doc = await prisma.document.create({
+      data: {
+        kbId: userKb.id,
+        name: 'Codex 桌宠 · 测试狐',
+        sourceType: 'ARTIFACT',
+        sourceModule: 'codex_pet',
+        sourceId: `codex-pet-success-${Date.now()}`,
+        content: '桌宠名称：测试狐\nCodex v2 规格：1536×2288，16 个方向。',
+        mime: 'application/zip',
+        status: 'pending',
+      },
+    });
+    createdDocIds.push(doc.id);
+    const mockBilling = { settle: vi.fn() };
+    const text = doc.content!;
+    const deps: IndexDeps = {
+      prisma,
+      loadObject: vi.fn().mockResolvedValue({
+        buf: Buffer.from(text),
+        mime: 'text/plain',
+        filename: 'codex-pet.txt',
+      }),
+      parse: vi.fn().mockResolvedValue(text),
+      chunk: vi.fn().mockReturnValue([text]),
+      embed: vi.fn().mockResolvedValue({ vector: new Array(1024).fill(0.3), tokens: 20 }),
+      billing: mockBilling,
+      embeddingModel: 'embedding-v1',
+      workerId: 'worker-codex-pet-success',
+    };
+
+    await indexOnce(deps, doc.id);
+
+    const updated = await prisma.document.findUniqueOrThrow({ where: { id: doc.id } });
+    expect(updated).toMatchObject({ status: 'indexed', chunkCount: 1 });
+    const chunks = await prisma.chunk.findMany({ where: { documentId: doc.id } });
+    createdChunkIds.push(...chunks.map((chunk) => chunk.id));
+    expect(chunks).toHaveLength(1);
+    expect(mockBilling.settle).not.toHaveBeenCalled();
+  });
+
+  it('Codex 桌宠自动归档在索引失败时也不发起零额退款结算', async () => {
+    const doc = await prisma.document.create({
+      data: {
+        kbId: userKb.id,
+        name: 'Codex 桌宠 · 空内容测试',
+        sourceType: 'ARTIFACT',
+        sourceModule: 'codex_pet',
+        sourceId: `codex-pet-failure-${Date.now()}`,
+        content: '待索引桌宠摘要',
+        mime: 'application/zip',
+        status: 'pending',
+      },
+    });
+    createdDocIds.push(doc.id);
+    const mockBilling = { settle: vi.fn() };
+    const deps: IndexDeps = {
+      prisma,
+      loadObject: vi.fn().mockResolvedValue({
+        buf: Buffer.from('待索引桌宠摘要'),
+        mime: 'text/plain',
+        filename: 'codex-pet.txt',
+      }),
+      parse: vi.fn().mockRejectedValue(new EmptyTextError('桌宠摘要为空')),
+      chunk: vi.fn(),
+      embed: vi.fn(),
+      billing: mockBilling,
+      embeddingModel: 'embedding-v1',
+      workerId: 'worker-codex-pet-failure',
+    };
+
+    await indexOnce(deps, doc.id);
+
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
+      .toMatchObject({ status: 'failed', error: '桌宠摘要为空' });
+    expect(mockBilling.settle).not.toHaveBeenCalled();
+  });
+
+  it('瞬时失败在次数耗尽前回到 pending，成功重试只结算一次', async () => {
+    const doc = await prisma.document.create({
+      data: {
+        kbId: userKb.id,
+        name: 'transient-then-success.txt',
+        sourceType: 'TEXT',
+        sourceUri: 'memory://transient-then-success',
+        status: 'pending',
+        opId: `op-transient-${Date.now()}`,
+      },
+    });
+    createdDocIds.push(doc.id);
+
+    const text = '第一次嵌入超时，第二次成功';
+    let embedAttempts = 0;
+    const mockBilling = { settle: vi.fn().mockResolvedValue({}) };
+    const deps: IndexDeps = {
+      prisma,
+      loadObject: vi.fn().mockResolvedValue({
+        buf: Buffer.from(text),
+        mime: 'text/plain',
+        filename: doc.name,
+      }),
+      parse: vi.fn().mockResolvedValue(text),
+      chunk: vi.fn().mockReturnValue([text]),
+      embed: vi.fn(async () => {
+        embedAttempts++;
+        if (embedAttempts === 1) throw new Error('Embedding upstream timeout');
+        return { vector: new Array(1024).fill(0.4), tokens: 12 };
+      }),
+      billing: mockBilling,
+      embeddingModel: 'embedding-v1',
+      workerId: 'worker-transient-then-success',
+    };
+
+    await indexOnce(deps, doc.id, { maxAttempts: 3 });
+
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
+      .toMatchObject({ status: 'pending', attempts: 1, error: 'Embedding upstream timeout' });
+    expect(mockBilling.settle).not.toHaveBeenCalled();
+
+    await indexOnce(deps, doc.id, { maxAttempts: 3 });
+
+    const indexed = await prisma.document.findUniqueOrThrow({ where: { id: doc.id } });
+    expect(indexed).toMatchObject({ status: 'indexed', attempts: 2, chunkCount: 1, error: null });
+    const chunks = await prisma.chunk.findMany({ where: { documentId: doc.id } });
+    createdChunkIds.push(...chunks.map((chunk) => chunk.id));
+    expect(mockBilling.settle).toHaveBeenCalledTimes(1);
+    expect(mockBilling.settle).toHaveBeenCalledWith(expect.objectContaining({
+      operationId: doc.opId,
+      userId: testUser.id,
+      inputTokens: expect.any(Number),
+    }));
+  });
+
+  it('瞬时失败达到最大尝试次数后进入 failed 并只释放一次预扣', async () => {
+    const doc = await prisma.document.create({
+      data: {
+        kbId: userKb.id,
+        name: 'transient-exhausted.txt',
+        sourceType: 'TEXT',
+        sourceUri: 'memory://transient-exhausted',
+        status: 'pending',
+        attempts: 1,
+        opId: `op-exhausted-${Date.now()}`,
+      },
+    });
+    createdDocIds.push(doc.id);
+
+    const text = '嵌入服务持续不可用';
+    const mockBilling = { settle: vi.fn().mockResolvedValue({}) };
+    const deps: IndexDeps = {
+      prisma,
+      loadObject: vi.fn().mockResolvedValue({
+        buf: Buffer.from(text),
+        mime: 'text/plain',
+        filename: doc.name,
+      }),
+      parse: vi.fn().mockResolvedValue(text),
+      chunk: vi.fn().mockReturnValue([text]),
+      embed: vi.fn().mockRejectedValue(new Error('Embedding service unavailable')),
+      billing: mockBilling,
+      embeddingModel: 'embedding-v1',
+      workerId: 'worker-transient-exhausted',
+    };
+
+    await indexOnce(deps, doc.id, { maxAttempts: 2 });
+
+    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
+      .toMatchObject({ status: 'failed', attempts: 2, error: 'Embedding service unavailable' });
+    expect(mockBilling.settle).toHaveBeenCalledTimes(1);
+    expect(mockBilling.settle).toHaveBeenCalledWith({
+      operationId: doc.opId,
+      userId: testUser.id,
+      model: 'embedding-v1',
+      inputTokens: 0,
+      outputTokens: 0,
+    });
+  });
+
   it('claim 失败时直接返回（防重复索引）', async () => {
     const doc = await prisma.document.create({
       data: {
@@ -287,12 +465,13 @@ describe('indexOnce', () => {
       workerId: 'worker-1',
     };
 
-    await indexOnce(deps, doc.id);
+    await indexOnce(deps, doc.id, { maxAttempts: 3 });
 
     const failed = await prisma.document.findUnique({ where: { id: doc.id } });
     expect(failed?.status).toBe('failed');
     expect(failed?.error).toContain('文本为空');
     expect(failed?.lockedBy).toBeNull();
+    expect(failed?.attempts).toBe(1); // 永久失败不进入重试循环
 
     // 应该调用 settle 进行全额退款（inputTokens=0）
     expect(mockBilling.settle).toHaveBeenCalledWith({
@@ -415,7 +594,7 @@ describe('indexOnce', () => {
     expect(final?.chunkCount).toBe(1);
   });
 
-  it('embed 出错：status=failed，全额退款', async () => {
+  it('embed 瞬时出错：status=pending，保留预扣等待 reaper', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
@@ -449,17 +628,12 @@ describe('indexOnce', () => {
 
     await indexOnce(deps, doc.id);
 
-    const failed = await prisma.document.findUnique({ where: { id: doc.id } });
-    expect(failed?.status).toBe('failed');
-    expect(failed?.error).toContain('Embedding API error');
+    const pending = await prisma.document.findUnique({ where: { id: doc.id } });
+    expect(pending?.status).toBe('pending');
+    expect(pending?.attempts).toBe(1);
+    expect(pending?.error).toContain('Embedding API error');
 
-    // 全额退款
-    expect(mockBilling.settle).toHaveBeenCalledWith({
-      operationId: doc.opId,
-      userId: testUser.id,
-      model: 'embedding-v1',
-      inputTokens: 0,
-      outputTokens: 0,
-    });
+    // 尚未进入终态，不提前退款；后续成功仍能使用同一 operationId 结算。
+    expect(mockBilling.settle).not.toHaveBeenCalled();
   });
 });

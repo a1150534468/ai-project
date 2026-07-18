@@ -133,6 +133,8 @@ const defaultEcomStitchResourceRate = 1.0
 const defaultLocalBusinessPromoRender25sResourceKey = "local_business_promo_render_25s"
 const defaultLocalBusinessPromoRender40sResourceKey = "local_business_promo_render_40s"
 const defaultLocalBusinessPromoRender60sResourceKey = "local_business_promo_render_60s"
+const defaultCodexPetV2PackageResourceKey = "codex_pet_v2_package"
+const defaultCodexPetV2PackageResourceRate = 200.0
 
 func videoDefaultPrice(resourceKey, displayName string) model.ResourcePrice {
 	return model.ResourcePrice{
@@ -330,6 +332,14 @@ func (s *Service) EnsureDefaultResourcePrices() error {
 			DisplayName: "本地商家宣传成片生成 60 秒",
 			PricingType: "PER_CALL",
 			Rate:        60,
+			PerUnits:    1,
+			Enabled:     true,
+		},
+		{
+			ResourceKey: defaultCodexPetV2PackageResourceKey,
+			DisplayName: "Codex 桌宠 v2 套餐",
+			PricingType: "PER_CALL",
+			Rate:        defaultCodexPetV2PackageResourceRate,
 			PerUnits:    1,
 			Enabled:     true,
 		},

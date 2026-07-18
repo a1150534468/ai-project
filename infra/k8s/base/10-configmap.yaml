@@ -6,6 +6,9 @@ metadata:
 data:
   NODE_ENV: "production"
   PORT: "8090"
+  # Swagger/OpenAPI contains the full API surface; production enables it only
+  # through an explicit, access-controlled overlay.
+  API_DOCS_ENABLED: "false"
   LLM_PROVIDER: "bailian"
   BAILIAN_REGION: "cn-beijing"
   LLM_DEFAULT_MODEL: "qwen3.7-plus"
@@ -24,6 +27,7 @@ data:
   # 生图复用同一业务空间的 BAILIAN_WORKSPACE_ID / BAILIAN_API_KEY，直连百炼原生多模态接口。
   IMAGE_GENERATION_MODEL: "qwen-image-2.0-pro-2026-04-22"
   GPT_IMAGE_GENERATION_ENDPOINT: "https://api.ai-pixel.online/v1/images/generations"
+  GPT_IMAGE_EDIT_ENDPOINT: "https://api.ai-pixel.online/v1/images/edits"
   CHATGPT_BASE_URL: "https://api.ai-pixel.online"
   CHATGPT_MODELS: "codex-auto-review,gpt-5.4,gpt-5.4-mini,gpt-5.5,gpt-5.6-luna,gpt-5.6-sol,gpt-5.6-terra"
   LOCAL_BUSINESS_PROMO_WORKER_CONCURRENCY: "2"
@@ -32,6 +36,19 @@ data:
   LOCAL_BUSINESS_PROMO_JOB_BACKOFF_MS: "30000"
   NOVEL_WORKER_CONCURRENCY: "2"
   NOVEL_WORKER_HEALTH_PORT: "8091"
+  PET_VISUAL_QA_MODEL: "qwen3.7-plus"
+  CODEX_PET_PUBLIC_BASE_URL: "https://api.example.com"
+  CODEX_PET_WORKER_CONCURRENCY: "2"
+  CODEX_PET_VISUAL_CONCURRENCY: "3"
+  CODEX_PET_HEARTBEAT_MS: "10000"
+  CODEX_PET_STALE_RUN_MS: "900000"
+  CODEX_PET_MAINTENANCE_MS: "60000"
+  CODEX_PET_WORKER_HEALTH_PORT: "8092"
+  CODEX_PET_HEALTH_STALE_MS: "120000"
+  CODEX_PET_ARCHIVE_MAX_ATTEMPTS: "10"
+  CODEX_PET_CLEANUP_ATTEMPTS: "120"
+  CODEX_PET_CLEANUP_BACKOFF_MS: "10000"
+  CODEX_PET_CLEANUP_RECOVERY_LIMIT: "100"
   # 视频/图片理解旧工作流仍走 Gemini 原生协议；迁移该工作流时再切百炼全模态接口。
   VIDEO_ANALYZE_MODEL: "gemini-2.5-flash"
   # 数字人口播：飞天数字人（对口型）与小米 MiMo（TTS）的非敏感配置。

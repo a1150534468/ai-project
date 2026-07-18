@@ -232,6 +232,18 @@ export const LOCAL_BUSINESS_PROMO_PRICING_CONFIGS: readonly EcomResourcePricingC
   },
 ];
 
+export const CODEX_PET_PRICING_CONFIGS: readonly EcomResourcePricingConfig[] = [
+  {
+    resourceKey: "codex_pet_v2_package",
+    title: "Codex 桌宠 v2 套餐价格",
+    description: "完整桌宠生成、自动修复、质量检查、知识库归档和兼容包按次统一扣点。",
+    displayName: "Codex 桌宠 v2 套餐",
+    pricingType: "PER_CALL",
+    defaultRate: 200,
+    rateLabel: "每次完整制作扣点",
+  },
+];
+
 const DEFAULT_IMAGE_PRICE: api.ResourcePriceRow = {
   resourceKey: "image_generation_1k",
   displayName: "图片生成 1K",

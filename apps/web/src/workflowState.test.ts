@@ -37,6 +37,7 @@ describe("workflowState", () => {
       "image",
       "novel",
       "commerce-long-image",
+      "codex-pet",
       "fanout",
       "article-workflow",
       "local-business-promo",

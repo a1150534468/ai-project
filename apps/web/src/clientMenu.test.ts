@@ -7,7 +7,8 @@ import {
 } from "./clientMenu";
 
 describe("clientMenu", () => {
-  it("默认隐藏指定的七个工作流入口，其他入口显示", () => {
+  it("默认隐藏灰度中的 Codex 桌宠及其他工作流入口，其他入口显示", () => {
+    expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.codex-pet")).toBe(false);
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.report")).toBe(false);
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.scheduled-task")).toBe(false);
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.image")).toBe(true);

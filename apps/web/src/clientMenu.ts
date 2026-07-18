@@ -8,6 +8,7 @@ export interface ClientMenuItem {
 export type ClientMenuVisibility = Readonly<Record<string, boolean>>;
 
 const DEFAULT_HIDDEN_KEYS = [
+  "workflow.codex-pet",
   "workflow.report",
   "workflow.fanout",
   "workflow.article-workflow",
@@ -17,7 +18,7 @@ const DEFAULT_HIDDEN_KEYS = [
   "workflow.ppt",
 ] as const;
 
-/** 接口暂不可用时仍按本次产品要求隐藏七个入口，避免先闪现再消失。 */
+/** 接口暂不可用时仍按产品配置隐藏灰度入口，避免先闪现再消失。 */
 export const DEFAULT_CLIENT_MENU_VISIBILITY: ClientMenuVisibility = Object.fromEntries(
   DEFAULT_HIDDEN_KEYS.map((key) => [key, false]),
 );

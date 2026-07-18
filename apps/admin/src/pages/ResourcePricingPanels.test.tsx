@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../api.js";
 import {
+  CODEX_PET_PRICING_CONFIGS,
   EcomResourcePricingPanel,
   ImageGenerationPricingPanel,
   NovelCoverPricingPanel,
@@ -259,6 +260,40 @@ describe("ArticleWorkflowPricingPanel", () => {
       rate: 3,
       perUnits: 1000,
     }));
+    expect(onDone).toHaveBeenCalledOnce();
+    expect(onErr).not.toHaveBeenCalled();
+  });
+});
+
+describe("CodexPetPricingPanel", () => {
+  it("defaults to a 200-point per-call package and saves admin overrides", async () => {
+    const onDone = vi.fn();
+    const onErr = vi.fn();
+    await act(async () => {
+      root.render(
+        <EcomResourcePricingPanel
+          config={CODEX_PET_PRICING_CONFIGS[0]}
+          onDone={onDone}
+          onErr={onErr}
+        />,
+      );
+    });
+
+    expect(container.textContent).toContain("Codex 桌宠 v2 套餐价格");
+    expect(container.textContent).toContain("codex_pet_v2_package");
+    expect(requireInput(container.querySelector("input[type='number']")).value).toBe("200");
+    await act(async () => {
+      requireButtonByText("保存资源价格").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(api.upsertResourcePrice).toHaveBeenCalledWith({
+      resourceKey: "codex_pet_v2_package",
+      displayName: "Codex 桌宠 v2 套餐",
+      pricingType: "PER_CALL",
+      rate: 200,
+      perUnits: 1,
+      enabled: true,
+    });
     expect(onDone).toHaveBeenCalledOnce();
     expect(onErr).not.toHaveBeenCalled();
   });

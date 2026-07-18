@@ -1,0 +1,1568 @@
+import { Icon } from "@iconify/react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ReactNode,
+} from "react";
+import { ApiError } from "../../apiError";
+import * as codexPetApi from "../../codexPetApi";
+import type {
+  CodexPetArtifact,
+  CodexPetBaseSelection,
+  CodexPetCreatePayload,
+  CodexPetEvent,
+  CodexPetInstallLink,
+  CodexPetPricing,
+  CodexPetProject,
+  CodexPetProjectDetail,
+  CodexPetProjectSummary,
+  CodexPetReferenceAsset,
+  CodexPetRun,
+  CodexPetStartResult,
+  CodexPetUpdatePayload,
+} from "../../codexPetApi";
+import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
+import {
+  CODEX_PET_LOOK_DIRECTIONS,
+  CODEX_PET_MAX_REFERENCES,
+  CODEX_PET_POLL_MS,
+  CODEX_PET_PROGRESS_STEPS,
+  CODEX_PET_STANDARD_STATES,
+  CODEX_PET_STREAM_RECONNECT_MS,
+  CODEX_PET_STYLE_OPTIONS,
+  EMPTY_CODEX_PET_DRAFT,
+  canEditCodexPetProject,
+  codexPetArtifactUrl,
+  codexPetDisplayProgress,
+  codexPetDraftFromProject,
+  codexPetFileError,
+  codexPetPayloadFromDraft,
+  codexPetStatusLabel,
+  codexPetValidationPassed,
+  isCodexPetAnimationPreview,
+  isCodexPetBaseCandidate,
+  isCodexPetDeliveryReady,
+  isCodexPetFinalContactSheet,
+  makeCodexPetIdempotencyKey,
+  mergeCodexPetEvents,
+  validateCodexPetDraft,
+  type CodexPetDraft,
+} from "./codexPetStudioModel";
+
+export interface CodexPetStudioClient {
+  readonly getPricing: (token: string) => Promise<CodexPetPricing>;
+  readonly listProjects: (token: string) => Promise<readonly CodexPetProjectSummary[]>;
+  readonly createProject: (token: string, payload: CodexPetCreatePayload) => Promise<CodexPetProject>;
+  readonly getProject: (token: string, projectId: string, signal?: AbortSignal) => Promise<CodexPetProjectDetail>;
+  readonly updateProject: (token: string, projectId: string, payload: CodexPetUpdatePayload) => Promise<CodexPetProject>;
+  readonly deleteProject: (token: string, projectId: string) => Promise<void>;
+  readonly startRun: (token: string, projectId: string, idempotencyKey: string) => Promise<CodexPetStartResult>;
+  readonly selectBase: (
+    token: string,
+    projectId: string,
+    runId: string,
+    selection: CodexPetBaseSelection,
+  ) => Promise<CodexPetRun>;
+  readonly cancelRun: (token: string, projectId: string, runId: string) => Promise<CodexPetRun>;
+  readonly listEvents: (
+    token: string,
+    projectId: string,
+    runId: string,
+    after?: number,
+    signal?: AbortSignal,
+  ) => Promise<{ readonly events: readonly CodexPetEvent[]; readonly cursor: number }>;
+  readonly streamEvents: typeof codexPetApi.streamCodexPetEvents;
+  readonly createInstallLink: (token: string, projectId: string) => Promise<CodexPetInstallLink>;
+  readonly downloadPackage: typeof codexPetApi.downloadCodexPetPackage;
+  readonly uploadReference: typeof codexPetApi.uploadCodexPetReferenceAsset;
+}
+
+const DEFAULT_CLIENT: CodexPetStudioClient = {
+  getPricing: codexPetApi.getCodexPetPricing,
+  listProjects: codexPetApi.listCodexPetProjects,
+  createProject: codexPetApi.createCodexPetProject,
+  getProject: codexPetApi.getCodexPetProject,
+  updateProject: codexPetApi.updateCodexPetProject,
+  deleteProject: codexPetApi.deleteCodexPetProject,
+  startRun: codexPetApi.startCodexPetRun,
+  selectBase: codexPetApi.selectCodexPetBase,
+  cancelRun: codexPetApi.cancelCodexPetRun,
+  listEvents: codexPetApi.listCodexPetEvents,
+  streamEvents: codexPetApi.streamCodexPetEvents,
+  createInstallLink: codexPetApi.createCodexPetInstallLink,
+  downloadPackage: codexPetApi.downloadCodexPetPackage,
+  uploadReference: codexPetApi.uploadCodexPetReferenceAsset,
+};
+
+export interface CodexPetStudioProps {
+  readonly token: string;
+  readonly initialProjectId?: string | null;
+  readonly onBalanceRefresh?: () => void;
+  readonly onOpenKnowledgeDocument?: (documentId: string) => void;
+  readonly onInstallUrl?: (url: string) => void;
+  readonly client?: CodexPetStudioClient;
+}
+
+type BusyAction =
+  | "saving"
+  | "starting"
+  | "uploading"
+  | "deleting"
+  | "cancelling"
+  | "selecting-base"
+  | "regenerating-base"
+  | "installing"
+  | "downloading"
+  | null;
+
+type StreamState = "idle" | "connecting" | "live" | "reconnecting" | "polling" | "ended";
+
+const TERMINAL_RUN_STATUSES = new Set(["ready", "failed", "cancelled"]);
+const DETAIL_REFRESH_EVENTS = new Set([
+  "preview.ready",
+  "base.review_required",
+  "job.completed",
+  "validation.failed",
+  "package.ready",
+  "knowledge.archive_completed",
+  "run.completed",
+  "run.failed",
+  "run.cancelled",
+  "billing.refunded",
+]);
+
+const EVENT_LABELS: Record<string, string> = {
+  "run.queued": "任务已进入队列",
+  "stage.started": "阶段开始",
+  "stage.completed": "阶段完成",
+  "job.started": "视觉任务开始",
+  "job.retrying": "视觉任务重试",
+  "job.completed": "视觉任务完成",
+  "preview.ready": "新预览可用",
+  "base.review_required": "请确认主形象",
+  "validation.warning": "质量检查警告",
+  "validation.failed": "质量检查未通过",
+  "run.repairing": "正在自动修复",
+  "package.ready": "兼容包已生成",
+  "knowledge.archive_started": "开始归档知识库",
+  "knowledge.archive_completed": "知识库归档完成",
+  "knowledge.archive_retrying": "知识库归档重试",
+  "run.completed": "桌宠制作完成",
+  "run.failed": "桌宠制作失败",
+  "run.cancellation_requested": "已请求取消桌宠制作",
+  "run.cancelled": "桌宠制作已取消",
+  "billing.refunded": "积分已退款",
+};
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status === 402) return "积分不足，请充值后再开始制作";
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function summaryFromProject(project: CodexPetProject): CodexPetProjectSummary {
+  return {
+    id: project.id,
+    name: project.name,
+    description: project.description,
+    stylePreset: project.stylePreset,
+    status: project.status,
+    latestRunId: project.latestRunId,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+  };
+}
+
+function upsertProjectSummary(
+  projects: readonly CodexPetProjectSummary[],
+  project: CodexPetProject,
+): readonly CodexPetProjectSummary[] {
+  return [summaryFromProject(project), ...projects.filter((item) => item.id !== project.id)]
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function shortDate(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function artifactTime(artifact: CodexPetArtifact): number {
+  const value = new Date(artifact.createdAt).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function artifactJobKey(artifact: CodexPetArtifact): string {
+  const value = artifact.metadata?.jobKey;
+  return typeof value === "string" ? value : "";
+}
+
+function animationPreviewMatchesState(artifact: CodexPetArtifact, stateId: string): boolean {
+  const jobKey = `row-${stateId}`;
+  if (artifactJobKey(artifact) === jobKey) return true;
+  // The derived running-left preview predates the row job metadata and keeps
+  // its state in the human-readable artifact name.  Keep this fallback for
+  // old runs while preferring the structured jobKey for normal rows.
+  return stateId === "running-left"
+    && artifact.name.toLowerCase().startsWith("running-left ");
+}
+
+function validationSummary(report: unknown): string {
+  if (!report || typeof report !== "object") return "尚无质量报告";
+  const value = report as Record<string, unknown>;
+  const errors = Array.isArray(value.errors) ? value.errors.length : 0;
+  const warnings = Array.isArray(value.warnings) ? value.warnings.length : 0;
+  const status = codexPetValidationPassed(report) ? "已通过" : "未通过";
+  return `${status} · ${errors} 个错误 · ${warnings} 个可接受警告`;
+}
+
+function refundStatusLabel(run: CodexPetRun | null | undefined): string {
+  if (run?.billingRefundedAt || run?.billingRefundStatus === "refunded") return "已全额退款";
+  if (run?.billingRefundStatus === "pending") return "退款处理中";
+  if (run?.billingRefundStatus === "failed") return "退款待重试";
+  return "未退款";
+}
+
+function eventTitle(event: CodexPetEvent): string {
+  return event.message || EVENT_LABELS[event.type] || event.type;
+}
+
+function openDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+function launchInstallUrl(url: string): void {
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+}
+
+function Card({ children, className = "", ariaLabel }: {
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly ariaLabel?: string;
+}) {
+  return (
+    <section
+      aria-label={ariaLabel}
+      className={`rounded-[16px] border border-[#e6e7eb] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${className}`}
+    >
+      {children}
+    </section>
+  );
+}
+
+function CardTitle({ icon, title, aside }: { readonly icon: string; readonly title: string; readonly aside?: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-[#eef0f3] px-4 py-3">
+      <span className="grid size-7 place-items-center rounded-[8px] bg-brand-soft text-brand-ink">
+        <Icon icon={icon} className="text-base" aria-hidden />
+      </span>
+      <h2 className="text-sm font-semibold text-[#1d1d1f]">{title}</h2>
+      {aside && <div className="ml-auto">{aside}</div>}
+    </div>
+  );
+}
+
+function StatusPill({ status }: { readonly status: string }) {
+  const complete = status === "ready";
+  const failed = status === "failed" || status === "cancelled";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+      complete ? "bg-emerald-50 text-emerald-700" : failed ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"
+    }`}>
+      {codexPetStatusLabel(status)}
+    </span>
+  );
+}
+
+function PrimaryButton(props: {
+  readonly children: ReactNode;
+  readonly onClick: () => void;
+  readonly disabled?: boolean;
+  readonly kind?: "primary" | "secondary" | "danger";
+  readonly icon?: string;
+  readonly ariaLabel?: string;
+}) {
+  const kind = props.kind ?? "primary";
+  const colors = kind === "primary"
+    ? "bg-brand text-white hover:brightness-95"
+    : kind === "danger"
+      ? "border border-red-200 bg-white text-red-600 hover:bg-red-50"
+      : "border border-[#dfe1e6] bg-white text-[#34343a] hover:bg-[#f7f7f9]";
+  return (
+    <button
+      type="button"
+      aria-label={props.ariaLabel}
+      disabled={props.disabled}
+      onClick={props.onClick}
+      className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-[10px] px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-45 ${colors}`}
+    >
+      {props.icon && <Icon icon={props.icon} className="text-base" aria-hidden />}
+      {props.children}
+    </button>
+  );
+}
+
+function ImagePlaceholder({ text }: { readonly text: string }) {
+  return (
+    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-[#d9dce3] bg-[#fafafd] px-5 text-center text-xs leading-5 text-[#888891]">
+      {text}
+    </div>
+  );
+}
+
+export function CodexPetStudio({
+  token,
+  initialProjectId,
+  onBalanceRefresh,
+  onOpenKnowledgeDocument,
+  onInstallUrl,
+  client = DEFAULT_CLIENT,
+}: CodexPetStudioProps) {
+  const [projects, setProjects] = useState<readonly CodexPetProjectSummary[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null | undefined>(initialProjectId ?? undefined);
+  const [detail, setDetail] = useState<CodexPetProjectDetail | null>(null);
+  const [draft, setDraft] = useState<CodexPetDraft>(EMPTY_CODEX_PET_DRAFT);
+  const [pricing, setPricing] = useState<CodexPetPricing | null>(null);
+  const [events, setEvents] = useState<readonly CodexPetEvent[]>([]);
+  const [selectedBaseArtifactId, setSelectedBaseArtifactId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<BusyAction>(null);
+  const [streamState, setStreamState] = useState<StreamState>("idle");
+  const [bootstrapping, setBootstrapping] = useState(true);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [showActualSize, setShowActualSize] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const selectedProjectIdRef = useRef<string | null | undefined>(undefined);
+  const draftProjectIdRef = useRef<string | null>(null);
+  const eventCursorRef = useRef(0);
+  const detailRevisionRef = useRef(0);
+  const createIdempotencyKeyRef = useRef(makeCodexPetIdempotencyKey("project"));
+  const runIdempotencyKeyRef = useRef<{ readonly projectId: string; readonly key: string } | null>(null);
+  const terminalBalanceRefreshRef = useRef<{ readonly runId: string; readonly status: string } | null>(null);
+
+  selectedProjectIdRef.current = selectedProjectId;
+
+  const latestRun = detail?.latestRun ?? null;
+  // Project details include a bounded history of artifacts from every run.
+  // Rendering that unfiltered list lets a previous run's candidate/preview
+  // appear in the current run's workbench (and can even make a failed run
+  // look deliverable).  Every visual shown here is scoped to the run currently
+  // represented by `latestRun`.
+  const artifacts = useMemo<readonly CodexPetArtifact[]>(() => {
+    const runId = latestRun?.id;
+    if (!runId) return [];
+    return (detail?.artifacts ?? []).filter((artifact) => artifact.runId === runId);
+  }, [detail?.artifacts, latestRun?.id]);
+  const baseCandidates = useMemo(
+    () => artifacts.filter(isCodexPetBaseCandidate).slice().sort((left, right) => artifactTime(left) - artifactTime(right)),
+    [artifacts],
+  );
+  const poseBoards = useMemo(
+    () => artifacts
+      .filter((artifact) => artifact.kind.includes("pose") || artifact.kind.includes("board") || artifact.kind.includes("direction"))
+      .slice()
+      .sort((left, right) => artifactTime(right) - artifactTime(left)),
+    [artifacts],
+  );
+  const currentPoseBoard = poseBoards[0] ?? null;
+  const animationPreviews = useMemo(
+    () => artifacts
+      .filter(isCodexPetAnimationPreview)
+      .slice()
+      .sort((left, right) => artifactTime(right) - artifactTime(left)),
+    [artifacts],
+  );
+  const animationPreview = animationPreviews[0] ?? null;
+  const standardAnimationPreviews = useMemo(
+    () => CODEX_PET_STANDARD_STATES.map((state) => ({
+      state,
+      artifact: animationPreviews
+        .find((candidate) => animationPreviewMatchesState(candidate, state.id)) ?? null,
+    })),
+    [animationPreviews],
+  );
+  const finalContactSheet = useMemo(() => {
+    if (latestRun?.previewArtifactId) {
+      const exact = artifacts.find((artifact) => (
+        artifact.id === latestRun.previewArtifactId && isCodexPetFinalContactSheet(artifact)
+      ));
+      if (exact) return exact;
+    }
+    return artifacts
+      .filter(isCodexPetFinalContactSheet)
+      .slice()
+      .sort((left, right) => artifactTime(right) - artifactTime(left))[0] ?? null;
+  }, [artifacts, latestRun?.previewArtifactId]);
+  const spritesheetArtifact = latestRun?.spritesheetArtifactId
+    ? artifacts.find((artifact) => artifact.id === latestRun.spritesheetArtifactId) ?? null
+    : null;
+  const packageArtifact = latestRun?.packageArtifactId
+    ? artifacts.find((artifact) => artifact.id === latestRun.packageArtifactId) ?? null
+    : null;
+  const deliveryReady = isCodexPetDeliveryReady(latestRun);
+  const lastEvent = events.at(-1);
+  const progress = codexPetDisplayProgress(latestRun, lastEvent?.progress ?? 0);
+  const projectStatus = detail?.project.status ?? "draft";
+  const runIsTerminal = latestRun ? TERMINAL_RUN_STATUSES.has(latestRun.status) : false;
+  const runAllowsInputEdit = !latestRun || runIsTerminal || latestRun.status === "awaiting_base_review";
+  // Keep the previous detail visible while a project switch is loading, but
+  // never let actions use it with the newly selected project id. Without this
+  // gate a fast click on “保存草稿” could PATCH the new project with the old
+  // project's still-rendered inputs before its detail request completed.
+  const detailMatchesSelection = selectedProjectId === null
+    || selectedProjectId === undefined
+    || detail?.project.id === selectedProjectId;
+  const selectionIsPending = Boolean(loadingDetail && selectedProjectId && !detailMatchesSelection);
+  const interactionLocked = busyAction !== null || bootstrapping || loadingDetail || selectionIsPending;
+  const canEdit = !interactionLocked && (
+    selectedProjectId === null
+    || selectedProjectId === undefined
+    || (detailMatchesSelection && canEditCodexPetProject(projectStatus) && runAllowsInputEdit)
+  );
+  const canStart = !interactionLocked
+    && (!selectedProjectId || (detailMatchesSelection && projectStatus === "draft" && (!latestRun || runIsTerminal)));
+  const runIsCancellable = Boolean(latestRun && !runIsTerminal && !latestRun.cancelRequested);
+
+  const applyDetail = useCallback((next: CodexPetProjectDetail, hydrateDraft: boolean) => {
+    detailRevisionRef.current += 1;
+    setDetail(next);
+    setProjects((current) => upsertProjectSummary(current, next.project));
+    if (hydrateDraft || draftProjectIdRef.current !== next.project.id) {
+      draftProjectIdRef.current = next.project.id;
+      setDraft(codexPetDraftFromProject(next.project));
+    }
+  }, []);
+
+  const refreshSelectedProject = useCallback(async (silent = true): Promise<CodexPetProjectDetail | null> => {
+    const projectId = selectedProjectIdRef.current;
+    if (!projectId) return null;
+    const revision = detailRevisionRef.current;
+    try {
+      const next = await client.getProject(token, projectId);
+      if (selectedProjectIdRef.current !== projectId || detailRevisionRef.current !== revision) return null;
+      applyDetail(next, false);
+      return next;
+    } catch (refreshError) {
+      if (!silent) setError(errorMessage(refreshError, "刷新桌宠项目失败"));
+      return null;
+    }
+  }, [applyDetail, client, token]);
+
+  useEffect(() => {
+    if (!initialProjectId || initialProjectId === selectedProjectIdRef.current) return;
+    setSelectedProjectId(initialProjectId);
+    selectedProjectIdRef.current = initialProjectId;
+    detailRevisionRef.current += 1;
+    setDetail(null);
+    setDraft(EMPTY_CODEX_PET_DRAFT);
+    setLoadingDetail(true);
+    setEvents([]);
+    eventCursorRef.current = 0;
+    clearFeedback();
+  }, [initialProjectId]);
+
+  useEffect(() => {
+    let disposed = false;
+    void (async () => {
+      const [pricingResult, projectsResult] = await Promise.allSettled([
+        client.getPricing(token),
+        client.listProjects(token),
+      ]);
+      if (disposed) return;
+      if (pricingResult.status === "fulfilled") setPricing(pricingResult.value);
+      else setNotice("套餐价格暂时无法加载，开始制作前请稍后重试");
+      if (projectsResult.status === "fulfilled") {
+        setProjects(projectsResult.value);
+        if (selectedProjectIdRef.current === undefined) {
+          setSelectedProjectId(projectsResult.value[0]?.id ?? null);
+        }
+      } else {
+        setError(errorMessage(projectsResult.reason, "加载桌宠项目失败"));
+        if (selectedProjectIdRef.current === undefined) setSelectedProjectId(null);
+      }
+      setBootstrapping(false);
+    })();
+    return () => { disposed = true; };
+  }, [client, token]);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setLoadingDetail(false);
+      if (selectedProjectId === null) {
+        setDetail(null);
+        draftProjectIdRef.current = null;
+      }
+      return undefined;
+    }
+    const projectId = selectedProjectId;
+    const revision = detailRevisionRef.current;
+    const controller = new AbortController();
+    setLoadingDetail(true);
+    setEvents([]);
+    eventCursorRef.current = 0;
+    void client.getProject(token, projectId, controller.signal)
+      .then((next) => {
+        if (selectedProjectIdRef.current !== projectId || detailRevisionRef.current !== revision) return;
+        applyDetail(next, true);
+        setError("");
+      })
+      .catch((loadError: unknown) => {
+        if (!isAbortError(loadError)) setError(errorMessage(loadError, "加载桌宠项目详情失败"));
+      })
+      .finally(() => {
+        if (selectedProjectIdRef.current === projectId) setLoadingDetail(false);
+      });
+    return () => controller.abort();
+  }, [applyDetail, client, selectedProjectId, token]);
+
+  useEffect(() => {
+    if (baseCandidates.length === 0) {
+      setSelectedBaseArtifactId(null);
+      return;
+    }
+    setSelectedBaseArtifactId((current) => {
+      if (current && baseCandidates.some((candidate) => candidate.id === current)) return current;
+      if (latestRun?.selectedBaseArtifactId && baseCandidates.some((candidate) => candidate.id === latestRun.selectedBaseArtifactId)) {
+        return latestRun.selectedBaseArtifactId;
+      }
+      return baseCandidates[0]?.id ?? null;
+    });
+  }, [baseCandidates, latestRun?.selectedBaseArtifactId]);
+
+  useEffect(() => {
+    const projectId = detail?.project.id;
+    const run = detail?.latestRun;
+    if (!projectId || !run) {
+      setEvents([]);
+      eventCursorRef.current = 0;
+      setStreamState("idle");
+      return undefined;
+    }
+
+    let disposed = false;
+    let reconnectTimer: number | undefined;
+    let detailRefreshTimer: number | undefined;
+    const controller = new AbortController();
+    eventCursorRef.current = 0;
+    setEvents([]);
+
+    const acceptEvents = (incoming: readonly CodexPetEvent[]) => {
+      if (disposed || incoming.length === 0) return;
+      eventCursorRef.current = Math.max(eventCursorRef.current, ...incoming.map((event) => event.sequence));
+      setEvents((current) => mergeCodexPetEvents(current, incoming));
+      if (incoming.some((event) => DETAIL_REFRESH_EVENTS.has(event.type))) {
+        if (detailRefreshTimer !== undefined) window.clearTimeout(detailRefreshTimer);
+        detailRefreshTimer = window.setTimeout(() => { void refreshSelectedProject(true); }, 160);
+      }
+    };
+
+    const replayPersisted = async () => {
+      const replay = await client.listEvents(token, projectId, run.id, eventCursorRef.current, controller.signal);
+      acceptEvents(replay.events);
+      eventCursorRef.current = Math.max(eventCursorRef.current, replay.cursor);
+    };
+
+    let reconnecting = false;
+    const connect = async () => {
+      if (disposed) return;
+      setStreamState(reconnecting ? "reconnecting" : "connecting");
+      try {
+        await replayPersisted();
+        if (disposed || TERMINAL_RUN_STATUSES.has(run.status)) {
+          if (!disposed) setStreamState("ended");
+          return;
+        }
+        setStreamState("live");
+        await client.streamEvents({
+          token,
+          projectId,
+          runId: run.id,
+          after: eventCursorRef.current,
+          signal: controller.signal,
+          onEvent: (event) => acceptEvents([event]),
+        });
+        if (disposed) return;
+      } catch (streamError) {
+        if (disposed || isAbortError(streamError)) return;
+        setStreamState("polling");
+      }
+      reconnecting = true;
+      reconnectTimer = window.setTimeout(() => { void connect(); }, CODEX_PET_STREAM_RECONNECT_MS);
+    };
+
+    void connect();
+    return () => {
+      disposed = true;
+      controller.abort();
+      if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
+      if (detailRefreshTimer !== undefined) window.clearTimeout(detailRefreshTimer);
+    };
+  }, [client, detail?.latestRun?.id, detail?.latestRun?.status, detail?.project.id, refreshSelectedProject, token]);
+
+  useEffect(() => {
+    const projectId = detail?.project.id;
+    const run = detail?.latestRun;
+    if (!projectId || !run || TERMINAL_RUN_STATUSES.has(run.status)) return undefined;
+    let disposed = false;
+    const poll = async () => {
+      const revision = detailRevisionRef.current;
+      const [nextDetail, replay] = await Promise.allSettled([
+        client.getProject(token, projectId),
+        client.listEvents(token, projectId, run.id, eventCursorRef.current),
+      ]);
+      if (disposed || selectedProjectIdRef.current !== projectId) return;
+      if (nextDetail.status === "fulfilled" && detailRevisionRef.current === revision) applyDetail(nextDetail.value, false);
+      if (replay.status === "fulfilled") {
+        eventCursorRef.current = Math.max(eventCursorRef.current, replay.value.cursor);
+        setEvents((current) => mergeCodexPetEvents(current, replay.value.events));
+      }
+    };
+    const timer = window.setInterval(() => { void poll(); }, CODEX_PET_POLL_MS);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [applyDetail, client, detail?.latestRun?.id, detail?.latestRun?.status, detail?.project.id, token]);
+
+  useEffect(() => {
+    if (!latestRun || !TERMINAL_RUN_STATUSES.has(latestRun.status)) return;
+    const last = terminalBalanceRefreshRef.current;
+    if (last?.runId === latestRun.id && last.status === latestRun.status) return;
+    terminalBalanceRefreshRef.current = { runId: latestRun.id, status: latestRun.status };
+    onBalanceRefresh?.();
+  }, [latestRun?.id, latestRun?.status, onBalanceRefresh]);
+
+  const clearFeedback = () => {
+    setError("");
+    setNotice("");
+  };
+
+  const updateDraft = <K extends keyof CodexPetDraft>(key: K, value: CodexPetDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+    clearFeedback();
+  };
+
+  const startNewProject = () => {
+    if (interactionLocked) return;
+    setSelectedProjectId(null);
+    selectedProjectIdRef.current = null;
+    detailRevisionRef.current += 1;
+    setDetail(null);
+    setDraft(EMPTY_CODEX_PET_DRAFT);
+    setEvents([]);
+    setSelectedBaseArtifactId(null);
+    draftProjectIdRef.current = null;
+    eventCursorRef.current = 0;
+    createIdempotencyKeyRef.current = makeCodexPetIdempotencyKey("project");
+    runIdempotencyKeyRef.current = null;
+    clearFeedback();
+  };
+
+  const persistDraft = async (): Promise<CodexPetProject> => {
+    // Saving a draft is deliberately less strict than starting a billable
+    // run.  This allows a user to save the name/style first and add visual
+    // input in a later edit; handleStart performs the required-input gate.
+    const validationError = validateCodexPetDraft(draft, { requireVisualInput: false });
+    if (validationError) throw new Error(validationError);
+    const currentProjectId = selectedProjectIdRef.current;
+    const project = currentProjectId
+      ? await client.updateProject(token, currentProjectId, codexPetPayloadFromDraft(draft))
+      : await client.createProject(token, codexPetPayloadFromDraft(draft, createIdempotencyKeyRef.current));
+    setProjects((current) => upsertProjectSummary(current, project));
+    setSelectedProjectId(project.id);
+    selectedProjectIdRef.current = project.id;
+    draftProjectIdRef.current = project.id;
+    setDraft(codexPetDraftFromProject(project));
+    detailRevisionRef.current += 1;
+    setDetail((current) => current?.project.id === project.id
+      ? { ...current, project }
+      : { project, latestRun: null, runs: [], artifacts: [], jobs: [] });
+    if (!currentProjectId) createIdempotencyKeyRef.current = makeCodexPetIdempotencyKey("project");
+    return project;
+  };
+
+  const handleSaveDraft = () => {
+    if (interactionLocked || !canEdit) return;
+    clearFeedback();
+    setBusyAction("saving");
+    const regeneratesCandidates = projectStatus === "awaiting_base_review";
+    void persistDraft()
+      .then(async () => {
+        setNotice(regeneratesCandidates ? "输入已保存，正在重新生成主形象候选" : "草稿已保存，尚未扣费");
+        // The PATCH response includes the project while the run is reset by
+        // the server. Refresh immediately so stale candidates cannot remain
+        // selectable until the next 2.5-second fallback poll.
+        if (regeneratesCandidates) await refreshSelectedProject(true);
+      })
+      .catch((saveError: unknown) => setError(errorMessage(saveError, "保存桌宠草稿失败")))
+      .finally(() => setBusyAction(null));
+  };
+
+  const handleStart = () => {
+    if (interactionLocked || !canStart) return;
+    const validationError = validateCodexPetDraft(draft);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    if (!pricing?.enabled) {
+      setError("桌宠套餐当前不可用，请等待管理员开启后再试");
+      return;
+    }
+    clearFeedback();
+    setBusyAction("starting");
+    void (async () => {
+      try {
+        const project = await persistDraft();
+        const currentKey = runIdempotencyKeyRef.current?.projectId === project.id
+          ? runIdempotencyKeyRef.current.key
+          : makeCodexPetIdempotencyKey("run");
+        runIdempotencyKeyRef.current = { projectId: project.id, key: currentKey };
+        const started = await client.startRun(token, project.id, currentKey);
+        runIdempotencyKeyRef.current = null;
+        applyDetail({ project: started.project, latestRun: started.run, runs: [started.run], artifacts: [], jobs: [] }, false);
+        setNotice("制作任务已提交，实时进度已连接");
+        onBalanceRefresh?.();
+        void refreshSelectedProject(true);
+      } catch (startError) {
+        setError(errorMessage(startError, "启动桌宠制作失败"));
+      } finally {
+        setBusyAction(null);
+      }
+    })();
+  };
+
+  const handleReferenceFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const available = Math.max(0, CODEX_PET_MAX_REFERENCES - draft.referenceAssets.length);
+    const files = Array.from(input.files ?? []).slice(0, available);
+    input.value = "";
+    if (files.length === 0 || interactionLocked || !canEdit) return;
+    for (const file of files) {
+      const fileError = codexPetFileError(file);
+      if (fileError) {
+        setError(`${file.name}：${fileError}`);
+        return;
+      }
+    }
+    clearFeedback();
+    setBusyAction("uploading");
+    void (async () => {
+      try {
+        const uploaded: CodexPetReferenceAsset[] = [];
+        for (const file of files) {
+          const inline = await readFileAsInlineImage(file);
+          const asset = await client.uploadReference(token, inline);
+          uploaded.push({ ...asset, name: asset.name || file.name });
+        }
+        setDraft((current) => ({
+          ...current,
+          referenceAssets: [...current.referenceAssets, ...uploaded]
+            .filter((asset, index, all) => all.findIndex((item) => item.id === asset.id) === index)
+            .slice(0, CODEX_PET_MAX_REFERENCES),
+        }));
+        setNotice(`已上传 ${uploaded.length} 张参考图`);
+      } catch (uploadError) {
+        setError(errorMessage(uploadError, "上传参考图失败"));
+      } finally {
+        setBusyAction(null);
+      }
+    })();
+  };
+
+  const handleDeleteProject = () => {
+    const projectId = detail?.project.id;
+    if (!projectId || interactionLocked) return;
+    const confirmed = typeof window === "undefined" || window.confirm(
+      latestRun && !runIsTerminal
+        ? "项目仍在运行。删除会先请求取消，并清理对应知识库文档与产物，确认继续？"
+        : "删除项目会清理对应知识库文档与桌宠产物，确认继续？",
+    );
+    if (!confirmed) return;
+    clearFeedback();
+    setBusyAction("deleting");
+    void client.deleteProject(token, projectId)
+      .then(() => {
+        const remaining = projects.filter((project) => project.id !== projectId);
+        setProjects(remaining);
+        const nextProjectId = remaining[0]?.id ?? null;
+        setSelectedProjectId(nextProjectId);
+        selectedProjectIdRef.current = nextProjectId;
+        detailRevisionRef.current += 1;
+        setDetail(null);
+        setNotice("项目已提交删除清理");
+      })
+      .catch(async (deleteError: unknown) => {
+        setError(errorMessage(deleteError, "删除桌宠项目失败"));
+        // DELETE marks the project as `deleting` before it enqueues durable
+        // cleanup. If Redis is unavailable the API deliberately returns 503,
+        // but the tombstone is already committed and maintenance will retry.
+        // Refresh so the browser cannot keep offering save/start actions for
+        // a project that the server has already made immutable.
+        await refreshSelectedProject(true);
+      })
+      .finally(() => setBusyAction(null));
+  };
+
+  const handleCancelRun = () => {
+    const project = detail?.project;
+    const run = latestRun;
+    if (!project || !run || !runIsCancellable || interactionLocked) return;
+    const refundText = run.hasSuccessfulImage
+      ? "当前已有成功图片，主动取消不会退款。"
+      : "当前尚无成功图片，取消完成后将全额退款。";
+    if (typeof window !== "undefined" && !window.confirm(`${refundText}确认取消本次制作？`)) return;
+    clearFeedback();
+    setBusyAction("cancelling");
+    void client.cancelRun(token, project.id, run.id)
+      .then((cancelled) => {
+        setDetail((current) => current ? { ...current, latestRun: cancelled } : current);
+        setNotice("已提交取消请求，Worker 会在安全检查点停止");
+        onBalanceRefresh?.();
+        // The cancel response is an acknowledgement, not necessarily the
+        // terminal run/project state.  Refresh immediately so project history,
+        // billing/refund fields, and the latest-run pointer cannot remain stale
+        // after the worker finishes the cancellation handshake.
+        void refreshSelectedProject(true);
+      })
+      .catch((cancelError: unknown) => setError(errorMessage(cancelError, "取消桌宠制作失败")))
+      .finally(() => setBusyAction(null));
+  };
+
+  const mutateBaseSelection = (selection: CodexPetBaseSelection, action: Exclude<BusyAction, null>, success: string) => {
+    const project = detail?.project;
+    const run = latestRun;
+    if (!project || !run || run.status !== "awaiting_base_review" || interactionLocked) return;
+    clearFeedback();
+    setBusyAction(action);
+    void client.selectBase(token, project.id, run.id, selection)
+      .then((nextRun) => {
+        setDetail((current) => current ? { ...current, latestRun: nextRun } : current);
+        setNotice(success);
+        void refreshSelectedProject(true);
+      })
+      .catch((selectionError: unknown) => setError(errorMessage(selectionError, "处理主形象失败")))
+      .finally(() => setBusyAction(null));
+  };
+
+  const handleInstall = () => {
+    const projectId = detail?.project.id;
+    if (!projectId || !deliveryReady || interactionLocked) return;
+    clearFeedback();
+    setBusyAction("installing");
+    void client.createInstallLink(token, projectId)
+      .then((result) => {
+        if (onInstallUrl) onInstallUrl(result.installUrl);
+        else launchInstallUrl(result.installUrl);
+        setNotice("已唤起 Codex 安装确认；签名图片链接 30 分钟内有效");
+      })
+      .catch((installError: unknown) => setError(errorMessage(installError, "安装到 Codex 失败")))
+      .finally(() => setBusyAction(null));
+  };
+
+  const handleDownload = () => {
+    const projectId = detail?.project.id;
+    if (!projectId || !deliveryReady || interactionLocked) return;
+    clearFeedback();
+    setBusyAction("downloading");
+    void client.downloadPackage(token, projectId)
+      .then((result) => {
+        openDownload(result.blob, result.filename);
+        setNotice("兼容包已开始下载");
+      })
+      .catch((downloadError: unknown) => setError(errorMessage(downloadError, "下载兼容包失败")))
+      .finally(() => setBusyAction(null));
+  };
+
+  const handleOpenKnowledge = () => {
+    const documentId = latestRun?.knowledgeDocumentId;
+    if (!documentId || !deliveryReady || interactionLocked) return;
+    if (onOpenKnowledgeDocument) {
+      onOpenKnowledgeDocument(documentId);
+      return;
+    }
+    window.dispatchEvent(new CustomEvent("ai-assistant:open-knowledge-document", {
+      detail: { documentId, systemKey: "AI_ARTIFACTS" },
+    }));
+    setNotice("已请求打开「AI 产物」知识库中的桌宠文档");
+  };
+
+  const handleCopyProject = () => {
+    const project = detail?.project;
+    if (!project || interactionLocked) return;
+    const copied = codexPetDraftFromProject(project);
+    const suffix = " 副本";
+    const copiedName = Array.from(`${copied.name}${suffix}`).slice(0, 30).join("");
+    startNewProject();
+    setDraft({ ...copied, name: copiedName });
+    setNotice("已复制输入信息为新草稿，保存前不会扣费");
+  };
+
+  const streamLabel = streamState === "live"
+    ? "SSE 实时"
+    : streamState === "polling"
+      ? "轮询兜底"
+      : streamState === "reconnecting"
+        ? "正在重连"
+        : streamState === "connecting"
+          ? "正在连接"
+          : streamState === "ended"
+            ? "事件已同步"
+            : "等待运行";
+
+  return (
+    <section className="space-y-3" data-testid="codex-pet-studio">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-[16px] border border-[#e6e7eb] bg-[linear-gradient(120deg,#ffffff_0%,#f5fffd_100%)] px-5 py-4">
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <span className="grid size-9 place-items-center rounded-[12px] bg-brand text-white shadow-sm">
+              <Icon icon="mdi:egg-easter" className="text-xl" aria-hidden />
+            </span>
+            <div>
+              <h1 className="text-lg font-semibold tracking-tight text-[#1d1d1f]">Codex 桌宠工坊</h1>
+              <p className="text-xs text-[#71717a]">参考图或文字生成，可直接安装到 Codex</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-[#dcf3ef] bg-white px-3 py-1.5 text-[#477069]">
+            gpt-image-2 · 2 个主形象 · 每组最多 2 次自动修复
+          </span>
+          <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
+            {pricing ? `${pricing.rate} 积分 / 完整 v2 套餐` : "套餐价格加载中"}
+          </span>
+        </div>
+      </div>
+
+      {error && (
+        <div role="alert" className="flex items-start gap-2 rounded-[12px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+          <Icon icon="mdi:alert-circle-outline" className="mt-0.5 flex-none text-base" aria-hidden />
+          <span>{error}</span>
+        </div>
+      )}
+      {notice && !error && (
+        <div aria-live="polite" className="flex items-start gap-2 rounded-[12px] border border-[#cdeee8] bg-brand-soft px-3 py-2.5 text-sm text-brand-ink">
+          <Icon icon="mdi:check-circle-outline" className="mt-0.5 flex-none text-base" aria-hidden />
+          <span>{notice}</span>
+        </div>
+      )}
+
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[280px_minmax(440px,1fr)_330px]">
+        <aside className="min-w-0 space-y-3">
+          <Card ariaLabel="桌宠项目历史">
+            <CardTitle
+              icon="mdi:history"
+              title="项目历史"
+              aside={(
+                <button
+                  type="button"
+                  disabled={interactionLocked}
+                  onClick={startNewProject}
+                  className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-semibold text-brand-ink hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <Icon icon="mdi:plus" aria-hidden /> 新建
+                </button>
+              )}
+            />
+            <div className="max-h-56 space-y-1 overflow-y-auto p-2" aria-label="桌宠项目列表">
+              {bootstrapping && <p className="px-2 py-4 text-center text-xs text-[#8b8b94]">正在加载项目...</p>}
+              {!bootstrapping && projects.length === 0 && (
+                <p className="px-3 py-5 text-center text-xs leading-5 text-[#8b8b94]">还没有桌宠项目，从文字或参考图开始吧。</p>
+              )}
+              {projects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  disabled={interactionLocked}
+                  onClick={() => {
+                    if (interactionLocked) return;
+                    setSelectedProjectId(project.id);
+                    selectedProjectIdRef.current = project.id;
+                    detailRevisionRef.current += 1;
+                    // Clear the old detail synchronously. The effect below
+                    // also sets this state, but doing it here closes the
+                    // one-render window in which destructive actions could
+                    // still target the previously selected project.
+                    setDetail(null);
+                    setDraft(EMPTY_CODEX_PET_DRAFT);
+                    setLoadingDetail(true);
+                    setEvents([]);
+                    eventCursorRef.current = 0;
+                    clearFeedback();
+                  }}
+                  className={`w-full rounded-[10px] border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                    project.id === selectedProjectId
+                      ? "border-[#bde8e2] bg-brand-soft"
+                      : "border-transparent hover:border-[#e6e7eb] hover:bg-[#fafafa]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#2d2d31]">{project.name}</span>
+                    <StatusPill status={project.status} />
+                  </div>
+                  <p className="mt-1 truncate text-[10px] text-[#8b8b94]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
+                </button>
+              ))}
+            </div>
+          </Card>
+
+          <Card ariaLabel="桌宠输入信息">
+            <CardTitle
+              icon="mdi:creation-outline"
+              title="输入信息"
+              aside={detail && <StatusPill status={detail.project.status} />}
+            />
+            <div className="space-y-3 p-4">
+              {loadingDetail && <p className="text-xs text-[#8b8b94]">正在恢复项目输入...</p>}
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">桌宠名称 <span className="text-red-500">*</span></span>
+                <input
+                  value={draft.name}
+                  disabled={!canEdit || interactionLocked}
+                  maxLength={30}
+                  onChange={(event) => updateDraft("name", event.target.value)}
+                  placeholder="例如：码仔"
+                  className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                />
+                <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.name).length}/30</span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">一句话描述</span>
+                <input
+                  value={draft.description}
+                  disabled={!canEdit || interactionLocked}
+                  onChange={(event) => updateDraft("description", event.target.value)}
+                  placeholder="它是谁、有什么性格"
+                  className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">角色提示词</span>
+                <textarea
+                  value={draft.prompt}
+                  disabled={!canEdit || interactionLocked}
+                  maxLength={4_000}
+                  onChange={(event) => updateDraft("prompt", event.target.value)}
+                  placeholder="描述角色外形、配色、材质、标志性配件和气质；也可以只上传参考图。"
+                  rows={5}
+                  className="w-full resize-y rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                />
+                <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.prompt).length}/4000</span>
+              </label>
+
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[#4b4b52]">参考图</span>
+                  <span className="text-[10px] text-[#9a9aa2]">{draft.referenceAssets.length}/3 · 每张 10MB</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {draft.referenceAssets.map((asset) => {
+                    const url = asset.thumbnailUrl || asset.originalUrl;
+                    return (
+                      <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-[9px] border border-[#e1e3e8] bg-[#f6f6f8]">
+                        {url ? <img src={url} alt={asset.name || "桌宠参考图"} className="size-full object-cover" /> : (
+                          <span className="grid size-full place-items-center text-[10px] text-[#9a9aa2]">已上传</span>
+                        )}
+                        {canEdit && (
+                          <button
+                            type="button"
+                            aria-label={`移除参考图 ${asset.name ?? asset.id}`}
+                            disabled={interactionLocked}
+                            onClick={() => updateDraft("referenceAssets", draft.referenceAssets.filter((item) => item.id !== asset.id))}
+                            className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
+                          >
+                            <Icon icon="mdi:close" aria-hidden />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {draft.referenceAssets.length < CODEX_PET_MAX_REFERENCES && (
+                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-[#fafafd] text-center text-[10px] text-[#7d7d86] transition hover:border-brand hover:text-brand-ink ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
+                      <span><Icon icon={busyAction === "uploading" ? "mdi:loading" : "mdi:image-plus-outline"} className={`mx-auto mb-1 text-lg ${busyAction === "uploading" ? "animate-spin" : ""}`} aria-hidden />上传参考图</span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif"
+                        multiple
+                        disabled={!canEdit || interactionLocked}
+                        onChange={handleReferenceFiles}
+                        className="sr-only"
+                      />
+                    </label>
+                  )}
+                </div>
+              </div>
+
+              <fieldset disabled={!canEdit || interactionLocked}>
+                <legend className="mb-1.5 text-[11px] font-semibold text-[#4b4b52]">风格预设</legend>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CODEX_PET_STYLE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      title={option.description}
+                      aria-pressed={draft.stylePreset === option.value}
+                      onClick={() => updateDraft("stylePreset", option.value)}
+                      className={`rounded-[9px] border px-2 py-1.5 text-left text-[11px] transition ${
+                        draft.stylePreset === option.value
+                          ? "border-[#9eddd4] bg-brand-soft font-semibold text-brand-ink"
+                          : "border-[#e2e3e8] bg-white text-[#66666e] hover:border-[#c8ccd3]"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">风格补充</span>
+                <input
+                  value={draft.styleNotes}
+                  disabled={!canEdit || interactionLocked}
+                  onChange={(event) => updateDraft("styleNotes", event.target.value)}
+                  placeholder="可选，例如：圆润、低饱和、不要文字"
+                  className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                />
+              </label>
+
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#e5e7eb] bg-[#fafafa] p-3">
+                <input
+                  type="checkbox"
+                  checked={draft.autoContinue}
+                  disabled={!canEdit || interactionLocked}
+                  onChange={(event) => updateDraft("autoContinue", event.target.checked)}
+                  className="mt-0.5 size-4 accent-[var(--accent-primary)]"
+                />
+                <span>
+                  <span className="block text-xs font-semibold text-[#3d3d42]">主形象生成后自动继续</span>
+                  <span className="mt-0.5 block text-[10px] leading-4 text-[#85858d]">关闭时会停下来让你从 2 个候选中选择；开启后由视觉质检自动选优。</span>
+                </span>
+              </label>
+
+              <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-[#6f7078]">
+                预计 13–14 个视觉任务（不对称角色会单独生成向左移动）；上传即表示你拥有参考图与角色的使用权。套餐包含完整生成、QA、最多两轮自动修复、知识库索引、Codex 安装和 ZIP，不另收归档费用。
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <PrimaryButton
+                  kind="secondary"
+                  icon={busyAction === "saving" ? "mdi:loading" : "mdi:content-save-outline"}
+                  disabled={!canEdit || interactionLocked}
+                  onClick={handleSaveDraft}
+                >
+                  {selectedProjectId ? "保存草稿" : "创建草稿"}
+                </PrimaryButton>
+                <PrimaryButton
+                  icon={busyAction === "starting" ? "mdi:loading" : "mdi:creation"}
+                  disabled={interactionLocked || !canStart || pricing?.enabled !== true}
+                  onClick={handleStart}
+                >
+                  开始制作{pricing ? ` · ${pricing.rate}` : ""}
+                </PrimaryButton>
+              </div>
+
+              {detail && (
+                <div className="flex gap-2 border-t border-[#eceef1] pt-3">
+                  {runIsCancellable && (
+                    <PrimaryButton kind="secondary" icon="mdi:stop-circle-outline" disabled={interactionLocked} onClick={handleCancelRun}>
+                      取消运行
+                    </PrimaryButton>
+                  )}
+                  <PrimaryButton kind="danger" icon="mdi:trash-can-outline" disabled={interactionLocked} onClick={handleDeleteProject}>
+                    删除项目
+                  </PrimaryButton>
+                </div>
+              )}
+            </div>
+          </Card>
+        </aside>
+
+        <main className="min-w-0 space-y-3">
+          <Card ariaLabel="桌宠视觉工作台">
+            <CardTitle
+              icon="mdi:monitor-dashboard"
+              title="视觉工作台"
+              aside={latestRun && <span className="text-[11px] font-semibold text-brand-ink">{progress}%</span>}
+            />
+            <div className="space-y-4 p-4">
+              {!latestRun && (
+                <ImagePlaceholder text="保存草稿后点击“开始制作”。这里会依次显示 2 个主形象候选、当前姿势板、动作预览和最终 v2 精灵图。" />
+              )}
+
+              {latestRun && baseCandidates.length > 0 && (
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-semibold text-[#34343a]">主形象候选</h3>
+                      <p className="mt-0.5 text-[10px] text-[#898991]">选中的形象会成为所有动作与方向的身份基准。</p>
+                    </div>
+                    {latestRun.status === "awaiting_base_review" && (
+                      <div className="flex flex-wrap gap-1.5">
+                        <PrimaryButton
+                          kind="secondary"
+                          icon="mdi:robot-happy-outline"
+                          disabled={interactionLocked}
+                          onClick={() => mutateBaseSelection({ autoSelect: true }, "selecting-base", "视觉质检已选出更稳定的主形象，继续制作")}
+                        >
+                          QA 自动选优
+                        </PrimaryButton>
+                        <PrimaryButton
+                          kind="secondary"
+                          icon="mdi:refresh"
+                          disabled={interactionLocked}
+                          onClick={() => mutateBaseSelection({ regenerate: true }, "regenerating-base", "已提交主形象重生，将生成两个新候选")}
+                        >
+                          重生候选
+                        </PrimaryButton>
+                      </div>
+                    )}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {baseCandidates.map((candidate, index) => {
+                      const url = codexPetArtifactUrl(candidate);
+                      const selected = candidate.id === selectedBaseArtifactId;
+                      return (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          disabled={latestRun.status !== "awaiting_base_review" || interactionLocked}
+                          aria-pressed={selected}
+                          onClick={() => setSelectedBaseArtifactId(candidate.id)}
+                          className={`overflow-hidden rounded-[13px] border-2 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-[#e2e4e9] bg-white hover:border-[#c9cdd4]"}`}
+                        >
+                          <div className="aspect-[3/2] bg-[#f5f5f7]">
+                            {url ? <img src={url} alt={`主形象候选 ${index + 1}`} className="size-full object-contain" /> : (
+                              <span className="grid size-full place-items-center text-xs text-[#92929a]">候选 {index + 1} 已生成</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 px-3 py-2">
+                            <span className="text-xs font-semibold text-[#34343a]">候选 {index + 1}</span>
+                            {selected && <span className="ml-auto text-[10px] font-semibold text-brand-ink">已选择</span>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {latestRun.status === "awaiting_base_review" && (
+                    <div className="mt-3 flex justify-end">
+                      <PrimaryButton
+                        icon="mdi:arrow-right"
+                        disabled={!selectedBaseArtifactId || interactionLocked}
+                        onClick={() => selectedBaseArtifactId && mutateBaseSelection(
+                          { artifactId: selectedBaseArtifactId },
+                          "selecting-base",
+                          "主形象已确认，开始制作标准动作",
+                        )}
+                      >
+                        使用所选形象并继续
+                      </PrimaryButton>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {latestRun && baseCandidates.length === 0 && latestRun.status === "base_generating" && (
+                <ImagePlaceholder text="正在并行生成 2 个主形象候选；完成后会实时出现在这里。" />
+              )}
+
+              {latestRun && (currentPoseBoard || animationPreview) && (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-xs font-semibold text-[#34343a]">当前姿势板</h3>
+                      {currentPoseBoard && <span className="text-[10px] text-[#8b8b94]">{currentPoseBoard.width ?? "?"}×{currentPoseBoard.height ?? "?"}</span>}
+                    </div>
+                    {currentPoseBoard && codexPetArtifactUrl(currentPoseBoard) ? (
+                      <img src={codexPetArtifactUrl(currentPoseBoard)} alt="当前桌宠姿势板" className="aspect-[3/2] w-full rounded-[12px] border border-[#e2e4e9] bg-[#f4f4f6] object-contain" />
+                    ) : <ImagePlaceholder text="姿势板处理中" />}
+                  </div>
+                  <div>
+                    <div className="mb-2 flex items-center justify-between">
+                      <h3 className="text-xs font-semibold text-[#34343a]">状态动画预览</h3>
+                      <span className="text-[10px] text-[#8b8b94]">透明背景 · 192×208 单格</span>
+                    </div>
+                    {animationPreview && codexPetArtifactUrl(animationPreview) ? (
+                      <img src={codexPetArtifactUrl(animationPreview)} alt="桌宠状态动画预览" className="aspect-[3/2] w-full rounded-[12px] border border-[#e2e4e9] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:16px_16px] object-contain" />
+                    ) : <ImagePlaceholder text="动作预览生成后显示" />}
+                  </div>
+                </div>
+              )}
+
+              {latestRun && spritesheetArtifact && (
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-semibold text-[#34343a]">最终 Codex v2 精灵图</h3>
+                      <p className="mt-0.5 text-[10px] text-[#898991]">1536×2288 · 8 列 × 11 行 · 透明背景 · spriteVersionNumber 2</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowActualSize((current) => !current)}
+                      className="rounded-[8px] border border-[#dfe1e6] px-2 py-1 text-[10px] font-semibold text-[#55555d] hover:bg-[#f6f6f8]"
+                    >
+                      {showActualSize ? "适应窗口" : "1:1 实际尺寸"}
+                    </button>
+                  </div>
+                  <div className={`overflow-auto rounded-[12px] border border-[#dfe1e6] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:20px_20px] ${showActualSize ? "max-h-[560px]" : "p-3"}`}>
+                    {codexPetArtifactUrl(spritesheetArtifact) ? (
+                      <img
+                        src={codexPetArtifactUrl(spritesheetArtifact)}
+                        alt="最终 Codex v2 桌宠精灵图"
+                        width={showActualSize ? (spritesheetArtifact.width ?? 1536) : undefined}
+                        height={showActualSize ? (spritesheetArtifact.height ?? 2288) : undefined}
+                        className={showActualSize ? "max-w-none" : "mx-auto max-h-[520px] w-auto max-w-full object-contain"}
+                      />
+                    ) : <ImagePlaceholder text="最终精灵图已生成，正在刷新签名预览地址" />}
+                  </div>
+                </div>
+              )}
+
+              {latestRun && deliveryReady && (
+                <div className="space-y-3 rounded-[14px] border border-emerald-200 bg-emerald-50/50 p-4">
+                  <div className="flex items-start gap-2">
+                    <Icon icon="mdi:check-decagram" className="mt-0.5 text-xl text-emerald-600" aria-hidden />
+                    <div>
+                      <h3 className="text-sm font-semibold text-emerald-800">桌宠已孵化并归档</h3>
+                      <p className="mt-0.5 text-[11px] text-emerald-700">最终验证、ZIP 打包与「AI 产物」知识库 Document 均已完成。</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="mb-1.5 text-[11px] font-semibold text-[#52525a]">9 组标准动画</h4>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="codex-pet-standard-animations">
+                      {standardAnimationPreviews.map(({ state, artifact }) => {
+                        const url = artifact ? codexPetArtifactUrl(artifact) : "";
+                        return (
+                          <figure
+                            key={state.id}
+                            data-testid={`codex-pet-animation-${state.id}`}
+                            className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
+                          >
+                            <div className="aspect-[3/2] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:12px_12px]">
+                              {url ? (
+                                <img src={url} alt={`${state.label}动画预览`} className="size-full object-contain" />
+                              ) : (
+                                <span className="grid size-full place-items-center px-2 text-center text-[10px] text-[#9a9aa2]">{state.label}预览处理中</span>
+                              )}
+                            </div>
+                            <figcaption className="px-2 py-1.5 text-[10px] font-semibold text-[#55555d]">{state.label}</figcaption>
+                          </figure>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {finalContactSheet && (
+                    <div className="rounded-[10px] border border-emerald-100 bg-white p-2.5" data-testid="codex-pet-final-contact-sheet">
+                      <div className="mb-1.5 flex items-center justify-between gap-2">
+                        <h4 className="text-[11px] font-semibold text-[#52525a]">最终 Contact Sheet</h4>
+                        <span className="text-[9px] text-[#8b8b94]">完整 v2 预览 · 非单组动画</span>
+                      </div>
+                      {codexPetArtifactUrl(finalContactSheet) ? (
+                        <img
+                          src={codexPetArtifactUrl(finalContactSheet)}
+                          alt="最终 Codex v2 Contact Sheet"
+                          className="max-h-72 w-full rounded-[8px] border border-[#e7e8ec] bg-[#f7f8fa] object-contain"
+                        />
+                      ) : (
+                        <ImagePlaceholder text="最终 Contact Sheet 已生成，正在刷新预览地址" />
+                      )}
+                    </div>
+                  )}
+                  <div>
+                    <h4 className="mb-1.5 text-[11px] font-semibold text-[#52525a]">16 个观察方向（顺时针）</h4>
+                    <div className="grid grid-cols-8 gap-1">
+                      {CODEX_PET_LOOK_DIRECTIONS.map((direction) => <span key={direction} className="rounded-[6px] bg-white px-1 py-1 text-center text-[9px] text-[#6f7078] shadow-sm">{direction}°</span>)}
+                    </div>
+                  </div>
+                  <div className="rounded-[10px] bg-white px-3 py-2 text-[11px] text-[#5f6068]">
+                    质量报告：{validationSummary(latestRun.validationReport)}
+                  </div>
+                  <details className="rounded-[10px] border border-emerald-100 bg-white px-3 py-2 text-[10px] text-[#64646c]">
+                    <summary className="cursor-pointer font-semibold text-[#4f5057]">查看完整质量报告</summary>
+                    <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#f7f8fa] p-2 font-mono text-[9px] leading-4">
+                      {JSON.stringify(latestRun.validationReport, null, 2)}
+                    </pre>
+                  </details>
+                  <div className="flex flex-wrap gap-2">
+                    <PrimaryButton icon="mdi:download-circle-outline" disabled={interactionLocked} onClick={handleInstall}>安装到 Codex</PrimaryButton>
+                    <PrimaryButton kind="secondary" icon="mdi:folder-zip-outline" disabled={interactionLocked} onClick={handleDownload}>下载兼容包</PrimaryButton>
+                    <PrimaryButton kind="secondary" icon="mdi:database-eye-outline" disabled={interactionLocked} onClick={handleOpenKnowledge}>在 AI 产物中查看</PrimaryButton>
+                    <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
+                  </div>
+                </div>
+              )}
+
+              {latestRun?.status === "ready" && !deliveryReady && (
+                <div role="alert" className="rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
+                  后端返回了 ready，但知识库归档、最终产物或验证报告尚不完整。为避免安装不完整桌宠，工作台保持在 98% 并禁用交付操作。
+                </div>
+              )}
+            </div>
+          </Card>
+        </main>
+
+        <aside className="min-w-0 space-y-3">
+          <Card ariaLabel="桌宠运行进度">
+            <CardTitle
+              icon="mdi:progress-clock"
+              title="阶段进度"
+              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-emerald-600" : "text-[#85858d]"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-emerald-500" : "bg-[#a8a8af]"}`} />{streamLabel}</span>}
+            />
+            <div className="space-y-3 p-4">
+              <div>
+                <div className="mb-1.5 flex items-center justify-between text-xs">
+                  <span className="font-semibold text-[#34343a]">{latestRun ? codexPetStatusLabel(latestRun.status) : "等待开始"}</span>
+                  <span className="font-semibold text-brand-ink">{progress}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-[#eceef1]">
+                  <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${progress}%` }} />
+                </div>
+                <p className="mt-1.5 text-[10px] leading-4 text-[#7f7f87]">{latestRun?.progressMessage || lastEvent?.message || "提交后会显示当前子任务"}</p>
+              </div>
+              <ol className="space-y-2">
+                {CODEX_PET_PROGRESS_STEPS.map((step) => {
+                  const complete = progress >= step.end;
+                  const active = progress >= step.start && progress < step.end;
+                  return (
+                    <li key={step.id} className="flex items-center gap-2">
+                      <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-[#eceef1] text-[#9898a0]"}`}>
+                        {complete ? <Icon icon="mdi:check" aria-hidden /> : CODEX_PET_PROGRESS_STEPS.findIndex((item) => item.id === step.id) + 1}
+                      </span>
+                      <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-[#34343a]" : "text-[#74747c]"}`}>{step.label}</span>
+                      <span className="text-[9px] text-[#a0a0a7]">{step.range}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+              {latestRun && (
+                <div className="grid grid-cols-2 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
+                  <div className="rounded-[9px] bg-[#f7f8fa] p-2">
+                    <span className="block text-[#919198]">当前子任务</span>
+                    <span className="mt-0.5 block truncate font-semibold text-[#52525a]">{lastEvent?.jobKey || latestRun.progressStage || "—"}</span>
+                  </div>
+                  <div className="rounded-[9px] bg-[#f7f8fa] p-2">
+                    <span className="block text-[#919198]">成功图片</span>
+                    <span className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.hasSuccessfulImage ? "已有" : "暂无"}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card ariaLabel="运行任务与重试">
+            <CardTitle icon="mdi:graph-outline" title="视觉任务" aside={<span className="text-[10px] text-[#8d8d95]">并行上限 3</span>} />
+            <div className="max-h-44 space-y-1.5 overflow-y-auto p-3">
+              {(detail?.jobs.length ?? 0) === 0 && <p className="py-3 text-center text-[10px] text-[#97979f]">运行后显示动作组与重试次数</p>}
+              {detail?.jobs.slice().reverse().slice(0, 12).map((job) => (
+                <div key={job.id} className="rounded-[9px] border border-[#eceef1] px-2.5 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-[#505057]">{job.key}</span>
+                    <span className="text-[9px] text-[#85858d]">{job.attempt}/{job.maxAttempts}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-1 text-[9px] text-[#96969d]">
+                    <span className={`size-1.5 rounded-full ${job.status === "completed" ? "bg-emerald-500" : job.status === "failed" ? "bg-red-500" : "bg-brand"}`} />
+                    {job.status}{job.error ? ` · ${job.error}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <Card ariaLabel="计费与知识库归档">
+            <CardTitle icon="mdi:database-check-outline" title="计费与归档" />
+            <div className="space-y-2.5 p-4 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="text-[#777780]">套餐扣费</span>
+                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${latestRun.billingPoints} 积分` : pricing ? `${pricing.rate} 积分` : "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#777780]">退款状态</span>
+                <span className="font-semibold text-[#3f3f45]">{refundStatusLabel(latestRun)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#777780]">知识库</span>
+                <span className={`font-semibold ${latestRun?.knowledgeDocumentId ? "text-emerald-700" : latestRun?.status === "archiving" ? "text-brand-ink" : "text-[#8d8d95]"}`}>
+                  {latestRun?.knowledgeDocumentId ? "AI 产物 · 已归档" : latestRun?.status === "archiving" ? "正在归档" : "等待最终产物"}
+                </span>
+              </div>
+              {packageArtifact && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[#777780]">兼容包大小</span>
+                  <span className="font-semibold text-[#3f3f45]">{formatBytes(packageArtifact.sizeBytes)}</span>
+                </div>
+              )}
+              {latestRun?.usage?.totalTokens !== undefined && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[#777780]">模型 token</span>
+                  <span className="font-semibold text-[#3f3f45]">{latestRun.usage.totalTokens.toLocaleString()}</span>
+                </div>
+              )}
+              {latestRun && (
+                <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#72727a]">
+                  请求模型 {latestRun.requestedModel || "gpt-image-2"}<br />
+                  实际模型 {latestRun.actualModels.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          <Card ariaLabel="实时事件">
+            <CardTitle icon="mdi:message-flash-outline" title="实时事件" aside={<span className="text-[10px] text-[#8d8d95]">游标 {eventCursorRef.current}</span>} />
+            <ol className="max-h-72 space-y-0 overflow-y-auto p-3" aria-label="桌宠实时事件列表">
+              {events.length === 0 && <li className="py-5 text-center text-[10px] text-[#97979f]">事件会先持久化，再通过 SSE 实时推送</li>}
+              {events.slice().reverse().map((event) => (
+                <li key={event.sequence} className="relative border-l border-[#dde1e6] pb-3 pl-3 last:pb-0">
+                  <span className="absolute -left-[3px] top-1 size-[5px] rounded-full bg-brand" />
+                  <div className="flex items-start gap-2">
+                    <span className="min-w-0 flex-1 text-[10px] font-semibold leading-4 text-[#52525a]">{eventTitle(event)}</span>
+                    <span className="flex-none text-[8px] text-[#a0a0a7]">#{event.sequence}</span>
+                  </div>
+                  <p className="mt-0.5 text-[9px] text-[#92929a]">{event.stage ? codexPetStatusLabel(event.stage) : event.type} · {shortDate(event.createdAt)}</p>
+                </li>
+              ))}
+            </ol>
+          </Card>
+
+          {latestRun?.error && (
+            <div className="rounded-[12px] border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700">
+              <strong className="block">运行诊断</strong>
+              {latestRun.error}
+            </div>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}

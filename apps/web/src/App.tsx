@@ -65,6 +65,8 @@ export default function App() {
   const [authView, setAuthView] = useState<"login" | "register">("login");
   const [view, setView] = useState<ViewType>(() => novelProjectIdFromHash(window.location.hash) ? "workflow" : "chat");
   const [workflowModule, setWorkflowModule] = useState<WorkflowModuleId>(() => novelProjectIdFromHash(window.location.hash) ? "novel" : "image");
+  const [codexPetProjectTarget, setCodexPetProjectTarget] = useState<string | null>(null);
+  const [knowledgeDocumentTarget, setKnowledgeDocumentTarget] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [draftSessionKey, setDraftSessionKey] = useState(newDraftKey);
   const [balance, setBalance] = useState<number | null>(null);
@@ -152,6 +154,9 @@ export default function App() {
   useEffect(() => {
     if (!token) {
       setMenuVisibility(DEFAULT_CLIENT_MENU_VISIBILITY);
+      // Do not carry another user's deep-link targets across logout/login.
+      setCodexPetProjectTarget(null);
+      setKnowledgeDocumentTarget(null);
       return;
     }
     const refresh = () => {
@@ -170,6 +175,16 @@ export default function App() {
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [token]);
+
+  // Cross-page jumps (Knowledge ↔ Codex pet) are one-shot navigation
+  // intents.  Keeping an old target around would make a later, ordinary visit
+  // to either page unexpectedly reopen a stale project/document.  Clear the
+  // opposite intent as soon as its destination is left; the destination
+  // itself keeps the intent alive for the first render that consumes it.
+  useEffect(() => {
+    if (view !== "workflow") setCodexPetProjectTarget(null);
+    if (view !== "kb") setKnowledgeDocumentTarget(null);
+  }, [view]);
 
   useEffect(() => {
     const mainKey = clientMenuKeyForView(view);
@@ -240,6 +255,9 @@ export default function App() {
       setView("report");
       return;
     }
+    // Selecting a module from the menu is a fresh navigation intent, not a
+    // continuation of a previous Knowledge → Codex deep link.
+    setCodexPetProjectTarget(null);
     setWorkflowModule(id);
     setView("workflow");
   };
@@ -548,7 +566,19 @@ export default function App() {
     }
 
     if (view === "kb") {
-      return <Knowledge token={token} onViewChange={(v: string) => setView(v as ViewType)} />;
+      return (
+        <Knowledge
+          token={token}
+          initialDocumentId={knowledgeDocumentTarget}
+          onViewChange={(v: string) => setView(v as ViewType)}
+          onOpenCodexPetProject={(projectId) => {
+            setKnowledgeDocumentTarget(null);
+            setCodexPetProjectTarget(projectId);
+            setWorkflowModule("codex-pet");
+            setView("workflow");
+          }}
+        />
+      );
     }
 
     if (view === "tool-market") {
@@ -561,6 +591,12 @@ export default function App() {
           token={token}
           activeModuleId={workflowModule}
           onBalanceRefresh={refreshBalance}
+          initialCodexPetProjectId={codexPetProjectTarget}
+          onOpenKnowledgeDocument={(documentId) => {
+            setCodexPetProjectTarget(null);
+            setKnowledgeDocumentTarget(documentId);
+            setView("kb");
+          }}
         />
       );
     }

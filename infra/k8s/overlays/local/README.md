@@ -16,6 +16,7 @@
 - Ingress 使用 HTTP 和 `*.localhost` 域名，宿主端口为 `8080`。
 - API、Web、Admin 和 billing 均为单副本，不启用 HPA。
 - billing 使用 `BILLING_PRICING_MODE=learning`，每个 operation 只扣 1 点。
+- Codex 桌宠 Worker 随 base 一起运行；本地 HTTP ingress 只能验证工作流和签名路由，真实 Codex 安装仍需外网可达的 HTTPS `CODEX_PET_PUBLIC_BASE_URL`。
 
 重新应用配置：
 
@@ -29,7 +30,7 @@ kubectl apply -k infra/k8s/overlays/local
 ```bash
 docker build -f infra/docker/api/Dockerfile -t ai-assistant-api:local .
 kind load docker-image --name ai-assistant ai-assistant-api:local
-kubectl rollout restart deployment/api deployment/local-business-promo-worker -n ai-assistant
+kubectl rollout restart deployment/api deployment/local-business-promo-worker deployment/novel-worker deployment/codex-pet-worker -n ai-assistant
 ```
 
 查看状态：

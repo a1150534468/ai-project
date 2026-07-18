@@ -3,6 +3,7 @@ import * as api from "../api.js";
 import { useToast, errMsg, Field } from "../ui.js";
 import { can, loadSession } from "../auth.js";
 import {
+  CODEX_PET_PRICING_CONFIGS,
   DUB_RESOURCE_PRICING_CONFIGS,
   ECOM_MAIN_IMAGE_PRICING_CONFIGS,
   ECOM_RESOURCE_PRICING_CONFIGS,
@@ -168,6 +169,18 @@ export function ResourcePricingPage() {
         />
       ))}
       {LOCAL_BUSINESS_PROMO_PRICING_CONFIGS.map((config) => (
+        <EcomResourcePricingPanel
+          key={config.resourceKey}
+          config={config}
+          row={rows.find((row) => row.resourceKey === config.resourceKey)}
+          onDone={() => {
+            show(`已保存${config.displayName}价格`);
+            void load();
+          }}
+          onErr={(m) => show(m, "err")}
+        />
+      ))}
+      {CODEX_PET_PRICING_CONFIGS.map((config) => (
         <EcomResourcePricingPanel
           key={config.resourceKey}
           config={config}
