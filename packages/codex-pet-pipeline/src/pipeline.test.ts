@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import type { OverlayOptions } from "sharp";
 import {
+  LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
   PET_ATLAS_HEIGHT,
   PET_ATLAS_WIDTH,
   PET_CELL_HEIGHT,
@@ -18,6 +19,7 @@ import {
   createCodexPetPackage,
   createDirectionQaSheet,
   createLayoutGuide,
+  createLookAnchorStoryboard,
   despillChromaEdges,
   extractFullPoseBoardsWithSharedRegistration,
   extractPoseBoard,
@@ -81,21 +83,84 @@ async function boardWithOverlays(columns: number, rows: number, overlays: readon
 
 describe("codex pet deterministic pipeline", () => {
   it("builds layout guides for all supported board geometries", async () => {
-    for (const [columns, frameCount] of [[4, 8], [3, 6], [3, 5], [2, 4]] as const) {
-      const guide = await createLayoutGuide({ columns, frameCount });
+    for (const { columns, rows, frameCount } of [
+      { columns: 4, rows: 2, frameCount: 8 },
+      { columns: 3, rows: 2, frameCount: 6 },
+      { columns: 5, rows: 1, frameCount: 5 },
+      { columns: 2, rows: 2, frameCount: 4 },
+    ] as const) {
+      const guide = await createLayoutGuide({ columns, rows, frameCount });
       const metadata = await sharp(guide).metadata();
       expect(metadata.width).toBe(1536);
       expect(metadata.height).toBe(1024);
     }
     await expect(createLayoutGuide({ columns: 0, frameCount: 1 })).rejects.toThrow(/positive integers/);
     await expect(createLayoutGuide({ columns: 2, rows: 2, frameCount: 0 })).rejects.toThrow(/fit inside/);
+    await expect(createLayoutGuide({ columns: 2, rows: 2, frameCount: 4, slotLabels: ["1"] })).rejects.toThrow(/one label/);
   });
 
-  it("extracts 4x2, 3x2 and 2x2 boards with one scale/baseline and enforces unused slots", async () => {
+  it("restores serpentine 4x2 look boards to chronological frame order", async () => {
+    const sourceColors = ["#aa1100", "#bb2200", "#cc3300", "#dd4400", "#1155aa", "#2266bb", "#3377cc", "#4488dd"];
+    const overlays = sourceColors.map((color, index) => ({
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360"><rect x="90" y="70" width="140" height="240" rx="30" fill="${color}"/></svg>`),
+      left: (index % 4) * 320,
+      top: Math.floor(index / 4) * 360,
+    }));
+    const extracted = await extractPoseBoard(await boardWithOverlays(4, 2, overlays), {
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+      frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
+      chromaKey: "#ff00ff",
+    });
+    expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
+    const sampled = await Promise.all(extracted.frames.map(async (frame, index) => {
+      const bounds = extracted.diagnostics[index]!.normalizedBounds!;
+      const { data } = await sharp(frame).extract({
+        left: Math.round(bounds.left + (bounds.width - 1) / 2),
+        top: Math.round(bounds.top + (bounds.height - 1) / 2),
+        width: 1,
+        height: 1,
+      }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return `#${[data[0], data[1], data[2]].map((value) => value!.toString(16).padStart(2, "0")).join("")}`;
+    }));
+    expect(sampled).toEqual(LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.map((sourceSlot) => sourceColors[sourceSlot]));
+  });
+
+  it("maps approved cardinal endpoints into a sparse serpentine edit storyboard", async () => {
+    const cardinals = await composeCardinalAnchorStrip(await Promise.all([
+      solidFrame("#aa1100"),
+      solidFrame("#bb2200"),
+      solidFrame("#cc3300"),
+      solidFrame("#dd4400"),
+    ]));
+    for (const row of ["look-a", "look-b"] as const) {
+      const storyboard = await createLookAnchorStoryboard(cardinals, row, "#ff00ff");
+      expect(await sharp(storyboard).metadata()).toMatchObject({ width: 1536, height: 1024 });
+      const { data, info } = await sharp(storyboard).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const foregroundBySlot = Array.from({ length: 8 }, (_, slot) => {
+        const column = slot % 4;
+        const sourceRow = Math.floor(slot / 4);
+        let count = 0;
+        for (let y = sourceRow * 512; y < (sourceRow + 1) * 512; y += 1) {
+          for (let x = column * 384; x < (column + 1) * 384; x += 1) {
+            const offset = (y * info.width + x) * info.channels;
+            if (data[offset] !== 255 || data[offset + 1] !== 0 || data[offset + 2] !== 255) count += 1;
+          }
+        }
+        return count;
+      });
+      expect(foregroundBySlot[0]).toBeGreaterThan(1_000);
+      expect(foregroundBySlot[7]).toBeGreaterThan(1_000);
+      expect(foregroundBySlot.slice(1, 7).every((count) => count === 0)).toBe(true);
+    }
+  });
+
+  it("extracts 4x2, 3x2, 5x1 and 2x2 boards with one scale/baseline and enforces unused slots", async () => {
     for (const geometry of [
       { columns: 4, rows: 2, frameCount: 8 },
       { columns: 3, rows: 2, frameCount: 6 },
-      { columns: 3, rows: 2, frameCount: 5 },
+      { columns: 5, rows: 1, frameCount: 5 },
       { columns: 2, rows: 2, frameCount: 4 },
     ]) {
       const extracted = await extractPoseBoard(await poseBoard(geometry.columns, geometry.rows, geometry.frameCount), {
@@ -121,6 +186,37 @@ describe("codex pet deterministic pipeline", () => {
     });
     expect(invalid.ok).toBe(false);
     expect(invalid.errors).toContain("unused-slot-5:not-empty");
+  });
+
+  it("normalizes ordinary poses across shifted source rows to one center and baseline", async () => {
+    const sourcePositions = [
+      { x: 55, y: 45 },
+      { x: 65, y: 55 },
+      // The model laid out the second row much farther right and lower even
+      // though these are the same grounded character pose dimensions.
+      { x: 155, y: 140 },
+      { x: 165, y: 150 },
+    ];
+    const overlays = sourcePositions.map((position, index) => ({
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="${position.x}" y="${position.y}" width="100" height="160" rx="28" fill="#2459c7"/>
+      </svg>`),
+      left: (index % 2) * 320,
+      top: Math.floor(index / 2) * 360,
+    }));
+
+    const extracted = await extractPoseBoard(await boardWithOverlays(2, 2, overlays), {
+      columns: 2,
+      rows: 2,
+      frameCount: 4,
+      chromaKey: "#ff00ff",
+    });
+
+    expect(extracted.errors).toEqual([]);
+    expect(extracted.geometry.baselineSpreadPixels).toBeLessThanOrEqual(1);
+    expect(extracted.geometry.centerSpreadPixels).toBeLessThanOrEqual(1);
+    expect(extracted.geometry.warnings.some((warning) => warning.startsWith("geometry:baseline-spread:"))).toBe(false);
+    expect(extracted.geometry.warnings.some((warning) => warning.startsWith("geometry:center-spread:"))).toBe(false);
   });
 
   it("registers both direction boards with one scale and baseline", async () => {
@@ -236,6 +332,7 @@ describe("codex pet deterministic pipeline", () => {
       rows: 2,
       frameCount: 5,
       chromaKey: "#ff00ff",
+      allowVerticalTravel: true,
     });
 
     expect(extracted.errors).toEqual([]);
@@ -246,7 +343,7 @@ describe("codex pet deterministic pipeline", () => {
     expect(bottoms[1]!).toBeLessThan(bottoms[0]!);
   });
 
-  it("reports deterministic scale and baseline discontinuities while allowing intentional jumps", async () => {
+  it("reports deterministic scale discontinuities while grounding ordinary poses and allowing intentional jumps", async () => {
     const poses = [
       { y: 80, height: 230 },
       { y: 200, height: 110 },
@@ -269,9 +366,9 @@ describe("codex pet deterministic pipeline", () => {
     });
     expect(ordinary.ok).toBe(true);
     expect(ordinary.geometry.heightRatio).toBeGreaterThan(2);
-    expect(ordinary.geometry.baselineSpreadPixels).toBeGreaterThan(30);
+    expect(ordinary.geometry.baselineSpreadPixels).toBeLessThanOrEqual(1);
     expect(ordinary.geometry.warnings.some((warning) => warning.startsWith("geometry:height-ratio:"))).toBe(true);
-    expect(ordinary.geometry.warnings.some((warning) => warning.startsWith("geometry:baseline-spread:"))).toBe(true);
+    expect(ordinary.geometry.warnings.some((warning) => warning.startsWith("geometry:baseline-spread:"))).toBe(false);
 
     const jumping = await extractPoseBoard(board, {
       columns: 2,
@@ -280,8 +377,11 @@ describe("codex pet deterministic pipeline", () => {
       chromaKey: "#ff00ff",
       allowVerticalTravel: true,
     });
+    expect(jumping.geometry.baselineSpreadPixels).toBeGreaterThan(30);
+    expect(jumping.geometry.centerSpreadPixels).toBeLessThanOrEqual(1);
     expect(jumping.geometry.warnings.some((warning) => warning.startsWith("geometry:height-ratio:"))).toBe(true);
     expect(jumping.geometry.warnings.some((warning) => warning.startsWith("geometry:baseline-spread:"))).toBe(false);
+    expect(jumping.geometry.warnings.some((warning) => warning.startsWith("geometry:center-spread:"))).toBe(false);
   });
 
   it("selects a non-conflicting chroma key and preserves the character colour", async () => {

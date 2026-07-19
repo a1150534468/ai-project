@@ -84,6 +84,8 @@ export interface ImageGenerationErrorClassification {
   readonly code: string | null;
   readonly type: string | null;
   readonly upstreamRequestId: string | null;
+  /** Bounded allowlisted network/TLS code; never contains an endpoint or message. */
+  readonly transportCode: string | null;
 }
 
 export class ImageGenerationUpstreamError extends Error {
@@ -257,6 +259,29 @@ const IMAGE_UPSTREAM_REQUEST_ID_HEADERS = [
   "traceparent",
 ] as const;
 
+const IMAGE_TRANSPORT_CODES = new Set([
+  "ECONNRESET",
+  "ETIMEDOUT",
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_RESPONSE_STATUS_CODE",
+  "CERT_HAS_EXPIRED",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+]);
+
+/** Keep only low-cardinality transport diagnostics that cannot expose URLs or credentials. */
+export function imageTransportCode(error: unknown): string | null {
+  if (!isRecord(error) || !isRecord(error.cause)) return null;
+  const code = stringField(error.cause, "code");
+  return IMAGE_TRANSPORT_CODES.has(code) ? code : null;
+}
+
 /**
  * Request IDs are safe observability metadata, not arbitrary response text.
  * Reject whitespace, control characters and unbounded values so an upstream
@@ -317,20 +342,21 @@ export function classifyImageGenerationError(error: unknown): ImageGenerationErr
       code: error.code,
       type: error.type,
       upstreamRequestId: error.upstreamRequestId,
+      transportCode: null,
     };
   }
   if (error instanceof ImageGenerationTimeoutError) {
-    return { category: "timeout", retryable: true, status: null, code: null, type: null, upstreamRequestId: null };
+    return { category: "timeout", retryable: true, status: null, code: null, type: null, upstreamRequestId: null, transportCode: null };
   }
   if (errorName(error) === "AbortError") {
-    return { category: "cancelled", retryable: false, status: null, code: null, type: null, upstreamRequestId: null };
+    return { category: "cancelled", retryable: false, status: null, code: null, type: null, upstreamRequestId: null, transportCode: null };
   }
   if (error instanceof TypeError) {
-    return { category: "network", retryable: true, status: null, code: null, type: null, upstreamRequestId: null };
+    return { category: "network", retryable: true, status: null, code: null, type: null, upstreamRequestId: null, transportCode: imageTransportCode(error) };
   }
   // Storage and malformed-success-response errors can be transient. Preserve the
   // existing retry behavior unless the image client can classify the failure.
-  return { category: "unknown", retryable: true, status: null, code: null, type: null, upstreamRequestId: null };
+  return { category: "unknown", retryable: true, status: null, code: null, type: null, upstreamRequestId: null, transportCode: null };
 }
 
 export function isRetryableImageGenerationError(error: unknown): boolean {
@@ -376,7 +402,10 @@ async function detailedResult(
     image,
     upstreamRequestId,
     requestedModel: request.model,
-    actualModel: stringField(record, "model") || request.model,
+    // Never present the requested model as observed upstream provenance. A
+    // compatible relay may omit `model`; callers that require a strict model
+    // contract (notably Codex Pet) must then reject the unknown actual model.
+    actualModel: stringField(record, "model"),
     requestedSize: request.size || "auto",
     actualSize: decodedSize || stringField(record, "size") || request.size || "auto",
     requestedQuality: request.quality || "auto",

@@ -53,6 +53,8 @@ CHAT_MULTIMODAL_MODEL=qwen3.7-plus
 
 主生图工作台还可选择 `gpt-image-2`，通过 OpenAI Images API 兼容协议调用 `GPT_IMAGE_GENERATION_ENDPOINT`（默认 `https://api.ai-pixel.online/v1/images/generations`），凭据使用 `GPT_IMAGE_API_KEY`。带 1～3 张参考图时会复用同一生图模块，通过 multipart `image[]` 调用 `GPT_IMAGE_EDIT_ENDPOINT`；该地址未配置时会从 generations 地址推导 `/edits`，`GPT_IMAGE_EDIT_API_KEY` 未配置时复用 generation key。真实 edits POC 只在部署、网关切换或模型升级时通过 `RUN_GPT_IMAGE_EDIT_POC=1` 显式运行。
 
+Codex 桌宠工作流的第一版模型合同固定为：生图 `gpt-image-2`，主形象选择、身份指南、动作/方向/最终视觉质检 `gpt-5.6-sol`。`PET_VISUAL_QA_MODEL` 只能设为 `gpt-5.6-sol`，并且该模型必须存在于带有效 `CHATGPT_API_KEY`（或复用 `GPT_IMAGE_API_KEY`）的 `CHATGPT_MODELS` 路由中；Worker 在健康就绪前校验此路由，禁止回退到默认 Bailian/Qwen 客户端。
+
 对话助手额外接入 AI Pixel 的 Anthropic Messages 兼容接口。当前只开放 `codex-auto-review`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`，不会把上游列表中的旧 GPT、音频、Realtime 或图片模型混入对话选项。默认地址为 `CHATGPT_BASE_URL=https://api.ai-pixel.online`；`CHATGPT_API_KEY` 未配置时复用 `GPT_IMAGE_API_KEY`。
 
 真实向量链路可用仓库 POC 验证：

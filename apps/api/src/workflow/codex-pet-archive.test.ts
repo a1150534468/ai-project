@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { describe, expect, it, vi } from "vitest";
 import {
   archiveCodexPetRun,
@@ -12,6 +13,30 @@ const ARCHIVE_SCOPE = {
   projectId: "project-1",
 } as const;
 
+function completeValidationReport(overrides: Record<string, unknown> = {}) {
+  return {
+    ok: true,
+    spriteVersionNumber: 2,
+    modelContractVersion: "gpt-only-v1",
+    modelProvenance: {
+      imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
+      visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] },
+    },
+    deterministic: { ok: true },
+    standardAtlasValidation: { ok: true },
+    packagedSpritesheet: { ok: true },
+    chromaDespill: { ok: true },
+    directionRegistration: { ok: true },
+    directionContinuity: { ok: true },
+    row9PreGenerationGate: { passed: true },
+    row10PreGenerationGate: { passed: true },
+    blindDirectionValidation: { ok: true },
+    finalVisualQa: { pass: true, identity: true, structure: true, semantics: true, continuity: true },
+    directionSemantics: LOOK_DIRECTIONS.map((direction) => ({ direction, verdict: "pass" })),
+    ...overrides,
+  };
+}
+
 function archiveFixture(overrides: Record<string, unknown> = {}) {
   let activeTransaction = false;
   let document: Record<string, unknown> | null = null;
@@ -20,17 +45,17 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
     projectId: "project-1",
     userId: "user-1",
     status: "archiving",
+    workerId: "worker-1",
+    cancelRequested: false,
     knowledgeDocumentId: null,
     spritesheetArtifactId: "sprite-1",
     packageArtifactId: "zip-1",
     previewArtifactId: "preview-1",
-    validationReport: {
-      ok: true,
-      spriteVersionNumber: 2,
+    validationReport: completeValidationReport({
       warnings: ["minor edge softness"],
       rawResponse: "must never be indexed",
       objectKey: "must/never/be/indexed",
-    },
+    }),
     requestedModel: "gpt-image-2",
     actualModels: ["gpt-image-2-codex"],
     inputSnapshot: {
@@ -55,9 +80,9 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
   const artifacts = [
-    { id: "sprite-1", kind: "spritesheet", mime: "image/webp", sizeBytes: 1234, width: 1536, height: 2288, objectKey: "workflow/codex-pets/user-1/project-1/run-1/sprite.webp", expiresAt: null, metadata: {} },
-    { id: "zip-1", kind: "package", mime: "application/zip", sizeBytes: 4567, width: null, height: null, objectKey: "workflow/codex-pets/user-1/project-1/run-1/package.zip", expiresAt: null, metadata: { petId: "quick-fox" } },
-    { id: "preview-1", kind: "preview", mime: "image/png", sizeBytes: 891, width: 1024, height: 1024, objectKey: "workflow/codex-pets/user-1/project-1/run-1/preview.png", expiresAt: null, metadata: {} },
+    { id: "sprite-1", kind: "spritesheet", mime: "image/webp", sizeBytes: 1234, width: 1536, height: 2288, objectKey: "workflow/codex-pets/user-1/project-1/run-1/sprite.webp", expiresAt: null as Date | null, metadata: {} },
+    { id: "zip-1", kind: "package", mime: "application/zip", sizeBytes: 4567, width: null, height: null, objectKey: "workflow/codex-pets/user-1/project-1/run-1/package.zip", expiresAt: null as Date | null, metadata: { petId: "quick-fox" } },
+    { id: "preview-1", kind: "preview", mime: "image/png", sizeBytes: 891, width: 1024, height: 1024, objectKey: "workflow/codex-pets/user-1/project-1/run-1/preview.png", expiresAt: null as Date | null, metadata: {} },
   ];
   const tx = {
     codexPetRun: {
@@ -68,10 +93,20 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
           ? run
           : null
       )),
-      update: vi.fn(async ({ data }: { data: { knowledgeDocumentId: string } }) => {
+      updateMany: vi.fn(async ({ where, data }: {
+        where: Record<string, unknown>;
+        data: { knowledgeDocumentId: string };
+      }) => {
         expect(activeTransaction).toBe(true);
+        if (where.id !== run.id
+          || where.userId !== run.userId
+          || where.projectId !== run.projectId
+          || where.status !== run.status
+          || where.workerId !== run.workerId
+          || where.cancelRequested !== false
+          || run.cancelRequested) return { count: 0 };
         run.knowledgeDocumentId = data.knowledgeDocumentId as never;
-        return run;
+        return { count: 1 };
       }),
       findMany: vi.fn(),
     },
@@ -85,8 +120,13 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
       findUnique: vi.fn(async () => document
         ? { ...document, kb: { userId: "user-1", systemKey: "AI_ARTIFACTS" } }
         : null),
-      create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      createMany: vi.fn(async ({ data, skipDuplicates }: {
+        data: Record<string, unknown>[];
+        skipDuplicates: boolean;
+      }) => {
         expect(activeTransaction).toBe(true);
+        expect(skipDuplicates).toBe(true);
+        if (document) return { count: 0 };
         document = {
           chunkCount: 0,
           tokensUsed: 0,
@@ -96,9 +136,9 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
           lockedAt: null,
           createdAt: new Date(),
           updatedAt: new Date(),
-          ...data,
+          ...data[0],
         };
-        return document;
+        return { count: 1 };
       }),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
         expect(activeTransaction).toBe(true);
@@ -118,7 +158,14 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
       }
     }),
   } as unknown as PrismaClient;
-  return { prisma, tx, run, artifacts, getDocument: () => document };
+  return {
+    prisma,
+    tx,
+    run,
+    artifacts,
+    getDocument: () => document,
+    setDocument: (value: Record<string, unknown> | null) => { document = value; },
+  };
 }
 
 describe("Codex pet AI_ARTIFACTS archive", () => {
@@ -128,8 +175,8 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
     const second = await archiveCodexPetRun({ prisma: fixture.prisma, ...ARCHIVE_SCOPE });
 
     expect(second.id).toBe(first.id);
-    expect(fixture.tx.document.create).toHaveBeenCalledTimes(1);
-    expect(fixture.tx.document.update).toHaveBeenCalledTimes(1);
+    expect(fixture.tx.document.createMany).toHaveBeenCalledTimes(2);
+    expect(fixture.tx.document.update).toHaveBeenCalledTimes(2);
     expect(fixture.tx.knowledgeBase.upsert).toHaveBeenCalledWith(expect.objectContaining({
       where: { userId_systemKey: { userId: "user-1", systemKey: "AI_ARTIFACTS" } },
     }));
@@ -137,8 +184,15 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
       where: { id: "run-1", userId: "user-1", projectId: "project-1" },
       include: { project: true },
     });
-    expect(fixture.tx.codexPetRun.update).toHaveBeenLastCalledWith({
-      where: { id: "run-1", userId: "user-1", projectId: "project-1" },
+    expect(fixture.tx.codexPetRun.updateMany).toHaveBeenLastCalledWith({
+      where: {
+        id: "run-1",
+        userId: "user-1",
+        projectId: "project-1",
+        status: "archiving",
+        workerId: "worker-1",
+        cancelRequested: false,
+      },
       data: { knowledgeDocumentId: first.id },
     });
 
@@ -157,6 +211,7 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
     expect(doc.content).toContain("橙色小狐狸，蓝色围巾");
     expect(doc.content).toContain("1536×2288");
     expect(doc.content).toContain("337.5°");
+    expect(doc.content).toContain("视觉推理与质检模型：请求 gpt-5.6-sol；实际 gpt-5.6-sol");
     expect(doc.content).not.toContain("must/never/be/indexed");
     expect(doc.content).not.toContain("must never be indexed");
     expect(doc.metadata).toEqual({
@@ -166,6 +221,10 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
       stylePreset: "plush",
       requestedModel: "gpt-image-2",
       actualModels: ["gpt-image-2-codex"],
+      visualQaRequestedModel: "gpt-5.6-sol",
+      visualQaActualModels: ["gpt-5.6-sol"],
+      visualQaRoutes: ["chatgpt_model_route"],
+      modelContractVersion: "gpt-only-v1",
       spriteVersionNumber: 2,
       spritesheetArtifactId: "sprite-1",
       packageArtifactId: "zip-1",
@@ -174,6 +233,106 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
       packageBytes: 4567,
     });
     expect(JSON.stringify(doc.metadata)).not.toMatch(/objectKey|signedUrl|sourceUri/i);
+  });
+
+  it("recovers the same source document when a concurrent atomic create wins", async () => {
+    const fixture = archiveFixture();
+    fixture.tx.document.createMany.mockImplementationOnce(async () => {
+      fixture.setDocument({
+        id: "concurrent-document",
+        kbId: "kb-ai-artifacts",
+        name: "concurrent placeholder",
+        sourceType: "ARTIFACT",
+        sourceUri: null,
+        content: "placeholder",
+        mime: "application/zip",
+        sizeBytes: 1,
+        status: "indexing",
+        error: null,
+        chunkCount: 0,
+        tokensUsed: 0,
+        opId: null,
+        sourceModule: "codex_pet",
+        sourceId: "run-1",
+        metadata: {},
+        lockedBy: "kb-worker",
+        lockedAt: new Date(),
+        attempts: 2,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      return { count: 0 };
+    });
+
+    const archived = await archiveCodexPetRun({
+      prisma: fixture.prisma,
+      ...ARCHIVE_SCOPE,
+      workerId: "worker-1",
+    });
+
+    expect(archived.id).toBe("concurrent-document");
+    expect(fixture.tx.document.createMany).toHaveBeenCalledOnce();
+    expect(fixture.tx.document.update).toHaveBeenCalledOnce();
+    expect(fixture.getDocument()).toMatchObject({
+      id: "concurrent-document",
+      sourceModule: "codex_pet",
+      sourceId: "run-1",
+      status: "indexing",
+      attempts: 2,
+    });
+    expect(fixture.run.knowledgeDocumentId).toBe("concurrent-document");
+  });
+
+  it.each([
+    {
+      name: "cancelled run",
+      overrides: { cancelRequested: true },
+      workerId: "worker-1",
+      code: "cancelled",
+    },
+    {
+      name: "unleased run",
+      overrides: { workerId: null },
+      workerId: undefined,
+      code: "lease_lost",
+    },
+    {
+      name: "stale worker",
+      overrides: { workerId: "worker-current" },
+      workerId: "worker-stale",
+      code: "lease_lost",
+    },
+  ])("rejects $name before creating a knowledge document", async ({ overrides, workerId, code }) => {
+    const fixture = archiveFixture(overrides);
+
+    await expect(archiveCodexPetRun({
+      prisma: fixture.prisma,
+      ...ARCHIVE_SCOPE,
+      ...(workerId === undefined ? {} : { workerId }),
+    })).rejects.toMatchObject({ code });
+
+    expect(fixture.tx.knowledgeBase.upsert).not.toHaveBeenCalled();
+    expect(fixture.tx.document.createMany).not.toHaveBeenCalled();
+    expect(fixture.run.knowledgeDocumentId).toBeNull();
+  });
+
+  it("rolls back the archive link when cancellation or lease ownership changes before commit", async () => {
+    const fixture = archiveFixture();
+    fixture.tx.codexPetRun.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(archiveCodexPetRun({
+      prisma: fixture.prisma,
+      ...ARCHIVE_SCOPE,
+      workerId: "worker-1",
+    })).rejects.toMatchObject({ code: "lease_lost" } satisfies Partial<CodexPetArchiveError>);
+
+    expect(fixture.tx.codexPetRun.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workerId: "worker-1",
+        cancelRequested: false,
+      }),
+    }));
+    expect(fixture.run.knowledgeDocumentId).toBeNull();
   });
 
   it.each([
@@ -201,50 +360,44 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
     await expect(archiveCodexPetRun({ prisma: incomplete.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "package_incomplete" } satisfies Partial<CodexPetArchiveError>);
 
-    const wrongVersion = archiveFixture({ validationReport: { ok: true, spriteVersionNumber: 1 } });
+    const wrongVersion = archiveFixture({ validationReport: completeValidationReport({ spriteVersionNumber: 1 }) });
     await expect(archiveCodexPetRun({ prisma: wrongVersion.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
 
-    const missingVersion = archiveFixture({ validationReport: { ok: true } });
+    const missingVersionReport = completeValidationReport() as Record<string, unknown>;
+    delete missingVersionReport.spriteVersionNumber;
+    const missingVersion = archiveFixture({ validationReport: missingVersionReport });
     await expect(archiveCodexPetRun({ prisma: missingVersion.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
 
     const contradictoryGate = archiveFixture({
-      validationReport: {
-        ok: true,
-        spriteVersionNumber: 2,
+      validationReport: completeValidationReport({
         packagedSpritesheet: { ok: false, errors: ["unused-cell-not-transparent"] },
-      },
+      }),
     });
     await expect(archiveCodexPetRun({ prisma: contradictoryGate.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
 
     const contradictoryStandardAtlas = archiveFixture({
-      validationReport: {
-        ok: true,
-        spriteVersionNumber: 2,
+      validationReport: completeValidationReport({
         standardAtlasValidation: { ok: false, errors: ["idle[7]:unused-cell-not-transparent"] },
-      },
+      }),
     });
     await expect(archiveCodexPetRun({ prisma: contradictoryStandardAtlas.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
 
     const contradictoryContinuity = archiveFixture({
-      validationReport: {
-        ok: true,
-        spriteVersionNumber: 2,
+      validationReport: completeValidationReport({
         directionContinuity: { ok: false, errors: ["empty look cell"] },
-      },
+      }),
     });
     await expect(archiveCodexPetRun({ prisma: contradictoryContinuity.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
 
     const contradictoryRegistration = archiveFixture({
-      validationReport: {
-        ok: true,
-        spriteVersionNumber: 2,
+      validationReport: completeValidationReport({
         directionRegistration: { ok: false, errors: ["scale mismatch"] },
-      },
+      }),
     });
     await expect(archiveCodexPetRun({ prisma: contradictoryRegistration.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
@@ -276,6 +429,11 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
     await expect(archiveCodexPetRun({ prisma: publicObject.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "package_incomplete" } satisfies Partial<CodexPetArchiveError>);
 
+    const temporaryFinalArtifact = archiveFixture();
+    temporaryFinalArtifact.artifacts[0]!.expiresAt = new Date("2026-07-24T00:00:00.000Z");
+    await expect(archiveCodexPetRun({ prisma: temporaryFinalArtifact.prisma, ...ARCHIVE_SCOPE }))
+      .rejects.toMatchObject({ code: "package_incomplete" } satisfies Partial<CodexPetArchiveError>);
+
     const mismatchedOwner = archiveFixture({
       project: {
         id: "project-1",
@@ -292,24 +450,66 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
       .rejects.toMatchObject({ code: "source_conflict" } satisfies Partial<CodexPetArchiveError>);
   });
 
+  it("requires every final validation gate and exactly the 16 fixed direction verdicts", async () => {
+    const requiredGates = [
+      ["deterministic", "ok"],
+      ["standardAtlasValidation", "ok"],
+      ["packagedSpritesheet", "ok"],
+      ["chromaDespill", "ok"],
+      ["directionRegistration", "ok"],
+      ["directionContinuity", "ok"],
+      ["row9PreGenerationGate", "passed"],
+      ["row10PreGenerationGate", "passed"],
+      ["blindDirectionValidation", "ok"],
+      ["finalVisualQa", "pass"],
+    ] as const;
+
+    for (const [gate, passField] of requiredGates) {
+      const missing = completeValidationReport() as Record<string, unknown>;
+      delete missing[gate];
+      await expect(archiveCodexPetRun({
+        prisma: archiveFixture({ validationReport: missing }).prisma,
+        ...ARCHIVE_SCOPE,
+      }), `missing ${gate}`).rejects.toMatchObject({ code: "validation_failed" });
+
+      const failed = completeValidationReport({ [gate]: { [passField]: false } });
+      await expect(archiveCodexPetRun({
+        prisma: archiveFixture({ validationReport: failed }).prisma,
+        ...ARCHIVE_SCOPE,
+      }), `failed ${gate}.${passField}`).rejects.toMatchObject({ code: "validation_failed" });
+    }
+
+    const semantics = completeValidationReport().directionSemantics;
+    const invalidSemantics = [
+      semantics.slice(0, -1),
+      [...semantics.slice(0, -1), semantics[0]],
+      semantics.map((entry, index) => index === 7 ? { ...entry, verdict: "fail" } : entry),
+    ];
+    for (const directionSemantics of invalidSemantics) {
+      const fixture = archiveFixture({
+        validationReport: completeValidationReport({ directionSemantics }),
+      });
+      await expect(archiveCodexPetRun({ prisma: fixture.prisma, ...ARCHIVE_SCOPE }))
+        .rejects.toMatchObject({ code: "validation_failed" });
+    }
+  });
+
   it("does not recreate a knowledge document intentionally deleted after ready", async () => {
     const fixture = archiveFixture({ status: "ready", knowledgeDocumentId: null });
     await expect(archiveCodexPetRun({ prisma: fixture.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "archive_deleted" } satisfies Partial<CodexPetArchiveError>);
-    expect(fixture.tx.document.create).not.toHaveBeenCalled();
+    expect(fixture.tx.document.createMany).not.toHaveBeenCalled();
   });
 
   it("redacts provider echoes from searchable validation summaries and model metadata", async () => {
     const fixture = archiveFixture({
       actualModels: ["gpt-image-2", "sk-test-secret-value"],
-      validationReport: {
-        ok: true,
-        spriteVersionNumber: 2,
+      validationReport: completeValidationReport({
         acceptableWarnings: [
           "provider echoed objectKey=workflow/codex-pets/user-1/project-1/run-1/private.zip",
           `raw payload ${"a".repeat(600)}`,
         ],
-      },
+      }),
     });
     const archived = await archiveCodexPetRun({ prisma: fixture.prisma, ...ARCHIVE_SCOPE });
     const document = fixture.getDocument()!;

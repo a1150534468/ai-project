@@ -3,6 +3,21 @@ import { ApiError, readErrorMessage } from "./apiError";
 
 export const CODEX_PET_API_BASE = "/api/workflow/codex-pets";
 
+/**
+ * The desktop-pet workflow has a deliberately fixed GPT-only model contract.
+ * Keep these values independent from the general chat/image workspace
+ * defaults: a CHAT_MULTIMODAL_MODEL or Qwen fallback is never valid here.
+ */
+export const CODEX_PET_IMAGE_MODEL = "gpt-image-2" as const;
+export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol" as const;
+export const CODEX_PET_MODEL_CONTRACT_VERSION = "gpt-only-v1" as const;
+export const CODEX_PET_IMAGE_ACTUAL_MODELS = [
+  CODEX_PET_IMAGE_MODEL,
+  "gpt-image-2-codex",
+] as const;
+export const CODEX_PET_VISUAL_QA_ACTUAL_MODELS = [CODEX_PET_VISUAL_QA_MODEL] as const;
+export const CODEX_PET_VISUAL_QA_ROUTES = ["chatgpt_model_route"] as const;
+
 export type CodexPetStylePreset =
   | "auto"
   | "pixel"
@@ -101,6 +116,10 @@ export interface CodexPetRun {
   readonly previewArtifactId: string | null;
   readonly validationReport: unknown;
   readonly requestedModel: string;
+  readonly modelContractVersion: string;
+  readonly visualQaModel: string;
+  readonly visualQaActualModels: readonly string[];
+  readonly visualQaRoutes: readonly string[];
   readonly actualModels: readonly string[];
   readonly usage: CodexPetProviderUsage | null;
   readonly knowledgeDocumentId: string | null;

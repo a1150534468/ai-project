@@ -24,6 +24,14 @@ import {
   codexPetPendingBillingFields,
   reconcileCodexPetRunBilling,
 } from "./codex-pet-billing.js";
+import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
+import { assertCodexPetImageRoute, CODEX_PET_MODEL_CONTRACT_VERSION } from "./codex-pet-model-contract.js";
+import {
+  assertCodexPetVisualQaRoute,
+  resolveCodexPetVisualQaModel,
+} from "./codex-pet-visual.js";
+
+export { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 
 export const CODEX_PET_RESOURCE_KEY = "codex_pet_v2_package";
 export const CODEX_PET_PUBLIC_ARTIFACT_PURPOSE = "codex-pet-install";
@@ -193,6 +201,10 @@ export interface CodexPetRouteDeps {
   readonly sseHeartbeatIntervalMs?: number;
   /** Testable connection lifetime; production waits for the raw response to close. */
   readonly waitForSseDisconnect?: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+  /** Startup/start-run GPT route preflight; injectable only for isolated route tests. */
+  readonly assertVisualQaReady?: () => void;
+  /** Start-run GPT Image generations/edits preflight. */
+  readonly assertImageReady?: () => void;
 }
 
 type ProjectShape = {
@@ -217,6 +229,7 @@ type RunShape = {
   readonly projectId: string;
   readonly userId: string;
   readonly idempotencyKey: string | null;
+  readonly inputSnapshot: unknown;
   readonly status: string;
   readonly progressStage: string;
   readonly progressPercent: number;
@@ -328,6 +341,16 @@ function serializeProjectSummary(project: ProjectShape) {
 }
 
 function serializeRun(run: RunShape) {
+  const inputSnapshot = recordOf(run.inputSnapshot);
+  const validationReport = recordOf(run.validationReport);
+  const validationProvenance = recordOf(validationReport.modelProvenance);
+  const visualQaProvenance = recordOf(validationProvenance.visualQa);
+  const visualQaActualModels = Array.isArray(visualQaProvenance.actualModels)
+    ? visualQaProvenance.actualModels.filter((model): model is string => typeof model === "string")
+    : [];
+  const visualQaRoutes = Array.isArray(visualQaProvenance.routes)
+    ? visualQaProvenance.routes.filter((route): route is string => typeof route === "string")
+    : [];
   return {
     id: run.id,
     projectId: run.projectId,
@@ -354,6 +377,14 @@ function serializeRun(run: RunShape) {
     previewArtifactId: run.previewArtifactId,
     validationReport: run.validationReport,
     requestedModel: run.requestedModel,
+    modelContractVersion: typeof inputSnapshot.modelContractVersion === "string"
+      ? inputSnapshot.modelContractVersion
+      : "",
+    visualQaModel: typeof inputSnapshot.visualQaModel === "string"
+      ? inputSnapshot.visualQaModel
+      : "",
+    visualQaActualModels,
+    visualQaRoutes,
     actualModels: [...run.actualModels],
     usage: run.usage,
     knowledgeDocumentId: run.knowledgeDocumentId,
@@ -521,41 +552,6 @@ export function verifyCodexPetArtifactSignature(args: {
   return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
-export function codexPetValidationPassed(report: unknown): boolean {
-  const value = recordOf(report);
-  const passed = value.ok === true
-    || value.status === "passed"
-    || value.validationStatus === "passed";
-  const gateKeys = [
-    "atlas",
-    "deterministic",
-    "packagedSpritesheet",
-    "chromaDespill",
-    "visual",
-    "multimodal",
-    "final",
-    "finalVisualQa",
-    "blindDirectionValidation",
-    "directionRegistration",
-    "directionContinuity",
-    "row9PreGenerationGate",
-    "row10PreGenerationGate",
-  ];
-  const hasContradictoryGate = gateKeys.some((key) => {
-    const gate = recordOf(value[key]);
-    return gate.ok === false || gate.pass === false || gate.passed === false || gate.status === "failed";
-  });
-  const hasFailedDirection = Array.isArray(value.directionSemantics)
-    && value.directionSemantics.some((entry) => recordOf(entry).verdict === "fail");
-  // Delivery is a strict v2 contract.  Accepting an otherwise-passed legacy
-  // report with no explicit version can turn a malformed/old atlas into an
-  // install capability merely because its database row claims v2 geometry.
-  return passed
-    && value.spriteVersionNumber === 2
-    && !hasContradictoryGate
-    && !hasFailedDirection;
-}
-
 function isActiveRunStatus(status: string): boolean {
   return (ACTIVE_RUN_STATUSES as readonly string[]).includes(status);
 }
@@ -656,22 +652,24 @@ async function defaultWaitForSseDisconnect(_request: FastifyRequest, reply: Fast
   });
 }
 
-function assertFinalSpritesheet(artifact: CodexPetArtifactShape, currentTime = new Date()): boolean {
+function assertFinalSpritesheet(artifact: CodexPetArtifactShape): boolean {
   return artifact.status === "ready"
     && artifact.kind === "spritesheet"
+    && artifact.sizeBytes > 0
     && artifact.width === 1_536
     && artifact.height === 2_288
     && (artifact.mime === "image/webp" || artifact.mime === "image/png")
     && hasOwnedArtifactObjectKey(artifact)
-    && (!artifact.expiresAt || artifact.expiresAt.getTime() > currentTime.getTime());
+    && artifact.expiresAt === null;
 }
 
-function assertPackageArtifact(artifact: CodexPetArtifactShape, currentTime = new Date()): boolean {
+function assertPackageArtifact(artifact: CodexPetArtifactShape): boolean {
   return artifact.status === "ready"
     && artifact.kind === "package"
+    && artifact.sizeBytes > 0
     && (artifact.mime === "application/zip" || artifact.mime === "application/x-zip-compressed")
     && hasOwnedArtifactObjectKey(artifact)
-    && (!artifact.expiresAt || artifact.expiresAt.getTime() > currentTime.getTime());
+    && artifact.expiresAt === null;
 }
 
 function hasOwnedArtifactObjectKey(artifact: CodexPetArtifactShape): boolean {
@@ -783,7 +781,10 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     runId: string,
   ): Promise<{ readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean }> {
     return prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-cancel:${runId}`);
+      // pg_advisory_xact_lock returns PostgreSQL `void`. Prisma attempts to
+      // deserialize SELECT rows issued through $queryRawUnsafe and raises
+      // P2010 for that type, so execute the statement without decoding rows.
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-cancel:${runId}`);
       await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', runId);
       const current = await tx.codexPetRun.findFirst({ where: { id: runId, projectId, userId } });
       if (!current) throw new Error("CODEX_PET_RUN_NOT_FOUND");
@@ -1162,7 +1163,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
 
     if (!project.latestRunId) return reply.code(409).send({ error: "等待确认的运行不存在，请刷新后重试" });
     const regenerated = await prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${project.latestRunId}`);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${project.latestRunId}`);
       const current = await tx.codexPetProject.findFirst({ where: { id: project.id, userId } });
       if (!current || current.status !== "awaiting_base_review" || !current.latestRunId) {
         throw new Error("CODEX_PET_EDIT_STATE_CONFLICT");
@@ -1183,7 +1184,9 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         styleNotes: updatedProject.styleNotes,
         referenceAssetIds: updatedProject.referenceAssetIds,
         autoContinue: updatedProject.autoContinue,
+        modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
         requestedModel: "gpt-image-2",
+        visualQaModel: resolveCodexPetVisualQaModel(process.env),
       };
       const supersededAt = now();
       await tx.codexPetArtifact.updateMany({
@@ -1288,7 +1291,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const marked = await prisma.$transaction(async (tx) => {
       // Serialize with /start for this user. Once marked, every mutating
       // project endpoint rejects the project while durable cleanup converges.
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
       return tx.codexPetProject.updateMany({
         where: { id: project.id, userId },
         data: { status: "deleting" },
@@ -1351,6 +1354,13 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     if (!await validateReferenceAssets(userId, initialProject.referenceAssetIds)) {
       return reply.code(400).send({ error: "项目参考图不存在、无权使用或已失效" });
     }
+    try {
+      (deps.assertVisualQaReady ?? (() => { assertCodexPetVisualQaRoute(process.env); }))();
+      (deps.assertImageReady ?? (() => { assertCodexPetImageRoute(process.env); }))();
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), status: "gpt_model_route_unavailable" }, "Codex pet GPT model route preflight failed");
+      return reply.code(503).send({ error: "桌宠 GPT 生图或 GPT-5.6 视觉服务未就绪，请稍后重试" });
+    }
     let pricing: ResourcePrice;
     try {
       pricing = await price();
@@ -1365,7 +1375,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     try {
       transactionResult = await prisma.$transaction(async (tx) => {
         // The lock serializes both equal and different idempotency keys for this user.
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
         const project = await tx.codexPetProject.findFirst({ where: { id: params.data.projectId, userId } });
         if (!project) throw new Error("CODEX_PET_PROJECT_NOT_FOUND");
         if (project.status === "deleting") throw new Error("CODEX_PET_PROJECT_DELETING");
@@ -1406,7 +1416,9 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
                   styleNotes: project.styleNotes,
                   referenceAssetIds: project.referenceAssetIds,
                   autoContinue: project.autoContinue,
+                  modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
                   requestedModel: "gpt-image-2",
+                  visualQaModel: resolveCodexPetVisualQaModel(process.env),
                 },
                 autoContinue: project.autoContinue,
                 requestedModel: "gpt-image-2",
@@ -1443,7 +1455,9 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           styleNotes: project.styleNotes,
           referenceAssetIds: project.referenceAssetIds,
           autoContinue: project.autoContinue,
+          modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
           requestedModel: "gpt-image-2",
+          visualQaModel: resolveCodexPetVisualQaModel(process.env),
         };
         const created = await tx.codexPetRun.create({
           data: {
@@ -1580,8 +1594,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         return reply.code(409).send({ error: "只有等待主形象确认时才能重生候选" });
       }
       const regenerated = await prisma.$transaction(async (tx) => {
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
         const mutableProject = await tx.codexPetProject.findFirst({
           where: { id: run.projectId, userId, status: { not: "deleting" } },
           select: { id: true },
@@ -1682,8 +1696,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         return reply.code(409).send({ error: "当前运行不在可自动选择主形象的阶段" });
       }
       const delegated = await prisma.$transaction(async (tx) => {
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
-        await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
         const mutableProject = await tx.codexPetProject.findFirst({
           where: { id: run.projectId, userId, status: { not: "deleting" } },
           select: { id: true },
@@ -1775,8 +1789,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
-      await tx.$queryRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-base:${run.id}`);
       const mutableProject = await tx.codexPetProject.findFirst({
         where: { id: run.projectId, userId, status: { not: "deleting" } },
         select: { id: true },
@@ -2005,9 +2019,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       }),
     ]);
     if (!spritesheet || !packageArtifact || !knowledgeDocument) return null;
-    const currentTime = now();
-    if (!assertFinalSpritesheet(spritesheet as CodexPetArtifactShape, currentTime)
-      || !assertPackageArtifact(packageArtifact as CodexPetArtifactShape, currentTime)) return null;
+    if (!assertFinalSpritesheet(spritesheet as CodexPetArtifactShape)
+      || !assertPackageArtifact(packageArtifact as CodexPetArtifactShape)) return null;
     return {
       project: project as ProjectShape,
       run: run as RunShape,
@@ -2117,7 +2130,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         return reply.code(404).send({ error: "桌宠预览不存在" });
       }
     } else {
-      if (!shape || !assertFinalSpritesheet(shape, now())) {
+      if (!shape || !assertFinalSpritesheet(shape)) {
         return reply.code(404).send({ error: "桌宠精灵图不存在" });
       }
       const run = await prisma.codexPetRun.findFirst({

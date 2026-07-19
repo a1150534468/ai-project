@@ -9,6 +9,7 @@ import {
   callImageGeneration,
   classifyImageGenerationError,
   extractGeneratedImage,
+  imageTransportCode,
   imageUpstreamRequestIdFromHeaders,
   ImageGenerationTimeoutError,
   isVerifiedWorkflowImageObjectKeyForUser,
@@ -527,6 +528,26 @@ describe("image service", () => {
       category: "cancelled",
       retryable: false,
     });
+  });
+
+  it("keeps only allowlisted low-cardinality transport codes", () => {
+    const reset = new TypeError("fetch failed", { cause: Object.assign(new Error("socket closed"), { code: "ECONNRESET" }) });
+    expect(imageTransportCode(reset)).toBe("ECONNRESET");
+    expect(classifyImageGenerationError(reset)).toMatchObject({
+      category: "network",
+      retryable: true,
+      transportCode: "ECONNRESET",
+    });
+
+    expect(imageTransportCode(new TypeError("fetch failed", {
+      cause: { code: "sk-secret-should-never-be-persisted" },
+    }))).toBeNull();
+    expect(imageTransportCode(new TypeError("fetch failed", {
+      cause: { code: "econnreset" },
+    }))).toBeNull();
+    expect(imageTransportCode(new TypeError("fetch failed", {
+      cause: { code: "X".repeat(500) },
+    }))).toBeNull();
   });
 
   it("returns a data url when storing a b64 image without s3 config", async () => {

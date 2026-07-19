@@ -67,6 +67,38 @@ describe.skipIf(!enabled)("GPT Image edits deployment POC", () => {
     await assertRealPng(result, "1536x1024");
   }, 600_000);
 
+  it("supports two concurrent edits in one worker process", async () => {
+    const config = loadImageGenerationConfigForModel(GPT_IMAGE_MODEL);
+    const sharedReference = await reference("#2459c7", "concurrent");
+    const settled = await Promise.allSettled([1, 2].map((candidate) => callImageEditDetailed({
+      config,
+      prompt: `Create centered friendly desktop-pet candidate ${candidate} from this reference on a flat magenta background. No text.`,
+      referenceImages: [sharedReference],
+      size: "1024x1024",
+      quality: "low",
+      outputFormat: "png",
+      fetchFn: fetch,
+    })));
+
+    const failures = settled.flatMap((entry) => entry.status === "rejected"
+      ? [{
+          classification: classifyImageGenerationError(entry.reason),
+          name: entry.reason instanceof Error ? entry.reason.name : typeof entry.reason,
+          message: entry.reason instanceof Error ? entry.reason.message : String(entry.reason),
+          causeCode: entry.reason instanceof Error
+            && entry.reason.cause
+            && typeof entry.reason.cause === "object"
+            && "code" in entry.reason.cause
+            ? String(entry.reason.cause.code)
+            : null,
+        }]
+      : []);
+    expect(failures, JSON.stringify(failures)).toEqual([]);
+    for (const entry of settled) {
+      if (entry.status === "fulfilled") await assertRealPng(entry.value, "1024x1024");
+    }
+  }, 600_000);
+
   it.each([
     {
       label: "429 rate limit",

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type CodexPetArtifact } from "@prisma/client";
 import { getPrisma } from "@ai-assistant/db";
 import { inspectCodexPetZip, LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
@@ -7,12 +7,17 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { archiveCodexPetRun } from "./codex-pet-archive.js";
 import { appendCodexPetEvent } from "./codex-pet-events.js";
 import { ImageGenerationUpstreamError } from "./image-service.js";
-import { executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";
+import { CodexPetLeaseLostError, codexPetBoardInputRevision, executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";
 import type { GeneratedPetVisual, PetVisualQaConsensus, PetVisualQaVerdict } from "./codex-pet-visual.js";
 
 const prisma = getPrisma();
 const enabled = Boolean(process.env.DATABASE_URL);
 const cleanupUserIds: string[] = [];
+const VISUAL_MODEL_PROVENANCE = {
+  requestedModel: "gpt-5.6-sol",
+  actualModel: "gpt-5.6-sol",
+  route: "chatgpt_model_route" as const,
+};
 
 const passedVerdict: PetVisualQaVerdict = {
   pass: true,
@@ -25,6 +30,7 @@ const passedVerdict: PetVisualQaVerdict = {
   warnings: [],
   failures: [],
   repairPrompt: "",
+  modelProvenance: VISUAL_MODEL_PROVENANCE,
 };
 
 const passedConsensus: PetVisualQaConsensus = {
@@ -34,9 +40,43 @@ const passedConsensus: PetVisualQaConsensus = {
   verdicts: [passedVerdict],
   warnings: [],
   failures: [],
+  modelProvenance: {
+    requestedModel: "gpt-5.6-sol",
+    actualModels: ["gpt-5.6-sol"],
+    route: "chatgpt_model_route",
+  },
 };
 
-async function syntheticVisual(prompt: string): Promise<GeneratedPetVisual> {
+const IDENTITY_GUIDE = "头：蓝色圆角头部；耳：无；眼：两只白色圆眼，位于面部上半部；嘴：不可见；四肢：与身体相连；尾巴：无；固定花纹：无；可动特征：眼睛、头部与四肢可小幅移动；歧义：无。";
+
+function completeDeliveryValidationReport() {
+  return {
+    ok: true,
+    spriteVersionNumber: 2,
+    modelContractVersion: "gpt-only-v1",
+    modelProvenance: {
+      imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
+      visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] },
+    },
+    deterministic: { ok: true },
+    standardAtlasValidation: { ok: true },
+    packagedSpritesheet: { ok: true },
+    chromaDespill: { ok: true },
+    directionRegistration: { ok: true },
+    directionContinuity: { ok: true },
+    row9PreGenerationGate: { passed: true },
+    row10PreGenerationGate: { passed: true },
+    blindDirectionValidation: { ok: true },
+    finalVisualQa: { pass: true, identity: true, structure: true, semantics: true, continuity: true },
+    directionSemantics: LOOK_DIRECTIONS.map((direction) => ({ direction, verdict: "pass" })),
+  };
+}
+
+async function syntheticVisual(
+  prompt: string,
+  jumpingLiftOverride?: readonly number[],
+  bodyWidthRatioOverride?: number,
+): Promise<GeneratedPetVisual> {
   const isBase = prompt.includes("main character candidate");
   const width = isBase ? 1024 : 1536;
   const height = 1024;
@@ -50,17 +90,23 @@ async function syntheticVisual(prompt: string): Promise<GeneratedPetVisual> {
   } else {
     const frameCount = Number(/exactly (\d+) separated/i.exec(prompt)?.[1]
       ?? (/exactly four separated/i.test(prompt) ? 4 : 8));
-    const columns = /2×2|2 columns/i.test(prompt) ? 2 : /3 columns/i.test(prompt) ? 3 : 4;
-    const rows = 2;
+    const columns = Number(/as a (\d+) columns/i.exec(prompt)?.[1]
+      ?? (/2×2/i.test(prompt) ? 2 : 4));
+    const rows = Number(/columns × (\d+) rows?/i.exec(prompt)?.[1]
+      ?? (/2×2/i.test(prompt) ? 2 : 2));
+    const jumpingLift = prompt.includes("“jumping” animation")
+      ? jumpingLiftOverride ?? [0, 0.1, 0.2, 0.1, 0]
+      : [];
     const slotWidth = width / columns;
     const slotHeight = height / rows;
     const overlays = Array.from({ length: frameCount }, (_, index) => {
       const column = index % columns;
       const row = Math.floor(index / columns);
-      const bodyWidth = Math.round(slotWidth * 0.34);
+      const bodyWidth = Math.round(slotWidth * (bodyWidthRatioOverride ?? 0.34));
       const bodyHeight = Math.round(slotHeight * 0.62);
       const x = Math.round(column * slotWidth + (slotWidth - bodyWidth) / 2);
-      const y = Math.round(row * slotHeight + slotHeight - 56 - bodyHeight);
+      const y = Math.round(row * slotHeight + slotHeight - 56 - bodyHeight
+        - slotHeight * (jumpingLift[index] ?? 0));
       return { input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect x="${x}" y="${y}" width="${bodyWidth}" height="${bodyHeight}" rx="${Math.round(bodyWidth * 0.25)}" fill="#2459c7"/><circle cx="${x + Math.round(bodyWidth * 0.38)}" cy="${y + Math.round(bodyHeight * 0.3)}" r="10" fill="#fff"/><circle cx="${x + Math.round(bodyWidth * 0.62)}" cy="${y + Math.round(bodyHeight * 0.3)}" r="10" fill="#fff"/></svg>`) };
     });
     buffer = await sharp({ create: { width, height, channels: 4, background: chromaKey } }).composite(overlays).png().toBuffer();
@@ -103,7 +149,7 @@ function memoryArtifactStore(): CodexPetArtifactStore & { buffers: Map<string, B
         sizeBytes: input.buffer.byteLength,
         width: input.width,
         height: input.height,
-        checksum: "test",
+        checksum: createHash("sha256").update(input.buffer).digest("hex"),
         metadata: (input.metadata ?? {}) as Prisma.InputJsonObject,
         expiresAt: input.expiresAt,
       } });
@@ -159,6 +205,9 @@ async function seed(autoContinue: boolean, options: {
       prompt: project.prompt,
       stylePreset: project.stylePreset,
       referenceAssetIds,
+      modelContractVersion: "gpt-only-v1",
+      requestedModel: "gpt-image-2",
+      visualQaModel: "gpt-5.6-sol",
     },
     autoContinue,
     billingOperationId: `codex-pet:test-${suffix}`,
@@ -172,6 +221,67 @@ async function seed(autoContinue: boolean, options: {
   } });
   await prisma.codexPetProject.update({ where: { id: project.id }, data: { latestRunId: run.id } });
   return { user, project, run, referenceAssetIds };
+}
+
+async function seedArchivingDeliverables(seeded: Awaited<ReturnType<typeof seed>>) {
+  const prefix = `workflow/codex-pets/${seeded.user.id}/${seeded.project.id}/${seeded.run.id}`;
+  const [spritesheet, packageArtifact, preview] = await Promise.all([
+    prisma.codexPetArtifact.create({ data: {
+      projectId: seeded.project.id,
+      runId: seeded.run.id,
+      userId: seeded.user.id,
+      kind: "spritesheet",
+      name: "spritesheet.webp",
+      objectKey: `${prefix}/spritesheet-${randomUUID()}.webp`,
+      mime: "image/webp",
+      sizeBytes: 1024,
+      width: 1536,
+      height: 2288,
+    } }),
+    prisma.codexPetArtifact.create({ data: {
+      projectId: seeded.project.id,
+      runId: seeded.run.id,
+      userId: seeded.user.id,
+      kind: "package",
+      name: "pet.zip",
+      objectKey: `${prefix}/package-${randomUUID()}.zip`,
+      mime: "application/zip",
+      sizeBytes: 2048,
+      metadata: { petId: `pet-${seeded.run.id}` },
+    } }),
+    prisma.codexPetArtifact.create({ data: {
+      projectId: seeded.project.id,
+      runId: seeded.run.id,
+      userId: seeded.user.id,
+      kind: "preview",
+      name: "preview.png",
+      objectKey: `${prefix}/preview-${randomUUID()}.png`,
+      mime: "image/png",
+      sizeBytes: 512,
+      width: 1024,
+      height: 1024,
+    } }),
+  ]);
+  await prisma.$transaction([
+    prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: {
+        status: "archiving",
+        progressStage: "archiving",
+        progressPercent: 98,
+        progressMessage: "正在归档到 AI 产物知识库",
+        colorKey: "#ff00ff",
+        workerId: null,
+        heartbeatAt: null,
+        spritesheetArtifactId: spritesheet.id,
+        packageArtifactId: packageArtifact.id,
+        previewArtifactId: preview.id,
+        validationReport: completeDeliveryValidationReport(),
+      },
+    }),
+    prisma.codexPetProject.update({ where: { id: seeded.project.id }, data: { status: "archiving" } }),
+  ]);
+  return { spritesheet, packageArtifact, preview };
 }
 
 function runnerDeps(store: ReturnType<typeof memoryArtifactStore>, consensus = vi.fn(async () => passedConsensus)) {
@@ -192,9 +302,32 @@ function runnerDeps(store: ReturnType<typeof memoryArtifactStore>, consensus = v
       generate: vi.fn(async ({ prompt }: { prompt: string }) => syntheticVisual(prompt)) as never,
       qa: vi.fn(async () => passedVerdict),
       qaConsensus: consensus as never,
-      blindQa: vi.fn(async () => ({ ok: true, reviewers: [], consensus: [], failures: [], warnings: [] })),
-      directionSemantics: vi.fn(async () => LOOK_DIRECTIONS.map((direction) => ({ direction, verdict: "pass" as const, expected: direction, observed: direction, horizontalEvidence: "ok", verticalEvidence: "ok", reason: "continuous" }))),
-      lookMechanics: vi.fn(async () => "下半身固定，眼睛先引导，头部与天线平滑跟随，四个基准方向明确。"),
+      blindQa: vi.fn(async () => ({
+        ok: true,
+        reviewers: [],
+        consensus: [],
+        failures: [],
+        warnings: [],
+        modelProvenance: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], route: "chatgpt_model_route" as const },
+      })),
+      directionSemantics: vi.fn(async () => LOOK_DIRECTIONS.map((direction) => ({
+        direction,
+        verdict: "pass" as const,
+        expected: direction,
+        observed: direction,
+        horizontalEvidence: "ok",
+        verticalEvidence: "ok",
+        reason: "continuous",
+        modelProvenance: VISUAL_MODEL_PROVENANCE,
+      }))),
+      lookMechanics: vi.fn(async (input: { onModelProvenance?: (provenance: typeof VISUAL_MODEL_PROVENANCE) => void }) => {
+        input.onModelProvenance?.(VISUAL_MODEL_PROVENANCE);
+        return "下半身固定，眼睛先引导，头部与天线平滑跟随，四个基准方向明确。";
+      }),
+      identityGuide: vi.fn(async (input: { onModelProvenance?: (provenance: typeof VISUAL_MODEL_PROVENANCE) => void }) => {
+        input.onModelProvenance?.(VISUAL_MODEL_PROVENANCE);
+        return IDENTITY_GUIDE;
+      }),
     },
   };
 }
@@ -219,12 +352,54 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const deps = runnerDeps(store, consensus);
     const persistEvent = deps.appendEvent;
     deps.appendEvent = vi.fn(async (input) => {
-      if (input.type === "run.completed") throw new Error("event store unavailable after ready commit");
+      if (input.type === "package.ready" || input.type === "run.completed") throw new Error("event store unavailable after durable commit");
       return persistEvent(input);
     });
     const result = await executeCodexPetRun({ runId: seeded.run.id, deps });
-    expect(result.status).toBe("ready");
+    const packageDiagnostic = result.status === "packaging"
+      ? (await prisma.codexPetJob.findUnique({ where: { runId_key: { runId: seeded.run.id, key: "final-package" } }, select: { error: true } }))?.error
+      : undefined;
+    expect(result.status, packageDiagnostic ?? undefined).toBe("ready");
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
+    expect(deps.visual.identityGuide).toHaveBeenCalledOnce();
+    const identityGuideJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: run.id, key: "identity-guide" } },
+    });
+    expect(identityGuideJob).toMatchObject({
+      status: "completed",
+      kind: "identity_guide",
+      dependencyKeys: ["base-selection"],
+      inputArtifactIds: [run.selectedBaseArtifactId!],
+    });
+    expect(identityGuideJob.output).toMatchObject({
+      version: 2,
+      selectedArtifactId: run.selectedBaseArtifactId,
+      supportingReferenceAssetIds: [],
+      guide: IDENTITY_GUIDE,
+    });
+    expect(deps.visual.identityGuide).toHaveBeenCalledWith(expect.objectContaining({
+      originalReferences: [],
+      characterBrief: "名称：蓝色测试宠；描述：端到端测试桌宠；角色设定：蓝色圆角机器人；风格：pixel",
+    }));
+    const generatedPrompts = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => String((call[0] as { prompt?: string }).prompt ?? ""));
+    const basePrompts = generatedPrompts.filter((prompt) => prompt.includes("main character candidate"));
+    const guidedGenerationPrompts = generatedPrompts.filter((prompt) => !prompt.includes("main character candidate"));
+    expect(basePrompts).toHaveLength(2);
+    expect(basePrompts.every((prompt) => !prompt.includes(IDENTITY_GUIDE))).toBe(true);
+    expect(guidedGenerationPrompts.length).toBeGreaterThan(0);
+    expect(guidedGenerationPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
+    const consensusPrompts = consensus.mock.calls.map((call) => String((call[0] as { prompt?: string }).prompt ?? ""));
+    expect(consensusPrompts.length).toBeGreaterThan(0);
+    expect(consensusPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
+    const postSelectionQaPrompts = (deps.visual.qa as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => String((call[0] as { prompt?: string }).prompt ?? ""))
+      .filter((prompt) => !prompt.includes("Kind: base-choice"));
+    expect(postSelectionQaPrompts.length).toBeGreaterThan(0);
+    expect(postSelectionQaPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
+    expect(deps.visual.lookMechanics).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining(IDENTITY_GUIDE) }));
+    expect(deps.visual.blindQa).toHaveBeenCalledWith(expect.objectContaining({ identityGuide: IDENTITY_GUIDE }));
+    expect(deps.visual.directionSemantics).toHaveBeenCalledWith(expect.objectContaining({ identityGuide: IDENTITY_GUIDE }));
     expect(run.progressPercent).toBe(100);
     expect(run.knowledgeDocumentId).toBeTruthy();
     expect(run.actualModels).toEqual(["gpt-image-2-codex"]);
@@ -243,13 +418,66 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     const report = run.validationReport as {
       directionContinuity?: { pairs?: unknown[]; semanticAssessment?: string };
-      directionRegistration?: { ok?: boolean; sharedScale?: number; sourceBoardSizes?: unknown[] };
+      directionRegistration?: {
+        ok?: boolean;
+        sharedScale?: number;
+        sourceBoardSizes?: unknown[];
+        neutralFrameArtifactId?: string;
+        registeredRowArtifactIds?: string[];
+        manifestArtifactId?: string;
+        row9ImmutableDuringRow10Registration?: boolean;
+        neutralValidationByBoard?: Array<{ ok?: boolean; medianHeightRatio?: number }>;
+      };
     };
     expect(report.directionContinuity?.pairs).toHaveLength(16);
     expect(report.directionContinuity?.semanticAssessment).toBe("not-assessed");
     expect(report.directionRegistration).toMatchObject({ ok: true });
     expect(report.directionRegistration?.sharedScale).toBeGreaterThan(0);
     expect(report.directionRegistration?.sourceBoardSizes).toHaveLength(2);
+    expect(report.directionRegistration).toMatchObject({
+      row9ImmutableDuringRow10Registration: true,
+      neutralFrameArtifactId: expect.any(String),
+      manifestArtifactId: expect.any(String),
+      registeredRowArtifactIds: [expect.any(String), expect.any(String)],
+      neutralValidationByBoard: [expect.objectContaining({ ok: true }), expect.objectContaining({ ok: true })],
+    });
+    const [row9RegistrationJob, row10RegistrationJob, rawRow9Job, row10Job] = await Promise.all([
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: run.id, key: "look-a-registration" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: run.id, key: "look-b-registration" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: run.id, key: "look-a" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: run.id, key: "look-b" } } }),
+    ]);
+    const row9RegistrationOutput = row9RegistrationJob.output as { registeredRowArtifactId: string; manifestArtifactId: string };
+    expect(row9RegistrationJob).toMatchObject({ status: "completed", dependencyKeys: ["look-a", "row-idle"] });
+    expect(row10RegistrationJob).toMatchObject({ status: "completed", dependencyKeys: ["look-b", "look-a-registration"] });
+    expect(row10Job.dependencyKeys).toEqual(["look-a-registration"]);
+    expect(row10Job.inputArtifactIds).toContain(row9RegistrationOutput.registeredRowArtifactId);
+    expect(row10Job.inputArtifactIds).toContain(row9RegistrationOutput.manifestArtifactId);
+    expect(row10Job.inputArtifactIds).not.toContain((rawRow9Job.output as { boardArtifactId: string }).boardArtifactId);
+    const manifestArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: row9RegistrationOutput.manifestArtifactId } });
+    expect(JSON.parse((await store.load(manifestArtifact)).toString("utf8"))).toMatchObject({
+      schemaVersion: "codex-pet-neutral-direction-registration-v1",
+      transform: { scale: expect.any(Number), target: { bodyHeight: expect.any(Number), lowerBodyAnchorX: expect.any(Number), baseline: expect.any(Number) } },
+    });
+    const row9GenerationCall = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls.find((call) => (
+      String((call[0] as { prompt?: string }).prompt ?? "").includes("Direction order: 000, 022.5")
+    ));
+    const row9References = (row9GenerationCall?.[0] as { references?: Array<{ filename?: string }> }).references ?? [];
+    expect(row9References.slice(0, 2).map((reference) => reference.filename)).toEqual([
+      "look-a-approved-anchor-storyboard.png",
+      "approved-canonical-base.png",
+    ]);
+    const row10GenerationCall = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls.find((call) => (
+      String((call[0] as { prompt?: string }).prompt ?? "").includes("Direction order: 180, 202.5")
+    ));
+    const row10References = (row10GenerationCall?.[0] as { references?: Array<{ filename?: string; b64?: string }> }).references ?? [];
+    expect(row10References.slice(0, 2).map((reference) => reference.filename)).toEqual([
+      "look-b-approved-anchor-storyboard.png",
+      "approved-canonical-base.png",
+    ]);
+    expect(row10References.map((reference) => reference.filename)).toContain("approved-registered-look-row-9-4x2.png");
+    const registeredReference = row10References.find((reference) => reference.filename === "approved-registered-look-row-9-4x2.png");
+    expect(await sharp(Buffer.from(registeredReference!.b64!, "base64")).metadata()).toMatchObject({ width: 768, height: 416 });
     expect(await prisma.codexPetArtifact.count({ where: { runId: run.id, kind: "animation_preview", status: "ready" } })).toBe(11);
     expect(await prisma.codexPetArtifact.count({ where: { runId: run.id, kind: "animation_preview" } })).toBe(12);
     const rejectedMirror = await prisma.codexPetArtifact.findFirstOrThrow({
@@ -263,6 +491,12 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(rejectedMirror.expiresAt).not.toBeNull();
     const idleJob = await prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: run.id, key: "row-idle" } } });
     expect(idleJob.attempt).toBe(2);
+    const stageEvents = await prisma.codexPetEvent.findMany({
+      where: { runId: run.id, type: "stage.started", stage: "standard_generating" },
+    });
+    expect(stageEvents.some((event) => (
+      (event.payload as { resumedAfterRepair?: boolean }).resumedAfterRepair === true
+    ))).toBe(true);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: run.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
     const document = await prisma.document.findUniqueOrThrow({ where: { id: run.knowledgeDocumentId! } });
@@ -271,12 +505,425 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(JSON.stringify(document.metadata)).not.toContain("objectKey");
     expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
+    expect(await executeCodexPetRun({ runId: run.id, deps: { ...deps, workerId: "identity-guide-replay-worker" } }))
+      .toEqual({ status: "ready", runId: run.id });
+    expect(deps.visual.identityGuide).toHaveBeenCalledOnce();
+
     const artifactCount = await prisma.codexPetArtifact.count({ where: { runId: run.id } });
     await prisma.document.delete({ where: { id: document.id } });
     const retainedRun = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: run.id } });
     expect(retainedRun.knowledgeDocumentId).toBeNull();
     expect(await prisma.codexPetProject.findUnique({ where: { id: seeded.project.id } })).not.toBeNull();
     expect(await prisma.codexPetArtifact.count({ where: { runId: run.id } })).toBe(artifactCount);
+  }, 120_000);
+
+  it("recovers partial and fully-written final packages without replaying visual QA or duplicating permanent artifacts", async () => {
+    for (const interruptAfterKind of ["package", "validation_report"] as const) {
+      const seeded = await seed(true);
+      const baseStore = memoryArtifactStore();
+      let interrupted = false;
+      const store: CodexPetArtifactStore & { buffers: Map<string, Buffer> } = {
+        buffers: baseStore.buffers,
+        load: baseStore.load,
+        async put(input) {
+          const artifact = await baseStore.put(input);
+          if (!interrupted && input.jobId && input.kind === interruptAfterKind) {
+            interrupted = true;
+            // The object and Artifact row exist, but the Job output does not
+            // yet reference them: this is the critical process-crash window.
+            throw new Error(`synthetic packaging interruption after ${interruptAfterKind}`);
+          }
+          return artifact;
+        },
+      };
+      const deps = runnerDeps(store);
+      const persistedEvent = deps.appendEvent;
+      deps.appendEvent = vi.fn(async (input) => {
+        if (input.type === "package.ready") throw new Error("package.ready event unavailable after database commit");
+        return persistedEvent(input);
+      });
+
+      await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+        .resolves.toEqual({ status: "packaging", runId: seeded.run.id });
+      expect(interrupted).toBe(true);
+      const interruptedRun = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
+      expect(interruptedRun).toMatchObject({
+        status: "packaging",
+        spritesheetArtifactId: null,
+        packageArtifactId: null,
+        previewArtifactId: null,
+        knowledgeDocumentId: null,
+        billingRefundedAt: null,
+      });
+      const interruptedJob = await prisma.codexPetJob.findUniqueOrThrow({
+        where: { runId_key: { runId: seeded.run.id, key: "final-package" } },
+      });
+      expect(interruptedJob).toMatchObject({ kind: "final_package", status: "queued", attempt: 1, workerId: null });
+      expect(interruptedJob.input).toMatchObject({
+        version: 1,
+        inputRevision: expect.stringMatching(/^[0-9a-f]{64}$/),
+        finalAtlasChecksum: expect.stringMatching(/^[0-9a-f]{64}$/),
+        validationReportChecksum: expect.stringMatching(/^[0-9a-f]{64}$/),
+      });
+      const orphanedCheckpoint = await prisma.codexPetArtifact.findFirstOrThrow({
+        where: { runId: seeded.run.id, jobId: interruptedJob.id, kind: interruptAfterKind, status: "ready" },
+      });
+      expect(orphanedCheckpoint.checksum).toMatch(/^[0-9a-f]{64}$/);
+      if (interruptAfterKind === "validation_report") {
+        // Also cover a process dying after every per-file checkpoint but
+        // immediately before the Run delivery fields are visible. The new
+        // implementation commits these together, but recovery also tolerates
+        // this legacy/manually-repaired complete-checkpoint state.
+        const output = interruptedJob.output as Record<string, unknown>;
+        const artifacts = output.artifacts as Record<string, unknown>;
+        const completedArtifacts: Record<string, unknown> = {
+          ...artifacts,
+          validationReport: {
+            artifactId: orphanedCheckpoint.id,
+            checksum: orphanedCheckpoint.checksum,
+            kind: orphanedCheckpoint.kind,
+            sizeBytes: orphanedCheckpoint.sizeBytes,
+          },
+        };
+        const completedKeys = ["spritesheet", "package", "preview", "directionQa", "directionBlindQa", "validationReport"];
+        await prisma.codexPetJob.update({
+          where: { id: interruptedJob.id },
+          data: {
+            output: {
+              ...output,
+              artifacts: completedArtifacts,
+            } as Prisma.InputJsonObject,
+            status: "completed",
+            outputArtifactIds: completedKeys.map((key) => (
+              (completedArtifacts[key] as { artifactId: string }).artifactId
+            )),
+            completedAt: new Date(),
+            workerId: null,
+          },
+        });
+      }
+
+      const mocks = [
+        deps.visual.generate,
+        deps.visual.qa,
+        deps.visual.qaConsensus,
+        deps.visual.blindQa,
+        deps.visual.directionSemantics,
+      ] as unknown as Array<ReturnType<typeof vi.fn>>;
+      const callCounts = mocks.map((mock) => mock.mock.calls.length);
+
+      await expect(executeCodexPetRun({
+        runId: seeded.run.id,
+        deps: { ...deps, workerId: `packaging-recovery-${interruptAfterKind}` },
+      })).resolves.toEqual({ status: "ready", runId: seeded.run.id });
+      mocks.forEach((mock, index) => expect(mock.mock.calls).toHaveLength(callCounts[index]!));
+
+      const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
+      expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundedAt: null });
+      expect(run.knowledgeDocumentId).toBeTruthy();
+      expect(deps.billing.refundResource).not.toHaveBeenCalled();
+      expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(1);
+      expect(await prisma.codexPetEvent.count({ where: { runId: run.id, type: "package.ready" } })).toBe(0);
+
+      const finalJob = await prisma.codexPetJob.findUniqueOrThrow({
+        where: { runId_key: { runId: run.id, key: "final-package" } },
+      });
+      expect(finalJob).toMatchObject({ status: "completed", workerId: null });
+      expect(finalJob.outputArtifactIds).toHaveLength(6);
+      const permanentKinds = ["spritesheet", "package", "preview", "direction_qa", "direction_blind_qa", "validation_report"];
+      const permanentArtifacts = await prisma.codexPetArtifact.findMany({
+        where: { runId: run.id, jobId: finalJob.id, kind: { in: permanentKinds }, status: "ready", expiresAt: null },
+      });
+      expect(permanentArtifacts).toHaveLength(6);
+      expect(new Set(permanentArtifacts.map((artifact) => artifact.kind))).toEqual(new Set(permanentKinds));
+      expect(new Set(finalJob.outputArtifactIds)).toEqual(new Set(permanentArtifacts.map((artifact) => artifact.id)));
+      expect(permanentArtifacts.every((artifact) => /^[0-9a-f]{64}$/.test(artifact.checksum ?? ""))).toBe(true);
+      const packageArtifact = permanentArtifacts.find((artifact) => artifact.kind === "package")!;
+      expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
+    }
+  }, 240_000);
+
+  it("resumes from the persisted registered row-9 artifact without regenerating or re-fitting it", async () => {
+    const seeded = await seed(true);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    const baseGenerate = deps.visual.generate as unknown as (input: { prompt: string }) => Promise<GeneratedPetVisual>;
+    let interrupted = false;
+    const generate = vi.fn(async (input: { prompt: string }) => {
+      if (!interrupted && input.prompt.includes("Direction order: 180, 202.5")) {
+        interrupted = true;
+        await prisma.codexPetRun.update({
+          where: { id: seeded.run.id },
+          data: { workerId: "simulated-crashed-worker", heartbeatAt: new Date() },
+        });
+        throw new CodexPetLeaseLostError();
+      }
+      return baseGenerate(input);
+    });
+    deps.visual.generate = generate as never;
+
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps })).toEqual({ status: "busy", runId: seeded.run.id });
+    const registrationBefore = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "look-a-registration" } },
+    });
+    expect(registrationBefore.status).toBe("completed");
+    const outputBefore = registrationBefore.output as { registeredRowArtifactId: string; manifestArtifactId: string };
+    const [rowArtifactBefore, manifestArtifactBefore] = await Promise.all([
+      prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: outputBefore.registeredRowArtifactId } }),
+      prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: outputBefore.manifestArtifactId } }),
+    ]);
+    const rowHashBefore = createHash("sha256").update(await store.load(rowArtifactBefore)).digest("hex");
+    const manifestHashBefore = createHash("sha256").update(await store.load(manifestArtifactBefore)).digest("hex");
+    const row9GenerationCallsBefore = generate.mock.calls.filter((call) => call[0].prompt.includes("Direction order: 000, 022.5")).length;
+
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: { workerId: null, heartbeatAt: null },
+    });
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps: { ...deps, workerId: "registered-row-resume-worker" } }))
+      .toEqual({ status: "ready", runId: seeded.run.id });
+
+    const registrationAfter = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "look-a-registration" } },
+    });
+    const outputAfter = registrationAfter.output as { registeredRowArtifactId: string; manifestArtifactId: string };
+    expect(outputAfter).toEqual(expect.objectContaining(outputBefore));
+    expect(outputAfter.registeredRowArtifactId).toBe(outputBefore.registeredRowArtifactId);
+    expect(outputAfter.manifestArtifactId).toBe(outputBefore.manifestArtifactId);
+    expect(createHash("sha256").update(await store.load(rowArtifactBefore)).digest("hex")).toBe(rowHashBefore);
+    expect(createHash("sha256").update(await store.load(manifestArtifactBefore)).digest("hex")).toBe(manifestHashBefore);
+    expect(generate.mock.calls.filter((call) => call[0].prompt.includes("Direction order: 000, 022.5"))).toHaveLength(row9GenerationCallsBefore);
+  }, 120_000);
+
+  it("repairs an over-wide row 10 without replacing or shrinking the approved registered row 9", async () => {
+    const seeded = await seed(true);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    let row10Calls = 0;
+    let approvedRow9ArtifactId = "";
+    let approvedRow9Hash = "";
+    deps.visual.generate = vi.fn(async ({ prompt }: { prompt: string }) => {
+      if (prompt.includes("Direction order: 180, 202.5")) {
+        row10Calls += 1;
+        if (row10Calls === 1) {
+          const registration = await prisma.codexPetJob.findUniqueOrThrow({
+            where: { runId_key: { runId: seeded.run.id, key: "look-a-registration" } },
+          });
+          approvedRow9ArtifactId = String((registration.output as { registeredRowArtifactId?: string }).registeredRowArtifactId ?? "");
+          const artifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: approvedRow9ArtifactId } });
+          approvedRow9Hash = createHash("sha256").update(await store.load(artifact)).digest("hex");
+          return syntheticVisual(prompt, undefined, 0.9);
+        }
+      }
+      return syntheticVisual(prompt);
+    }) as never;
+
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps })).toEqual({ status: "ready", runId: seeded.run.id });
+    expect(row10Calls).toBe(2);
+    const [row9Registration, row10Job, approvedRow9Artifact] = await Promise.all([
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a-registration" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } }),
+      prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: approvedRow9ArtifactId } }),
+    ]);
+    expect(row10Job.attempt).toBe(2);
+    expect((row9Registration.output as { registeredRowArtifactId?: string }).registeredRowArtifactId).toBe(approvedRow9ArtifactId);
+    expect(approvedRow9Artifact.status).toBe("ready");
+    expect(createHash("sha256").update(await store.load(approvedRow9Artifact)).digest("hex")).toBe(approvedRow9Hash);
+    const failedRegistration = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, kind: "direction_registration_report", name: { contains: "row 10" } },
+      orderBy: { createdAt: "asc" },
+    });
+    const failedReport = JSON.parse((await store.load(failedRegistration)).toString("utf8")) as { ok?: boolean; errors?: string[] };
+    expect(failedReport.ok).toBe(false);
+    expect(failedReport.errors?.some((error) => error.includes("registered-frame-outside-safe-margin") || error.includes("registered-near-edge-pixels"))).toBe(true);
+  }, 120_000);
+
+  it("reuses an interrupted running attempt instead of consuming a visual repair", async () => {
+    const seeded = await seed(false);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .toEqual({ status: "awaiting_base_review", runId: seeded.run.id });
+    const candidate = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
+      orderBy: { createdAt: "asc" },
+    });
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: {
+        selectedBaseArtifactId: candidate.id,
+        status: "standard_generating",
+        progressStage: "standard_generating",
+      },
+    });
+    const inputBinding = { inputArtifactIds: [candidate.id], columns: 3, rows: 2, frameCount: 6 } as const;
+    await prisma.codexPetJob.create({
+      data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        key: "row-idle",
+        kind: "standard_row",
+        status: "running",
+        dependencyKeys: ["base-selection"],
+        attempt: 2,
+        maxAttempts: 3,
+        input: {
+          columns: 3,
+          rows: 2,
+          frameCount: 6,
+          inputRevision: codexPetBoardInputRevision(inputBinding),
+        },
+        inputArtifactIds: [candidate.id],
+        workerId: "interrupted-worker",
+        startedAt: new Date(Date.now() - 60_000),
+      },
+    });
+    await prisma.codexPetJob.create({
+      data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        key: "row-running-right",
+        kind: "standard_row",
+        status: "running",
+        dependencyKeys: ["identity-guide"],
+        attempt: 2,
+        maxAttempts: 3,
+        // Legacy board Jobs did not persist inputRevision. Matching ordered
+        // artifact ids must backfill the revision without resetting attempt.
+        input: { columns: 4, rows: 2, frameCount: 8 },
+        inputArtifactIds: [candidate.id],
+        workerId: "interrupted-legacy-worker",
+        startedAt: new Date(Date.now() - 60_000),
+      },
+    });
+
+    const result = await executeCodexPetRun({
+      runId: seeded.run.id,
+      deps,
+    });
+
+    expect(result.status).toBe("ready");
+    const idleJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "row-idle" } },
+    });
+    expect(idleJob.status).toBe("completed");
+    expect(idleJob.attempt).toBe(2);
+    const legacyRunningJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "row-running-right" } },
+    });
+    expect(legacyRunningJob).toMatchObject({
+      status: "completed",
+      attempt: 2,
+      inputArtifactIds: [candidate.id],
+    });
+    expect(legacyRunningJob.input).toMatchObject({
+      inputRevision: codexPetBoardInputRevision({
+        inputArtifactIds: [candidate.id],
+        columns: 4,
+        rows: 2,
+        frameCount: 8,
+      }),
+    });
+  }, 120_000);
+
+  it("rejects a peak-only jumping row before visual QA and retries with an actionable full-arc prompt", async () => {
+    const seeded = await seed(true);
+    const store = memoryArtifactStore();
+    const consensus = vi.fn(async () => passedConsensus);
+    const deps = runnerDeps(store, consensus);
+    let injectedPeakOnly = false;
+    deps.visual.generate = vi.fn(async ({ prompt }: { prompt: string }) => {
+      if (!injectedPeakOnly && prompt.includes("“jumping” animation")) {
+        injectedPeakOnly = true;
+        return syntheticVisual(prompt, [0, 0, 0.2, 0, 0]);
+      }
+      return syntheticVisual(prompt);
+    }) as never;
+
+    expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("ready");
+
+    const jumpingCalls = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => String((call[0] as { prompt?: string }).prompt ?? ""))
+      .filter((prompt) => prompt.includes("“jumping” animation"));
+    expect(jumpingCalls).toHaveLength(2);
+    expect(jumpingCalls[1]).toContain("Move the whole character visibly upward in frame 2");
+    expect(jumpingCalls[1]).toContain("keep frame 4 visibly above the ground before frame 5 settles");
+
+    const jumpingQaCalls = (consensus as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => String((call[0] as { prompt?: string }).prompt ?? ""))
+      .filter((prompt) => prompt.includes("Context: jumping 动作组"));
+    expect(jumpingQaCalls).toHaveLength(1);
+    const jumpingJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "row-jumping" } },
+    });
+    expect(jumpingJob.attempt).toBe(2);
+    const report = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, jobId: jumpingJob.id, kind: "qa_report" },
+    });
+    const diagnostic = JSON.parse((await store.load(report)).toString("utf8")) as {
+      deterministic: { jumpingArc: { errors: string[] } };
+    };
+    expect(diagnostic.deterministic.jumpingArc.errors).toEqual(expect.arrayContaining([
+      expect.stringMatching(/^jumping-arc:frame-2-rise-too-small:/),
+      expect.stringMatching(/^jumping-arc:frame-4-not-airborne-before-settle:/),
+    ]));
+  }, 120_000);
+
+  it("adjudicates a jumping zoom claim that contradicts shared-scale geometry", async () => {
+    const seeded = await seed(true);
+    const store = memoryArtifactStore();
+    const scaleFailure: PetVisualQaVerdict = {
+      ...passedVerdict,
+      pass: false,
+      score: 65,
+      failures: [
+        "Actual zoom detected: visible width and height increase at the peak frame",
+        "Unintended scale jumps",
+      ],
+      repairPrompt: "keep one constant scale",
+      repairRows: ["jumping"],
+    };
+    const consensus = vi.fn(async (input: { prompt: string; repetitions?: number }) => {
+      if (input.prompt.includes("Independent jumping scale adjudication")) return passedConsensus;
+      if (input.prompt.includes("Context: jumping 动作组")) {
+        return {
+          ...passedConsensus,
+          pass: false,
+          score: 65,
+          verdicts: [scaleFailure],
+          failures: scaleFailure.failures,
+        };
+      }
+      return passedConsensus;
+    });
+    const deps = runnerDeps(store, consensus);
+
+    expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("ready");
+
+    const jumpingJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "row-jumping" } },
+    });
+    expect(jumpingJob).toMatchObject({ status: "completed", attempt: 1 });
+    const jumpingCalls = consensus.mock.calls
+      .map((call) => call[0] as { prompt: string; repetitions?: number })
+      .filter((input) => input.prompt.includes("jumping"));
+    expect(jumpingCalls.some((input) => input.prompt.includes("one shared raster scale"))).toBe(true);
+    expect(jumpingCalls.find((input) => input.prompt.includes("Independent jumping scale adjudication"))?.repetitions).toBe(3);
+
+    const adjudication = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, jobId: jumpingJob.id, kind: "qa_report", name: { contains: "尺度冲突独立裁决" } },
+    });
+    expect(JSON.parse((await store.load(adjudication)).toString("utf8"))).toMatchObject({
+      deterministic: { geometry: { widthRatio: expect.any(Number) }, jumpingArc: { ok: true } },
+      initial: { pass: false },
+      adjudication: { pass: true },
+    });
+    const warning = await prisma.codexPetEvent.findFirstOrThrow({
+      where: { runId: seeded.run.id, type: "validation.warning", jobKey: "row-jumping" },
+    });
+    expect(warning.payload).toMatchObject({ adjudicationScore: passedConsensus.score });
   }, 120_000);
 
   it("runs a single-reference plush pet through packaging and knowledge archival", async () => {
@@ -287,6 +934,14 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
+    let baseQaIndex = 0;
+    deps.visual!.qa = vi.fn(async (input: { prompt: string }) => {
+      if (!input.prompt.includes("Kind: base-choice")) return passedVerdict;
+      baseQaIndex += 1;
+      return baseQaIndex === 1
+        ? { ...passedVerdict, score: 100, structure: false, failures: ["candidate-local structure failure"] }
+        : { ...passedVerdict, score: 70 };
+    }) as never;
 
     expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("ready");
     expect(deps.loadReferenceAsset).toHaveBeenCalledOnce();
@@ -295,7 +950,16 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       .filter((input) => input.prompt.includes("main character candidate"));
     expect(baseCalls).toHaveLength(2);
     expect(baseCalls.every((input) => input.references?.length === 1)).toBe(true);
+    const baseQaCalls = (deps.visual.qa as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0] as { prompt: string; images: readonly unknown[] })
+      .filter((input) => input.prompt.includes("Kind: base-choice"));
+    expect(baseQaCalls).toHaveLength(2);
+    expect(baseQaCalls.every((input) => input.images.length === 2)).toBe(true);
+    expect(baseQaCalls.every((input) => input.prompt.includes("original references in upload order"))).toBe(true);
+    expect(baseQaCalls.every((input) => input.prompt.includes("same shape, color, connection and location as a real paw"))).toBe(true);
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
+    const selected = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: run.selectedBaseArtifactId! } });
+    expect(selected.name).toBe("主形象候选 2");
     const document = await prisma.document.findUniqueOrThrow({ where: { id: run.knowledgeDocumentId! } });
     expect(document.content).toContain("风格预设：plush");
   }, 120_000);
@@ -319,6 +983,27 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
     expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("ready");
     expect(deps.loadReferenceAsset).toHaveBeenCalledTimes(3);
+    const identityGuideInput = (deps.visual.identityGuide as unknown as ReturnType<typeof vi.fn>).mock.calls[0]![0] as {
+      originalReferences: Array<{ filename?: string }>;
+      characterBrief: string;
+    };
+    expect(identityGuideInput.originalReferences.map((reference) => reference.filename)).toEqual(
+      seeded.referenceAssetIds.map((id) => `${id}.png`),
+    );
+    expect(identityGuideInput.characterBrief).toBe(
+      "名称：蓝色测试宠；描述：端到端测试桌宠；角色设定：保留右耳单边配件与不对称花纹，不可通过镜像改变身份；风格：painterly",
+    );
+    const identityGuideJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "identity-guide" } },
+    });
+    expect(identityGuideJob.input).toMatchObject({
+      version: 2,
+      supportingReferenceAssetIds: seeded.referenceAssetIds,
+    });
+    expect(identityGuideJob.output).toMatchObject({
+      version: 2,
+      supportingReferenceAssetIds: seeded.referenceAssetIds,
+    });
     const generatedPrompts = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls
       .map((call) => String((call[0] as { prompt?: string }).prompt ?? ""));
     expect(generatedPrompts.some((prompt) => prompt.includes("running-left"))).toBe(true);
@@ -332,6 +1017,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
     expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("awaiting_base_review");
+    expect(deps.visual.identityGuide).not.toHaveBeenCalled();
     expect((await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } })).hasSuccessfulImage).toBe(true);
     const generate = deps.visual.generate as unknown as ReturnType<typeof vi.fn>;
     const callsAtPause = generate.mock.calls.length;
@@ -341,6 +1027,19 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const candidate = await prisma.codexPetArtifact.findFirstOrThrow({ where: { runId: seeded.run.id, kind: "base_candidate" }, orderBy: { createdAt: "asc" } });
     await prisma.codexPetRun.update({ where: { id: seeded.run.id }, data: { selectedBaseArtifactId: candidate.id } });
     expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("ready");
+    expect(deps.visual.identityGuide).toHaveBeenCalledOnce();
+    const identityGuideJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "identity-guide" } },
+    });
+    expect(identityGuideJob).toMatchObject({
+      status: "completed",
+      dependencyKeys: ["base-selection"],
+      inputArtifactIds: [candidate.id],
+      output: { version: 2, selectedArtifactId: candidate.id, supportingReferenceAssetIds: [], guide: IDENTITY_GUIDE },
+    });
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps: { ...deps, workerId: "manual-resume-replay-worker" } }))
+      .toEqual({ status: "ready", runId: seeded.run.id });
+    expect(deps.visual.identityGuide).toHaveBeenCalledOnce();
     expect(await prisma.codexPetJob.count({ where: { runId: seeded.run.id, key: { startsWith: "base-candidate-" } } })).toBe(2);
     const resumedStageEvents = await prisma.codexPetEvent.findMany({
       where: { runId: seeded.run.id, sequence: { gt: cursorAtPause }, type: "stage.started" },
@@ -349,6 +1048,106 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     expect(resumedStageEvents[0]).toMatchObject({ stage: "standard_generating", progress: 16 });
     expect(resumedStageEvents).not.toContainEqual(expect.objectContaining({ stage: "base_generating" }));
+  }, 120_000);
+
+  it("keeps a completed identity guide durable when its completion event fails", async () => {
+    const seeded = await seed(true);
+    const deps = runnerDeps(memoryArtifactStore());
+    const persistEvent = deps.appendEvent;
+    let rejectedGuideEvent = false;
+    deps.appendEvent = vi.fn(async (input) => {
+      if (!rejectedGuideEvent && input.type === "job.completed" && input.jobKey === "identity-guide") {
+        rejectedGuideEvent = true;
+        throw new Error("identity guide event store unavailable");
+      }
+      return persistEvent(input);
+    });
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
+    expect(rejectedGuideEvent).toBe(true);
+    expect(deps.visual.identityGuide).toHaveBeenCalledOnce();
+    const job = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "identity-guide" } },
+    });
+    expect(job).toMatchObject({
+      status: "completed",
+      output: expect.objectContaining({ version: 2, guide: IDENTITY_GUIDE }),
+    });
+  }, 30_000);
+
+  it("restores a canonical-bound identity guide in a new active worker without another model call", async () => {
+    const seeded = await seed(false);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .toEqual({ status: "awaiting_base_review", runId: seeded.run.id });
+    const candidate = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
+      orderBy: { createdAt: "asc" },
+    });
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: { selectedBaseArtifactId: candidate.id, status: "standard_generating", progressStage: "standard_generating" },
+    });
+    await prisma.codexPetJob.create({
+      data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        key: "base-selection",
+        kind: "visual_qa",
+        status: "completed",
+        dependencyKeys: ["base-candidate-1", "base-candidate-2"],
+        attempt: 1,
+        output: { selectedArtifactId: candidate.id, selectionMode: "manual" },
+        completedAt: new Date(),
+      },
+    });
+    await prisma.codexPetJob.create({
+      data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        key: "identity-guide",
+        kind: "identity_guide",
+        status: "completed",
+        dependencyKeys: ["base-selection"],
+        attempt: 1,
+        input: {
+          version: 2,
+          selectedBaseArtifactId: candidate.id,
+          supportingReferenceAssetIds: [],
+          characterBriefHash: createHash("sha256")
+            .update("名称：蓝色测试宠；描述：端到端测试桌宠；角色设定：蓝色圆角机器人；风格：pixel")
+            .digest("hex"),
+        },
+        inputArtifactIds: [candidate.id],
+        output: {
+          version: 2,
+          selectedArtifactId: candidate.id,
+          supportingReferenceAssetIds: [],
+          characterBriefHash: createHash("sha256")
+            .update("名称：蓝色测试宠；描述：端到端测试桌宠；角色设定：蓝色圆角机器人；风格：pixel")
+            .digest("hex"),
+          guide: IDENTITY_GUIDE,
+        },
+        providerMetadata: { visualQa: VISUAL_MODEL_PROVENANCE },
+        completedAt: new Date(),
+      },
+    });
+    deps.visual.identityGuide = vi.fn(async () => { throw new Error("identity guide must be restored"); });
+
+    expect(await executeCodexPetRun({
+      runId: seeded.run.id,
+      deps: { ...deps, workerId: "identity-guide-recovery-worker" },
+    })).toEqual({ status: "ready", runId: seeded.run.id });
+    expect(deps.visual.identityGuide).not.toHaveBeenCalled();
+    const guidedPrompts = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => String((call[0] as { prompt?: string }).prompt ?? ""))
+      .filter((prompt) => !prompt.includes("main character candidate"));
+    expect(guidedPrompts.length).toBeGreaterThan(0);
+    expect(guidedPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
   }, 120_000);
 
   it("does not enter ready when the archived knowledge document is concurrently deleted", async () => {
@@ -367,6 +1166,23 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(run).toMatchObject({ status: "failed", knowledgeDocumentId: null, billingRefundStatus: "refunded" });
     expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   }, 120_000);
+
+  it("rejects and refunds an active legacy run without the GPT-only model contract", async () => {
+    const seeded = await seed(true);
+    const deps = runnerDeps(memoryArtifactStore());
+    const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
+    const { modelContractVersion: _ignoredContract, ...legacySnapshot } = snapshot;
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: { inputSnapshot: legacySnapshot as Prisma.InputJsonObject },
+    });
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .rejects.toThrow("missing the required gpt-only-v1 model contract");
+    expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }))
+      .toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
+    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+  });
 
   it("cancels before the first image and refunds the fixed package", async () => {
     const seeded = await seed(false);
@@ -403,6 +1219,147 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(run.billingRefundedAt).not.toBeNull();
     expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   });
+
+  it("preserves the originating base transport failure while cancelling only its sibling", async () => {
+    const seeded = await seed(false);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    deps.visual!.generate = vi.fn(async (input: { readonly prompt: string; readonly signal?: AbortSignal }) => {
+      if (input.prompt.includes("Candidate variation 1")) {
+        throw new TypeError("fetch failed", {
+          cause: Object.assign(new Error("socket closed"), { code: "ECONNRESET" }),
+        });
+      }
+      await new Promise<never>((_resolve, reject) => {
+        input.signal?.addEventListener("abort", () => reject(input.signal?.reason), { once: true });
+      });
+      throw new Error("unreachable");
+    }) as never;
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps })).rejects.toThrow("fetch failed");
+
+    const jobs = await prisma.codexPetJob.findMany({
+      where: { runId: seeded.run.id, kind: "base_candidate" },
+      orderBy: { key: "asc" },
+    });
+    expect(jobs.map((job) => job.status).sort()).toEqual(["cancelled", "failed"]);
+    const failed = jobs.find((job) => job.status === "failed");
+    const sibling = jobs.find((job) => job.status === "cancelled");
+    expect(failed?.error).toContain("图片生成服务暂时不可用");
+    expect(failed?.providerMetadata).toMatchObject({
+      failure: { category: "network", transportCode: "ECONNRESET" },
+    });
+    expect(sibling?.error).toBe("同一运行中的其他任务失败，当前任务已停止");
+
+    const failureEvent = await prisma.codexPetEvent.findFirst({
+      where: { runId: seeded.run.id, type: "run.failed" },
+    });
+    expect(failureEvent?.payload).toMatchObject({
+      errorCategory: "network",
+      transportCode: "ECONNRESET",
+    });
+    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+  });
+
+  it("aborts and drains a slow standard-row sibling before failing and refunding the run", async () => {
+    const seeded = await seed(true);
+    const baseStore = memoryArtifactStore();
+    let terminalEventSeen = false;
+    const artifactWritesAfterTerminal: string[] = [];
+    const store: CodexPetArtifactStore & { buffers: Map<string, Buffer> } = {
+      ...baseStore,
+      async put(input) {
+        if (terminalEventSeen) artifactWritesAfterTerminal.push(input.kind);
+        return baseStore.put(input);
+      },
+    };
+    const deps = runnerDeps(store);
+    const lifecycle: string[] = [];
+    let siblingObservedAbort = false;
+    let siblingSettled = false;
+    let releaseIdleStart!: () => void;
+    const idleStarted = new Promise<void>((resolve) => { releaseIdleStart = resolve; });
+
+    deps.visual!.generate = vi.fn(async (input: { readonly prompt: string; readonly signal?: AbortSignal }) => {
+      if (input.prompt.includes("“idle” animation")) {
+        releaseIdleStart();
+        try {
+          await new Promise<never>((_resolve, reject) => {
+            const abort = () => {
+              siblingObservedAbort = true;
+              reject(input.signal?.reason instanceof Error ? input.signal.reason : new Error("slow sibling aborted"));
+            };
+            if (!input.signal) reject(new Error("standard row did not receive a child abort signal"));
+            else if (input.signal.aborted) abort();
+            else input.signal.addEventListener("abort", abort, { once: true });
+          });
+          throw new Error("slow sibling unexpectedly resumed");
+        } finally {
+          siblingSettled = true;
+          lifecycle.push("idle.settled");
+        }
+      }
+      if (input.prompt.includes("“running-right” animation")) {
+        await idleStarted;
+        lifecycle.push("running-right.failed");
+        throw new Error("synthetic fast standard-row failure");
+      }
+      return syntheticVisual(input.prompt);
+    }) as never;
+
+    const persistEvent = deps.appendEvent;
+    deps.appendEvent = vi.fn(async (input) => {
+      if (input.type === "run.failed" || input.type === "billing.refunded") {
+        terminalEventSeen = true;
+        lifecycle.push(input.type);
+      }
+      return persistEvent(input);
+    });
+    deps.billing.refundResource = vi.fn(async () => {
+      lifecycle.push("refund.called");
+      expect(siblingSettled).toBe(true);
+      return { success: true };
+    });
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .rejects.toThrow("synthetic fast standard-row failure");
+
+    expect(siblingObservedAbort).toBe(true);
+    expect(lifecycle.indexOf("idle.settled")).toBeLessThan(lifecycle.indexOf("run.failed"));
+    expect(lifecycle.indexOf("run.failed")).toBeLessThan(lifecycle.indexOf("refund.called"));
+    expect(artifactWritesAfterTerminal).toEqual([]);
+
+    const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
+    expect(run).toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
+    expect(run.completedAt).not.toBeNull();
+    expect(await prisma.codexPetArtifact.count({
+      where: { runId: run.id, kind: "pose_board" },
+    })).toBe(0);
+    expect(await prisma.codexPetArtifact.count({
+      where: { runId: run.id, createdAt: { gt: run.completedAt! } },
+    })).toBe(0);
+
+    const idleJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: run.id, key: "row-idle" } },
+    });
+    expect(idleJob).toMatchObject({ status: "cancelled", workerId: null, providerMetadata: null });
+    expect(idleJob.completedAt).not.toBeNull();
+    const runningRightJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: run.id, key: "row-running-right" } },
+    });
+    expect(runningRightJob.status).toBe("failed");
+    expect(runningRightJob.completedAt).not.toBeNull();
+
+    const events = await prisma.codexPetEvent.findMany({
+      where: { runId: run.id },
+      orderBy: { sequence: "asc" },
+    });
+    const failedIndex = events.findIndex((event) => event.type === "run.failed");
+    expect(failedIndex).toBeGreaterThanOrEqual(0);
+    expect(events.slice(failedIndex + 1).map((event) => event.type)).toEqual(["billing.refunded"]);
+    expect(events.some((event, index) => index > failedIndex && event.jobKey === "row-idle")).toBe(false);
+    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+  }, 30_000);
 
   it("turns moderation failures into an actionable user message and refunds", async () => {
     const seeded = await seed(false);
@@ -518,6 +1475,127 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(archiveRun).toHaveBeenCalledTimes(2);
   }, 120_000);
 
+  it("reconciles an ownership-scoped archived Document without consuming another archive attempt", async () => {
+    const seeded = await seed(true);
+    await seedArchivingDeliverables(seeded);
+    const kb = await prisma.knowledgeBase.upsert({
+      where: { userId_systemKey: { userId: seeded.user.id, systemKey: "AI_ARTIFACTS" } },
+      create: {
+        ownerType: "USER",
+        userId: seeded.user.id,
+        systemKey: "AI_ARTIFACTS",
+        name: "AI 产物",
+      },
+      update: {},
+    });
+    const document = await prisma.document.create({ data: {
+      kbId: kb.id,
+      name: "Codex 桌宠 · 已归档恢复",
+      sourceType: "ARTIFACT",
+      sourceModule: "codex_pet",
+      sourceId: seeded.run.id,
+      mime: "application/zip",
+      status: "pending",
+    } });
+    await prisma.$transaction([
+      prisma.codexPetRun.update({
+        where: { id: seeded.run.id },
+        data: {
+          knowledgeDocumentId: document.id,
+          workerId: "archive-worker-crashed",
+          heartbeatAt: new Date(0),
+        },
+      }),
+      prisma.codexPetJob.create({ data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        key: "knowledge-archive",
+        kind: "knowledge_archive",
+        status: "running",
+        attempt: 2,
+        maxAttempts: 3,
+        workerId: "archive-worker-crashed",
+        startedAt: new Date(Date.now() - 120_000),
+      } }),
+    ]);
+    const deps = runnerDeps(memoryArtifactStore());
+    deps.archiveRun = vi.fn(async () => {
+      throw new Error("archive routine must not run for a committed Document link");
+    });
+
+    await expect(executeCodexPetRun({
+      runId: seeded.run.id,
+      deps: {
+        ...deps,
+        workerId: "archive-worker-recovery",
+        env: { CODEX_PET_STALE_RUN_MS: "1", CODEX_PET_HEARTBEAT_MS: "60000" },
+      },
+    })).resolves.toEqual({ status: "ready", runId: seeded.run.id });
+
+    const [run, job] = await Promise.all([
+      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "knowledge-archive" } } }),
+    ]);
+    expect(run).toMatchObject({ status: "ready", knowledgeDocumentId: document.id, progressPercent: 100 });
+    expect(job).toMatchObject({ status: "completed", attempt: 2, workerId: null, error: null });
+    expect(job.output).toEqual({ documentId: document.id });
+    expect(deps.archiveRun).not.toHaveBeenCalled();
+  });
+
+  it("recovers the same running archive attempt and prevents the stale worker from overwriting it", async () => {
+    const seeded = await seed(true);
+    await seedArchivingDeliverables(seeded);
+    let signalOldEntered!: () => void;
+    let releaseOldWorker!: () => void;
+    const oldEntered = new Promise<void>((resolve) => { signalOldEntered = resolve; });
+    const oldReleased = new Promise<void>((resolve) => { releaseOldWorker = resolve; });
+    const archiveRun = vi.fn(async (input: Parameters<typeof archiveCodexPetRun>[0]) => {
+      if (input.workerId === "archive-worker-old") {
+        signalOldEntered();
+        await oldReleased;
+        throw new Error("late stale worker failure");
+      }
+      return archiveCodexPetRun(input);
+    });
+    const baseDeps = runnerDeps(memoryArtifactStore());
+    const sharedEnv = { CODEX_PET_STALE_RUN_MS: "1", CODEX_PET_HEARTBEAT_MS: "60000" };
+    const oldExecution = executeCodexPetRun({
+      runId: seeded.run.id,
+      deps: { ...baseDeps, archiveRun, workerId: "archive-worker-old", env: sharedEnv },
+    });
+    await oldEntered;
+    const initiallyRunning = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "knowledge-archive" } },
+    });
+    expect(initiallyRunning).toMatchObject({ status: "running", attempt: 1, workerId: "archive-worker-old" });
+
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: { heartbeatAt: new Date(0) },
+    });
+    await expect(executeCodexPetRun({
+      runId: seeded.run.id,
+      deps: { ...baseDeps, archiveRun, workerId: "archive-worker-new", env: sharedEnv },
+    })).resolves.toEqual({ status: "ready", runId: seeded.run.id });
+
+    releaseOldWorker();
+    await expect(oldExecution).resolves.toEqual({ status: "ready", runId: seeded.run.id });
+
+    const [run, job, events] = await Promise.all([
+      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "knowledge-archive" } } }),
+      prisma.codexPetEvent.findMany({ where: { runId: seeded.run.id }, orderBy: { sequence: "asc" } }),
+    ]);
+    expect(run.status).toBe("ready");
+    expect(run.knowledgeDocumentId).toBeTruthy();
+    expect(job).toMatchObject({ status: "completed", attempt: 1, workerId: null, error: null });
+    expect(job.output).toEqual({ documentId: run.knowledgeDocumentId });
+    expect(events.filter((event) => event.type === "knowledge.archive_retrying")).toHaveLength(0);
+    expect(events.filter((event) => event.type === "knowledge.archive_completed")).toHaveLength(1);
+    expect(archiveRun).toHaveBeenCalledTimes(2);
+  });
+
   it("repairs complete action groups requested by the final visual QA", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
@@ -557,11 +1635,18 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(persistedRepairStages).toContain("repairing");
   }, 120_000);
 
-  it("does not auto-select when both base candidates fail visual QA", async () => {
+  it("does not auto-select model outputs whose pass flag contradicts a failed base hard gate", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
-    deps.visual!.qa = vi.fn(async () => ({ ...passedVerdict, pass: false, score: 12, failures: ["identity drift"], repairPrompt: "preserve identity" })) as never;
+    deps.visual!.qa = vi.fn(async () => ({
+      ...passedVerdict,
+      pass: true,
+      score: 99,
+      structure: false,
+      failures: ["ambiguous limb attachment"],
+      repairPrompt: "make every limb attachment explicit",
+    })) as never;
 
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps })).rejects.toThrow("两个主形象候选均未通过视觉质检");
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
@@ -595,22 +1680,233 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
   it("retries the independent row-10 gate before starting final assembly", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
-    let rejectedRow10 = false;
+    let rejectedRow10Count = 0;
     const consensus = vi.fn(async (input: { prompt: string }) => {
-      if (!rejectedRow10 && input.prompt.includes("pre-row-10 gate")) {
-        rejectedRow10 = true;
-        return { ...passedConsensus, pass: false, failures: ["row-10 seam registration"], verdicts: [{ ...passedVerdict, pass: false, repairPrompt: "repair the complete 180–337.5 row" }] };
+      if (rejectedRow10Count < 2 && input.prompt.includes("pre-row-10 gate")) {
+        rejectedRow10Count += 1;
+        const requirement = rejectedRow10Count === 1
+          ? "preserve the 180 anchor and repair the row-10 seam"
+          : "preserve the earlier seam fix and stop the cell-4-to-5 quadrant reversal";
+        return { ...passedConsensus, pass: false, failures: [requirement], verdicts: [{ ...passedVerdict, pass: false, repairPrompt: requirement }] };
       }
       return passedConsensus;
     });
     const deps = runnerDeps(store, consensus);
     const result = await executeCodexPetRun({ runId: seeded.run.id, deps });
     expect(result.status).toBe("ready");
-    expect(rejectedRow10).toBe(true);
+    expect(rejectedRow10Count).toBe(2);
     const row10Job = await prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } });
-    expect(row10Job.attempt).toBe(2);
+    expect(row10Job.attempt).toBe(3);
+    const row10GenerationCalls = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0] as { prompt: string; references: Array<{ filename?: string }> })
+      .filter((call) => call.prompt.includes("Direction order: 180, 202.5"));
+    expect(row10GenerationCalls).toHaveLength(3);
+    expect(row10GenerationCalls[1]!.prompt).toContain("preserve the 180 anchor and repair the row-10 seam");
+    expect(row10GenerationCalls[2]!.prompt).toContain("preserve the 180 anchor and repair the row-10 seam");
+    expect(row10GenerationCalls[2]!.prompt).toContain("stop the cell-4-to-5 quadrant reversal");
+    expect(row10GenerationCalls[2]!.references.slice(0, 2).map((reference) => reference.filename)).toEqual([
+      "look-b-approved-anchor-storyboard.png",
+      "approved-canonical-base.png",
+    ]);
+    expect(row10GenerationCalls[2]!.references.map((reference) => reference.filename))
+      .toContain("previous-specialized-qa-failed-pose-board.png");
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
     expect((run.validationReport as { row10PreGenerationGate?: { passed?: boolean } }).row10PreGenerationGate?.passed).toBe(true);
+  }, 120_000);
+
+  it("resets an exhausted board job when its ordered input artifact revision changes", async () => {
+    const seeded = await seed(false);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .toEqual({ status: "awaiting_base_review", runId: seeded.run.id });
+    const candidates = await prisma.codexPetArtifact.findMany({
+      where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
+      orderBy: { createdAt: "asc" },
+    });
+    const selected = candidates[0]!;
+    const staleInput = candidates[1]!;
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: {
+        selectedBaseArtifactId: selected.id,
+        status: "standard_generating",
+        progressStage: "standard_generating",
+      },
+    });
+    const staleBinding = { inputArtifactIds: [staleInput.id], columns: 3, rows: 2, frameCount: 6 } as const;
+    const staleStartedAt = new Date(Date.now() - 120_000);
+    const job = await prisma.codexPetJob.create({
+      data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        key: "row-idle",
+        kind: "standard_row",
+        status: "completed",
+        dependencyKeys: ["identity-guide"],
+        attempt: 3,
+        maxAttempts: 3,
+        input: {
+          columns: 3,
+          rows: 2,
+          frameCount: 6,
+          inputRevision: codexPetBoardInputRevision(staleBinding),
+        },
+        inputArtifactIds: [staleInput.id],
+        providerMetadata: { actualModel: "obsolete-model" },
+        error: "obsolete failure",
+        workerId: "obsolete-worker",
+        startedAt: staleStartedAt,
+        completedAt: new Date(Date.now() - 60_000),
+      },
+    });
+    const [oldBoard, oldFrame, oldPreview] = await Promise.all([
+      store.put({ userId: seeded.user.id, projectId: seeded.project.id, runId: seeded.run.id, jobId: job.id, kind: "pose_board", name: "old board", buffer: Buffer.from("old-board"), mime: "image/png" }),
+      store.put({ userId: seeded.user.id, projectId: seeded.project.id, runId: seeded.run.id, jobId: job.id, kind: "frame", name: "old frame", buffer: Buffer.from("old-frame"), mime: "image/png" }),
+      store.put({ userId: seeded.user.id, projectId: seeded.project.id, runId: seeded.run.id, jobId: job.id, kind: "animation_preview", name: "old preview", buffer: Buffer.from("old-preview"), mime: "image/webp" }),
+    ]);
+    await prisma.codexPetJob.update({
+      where: { id: job.id },
+      data: {
+        outputArtifactIds: [oldFrame.id],
+        output: { boardArtifactId: oldBoard.id, animationPreviewArtifactId: oldPreview.id },
+      },
+    });
+
+    let observedReset = false;
+    deps.visual.generate = vi.fn(async ({ prompt }: { prompt: string }) => {
+      if (!observedReset && prompt.includes("“idle” animation")) {
+        observedReset = true;
+        const resetJob = await prisma.codexPetJob.findUniqueOrThrow({ where: { id: job.id } });
+        const currentBinding = { inputArtifactIds: [selected.id], columns: 3, rows: 2, frameCount: 6 } as const;
+        expect(resetJob).toMatchObject({
+          status: "running",
+          attempt: 1,
+          inputArtifactIds: [selected.id],
+          outputArtifactIds: [],
+          output: null,
+          providerMetadata: null,
+          completedAt: null,
+          error: null,
+        });
+        expect(resetJob.startedAt!.getTime()).toBeGreaterThan(staleStartedAt.getTime());
+        expect(resetJob.input).toMatchObject({
+          inputRevision: codexPetBoardInputRevision(currentBinding),
+          inputArtifactIds: [selected.id],
+        });
+        const obsolete = await prisma.codexPetArtifact.findMany({
+          where: { id: { in: [oldBoard.id, oldFrame.id, oldPreview.id] } },
+        });
+        expect(obsolete).toHaveLength(3);
+        expect(obsolete.every((artifact) => artifact.status === "superseded" && artifact.expiresAt !== null)).toBe(true);
+      }
+      return syntheticVisual(prompt);
+    }) as never;
+
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .toEqual({ status: "ready", runId: seeded.run.id });
+    expect(observedReset).toBe(true);
+    const completed = await prisma.codexPetJob.findUniqueOrThrow({ where: { id: job.id } });
+    expect(completed).toMatchObject({ status: "completed", attempt: 1, inputArtifactIds: [selected.id] });
+  }, 120_000);
+
+  it("keeps same-revision repair attempts but resets look-b after look-a produces a new dependency", async () => {
+    const seeded = await seed(true);
+    const store = memoryArtifactStore();
+    let initialLookBFailures = 0;
+    const consensus = vi.fn(async (input: { prompt: string }) => {
+      if (input.prompt.includes("Context: 方向 180 到 337.5 连续顺时针观察动作") && initialLookBFailures < 2) {
+        initialLookBFailures += 1;
+        return {
+          ...passedConsensus,
+          pass: false,
+          failures: [`initial look-b failure ${initialLookBFailures}`],
+          verdicts: [{ ...passedVerdict, pass: false, repairPrompt: "repair the same complete look-b row" }],
+        };
+      }
+      return passedConsensus;
+    });
+    const deps = runnerDeps(store, consensus);
+    let rejectedFinal = false;
+    let initialLookARevision = "";
+    let initialLookBRevision = "";
+    let initialLookABoardArtifactId = "";
+    let initialRegisteredLookAArtifactId = "";
+    let initialLookBOutputArtifactIds: string[] = [];
+    deps.visual.qa = vi.fn(async (input: { prompt: string }) => {
+      if (!rejectedFinal && input.prompt.includes("Kind: final")) {
+        rejectedFinal = true;
+        const [lookA, lookB, lookARegistration] = await Promise.all([
+          prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a" } } }),
+          prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } }),
+          prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a-registration" } } }),
+        ]);
+        initialLookARevision = String((lookA.input as { inputRevision?: string }).inputRevision ?? "");
+        initialLookBRevision = String((lookB.input as { inputRevision?: string }).inputRevision ?? "");
+        initialLookABoardArtifactId = String((lookA.output as { boardArtifactId?: string }).boardArtifactId ?? "");
+        initialRegisteredLookAArtifactId = String((lookARegistration.output as { registeredRowArtifactId?: string }).registeredRowArtifactId ?? "");
+        initialLookBOutputArtifactIds = [
+          ...lookB.outputArtifactIds,
+          String((lookB.output as { boardArtifactId?: string }).boardArtifactId ?? ""),
+          String((lookB.output as { animationPreviewArtifactId?: string }).animationPreviewArtifactId ?? ""),
+        ].filter(Boolean);
+        expect(lookA.attempt).toBe(1);
+        expect(lookB.attempt).toBe(3);
+        return {
+          ...passedVerdict,
+          pass: false,
+          failures: ["look rows need one coherent repair"],
+          repairPrompt: "repair both complete direction rows while preserving their input contract",
+          repairRows: ["look-a", "look-b"],
+        };
+      }
+      return passedVerdict;
+    }) as never;
+
+    let lookBGenerationCount = 0;
+    let observedChangedDependencyReset = false;
+    deps.visual.generate = vi.fn(async ({ prompt }: { prompt: string }) => {
+      if (prompt.includes("Direction order: 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5")) {
+        lookBGenerationCount += 1;
+        if (lookBGenerationCount === 4) {
+          const [lookA, lookB, lookARegistration] = await Promise.all([
+            prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a" } } }),
+            prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } }),
+            prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a-registration" } } }),
+          ]);
+          const newLookABoardArtifactId = String((lookA.output as { boardArtifactId?: string }).boardArtifactId ?? "");
+          const newRegisteredLookAArtifactId = String((lookARegistration.output as { registeredRowArtifactId?: string }).registeredRowArtifactId ?? "");
+          const lookBRevision = String((lookB.input as { inputRevision?: string }).inputRevision ?? "");
+          expect(newLookABoardArtifactId).not.toBe(initialLookABoardArtifactId);
+          expect(newRegisteredLookAArtifactId).not.toBe(initialRegisteredLookAArtifactId);
+          expect(lookB).toMatchObject({ status: "running", attempt: 1, output: null, providerMetadata: null, completedAt: null });
+          expect(lookB.inputArtifactIds).toContain(newRegisteredLookAArtifactId);
+          expect(lookB.inputArtifactIds).not.toContain(newLookABoardArtifactId);
+          expect(lookBRevision).not.toBe(initialLookBRevision);
+          observedChangedDependencyReset = true;
+        }
+      }
+      return syntheticVisual(prompt);
+    }) as never;
+
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .toEqual({ status: "ready", runId: seeded.run.id });
+    expect(initialLookBFailures).toBe(2);
+    expect(rejectedFinal).toBe(true);
+    expect(lookBGenerationCount).toBe(4);
+    expect(observedChangedDependencyReset).toBe(true);
+    const [lookA, lookB, supersededLookBArtifacts] = await Promise.all([
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } }),
+      prisma.codexPetArtifact.findMany({ where: { id: { in: initialLookBOutputArtifactIds } } }),
+    ]);
+    expect(lookA.attempt).toBe(2);
+    expect((lookA.input as { inputRevision?: string }).inputRevision).toBe(initialLookARevision);
+    expect(lookB.attempt).toBe(1);
+    expect((lookB.input as { inputRevision?: string }).inputRevision).not.toBe(initialLookBRevision);
+    expect(supersededLookBArtifacts).toHaveLength(initialLookBOutputArtifactIds.length);
+    expect(supersededLookBArtifacts.every((artifact) => artifact.status === "superseded" && artifact.expiresAt !== null)).toBe(true);
   }, 120_000);
 
   it("does not enter the visual pipeline while another fresh worker owns the run lease", async () => {

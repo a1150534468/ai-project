@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   CodexPetArtifact,
   CodexPetEvent,
+  CodexPetJob,
   CodexPetPricing,
   CodexPetProject,
   CodexPetProjectDetail,
@@ -83,6 +84,10 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     previewArtifactId: null,
     validationReport: null,
     requestedModel: "gpt-image-2",
+    modelContractVersion: "gpt-only-v1",
+    visualQaModel: "gpt-5.6-sol",
+    visualQaActualModels: ["gpt-5.6-sol"],
+    visualQaRoutes: ["chatgpt_model_route"],
     actualModels: ["gpt-image-2-codex"],
     usage: { totalTokens: 321 },
     knowledgeDocumentId: null,
@@ -126,6 +131,20 @@ function makeEvent(sequence: number, message: string): CodexPetEvent {
     progress: sequence * 10,
     payload: {},
     createdAt: "2026-07-17T08:02:00.000Z",
+  };
+}
+
+function makeJob(key: string, status: string, updatedAt: string): CodexPetJob {
+  return {
+    id: `job-${key}`,
+    key,
+    kind: "standard_row",
+    status,
+    attempt: status === "running" ? 2 : 1,
+    maxAttempts: 3,
+    error: null,
+    createdAt: "2026-07-17T08:01:00.000Z",
+    updatedAt,
   };
 }
 
@@ -210,6 +229,34 @@ describe("CodexPetStudio", () => {
     expect(html).toContain("上传即表示你拥有参考图与角色的使用权");
     expect(html).toContain("验证、打包与归档");
     expect(html).toContain("事件会先持久化，再通过 SSE 实时推送");
+    expect(html).toContain("生图 gpt-image-2");
+    expect(html).toContain("视觉推理 / QA gpt-5.6-sol");
+  });
+
+  it("shows the fixed GPT-5.6 contract and blocks a legacy Qwen request from delivery", async () => {
+    const run = makeRun({
+      status: "ready",
+      progressStage: "ready",
+      progressPercent: 100,
+      knowledgeDocumentId: "document-1",
+      spritesheetArtifactId: "sheet-1",
+      packageArtifactId: "zip-1",
+      visualQaModel: "qwen3.7-plus",
+      visualQaActualModels: [],
+      validationReport: { ok: true, spriteVersionNumber: 2 },
+    });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    expect(mounted.container.textContent).toContain("视觉推理 / QA 固定 gpt-5.6-sol");
+    expect(mounted.container.textContent).toContain("不符合 GPT-only · 已阻止交付");
+    expect(mounted.container.textContent).toContain("不会回退到通用聊天模型或 Qwen");
+    expect(mounted.container.textContent).not.toContain("视觉推理 / QA 固定 qwen3.7-plus");
+    expect(Array.from(mounted.container.querySelectorAll("button"))
+      .some((button) => button.textContent?.includes("安装到 Codex"))).toBe(false);
+
+    await act(async () => { mounted.root.unmount(); });
   });
 
   it("opens the exact project requested by a knowledge-base jump even when it is not first in history", async () => {
@@ -329,6 +376,39 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
+  it("shows the durable running job instead of a later completed-job event as the current subtask", async () => {
+    const run = makeRun({
+      status: "standard_generating",
+      progressStage: "standard_generating",
+      progressPercent: 25,
+    });
+    const project = makeProject({ status: "standard_generating", latestRunId: run.id });
+    const completedIdleEvent: CodexPetEvent = {
+      ...makeEvent(2, "idle 动作组已通过检查"),
+      type: "job.completed",
+      jobKey: "row-idle",
+    };
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [],
+      jobs: [
+        makeJob("row-running-right", "running", "2026-07-17T08:02:00.000Z"),
+        makeJob("row-idle", "completed", "2026-07-17T08:03:00.000Z"),
+      ],
+    };
+    const mounted = await mountStudio({
+      token: "token",
+      client: makeClient({ project, detail, replay: [completedIdleEvent] }),
+    });
+
+    expect(mounted.container.querySelector('[data-testid="codex-pet-current-subtask"]')?.textContent)
+      .toBe("row-running-right");
+
+    await act(async () => { mounted.root.unmount(); });
+  });
+
   it("replays the latest database gap before reconnecting SSE with the newest cursor after 1.2 seconds", async () => {
     vi.useFakeTimers();
     const run = makeRun({ status: "standard_generating", progressPercent: 20 });
@@ -411,6 +491,24 @@ describe("CodexPetStudio", () => {
     await act(async () => { buttonByText(mounted.container, "开始制作").click(); });
     expect(mounted.container.textContent).toContain("请填写角色提示词或上传至少一张参考图");
     expect(client.startRun).not.toHaveBeenCalled();
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("lets a failed immutable project be copied into a new runnable draft", async () => {
+    const run = makeRun({ status: "failed", progressStage: "failed", error: "动作质检失败" });
+    const project = makeProject({ status: "failed", latestRunId: run.id, name: "月薪喵" });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    const copy = buttonByText(mounted.container, "复制为新项目");
+    expect(copy.disabled).toBe(false);
+    await act(async () => { copy.click(); });
+    await flushEffects();
+
+    expect(mounted.container.textContent).toContain("已复制输入信息为新草稿");
+    expect(buttonByText(mounted.container, "开始制作").disabled).toBe(false);
+    const nameInput = mounted.container.querySelector<HTMLInputElement>('input[maxlength="30"]');
+    expect(nameInput?.value).toBe("月薪喵 副本");
     await act(async () => { mounted.root.unmount(); });
   });
 

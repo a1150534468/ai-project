@@ -79,6 +79,8 @@ export async function createLayoutGuide(options: {
   readonly width?: number;
   readonly height?: number;
   readonly title?: string;
+  /** Optional row-major labels for the physical source slots. */
+  readonly slotLabels?: readonly string[];
 }): Promise<Buffer> {
   const rows = options.rows ?? 2;
   const width = options.width ?? 1536;
@@ -88,6 +90,9 @@ export async function createLayoutGuide(options: {
   }
   if (!Number.isInteger(options.frameCount) || options.frameCount < 1 || options.frameCount > options.columns * rows) {
     throw new Error("frameCount must fit inside the layout grid");
+  }
+  if (options.slotLabels && options.slotLabels.length !== options.columns * rows) {
+    throw new Error("slotLabels must provide one label for every layout slot");
   }
   if (!Number.isInteger(width) || width < 1 || !Number.isInteger(height) || height < 1) {
     throw new Error("Layout width and height must be positive integers");
@@ -104,7 +109,7 @@ export async function createLayoutGuide(options: {
     return `<g>
       <rect x="${x + 2}" y="${y + 2}" width="${cellWidth - 4}" height="${cellHeight - 4}" fill="${used ? "#f5f7fb" : "#e3e7ee"}" stroke="#667085" stroke-width="4" stroke-dasharray="16 12"/>
       <rect x="${x + inset}" y="${y + inset}" width="${cellWidth - inset * 2}" height="${cellHeight - inset * 2}" fill="none" stroke="${used ? "#5b7cff" : "#98a2b3"}" stroke-width="3" stroke-dasharray="10 10"/>
-      <text x="${x + cellWidth / 2}" y="${y + cellHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="Arial,sans-serif" font-size="${Math.min(cellWidth, cellHeight) * 0.15}" font-weight="700" fill="${used ? "#344054" : "#98a2b3"}">${used ? index + 1 : "EMPTY"}</text>
+      <text x="${x + cellWidth / 2}" y="${y + cellHeight / 2}" text-anchor="middle" dominant-baseline="central" font-family="Arial,sans-serif" font-size="${Math.min(cellWidth, cellHeight) * 0.15}" font-weight="700" fill="${used ? "#344054" : "#98a2b3"}">${used ? escapeXml(options.slotLabels?.[index] ?? String(index + 1)) : "EMPTY"}</text>
     </g>`;
   }).join("");
   const title = escapeXml(options.title ?? `${options.frameCount}-pose layout reference`);
@@ -187,6 +192,106 @@ export async function composeCardinalAnchorStrip(frames: readonly Buffer[]): Pro
       background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
   }).composite(frames.map((input, index) => ({ input, ...positions[index]! }))).png().toBuffer();
+}
+
+/**
+ * Remap the two exact cardinal endpoints used inside one serpentine look row
+ * into their physical target slots. GPT Image edits treats its first image as
+ * the primary edit canvas; supplying the original 2×2 cardinal layout there
+ * would incorrectly map 270 into the 4×2 bottom-right slot, where serpentine
+ * chronology requires frame 5 (090 for row A, 270 for row B).
+ *
+ * The other six slots remain pure chroma and are explicitly filled by the
+ * image model. The complete 2×2 cardinal strip remains a separate supporting
+ * reference for the next endpoint and overall direction meaning.
+ */
+export async function createLookAnchorStoryboard(
+  cardinalStrip: Buffer,
+  row: "look-a" | "look-b",
+  chromaKey: string,
+): Promise<Buffer> {
+  const metadata = await sharp(cardinalStrip).metadata();
+  if (metadata.width !== PET_CELL_WIDTH * 2 || metadata.height !== PET_CELL_HEIGHT * 2) {
+    throw new Error("Look anchor storyboard requires a 384x416 approved cardinal strip");
+  }
+  const cardinalIndices = row === "look-a" ? [0, 1] : [2, 3];
+  const targetSlots = [0, 7];
+  const slotWidth = 1536 / 4;
+  const slotHeight = 1024 / 2;
+  const targetWidth = 278;
+  const targetHeight = 302;
+  const anchors = await Promise.all(cardinalIndices.map(async (cardinalIndex) => {
+    const column = cardinalIndex % 2;
+    const cardinalRow = Math.floor(cardinalIndex / 2);
+    return sharp(cardinalStrip)
+      .extract({
+        left: column * PET_CELL_WIDTH,
+        top: cardinalRow * PET_CELL_HEIGHT,
+        width: PET_CELL_WIDTH,
+        height: PET_CELL_HEIGHT,
+      })
+      .resize(targetWidth, targetHeight, { fit: "fill", kernel: sharp.kernel.nearest })
+      .png()
+      .toBuffer();
+  }));
+  return sharp({ create: { width: 1536, height: 1024, channels: 4, background: chromaKey } })
+    .composite(anchors.map((input, index) => {
+      const slot = targetSlots[index]!;
+      const column = slot % 4;
+      const sourceRow = Math.floor(slot / 4);
+      return {
+        input,
+        left: Math.round(column * slotWidth + (slotWidth - targetWidth) / 2),
+        top: Math.round((sourceRow + 1) * slotHeight - 64 - targetHeight),
+      };
+    }))
+    .png()
+    .toBuffer();
+}
+
+/**
+ * Compose already-normalized pet cells back into a compact chroma pose board.
+ *
+ * Image models rarely keep the implicit row/column gutters of a generated
+ * board pixel-perfect. Extraction owns registration, so visual QA should
+ * inspect these production cells rather than incidental source whitespace.
+ * Unused slots remain pure chroma.
+ */
+export async function composeNormalizedPoseBoard(
+  frames: readonly Buffer[],
+  options: {
+    readonly columns: number;
+    readonly rows: number;
+    readonly chromaKey: string;
+  },
+): Promise<Buffer> {
+  if (!Number.isInteger(options.columns) || options.columns < 1
+    || !Number.isInteger(options.rows) || options.rows < 1) {
+    throw new Error("Pose-board columns and rows must be positive integers");
+  }
+  const slotCount = options.columns * options.rows;
+  if (frames.length < 1 || frames.length > slotCount) {
+    throw new Error("Normalized pose frames must fit inside the board grid");
+  }
+  await Promise.all(frames.map(async (frame, index) => {
+    const metadata = await sharp(frame).metadata();
+    if (metadata.width !== PET_CELL_WIDTH || metadata.height !== PET_CELL_HEIGHT) {
+      throw new Error(`Normalized pose frame ${index} must be ${PET_CELL_WIDTH}x${PET_CELL_HEIGHT}`);
+    }
+  }));
+  const key = parseHexColor(options.chromaKey);
+  return sharp({
+    create: {
+      width: options.columns * PET_CELL_WIDTH,
+      height: options.rows * PET_CELL_HEIGHT,
+      channels: 4,
+      background: { ...key, alpha: 1 },
+    },
+  }).composite(frames.map((input, index) => ({
+    input,
+    left: (index % options.columns) * PET_CELL_WIDTH,
+    top: Math.floor(index / options.columns) * PET_CELL_HEIGHT,
+  }))).png().toBuffer();
 }
 
 export async function despillChromaEdges(

@@ -3,10 +3,12 @@ import { createHash, randomUUID } from "node:crypto";
 import { Prisma, type CodexPetArtifact, type CodexPetJob, type CodexPetProject, type CodexPetRun, type ImageAsset, type PrismaClient } from "@prisma/client";
 import {
   LOOK_DIRECTIONS,
+  LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
   PET_ROW_SPECS,
   assemblePetAtlas,
   assembleStandardPetAtlas,
   composeCardinalAnchorStrip,
+  composeNormalizedPoseBoard,
   chooseChromaKey,
   createAnimatedWebpPreview,
   createAtlasContactSheet,
@@ -14,29 +16,47 @@ import {
   createDirectionBlindQaSheet,
   createDirectionQaSheet,
   createLayoutGuide,
+  createLookAnchorStoryboard,
   createStandardAtlasContactSheet,
   despillChromaEdges,
-  extractFullPoseBoardsWithSharedRegistration,
   extractPoseBoard,
   inspectCodexPetZip,
   measureDirectionContinuity,
   measureDirectionRowContinuity,
   mirrorFramesPreservingOrder,
+  parseNeutralDirectionRegistrationManifest,
   petRowSpec,
+  registerFirstDirectionRowToNeutral,
+  registerSecondDirectionRowWithManifest,
+  splitRegisteredDirectionRow,
   validatePetAtlas,
+  validateNeutralLockedDirectionFrames,
   validateStandardPetAtlas,
+  type DirectionRegistrationCellDiagnostics,
+  type ExtractPoseBoardResult,
+  type NeutralDirectionGeometryValidation,
+  type NeutralDirectionRegistrationManifest,
   type PetFramesByState,
   type PetRowSpec,
 } from "@ai-assistant/codex-pet-pipeline";
 import {
+  GPT_IMAGE_MODEL,
   classifyImageGenerationError,
   type ImageBinaryInput,
   type ImageGenerationResult,
 } from "./image-service.js";
-import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
+import {
+  CodexPetModelContractError,
+  CODEX_PET_MODEL_CONTRACT_VERSION,
+  isAllowedCodexPetImageModel,
+  isAllowedCodexPetVisualModel,
+} from "./codex-pet-model-contract.js";
+import { sanitizeCodexPetDiagnosticText, type CodexPetRunStage } from "./codex-pet-events.js";
 import {
   buildBasePetPrompt,
+  buildBaseChoiceQaContext,
   buildCardinalPrompt,
+  buildJumpingQaEvidenceContext,
   buildLookMechanicsPrompt,
   buildLookRowPrompt,
   buildStandardRowPrompt,
@@ -44,18 +64,28 @@ import {
   type CodexPetVisualIdentity,
 } from "./codex-pet-prompts.js";
 import {
+  generateCodexPetIdentityGuide,
   generateCodexPetLookMechanics,
   generateCodexPetVisual,
+  codexPetVisualQaConsensusPasses,
+  codexPetVisualQaVerdictPasses,
+  resolveCodexPetVisualQaModel,
   runBlindDirectionQa,
   runCodexPetVisualQa,
   runCodexPetVisualQaConsensus,
   runLabeledDirectionSemantics,
   type BlindDirectionValidation,
+  type CodexPetVisualModelProvenance,
   type DirectionSemanticVerdict,
   type GeneratedPetVisual,
   type PetVisualQaConsensus,
   type PetVisualQaVerdict,
 } from "./codex-pet-visual.js";
+import {
+  CodexPetPackagingDeferredError,
+  persistOrResumeCodexPetFinalPackage,
+  type CodexPetDurablePackagingResult,
+} from "./codex-pet-packaging.js";
 
 export const CODEX_PET_ACTIVE_STATUSES = [
   "queued", "base_generating", "awaiting_base_review", "standard_generating", "direction_generating",
@@ -66,6 +96,9 @@ export const CODEX_PET_RESOURCE_KEY = "codex_pet_v2_package";
 const INTERMEDIATE_TTL_MS = 7 * 24 * 60 * 60_000;
 const WORKER_ID = `codex-pet-${process.pid}-${randomUUID().slice(0, 8)}`;
 const DEFAULT_STALE_RUN_MS = 15 * 60_000;
+const IDENTITY_GUIDE_VERSION = 2;
+const BOARD_JOB_INPUT_SCHEMA_VERSION = "codex-pet-board-input-v2";
+const BOARD_JOB_PROMPT_VERSION = "codex-pet-board-prompt-v2";
 
 /**
  * The queue is at-least-once. A stale delivery must not be allowed to keep
@@ -80,7 +113,7 @@ export class CodexPetLeaseLostError extends Error {
   }
 }
 
-export type CodexPetExecutionStatus = "awaiting_base_review" | "archiving" | "ready" | "failed" | "cancelled" | "busy";
+export type CodexPetExecutionStatus = "awaiting_base_review" | "packaging" | "archiving" | "ready" | "failed" | "cancelled" | "busy";
 export interface CodexPetExecutionResult {
   readonly status: CodexPetExecutionStatus;
   readonly runId: string;
@@ -127,6 +160,7 @@ export interface CodexPetRunnerDeps {
     runId: string;
     userId: string;
     projectId: string;
+    workerId?: string;
   }) => Promise<{ documentId: string }>;
   readonly billing: { refundResource(operationId: string): Promise<{ success: boolean }> };
   readonly visual?: {
@@ -136,6 +170,7 @@ export interface CodexPetRunnerDeps {
     blindQa?: typeof runBlindDirectionQa;
     directionSemantics?: typeof runLabeledDirectionSemantics;
     lookMechanics?: typeof generateCodexPetLookMechanics;
+    identityGuide?: typeof generateCodexPetIdentityGuide;
   };
   readonly env?: NodeJS.ProcessEnv;
   readonly signal?: AbortSignal;
@@ -147,6 +182,7 @@ interface RunnerContext extends CodexPetRunnerDeps {
   readonly workerId: string;
   readonly project: CodexPetProject;
   readonly runId: string;
+  readonly visualQaModel: string;
   readonly identity: CodexPetVisualIdentity;
   readonly referenceAssetIds: readonly string[];
   readonly userReferences: readonly ImageBinaryInput[];
@@ -156,6 +192,7 @@ interface RunnerContext extends CodexPetRunnerDeps {
   readonly blindQa: typeof runBlindDirectionQa;
   readonly directionSemantics: typeof runLabeledDirectionSemantics;
   readonly lookMechanics: typeof generateCodexPetLookMechanics;
+  readonly identityGuide: typeof generateCodexPetIdentityGuide;
 }
 
 interface BoardJobResult {
@@ -166,6 +203,22 @@ interface BoardJobResult {
   readonly boardArtifact: CodexPetArtifact;
   readonly mirrorSafe: boolean;
   readonly qa: PetVisualQaConsensus;
+}
+
+interface RegisteredDirectionRowResult {
+  readonly registrationJob: CodexPetJob;
+  readonly source: BoardJobResult;
+  readonly frames: readonly Buffer[];
+  readonly registeredRow: Buffer;
+  readonly registeredRowArtifact: CodexPetArtifact | null;
+  readonly manifest: NeutralDirectionRegistrationManifest;
+  readonly manifestArtifact: CodexPetArtifact | null;
+  readonly validation: NeutralDirectionGeometryValidation;
+  readonly diagnostics: readonly DirectionRegistrationCellDiagnostics[];
+  readonly sourceBoardSize: { readonly width: number; readonly height: number };
+  readonly ok: boolean;
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
 }
 
 class CodexPetCancelledError extends Error {
@@ -210,6 +263,71 @@ function safeError(error: unknown): string {
   );
 }
 
+function poseBoardRepairPrompt(errors: readonly string[]): string {
+  const hints = new Set<string>();
+  for (const error of errors) {
+    if (error.includes("source-touches-slot-edge") || error.includes("normalized-frame-outside-safe-margin")) {
+      hints.add("Scale down and recenter every complete pose so ears, tail, paws and effects keep at least 15% clear background from every slot boundary.");
+    } else if (error.includes("empty-frame")) {
+      hints.add("Restore every required pose; no used slot may be empty.");
+    } else if (error.includes("multiple-foreground-components")) {
+      hints.add("Keep each pose as one connected silhouette with no detached pieces or effects.");
+    } else if (error.includes("possible-transparent-holes")) {
+      hints.add("Remove accidental holes or sliced seams through the filled character body.");
+    } else if (error.startsWith("unused-slot-")) {
+      hints.add("Leave every unused final slot completely empty with only the exact chroma background.");
+    } else if (error.includes("chroma-coverage")) {
+      hints.add("Use the exact requested flat chroma background with no scenery, panels, gradients or alternate background colour.");
+    } else if (error.includes("jumping-arc:frame-1-not-grounded") || error.includes("jumping-arc:frame-5-not-grounded")) {
+      hints.add("Keep frame 1 as a grounded anticipation and frame 5 as a grounded settle on the same practical foot baseline.");
+    } else if (error.includes("jumping-arc:frame-2-rise-too-small") || error.includes("jumping-arc:frame-4-not-airborne-before-settle")) {
+      hints.add("Move the whole character visibly upward in frame 2 and keep frame 4 visibly above the ground before frame 5 settles; changing only the legs is not enough.");
+    } else if (error.includes("jumping-arc:frame-3-not-unique") || error.includes("jumping-arc:frame-4-descent-from-peak-too-small")) {
+      hints.add("Make frame 3 the single unmistakable highest pose, with frame 2 still rising and frame 4 clearly lower while descending.");
+    } else if (error.includes("jumping-arc:peak-lift-too-small")) {
+      hints.add("Increase the complete character's vertical travel so the frame-3 peak is clearly separated from both grounded endpoints without zooming or changing body scale.");
+    }
+  }
+  return [...hints].join(" ") || errors.join("; ");
+}
+
+function jumpingQaEvidence(extracted: ExtractPoseBoardResult): string {
+  return buildJumpingQaEvidenceContext({
+    sharedScale: extracted.sharedScale,
+    widthRatio: extracted.geometry.widthRatio,
+    heightRatio: extracted.geometry.heightRatio,
+    centerSpreadPixels: extracted.geometry.centerSpreadPixels,
+    normalizedFrames: extracted.diagnostics.map((diagnostic, index) => ({
+      frame: index + 1,
+      width: diagnostic.normalizedBounds?.width ?? null,
+      height: diagnostic.normalizedBounds?.height ?? null,
+    })),
+    jumpingFrames: extracted.jumpingArc?.positions.map((position) => ({
+      frame: position.frame,
+      centerY: position.centerY,
+      groundY: position.groundY,
+      bodySpan: position.bodySpan,
+    })) ?? [],
+  });
+}
+
+function isJumpingScaleEvidenceConflict(
+  qa: PetVisualQaConsensus,
+  extracted: ExtractPoseBoardResult,
+): boolean {
+  if (!extracted.ok || !extracted.jumpingArc?.ok) return false;
+  if ((extracted.geometry.widthRatio ?? Number.POSITIVE_INFINITY) > 1.08) return false;
+  if ((extracted.geometry.centerSpreadPixels ?? Number.POSITIVE_INFINITY) > 4) return false;
+  if (qa.pass || qa.failures.length === 0) return false;
+  const scaleOnly = qa.failures.every((failure) => (
+    /zoom|scale|size jump|size pop|squash|stretch|缩放|尺寸|比例|拉伸|挤压/i.test(failure)
+  ));
+  if (!scaleOnly) return false;
+  return qa.verdicts.length > 0 && qa.verdicts.every((verdict) => (
+    verdict.identity && verdict.structure && verdict.semantics && verdict.continuity
+  ));
+}
+
 function configuredVisualConcurrency(env: NodeJS.ProcessEnv): number {
   const value = Number(env.CODEX_PET_VISUAL_CONCURRENCY);
   return Number.isInteger(value) && value > 0 ? Math.min(3, value) : 3;
@@ -247,18 +365,48 @@ function repairRowsFromFinalQa(verdict: PetVisualQaVerdict): FinalRepairRow[] {
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,
-  worker: (item: T, index: number) => Promise<R>,
+  worker: (item: T, index: number, signal: AbortSignal) => Promise<R>,
+  parentSignal?: AbortSignal,
 ): Promise<R[]> {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) controller.abort(parentSignal.reason);
+  else parentSignal?.addEventListener("abort", abortFromParent, { once: true });
+
   const results = new Array<R>(items.length);
   let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(items.length, Math.max(1, concurrency)) }, async () => {
+  const failures: unknown[] = [];
+  const runners = Array.from({ length: Math.min(items.length, Math.max(1, concurrency)) }, async () => {
     for (;;) {
+      if (controller.signal.aborted) return;
       const index = cursor;
       cursor += 1;
       if (index >= items.length) return;
-      results[index] = await worker(items[index]!, index);
+      try {
+        results[index] = await worker(items[index]!, index, controller.signal);
+      } catch (error) {
+        if (failures.length === 0) {
+          failures.push(error);
+          if (!controller.signal.aborted) controller.abort(error);
+        }
+        return;
+      }
     }
-  }));
+  });
+  try {
+    // A terminal run/refund must not race a sibling that is still unwinding
+    // an upstream image request, QA call or artifact write. Abort on the first
+    // branch failure, then drain every branch before rethrowing that failure.
+    await Promise.allSettled(runners);
+  } finally {
+    parentSignal?.removeEventListener("abort", abortFromParent);
+  }
+  if (failures.length > 0) throw failures[0];
+  if (controller.signal.aborted) {
+    const reason = controller.signal.reason;
+    if (reason instanceof Error) throw reason;
+    throw new CodexPetCancelledError();
+  }
   return results;
 }
 
@@ -279,6 +427,9 @@ function imageFailureMetadata(error: unknown): Record<string, unknown> {
   const classification = classifyImageGenerationError(error);
   return {
     category: classification.category,
+    ...(classification.transportCode
+      ? { transportCode: classification.transportCode }
+      : {}),
     ...(classification.upstreamRequestId
       ? { upstreamRequestId: classification.upstreamRequestId }
       : {}),
@@ -394,7 +545,7 @@ async function checkCancelled(ctx: RunnerContext): Promise<void> {
     select: { cancelRequested: true, status: true, workerId: true },
   });
   if (!run || run.cancelRequested || run.status === "cancelled") throw new CodexPetCancelledError();
-  if ((CODEX_PET_ACTIVE_STATUSES as readonly string[]).includes(run.status) && run.workerId !== ctx.workerId) {
+  if (!(CODEX_PET_ACTIVE_STATUSES as readonly string[]).includes(run.status) || run.workerId !== ctx.workerId) {
     throw new CodexPetLeaseLostError();
   }
 }
@@ -440,6 +591,65 @@ async function stage(ctx: RunnerContext, status: string, progress: number, messa
   });
   if (!transition.claimed) throw new CodexPetLeaseLostError();
   if (transition.advanced) await emit(ctx, "stage.started", status, progress, message);
+}
+
+/**
+ * Visual repair moves the durable run to `repairing`, while a successful
+ * per-job event does not own the surrounding workflow stage. Reconcile only
+ * after the complete parallel batch/gate has passed. Progress is deliberately
+ * a high-water mark because final QA may replay a 20% row from 88%.
+ */
+async function resumeStageIfRepairing(
+  ctx: RunnerContext,
+  status: Extract<CodexPetRunStage, "standard_generating" | "direction_generating" | "validating">,
+  progress: number,
+  message: string,
+): Promise<boolean> {
+  const restored = await ctx.prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', ctx.runId);
+    const current = await tx.codexPetRun.findFirst({
+      where: {
+        id: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        workerId: ctx.workerId,
+        status: "repairing",
+        cancelRequested: false,
+      },
+      select: { progressPercent: true },
+    });
+    if (!current) return null;
+    const effectiveProgress = Math.max(current.progressPercent, Math.min(99, progress));
+    const changed = await tx.codexPetRun.updateMany({
+      where: {
+        id: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        workerId: ctx.workerId,
+        status: "repairing",
+        cancelRequested: false,
+      },
+      data: {
+        status,
+        progressStage: status,
+        progressPercent: effectiveProgress,
+        progressMessage: message,
+        heartbeatAt: new Date(),
+      },
+    });
+    if (changed.count !== 1) return null;
+    await tx.codexPetProject.updateMany({
+      where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } },
+      data: { status },
+    });
+    return { effectiveProgress };
+  });
+  if (!restored) return false;
+  await emit(ctx, "stage.started", status, restored.effectiveProgress, message, {
+    resumedAfterRepair: true,
+    resumeStage: status,
+  });
+  return true;
 }
 
 async function ensureJob(
@@ -491,15 +701,40 @@ async function startJob(ctx: RunnerContext, job: CodexPetJob, attempt: number, p
       : job.kind.startsWith("look_")
         ? "direction_generating"
         : "standard_generating";
-  await emit(ctx, retrying ? "job.retrying" : "job.started", eventStage, progress, message, { attempt, maxAttempts: job.maxAttempts }, job.key);
+  await emit(ctx, retrying ? "job.retrying" : "job.started", eventStage, progress, message, {
+    attempt,
+    maxAttempts: job.maxAttempts,
+    ...(retrying ? { retryKind: "visual" } : {}),
+  }, job.key);
   return updated;
 }
 
-async function failJobAttempt(ctx: RunnerContext, job: CodexPetJob, attempt: number, detail: string, progress: number, terminal = false): Promise<void> {
+async function failJobAttempt(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+  attempt: number,
+  detail: string,
+  progress: number,
+  terminal = false,
+  failureMetadata?: Record<string, unknown>,
+): Promise<void> {
   await checkCancelled(ctx);
   const failed = terminal || attempt >= job.maxAttempts;
-  await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: { status: failed ? "failed" : "queued", error: detail, workerId: null } });
-  await emit(ctx, failed ? "validation.failed" : "run.repairing", "repairing", progress, detail, { attempt, maxAttempts: job.maxAttempts }, job.key);
+  await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: {
+    status: failed ? "failed" : "queued",
+    error: detail,
+    ...(failureMetadata
+      ? { providerMetadata: { failure: failureMetadata } as Prisma.InputJsonValue }
+      : {}),
+    workerId: null,
+    completedAt: failed ? new Date() : null,
+  } });
+  await emit(ctx, failed ? "validation.failed" : "run.repairing", "repairing", progress, detail, {
+    attempt,
+    maxAttempts: job.maxAttempts,
+    retryKind: "visual",
+    ...failureMetadata,
+  }, job.key);
 }
 
 async function persistProviderMetadata(ctx: RunnerContext, job: CodexPetJob, result: ImageGenerationResult): Promise<void> {
@@ -549,6 +784,37 @@ async function markImageSucceeded(ctx: RunnerContext, job: CodexPetJob, result?:
 }
 
 async function putJsonArtifact(ctx: RunnerContext, input: { jobId?: string; kind: string; name: string; value: unknown; expiresAt?: Date | null }): Promise<CodexPetArtifact> {
+  const actualModels = new Set<string>();
+  const routes = new Set<string>();
+  const visit = (value: unknown, depth = 0): void => {
+    if (depth > 8 || value === null || value === undefined) return;
+    if (Array.isArray(value)) {
+      value.slice(0, 200).forEach((item) => visit(item, depth + 1));
+      return;
+    }
+    if (typeof value !== "object") return;
+    const row = value as Record<string, unknown>;
+    const provenance = asRecord(row.modelProvenance);
+    if (typeof provenance.actualModel === "string") actualModels.add(provenance.actualModel);
+    if (Array.isArray(provenance.actualModels)) {
+      provenance.actualModels.filter((model): model is string => typeof model === "string").forEach((model) => actualModels.add(model));
+    }
+    if (typeof provenance.route === "string") routes.add(provenance.route);
+    Object.values(row).slice(0, 200).forEach((item) => visit(item, depth + 1));
+  };
+  if (input.kind === "qa_report") visit(input.value);
+  const qaProvenance = input.kind === "qa_report"
+    ? {
+        visualQa: {
+          requestedModel: ctx.visualQaModel,
+          actualModels: [...actualModels],
+          routes: [...routes],
+        },
+      }
+    : null;
+  const value = qaProvenance && input.value && typeof input.value === "object" && !Array.isArray(input.value)
+    ? { ...(input.value as Record<string, unknown>), modelProvenance: qaProvenance }
+    : input.value;
   return ctx.artifacts.put({
     userId: ctx.project.userId,
     projectId: ctx.project.id,
@@ -556,8 +822,9 @@ async function putJsonArtifact(ctx: RunnerContext, input: { jobId?: string; kind
     jobId: input.jobId,
     kind: input.kind,
     name: input.name,
-    buffer: Buffer.from(`${JSON.stringify(input.value, null, 2)}\n`),
+    buffer: Buffer.from(`${JSON.stringify(value, null, 2)}\n`),
     mime: "application/json",
+    metadata: qaProvenance ?? undefined,
     expiresAt: input.expiresAt,
   });
 }
@@ -595,9 +862,11 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
       signal: ctx.signal,
       onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", "base_generating", 8, "生图服务暂时不可用，正在重试", {
         transportAttempt,
+        retryKind: "transport",
         ...imageFailureMetadata(error),
       }, key),
     });
+    await checkCancelled(ctx);
     const artifact = await ctx.artifacts.put({
       userId: ctx.project.userId,
       projectId: ctx.project.id,
@@ -619,7 +888,11 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
     await emit(ctx, "job.completed", "base_generating", 10, `主形象候选 ${candidateIndex} 已完成`, { artifactId: artifact.id }, key);
     return { artifact, buffer: generated.buffer };
   } catch (error) {
-    await failJobAttempt(ctx, job, attempt, safeError(error), 10);
+    // generateCodexPetVisual has already exhausted its bounded transport
+    // retries. This is a terminal infrastructure failure for the run, not a
+    // visual-repair attempt. Mark the originating job failed before sibling
+    // cancellation so its safe transport diagnosis remains recoverable.
+    await failJobAttempt(ctx, job, attempt, safeError(error), 10, true, imageFailureMetadata(error));
     throw error;
   }
 }
@@ -627,19 +900,29 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
 async function selectBaseAutomatically(ctx: RunnerContext, candidates: readonly { artifact: CodexPetArtifact; buffer: Buffer }[]): Promise<string> {
   const job = await ensureJob(ctx, "base-selection", "visual_qa", ["base-candidate-1", "base-candidate-2"]);
   const output = asRecord(job.output);
-  if (job.status === "completed" && typeof output.selectedArtifactId === "string") return output.selectedArtifactId;
+  if (job.status === "completed" && typeof output.selectedArtifactId === "string") {
+    assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "base-selection");
+    return output.selectedArtifactId;
+  }
   const verdicts = await Promise.all(candidates.map((candidate, index) => ctx.qa({
-    images: [{ buffer: candidate.buffer, mime: candidate.artifact.mime }],
-    prompt: buildVisualQaPrompt("base-choice", `Candidate ${index + 1}; choose by identity consistency, pet-size readability and clean whole-body silhouette.`),
+    images: [
+      { buffer: candidate.buffer, mime: candidate.artifact.mime },
+      ...ctx.userReferences.slice(0, 3).map((reference) => ({ buffer: Buffer.from(reference.b64, "base64"), mime: reference.mime })),
+    ],
+    prompt: buildVisualQaPrompt("base-choice", buildBaseChoiceQaContext(index + 1)),
     env: ctx.env,
     signal: ctx.signal,
   })));
   await checkCancelled(ctx);
+  const baseQaProvenance = verdicts.map((verdict, index) => (
+    assertVisualQaProvenance(verdict.modelProvenance, ctx.visualQaModel, `base-selection-candidate-${index + 1}`)
+  ));
+  const eligible = codexPetVisualQaVerdictPasses;
   // Never silently pick a visually rejected candidate.  Continuing with the
   // highest numeric score would produce a run whose canonical identity was
   // explicitly rejected by every reviewer.  The caller treats this as a
   // terminal workflow error (and therefore refunds the package).
-  if (verdicts.length === 0 || verdicts.every((verdict) => !verdict.pass)) {
+  if (verdicts.length === 0 || verdicts.every((verdict) => !eligible(verdict))) {
     const qaArtifact = await putJsonArtifact(ctx, {
       jobId: job.id,
       kind: "qa_report",
@@ -659,11 +942,12 @@ async function selectBaseAutomatically(ctx: RunnerContext, candidates: readonly 
     throw new Error("两个主形象候选均未通过视觉质检");
   }
   const selectedIndex = verdicts.reduce((best, verdict, index) => {
+    if (!eligible(verdict)) return best;
+    if (best < 0) return index;
     const bestVerdict = verdicts[best]!;
-    const score = (verdict.pass ? 1000 : 0) + verdict.score;
-    const bestScore = (bestVerdict.pass ? 1000 : 0) + bestVerdict.score;
-    return score > bestScore ? index : best;
-  }, 0);
+    return verdict.score > bestVerdict.score ? index : best;
+  }, -1);
+  if (selectedIndex < 0) throw new Error("两个主形象候选均未通过视觉质检");
   const selectedArtifactId = candidates[selectedIndex]!.artifact.id;
   const qaArtifact = await putJsonArtifact(ctx, { jobId: job.id, kind: "qa_report", name: "主形象自动选择报告", value: { selectedArtifactId, verdicts } });
   await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: {
@@ -671,15 +955,221 @@ async function selectBaseAutomatically(ctx: RunnerContext, candidates: readonly 
     attempt: 1,
     output: { selectedArtifactId, qaArtifactId: qaArtifact.id } as Prisma.InputJsonValue,
     outputArtifactIds: [qaArtifact.id],
+    providerMetadata: {
+      visualQa: {
+        requestedModel: ctx.visualQaModel,
+        actualModels: [...new Set(baseQaProvenance.flatMap((value) => value.actualModels))],
+        routes: [...new Set(baseQaProvenance.flatMap((value) => value.routes))],
+      },
+    } as Prisma.InputJsonValue,
     completedAt: new Date(),
   } });
   return selectedArtifactId;
+}
+
+async function ensurePersistedBaseSelection(ctx: RunnerContext, selectedArtifactId: string): Promise<void> {
+  const job = await ensureJob(ctx, "base-selection", "visual_qa", ["base-candidate-1", "base-candidate-2"]);
+  const output = asRecord(job.output);
+  if (job.status === "completed") {
+    if (output.selectedArtifactId !== selectedArtifactId) throw new Error("Persisted base selection does not match the approved artifact");
+    return;
+  }
+  // Automatic selection already completes this job with a QA report. Manual
+  // selection is committed by the route, so the runner records the same
+  // durable graph node without inventing another visual review.
+  const changed = await ctx.prisma.codexPetJob.updateMany({
+    where: {
+      id: job.id,
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      status: { not: "completed" },
+    },
+    data: {
+      status: "completed",
+      attempt: Math.max(1, job.attempt),
+      inputArtifactIds: [selectedArtifactId],
+      output: { selectedArtifactId, selectionMode: "manual" } as Prisma.InputJsonValue,
+      error: null,
+      workerId: null,
+      completedAt: new Date(),
+    },
+  });
+  if (changed.count !== 1) throw new CodexPetLeaseLostError();
+}
+
+async function getIdentityGuide(
+  ctx: RunnerContext,
+  canonical: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer },
+): Promise<string> {
+  const compact = (value: string, limit: number) => value.replace(/\s+/g, " ").trim().slice(0, limit);
+  const characterBrief = [
+    `名称：${compact(ctx.identity.name, 60)}`,
+    ctx.identity.description ? `描述：${compact(ctx.identity.description, 240)}` : "",
+    ctx.identity.prompt ? `角色设定：${compact(ctx.identity.prompt, 640)}` : "",
+    `风格：${compact(ctx.identity.stylePreset, 60)}`,
+    ctx.identity.styleNotes ? `风格补充：${compact(ctx.identity.styleNotes, 180)}` : "",
+  ].filter(Boolean).join("；").slice(0, 1200);
+  const supportingReferenceAssetIds = ctx.referenceAssetIds.slice(0, 3);
+  const characterBriefHash = createHash("sha256").update(characterBrief).digest("hex");
+  const guideBinding = {
+    version: IDENTITY_GUIDE_VERSION,
+    selectedBaseArtifactId: canonical.artifact.id,
+    supportingReferenceAssetIds,
+    characterBriefHash,
+  };
+  let job = await ensureJob(ctx, "identity-guide", "identity_guide", ["base-selection"], {
+    ...guideBinding,
+  });
+  const persistedOutput = asRecord(job.output);
+  const persisted = persistedOutput.guide;
+  if (job.status === "completed") {
+    const jobInput = asRecord(job.input);
+    const persistedReferenceIds = Array.isArray(persistedOutput.supportingReferenceAssetIds)
+      ? persistedOutput.supportingReferenceAssetIds.filter((value): value is string => typeof value === "string")
+      : [];
+    const inputReferenceIds = Array.isArray(jobInput.supportingReferenceAssetIds)
+      ? jobInput.supportingReferenceAssetIds.filter((value): value is string => typeof value === "string")
+      : [];
+    const referencesMatch = (values: readonly string[]) => values.length === supportingReferenceAssetIds.length
+      && values.every((value, index) => value === supportingReferenceAssetIds[index]);
+    const matchesCanonical = persistedOutput.version === IDENTITY_GUIDE_VERSION
+      && persistedOutput.selectedArtifactId === canonical.artifact.id
+      && persistedOutput.characterBriefHash === characterBriefHash
+      && referencesMatch(persistedReferenceIds)
+      && jobInput.version === IDENTITY_GUIDE_VERSION
+      && jobInput.selectedBaseArtifactId === canonical.artifact.id
+      && jobInput.characterBriefHash === characterBriefHash
+      && referencesMatch(inputReferenceIds)
+      && job.inputArtifactIds.length === 1
+      && job.inputArtifactIds[0] === canonical.artifact.id
+      && typeof persisted === "string"
+      && Boolean(persisted.trim())
+      && persisted.length <= 1600;
+    if (matchesCanonical) {
+      assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "identity-guide");
+      return persisted.trim();
+    }
+
+    // A regenerated/changed base must never inherit anatomy inferred from a
+    // different candidate. Reset this internal text job and recompute it from
+    // the currently approved, ownership-checked artifact.
+    const reset = await ctx.prisma.codexPetJob.updateMany({
+      where: {
+        id: job.id,
+        runId: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        status: "completed",
+      },
+      data: {
+        status: "queued",
+        attempt: 0,
+        input: guideBinding as Prisma.InputJsonValue,
+        inputArtifactIds: [canonical.artifact.id],
+        outputArtifactIds: [],
+        output: {} as Prisma.InputJsonValue,
+        error: null,
+        workerId: null,
+        startedAt: null,
+        completedAt: null,
+      },
+    });
+    if (reset.count !== 1) throw new CodexPetLeaseLostError();
+    const resetJob = await ctx.prisma.codexPetJob.findUnique({ where: { id: job.id } });
+    if (!resetJob) throw new Error("Identity guide job disappeared while resetting stale output");
+    job = resetJob;
+  }
+
+  // A queued/running job may predate the anatomy-reference contract. Bind its
+  // durable input before invoking the model so crash recovery cannot reuse a
+  // guide inferred from a different brief or supporting-reference order.
+  job = await ctx.prisma.codexPetJob.update({
+    where: { id: job.id },
+    data: {
+      input: guideBinding as Prisma.InputJsonValue,
+      inputArtifactIds: [canonical.artifact.id],
+    },
+  });
+
+  // Resume a process-interrupted attempt without consuming an automatic retry.
+  const firstAttempt = job.status === "running" && job.attempt > 0
+    ? job.attempt
+    : Math.max(1, job.attempt + 1);
+  let lastError = "";
+  for (let attempt = firstAttempt; attempt <= job.maxAttempts; attempt += 1) {
+    job = await startJob(ctx, job, attempt, 16, "正在分析批准主形象的角色解剖与身份特征");
+    let completedGuide: string | null = null;
+    try {
+      let guideModelProvenance: CodexPetVisualModelProvenance | undefined;
+      const generatedGuide = await ctx.identityGuide({
+        reference: canonical.buffer,
+        mime: canonical.artifact.mime,
+        originalReferences: ctx.userReferences,
+        characterBrief,
+        env: ctx.env,
+        signal: ctx.signal,
+        onModelProvenance: (provenance) => { guideModelProvenance = provenance; },
+      });
+      const guide = generatedGuide.replace(/\s+/g, " ").trim().slice(0, 1600);
+      if (!guide) throw new Error("角色解剖与身份指南为空");
+      const guideProvenance = assertVisualQaProvenance(guideModelProvenance, ctx.visualQaModel, "identity-guide");
+      await checkCancelled(ctx);
+      const completed = await ctx.prisma.codexPetJob.updateMany({
+        where: {
+          id: job.id,
+          runId: ctx.runId,
+          projectId: ctx.project.id,
+          userId: ctx.project.userId,
+          status: "running",
+          workerId: ctx.workerId,
+        },
+        data: {
+          status: "completed",
+          inputArtifactIds: [canonical.artifact.id],
+          outputArtifactIds: [],
+          output: {
+            version: IDENTITY_GUIDE_VERSION,
+            selectedArtifactId: canonical.artifact.id,
+            supportingReferenceAssetIds,
+            characterBriefHash,
+            guide,
+            modelProvenance: guideProvenance,
+          } as unknown as Prisma.InputJsonValue,
+          providerMetadata: {
+            visualQa: guideProvenance,
+          } as unknown as Prisma.InputJsonValue,
+          error: null,
+          workerId: null,
+          completedAt: new Date(),
+        },
+      });
+      if (completed.count !== 1) throw new CodexPetLeaseLostError();
+      completedGuide = guide;
+    } catch (error) {
+      if (error instanceof CodexPetLeaseLostError || ctx.signal?.reason instanceof CodexPetLeaseLostError) throw new CodexPetLeaseLostError();
+      if (error instanceof CodexPetCancelledError || ctx.signal?.aborted) throw new CodexPetCancelledError();
+      lastError = safeError(error);
+      await failJobAttempt(ctx, job, attempt, lastError, 16);
+      if (error instanceof CodexPetModelContractError) throw error;
+      if (attempt >= job.maxAttempts) throw new Error(`角色解剖与身份指南生成失败：${lastError}`);
+    }
+    if (completedGuide) {
+      // The durable job output is authoritative. Event delivery happens after
+      // the attempt catch so an event-store failure cannot turn a completed
+      // guide back into queued work and invoke the multimodal model twice.
+      await emit(ctx, "job.completed", "standard_generating", 16, "角色解剖与身份指南已锁定", {}, job.key).catch(() => undefined);
+      return completedGuide;
+    }
+  }
+  throw new Error(`角色解剖与身份指南生成失败：${lastError || "多模态模型未返回结果"}`);
 }
 
 async function completedBoardJob(ctx: RunnerContext, job: CodexPetJob): Promise<BoardJobResult | null> {
   if (job.status !== "completed" || job.outputArtifactIds.length === 0) return null;
   const output = asRecord(job.output);
   if (typeof output.boardArtifactId !== "string") return null;
+  assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, job.key);
   const loadedFrames = await loadArtifactsInOrder(ctx, job.outputArtifactIds);
   const boardArtifact = await ctx.prisma.codexPetArtifact.findFirst({
     where: {
@@ -707,6 +1197,166 @@ async function completedBoardJob(ctx: RunnerContext, job: CodexPetJob): Promise<
       failures: [],
     },
   };
+}
+
+interface BoardJobInputBinding {
+  readonly inputArtifactIds: readonly string[];
+  readonly columns: number;
+  readonly rows: number;
+  readonly frameCount: number;
+  readonly frameOrder?: readonly number[];
+}
+
+/**
+ * Board attempts are scoped to their ordered durable inputs, not to a Job key
+ * alone. The repair hint is deliberately absent: it changes how the next
+ * attempt should improve the same visual task and therefore must consume the
+ * next attempt rather than resetting the bounded repair budget.
+ */
+export function codexPetBoardInputRevision(input: BoardJobInputBinding): string {
+  return createHash("sha256").update(JSON.stringify({
+    schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
+    promptVersion: BOARD_JOB_PROMPT_VERSION,
+    inputArtifactIds: [...input.inputArtifactIds],
+    columns: input.columns,
+    rows: input.rows,
+    frameCount: input.frameCount,
+    frameOrder: input.frameOrder ? [...input.frameOrder] : null,
+  })).digest("hex");
+}
+
+function sameOrderedStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function boardJobInputPayload(input: BoardJobInputBinding): Prisma.InputJsonObject {
+  return {
+    schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
+    promptVersion: BOARD_JOB_PROMPT_VERSION,
+    inputRevision: codexPetBoardInputRevision(input),
+    inputArtifactIds: [...input.inputArtifactIds],
+    columns: input.columns,
+    rows: input.rows,
+    frameCount: input.frameCount,
+    frameOrder: input.frameOrder ? [...input.frameOrder] : null,
+  };
+}
+
+function boardOutputArtifactIds(job: CodexPetJob): string[] {
+  const output = asRecord(job.output);
+  return [...new Set([
+    ...job.outputArtifactIds,
+    typeof output.boardArtifactId === "string" ? output.boardArtifactId : "",
+    typeof output.animationPreviewArtifactId === "string" ? output.animationPreviewArtifactId : "",
+  ].filter(Boolean))];
+}
+
+/**
+ * Bind a durable board Job to the exact dependency artifact revision before
+ * consulting its cached output or choosing the next attempt number.
+ *
+ * A changed dependency invalidates both the old result and its exhausted
+ * attempt budget. The reset is protected by the current active run lease and
+ * committed atomically with superseding the previous output artifacts. Jobs
+ * written by the pre-revision implementation are backfilled without changing
+ * attempts when their ordered artifact ids already match the current input.
+ */
+async function bindBoardJobInput(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+  input: BoardJobInputBinding,
+): Promise<CodexPetJob> {
+  const payload = boardJobInputPayload(input);
+  const currentRevision = payload.inputRevision;
+  const persistedInput = asRecord(job.input);
+  const persistedRevision = typeof persistedInput.inputRevision === "string"
+    ? persistedInput.inputRevision
+    : null;
+  const artifactIdsMatch = sameOrderedStrings(job.inputArtifactIds, input.inputArtifactIds);
+  if (persistedRevision === currentRevision && artifactIdsMatch) return job;
+
+  return ctx.prisma.$transaction(async (tx) => {
+    // Updating the run row makes the lease check a database CAS and holds its
+    // row lock until the Job reset/backfill and artifact invalidation commit.
+    const lease = await tx.codexPetRun.updateMany({
+      where: {
+        id: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        workerId: ctx.workerId,
+        status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
+        cancelRequested: false,
+      },
+      data: { heartbeatAt: new Date() },
+    });
+    if (lease.count !== 1) throw new CodexPetLeaseLostError();
+
+    const fresh = await tx.codexPetJob.findFirst({
+      where: {
+        id: job.id,
+        runId: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+      },
+    });
+    if (!fresh) throw new CodexPetLeaseLostError();
+    const freshInput = asRecord(fresh.input);
+    const freshRevision = typeof freshInput.inputRevision === "string"
+      ? freshInput.inputRevision
+      : null;
+    const freshArtifactIdsMatch = sameOrderedStrings(fresh.inputArtifactIds, input.inputArtifactIds);
+    if (freshRevision === currentRevision && freshArtifactIdsMatch) return fresh;
+
+    if (freshRevision === null && freshArtifactIdsMatch) {
+      // Legacy completed/running Jobs already bound to these exact artifacts
+      // keep their attempt and result. Only add the deterministic revision
+      // contract so subsequent dependency changes are detectable.
+      return tx.codexPetJob.update({
+        where: { id: fresh.id },
+        data: {
+          input: {
+            ...freshInput,
+            schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
+            promptVersion: BOARD_JOB_PROMPT_VERSION,
+            inputRevision: currentRevision,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
+
+    const obsoleteArtifactIds = boardOutputArtifactIds(fresh);
+    if (obsoleteArtifactIds.length > 0) {
+      await tx.codexPetArtifact.updateMany({
+        where: {
+          id: { in: obsoleteArtifactIds },
+          runId: ctx.runId,
+          projectId: ctx.project.id,
+          userId: ctx.project.userId,
+        },
+        data: {
+          status: "superseded",
+          expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+        },
+      });
+    }
+
+    return tx.codexPetJob.update({
+      where: { id: fresh.id },
+      data: {
+        status: "queued",
+        attempt: 0,
+        input: payload as Prisma.InputJsonValue,
+        inputArtifactIds: [...input.inputArtifactIds],
+        outputArtifactIds: [],
+        output: Prisma.DbNull,
+        providerMetadata: Prisma.DbNull,
+        error: null,
+        workerId: null,
+        startedAt: null,
+        completedAt: null,
+      },
+    });
+  });
 }
 
 /** Build a deterministic reference from the four QA-approved cardinal cells.
@@ -784,23 +1434,25 @@ async function runBoardJob(ctx: RunnerContext, input: {
   readonly columns: number;
   readonly rows: number;
   readonly frameCount: number;
+  readonly frameOrder?: readonly number[];
   readonly progress: number;
   readonly qaKind: "row" | "cardinals" | "directions";
   readonly qaContext: string;
   readonly qaRepetitions?: number;
+  readonly workflowStage?: "standard_generating" | "direction_generating" | "validating";
   readonly animationDurations?: readonly number[];
   readonly force?: boolean;
   readonly repairHint?: string;
 }): Promise<BoardJobResult> {
   let job = await ensureJob(ctx, input.key, input.kind, input.dependencies, { columns: input.columns, rows: input.rows, frameCount: input.frameCount });
-  const previousOutput = asRecord(job.output);
-  const supersededArtifactIds = input.force
-    ? [...new Set([
-        ...job.outputArtifactIds,
-        typeof previousOutput.boardArtifactId === "string" ? previousOutput.boardArtifactId : "",
-        typeof previousOutput.animationPreviewArtifactId === "string" ? previousOutput.animationPreviewArtifactId : "",
-      ].filter(Boolean))]
-    : [];
+  job = await bindBoardJobInput(ctx, job, {
+    inputArtifactIds: input.inputArtifactIds,
+    columns: input.columns,
+    rows: input.rows,
+    frameCount: input.frameCount,
+    frameOrder: input.frameOrder,
+  });
+  const supersededArtifactIds = input.force ? boardOutputArtifactIds(job) : [];
   if (!input.force) {
     const completed = await completedBoardJob(ctx, job);
     if (completed) {
@@ -813,24 +1465,42 @@ async function runBoardJob(ctx: RunnerContext, input: {
       return completed;
     }
   }
-  let repairPrompt = input.repairHint ?? "";
+  const repairRequirements = input.repairHint?.trim() ? [input.repairHint.trim()] : [];
+  let previousFailedBoard: Buffer | null = null;
   let lastError = "";
-  for (let attempt = Math.max(1, job.attempt + 1); attempt <= job.maxAttempts; attempt += 1) {
+  // A process may die after persisting status=running but before producing a
+  // durable board/diagnostic result. A stale-lease replay retries that same
+  // numbered attempt; infrastructure interruption must not consume one of the
+  // two visual-repair attempts included in the package.
+  const firstAttempt = job.status === "running" && job.attempt > 0
+    ? job.attempt
+    : Math.max(1, job.attempt + 1);
+  const workflowStage = input.workflowStage
+    ?? (input.qaKind === "row" ? "standard_generating" : "direction_generating");
+  for (let attempt = firstAttempt; attempt <= job.maxAttempts; attempt += 1) {
     await checkCancelled(ctx);
     job = await startJob(ctx, job, attempt, input.progress, `${input.qaContext}${attempt > 1 ? `（自动修复 ${attempt - 1}/2）` : ""}`);
     try {
       const generated = await ctx.generate({
-        prompt: `${input.prompt}${repairPrompt ? `\n\nRepair the complete pose group: ${repairPrompt}` : ""}`,
-        references: input.references,
+        prompt: `${input.prompt}${repairRequirements.length > 0
+          ? `\n\nRepair the complete pose group. Every numbered requirement is cumulative and mandatory; preserve requirements that already passed:\n${repairRequirements.map((requirement, index) => `${index + 1}. ${requirement}`).join("\n")}`
+          : ""}${previousFailedBoard
+          ? "\nAn attached previous failed pose board is diagnostic guidance only. Preserve its already-passing identity, grid clearance, connectivity, scale and baseline while correcting every numbered failure; still redraw the complete coherent group rather than copying broken cells."
+          : ""}`,
+        references: previousFailedBoard
+          ? [...input.references, imageInput(previousFailedBoard, "image/png", "previous-failed-pose-board.png")]
+          : input.references,
         size: "1536x1024",
         quality: "low",
         env: ctx.env,
         signal: ctx.signal,
-        onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", "repairing", input.progress, "上游生图调用重试中", {
+        onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", workflowStage, input.progress, "上游生图调用重试中", {
           transportAttempt,
+          retryKind: "transport",
           ...imageFailureMetadata(error),
         }, input.key),
       });
+      await checkCancelled(ctx);
       const boardArtifact = await ctx.artifacts.put({
         userId: ctx.project.userId,
         projectId: ctx.project.id,
@@ -848,40 +1518,146 @@ async function runBoardJob(ctx: RunnerContext, input: {
         columns: input.columns,
         rows: input.rows,
         frameCount: input.frameCount,
+        frameOrder: input.frameOrder,
         chromaKey: ctx.identity.chromaKey,
         requireUnusedSlotsEmpty: true,
         allowVerticalTravel: input.key === "row-jumping",
+        requireJumpingArc: input.key === "row-jumping",
+        maxHeightRatio: input.key === "row-jumping" || input.key === "row-failed" ? 1.8 : undefined,
       });
       let qa: PetVisualQaConsensus = { pass: false, verdicts: [], score: 0, mirrorSafe: false, warnings: extracted.warnings, failures: extracted.errors };
       if (extracted.ok) {
+        // QA the normalized cells that will actually enter the atlas. The
+        // source board's row/column gutters are construction detail owned by
+        // deterministic extraction, not animation motion.
+        const normalizedBoard = await composeNormalizedPoseBoard(extracted.frames, {
+          columns: input.columns,
+          rows: input.rows,
+          chromaKey: ctx.identity.chromaKey,
+        });
+        const jumpingEvidence = input.key === "row-jumping"
+          ? jumpingQaEvidence(extracted)
+          : "";
+        const canonicalReference = input.references.find((reference) => reference.filename?.includes("canonical-base"))
+          ?? input.references[0];
+        const qaImages = [
+          { buffer: canonicalReference ? Buffer.from(canonicalReference.b64, "base64") : generated.buffer, mime: canonicalReference?.mime },
+          { buffer: normalizedBoard, mime: "image/png" },
+        ];
         const visualQa = await ctx.qaConsensus({
-          images: [
-            { buffer: input.references[0] ? Buffer.from(input.references[0].b64, "base64") : generated.buffer, mime: input.references[0]?.mime },
-            { buffer: generated.buffer, mime: generated.mime },
-          ],
+          images: qaImages,
           prompt: buildVisualQaPrompt(
             input.qaKind,
-            `${input.qaContext}${extracted.geometry.warnings.length > 0
+            `${input.qaContext}${jumpingEvidence ? `。${jumpingEvidence}` : ""}${extracted.geometry.warnings.length > 0
               ? `。确定性尺寸/基线指标需要复核：${extracted.geometry.warnings.join("；")}`
               : ""}`,
+            ctx.identity.canonicalGuide,
           ),
           env: ctx.env,
           signal: ctx.signal,
           repetitions: input.qaRepetitions ?? 1,
         });
+        assertVisualQaProvenance(visualQa.modelProvenance, ctx.visualQaModel, `${input.key}-visual-qa`);
         qa = {
           ...visualQa,
           warnings: [...new Set([...extracted.warnings, ...visualQa.warnings])],
         };
+        if (input.key === "row-jumping" && isJumpingScaleEvidenceConflict(qa, extracted)) {
+          const adjudication = await ctx.qaConsensus({
+            images: qaImages,
+            prompt: buildVisualQaPrompt(
+              "row",
+              `Independent jumping scale adjudication. The initial reviewer passed identity, structure, semantics and continuity but failed only zoom/scale. Inspect the actual five normalized production cells and decide whether rigid identity anchors (head width, ear spacing and torso width) enlarge together. Pose-dependent leg/foot extension and the mandatory vertical arc are not zoom. ${jumpingEvidence}`,
+              ctx.identity.canonicalGuide,
+            ),
+            env: ctx.env,
+            signal: ctx.signal,
+            repetitions: 3,
+          });
+          assertVisualQaProvenance(adjudication.modelProvenance, ctx.visualQaModel, `${input.key}-jumping-adjudication`);
+          await putJsonArtifact(ctx, {
+            jobId: job.id,
+            kind: "qa_report",
+            name: `${input.qaContext}尺度冲突独立裁决 · 第 ${attempt} 次`,
+            value: {
+              deterministic: {
+                sharedScale: extracted.sharedScale,
+                geometry: extracted.geometry,
+                jumpingArc: extracted.jumpingArc,
+                diagnostics: extracted.diagnostics.map((diagnostic) => ({ normalizedBounds: diagnostic.normalizedBounds })),
+              },
+              initial: visualQa,
+              adjudication,
+            },
+            expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+          });
+          if (codexPetVisualQaConsensusPasses(adjudication)) {
+            const acceptedWarnings = [
+              ...extracted.warnings,
+              ...visualQa.warnings,
+              ...visualQa.failures.map((failure) => `初审尺度争议：${failure}`),
+              ...adjudication.warnings,
+            ];
+            qa = {
+              pass: true,
+              verdicts: [...visualQa.verdicts, ...adjudication.verdicts],
+              score: adjudication.score,
+              mirrorSafe: visualQa.mirrorSafe,
+              warnings: [...new Set(acceptedWarnings)],
+              failures: [],
+              modelProvenance: adjudication.modelProvenance,
+            };
+            await emit(ctx, "validation.warning", "standard_generating", input.progress, "jumping 尺度初审与确定性数据冲突，已由三次独立裁决通过", {
+              initialFailures: visualQa.failures,
+              widthRatio: extracted.geometry.widthRatio,
+              heightRatio: extracted.geometry.heightRatio,
+              centerSpreadPixels: extracted.geometry.centerSpreadPixels,
+              adjudicationScore: adjudication.score,
+            }, input.key);
+          } else {
+            qa = {
+              ...adjudication,
+              verdicts: [...visualQa.verdicts, ...adjudication.verdicts],
+              mirrorSafe: visualQa.mirrorSafe,
+              warnings: [...new Set([...extracted.warnings, ...visualQa.warnings, ...adjudication.warnings])],
+              failures: [...new Set([...visualQa.failures, ...adjudication.failures])],
+            };
+          }
+        }
       }
-      if (!extracted.ok || !qa.pass) {
+      if (!extracted.ok || !codexPetVisualQaConsensusPasses(qa)) {
         lastError = [...extracted.errors, ...qa.failures].join("；") || "视觉质量检查未通过";
-        repairPrompt = qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt || lastError;
+        const nextRepairRequirement = extracted.ok
+          ? qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt || lastError
+          : poseBoardRepairPrompt(extracted.errors);
+        if (nextRepairRequirement.trim() && !repairRequirements.includes(nextRepairRequirement.trim())) {
+          repairRequirements.push(nextRepairRequirement.trim());
+        }
+        previousFailedBoard = generated.buffer;
         await putJsonArtifact(ctx, {
           jobId: job.id,
           kind: "qa_report",
           name: `${input.qaContext}失败诊断 · 第 ${attempt} 次`,
-          value: { deterministic: extracted, visual: qa },
+          // Frames are already stored as image artifacts when a board passes
+          // and the rejected source board is stored above. Serializing Buffer
+          // byte arrays into diagnostic JSON inflated each failed report by
+          // several megabytes without adding useful evidence.
+          value: {
+            deterministic: {
+              diagnostics: extracted.diagnostics,
+              unusedSlotOpaquePixels: extracted.unusedSlotOpaquePixels,
+              chroma: extracted.chroma,
+              sourceWidth: extracted.sourceWidth,
+              sourceHeight: extracted.sourceHeight,
+              sharedScale: extracted.sharedScale,
+              geometry: extracted.geometry,
+              jumpingArc: extracted.jumpingArc,
+              ok: extracted.ok,
+              errors: extracted.errors,
+              warnings: extracted.warnings,
+            },
+            visual: qa,
+          },
           expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
         });
         await failJobAttempt(ctx, job, attempt, lastError, input.progress);
@@ -891,6 +1667,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
       // Only now has this image passed both deterministic extraction and the
       // visual action/identity gate.  A generated-but-rejected board must not
       // affect the cancellation refund decision.
+      const qaProvenance = assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, input.key);
       await markImageSucceeded(ctx, job, generated.provider);
       const frameArtifacts: CodexPetArtifact[] = [];
       for (let index = 0; index < extracted.frames.length; index += 1) {
@@ -954,8 +1731,13 @@ async function runBoardJob(ctx: RunnerContext, input: {
           qa: { score: qa.score, warnings: qa.warnings },
           deterministic: {
             geometry: extracted.geometry,
+            jumpingArc: extracted.jumpingArc,
             chromaCoverage: extracted.diagnostics.map((diagnostic) => diagnostic.chromaCoverage),
           },
+        } as unknown as Prisma.InputJsonValue,
+        providerMetadata: {
+          ...providerMetadata(generated.provider),
+          visualQa: qaProvenance,
         } as unknown as Prisma.InputJsonValue,
         completedAt: new Date(),
         workerId: null,
@@ -1042,7 +1824,11 @@ async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, cano
   try {
     qa = await ctx.qaConsensus({
       images: [{ buffer: canonical.buffer, mime: canonical.artifact.mime }, { buffer: preview.image, mime: "image/webp" }],
-      prompt: buildVisualQaPrompt("row", "running-left must face/travel left; mirroring must preserve identity, timing and all asymmetric meaning"),
+      prompt: buildVisualQaPrompt(
+        "row",
+        "running-left must face/travel left; mirroring must preserve identity, timing and all asymmetric meaning",
+        ctx.identity.canonicalGuide,
+      ),
       env: ctx.env,
       signal: ctx.signal,
       repetitions: 1,
@@ -1052,7 +1838,8 @@ async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, cano
     await failJobAttempt(ctx, job, 1, safeError(error), 30, true).catch(() => undefined);
     throw error;
   }
-  if (!qa.pass) {
+  const qaProvenance = assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row-running-left");
+  if (!codexPetVisualQaConsensusPasses(qa)) {
     await supersedeRejectedMirror();
     await failJobAttempt(ctx, job, 1, qa.failures.join("；") || "镜像结果不适用", 30);
     throw new Error("MIRROR_NOT_SAFE");
@@ -1085,6 +1872,9 @@ async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, cano
       inputArtifactIds: right.frameArtifacts.map((artifact) => artifact.id),
       outputArtifactIds: frameArtifacts.map((artifact) => artifact.id),
       output: { boardArtifactId: boardArtifact.id, mirrorSafe: true, qa: { score: qa.score, warnings: qa.warnings } } as Prisma.InputJsonValue,
+      providerMetadata: {
+        visualQa: qaProvenance,
+      } as unknown as Prisma.InputJsonValue,
       completedAt: new Date(),
       workerId: null,
     } });
@@ -1096,6 +1886,74 @@ function imageInput(buffer: Buffer, mime = "image/png", filename = "reference.pn
   return { b64: buffer.toString("base64"), mime, filename };
 }
 
+/**
+ * GPT Image edits preserves only the first two direction references as
+ * independent multipart images and compacts the remaining guidance into one
+ * contact sheet. Direction edits keep a deterministic 4×2 cardinal endpoint
+ * storyboard first as the primary edit target and canonical identity second.
+ * The complete cardinal basis remains in supporting guidance. Standard
+ * motion, layout, the registered first row and failed-board diagnostics are
+ * useful continuity evidence, but none may outrank the cardinal semantics.
+ */
+function lookRowReferences(input: {
+  readonly row: "look-a" | "look-b";
+  readonly anchorStoryboard: Buffer;
+  readonly canonical: { readonly buffer: Buffer; readonly mime: string };
+  readonly cardinalAnchor: { readonly buffer: Buffer; readonly mime: string };
+  readonly standardContact: Buffer;
+  readonly layout: Buffer;
+  readonly registeredLookA?: Buffer;
+  readonly diagnosticBoard?: Buffer;
+}): readonly ImageBinaryInput[] {
+  const authoritative = [
+    imageInput(input.anchorStoryboard, "image/png", `${input.row}-approved-anchor-storyboard.png`),
+    imageInput(input.canonical.buffer, input.canonical.mime, "approved-canonical-base.png"),
+  ];
+  if (input.row === "look-a") {
+    const references = [
+      ...authoritative,
+      imageInput(input.cardinalAnchor.buffer, input.cardinalAnchor.mime, "approved-cardinal-anchor-strip.png"),
+      imageInput(input.standardContact, "image/png", "approved-standard-contact.png"),
+      imageInput(input.layout, "image/png", "look-layout.png"),
+    ];
+    if (input.diagnosticBoard) {
+      references.push(imageInput(input.diagnosticBoard, "image/png", "previous-specialized-qa-failed-pose-board.png"));
+    }
+    return references;
+  }
+  if (!input.registeredLookA) throw new Error("look-b requires the approved registered look-a reference");
+  const references = [
+    ...authoritative,
+    imageInput(input.cardinalAnchor.buffer, input.cardinalAnchor.mime, "approved-cardinal-anchor-strip.png"),
+    imageInput(input.registeredLookA, "image/png", "approved-registered-look-row-9-4x2.png"),
+    imageInput(input.standardContact, "image/png", "approved-standard-contact.png"),
+    imageInput(input.layout, "image/png", "look-layout.png"),
+  ];
+  if (input.diagnosticBoard) {
+    references.push(imageInput(input.diagnosticBoard, "image/png", "previous-specialized-qa-failed-pose-board.png"));
+  }
+  return references;
+}
+
+function appendCumulativeRepairRequirement(requirements: string[], value: string): string {
+  const normalized = value.trim();
+  if (normalized && !requirements.includes(normalized)) requirements.push(normalized);
+  return `All specialized direction-gate requirements below are cumulative and mandatory:\n${requirements
+    .map((requirement, index) => `${index + 1}. ${requirement}`)
+    .join("\n")}`;
+}
+
+async function composeLookSourceBoardReference(frames: readonly Buffer[], chromaKey: string): Promise<Buffer> {
+  if (frames.length !== LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.length) {
+    throw new Error("Look source-board reference requires exactly eight chronological frames");
+  }
+  const sourceSlots = new Array<Buffer>(frames.length);
+  LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.forEach((sourceSlot, chronologicalIndex) => {
+    sourceSlots[sourceSlot] = frames[chronologicalIndex]!;
+  });
+  return composeNormalizedPoseBoard(sourceSlots, { columns: 4, rows: 2, chromaKey });
+}
+
 async function runStandardRow(
   ctx: RunnerContext,
   state: Exclude<PetRowSpec["state"], "look-a" | "look-b">,
@@ -1103,13 +1961,14 @@ async function runStandardRow(
   progress: number,
   force = false,
   repairHint = "",
+  workflowStage: "standard_generating" | "validating" = "standard_generating",
 ): Promise<BoardJobResult> {
   const spec = petRowSpec(state);
   const layout = await createLayoutGuide({ columns: spec.boardColumns, rows: spec.boardRows, frameCount: spec.frameCount, title: `${state} ${spec.frameCount}-pose board` });
   return runBoardJob(ctx, {
     key: `row-${state}`,
     kind: "standard_row",
-    dependencies: state === "running-left" ? ["row-running-right"] : ["base-selection"],
+    dependencies: state === "running-left" ? ["row-running-right"] : ["identity-guide"],
     inputArtifactIds: [canonical.artifact.id],
     prompt: buildStandardRowPrompt(ctx.identity, state),
     references: [imageInput(canonical.buffer, canonical.artifact.mime, "canonical-base.png"), imageInput(layout, "image/png", `${state}-layout.png`)],
@@ -1119,6 +1978,7 @@ async function runStandardRow(
     progress,
     qaKind: "row",
     qaContext: `${state} 动作组：身份、${spec.frameCount} 帧结构、动作语义和连续性`,
+    workflowStage,
     animationDurations: spec.durations,
     force,
     repairHint,
@@ -1169,18 +2029,346 @@ async function storeStandardAtlas(ctx: RunnerContext, frames: PetFramesByState, 
 }
 
 async function getLookMechanics(ctx: RunnerContext, canonical: { artifact: CodexPetArtifact; buffer: Buffer }): Promise<string> {
-  const job = await ensureJob(ctx, "look-mechanics", "look_mechanics", ["standard-atlas"]);
+  const job = await ensureJob(ctx, "look-mechanics", "look_mechanics", ["identity-guide", "standard-atlas"]);
   const output = asRecord(job.output);
-  if (job.status === "completed" && typeof output.mechanics === "string") return output.mechanics;
-  const mechanics = await ctx.lookMechanics({ prompt: buildLookMechanicsPrompt(ctx.identity), reference: canonical.buffer, env: ctx.env, signal: ctx.signal });
-  await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: { status: "completed", attempt: 1, output: { mechanics } as Prisma.InputJsonValue, completedAt: new Date() } });
+  if (job.status === "completed" && typeof output.mechanics === "string") {
+    assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "look-mechanics");
+    return output.mechanics;
+  }
+  let mechanicsModelProvenance: CodexPetVisualModelProvenance | undefined;
+  const mechanics = await ctx.lookMechanics({
+    prompt: buildLookMechanicsPrompt(ctx.identity),
+    reference: canonical.buffer,
+    env: ctx.env,
+    signal: ctx.signal,
+    onModelProvenance: (provenance) => { mechanicsModelProvenance = provenance; },
+  });
+  const mechanicsProvenance = assertVisualQaProvenance(mechanicsModelProvenance, ctx.visualQaModel, "look-mechanics");
+  await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: {
+    status: "completed",
+    attempt: 1,
+    output: { mechanics, modelProvenance: mechanicsProvenance } as unknown as Prisma.InputJsonValue,
+    providerMetadata: {
+      visualQa: mechanicsProvenance,
+    } as unknown as Prisma.InputJsonValue,
+    completedAt: new Date(),
+  } });
   return mechanics;
+}
+
+function recoveredRegistrationDiagnostics(
+  validation: NeutralDirectionGeometryValidation,
+): readonly DirectionRegistrationCellDiagnostics[] {
+  return validation.frames.map((frame) => ({
+    index: frame.index,
+    sourceBounds: null,
+    sourceGeometry: null,
+    normalizedBounds: frame.geometry?.bounds ?? null,
+    normalizedGeometry: frame.geometry,
+    chromaCoverage: 0,
+    edgePixels: frame.edgePixels,
+    errors: frame.errors,
+    warnings: [...frame.warnings, "recovered-from-registered-artifact"],
+  }));
+}
+
+function registeredSourceBoardSize(output: Record<string, unknown>, manifest: NeutralDirectionRegistrationManifest): { width: number; height: number } {
+  const source = asRecord(output.sourceBoardSize);
+  return {
+    width: typeof source.width === "number" && Number.isFinite(source.width) ? source.width : manifest.row9Source.width,
+    height: typeof source.height === "number" && Number.isFinite(source.height) ? source.height : manifest.row9Source.height,
+  };
+}
+
+async function completedRegisteredDirectionRow(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+  source: BoardJobResult,
+  neutral: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer },
+  expectedInputArtifactIds: readonly string[],
+  lockedManifestArtifactId?: string,
+): Promise<RegisteredDirectionRowResult | null> {
+  if (job.status !== "completed" || !sameOrderedStrings(job.inputArtifactIds, expectedInputArtifactIds)) return null;
+  const output = asRecord(job.output);
+  if (output.sourceBoardArtifactId !== source.boardArtifact.id || output.neutralFrameArtifactId !== neutral.artifact.id
+    || typeof output.registeredRowArtifactId !== "string" || typeof output.manifestArtifactId !== "string") return null;
+  if (lockedManifestArtifactId && output.manifestArtifactId !== lockedManifestArtifactId) return null;
+  const [registeredRowArtifact, manifestArtifact] = await Promise.all([
+    ctx.prisma.codexPetArtifact.findFirst({ where: {
+      id: output.registeredRowArtifactId,
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      status: "ready",
+    } }),
+    ctx.prisma.codexPetArtifact.findFirst({ where: {
+      id: output.manifestArtifactId,
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      status: "ready",
+    } }),
+  ]);
+  if (!registeredRowArtifact || !manifestArtifact) return null;
+  try {
+    const [registeredRow, manifestBytes] = await Promise.all([
+      ctx.artifacts.load(registeredRowArtifact),
+      ctx.artifacts.load(manifestArtifact),
+    ]);
+    const manifest = parseNeutralDirectionRegistrationManifest(JSON.parse(manifestBytes.toString("utf8")) as unknown);
+    const frames = await splitRegisteredDirectionRow(registeredRow);
+    const validation = await validateNeutralLockedDirectionFrames(neutral.buffer, frames, manifest.thresholds);
+    if (!validation.ok) return null;
+    return {
+      registrationJob: job,
+      source,
+      frames,
+      registeredRow,
+      registeredRowArtifact,
+      manifest,
+      manifestArtifact,
+      validation,
+      diagnostics: recoveredRegistrationDiagnostics(validation),
+      sourceBoardSize: registeredSourceBoardSize(output, manifest),
+      ok: true,
+      errors: [],
+      warnings: validation.warnings,
+    };
+  } catch {
+    // A missing/corrupt deterministic artifact is cache corruption, not a
+    // reason to invoke the image provider. Rebuild it from the durable source
+    // board below and preserve the provider attempt budget.
+    return null;
+  }
+}
+
+/**
+ * Persist the exact direction cells that QA and final assembly consume.
+ * Row 9 creates the immutable neutral registration manifest. Row 10 reuses it
+ * verbatim and can never trigger a second fit of the already-approved row 9.
+ */
+async function registerDirectionRow(
+  ctx: RunnerContext,
+  input: {
+    readonly row: "look-a" | "look-b";
+    readonly source: BoardJobResult;
+    readonly neutral: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer };
+    readonly lockedRow9?: RegisteredDirectionRowResult;
+    readonly progress: number;
+  },
+): Promise<RegisteredDirectionRowResult> {
+  if (input.row === "look-b" && (!input.lockedRow9?.registeredRowArtifact || !input.lockedRow9.manifestArtifact)) {
+    throw new Error("第二组观察方向缺少已批准的 row-9 注册产物");
+  }
+  const expectedInputArtifactIds = input.row === "look-a"
+    ? [input.source.boardArtifact.id, input.neutral.artifact.id]
+    : [
+        input.source.boardArtifact.id,
+        input.neutral.artifact.id,
+        input.lockedRow9!.registeredRowArtifact!.id,
+        input.lockedRow9!.manifestArtifact!.id,
+      ];
+  let job = await ensureJob(
+    ctx,
+    `${input.row}-registration`,
+    "look_direction_registration",
+    input.row === "look-a" ? ["look-a", "row-idle"] : ["look-b", "look-a-registration"],
+    { row: input.row, schemaVersion: "codex-pet-neutral-direction-registration-v1" },
+  );
+  const cached = await completedRegisteredDirectionRow(
+    ctx,
+    job,
+    input.source,
+    input.neutral,
+    expectedInputArtifactIds,
+    input.lockedRow9?.manifestArtifact?.id,
+  );
+  if (cached) return cached;
+
+  await checkCancelled(ctx);
+  const obsoleteArtifactIds = [...job.outputArtifactIds];
+  if (obsoleteArtifactIds.length > 0) {
+    await ctx.prisma.codexPetArtifact.updateMany({
+      where: {
+        id: { in: obsoleteArtifactIds },
+        runId: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+      },
+      data: { status: "superseded", expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS) },
+    });
+  }
+  job = await startJob(
+    ctx,
+    job,
+    Math.max(1, input.source.job.attempt),
+    input.progress,
+    input.row === "look-a" ? "按已批准 idle 中立帧注册第一组观察方向" : "复用 row-9 固定变换注册第二组观察方向",
+  );
+  const result = input.row === "look-a"
+    ? await registerFirstDirectionRowToNeutral(input.source.board, input.neutral.buffer, {
+        chromaKey: ctx.identity.chromaKey,
+        frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
+      })
+    : await registerSecondDirectionRowWithManifest(
+        input.source.board,
+        input.neutral.buffer,
+        input.lockedRow9!.manifest,
+        { chromaKey: ctx.identity.chromaKey, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT },
+      );
+  const reportArtifact = await putJsonArtifact(ctx, {
+    jobId: job.id,
+    kind: "direction_registration_report",
+    name: `${input.row === "look-a" ? "row 9" : "row 10"} 中立帧锁定注册报告 · 第 ${input.source.job.attempt} 次`,
+    value: {
+      schemaVersion: result.manifest.schemaVersion,
+      sourceBoardArtifactId: input.source.boardArtifact.id,
+      neutralFrameArtifactId: input.neutral.artifact.id,
+      sourceBoardSize: result.sourceBoardSize,
+      transform: result.manifest.transform,
+      validation: result.validation,
+      diagnostics: result.diagnostics,
+      ok: result.ok,
+      errors: result.errors,
+      warnings: result.warnings,
+    },
+    expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+  });
+  if (!result.ok) {
+    const rejected = await ctx.prisma.codexPetJob.updateMany({
+      where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId },
+      data: {
+        status: "queued",
+        inputArtifactIds: [...expectedInputArtifactIds],
+        outputArtifactIds: [reportArtifact.id],
+        output: {
+          sourceBoardArtifactId: input.source.boardArtifact.id,
+          neutralFrameArtifactId: input.neutral.artifact.id,
+          reportArtifactId: reportArtifact.id,
+          sourceBoardSize: result.sourceBoardSize,
+          ok: false,
+          errors: result.errors,
+        } as Prisma.InputJsonValue,
+        error: result.errors.join("；") || "中立帧锁定注册未通过",
+        workerId: null,
+        completedAt: null,
+      },
+    });
+    if (rejected.count !== 1) throw new CodexPetLeaseLostError();
+    return {
+      registrationJob: job,
+      source: input.source,
+      frames: result.frames,
+      registeredRow: result.registeredRow,
+      registeredRowArtifact: null,
+      manifest: result.manifest,
+      manifestArtifact: input.lockedRow9?.manifestArtifact ?? null,
+      validation: result.validation,
+      diagnostics: result.diagnostics,
+      sourceBoardSize: result.sourceBoardSize,
+      ok: false,
+      errors: result.errors,
+      warnings: result.warnings,
+    };
+  }
+
+  const manifestArtifact = input.row === "look-a"
+    ? await putJsonArtifact(ctx, {
+        jobId: job.id,
+        kind: "direction_registration_manifest",
+        name: "row 9 中立帧锁定注册 Manifest",
+        value: result.manifest,
+        expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+      })
+    : input.lockedRow9!.manifestArtifact!;
+  const registeredRowArtifact = await ctx.artifacts.put({
+    userId: ctx.project.userId,
+    projectId: ctx.project.id,
+    runId: ctx.runId,
+    jobId: job.id,
+    kind: "registered_direction_row",
+    name: input.row === "look-a" ? "已批准注册 row 9 · 000–157.5" : "固定 row-9 变换注册 row 10 · 180–337.5",
+    buffer: result.registeredRow,
+    mime: "image/png",
+    width: 1536,
+    height: 208,
+    metadata: {
+      row: input.row === "look-a" ? 9 : 10,
+      sourceBoardArtifactId: input.source.boardArtifact.id,
+      neutralFrameArtifactId: input.neutral.artifact.id,
+      manifestArtifactId: manifestArtifact.id,
+      schemaVersion: result.manifest.schemaVersion,
+      lockedScale: result.manifest.transform.scale,
+      target: result.manifest.transform.target,
+      validation: {
+        medianHeightRatio: result.validation.medianHeightRatio,
+        medianWidthRatio: result.validation.medianWidthRatio,
+      },
+    },
+    expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+  });
+  const outputArtifactIds = input.row === "look-a"
+    ? [registeredRowArtifact.id, manifestArtifact.id, reportArtifact.id]
+    : [registeredRowArtifact.id, reportArtifact.id];
+  const completed = await ctx.prisma.codexPetJob.updateMany({
+    where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId },
+    data: {
+      status: "completed",
+      inputArtifactIds: [...expectedInputArtifactIds],
+      outputArtifactIds,
+      output: {
+        sourceBoardArtifactId: input.source.boardArtifact.id,
+        neutralFrameArtifactId: input.neutral.artifact.id,
+        registeredRowArtifactId: registeredRowArtifact.id,
+        manifestArtifactId: manifestArtifact.id,
+        reportArtifactId: reportArtifact.id,
+        sourceBoardSize: result.sourceBoardSize,
+        ok: true,
+      } as Prisma.InputJsonValue,
+      error: null,
+      workerId: null,
+      completedAt: new Date(),
+    },
+  });
+  if (completed.count !== 1) throw new CodexPetLeaseLostError();
+  await emit(ctx, "preview.ready", "direction_generating", input.progress,
+    input.row === "look-a" ? "第一组观察方向已按中立帧完成固定注册" : "第二组观察方向已复用 row-9 固定注册",
+    {
+      artifactId: registeredRowArtifact.id,
+      manifestArtifactId: manifestArtifact.id,
+      lockedScale: result.manifest.transform.scale,
+      medianHeightRatio: result.validation.medianHeightRatio,
+    }, job.key);
+  return {
+    registrationJob: { ...job, status: "completed", workerId: null, outputArtifactIds },
+    source: input.source,
+    frames: result.frames,
+    registeredRow: result.registeredRow,
+    registeredRowArtifact,
+    manifest: result.manifest,
+    manifestArtifact,
+    validation: result.validation,
+    diagnostics: result.diagnostics,
+    sourceBoardSize: result.sourceBoardSize,
+    ok: true,
+    errors: [],
+    warnings: result.warnings,
+  };
+}
+
+function requireApprovedRegisteredRow(result: RegisteredDirectionRowResult, label: string): asserts result is RegisteredDirectionRowResult & {
+  readonly registeredRowArtifact: CodexPetArtifact;
+  readonly manifestArtifact: CodexPetArtifact;
+} {
+  if (!result.ok || !result.registeredRowArtifact || !result.manifestArtifact) {
+    throw new Error(`${label} 未形成可恢复的注册产物`);
+  }
 }
 
 async function reviewFirstLookRow(
   ctx: RunnerContext,
   input: {
-    readonly look: BoardJobResult;
+    readonly look: RegisteredDirectionRowResult;
     readonly canonical: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer };
     readonly standardContact: Buffer;
     readonly cardinalAnchor: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer };
@@ -1188,12 +2376,21 @@ async function reviewFirstLookRow(
 ) {
   const directions = LOOK_DIRECTIONS.slice(0, 8);
   const continuity = await measureDirectionRowContinuity(input.look.frames, directions);
-  if (!continuity.ok) {
+  if (!input.look.ok || !continuity.ok) {
+    const failures = [...input.look.errors, ...continuity.errors];
+    await putJsonArtifact(ctx, {
+      jobId: input.look.registrationJob.id,
+      kind: "qa_report",
+      name: `方向 000–157.5 注册与连续性门禁 · 第 ${input.look.source.job.attempt} 次`,
+      value: { neutralRegistration: input.look.validation, deterministicContinuity: continuity, failures },
+      expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+    });
     return {
       pass: false,
       continuity,
-      failures: continuity.errors,
-      repairPrompt: continuity.errors.join("; ") || "repair empty or structurally invalid direction cells",
+      visual: null,
+      failures,
+      repairPrompt: failures.join("; ") || "repair direction scale, lower-body anchor, baseline, edge clearance or structural cells",
     };
   }
   const preview = await createAnimatedWebpPreview(input.look.frames, petRowSpec("look-a").durations);
@@ -1209,21 +2406,25 @@ async function reviewFirstLookRow(
       `Pre-row-10 gate for the registered row-9 sequence 000, 022.5, 045, 067.5, 090, 112.5, 135, 157.5. `
       + `Confirm 000 unmistakably up, 090 unmistakably screen-right, every intermediate stays in its labeled quadrant, and the animated sequence advances clockwise without reversal, registration snap, scale pop or identity drift. `
       + `Continuity metrics are review evidence only: ${continuity.warnings.map((warning) => warning.message).slice(0, 16).join(" | ") || "none"}.`,
+      ctx.identity.canonicalGuide,
     ),
     env: ctx.env,
     signal: ctx.signal,
     repetitions: 1,
   });
+  assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
   await putJsonArtifact(ctx, {
-    jobId: input.look.job.id,
+    jobId: input.look.registrationJob.id,
     kind: "qa_report",
-    name: `方向 000–157.5 注册与连续性门禁 · 第 ${input.look.job.attempt} 次`,
-    value: { deterministicContinuity: continuity, visual: qa },
+    name: `方向 000–157.5 注册与连续性门禁 · 第 ${input.look.source.job.attempt} 次`,
+    value: { neutralRegistration: input.look.validation, deterministicContinuity: continuity, visual: qa },
     expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
   });
+  const passed = codexPetVisualQaConsensusPasses(qa);
   return {
-    pass: qa.pass,
+    pass: passed,
     continuity,
+    visual: qa,
     failures: qa.failures,
     repairPrompt: qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt
       || qa.failures.join("; ")
@@ -1240,8 +2441,8 @@ async function reviewFirstLookRow(
 async function reviewSecondLookRow(
   ctx: RunnerContext,
   input: {
-    readonly look: BoardJobResult;
-    readonly previousLook: BoardJobResult;
+    readonly look: RegisteredDirectionRowResult;
+    readonly previousLook: RegisteredDirectionRowResult;
     readonly canonical: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer };
     readonly standardContact: Buffer;
     readonly cardinalAnchor: { readonly artifact: CodexPetArtifact; readonly buffer: Buffer };
@@ -1258,14 +2459,14 @@ async function reviewSecondLookRow(
     warnings: [],
     failures: [],
   };
-  if (continuity.ok) {
+  if (input.look.ok && continuity.ok) {
     qa = await ctx.qaConsensus({
       images: [
         { buffer: input.canonical.buffer, mime: input.canonical.artifact.mime },
         { buffer: input.standardContact, mime: "image/png" },
         { buffer: input.cardinalAnchor.buffer, mime: input.cardinalAnchor.artifact.mime },
-        { buffer: input.previousLook.board, mime: input.previousLook.boardArtifact.mime },
-        { buffer: input.look.board, mime: input.look.boardArtifact.mime },
+        { buffer: input.previousLook.registeredRow, mime: "image/png" },
+        { buffer: input.look.registeredRow, mime: "image/png" },
         { buffer: preview.image, mime: preview.mime },
       ],
       prompt: buildVisualQaPrompt(
@@ -1274,34 +2475,37 @@ async function reviewSecondLookRow(
         + `Confirm 180 unmistakably down, 270 unmistakably screen-left, every intermediate remains in its labeled quadrant, and the animated row advances clockwise without reversal, registration snap, scale pop or identity drift. `
         + `Compare the preceding 157.5 frame from row 9 and the 000 anchor for both row-boundary seams. `
         + `Continuity metrics are review evidence only: ${continuity.warnings.map((warning) => warning.message).slice(0, 16).join(" | ") || "none"}.`,
+        ctx.identity.canonicalGuide,
       ),
       env: ctx.env,
       signal: ctx.signal,
       repetitions: 1,
     });
+    assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
   }
-  const failures = [...continuity.errors, ...qa.failures];
+  const failures = [...input.look.errors, ...continuity.errors, ...qa.failures];
   const repairPrompt = qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt
     || failures.join("; ")
     || "strengthen the complete 180–337.5 direction row and both row-boundary seams";
   await putJsonArtifact(ctx, {
-    jobId: input.look.job.id,
+    jobId: input.look.registrationJob.id,
     kind: "qa_report",
-    name: `方向 180–337.5 注册与连续性门禁 · 第 ${input.look.job.attempt} 次`,
+    name: `方向 180–337.5 注册与连续性门禁 · 第 ${input.look.source.job.attempt} 次`,
     value: {
       row: 10,
       directions,
+      neutralRegistration: input.look.validation,
       deterministicContinuity: continuity,
       visual: qa,
       animationPreview: { frameCount: preview.frameCount, durations: preview.durations },
-      previousRowArtifactId: input.previousLook.boardArtifact.id,
+      previousRowArtifactId: input.previousLook.registeredRowArtifact?.id ?? null,
       cardinalAnchorArtifactId: input.cardinalAnchor.artifact.id,
-      row10PreGenerationGate: { passed: continuity.ok && qa.pass, failures },
+      row10PreGenerationGate: { passed: input.look.ok && continuity.ok && codexPetVisualQaConsensusPasses(qa), failures },
     },
     expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
   });
   return {
-    pass: continuity.ok && qa.pass,
+    pass: input.look.ok && continuity.ok && codexPetVisualQaConsensusPasses(qa),
     continuity,
     visual: qa,
     failures,
@@ -1330,6 +2534,80 @@ async function summarizeProviderUsage(ctx: RunnerContext): Promise<{ actualModel
     }
   }
   return { actualModels: [...actualModels], usage };
+}
+
+const REQUIRED_VISUAL_JOB_KEYS = [
+  "identity-guide",
+  "row-idle",
+  "row-running-right",
+  "row-running-left",
+  "row-waving",
+  "row-jumping",
+  "row-failed",
+  "row-waiting",
+  "row-running",
+  "row-review",
+  "look-mechanics",
+  "look-cardinals",
+  "look-a",
+  "look-b",
+] as const;
+
+interface VisualQaProvenanceSummary {
+  readonly requestedModel: string;
+  readonly actualModels: readonly string[];
+  readonly routes: readonly string[];
+}
+
+function assertVisualQaProvenance(value: unknown, expectedModel: string, label: string): VisualQaProvenanceSummary {
+  const row = asRecord(value);
+  const actualModels = [...new Set([
+    ...(typeof row.actualModel === "string" ? [row.actualModel.trim()] : []),
+    ...(Array.isArray(row.actualModels)
+      ? row.actualModels.filter((model): model is string => typeof model === "string").map((model) => model.trim())
+      : []),
+  ].filter(Boolean))];
+  const routes = [...new Set([
+    ...(typeof row.route === "string" ? [row.route.trim()] : []),
+    ...(Array.isArray(row.routes)
+      ? row.routes.filter((route): route is string => typeof route === "string").map((route) => route.trim())
+      : []),
+  ].filter(Boolean))];
+  if (row.requestedModel !== expectedModel
+    || actualModels.length === 0
+    || actualModels.some((model) => !isAllowedCodexPetVisualModel(model))
+    || routes.length === 0
+    || routes.some((route) => route !== "chatgpt_model_route")) {
+    throw new CodexPetModelContractError(`${label} 缺少可信的 ${expectedModel} 模型来源证明`);
+  }
+  return { requestedModel: expectedModel, actualModels, routes };
+}
+
+async function summarizeRequiredVisualJobProvenance(ctx: RunnerContext): Promise<VisualQaProvenanceSummary> {
+  const jobs = await ctx.prisma.codexPetJob.findMany({
+    where: {
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      key: { in: ["base-selection", ...REQUIRED_VISUAL_JOB_KEYS] },
+    },
+  });
+  const requiredKeys: string[] = [...REQUIRED_VISUAL_JOB_KEYS];
+  const baseSelection = jobs.find((job) => job.key === "base-selection");
+  if (!baseSelection) throw new Error("主形象选择任务缺失，不能证明 GPT-only 模型合同");
+  if (asRecord(baseSelection.output).selectionMode !== "manual") requiredKeys.push("base-selection");
+
+  const actualModels = new Set<string>();
+  const routes = new Set<string>();
+  for (const key of requiredKeys) {
+    const job = jobs.find((candidate) => candidate.key === key);
+    if (!job || job.status !== "completed") throw new Error(`${key} 未完成，不能证明 GPT-only 模型合同`);
+    const visualQa = asRecord(job.providerMetadata).visualQa;
+    const provenance = assertVisualQaProvenance(visualQa, ctx.visualQaModel, key);
+    provenance.actualModels.forEach((model) => actualModels.add(model));
+    provenance.routes.forEach((route) => routes.add(route));
+  }
+  return { requestedModel: ctx.visualQaModel, actualModels: [...actualModels], routes: [...routes] };
 }
 
 async function refundRun(ctx: RunnerContext, reason: string): Promise<boolean> {
@@ -1456,6 +2734,29 @@ async function finalizeFailure(ctx: RunnerContext, error: unknown): Promise<void
     });
     if (changed.count !== 1) return { transitioned: false, refundPending: false, run: current };
     await tx.codexPetProject.updateMany({ where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } }, data: { status: "failed" } });
+    const unfinishedJobs: Prisma.CodexPetJobWhereInput = {
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      status: { in: ["queued", "running"] },
+    };
+    await tx.codexPetJob.updateMany({
+      where: {
+        ...unfinishedJobs,
+        error: null,
+      },
+      data: {
+        error: "同一运行中的其他任务失败，当前任务已停止",
+      },
+    });
+    await tx.codexPetJob.updateMany({
+      where: unfinishedJobs,
+      data: {
+        status: "cancelled",
+        completedAt: now,
+        workerId: null,
+      },
+    });
     return { transitioned: true, refundPending, run: { ...current, status: "failed", progressStage: "failed", progressMessage: message, progressPercent: current.progressPercent } };
   });
   if (!outcome.transitioned) {
@@ -1466,6 +2767,7 @@ async function finalizeFailure(ctx: RunnerContext, error: unknown): Promise<void
   await emit(ctx, "run.failed", "failed", outcome.run?.progressPercent ?? 0, message, {
     retryable: false,
     errorCategory: failure.category,
+    ...(failure.transportCode ? { transportCode: failure.transportCode } : {}),
     ...(failure.upstreamRequestId ? { upstreamRequestId: failure.upstreamRequestId } : {}),
   }).catch(() => undefined);
   if (outcome.refundPending) await refundRun(ctx, "system_failure");
@@ -1536,6 +2838,167 @@ function terminalArchiveError(error: unknown): boolean {
   return typeof code === "string" && TERMINAL_ARCHIVE_ERROR_CODES.has(code);
 }
 
+function archiveErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object" || !("code" in error)) return undefined;
+  const code = (error as { readonly code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+/**
+ * Serialize every knowledge-archive Job transition with the owning Run row.
+ *
+ * A Job-level workerId alone is not a lease: after a stale-run takeover the
+ * old process can still finish an in-flight database call. Locking and
+ * checking the Run in the same transaction prevents that process from
+ * changing the Job after a newer worker owns the Run.
+ */
+async function withCurrentKnowledgeArchiveLease<T>(
+  ctx: RunnerContext,
+  operation: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return ctx.prisma.$transaction(async (tx) => {
+    const locked = await tx.$queryRaw<Array<{ readonly id: string }>>`
+      SELECT "id"
+      FROM "CodexPetRun"
+      WHERE "id" = ${ctx.runId}
+        AND "projectId" = ${ctx.project.id}
+        AND "userId" = ${ctx.project.userId}
+        AND "workerId" = ${ctx.workerId}
+        AND "status" = 'archiving'
+        AND "cancelRequested" = false
+      FOR UPDATE
+    `;
+    if (locked.length !== 1) throw new CodexPetLeaseLostError();
+    return operation(tx);
+  });
+}
+
+async function transitionKnowledgeArchiveJob(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+  data: Prisma.CodexPetJobUpdateManyMutationInput,
+): Promise<CodexPetJob> {
+  return withCurrentKnowledgeArchiveLease(ctx, async (tx) => {
+    const changed = await tx.codexPetJob.updateMany({
+      where: {
+        id: job.id,
+        runId: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        status: job.status,
+        workerId: job.workerId,
+      },
+      data,
+    });
+    if (changed.count !== 1) throw new CodexPetLeaseLostError();
+    const updated = await tx.codexPetJob.findFirst({
+      where: {
+        id: job.id,
+        runId: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+      },
+    });
+    if (!updated) throw new CodexPetLeaseLostError();
+    return updated;
+  });
+}
+
+async function ensureKnowledgeArchiveJob(
+  ctx: RunnerContext,
+  maxAttempts: number,
+): Promise<CodexPetJob> {
+  return withCurrentKnowledgeArchiveLease(ctx, async (tx) => {
+    const job = await tx.codexPetJob.upsert({
+      where: { runId_key: { runId: ctx.runId, key: "knowledge-archive" } },
+      create: {
+        projectId: ctx.project.id,
+        runId: ctx.runId,
+        userId: ctx.project.userId,
+        key: "knowledge-archive",
+        kind: "knowledge_archive",
+        dependencyKeys: ["standard-atlas", "look-a", "look-b"],
+        maxAttempts,
+      },
+      update: { maxAttempts },
+    });
+    if (job.runId !== ctx.runId
+      || job.projectId !== ctx.project.id
+      || job.userId !== ctx.project.userId) {
+      throw new Error("Codex pet knowledge archive job ownership mismatch");
+    }
+    return job;
+  });
+}
+
+/**
+ * `archiveCodexPetRun` commits the Document and Run link atomically, but the
+ * process can die before it checkpoints the Job. In that case the ownership-
+ * scoped Run link is the durable result. Reconcile the Job without consuming
+ * another attempt or calling the archive routine again.
+ */
+async function reconcileKnowledgeArchiveJob(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+): Promise<string | null> {
+  return withCurrentKnowledgeArchiveLease(ctx, async (tx) => {
+    const run = await tx.codexPetRun.findFirst({
+      where: {
+        id: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        workerId: ctx.workerId,
+        status: "archiving",
+        cancelRequested: false,
+      },
+      select: { knowledgeDocumentId: true },
+    });
+    if (!run) throw new CodexPetLeaseLostError();
+    if (!run.knowledgeDocumentId) return null;
+
+    const document = await tx.document.findFirst({
+      where: {
+        id: run.knowledgeDocumentId,
+        sourceModule: "codex_pet",
+        sourceId: ctx.runId,
+        kb: {
+          ownerType: "USER",
+          userId: ctx.project.userId,
+          systemKey: "AI_ARTIFACTS",
+        },
+      },
+      select: { id: true },
+    });
+    if (!document) return null;
+
+    const previous = asRecord(job.output);
+    if (job.status === "completed"
+      && job.workerId === null
+      && previous.documentId === document.id) {
+      return document.id;
+    }
+    const changed = await tx.codexPetJob.updateMany({
+      where: {
+        id: job.id,
+        runId: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        status: job.status,
+        workerId: job.workerId,
+      },
+      data: {
+        status: "completed",
+        output: { documentId: document.id } as Prisma.InputJsonValue,
+        completedAt: new Date(),
+        workerId: null,
+        error: null,
+      },
+    });
+    if (changed.count !== 1) throw new CodexPetLeaseLostError();
+    return document.id;
+  });
+}
+
 /**
  * Knowledge archival is a durable job rather than an in-process retry loop.
  * Transient database/indexing-control-plane failures leave the run at 98% in
@@ -1545,29 +3008,39 @@ function terminalArchiveError(error: unknown): boolean {
  */
 async function runKnowledgeArchiveAttempt(ctx: RunnerContext): Promise<string> {
   const maxAttempts = configuredArchiveMaxAttempts(ctx.env);
-  let job = await ensureJob(
-    ctx,
-    "knowledge-archive",
-    "knowledge_archive",
-    ["standard-atlas", "look-a", "look-b"],
-    {},
-    maxAttempts,
-  );
+  let job = await ensureKnowledgeArchiveJob(ctx, maxAttempts);
+
+  const reconciledDocumentId = await reconcileKnowledgeArchiveJob(ctx, job);
+  if (reconciledDocumentId) return reconciledDocumentId;
+
   const previous = asRecord(job.output);
-  if (job.status === "completed" && typeof previous.documentId === "string" && previous.documentId) {
-    return previous.documentId;
+  if (job.status === "completed") {
+    throw new Error(typeof previous.documentId === "string" && previous.documentId
+      ? "知识库归档 checkpoint 与运行关联不一致"
+      : "知识库归档 checkpoint 缺少文档 ID");
   }
-  const attempt = job.attempt + 1;
+  if (job.status === "failed" || job.status === "cancelled") {
+    throw new Error(job.error || "AI 产物知识库归档任务已终止");
+  }
+  if (job.status !== "queued" && job.status !== "running") {
+    throw new Error(`无法从 ${job.status} 状态恢复知识库归档任务`);
+  }
+
+  // A process crash can leave a running Job behind while the Run lease is
+  // later reclaimed. Resume that exact attempt; only a durably queued retry
+  // consumes the next bounded attempt.
+  const recoveringRunningAttempt = job.status === "running";
+  const attempt = recoveringRunningAttempt ? Math.max(1, job.attempt) : job.attempt + 1;
   if (attempt > job.maxAttempts) throw new Error("AI 产物知识库归档重试次数已耗尽");
-  job = await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: {
+  job = await transitionKnowledgeArchiveJob(ctx, job, {
     status: "running",
     attempt,
     workerId: ctx.workerId,
-    startedAt: new Date(),
+    startedAt: recoveringRunningAttempt ? job.startedAt ?? new Date() : new Date(),
     completedAt: null,
     error: null,
-  } });
-  if (attempt === 1) {
+  });
+  if (attempt === 1 && !recoveringRunningAttempt) {
     await emit(ctx, "knowledge.archive_started", "archiving", 98, "开始写入 AI 产物知识库", {
       attempt,
       maxAttempts: job.maxAttempts,
@@ -1579,31 +3052,33 @@ async function runKnowledgeArchiveAttempt(ctx: RunnerContext): Promise<string> {
       runId: ctx.runId,
       userId: ctx.project.userId,
       projectId: ctx.project.id,
+      workerId: ctx.workerId,
     })).documentId;
     if (!documentId) throw new Error("知识库归档未返回文档 ID");
-    await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: {
+    job = await transitionKnowledgeArchiveJob(ctx, job, {
       status: "completed",
       output: { documentId } as Prisma.InputJsonValue,
       completedAt: new Date(),
       workerId: null,
       error: null,
-    } });
+    });
     await emit(ctx, "knowledge.archive_completed", "archiving", 98, "已归档到 AI 产物知识库", {
       knowledgeDocumentId: documentId,
       attempt,
     }, job.key).catch(() => undefined);
     return documentId;
   } catch (error) {
+    if (error instanceof CodexPetLeaseLostError || archiveErrorCode(error) === "lease_lost") {
+      throw new CodexPetLeaseLostError();
+    }
+    if (archiveErrorCode(error) === "cancelled") throw new CodexPetCancelledError();
     const terminal = terminalArchiveError(error) || attempt >= job.maxAttempts;
-    await ctx.prisma.codexPetJob.updateMany({
-      where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId },
-      data: {
-        status: terminal ? "failed" : "queued",
-        workerId: null,
-        error: safeError(error),
-        completedAt: terminal ? new Date() : null,
-      },
-    }).catch(() => undefined);
+    job = await transitionKnowledgeArchiveJob(ctx, job, {
+      status: terminal ? "failed" : "queued",
+      workerId: null,
+      error: safeError(error),
+      completedAt: terminal ? new Date() : null,
+    });
     await emit(ctx, "knowledge.archive_retrying", "archiving", 98, terminal
       ? "AI 产物知识库归档最终失败"
       : "知识库归档暂时失败，等待 Worker 重试", {
@@ -1664,16 +3139,85 @@ async function releaseDeferredArchiveLease(ctx: RunnerContext, error: CodexPetAr
   return released.count === 1;
 }
 
+async function releaseDeferredPackagingLease(ctx: RunnerContext, error: CodexPetPackagingDeferredError): Promise<boolean> {
+  const released = await ctx.prisma.codexPetRun.updateMany({
+    where: {
+      id: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      workerId: ctx.workerId,
+      status: "packaging",
+      cancelRequested: false,
+    },
+    data: {
+      progressStage: "packaging",
+      progressPercent: 94,
+      progressMessage: `最终打包暂时失败，等待重试（${error.attempt}/${error.maxAttempts}）`,
+      error: error.message,
+      workerId: null,
+      heartbeatAt: null,
+    },
+  });
+  return released.count === 1;
+}
+
+async function continueAfterDurablePackaging(
+  ctx: RunnerContext,
+  packaged: CodexPetDurablePackagingResult,
+): Promise<CodexPetExecutionResult> {
+  // The Job, all final artifact ids, validation report and archiving stage are
+  // already committed atomically. Realtime events are a best-effort view of
+  // that database truth and must never downgrade or refund a valid package.
+  await emit(ctx, "package.ready", "packaging", 98, "Codex v2 安装包已生成", {
+    spritesheetArtifactId: packaged.spritesheetArtifactId,
+    packageArtifactId: packaged.packageArtifactId,
+    previewArtifactId: packaged.previewArtifactId,
+    recovered: packaged.recovered,
+  }, "final-package").catch(() => undefined);
+  await emit(ctx, "stage.started", "archiving", 98, "正在归档到 AI 产物知识库", {
+    finalPackageJobId: packaged.jobId,
+  }, "final-package").catch(() => undefined);
+  return completeKnowledgeArchive(ctx);
+}
+
+async function resumeDurablePackaging(ctx: RunnerContext): Promise<CodexPetExecutionResult | null> {
+  const provider = await summarizeProviderUsage(ctx);
+  const packaged = await persistOrResumeCodexPetFinalPackage({
+    prisma: ctx.prisma,
+    artifacts: ctx.artifacts,
+    runId: ctx.runId,
+    projectId: ctx.project.id,
+    userId: ctx.project.userId,
+    workerId: ctx.workerId,
+    displayName: ctx.identity.name,
+    description: ctx.identity.description,
+    chromaKey: ctx.identity.chromaKey,
+    provider,
+  });
+  return packaged ? continueAfterDurablePackaging(ctx, packaged) : null;
+}
+
 async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
   let run = await currentRun(ctx);
   if (run.status === "ready") return { status: "ready", runId: ctx.runId };
   if (run.status === "failed") return { status: "failed", runId: ctx.runId };
   if (run.status === "cancelled" || run.cancelRequested) throw new CodexPetCancelledError();
   if (run.status === "archiving") return completeKnowledgeArchive(ctx);
+  if (run.status === "packaging") {
+    const resumed = await resumeDurablePackaging(ctx);
+    if (resumed) return resumed;
+    // Legacy packaging rows predate final-package checkpoints. Replay the
+    // graph once to establish the new durable source/output manifest.
+  }
 
   await stage(ctx, "base_generating", 5, "正在生成主形象候选");
   const visualConcurrency = configuredVisualConcurrency(ctx.env);
-  const candidates = await mapWithConcurrency([1, 2], visualConcurrency, (candidateIndex) => generateBaseCandidate(ctx, candidateIndex));
+  const candidates = await mapWithConcurrency(
+    [1, 2],
+    visualConcurrency,
+    (candidateIndex, _index, signal) => generateBaseCandidate({ ...ctx, signal }, candidateIndex),
+    ctx.signal,
+  );
   await checkCancelled(ctx);
   run = await currentRun(ctx);
   let selectedArtifactId = run.selectedBaseArtifactId;
@@ -1716,13 +3260,22 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     return true;
   });
   if (!selectedCommitted) throw new CodexPetLeaseLostError();
+  await ensurePersistedBaseSelection(ctx, selectedArtifactId);
   await emit(ctx, "stage.completed", "base_generating", 15, "主形象已确认", { selectedArtifactId });
+
+  // Base generation and base-choice QA intentionally run without a guide:
+  // the approved image does not exist yet. From this durable point onward,
+  // every generation/QA prompt receives the recovered canonical guide.
+  ctx.identity.canonicalGuide = await getIdentityGuide(ctx, selected);
 
   await stage(ctx, "standard_generating", 16, "正在制作 9 组标准动作");
   let [idle, runningRight] = await mapWithConcurrency([
     { state: "idle" as const, progress: 20 },
     { state: "running-right" as const, progress: 25 },
-  ], visualConcurrency, (item) => runStandardRow(ctx, item.state, selected, item.progress));
+  ], visualConcurrency, (item, _index, signal) => (
+    runStandardRow({ ...ctx, signal }, item.state, selected, item.progress)
+  ), ctx.signal);
+  await resumeStageIfRepairing(ctx, "standard_generating", 25, "正在制作 9 组标准动作");
   let runningLeft: BoardJobResult;
   if (runningRight.mirrorSafe) {
     try {
@@ -1734,11 +3287,13 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   } else {
     runningLeft = await runStandardRow(ctx, "running-left", selected, 30);
   }
+  await resumeStageIfRepairing(ctx, "standard_generating", 30, "正在制作 9 组标准动作");
   const remainingStates = ["waving", "jumping", "failed", "waiting", "running", "review"] as const;
   const remaining = new Map<(typeof remainingStates)[number], BoardJobResult>();
-  const remainingResults = await mapWithConcurrency(remainingStates, visualConcurrency, (stateName, index) => (
-    runStandardRow(ctx, stateName, selected, 35 + index * 5)
-  ));
+  const remainingResults = await mapWithConcurrency(remainingStates, visualConcurrency, (stateName, index, signal) => (
+    runStandardRow({ ...ctx, signal }, stateName, selected, 35 + index * 5)
+  ), ctx.signal);
+  await resumeStageIfRepairing(ctx, "standard_generating", 60, "9 组标准动作已通过逐组检查，正在组装中间图集");
   remainingStates.forEach((stateName, index) => remaining.set(stateName, remainingResults[index]!));
   const frames: PetFramesByState = {
     idle: idle.frames,
@@ -1773,88 +3328,187 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     qaRepetitions: 3,
   });
   let cardinalAnchor = await createApprovedCardinalAnchor(ctx, cardinals);
-  const lookLayout = await createLayoutGuide({ columns: 4, rows: 2, frameCount: 8, title: "Eight clockwise look directions" });
+  await resumeStageIfRepairing(ctx, "direction_generating", 68, "四个观察方向锚点已通过，正在生成第一组方向");
+  const lookLayout = await createLayoutGuide({
+    columns: 4,
+    rows: 2,
+    frameCount: 8,
+    title: "Eight clockwise look directions · follow the serpentine frame numbers",
+    slotLabels: ["1", "2", "3", "4", "8", "7", "6", "5"],
+  });
+  let lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
+  let lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
   let lookA = await runBoardJob(ctx, {
     key: "look-a",
     kind: "look_row",
     dependencies: ["look-cardinals"],
-    inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id, cardinalAnchor.artifact.id],
+    inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, standard.contactArtifact.id],
     prompt: buildLookRowPrompt(ctx.identity, "look-a", mechanics),
-    references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "approved-standard-contact.png"), imageInput(cardinalAnchor.buffer, cardinalAnchor.artifact.mime, "approved-cardinal-anchor-strip.png"), imageInput(lookLayout, "image/png", "look-layout.png")],
+    references: lookRowReferences({
+      row: "look-a",
+      anchorStoryboard: lookAAnchorStoryboard,
+      canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
+      cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
+      standardContact: standard.contact,
+      layout: lookLayout,
+    }),
     columns: 4,
     rows: 2,
     frameCount: 8,
+    frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
     progress: 72,
     qaKind: "directions",
     qaContext: "方向 000 到 157.5 的连续顺时针观察动作",
     animationDurations: petRowSpec("look-a").durations,
   });
-  let firstLookGate = await reviewFirstLookRow(ctx, { look: lookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+  let neutralDirectionFrame = { artifact: idle.frameArtifacts[0]!, buffer: idle.frames[0]! };
+  let registeredLookA = await registerDirectionRow(ctx, {
+    row: "look-a",
+    source: lookA,
+    neutral: neutralDirectionFrame,
+    progress: 73,
+  });
+  let firstLookGate = await reviewFirstLookRow(ctx, { look: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+  const firstLookRepairRequirements: string[] = [];
   while (!firstLookGate.pass) {
     if (lookA.job.attempt >= lookA.job.maxAttempts) {
       throw new Error(`方向 000 到 157.5 未通过 row-10 前置门禁：${firstLookGate.failures.join("；") || "方向语义或连续性失败"}`);
     }
     await emit(ctx, "run.repairing", "repairing", 74, "正在修复第一组观察方向，第二组尚未启动", {
       attempt: lookA.job.attempt,
+      retryKind: "visual",
       failures: firstLookGate.failures,
     }, lookA.job.key);
+    const diagnosticBoard = lookA.board;
+    const cumulativeRepairHint = appendCumulativeRepairRequirement(
+      firstLookRepairRequirements,
+      firstLookGate.repairPrompt || firstLookGate.failures.join("；") || "Keep the complete 000 through 157.5 row on one monotonic clockwise screen-right arc.",
+    );
     lookA = await runBoardJob(ctx, {
       key: "look-a",
       kind: "look_row",
       dependencies: ["look-cardinals"],
-      inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id, cardinalAnchor.artifact.id],
+      inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, standard.contactArtifact.id],
       prompt: buildLookRowPrompt(ctx.identity, "look-a", mechanics),
-      references: [imageInput(selected.buffer, selected.artifact.mime, "approved-canonical-base.png"), imageInput(standard.contact, "image/png", "approved-standard-contact.png"), imageInput(cardinalAnchor.buffer, cardinalAnchor.artifact.mime, "approved-cardinal-anchor-strip.png"), imageInput(lookLayout, "image/png", "look-layout.png")],
+      references: lookRowReferences({
+        row: "look-a",
+        anchorStoryboard: lookAAnchorStoryboard,
+        canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
+        cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
+        standardContact: standard.contact,
+        layout: lookLayout,
+        diagnosticBoard,
+      }),
       columns: 4,
       rows: 2,
       frameCount: 8,
+      frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
       progress: 74,
       qaKind: "directions",
       qaContext: "修复方向 000 到 157.5 的完整连续动作组",
       animationDurations: petRowSpec("look-a").durations,
       force: true,
-      repairHint: firstLookGate.repairPrompt,
+      repairHint: cumulativeRepairHint,
     });
-    firstLookGate = await reviewFirstLookRow(ctx, { look: lookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+    registeredLookA = await registerDirectionRow(ctx, {
+      row: "look-a",
+      source: lookA,
+      neutral: neutralDirectionFrame,
+      progress: 73,
+    });
+    firstLookGate = await reviewFirstLookRow(ctx, { look: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
   }
+  requireApprovedRegisteredRow(registeredLookA, "第一组观察方向");
+  await resumeStageIfRepairing(ctx, "direction_generating", 74, "第一组观察方向已通过门禁，正在生成第二组方向");
+  // Persist row 9 as an exact 8x1 atlas strip, but present those same approved
+  // cells to GPT edits in the supported 4x2 board geometry. This is a pure
+  // rearrangement with no resampling and avoids an unnecessarily extreme
+  // 1536x208 reference aspect ratio.
+  let registeredLookAReference = await composeLookSourceBoardReference(registeredLookA.frames, ctx.identity.chromaKey);
   await emit(ctx, "stage.completed", "direction_generating", 74, "第一组观察方向已完成注册、边缘、语义和连续性门禁", {
     row: 9,
+    registeredRowArtifactId: registeredLookA.registeredRowArtifact.id,
+    registrationManifestArtifactId: registeredLookA.manifestArtifact.id,
+    neutralFrameArtifactId: neutralDirectionFrame.artifact.id,
     continuityWarnings: firstLookGate.continuity.warnings.map((warning) => warning.message),
   }, lookA.job.key);
   let lookB = await runBoardJob(ctx, {
     key: "look-b",
     kind: "look_row",
-    dependencies: ["look-a"],
-    inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id, cardinalAnchor.artifact.id, lookA.boardArtifact.id],
+    dependencies: ["look-a-registration"],
+    inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, registeredLookA.registeredRowArtifact.id, registeredLookA.manifestArtifact.id, standard.contactArtifact.id],
     prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics),
-    references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "approved-standard-contact.png"), imageInput(cardinalAnchor.buffer, cardinalAnchor.artifact.mime, "approved-cardinal-anchor-strip.png"), imageInput(lookA.board, lookA.boardArtifact.mime, "completed-look-a.png"), imageInput(lookLayout, "image/png", "look-layout.png")],
+    references: lookRowReferences({
+      row: "look-b",
+      anchorStoryboard: lookBAnchorStoryboard,
+      canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
+      cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
+      registeredLookA: registeredLookAReference,
+      standardContact: standard.contact,
+      layout: lookLayout,
+    }),
     columns: 4,
     rows: 2,
     frameCount: 8,
+    frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
     progress: 76,
     qaKind: "directions",
     qaContext: "方向 180 到 337.5 连续顺时针观察动作，并与 157.5/000 边界连续",
     animationDurations: petRowSpec("look-b").durations,
   });
-  let secondLookGate = await reviewSecondLookRow(ctx, { look: lookB, previousLook: lookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+  let registeredLookB = await registerDirectionRow(ctx, {
+    row: "look-b",
+    source: lookB,
+    neutral: neutralDirectionFrame,
+    lockedRow9: registeredLookA,
+    progress: 77,
+  });
+  let secondLookGate = await reviewSecondLookRow(ctx, { look: registeredLookB, previousLook: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+  const secondLookRepairRequirements: string[] = [];
   while (!secondLookGate.pass) {
     if (lookB.job.attempt >= lookB.job.maxAttempts) {
       throw new Error(`方向 180 到 337.5 未通过 row-10 前置门禁：${secondLookGate.failures.join("；") || "方向语义或连续性失败"}`);
     }
     await emit(ctx, "run.repairing", "repairing", 78, "正在修复第二组观察方向，最终组装尚未启动", {
       attempt: lookB.job.attempt,
+      retryKind: "visual",
       failures: secondLookGate.failures,
     }, lookB.job.key);
+    const diagnosticBoard = lookB.board;
+    const cumulativeRepairHint = appendCumulativeRepairRequirement(
+      secondLookRepairRequirements,
+      secondLookGate.repairPrompt || secondLookGate.failures.join("；") || "Keep the complete 180 through 337.5 row on one monotonic clockwise screen-left arc.",
+    );
     lookB = await runBoardJob(ctx, {
-      key: "look-b", kind: "look_row", dependencies: ["look-a"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id, cardinalAnchor.artifact.id, lookA.boardArtifact.id],
+      key: "look-b", kind: "look_row", dependencies: ["look-a-registration"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, registeredLookA.registeredRowArtifact.id, registeredLookA.manifestArtifact.id, standard.contactArtifact.id],
       prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics),
-      references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "approved-standard-contact.png"), imageInput(cardinalAnchor.buffer, cardinalAnchor.artifact.mime, "approved-cardinal-anchor-strip.png"), imageInput(lookA.board, lookA.boardArtifact.mime, "completed-look-a.png"), imageInput(lookLayout, "image/png", "look-layout.png")],
-      columns: 4, rows: 2, frameCount: 8, progress: 78, qaKind: "directions", qaContext: "修复方向 180 到 337.5 的完整连续动作组", animationDurations: petRowSpec("look-b").durations, force: true, repairHint: secondLookGate.repairPrompt,
+      references: lookRowReferences({
+        row: "look-b",
+        anchorStoryboard: lookBAnchorStoryboard,
+        canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
+        cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
+        registeredLookA: registeredLookAReference,
+        standardContact: standard.contact,
+        layout: lookLayout,
+        diagnosticBoard,
+      }),
+      columns: 4, rows: 2, frameCount: 8, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT, progress: 78, qaKind: "directions", qaContext: "修复方向 180 到 337.5 的完整连续动作组", animationDurations: petRowSpec("look-b").durations, force: true, repairHint: cumulativeRepairHint,
     });
-    secondLookGate = await reviewSecondLookRow(ctx, { look: lookB, previousLook: lookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+    registeredLookB = await registerDirectionRow(ctx, {
+      row: "look-b",
+      source: lookB,
+      neutral: neutralDirectionFrame,
+      lockedRow9: registeredLookA,
+      progress: 78,
+    });
+    secondLookGate = await reviewSecondLookRow(ctx, { look: registeredLookB, previousLook: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
   }
+  requireApprovedRegisteredRow(registeredLookB, "第二组观察方向");
+  await resumeStageIfRepairing(ctx, "direction_generating", 79, "第二组观察方向已通过门禁，正在组装 16 方向");
   await emit(ctx, "stage.completed", "direction_generating", 79, "第二组观察方向已完成注册、边缘、语义和连续性门禁", {
     row: 10,
+    registeredRowArtifactId: registeredLookB.registeredRowArtifact.id,
+    registrationManifestArtifactId: registeredLookB.manifestArtifact.id,
     continuityWarnings: secondLookGate.continuity.warnings.map((warning) => warning.message),
   }, lookB.job.key);
   await emit(ctx, "stage.completed", "direction_generating", 80, "16 个观察方向已完成", {});
@@ -1873,7 +3527,14 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     readonly ok: boolean;
     readonly sharedScale: number;
     readonly sourceBoardSizes: readonly { readonly width: number; readonly height: number }[];
-    readonly diagnosticsByBoard: readonly (readonly Record<string, unknown>[])[];
+    readonly diagnosticsByBoard: readonly (readonly DirectionRegistrationCellDiagnostics[])[];
+    readonly schemaVersion: string;
+    readonly neutralFrameArtifactId: string;
+    readonly target: NeutralDirectionRegistrationManifest["transform"]["target"];
+    readonly registeredRowArtifactIds: readonly string[];
+    readonly manifestArtifactId: string;
+    readonly row9ImmutableDuringRow10Registration: true;
+    readonly neutralValidationByBoard: readonly NeutralDirectionGeometryValidation[];
     readonly errors: readonly string[];
     readonly warnings: readonly string[];
   } | null = null;
@@ -1884,71 +3545,129 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   // or final visual QA requests repair.  Re-running both rows keeps the seam
   // and the 000/360 wrap coherent; no individual direction frame is patched.
   const regenerateDirectionRows = async (repairHint: string): Promise<void> => {
-    let hint = repairHint;
+    const lookARequirements: string[] = [];
+    let lookADiagnosticBoard = lookA.board;
+    let lookAHint = appendCumulativeRepairRequirement(
+      lookARequirements,
+      repairHint || "Rebuild both coherent look rows while preserving the approved cardinal semantics and both row boundaries.",
+    );
     for (;;) {
       lookA = await runBoardJob(ctx, {
-        key: "look-a", kind: "look_row", dependencies: ["look-cardinals"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id, cardinalAnchor.artifact.id],
-        prompt: buildLookRowPrompt(ctx.identity, "look-a", mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "approved-standard-contact.png"), imageInput(cardinalAnchor.buffer, cardinalAnchor.artifact.mime, "approved-cardinal-anchor-strip.png"), imageInput(lookLayout, "image/png", "look-layout.png")],
-        columns: 4, rows: 2, frameCount: 8, progress: 84, qaKind: "directions", qaContext: "修复方向 000 到 157.5 的完整连续动作组", animationDurations: petRowSpec("look-a").durations, force: true, repairHint: hint,
+        key: "look-a", kind: "look_row", dependencies: ["look-cardinals"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, standard.contactArtifact.id],
+        prompt: buildLookRowPrompt(ctx.identity, "look-a", mechanics), references: lookRowReferences({
+          row: "look-a",
+          anchorStoryboard: lookAAnchorStoryboard,
+          canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
+          cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
+          standardContact: standard.contact,
+          layout: lookLayout,
+          diagnosticBoard: lookADiagnosticBoard,
+        }),
+        columns: 4, rows: 2, frameCount: 8, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT, progress: 84, qaKind: "directions", qaContext: "修复方向 000 到 157.5 的完整连续动作组", workflowStage: "validating", animationDurations: petRowSpec("look-a").durations, force: true, repairHint: lookAHint,
       });
-      firstLookGate = await reviewFirstLookRow(ctx, { look: lookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+      registeredLookA = await registerDirectionRow(ctx, {
+        row: "look-a",
+        source: lookA,
+        neutral: neutralDirectionFrame,
+        progress: 84,
+      });
+      firstLookGate = await reviewFirstLookRow(ctx, { look: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
       if (firstLookGate.pass) break;
       if (lookA.job.attempt >= lookA.job.maxAttempts) throw new Error(`修复后的第一组观察方向未通过前置门禁：${firstLookGate.failures.join("；") || "方向语义或连续性失败"}`);
-      hint = firstLookGate.repairPrompt;
+      lookADiagnosticBoard = lookA.board;
+      lookAHint = appendCumulativeRepairRequirement(
+        lookARequirements,
+        firstLookGate.repairPrompt || firstLookGate.failures.join("；") || "Keep row A monotonic across the cell 4 to cell 5 board wrap.",
+      );
     }
+    requireApprovedRegisteredRow(registeredLookA, "修复后的第一组观察方向");
+    registeredLookAReference = await composeLookSourceBoardReference(registeredLookA.frames, ctx.identity.chromaKey);
+    const lookBRequirements: string[] = [];
+    let lookBDiagnosticBoard = lookB.board;
+    let lookBHint = appendCumulativeRepairRequirement(
+      lookBRequirements,
+      repairHint || "Rebuild both coherent look rows while preserving the approved cardinal semantics and both row boundaries.",
+    );
     for (;;) {
       lookB = await runBoardJob(ctx, {
-        key: "look-b", kind: "look_row", dependencies: ["look-a"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id, cardinalAnchor.artifact.id, lookA.boardArtifact.id],
-        prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "approved-standard-contact.png"), imageInput(cardinalAnchor.buffer, cardinalAnchor.artifact.mime, "approved-cardinal-anchor-strip.png"), imageInput(lookA.board, lookA.boardArtifact.mime, "completed-look-a.png"), imageInput(lookLayout, "image/png", "look-layout.png")],
-        columns: 4, rows: 2, frameCount: 8, progress: 84, qaKind: "directions", qaContext: "修复方向 180 到 337.5 的完整连续动作组", animationDurations: petRowSpec("look-b").durations, force: true, repairHint: hint,
+        key: "look-b", kind: "look_row", dependencies: ["look-a-registration"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, registeredLookA.registeredRowArtifact.id, registeredLookA.manifestArtifact.id, standard.contactArtifact.id],
+        prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics), references: lookRowReferences({
+          row: "look-b",
+          anchorStoryboard: lookBAnchorStoryboard,
+          canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
+          cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
+          registeredLookA: registeredLookAReference,
+          standardContact: standard.contact,
+          layout: lookLayout,
+          diagnosticBoard: lookBDiagnosticBoard,
+        }),
+        columns: 4, rows: 2, frameCount: 8, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT, progress: 84, qaKind: "directions", qaContext: "修复方向 180 到 337.5 的完整连续动作组", workflowStage: "validating", animationDurations: petRowSpec("look-b").durations, force: true, repairHint: lookBHint,
       });
-      secondLookGate = await reviewSecondLookRow(ctx, { look: lookB, previousLook: lookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+      registeredLookB = await registerDirectionRow(ctx, {
+        row: "look-b",
+        source: lookB,
+        neutral: neutralDirectionFrame,
+        lockedRow9: registeredLookA,
+        progress: 84,
+      });
+      secondLookGate = await reviewSecondLookRow(ctx, { look: registeredLookB, previousLook: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
       if (secondLookGate.pass) break;
       if (lookB.job.attempt >= lookB.job.maxAttempts) throw new Error(`修复后的第二组观察方向未通过前置门禁：${secondLookGate.failures.join("；") || "方向语义或连续性失败"}`);
-      hint = secondLookGate.repairPrompt;
+      lookBDiagnosticBoard = lookB.board;
+      lookBHint = appendCumulativeRepairRequirement(
+        lookBRequirements,
+        secondLookGate.repairPrompt || secondLookGate.failures.join("；") || "Keep row B monotonic across the cell 4 to cell 5 board wrap and both row seams.",
+      );
     }
+    requireApprovedRegisteredRow(registeredLookB, "修复后的第二组观察方向");
+    await resumeStageIfRepairing(ctx, "validating", 84, "方向修复已通过，正在继续最终质量检查");
   };
 
   for (let directionAttempt = 1; directionAttempt <= 3; directionAttempt += 1) {
-    const registered = await extractFullPoseBoardsWithSharedRegistration([
-      { input: lookA.board, columns: 4, rows: 2, frameCount: 8 },
-      { input: lookB.board, columns: 4, rows: 2, frameCount: 8 },
-    ], { chromaKey: ctx.identity.chromaKey });
+    requireApprovedRegisteredRow(registeredLookA, "最终组装第一组观察方向");
+    requireApprovedRegisteredRow(registeredLookB, "最终组装第二组观察方向");
+    const registrationErrors = [
+      ...registeredLookA.errors,
+      ...registeredLookB.errors,
+      ...(registeredLookA.manifest.transform.scale === registeredLookB.manifest.transform.scale ? [] : ["row-10-registration-scale-changed"]),
+      ...(registeredLookA.manifestArtifact.id === registeredLookB.manifestArtifact.id ? [] : ["row-10-registration-manifest-changed"]),
+    ];
     directionRegistration = {
-      ok: registered.ok,
-      sharedScale: registered.sharedScale,
-      sourceBoardSizes: registered.sourceBoardSizes,
-      diagnosticsByBoard: registered.diagnosticsByBoard.map((row) => row.map((item) => ({
-        index: item.index,
-        sourceBounds: item.sourceBounds,
-        normalizedBounds: item.normalizedBounds,
-        opaquePixels: item.opaquePixels,
-        componentCount: item.componentCount,
-        internalTransparentPixels: item.internalTransparentPixels,
-        errors: item.errors,
-        warnings: item.warnings,
-      }))),
-      errors: registered.errors,
-      warnings: registered.warnings,
+      ok: registrationErrors.length === 0 && registeredLookA.validation.ok && registeredLookB.validation.ok,
+      sharedScale: registeredLookA.manifest.transform.scale,
+      sourceBoardSizes: [registeredLookA.sourceBoardSize, registeredLookB.sourceBoardSize],
+      diagnosticsByBoard: [registeredLookA.diagnostics, registeredLookB.diagnostics],
+      schemaVersion: registeredLookA.manifest.schemaVersion,
+      neutralFrameArtifactId: neutralDirectionFrame.artifact.id,
+      target: registeredLookA.manifest.transform.target,
+      registeredRowArtifactIds: [registeredLookA.registeredRowArtifact.id, registeredLookB.registeredRowArtifact.id],
+      manifestArtifactId: registeredLookA.manifestArtifact.id,
+      row9ImmutableDuringRow10Registration: true,
+      neutralValidationByBoard: [registeredLookA.validation, registeredLookB.validation],
+      errors: registrationErrors,
+      warnings: [...registeredLookA.warnings, ...registeredLookB.warnings],
     };
     await putJsonArtifact(ctx, {
-      jobId: lookB.job.id,
+      jobId: registeredLookB.registrationJob.id,
       kind: "qa_report",
-      name: `16 方向共享缩放与基线注册 · 第 ${directionAttempt} 次`,
+      name: `16 方向中立帧锁定缩放与基线注册 · 第 ${directionAttempt} 次`,
       value: directionRegistration,
       expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
     });
-    if (!registered.ok) {
+    if (!directionRegistration.ok) {
       if (directionAttempt >= 3) {
-        throw new Error(`16 个观察方向共享注册经两轮自动修复后仍未通过：${registered.errors.join("；")}`);
+        throw new Error(`16 个观察方向中立帧锁定注册经两轮自动修复后仍未通过：${directionRegistration.errors.join("；")}`);
       }
-      const repairHint = registered.errors.join("; ") || "keep all 16 direction poses inside their cells at one consistent scale and baseline";
-      await emit(ctx, "run.repairing", "repairing", 82, `方向共享注册自动修复 ${directionAttempt}/2`, { failures: registered.errors });
+      const repairHint = directionRegistration.errors.join("; ") || "keep all 16 direction poses at the approved neutral body scale, lower-body anchor and baseline";
+      await emit(ctx, "run.repairing", "repairing", 82, `方向中立帧锁定注册自动修复 ${directionAttempt}/2`, { retryKind: "visual", failures: directionRegistration.errors });
       await regenerateDirectionRows(repairHint);
       continue;
     }
-    frames["look-a"] = registered.framesByBoard[0]!;
-    frames["look-b"] = registered.framesByBoard[1]!;
+    // These are loaded from the persisted registered row artifacts. Final
+    // assembly never revisits either raw 4x2 board and therefore cannot let a
+    // wide row-10 pose recalculate or shrink the approved row 9.
+    frames["look-a"] = registeredLookA.frames;
+    frames["look-b"] = registeredLookB.frames;
     const assembled = await assemblePetAtlas(frames, "png");
     const cleaned = await despillChromaEdges(assembled, ctx.identity.chromaKey);
     finalAtlas = cleaned.image;
@@ -1962,16 +3681,20 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     const blind = await createDirectionBlindQaSheet(finalAtlas);
     blindSheet = blind.image;
     [blindValidation, semantics] = await Promise.all([
-      ctx.blindQa({ sheet: blind.image, answerKey: blind.answerKey, env: ctx.env, signal: ctx.signal }),
-      ctx.directionSemantics({ sheet: directionSheet, expectedDirections: LOOK_DIRECTIONS, env: ctx.env, signal: ctx.signal }),
+      ctx.blindQa({ sheet: blind.image, answerKey: blind.answerKey, identityGuide: ctx.identity.canonicalGuide, env: ctx.env, signal: ctx.signal }),
+      ctx.directionSemantics({ sheet: directionSheet, expectedDirections: LOOK_DIRECTIONS, identityGuide: ctx.identity.canonicalGuide, env: ctx.env, signal: ctx.signal }),
     ]);
+    assertVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
+    semantics.forEach((item) => {
+      assertVisualQaProvenance(item.modelProvenance, ctx.visualQaModel, `direction-${item.direction}`);
+    });
     const semanticFailures = semantics.filter((item) => item.verdict === "fail");
     if (!(blindValidation.ok && semanticFailures.length === 0)) {
       if (directionAttempt >= 3) {
         throw new Error(`方向质检经两轮自动修复后仍未通过：${[...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}:${item.reason}`)].join("；")}`);
       }
       const repairHint = [...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}: ${item.reason}`)].join("; ");
-      await emit(ctx, "run.repairing", "repairing", 84, `方向动作自动修复 ${directionAttempt}/2`, { failures: repairHint });
+      await emit(ctx, "run.repairing", "repairing", 84, `方向动作自动修复 ${directionAttempt}/2`, { retryKind: "visual", failures: repairHint });
       await regenerateDirectionRows(repairHint);
       continue;
     }
@@ -1997,18 +3720,20 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
         + `The first image is the canonical identity, followed by standard/final/direction sheets and nine animated WebP previews in row order. Inspect actual playback for cadence, vertical travel, inert loops, wrong facing, reversal, size popping and baseline jumps. `
         + `If any action group is defective, list its complete row name in repairRows; never request a single-frame patch. `
         + `Continuity metrics are review evidence only: ${continuityWarnings.slice(0, 20).join(" | ") || "no metric warnings"}`,
+        ctx.identity.canonicalGuide,
       ),
       env: ctx.env,
       signal: ctx.signal,
     });
-    if (finalQa.pass) break;
+    assertVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
+    if (codexPetVisualQaVerdictPasses(finalQa)) break;
     if (directionAttempt >= 3) {
       throw new Error(`最终独立视觉质检经两轮自动修复后仍未通过：${finalQa.failures.join("；") || "角色一致性或动作连续性失败"}`);
     }
     const repairRows = repairRowsFromFinalQa(finalQa);
     finalRepairHistory.push({ attempt: directionAttempt, rows: repairRows, failures: finalQa.failures });
     const repairHint = finalQa.repairPrompt || finalQa.failures.join("；") || "修复指定动作组的身份、动作语义、节奏与连续性";
-    await emit(ctx, "run.repairing", "repairing", 88, `最终视觉质检动作组修复 ${directionAttempt}/2`, { rows: repairRows, failures: finalQa.failures });
+    await emit(ctx, "run.repairing", "repairing", 88, `最终视觉质检动作组修复 ${directionAttempt}/2`, { retryKind: "visual", rows: repairRows, failures: finalQa.failures });
 
     const standardRowsSet = new Set(repairRows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
     // The two travel rows form one semantic pair.  If the right-facing source
@@ -2024,9 +3749,9 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     if (standardRows.includes("running-left") && !standardRows.includes("running-right")) standardRows.push("running-right");
     if (standardRows.length > 0) {
       const progressByState: Record<string, number> = { idle: 20, "running-right": 25, "running-left": 30, waving: 35, jumping: 40, failed: 45, waiting: 50, running: 55, review: 60 };
-      const repaired = await mapWithConcurrency(standardRows, visualConcurrency, (state) => (
-        runStandardRow(ctx, state, selected, progressByState[state] ?? 64, true, repairHint)
-      ));
+      const repaired = await mapWithConcurrency(standardRows, visualConcurrency, (state, _index, signal) => (
+        runStandardRow({ ...ctx, signal }, state, selected, progressByState[state] ?? 64, true, repairHint, "validating")
+      ), ctx.signal);
       repaired.forEach((result, index) => {
         const state = standardRows[index]!;
         if (state === "idle") idle = result;
@@ -2035,6 +3760,9 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
         if (state !== "idle" && state !== "running-right" && state !== "running-left") remaining.set(state, result);
         frames[state] = result.frames;
       });
+      if (standardRows.includes("idle")) {
+        neutralDirectionFrame = { artifact: idle.frameArtifacts[0]!, buffer: idle.frames[0]! };
+      }
       standard = await storeStandardAtlas(ctx, frames, true);
 
       // Direction references include the approved standard contact; refresh
@@ -2042,17 +3770,21 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       cardinals = await runBoardJob(ctx, {
         key: "look-cardinals", kind: "look_cardinals", dependencies: ["look-mechanics", "standard-atlas"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id],
         prompt: buildCardinalPrompt(ctx.identity, mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "standard-contact.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
-        columns: 2, rows: 2, frameCount: 4, progress: 83, qaKind: "cardinals", qaContext: "修复后四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左", qaRepetitions: 3, force: true, repairHint,
+        columns: 2, rows: 2, frameCount: 4, progress: 83, qaKind: "cardinals", qaContext: "修复后四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左", qaRepetitions: 3, workflowStage: "validating", force: true, repairHint,
       });
       cardinalAnchor = await createApprovedCardinalAnchor(ctx, cardinals, true);
+      lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
+      lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
     }
     await regenerateDirectionRows(repairHint);
   }
-  if (!validation || !despill || !blindValidation || !continuity || !directionRegistration?.ok || !finalQa?.pass) throw new Error("最终验证没有生成完整报告");
+  if (!validation || !despill || !blindValidation || !continuity || !directionRegistration?.ok || !finalQa || !codexPetVisualQaVerdictPasses(finalQa)) {
+    throw new Error("最终验证没有生成完整报告");
+  }
+  await resumeStageIfRepairing(ctx, "validating", 94, "最终结构、方向盲测与视觉质检已通过");
   const continuityWarnings = continuity.warnings.map((item) => item.message);
   await emit(ctx, "stage.completed", "validating", 94, "最终结构、方向盲测与视觉质检已通过", { warnings: [...validation.warnings, ...continuityWarnings, ...blindValidation.warnings, ...semantics.filter((item) => item.verdict === "warning").map((item) => `${item.direction}:${item.reason}`)] });
 
-  await stage(ctx, "packaging", 94, "正在生成 Codex 安装包");
   const petId = `${ctx.identity.name}-${createHash("sha256").update(ctx.project.id).digest("hex").slice(0, 10)}`;
   const packaged = await createCodexPetPackage({ id: petId, displayName: ctx.identity.name, description: ctx.identity.description, spritesheet: finalAtlas });
   // Re-open the exact ZIP bytes that will be persisted.  This closes the
@@ -2067,10 +3799,55 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   if (!packagedValidation.ok) {
     throw new Error(`Codex v2 WebP 图集验证失败：${packagedValidation.errors.join("；")}`);
   }
+  if (!firstLookGate.visual) throw new Error("row9 前置门禁缺少 GPT-5.6 视觉证明");
+  const requiredJobProvenance = await summarizeRequiredVisualJobProvenance(ctx);
+  const row9GateProvenance = assertVisualQaProvenance(firstLookGate.visual.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
+  const row10GateProvenance = assertVisualQaProvenance(secondLookGate.visual.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
+  const finalQaProvenance = assertVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
+  const blindQaProvenance = assertVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
+  const semanticProvenance = semantics.map((item) => (
+    assertVisualQaProvenance(item.modelProvenance, ctx.visualQaModel, `direction-${item.direction}`)
+  ));
+  const visualQaActualModels = [...new Set([
+    ...requiredJobProvenance.actualModels,
+    ...row9GateProvenance.actualModels,
+    ...row10GateProvenance.actualModels,
+    ...finalQaProvenance.actualModels,
+    ...blindQaProvenance.actualModels,
+    ...semanticProvenance.flatMap((item) => item.actualModels),
+  ])];
+  if (visualQaActualModels.length === 0
+    || visualQaActualModels.some((model) => !isAllowedCodexPetVisualModel(model))) {
+    throw new Error(`最终视觉质检模型不符合 ${ctx.visualQaModel} 合同`);
+  }
+  const visualQaRoutes = [...new Set([
+    ...requiredJobProvenance.routes,
+    ...row9GateProvenance.routes,
+    ...row10GateProvenance.routes,
+    ...finalQaProvenance.routes,
+    ...blindQaProvenance.routes,
+    ...semanticProvenance.flatMap((item) => item.routes),
+  ])];
+  const provider = await summarizeProviderUsage(ctx);
+  if (provider.actualModels.length === 0 || provider.actualModels.some((model) => !isAllowedCodexPetImageModel(model))) {
+    throw new Error(`最终生图模型不符合 ${GPT_IMAGE_MODEL} 合同`);
+  }
   const report = {
     ok: true,
     spriteVersionNumber: 2,
-    requestedModel: "gpt-image-2",
+    modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
+    requestedModel: GPT_IMAGE_MODEL,
+    modelProvenance: {
+      imageGeneration: {
+        requestedModel: GPT_IMAGE_MODEL,
+        actualModels: provider.actualModels,
+      },
+      visualQa: {
+        requestedModel: ctx.visualQaModel,
+        actualModels: visualQaActualModels,
+        routes: visualQaRoutes,
+      },
+    },
     chromaKey: ctx.identity.chromaKey,
     cardinalAnchor: {
       artifactId: cardinalAnchor.artifact.id,
@@ -2086,10 +3863,17 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     directionContinuity: continuity,
     row9PreGenerationGate: {
       passed: firstLookGate.pass,
+      neutralFrameArtifactId: neutralDirectionFrame.artifact.id,
+      registeredRowArtifactId: registeredLookA.registeredRowArtifact.id,
+      registrationManifestArtifactId: registeredLookA.manifestArtifact.id,
+      neutralGeometryValidation: registeredLookA.validation,
       deterministicContinuity: firstLookGate.continuity,
     },
     row10PreGenerationGate: {
       passed: secondLookGate.pass,
+      registeredRowArtifactId: registeredLookB.registeredRowArtifact.id,
+      reusedRegistrationManifestArtifactId: registeredLookB.manifestArtifact.id,
+      neutralGeometryValidation: registeredLookB.validation,
       deterministicContinuity: secondLookGate.continuity,
       visual: secondLookGate.visual,
       failures: secondLookGate.failures,
@@ -2100,30 +3884,35 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     finalVisualQa: finalQa,
     acceptableWarnings: [...validation.warnings, ...continuityWarnings, ...blindValidation.warnings, ...semantics.filter((item) => item.verdict === "warning").map((item) => `${item.direction}:${item.reason}`)],
   };
-  const [spritesheetArtifact, packageArtifact, previewArtifact, directionArtifact, blindArtifact, qaArtifact] = await Promise.all([
-    ctx.artifacts.put({ userId: ctx.project.userId, projectId: ctx.project.id, runId: ctx.runId, kind: "spritesheet", name: "Codex v2 spritesheet.webp", buffer: packaged.spritesheet, mime: "image/webp", metadata: { petId: packaged.petId, spriteVersionNumber: 2, width: 1536, height: 2288 }, width: 1536, height: 2288, expiresAt: null }),
-    ctx.artifacts.put({ userId: ctx.project.userId, projectId: ctx.project.id, runId: ctx.runId, kind: "package", name: `${packaged.petId}.zip`, buffer: packaged.zip, mime: "application/zip", metadata: { petId: packaged.petId, spriteVersionNumber: 2 }, expiresAt: null }),
-    ctx.artifacts.put({ userId: ctx.project.userId, projectId: ctx.project.id, runId: ctx.runId, kind: "preview", name: "最终 Contact Sheet", buffer: contactSheet, mime: "image/png", expiresAt: null }),
-    ctx.artifacts.put({ userId: ctx.project.userId, projectId: ctx.project.id, runId: ctx.runId, kind: "direction_qa", name: "16 方向标注质检图", buffer: directionSheet, mime: "image/png", expiresAt: null }),
-    ctx.artifacts.put({ userId: ctx.project.userId, projectId: ctx.project.id, runId: ctx.runId, kind: "direction_blind_qa", name: "方向盲测图", buffer: blindSheet, mime: "image/png", expiresAt: null }),
-    putJsonArtifact(ctx, { kind: "validation_report", name: "Codex v2 最终验证报告", value: report, expiresAt: null }),
-  ]);
-  const provider = await summarizeProviderUsage(ctx);
-  const packagingUpdate = await ctx.prisma.codexPetRun.updateMany({ where: { id: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId, status: "packaging", cancelRequested: false }, data: {
-    spritesheetArtifactId: spritesheetArtifact.id,
-    packageArtifactId: packageArtifact.id,
-    previewArtifactId: previewArtifact.id,
-    validationReport: { ...report, petId: packaged.petId, artifacts: { directionArtifactId: directionArtifact.id, blindArtifactId: blindArtifact.id, qaArtifactId: qaArtifact.id } } as unknown as Prisma.InputJsonValue,
-    actualModels: provider.actualModels,
-    usage: provider.usage as Prisma.InputJsonValue,
-    progressPercent: 98,
-    progressMessage: "安装包已生成，正在归档到 AI 产物知识库",
-  } });
-  if (packagingUpdate.count !== 1) throw new CodexPetLeaseLostError();
-  await emit(ctx, "package.ready", "packaging", 98, "Codex v2 安装包已生成", { spritesheetArtifactId: spritesheetArtifact.id, packageArtifactId: packageArtifact.id, previewArtifactId: previewArtifact.id });
-
-  await stage(ctx, "archiving", 98, "正在归档到 AI 产物知识库");
-  return completeKnowledgeArchive(ctx);
+  const durablePackage = await persistOrResumeCodexPetFinalPackage({
+    prisma: ctx.prisma,
+    artifacts: ctx.artifacts,
+    runId: ctx.runId,
+    projectId: ctx.project.id,
+    userId: ctx.project.userId,
+    workerId: ctx.workerId,
+    displayName: ctx.identity.name,
+    description: ctx.identity.description,
+    chromaKey: ctx.identity.chromaKey,
+    provider,
+    seed: {
+      petId: packaged.petId,
+      finalAtlas,
+      spritesheet: packaged.spritesheet,
+      zip: packaged.zip,
+      contactSheet,
+      directionSheet,
+      blindSheet,
+      report,
+      inputArtifactIds: [
+        standard.atlasArtifact.id,
+        registeredLookA.registeredRowArtifact.id,
+        registeredLookB.registeredRowArtifact.id,
+      ],
+    },
+  });
+  if (!durablePackage) throw new Error("最终打包任务未能建立持久化 checkpoint");
+  return continueAfterDurablePackaging(ctx, durablePackage);
 }
 
 export async function executeCodexPetRun(input: { runId: string; deps: CodexPetRunnerDeps }): Promise<CodexPetExecutionResult> {
@@ -2141,6 +3930,12 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   if (initialRun.status === "ready" || initialRun.status === "failed" || initialRun.status === "cancelled") {
     return { status: initialRun.status, runId: initialRun.id };
   }
+  const initialSnapshot = asRecord(initialRun.inputSnapshot);
+  const initialModelContractValid = initialSnapshot.modelContractVersion === CODEX_PET_MODEL_CONTRACT_VERSION
+    && initialSnapshot.requestedModel === GPT_IMAGE_MODEL
+    && typeof initialSnapshot.visualQaModel === "string"
+    && initialSnapshot.visualQaModel.trim() === resolveCodexPetVisualQaModel(env)
+    && initialRun.requestedModel === GPT_IMAGE_MODEL;
   // Waiting for an explicit user choice is a durable pause, not runnable
   // work. A duplicate Bull delivery (for example an old retained/stalled job)
   // must not claim the run and replay base generation while the workbench is
@@ -2149,6 +3944,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   if (initialRun.status === "awaiting_base_review"
     && !initialRun.selectedBaseArtifactId
     && !initialRun.autoContinue
+    && initialModelContractValid
     && !initialRun.cancelRequested) {
     return { status: "awaiting_base_review", runId: initialRun.id };
   }
@@ -2179,6 +3975,10 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   const run = claimed.run;
   if (!run) throw new Error("Codex pet run disappeared after lease claim");
   const snapshot = asRecord(run.inputSnapshot);
+  const visualQaModel = resolveCodexPetVisualQaModel(env);
+  const snapshottedModelContractVersion = typeof snapshot.modelContractVersion === "string" ? snapshot.modelContractVersion.trim() : "";
+  const snapshottedImageModel = typeof snapshot.requestedModel === "string" ? snapshot.requestedModel.trim() : "";
+  const snapshottedVisualQaModel = typeof snapshot.visualQaModel === "string" ? snapshot.visualQaModel.trim() : "";
   const referenceAssetIds = Array.isArray(snapshot.referenceAssetIds)
     ? snapshot.referenceAssetIds.filter((value): value is string => typeof value === "string")
     : [...run.project.referenceAssetIds];
@@ -2193,6 +3993,15 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   let loadedReferences: Array<{ buffer: Buffer; mime: string; filename: string }> = [];
   let chromaKey = run.colorKey || "#ff00ff";
   try {
+    if (snapshottedModelContractVersion !== CODEX_PET_MODEL_CONTRACT_VERSION) {
+      throw new Error(`Codex pet run is missing the required ${CODEX_PET_MODEL_CONTRACT_VERSION} model contract`);
+    }
+    if (run.requestedModel !== GPT_IMAGE_MODEL || snapshottedImageModel !== GPT_IMAGE_MODEL) {
+      throw new Error(`Codex pet image model contract must remain ${GPT_IMAGE_MODEL}`);
+    }
+    if (snapshottedVisualQaModel !== visualQaModel) {
+      throw new Error(`Codex pet visual model contract changed after start: ${snapshottedVisualQaModel} -> ${visualQaModel}`);
+    }
     const referenceAssets = referenceAssetIds.length
       ? await deps.prisma.imageAsset.findMany({ where: { userId: run.userId, id: { in: referenceAssetIds } } })
       : [];
@@ -2228,7 +4037,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     void deps.prisma.codexPetRun.findFirst({ where: { id: run.id, projectId: run.project.id, userId: run.userId }, select: { cancelRequested: true, status: true, workerId: true } })
       .then((fresh) => {
         if (!fresh || fresh.cancelRequested || fresh.status === "cancelled") controller.abort(new CodexPetCancelledError());
-        else if ((CODEX_PET_ACTIVE_STATUSES as readonly string[]).includes(fresh.status) && fresh.workerId !== workerId) controller.abort(new CodexPetLeaseLostError());
+        else if (!(CODEX_PET_ACTIVE_STATUSES as readonly string[]).includes(fresh.status) || fresh.workerId !== workerId) controller.abort(new CodexPetLeaseLostError());
       })
       .finally(() => { checking = false; });
   }, 1_000);
@@ -2257,6 +4066,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     signal: controller.signal,
     project: run.project,
     runId: run.id,
+    visualQaModel,
     referenceAssetIds,
     identity: {
       ...identity,
@@ -2269,10 +4079,29 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     blindQa: deps.visual?.blindQa ?? runBlindDirectionQa,
     directionSemantics: deps.visual?.directionSemantics ?? runLabeledDirectionSemantics,
     lookMechanics: deps.visual?.lookMechanics ?? generateCodexPetLookMechanics,
+    identityGuide: deps.visual?.identityGuide ?? generateCodexPetIdentityGuide,
   };
   try {
     return await executeRun(ctx);
   } catch (error) {
+    if (error instanceof CodexPetPackagingDeferredError) {
+      if (await releaseDeferredPackagingLease(ctx, error)) {
+        return { status: "packaging", runId: run.id };
+      }
+      const latest = await deps.prisma.codexPetRun.findFirst({
+        where: { id: run.id, projectId: run.project.id, userId: run.userId },
+        select: { status: true, cancelRequested: true },
+      });
+      if (latest?.cancelRequested || latest?.status === "cancelled") {
+        await finalizeCancellation(ctx);
+        return { status: "cancelled", runId: run.id };
+      }
+      if (latest?.status === "ready" || latest?.status === "failed") {
+        return { status: latest.status, runId: run.id };
+      }
+      if (latest?.status === "archiving") return { status: "archiving", runId: run.id };
+      return { status: "busy", runId: run.id };
+    }
     if (error instanceof CodexPetArchiveDeferredError) {
       if (await releaseDeferredArchiveLease(ctx, error)) {
         return { status: "archiving", runId: run.id };

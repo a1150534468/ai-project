@@ -1,6 +1,7 @@
 import sharp from "sharp";
 import { PET_CELL_HEIGHT, PET_CELL_WIDTH } from "./constants.js";
 import { removeChroma, type ChromaRemovalResult } from "./chroma.js";
+import { validateJumpingArc, type JumpingArcDiagnostics } from "./jumping.js";
 
 export interface PixelBounds {
   readonly left: number;
@@ -29,6 +30,8 @@ export interface ExtractPoseBoardOptions {
   readonly columns: number;
   readonly rows: number;
   readonly frameCount: number;
+  /** Chronological output index -> physical row-major source slot index. */
+  readonly frameOrder?: readonly number[];
   readonly chromaKey: string;
   readonly chromaThreshold?: number;
   readonly chromaFeather?: number;
@@ -40,8 +43,10 @@ export interface ExtractPoseBoardOptions {
   readonly cellHeight?: number;
   readonly padding?: number;
   readonly requireUnusedSlotsEmpty?: boolean;
-  /** Jumping intentionally changes its foreground baseline across the loop. */
+  /** Jumping opts into preserving source-board travel; ordinary poses are centred and grounded. */
   readonly allowVerticalTravel?: boolean;
+  /** Opt-in five-frame semantic geometry gate; callers should enable it only for jumping. */
+  readonly requireJumpingArc?: boolean;
   readonly maxHeightRatio?: number;
   readonly maxWidthRatio?: number;
   readonly maxBaselineSpreadPixels?: number;
@@ -74,6 +79,7 @@ export interface ExtractPoseBoardResult {
   readonly sourceHeight: number;
   readonly sharedScale: number;
   readonly geometry: PoseBoardGeometryDiagnostics;
+  readonly jumpingArc: JumpingArcDiagnostics | null;
   readonly ok: boolean;
   readonly errors: readonly string[];
   readonly warnings: readonly string[];
@@ -237,6 +243,12 @@ export async function extractPoseBoard(
   if (!Number.isInteger(options.frameCount) || options.frameCount < 1 || options.frameCount > slotCount) {
     throw new Error("frameCount must fit inside the board grid");
   }
+  const frameOrder = options.frameOrder ?? Array.from({ length: options.frameCount }, (_, index) => index);
+  if (frameOrder.length !== options.frameCount
+    || new Set(frameOrder).size !== options.frameCount
+    || frameOrder.some((index) => !Number.isInteger(index) || index < 0 || index >= options.frameCount)) {
+    throw new Error("frameOrder must be a permutation of every used source slot");
+  }
   const metadata = await sharp(input).metadata();
   if (!metadata.width || !metadata.height) throw new Error("Pose board has no readable dimensions");
   const cellWidth = options.cellWidth ?? PET_CELL_WIDTH;
@@ -291,18 +303,23 @@ export async function extractPoseBoard(
     chroma.push(report);
   }
 
-  const usedAnalyses = analyses.slice(0, options.frameCount);
-  // Register every pose in one shared source coordinate system. A per-frame
-  // bbox crop followed by unconditional bottom alignment erases intentional
-  // movement (most visibly the lift/peak/descent of jumping). These relative
-  // bounds preserve both horizontal and vertical displacement from the board
-  // while still resizing every original crop exactly once with one scale.
+  const usedAnalyses = frameOrder.map((sourceIndex) => analyses[sourceIndex]!);
+  const usedCleanedSlots = frameOrder.map((sourceIndex) => cleanedSlots[sourceIndex]!);
+  const usedSlotWidths = frameOrder.map((sourceIndex) => slotWidths[sourceIndex]!);
+  const usedSlotHeights = frameOrder.map((sourceIndex) => slotHeights[sourceIndex]!);
+  const usedChroma = frameOrder.map((sourceIndex) => chroma[sourceIndex]!);
+  // Every pose is resized exactly once with one shared scale. Horizontal
+  // placement inside an implicit model-drawn grid is always discarded because
+  // row/column gutter drift is layout noise, not animation travel. Ordinary
+  // actions are also grounded; jumping preserves only its relative vertical
+  // lift/peak/descent while remaining horizontally centred.
+  const preserveVerticalTravel = options.allowVerticalTravel === true;
   const positioned = usedAnalyses.map((analysis, index) => {
     if (!analysis.bounds) return null;
-    const bottomGap = slotHeights[index]! - 1 - analysis.bounds.bottom;
+    const bottomGap = usedSlotHeights[index]! - 1 - analysis.bounds.bottom;
     return {
-      left: analysis.bounds.left - slotWidths[index]! / 2,
-      right: analysis.bounds.right - slotWidths[index]! / 2,
+      left: analysis.bounds.left - usedSlotWidths[index]! / 2,
+      right: analysis.bounds.right - usedSlotWidths[index]! / 2,
       bottomGap,
       width: analysis.bounds.width,
       height: analysis.bounds.height,
@@ -312,8 +329,15 @@ export async function extractPoseBoard(
   const groundGap = nonempty.length ? Math.min(...nonempty.map((item) => item.bottomGap)) : 0;
   const relative = positioned.map((item) => item ? {
     ...item,
-    top: -(item.bottomGap - groundGap) - (item.height - 1),
-    bottom: -(item.bottomGap - groundGap),
+    left: -(item.width - 1) / 2,
+    right: (item.width - 1) / 2,
+    ...(preserveVerticalTravel ? {
+      top: -(item.bottomGap - groundGap) - (item.height - 1),
+      bottom: -(item.bottomGap - groundGap),
+    } : {
+      top: -(item.height - 1),
+      bottom: 0,
+    }),
   } : null);
   const placed = relative.filter((item): item is NonNullable<typeof item> => Boolean(item));
   const minLeft = placed.length ? Math.min(...placed.map((item) => item.left)) : 0;
@@ -338,7 +362,7 @@ export async function extractPoseBoard(
 
   for (let index = 0; index < options.frameCount; index += 1) {
     const analysis = usedAnalyses[index]!;
-    const chromaReport = chroma[index]!;
+    const chromaReport = usedChroma[index]!;
     const chromaCoverage = chromaReport.totalPixels > 0
       ? (chromaReport.removedPixels + chromaReport.softenedPixels) / chromaReport.totalPixels
       : 0;
@@ -363,15 +387,19 @@ export async function extractPoseBoard(
       }
       const targetWidth = Math.max(1, Math.round(analysis.bounds.width * sharedScale));
       const targetHeight = Math.max(1, Math.round(analysis.bounds.height * sharedScale));
-      const cropped = await sharp(cleanedSlots[index]!).extract({
+      const cropped = await sharp(usedCleanedSlots[index]!).extract({
         left: analysis.bounds.left,
         top: analysis.bounds.top,
         width: analysis.bounds.width,
         height: analysis.bounds.height,
       }).resize(targetWidth, targetHeight, { fit: "fill", kernel: sharp.kernel.lanczos3 }).png().toBuffer();
       const registration = relative[index]!;
-      const left = Math.round(horizontalOrigin + registration.left * sharedScale);
-      const top = Math.round(baseline + registration.top * sharedScale);
+      const left = preserveVerticalTravel
+        ? Math.round(horizontalOrigin + registration.left * sharedScale)
+        : Math.round((cellWidth - targetWidth) / 2);
+      const top = preserveVerticalTravel
+        ? Math.round(baseline + registration.top * sharedScale)
+        : cellHeight - padding - targetHeight;
       if (left < padding || top < padding || left + targetWidth > cellWidth - padding || top + targetHeight > cellHeight - padding) {
         frameErrors.push("normalized-frame-outside-safe-margin");
       }
@@ -427,6 +455,12 @@ export async function extractPoseBoard(
   }
   warnings.push(...geometryWarnings);
 
+  const jumpingArc = options.requireJumpingArc ? await validateJumpingArc(frames) : null;
+  if (jumpingArc) {
+    errors.push(...jumpingArc.errors);
+    warnings.push(...jumpingArc.warnings);
+  }
+
   const unusedSlotOpaquePixels = analyses.slice(options.frameCount).map((analysis) => analysis.opaquePixels);
   if (options.requireUnusedSlotsEmpty !== false) {
     unusedSlotOpaquePixels.forEach((count, offset) => {
@@ -437,7 +471,7 @@ export async function extractPoseBoard(
     frames,
     diagnostics,
     unusedSlotOpaquePixels,
-    chroma,
+    chroma: [...usedChroma, ...chroma.slice(options.frameCount)],
     sourceWidth: metadata.width,
     sourceHeight: metadata.height,
     sharedScale,
@@ -448,6 +482,7 @@ export async function extractPoseBoard(
       centerSpreadPixels,
       warnings: geometryWarnings,
     },
+    jumpingArc,
     ok: errors.length === 0,
     errors,
     warnings,

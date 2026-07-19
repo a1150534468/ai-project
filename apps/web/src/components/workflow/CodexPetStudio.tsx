@@ -10,6 +10,10 @@ import {
 } from "react";
 import { ApiError } from "../../apiError";
 import * as codexPetApi from "../../codexPetApi";
+import {
+  CODEX_PET_IMAGE_MODEL,
+  CODEX_PET_VISUAL_QA_MODEL,
+} from "../../codexPetApi";
 import type {
   CodexPetArtifact,
   CodexPetBaseSelection,
@@ -37,9 +41,11 @@ import {
   EMPTY_CODEX_PET_DRAFT,
   canEditCodexPetProject,
   codexPetArtifactUrl,
+  codexPetCurrentSubtask,
   codexPetDisplayProgress,
   codexPetDraftFromProject,
   codexPetFileError,
+  codexPetModelContractState,
   codexPetPayloadFromDraft,
   codexPetStatusLabel,
   codexPetValidationPassed,
@@ -432,7 +438,13 @@ export function CodexPetStudio({
     ? artifacts.find((artifact) => artifact.id === latestRun.packageArtifactId) ?? null
     : null;
   const deliveryReady = isCodexPetDeliveryReady(latestRun);
+  const modelContractState = codexPetModelContractState(latestRun);
   const lastEvent = events.at(-1);
+  const currentSubtask = codexPetCurrentSubtask(
+    detail?.jobs ?? [],
+    lastEvent?.jobKey,
+    latestRun?.progressStage,
+  );
   const progress = codexPetDisplayProgress(latestRun, lastEvent?.progress ?? 0);
   const projectStatus = detail?.project.status ?? "draft";
   const runIsTerminal = latestRun ? TERMINAL_RUN_STATUSES.has(latestRun.status) : false;
@@ -958,7 +970,7 @@ export function CodexPetStudio({
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-[#dcf3ef] bg-white px-3 py-1.5 text-[#477069]">
-            gpt-image-2 · 2 个主形象 · 每组最多 2 次自动修复
+            生图 {CODEX_PET_IMAGE_MODEL} · 视觉推理 / QA {CODEX_PET_VISUAL_QA_MODEL}
           </span>
           <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
             {pricing ? `${pricing.rate} 积分 / 完整 v2 套餐` : "套餐价格加载中"}
@@ -1424,6 +1436,13 @@ export function CodexPetStudio({
                 </div>
               )}
 
+              {latestRun && runIsTerminal && !deliveryReady && (
+                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2.5">
+                  <p className="text-[10px] leading-4 text-[#6f7078]">本次运行已结束；保留原项目记录，复制输入后可用新的幂等键重新制作。</p>
+                  <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
+                </div>
+              )}
+
               {latestRun?.status === "ready" && !deliveryReady && (
                 <div role="alert" className="rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
                   后端返回了 ready，但知识库归档、最终产物或验证报告尚不完整。为避免安装不完整桌宠，工作台保持在 98% 并禁用交付操作。
@@ -1470,7 +1489,7 @@ export function CodexPetStudio({
                 <div className="grid grid-cols-2 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">当前子任务</span>
-                    <span className="mt-0.5 block truncate font-semibold text-[#52525a]">{lastEvent?.jobKey || latestRun.progressStage || "—"}</span>
+                    <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-[#52525a]">{currentSubtask}</span>
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">成功图片</span>
@@ -1531,8 +1550,20 @@ export function CodexPetStudio({
               )}
               {latestRun && (
                 <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#72727a]">
-                  请求模型 {latestRun.requestedModel || "gpt-image-2"}<br />
-                  实际模型 {latestRun.actualModels.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}
+                  生图固定 {CODEX_PET_IMAGE_MODEL}<br />
+                  生图实际 {latestRun.actualModels?.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}<br />
+                  视觉推理 / QA 固定 {CODEX_PET_VISUAL_QA_MODEL}<br />
+                  视觉实际 {latestRun.visualQaActualModels?.length > 0 ? latestRun.visualQaActualModels.join("、") : "等待最终模型来源汇总"}<br />
+                  模型合同 {modelContractState === "valid"
+                    ? "GPT-only · 已验证"
+                    : modelContractState === "invalid"
+                      ? "不符合 GPT-only · 已阻止交付"
+                      : "GPT-only · 等待实际模型来源"}
+                  {modelContractState === "invalid" && (
+                    <span role="alert" className="mt-1 block font-semibold text-red-700">
+                      接口返回的模型或路由与桌宠固定合同不一致；不会回退到通用聊天模型或 Qwen。
+                    </span>
+                  )}
                 </div>
               )}
             </div>

@@ -24,8 +24,8 @@ export interface PetRowSpec {
   readonly row: number;
   readonly state: StandardPetState | "look-a" | "look-b";
   readonly frameCount: number;
-  readonly boardColumns: 2 | 3 | 4;
-  readonly boardRows: 2;
+  readonly boardColumns: 2 | 3 | 4 | 5;
+  readonly boardRows: 1 | 2;
   readonly durations: readonly number[];
 }
 
@@ -34,7 +34,10 @@ export const PET_ROW_SPECS: readonly PetRowSpec[] = [
   { row: 1, state: "running-right", frameCount: 8, boardColumns: 4, boardRows: 2, durations: [120, 120, 120, 120, 120, 120, 120, 220] },
   { row: 2, state: "running-left", frameCount: 8, boardColumns: 4, boardRows: 2, durations: [120, 120, 120, 120, 120, 120, 120, 220] },
   { row: 3, state: "waving", frameCount: 4, boardColumns: 2, boardRows: 2, durations: [140, 140, 140, 280] },
-  { row: 4, state: "jumping", frameCount: 5, boardColumns: 3, boardRows: 2, durations: [140, 140, 140, 140, 280] },
+  // A single left-to-right row is intentional. Repeated real GPT Image POCs
+  // treated the first cell after a 3x2 row wrap as a second peak, while 5x1
+  // produced the required ground-rise-peak-descent-ground arc reliably.
+  { row: 4, state: "jumping", frameCount: 5, boardColumns: 5, boardRows: 1, durations: [140, 140, 140, 140, 280] },
   { row: 5, state: "failed", frameCount: 8, boardColumns: 4, boardRows: 2, durations: [140, 140, 140, 140, 140, 140, 140, 240] },
   { row: 6, state: "waiting", frameCount: 6, boardColumns: 3, boardRows: 2, durations: [150, 150, 150, 150, 150, 260] },
   { row: 7, state: "running", frameCount: 6, boardColumns: 3, boardRows: 2, durations: [120, 120, 120, 120, 120, 220] },
@@ -47,6 +50,15 @@ export const LOOK_DIRECTIONS = [
   "000", "022.5", "045", "067.5", "090", "112.5", "135", "157.5",
   "180", "202.5", "225", "247.5", "270", "292.5", "315", "337.5",
 ] as const;
+
+/**
+ * Direction boards are generated in a 4×2 serpentine path so frame 4→5 is
+ * physically adjacent at the right edge instead of jumping from top-right to
+ * bottom-left. Values map chronological frame index to the source board's
+ * row-major slot index. Deterministic extraction restores normal clockwise
+ * order before QA, registration and atlas assembly.
+ */
+export const LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT = [0, 1, 2, 3, 7, 6, 5, 4] as const;
 
 export const DEFAULT_CHROMA_CANDIDATES = [
   "#ff00ff",

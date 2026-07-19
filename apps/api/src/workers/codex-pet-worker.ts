@@ -25,10 +25,12 @@ import {
   executeCodexPetRun,
 } from "../workflow/codex-pet-runner.js";
 import { createCodexPetArtifactStore, deleteCodexPetArtifact } from "../workflow/codex-pet-storage.js";
+import { assertCodexPetImageRoute } from "../workflow/codex-pet-model-contract.js";
 import {
   isVerifiedWorkflowImageObjectKeyForUser,
   sanitizeImageUpstreamRequestId,
 } from "../workflow/image-service.js";
+import { assertCodexPetVisualQaRoute } from "../workflow/codex-pet-visual.js";
 
 function positiveNumber(key: string, fallback: number, env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env[key]);
@@ -152,6 +154,55 @@ function finiteMetric(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+export interface CodexPetRetryMetricDelta {
+  readonly visualRepairAttempts: 0 | 1;
+  readonly transportRetries: 0 | 1;
+  readonly actionRetries: 0 | 1;
+  readonly failureCategory: unknown;
+}
+
+/**
+ * Classify retry events without inferring transport failures from a visual
+ * job's attempt counter. Older transport events predate `retryKind`, so a
+ * positive integer `transportAttempt` remains the only legacy discriminator.
+ */
+export function codexPetRetryMetricDelta(input: {
+  readonly type: unknown;
+  readonly payload?: unknown;
+}): CodexPetRetryMetricDelta {
+  if (input.type === "run.repairing") {
+    return {
+      visualRepairAttempts: 1,
+      transportRetries: 0,
+      actionRetries: 1,
+      failureCategory: null,
+    };
+  }
+  if (input.type !== "job.retrying") {
+    return {
+      visualRepairAttempts: 0,
+      transportRetries: 0,
+      actionRetries: 0,
+      failureCategory: null,
+    };
+  }
+
+  const payload = jsonRecord(input.payload);
+  const retryKind = payload.retryKind;
+  const transportAttempt = payload.transportAttempt;
+  const isLegacyTransportRetry = retryKind == null
+    && typeof transportAttempt === "number"
+    && Number.isSafeInteger(transportAttempt)
+    && transportAttempt > 0;
+  const isTransportRetry = retryKind === "transport" || isLegacyTransportRetry;
+  return {
+    visualRepairAttempts: 0,
+    transportRetries: isTransportRetry ? 1 : 0,
+    actionRetries: isTransportRetry ? 1 : 0,
+    failureCategory: isTransportRetry ? payload.category : null,
+  };
+}
+
 export interface CodexPetProviderMetricDelta {
   readonly calls: number;
   readonly inputTokens: number;
@@ -193,6 +244,17 @@ export function recordCodexPetImageFailureMetric(category: unknown, metrics: Wor
   if (category === "authentication") metrics.authenticationFailures += 1;
   if (category === "moderation") metrics.moderationFailures += 1;
   if (category === "invalid_request") metrics.invalidRequestFailures += 1;
+}
+
+export function recordCodexPetRetryMetrics(
+  input: { readonly type: unknown; readonly payload?: unknown },
+  metrics: WorkerMetrics,
+): CodexPetRetryMetricDelta {
+  const delta = codexPetRetryMetricDelta(input);
+  metrics.transportRetries += delta.transportRetries;
+  metrics.visualRepairAttempts += delta.visualRepairAttempts;
+  if (delta.transportRetries) recordCodexPetImageFailureMetric(delta.failureCategory, metrics);
+  return delta;
 }
 
 async function observeProviderArtifacts(input: {
@@ -473,6 +535,10 @@ async function reconcileBillingIntents(prisma: PrismaClient, billing: CodexPetCh
 }
 
 async function main() {
+  const imageRoute = assertCodexPetImageRoute(process.env);
+  const visualQaRoute = assertCodexPetVisualQaRoute(process.env);
+  console.info(`[codex-pet-worker] image route ready model=${imageRoute.model}`);
+  console.info(`[codex-pet-worker] visual QA route ready model=${visualQaRoute.model}`);
   const prisma = getPrisma();
   const s3 = makeS3();
   const artifacts = createCodexPetArtifactStore({ prisma, s3 });
@@ -561,6 +627,7 @@ async function main() {
           appendEvent: async (input) => {
             const event = await appendCodexPetEvent(input);
             const eventAt = Date.now();
+            const retryMetric = recordCodexPetRetryMetrics(input, metrics);
             if (input.type === "stage.started") {
               finishObservedStage(runId, eventAt);
               stageStartedAt.set(runId, { stage: input.stage, at: eventAt });
@@ -580,7 +647,7 @@ async function main() {
               const action = actionOutcomes.get(input.jobKey) ?? { completed: 0, failed: 0, retries: 0 };
               if (input.type === "job.completed") action.completed += 1;
               if (input.type === "validation.failed") action.failed += 1;
-              if (input.type === "job.retrying" || input.type === "run.repairing") action.retries += 1;
+              action.retries += retryMetric.actionRetries;
               actionOutcomes.set(input.jobKey, action);
             }
             if (input.type === "job.retrying" || input.type === "run.failed") {
@@ -593,11 +660,6 @@ async function main() {
                 );
               }
             }
-            if (input.type === "job.retrying") {
-              metrics.transportRetries += 1;
-              recordCodexPetImageFailureMetric(jsonRecord(input.payload).category, metrics);
-            }
-            if (input.type === "run.repairing") metrics.visualRepairAttempts += 1;
             if (input.type === "knowledge.archive_retrying") metrics.archiveRetries += 1;
             if (input.type === "knowledge.archive_completed") metrics.archiveCompleted += 1;
             if (input.type === "validation.warning") metrics.validationWarnings += 1;

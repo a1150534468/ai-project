@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
+import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CODEX_PET_RESOURCE_KEY,
@@ -14,6 +15,30 @@ import {
 } from "./codex-pet-routes.js";
 
 const NOW = new Date("2026-07-17T12:00:00.000Z");
+
+function completeValidationReport(overrides: Record<string, unknown> = {}) {
+  return {
+    ok: true,
+    spriteVersionNumber: 2,
+    modelContractVersion: "gpt-only-v1",
+    modelProvenance: {
+      imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
+      visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] },
+    },
+    deterministic: { ok: true },
+    standardAtlasValidation: { ok: true },
+    packagedSpritesheet: { ok: true },
+    chromaDespill: { ok: true },
+    directionRegistration: { ok: true },
+    directionContinuity: { ok: true },
+    row9PreGenerationGate: { passed: true },
+    row10PreGenerationGate: { passed: true },
+    blindDirectionValidation: { ok: true },
+    finalVisualQa: { pass: true, identity: true, structure: true, semantics: true, continuity: true },
+    directionSemantics: LOOK_DIRECTIONS.map((direction) => ({ direction, verdict: "pass" })),
+    ...overrides,
+  };
+}
 
 type ProjectRow = ReturnType<typeof projectRow>;
 type RunRow = ReturnType<typeof runRow>;
@@ -200,7 +225,8 @@ function createPrismaMock(seed: {
   let eventCounter = events.length;
 
   const prisma: Record<string, unknown> = {};
-  const queryRaw = vi.fn(async () => [{ pg_advisory_xact_lock: null }]);
+  const queryRaw = vi.fn(async () => [{ id: "locked-row" }]);
+  const executeRaw = vi.fn(async () => 1);
   const projectDelegate = {
     findMany: vi.fn(async ({ where = {}, take }: { where?: Record<string, unknown>; take?: number } = {}) =>
       projects.filter((row) => matches(row, where)).slice(0, take ?? projects.length)),
@@ -345,6 +371,7 @@ function createPrismaMock(seed: {
       }),
     },
     $queryRawUnsafe: queryRaw,
+    $executeRawUnsafe: executeRaw,
   });
   Object.assign(prisma, {
     $transaction: vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => {
@@ -364,7 +391,7 @@ function createPrismaMock(seed: {
   return {
     prisma: prisma as unknown as PrismaClient,
     state: { projects, runs, artifacts, events, images, jobs, documents, deletedDocumentSourceIds },
-    spies: { queryRaw, projectDelegate, runDelegate, artifactDelegate, eventDelegate, jobDelegate, isTransactionActive: () => transactionDepth > 0 },
+    spies: { queryRaw, executeRaw, projectDelegate, runDelegate, artifactDelegate, eventDelegate, jobDelegate, isTransactionActive: () => transactionDepth > 0 },
   };
 }
 
@@ -409,6 +436,8 @@ async function createApp(prisma: PrismaClient, overrides: Partial<CodexPetRouteD
     subscribeRunEvents: async () => undefined,
     notifyRunEvent: async () => undefined,
     waitForSseDisconnect: async () => undefined,
+    assertVisualQaReady: () => undefined,
+    assertImageReady: () => undefined,
     ...overrides,
   });
   return { app, billing, enqueueRun };
@@ -419,28 +448,81 @@ const auth = { "x-test-user": "u1" };
 describe("Codex pet routes", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it("rejects contradictory nested validation gates even when the top-level report says passed", () => {
-    expect(codexPetValidationPassed({ ok: true, spriteVersionNumber: 2 })).toBe(true);
-    expect(codexPetValidationPassed({
-      ok: true,
-      spriteVersionNumber: 2,
-      packagedSpritesheet: { ok: false },
-    })).toBe(false);
-    expect(codexPetValidationPassed({
-      ok: true,
-      spriteVersionNumber: 2,
-      directionContinuity: { ok: false },
-    })).toBe(false);
-    expect(codexPetValidationPassed({
-      ok: true,
-      spriteVersionNumber: 2,
-      directionRegistration: { ok: false },
-    })).toBe(false);
-    expect(codexPetValidationPassed({
-      ok: true,
-      spriteVersionNumber: 2,
-      directionSemantics: [{ direction: "270", verdict: "fail" }],
-    })).toBe(false);
+  it("accepts only a complete runner validation report", () => {
+    expect(codexPetValidationPassed(completeValidationReport())).toBe(true);
+    expect(codexPetValidationPassed({ ok: true, spriteVersionNumber: 2 })).toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({ modelContractVersion: undefined }))).toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({ modelProvenance: undefined }))).toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({
+      modelProvenance: {
+        imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
+        visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["qwen3.7-plus"], routes: ["chatgpt_model_route"] },
+      },
+    }))).toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({
+      modelProvenance: {
+        imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-qwen-fallback"] },
+        visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] },
+      },
+    }))).toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({
+      modelProvenance: {
+        imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
+        visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol-qwen-fallback"], routes: ["chatgpt_model_route"] },
+      },
+    }))).toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({
+      modelProvenance: {
+        imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
+        visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["primary_fallback"] },
+      },
+    }))).toBe(false);
+    for (const hardGate of ["identity", "structure", "semantics", "continuity"] as const) {
+      expect(codexPetValidationPassed(completeValidationReport({
+        finalVisualQa: {
+          pass: true,
+          identity: true,
+          structure: true,
+          semantics: true,
+          continuity: true,
+          [hardGate]: false,
+        },
+      }))).toBe(false);
+    }
+
+    const requiredGates = [
+      ["deterministic", "ok"],
+      ["standardAtlasValidation", "ok"],
+      ["packagedSpritesheet", "ok"],
+      ["chromaDespill", "ok"],
+      ["directionRegistration", "ok"],
+      ["directionContinuity", "ok"],
+      ["row9PreGenerationGate", "passed"],
+      ["row10PreGenerationGate", "passed"],
+      ["blindDirectionValidation", "ok"],
+      ["finalVisualQa", "pass"],
+    ] as const;
+    for (const [gate, passField] of requiredGates) {
+      const missing = completeValidationReport() as Record<string, unknown>;
+      delete missing[gate];
+      expect(codexPetValidationPassed(missing), `missing ${gate}`).toBe(false);
+      expect(codexPetValidationPassed(completeValidationReport({
+        [gate]: { [passField]: false },
+      })), `failed ${gate}.${passField}`).toBe(false);
+    }
+
+    const semantics = completeValidationReport().directionSemantics;
+    expect(codexPetValidationPassed(completeValidationReport({
+      directionSemantics: semantics.slice(0, -1),
+    })), "missing fixed direction").toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({
+      directionSemantics: [...semantics.slice(0, -1), semantics[0]],
+    })), "duplicate direction").toBe(false);
+    expect(codexPetValidationPassed(completeValidationReport({
+      directionSemantics: semantics.map((entry, index) => index === 7
+        ? { ...entry, verdict: "fail" }
+        : entry),
+    })), "failed direction").toBe(false);
   });
 
   it("revalidates reference MIME, object namespace, decoded raster, and 10MB size", async () => {
@@ -495,6 +577,56 @@ describe("Codex pet routes", () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ error: "Codex 桌宠套餐当前已停用" });
+    expect(state.runs).toHaveLength(0);
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(enqueueRun).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects start before creating a run or charging when the GPT-5.6 route is unavailable", async () => {
+    const { prisma, state } = createPrismaMock({ projects: [projectRow()] });
+    const billing = createBilling();
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, {
+      billing,
+      enqueueRun,
+      assertVisualQaReady: () => { throw new Error("gpt-5.6-sol route missing"); },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/codex-pets/projects/project-1/start",
+      headers: { ...auth, "idempotency-key": "gpt-route-missing-key" },
+      payload: { idempotencyKey: "gpt-route-missing-key" },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toContain("GPT-5.6");
+    expect(state.runs).toHaveLength(0);
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(enqueueRun).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("rejects start before creating a run or charging when GPT Image edits are unavailable", async () => {
+    const { prisma, state } = createPrismaMock({ projects: [projectRow()] });
+    const billing = createBilling();
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, {
+      billing,
+      enqueueRun,
+      assertImageReady: () => { throw new Error("GPT Image edit route missing"); },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/codex-pets/projects/project-1/start",
+      headers: { ...auth, "idempotency-key": "gpt-image-route-missing-key" },
+      payload: { idempotencyKey: "gpt-image-route-missing-key" },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toContain("GPT 生图");
     expect(state.runs).toHaveLength(0);
     expect(billing.chargeResource).not.toHaveBeenCalled();
     expect(enqueueRun).not.toHaveBeenCalled();
@@ -750,8 +882,12 @@ describe("Codex pet routes", () => {
       units: 1,
     });
     expect(enqueueRun).toHaveBeenCalledTimes(2);
-    expect(spies.queryRaw).toHaveBeenCalledWith("SELECT pg_advisory_xact_lock(hashtext($1))", "codex-pet:u1");
+    expect(spies.executeRaw).toHaveBeenCalledWith("SELECT pg_advisory_xact_lock(hashtext($1))", "codex-pet:u1");
     expect(state.runs[0]!.id).toBe(deriveCodexPetRunId("u1", "project-1", "start-key-0001"));
+    expect(state.runs[0]!.inputSnapshot).toMatchObject({
+      requestedModel: "gpt-image-2",
+      visualQaModel: "gpt-5.6-sol",
+    });
 
     const conflict = await app.inject({
       method: "POST",
@@ -1317,7 +1453,7 @@ describe("Codex pet routes", () => {
       spritesheetArtifactId: "sprite-final",
       packageArtifactId: "package-final",
       previewArtifactId: "preview-final",
-      validationReport: { ok: true, spriteVersionNumber: 2 },
+      validationReport: completeValidationReport(),
       knowledgeDocumentId: "knowledge-doc-1",
       completedAt: new Date(NOW),
     });
@@ -1376,7 +1512,7 @@ describe("Codex pet routes", () => {
       status: "ready",
       spritesheetArtifactId: "sprite-historical",
       packageArtifactId: "package-historical",
-      validationReport: { ok: true, spriteVersionNumber: 2 },
+      validationReport: completeValidationReport(),
       knowledgeDocumentId: "knowledge-historical",
     });
     const latest = runRow({
@@ -1384,7 +1520,7 @@ describe("Codex pet routes", () => {
       status: "ready",
       spritesheetArtifactId: "sprite-latest",
       packageArtifactId: "package-latest",
-      validationReport: { ok: true, spriteVersionNumber: 2 },
+      validationReport: completeValidationReport(),
       knowledgeDocumentId: "knowledge-latest",
     });
     const artifacts = [
@@ -1428,7 +1564,7 @@ describe("Codex pet routes", () => {
       status: "queued",
       spritesheetArtifactId: "sprite-selected",
       packageArtifactId: "package-selected",
-      validationReport: { ok: true, spriteVersionNumber: 2 },
+      validationReport: completeValidationReport(),
       knowledgeDocumentId: "knowledge-selected",
     });
     const artifacts = [
@@ -1450,7 +1586,7 @@ describe("Codex pet routes", () => {
     state.runs[0]!.validationReport = { ok: true };
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
 
-    state.runs[0]!.validationReport = { ok: true, spriteVersionNumber: 2 };
+    state.runs[0]!.validationReport = completeValidationReport();
     state.runs[0]!.knowledgeDocumentId = null;
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
 
@@ -1460,9 +1596,17 @@ describe("Codex pet routes", () => {
 
     (state.documents[0]!.kb as { userId: string }).userId = "u1";
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(200);
-    state.artifacts.find((artifact) => artifact.id === "sprite-selected")!.objectKey = "workflow/codex-pets/u2/project-1/run-selected/sprite.webp";
+    const selectedSprite = state.artifacts.find((artifact) => artifact.id === "sprite-selected")!;
+    const selectedPackage = state.artifacts.find((artifact) => artifact.id === "package-selected")!;
+    selectedSprite.expiresAt = new Date("2026-07-24T00:00:00.000Z");
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
-    state.artifacts.find((artifact) => artifact.id === "sprite-selected")!.objectKey = "workflow/codex-pets/u1/project-1/run-selected/sprite.webp";
+    selectedSprite.expiresAt = null;
+    selectedPackage.expiresAt = new Date("2026-07-24T00:00:00.000Z");
+    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
+    selectedPackage.expiresAt = null;
+    selectedSprite.objectKey = "workflow/codex-pets/u2/project-1/run-selected/sprite.webp";
+    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
+    selectedSprite.objectKey = "workflow/codex-pets/u1/project-1/run-selected/sprite.webp";
     state.runs[0]!.userId = "u2";
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
     expect((await app.inject({ method: "GET", url: "/api/workflow/codex-pets/projects/project-1/download?runId=run-selected", headers: { "x-test-user": "u2" } })).statusCode).toBe(404);

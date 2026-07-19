@@ -71,27 +71,110 @@ if [[ "${DEV_SKIP_MIGRATIONS:-0}" != "1" ]]; then
 fi
 
 pids=()
+pgids=()
+process_names=()
+stuck_counts=()
+cleanup_started=0
+
 cleanup() {
-  trap - EXIT INT TERM
-  if (( ${#pids[@]} > 0 )); then
-    kill "${pids[@]}" >/dev/null 2>&1 || true
-    wait "${pids[@]}" >/dev/null 2>&1 || true
+  if (( cleanup_started )); then
+    return
   fi
+  cleanup_started=1
+
+  if (( ${#pgids[@]} == 0 )); then
+    return
+  fi
+
+  echo "正在停止本机服务..."
+
+  # Each service is started in its own process group. Signalling the whole
+  # group also reaches grandchildren created by pnpm, tsx, Vite and esbuild.
+  for pgid in "${pgids[@]}"; do
+    kill -TERM -- "-$pgid" >/dev/null 2>&1 || true
+  done
+
+  local deadline=$((SECONDS + 10))
+  local any_alive
+  while (( SECONDS < deadline )); do
+    any_alive=0
+    for pgid in "${pgids[@]}"; do
+      if kill -0 -- "-$pgid" >/dev/null 2>&1; then
+        any_alive=1
+        break
+      fi
+    done
+    if (( any_alive == 0 )); then
+      break
+    fi
+    sleep 0.2
+  done
+
+  # A process stuck in macOS's E (exiting) state may ignore TERM indefinitely.
+  # KILL is only used after the grace period, and only for tracked groups.
+  for pgid in "${pgids[@]}"; do
+    if kill -0 -- "-$pgid" >/dev/null 2>&1; then
+      kill -KILL -- "-$pgid" >/dev/null 2>&1 || true
+    fi
+  done
+
+  for pid in "${pids[@]}"; do
+    wait "$pid" >/dev/null 2>&1 || true
+  done
 }
-trap cleanup EXIT INT TERM
+
+handle_exit() {
+  local status="$1"
+  trap - EXIT INT TERM HUP
+  cleanup
+  exit "$status"
+}
+
+handle_signal() {
+  local signal_name="$1"
+  local status="$2"
+  trap - EXIT INT TERM HUP
+  echo "收到 ${signal_name}，准备停止本机服务..." >&2
+  cleanup
+  exit "$status"
+}
+
+trap 'handle_exit $?' EXIT
+trap 'handle_signal INT 130' INT
+trap 'handle_signal TERM 143' TERM
+trap 'handle_signal HUP 129' HUP
+
+# Monitor mode gives every background job a separate process group whose PGID
+# is the PID returned in $!. This remains reliable even after a child is
+# re-parented to launchd because an intermediate watcher exits unexpectedly.
+set -m
 
 run_background() {
+  local process_name="$1"
+  shift
+
   "$@" &
-  pids+=("$!")
+  local pid="$!"
+  pids+=("$pid")
+  pgids+=("$pid")
+  process_names+=("$process_name")
+  stuck_counts+=(0)
+}
+
+group_has_stuck_process() {
+  local pgid="$1"
+  local states
+  states="$(ps -o state= -g "$pgid" 2>/dev/null || true)"
+  [[ "$states" == *E* || "$states" == *Z* ]]
 }
 
 echo "[3/4] 启动本机服务..."
-run_background bash -lc 'cd "$1/services/billing" && exec go run .' _ "$ROOT_DIR"
-run_background pnpm --filter @ai-assistant/api dev
-run_background pnpm --filter @ai-assistant/api worker:novel:dev
-run_background pnpm --filter @ai-assistant/api worker:codex-pet:dev
-run_background env PORT=5174 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/web dev
-run_background env PORT=5175 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/admin dev
+run_background "Billing" bash -lc 'cd "$1/services/billing" && exec go run .' _ "$ROOT_DIR"
+run_background "API" pnpm --filter @ai-assistant/api dev
+run_background "Novel Worker" pnpm --filter @ai-assistant/api worker:novel:dev
+run_background "Codex Pet Worker" pnpm --filter @ai-assistant/api worker:codex-pet:dev
+run_background "Web" env PORT=5174 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/web dev
+run_background "Admin" env PORT=5175 API_PROXY_TARGET="$API_PROXY_TARGET" pnpm --filter @ai-assistant/admin dev
 
 echo "[4/4] 混合开发环境已启动："
 echo "  Web:     http://localhost:5174"
@@ -103,14 +186,27 @@ echo "  Codex Pet Worker health: http://localhost:${CODEX_PET_WORKER_HEALTH_PORT
 echo "按 Ctrl+C 停止本机服务；Docker 数据层会继续运行。"
 
 while true; do
-  for pid in "${pids[@]}"; do
+  for index in "${!pids[@]}"; do
+    pid="${pids[$index]}"
     if ! kill -0 "$pid" >/dev/null 2>&1; then
       set +e
       wait "$pid"
       status=$?
       set -e
-      echo "本机服务进程已退出（PID $pid，状态 $status），正在停止其余服务。" >&2
+      echo "${process_names[$index]} 已退出（PID $pid，状态 $status），正在停止其余服务。" >&2
       exit "$status"
+    fi
+
+    # E/Z normally lasts for only an instant. Five consecutive observations
+    # indicate a wedged watcher or an unreaped child rather than a normal exit.
+    if group_has_stuck_process "${pgids[$index]}"; then
+      stuck_counts[$index]=$((stuck_counts[$index] + 1))
+      if (( stuck_counts[$index] >= 5 )); then
+        echo "${process_names[$index]} 的进程组持续处于 E/Z 状态，正在停止全部本机服务。" >&2
+        exit 1
+      fi
+    else
+      stuck_counts[$index]=0
     fi
   done
   sleep 1

@@ -2,12 +2,21 @@ import type {
   CodexPetArtifact,
   CodexPetCreatePayload,
   CodexPetEvent,
+  CodexPetJob,
   CodexPetProject,
   CodexPetProjectStatus,
   CodexPetReferenceAsset,
   CodexPetRun,
   CodexPetRunStatus,
   CodexPetStylePreset,
+} from "../../codexPetApi";
+import {
+  CODEX_PET_IMAGE_ACTUAL_MODELS,
+  CODEX_PET_IMAGE_MODEL,
+  CODEX_PET_MODEL_CONTRACT_VERSION,
+  CODEX_PET_VISUAL_QA_ACTUAL_MODELS,
+  CODEX_PET_VISUAL_QA_MODEL,
+  CODEX_PET_VISUAL_QA_ROUTES,
 } from "../../codexPetApi";
 
 export const CODEX_PET_POLL_MS = 2_500;
@@ -115,6 +124,42 @@ export function isCodexPetRunLive(status: CodexPetRunStatus | undefined): boolea
   return status !== undefined && !["ready", "failed", "cancelled", "awaiting_base_review"].includes(status);
 }
 
+function codexPetJobTimestamp(job: CodexPetJob): number {
+  const updatedAt = Date.parse(job.updatedAt);
+  if (Number.isFinite(updatedAt)) return updatedAt;
+  const createdAt = Date.parse(job.createdAt);
+  return Number.isFinite(createdAt) ? createdAt : 0;
+}
+
+function mostRecentCodexPetJob(
+  jobs: readonly CodexPetJob[],
+  status: "running" | "queued",
+): CodexPetJob | null {
+  let selected: CodexPetJob | null = null;
+  for (const job of jobs) {
+    if (job.status !== status) continue;
+    if (!selected || codexPetJobTimestamp(job) >= codexPetJobTimestamp(selected)) selected = job;
+  }
+  return selected;
+}
+
+/**
+ * Durable Job state is authoritative for the current visual subtask. Events
+ * are an append-only activity log, so a late completion event from one
+ * parallel branch must not replace another branch that is still running.
+ */
+export function codexPetCurrentSubtask(
+  jobs: readonly CodexPetJob[],
+  eventJobKey?: string | null,
+  progressStage?: string | null,
+): string {
+  return mostRecentCodexPetJob(jobs, "running")?.key
+    ?? mostRecentCodexPetJob(jobs, "queued")?.key
+    ?? eventJobKey
+    ?? progressStage
+    ?? "—";
+}
+
 function objectValue(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -141,6 +186,37 @@ export function codexPetValidationPassed(report: unknown): boolean {
     && value.directionSemantics.some((entry) => objectValue(entry)?.verdict === "fail"));
 }
 
+export type CodexPetModelContractState = "pending" | "valid" | "invalid";
+
+function containsOnly(values: readonly string[], allowed: readonly string[]): boolean {
+  const allowlist = new Set<string>(allowed);
+  return values.every((value) => allowlist.has(value.trim()));
+}
+
+/**
+ * Evaluate model provenance without ever consulting the app-wide chat model.
+ * Missing actual-model metadata is expected while a run is in progress, but
+ * mismatched requested models, relay aliases, or routes fail immediately.
+ */
+export function codexPetModelContractState(
+  run: CodexPetRun | null | undefined,
+): CodexPetModelContractState {
+  if (!run) return "pending";
+  const imageActualModels = Array.isArray(run.actualModels) ? run.actualModels : [];
+  const visualActualModels = Array.isArray(run.visualQaActualModels) ? run.visualQaActualModels : [];
+  const visualRoutes = Array.isArray(run.visualQaRoutes) ? run.visualQaRoutes : [];
+  if (run.modelContractVersion !== CODEX_PET_MODEL_CONTRACT_VERSION
+    || run.requestedModel !== CODEX_PET_IMAGE_MODEL
+    || run.visualQaModel !== CODEX_PET_VISUAL_QA_MODEL
+    || !containsOnly(imageActualModels, CODEX_PET_IMAGE_ACTUAL_MODELS)
+    || !containsOnly(visualActualModels, CODEX_PET_VISUAL_QA_ACTUAL_MODELS)
+    || !containsOnly(visualRoutes, CODEX_PET_VISUAL_QA_ROUTES)) return "invalid";
+  if (imageActualModels.length === 0 || visualActualModels.length === 0 || visualRoutes.length === 0) {
+    return "pending";
+  }
+  return "valid";
+}
+
 export function isCodexPetDeliveryReady(run: CodexPetRun | null | undefined): boolean {
   const report = objectValue(run?.validationReport);
   return Boolean(
@@ -149,6 +225,7 @@ export function isCodexPetDeliveryReady(run: CodexPetRun | null | undefined): bo
     && run.knowledgeDocumentId
     && run.spritesheetArtifactId
     && run.packageArtifactId
+    && codexPetModelContractState(run) === "valid"
     // A delivery report is only valid for this workflow when it explicitly
     // identifies the Codex v2 contract. Keep the broader helper above for
     // legacy/report-display compatibility, but gate install/download here.

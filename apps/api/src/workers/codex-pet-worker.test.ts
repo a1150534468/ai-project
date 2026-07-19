@@ -4,10 +4,12 @@ import { makeS3 } from "../storage/s3.js";
 import {
   cleanupExpiredCodexPetArtifacts,
   codexPetProviderMetricDelta,
+  codexPetRetryMetricDelta,
   codexPetWorkerMetricsText,
   createCodexPetWorkerHealthServer,
   createCodexPetWorkerMetrics,
   recordCodexPetImageFailureMetric,
+  recordCodexPetRetryMetrics,
   recordCodexPetUpstreamRequestIdMetric,
   recoverDeletingProjects,
   recoverStaleRuns,
@@ -114,6 +116,69 @@ describe("Codex pet provider observability", () => {
       authenticationFailures: 1,
       moderationFailures: 1,
       invalidRequestFailures: 1,
+    });
+  });
+});
+
+describe("Codex pet retry observability", () => {
+  it("counts one visual and action retry from a repair cycle without double-counting its job restart", () => {
+    const metrics = createCodexPetWorkerMetrics();
+    const visualRepair = recordCodexPetRetryMetrics({
+      type: "run.repairing",
+      payload: { attempt: 1, maxAttempts: 3 },
+    }, metrics);
+    const visualRestart = recordCodexPetRetryMetrics({
+      type: "job.retrying",
+      payload: { retryKind: "visual", attempt: 2, maxAttempts: 3 },
+    }, metrics);
+
+    expect(visualRepair.actionRetries + visualRestart.actionRetries).toBe(1);
+    expect(metrics).toMatchObject({
+      visualRepairAttempts: 1,
+      transportRetries: 0,
+      rateLimitFailures: 0,
+      timeoutFailures: 0,
+    });
+  });
+
+  it("counts explicit and legacy transport retries with their failure category and action retry", () => {
+    const metrics = createCodexPetWorkerMetrics();
+    const explicit = recordCodexPetRetryMetrics({
+      type: "job.retrying",
+      payload: { retryKind: "transport", transportAttempt: 1, category: "rate_limit" },
+    }, metrics);
+    const legacy = recordCodexPetRetryMetrics({
+      type: "job.retrying",
+      payload: { transportAttempt: 2, category: "timeout" },
+    }, metrics);
+
+    expect(explicit.actionRetries + legacy.actionRetries).toBe(2);
+    expect(metrics).toMatchObject({
+      visualRepairAttempts: 0,
+      transportRetries: 2,
+      rateLimitFailures: 1,
+      timeoutFailures: 1,
+    });
+  });
+
+  it("does not treat historical visual attempt metadata as a transport retry", () => {
+    expect(codexPetRetryMetricDelta({
+      type: "job.retrying",
+      payload: { attempt: 2, maxAttempts: 3, category: "upstream" },
+    })).toEqual({
+      visualRepairAttempts: 0,
+      transportRetries: 0,
+      actionRetries: 0,
+      failureCategory: null,
+    });
+    expect(codexPetRetryMetricDelta({
+      type: "job.retrying",
+      payload: { retryKind: "visual", transportAttempt: 2, category: "timeout" },
+    })).toEqual({
+      visualRepairAttempts: 0,
+      transportRetries: 0,
+      actionRetries: 0,
+      failureCategory: null,
     });
   });
 });
