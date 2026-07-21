@@ -33,7 +33,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 text-left text-sm text-[#424245] transition hover:border-brand/30 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 text-left text-sm text-[#424245] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -60,7 +60,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
                     setOpen(false);
                   }}
                   className={`flex w-full items-start gap-2 rounded-[9px] px-3 py-2.5 text-left transition ${
-                    checked ? "bg-brand-soft text-brand-ink" : "text-[#424245] hover:bg-[#f7faf9]"
+                    checked ? "bg-brand-soft text-brand-ink" : "text-[#424245] "
                   }`}
                 >
                   <span className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full ${

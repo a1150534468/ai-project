@@ -40,7 +40,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
           type="button"
           onClick={handleSaveLocal}
           disabled={saveState === "saving"}
-          className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] bg-brand px-3 text-sm font-semibold text-white transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-60"
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] bg-brand px-3 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-60"
         >
           <Icon icon={saveState === "saving" ? "mdi:loading" : "mdi:content-save-outline"} className={saveState === "saving" ? "animate-spin text-base" : "text-base"} aria-hidden />
           {saveState === "saving" ? "保存中…" : "保存到本地"}
@@ -49,7 +49,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
       <button
         type="button"
         onClick={handleDownload}
-        className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm font-semibold text-[#1d1d1f] transition hover:border-brand/40 hover:text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm font-semibold text-[#1d1d1f] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
       >
         <Icon icon="mdi:download-outline" className="text-base" aria-hidden />
         下载文档
@@ -58,7 +58,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
         <span className="inline-flex items-center gap-1.5 text-xs text-[#6e6e73]">
           <Icon icon="mdi:check-circle" className="text-sm text-brand" aria-hidden />
           已保存
-          <button type="button" onClick={() => void revealDesktopPath(savedPath)} className="font-medium text-brand-ink underline-offset-2 hover:underline">
+          <button type="button" onClick={() => void revealDesktopPath(savedPath)} className="font-medium text-brand-ink underline-offset-2 ">
             打开文件夹
           </button>
         </span>
@@ -151,7 +151,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
               type="button"
               disabled={isCancelling}
               onClick={onCancel}
-              className="h-8 rounded-full border border-[#d2d2d7] px-3 text-xs font-medium text-[#6e6e73] transition hover:border-red-200 hover:text-red-600 disabled:opacity-60"
+              className="h-8 rounded-full border border-[#d2d2d7] px-3 text-xs font-medium text-[#6e6e73] transition disabled:opacity-60"
             >
               {isCancelling ? "取消中" : "取消"}
             </button>
@@ -174,7 +174,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
                   aria-expanded={isWorkflowVisible}
                   aria-controls={`agent-workflow-steps-${run.id}`}
                   onClick={toggleWorkflow}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm font-semibold text-[#1d1d1f] transition hover:border-brand/40 hover:text-brand-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm font-semibold text-[#1d1d1f] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                 >
                   <Icon icon={isWorkflowVisible ? "mdi:chevron-up" : "mdi:source-branch"} className="text-base" aria-hidden />
                   {isWorkflowVisible ? "隐藏工作流" : "查看工作流"}

@@ -93,7 +93,7 @@ export function AgentRail(props: AgentRailProps) {
             <div className="flex-none border-b border-gray-100 p-4">
               <button
                 onClick={props.onOpenAgentPicker}
-                className="flex w-full items-center justify-center space-x-2 rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-brand-hover"
+                className="flex w-full items-center justify-center space-x-2 rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all "
               >
                 <Icon icon="mdi:plus" className="text-lg" aria-hidden />
                 <span>新建 Agent</span>
@@ -142,7 +142,7 @@ export function AgentRail(props: AgentRailProps) {
               </button>
               <button
                 onClick={() => props.onNewSession?.(selected.id)}
-                className="flex w-full items-center justify-center space-x-2 rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-brand-hover"
+                className="flex w-full items-center justify-center space-x-2 rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all "
               >
                 <Icon icon="mdi:plus" className="text-lg" aria-hidden />
                 <span>新对话</span>
@@ -221,7 +221,7 @@ function SessionList({
         <div
           key={session.id}
           onClick={() => onSelectSession?.(session.id)}
-          className={`group cursor-pointer rounded-lg p-2.5 transition-colors hover:bg-gray-50 ${
+          className={`group cursor-pointer rounded-lg p-2.5 transition-colors ${
             currentSessionId === session.id ? "bg-[#f5f5f7]" : ""
           }`}
         >
@@ -245,7 +245,7 @@ function SessionList({
                 e.stopPropagation();
                 onDeleteSession?.(session.id);
               }}
-              className="text-[10px] text-gray-400 opacity-0 transition-opacity hover:text-red-600 group-hover:opacity-100"
+              className="text-[10px] text-gray-400 opacity-100 transition-opacity "
             >
               删除
             </button>
@@ -308,7 +308,7 @@ function AgentRow({
   token: string;
 }) {
   return (
-    <div data-agent-row className="group flex items-center gap-2 rounded-lg px-2 py-2 hover:bg-gray-50">
+    <div data-agent-row className="group flex items-center gap-2 rounded-lg px-2 py-2 ">
       <button onClick={() => openAgent(agent.id)} className="flex min-w-0 flex-1 items-center gap-2.5 text-left">
         <AgentAvatar
           avatarUrl={agent.avatarUrl}
@@ -337,7 +337,7 @@ function AgentRow({
         >
           <button
             aria-label="更多操作"
-            className="flex-none rounded p-1 text-gray-300 opacity-0 transition-opacity hover:text-gray-600 group-hover:opacity-100"
+            className="flex-none rounded p-1 text-gray-300 opacity-100 transition-opacity "
           >
             <Icon icon="mdi:dots-horizontal" className="text-base" />
           </button>

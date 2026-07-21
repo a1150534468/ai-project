@@ -113,7 +113,7 @@ export function TaskComposer({
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(attachment.id)}
-                  className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] text-[#8a8a8f] transition hover:bg-white hover:text-red-600"
+                  className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] text-[#8a8a8f] transition "
                   aria-label="移除附件"
                 >
                   <Icon icon="mdi:close" className="text-sm" aria-hidden />
@@ -164,7 +164,7 @@ export function TaskComposer({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-[#424245] transition hover:border-brand/30 hover:bg-[#f7faf9] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-[#424245] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
             >
               <Icon icon="mdi:paperclip" className="text-lg" aria-hidden />
               上传文件
@@ -173,7 +173,7 @@ export function TaskComposer({
               type="button"
               disabled={isSubmitting}
               onClick={onSubmit}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-brand px-5 text-sm font-semibold text-white transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-brand px-5 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <Icon icon={isSubmitting ? "mdi:loading" : "mdi:play"} className={isSubmitting ? "animate-spin text-xl" : "text-lg"} aria-hidden />
               {isSubmitting ? "正在启动…" : usingSavedTeam ? "使用该团队执行" : "开始执行"}

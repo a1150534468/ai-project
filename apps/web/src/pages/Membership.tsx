@@ -107,7 +107,7 @@ export default function Membership({ token }: MembershipProps) {
                     onClick={() => setPaymentMethod(method)}
                     disabled={loading}
                     className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
-                      active ? "bg-white text-brand-ink shadow-sm" : "text-gray-500 hover:text-[#1d1d1f]"
+                      active ? "bg-white text-brand-ink shadow-sm" : "text-gray-500 "
                     }`}
                   >
                     <Icon icon={method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill"} className="text-lg" />
@@ -130,7 +130,7 @@ export default function Membership({ token }: MembershipProps) {
                 return (
                   <StaggerItem key={card.id}>
                     <motion.div
-                      className="bg-white rounded-2xl p-6 border border-gray-50 hover:border-brand/30 transition-all"
+                      className="bg-white rounded-2xl p-6 border border-gray-50 transition-all"
                       whileHover={{ y: -5 }}
                       transition={spring.snappy}
                     >
@@ -163,7 +163,7 @@ export default function Membership({ token }: MembershipProps) {
                       <RippleButton
                         onClick={() => handleBuyCard(card.id)}
                         disabled={loading}
-                        className="w-full mt-5 py-2.5 bg-brand text-white text-xs font-medium rounded-full hover:bg-brand-hover transition-all disabled:opacity-50"
+                        className="w-full mt-5 py-2.5 bg-brand text-white text-xs font-medium rounded-full transition-all disabled:opacity-50"
                       >
                         {loading ? "处理中..." : "立即购买"}
                       </RippleButton>
@@ -213,7 +213,7 @@ export default function Membership({ token }: MembershipProps) {
                           <span
                             className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
                               isActive
-                                ? "bg-green-100 text-green-700"
+                                ? "bg-brand-soft text-brand-ink"
                                 : "bg-gray-100 text-gray-600"
                             }`}
                           >
@@ -266,7 +266,7 @@ export default function Membership({ token }: MembershipProps) {
             className={`mt-6 rounded-2xl p-4 border ${
               message.includes("失败") || message.includes("错误")
                 ? "bg-red-50 border-red-200 text-red-700"
-                : "bg-green-50 border-green-200 text-green-700"
+                : "bg-brand-soft border-brand/30 text-brand-ink"
             }`}
           >
             <div className="flex items-start gap-3">

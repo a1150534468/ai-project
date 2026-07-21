@@ -27,7 +27,7 @@ export function WorkflowFlyout({ items, isActive, onSelect }: WorkflowFlyoutProp
             transition={{ delay: reduce ? 0 : idx * 0.035, duration: 0.16 }}
             className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors ${
               active ? "bg-brand-soft font-semibold text-brand-ink"
-                : sub.developing ? "cursor-not-allowed text-gray-300" : "text-gray-500 hover:bg-gray-50"
+                : sub.developing ? "cursor-not-allowed text-gray-300" : "text-gray-500 "
             }`}
           >
             <Icon icon={sub.icon} className="flex-none text-base" aria-hidden />

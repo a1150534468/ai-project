@@ -700,7 +700,7 @@ export default function App() {
           <div className="mt-6 flex w-full gap-3">
             <button
               onClick={() => setRechargePromptOpen(false)}
-              className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50"
+              className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition-colors "
             >
               稍后再说
             </button>
@@ -709,7 +709,7 @@ export default function App() {
                 setRechargePromptOpen(false);
                 setView("billing");
               }}
-              className="flex-1 rounded-full bg-brand py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+              className="flex-1 rounded-full bg-brand py-2.5 text-sm font-medium text-white transition-opacity "
             >
               去充值
             </button>

@@ -53,7 +53,7 @@ export function RechargeTab(p: RechargeTabProps) {
               type="button"
               onClick={() => p.setPaymentMethod(method)}
               disabled={p.loading}
-              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${p.paymentMethod === method ? "bg-white text-brand-ink shadow-sm" : "text-gray-500 hover:text-[#1d1d1f]"}`}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${p.paymentMethod === method ? "bg-white text-brand-ink shadow-sm" : "text-gray-500 "}`}
             >
               <Icon icon={p.paymentMethod === method ? (method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill") : (method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill")} className="text-lg" />
               {paymentMethodLabel(method)}
@@ -90,7 +90,7 @@ export function RechargeTab(p: RechargeTabProps) {
                 onKeyDown={(e) => { if (e.key === "Enter") p.onCustomTopup(); }} placeholder="输入充值金额"
                 className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20" disabled={p.loading} />
             </div>
-            <button onClick={p.onCustomTopup} disabled={p.loading || !p.pointCustomYuan.trim()} className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-full hover:bg-brand-hover transition-all disabled:opacity-50">{p.loading ? "处理中..." : "生成支付码"}</button>
+            <button onClick={p.onCustomTopup} disabled={p.loading || !p.pointCustomYuan.trim()} className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-full transition-all disabled:opacity-50">{p.loading ? "处理中..." : "生成支付码"}</button>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
             <span className="text-gray-400">当前汇率：1 元 = {p.rechargeRatio.toLocaleString()} 算力点</span>
@@ -106,7 +106,7 @@ export function RechargeTab(p: RechargeTabProps) {
                 onKeyDown={(e) => { if (e.key === "Enter") p.onVideoTopup(); }} placeholder="输入充值金额"
                 className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20" disabled={p.loading} />
             </div>
-            <button onClick={p.onVideoTopup} disabled={p.loading || !p.videoCustomYuan.trim()} className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-full hover:bg-brand-hover transition-all disabled:opacity-50">{p.loading ? "处理中..." : "生成支付码"}</button>
+            <button onClick={p.onVideoTopup} disabled={p.loading || !p.videoCustomYuan.trim()} className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-full transition-all disabled:opacity-50">{p.loading ? "处理中..." : "生成支付码"}</button>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
             <span className="text-gray-400">固定汇率：1 元 = 100 视频点</span>
@@ -121,7 +121,7 @@ export function RechargeTab(p: RechargeTabProps) {
         <div className="flex gap-3">
           <input type="text" value={p.redeemCode} onChange={(e) => p.setRedeemCode(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") p.onRedeem(); }}
             placeholder="请输入兑换码" className="flex-1 px-4 py-2.5 border border-gray-200 rounded-full text-sm focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand/20" disabled={p.loading} />
-          <button onClick={p.onRedeem} disabled={p.loading} className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-full hover:bg-brand-hover transition-all disabled:opacity-50">{p.loading ? "处理中..." : "兑换"}</button>
+          <button onClick={p.onRedeem} disabled={p.loading} className="px-6 py-2.5 bg-brand text-white text-sm font-medium rounded-full transition-all disabled:opacity-50">{p.loading ? "处理中..." : "兑换"}</button>
         </div>
       </div>
 
@@ -132,7 +132,7 @@ export function RechargeTab(p: RechargeTabProps) {
             <h3 className="text-base font-semibold text-[#1d1d1f]">算力点消耗</h3>
             <p className="text-xs text-gray-400 mt-1">显示最近 20 条实际结算记录</p>
           </div>
-          <button onClick={p.onLoadUsage} className="px-3 py-2 text-xs text-gray-600 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors">刷新</button>
+          <button onClick={p.onLoadUsage} className="px-3 py-2 text-xs text-gray-600 bg-gray-50 rounded-full transition-colors">刷新</button>
         </div>
         {p.usageRows.length > 0 ? (
           <Stagger className="space-y-2">

@@ -73,7 +73,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
 
   const getStatusPill = (status: string) => {
     const statusMap: Record<string, { bg: string; text: string; icon: string }> = {
-      indexed: { bg: "bg-green-50", text: "text-green-600", icon: "mdi:check-circle" },
+      indexed: { bg: "bg-brand-soft", text: "text-brand-ink", icon: "mdi:check-circle" },
       indexing: { bg: "bg-yellow-50", text: "text-yellow-600", icon: "mdi:loading" },
       failed: { bg: "bg-red-50", text: "text-red-600", icon: "mdi:alert-circle" },
       pending: { bg: "bg-gray-50", text: "text-gray-600", icon: "mdi:clock-outline" },
@@ -358,7 +358,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
         <h1 className="text-2xl font-bold text-gray-900">知识库</h1>
         <button
           onClick={() => onViewChange("chat")}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg "
         >
           返回对话
         </button>
@@ -425,7 +425,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
               <RippleButton
                 onClick={handleCreateKb}
                 disabled={loading}
-                className="w-full px-4 py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-hover disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                className="w-full px-4 py-2.5 bg-brand text-white font-semibold rounded-lg disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
               >
                 <Icon icon="mdi:plus" className="text-lg" aria-hidden />
                 创建
@@ -440,7 +440,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
               <button
                 onClick={handleLoadKbs}
                 disabled={loading}
-                className="p-1 text-gray-500 hover:text-brand disabled:text-gray-300"
+                className="p-1 text-gray-500 disabled:text-gray-300"
               >
                 <Icon icon="mdi:refresh" className="text-lg" aria-hidden />
               </button>
@@ -456,7 +456,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                     className={`p-4 rounded-lg border cursor-pointer transition-all ${
                       selectedKbId === kb.id
                         ? "bg-brand-soft border-brand-soft"
-                        : "bg-white border-gray-200 hover:border-gray-300"
+                        : "bg-white border-gray-200 "
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -483,7 +483,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                           setKbNewDescription(kb.description || "");
                           setSelectedKbId(kb.id);
                         }}
-                        className="text-xs px-2 py-1.5 font-medium bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        className="text-xs px-2 py-1.5 font-medium bg-gray-100 text-gray-700 rounded transition-colors"
                       >
                         编辑
                       </button>
@@ -492,7 +492,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                           e.stopPropagation();
                           handleDeleteKb(kb.id);
                         }}
-                        className="text-xs px-2 py-1.5 font-medium bg-red-50 text-red-600 rounded hover:bg-red-100 transition-colors"
+                        className="text-xs px-2 py-1.5 font-medium bg-red-50 text-red-600 rounded transition-colors"
                       >
                         删除
                       </button>
@@ -517,7 +517,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                     className={`p-4 rounded-lg border cursor-pointer transition-all ${
                       selectedKbId === kb.id
                         ? "bg-brand-soft border-brand-soft"
-                        : "bg-white border-gray-200 hover:border-gray-300"
+                        : "bg-white border-gray-200 "
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -568,7 +568,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                           multiple
                           accept={fileAccept}
                           onChange={(e) => handleSelectUploadFiles(e.currentTarget.files)}
-                          className="w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+                          className="w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-gray-700 "
                           disabled={uploadingKbFiles}
                         />
                       </label>
@@ -582,7 +582,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                           type="file"
                           multiple
                           onChange={(e) => handleSelectUploadFiles(e.currentTarget.files)}
-                          className="w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+                          className="w-full text-xs file:mr-3 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-xs file:font-medium file:text-gray-700 "
                           disabled={uploadingKbFiles}
                         />
                       </label>
@@ -620,7 +620,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                     <RippleButton
                       onClick={handleUploadFiles}
                       disabled={uploadingKbFiles || kbUploadFiles.length === 0}
-                      className="w-full px-4 py-2.5 bg-brand text-white font-semibold rounded-lg hover:bg-brand-hover disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                      className="w-full px-4 py-2.5 bg-brand text-white font-semibold rounded-lg disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
                     >
                       <Icon icon="mdi:upload" className="text-lg" aria-hidden />
                       {uploadingKbFiles ? `上传中 ${kbUploadProgress}/${kbUploadFiles.length}` : "上传并向量化"}
@@ -689,7 +689,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                               </div>
                               <button
                                 onClick={() => selectedKbId && handleDeleteDocument(selectedKbId, doc.id)}
-                                className="inline-flex flex-none items-center gap-1 rounded-lg border border-red-100 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 transition-colors"
+                                className="inline-flex flex-none items-center gap-1 rounded-lg border border-red-100 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors"
                                 title="删除文档"
                               >
                                 <Icon icon="mdi:trash-outline" className="text-base" aria-hidden />
@@ -706,9 +706,9 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                                     <div className="grid h-24 w-24 place-items-center rounded-lg bg-gray-50 text-3xl text-gray-300"><Icon icon="mdi:egg-easter" aria-hidden /></div>
                                   )}
                                   <div className="flex flex-1 flex-wrap gap-2">
-                                    <button onClick={() => onOpenCodexPetProject?.(projectId)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50">打开桌宠项目</button>
-                                    <button onClick={() => void handleInstallCodexPet(projectId, runId)} className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white hover:bg-brand-hover">安装到 Codex</button>
-                                    <button onClick={() => void handleDownloadCodexPet(projectId, runId)} className="rounded-lg border border-brand/20 px-3 py-2 text-xs font-semibold text-brand-ink hover:bg-brand-soft">下载兼容包</button>
+                                    <button onClick={() => onOpenCodexPetProject?.(projectId)} className="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-700 ">打开桌宠项目</button>
+                                    <button onClick={() => void handleInstallCodexPet(projectId, runId)} className="rounded-lg bg-brand px-3 py-2 text-xs font-semibold text-white ">安装到 Codex</button>
+                                    <button onClick={() => void handleDownloadCodexPet(projectId, runId)} className="rounded-lg border border-brand/20 px-3 py-2 text-xs font-semibold text-brand-ink ">下载兼容包</button>
                                   </div>
                                 </div>
                               </div>
@@ -731,7 +731,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                                   href={doc.sourceUri}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="font-medium text-brand-ink hover:underline"
+                                  className="font-medium text-brand-ink "
                                 >
                                   打开产物
                                 </a>

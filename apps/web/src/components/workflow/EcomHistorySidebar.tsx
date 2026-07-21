@@ -53,7 +53,7 @@ export function EcomHistorySidebar({
                   key={h.id}
                   type="button"
                   onClick={() => onSelectMain(h)}
-                  className="flex items-center gap-2 rounded-[8px] border border-[#eef1f3] px-2 py-1.5 text-left hover:border-[#00b8a9]/40 hover:bg-[#f7faf9]"
+                  className="flex items-center gap-2 rounded-[8px] border border-[#eef1f3] px-2 py-1.5 text-left "
                 >
                   <span className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-[6px] bg-[#f5f5f7]">
                     {h.images.find((i) => i.thumbnailUrl)?.thumbnailUrl ? (
@@ -88,7 +88,7 @@ export function EcomHistorySidebar({
                   key={w.id}
                   type="button"
                   onClick={() => onSelectDetail(w)}
-                  className="flex items-center gap-2 rounded-[8px] border border-[#eef1f3] px-2 py-1.5 text-left hover:border-[#00b8a9]/40 hover:bg-[#f7faf9]"
+                  className="flex items-center gap-2 rounded-[8px] border border-[#eef1f3] px-2 py-1.5 text-left "
                 >
                   <span className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-[6px] bg-[#f5f5f7]">
                     {w.masterAsset?.thumbnailUrl ? (

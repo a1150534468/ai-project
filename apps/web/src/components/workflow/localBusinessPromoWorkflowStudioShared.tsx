@@ -43,7 +43,7 @@ export function OptionGrid<T extends string | number>(props: {
             type="button"
             onClick={() => props.onChange(option.value)}
             className={`rounded-[10px] border px-3 py-2.5 text-left transition ${
-              active ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-[#d2d2d7] hover:border-brand/30 hover:bg-[#f7f7f9]"
+              active ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-[#d2d2d7] "
             }`}
           >
             <p className={`text-[12px] ${active ? "font-semibold" : "font-medium"} text-current`}>{option.label}</p>
@@ -119,7 +119,7 @@ export function AudioHistoryList(props: {
                     type="button"
                     onClick={() => props.onActivate(asset.id)}
                     disabled={pending}
-                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[#d2d2d7] px-2.5 text-[11px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[#d2d2d7] px-2.5 text-[11px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                   >
                     <Icon icon={pending ? "mdi:loading" : "mdi:check-circle-outline"} className={pending ? "animate-spin" : ""} aria-hidden />
                     {pending ? "切换中" : props.actionLabel}

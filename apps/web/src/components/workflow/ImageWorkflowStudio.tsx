@@ -235,7 +235,7 @@ export function ImageWorkflowStudio({
           <RippleButton
             type="button"
             onClick={onSubmit}
-            className="h-11 rounded-[10px] bg-brand text-sm font-semibold text-white hover:bg-brand-hover"
+            className="h-11 rounded-[10px] bg-brand text-sm font-semibold text-white "
           >
             生成图片
           </RippleButton>
@@ -243,14 +243,14 @@ export function ImageWorkflowStudio({
             type="button"
             onClick={onOptimizePrompt}
             disabled={isOptimizingPrompt}
-            className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+            className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
           >
             {isOptimizingPrompt ? "优化中" : "优化提示词"}
           </RippleButton>
-          <button type="button" className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink">
+          <button type="button" className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] ">
             收藏夹
           </button>
-          <button type="button" className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink">
+          <button type="button" className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] ">
             收藏当前
           </button>
         </div>
@@ -261,7 +261,7 @@ export function ImageWorkflowStudio({
             type="button"
             onClick={() => referenceInputRef.current?.click()}
             disabled={!supportsReferenceImages || isUploadingReference || referenceImages.length >= 3}
-            className="flex h-10 items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] hover:border-brand/50 hover:text-brand-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+            className="flex h-10 items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
           >
             <Icon icon={isUploadingReference ? "mdi:loading" : "mdi:plus"} className={`text-base ${isUploadingReference ? "animate-spin" : ""}`} aria-hidden />
             {isUploadingReference
@@ -292,7 +292,7 @@ export function ImageWorkflowStudio({
                     type="button"
                     aria-label={`移除参考图 ${index + 1}`}
                     onClick={() => onRemoveReference(image.id)}
-                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-red-600 group-hover:opacity-100"
+                    className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/65 text-white opacity-90 transition "
                   >
                     <Icon icon="mdi:close" className="text-sm" aria-hidden />
                   </button>
@@ -309,7 +309,7 @@ export function ImageWorkflowStudio({
               type="button"
               onClick={onDownloadAll}
               disabled={images.length === 0}
-              className="text-xs font-semibold text-brand-ink hover:text-brand-hover disabled:cursor-not-allowed disabled:text-[#8a8a8f]"
+              className="text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-[#8a8a8f]"
             >
               全部原图链接
             </button>
@@ -329,7 +329,7 @@ export function ImageWorkflowStudio({
                     className={`grid min-h-[70px] grid-cols-[54px_minmax(0,1fr)] items-center gap-3 rounded-[10px] border p-2 text-left transition ${
                       selected
                         ? "border-brand bg-brand-soft text-brand-ink"
-                        : "border-[#e8e8ed] bg-white text-[#1d1d1f] hover:border-brand/40 hover:bg-[#f7faf9] hover:text-brand-ink"
+                        : "border-[#e8e8ed] bg-white text-[#1d1d1f] "
                     }`}
                     title={image.prompt}
                   >
@@ -390,13 +390,13 @@ export function ImageWorkflowStudio({
           {visiblePreviewImages.map((image) => (
             <article key={image.id} className="group relative aspect-[4/3] min-h-[172px] overflow-hidden rounded-[10px] bg-[#f7faf9]">
               <img src={image.thumbnailUrl} alt={promptSummary(image.prompt)} className="h-full w-full object-cover" loading="lazy" />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent p-3 text-xs font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent p-3 text-xs font-semibold text-white opacity-100 transition-opacity ">
                 <p className="truncate">{promptSummary(image.prompt)}</p>
               </div>
               <button
                 type="button"
                 onClick={() => onDownloadOne(image)}
-                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-white/95 text-[#1d1d1f] opacity-0 shadow-[0_8px_18px_rgba(15,23,42,0.12)] transition-opacity hover:text-brand-ink focus-visible:opacity-100 group-hover:opacity-100"
+                className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-[8px] bg-white/95 text-[#1d1d1f] opacity-100 shadow-[0_8px_18px_rgba(15,23,42,0.12)] transition-opacity focus-visible:opacity-100 "
                 aria-label="查看原图下载链接"
               >
                 <Icon icon="mdi:download-outline" className="text-lg" aria-hidden />
@@ -461,7 +461,7 @@ export function ImageWorkflowStudio({
                         ? "border-brand bg-brand-soft"
                         : active
                           ? "border-brand/40 bg-white"
-                          : "border-[#e8e8ed] bg-[#f7faf9] hover:border-brand/40"
+                          : "border-[#e8e8ed] bg-[#f7faf9] "
                     }`}
                   >
                     {active && (
@@ -510,7 +510,7 @@ export function ImageWorkflowStudio({
                           onCancelTask(task);
                         }}
                         disabled={cancellingTaskSet.has(task.id)}
-                        className="relative mt-2 inline-flex h-7 items-center rounded-[7px] border border-red-200 px-2.5 text-[11px] font-semibold text-red-600 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:border-[#e8e8ed] disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+                        className="relative mt-2 inline-flex h-7 items-center rounded-[7px] border border-red-200 px-2.5 text-[11px] font-semibold text-red-600 transition disabled:cursor-not-allowed disabled:border-[#e8e8ed] disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
                         aria-label={`取消生图任务 ${promptSummary(task.prompt)}`}
                       >
                         {cancellingTaskSet.has(task.id) ? "取消中" : "取消任务"}

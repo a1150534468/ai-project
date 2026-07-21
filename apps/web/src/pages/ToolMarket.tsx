@@ -82,7 +82,7 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
               type="button"
               aria-label="向左滚动分类"
               onClick={() => scrollByStep(-1)}
-              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
+              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition "
             >
               <Icon icon="mdi:chevron-left" className="text-lg" aria-hidden />
             </button>
@@ -100,7 +100,7 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
               className={`h-9 flex-none rounded-full px-4 text-xs font-medium transition ${
                 activeKey === category.key
                   ? "bg-gray-900 text-white"
-                  : "bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900"
+                  : "bg-gray-50 text-gray-600 "
               }`}
             >
               {category.label}
@@ -123,7 +123,7 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
               type="button"
               aria-label="向右滚动分类"
               onClick={() => scrollByStep(1)}
-              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition hover:bg-gray-50 hover:text-gray-900"
+              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition "
             >
               <Icon icon="mdi:chevron-right" className="text-lg" aria-hidden />
             </button>
@@ -274,7 +274,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
             className={`rounded-lg border px-4 py-3 text-sm ${
               notice.type === "error"
                 ? "border-red-100 bg-red-50 text-red-700"
-                : "border-emerald-100 bg-emerald-50 text-emerald-700"
+                : "border-brand/30 bg-brand-soft text-brand-ink"
             }`}
           >
             {notice.text}
@@ -347,7 +347,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs ${
-                            accountInstalled ? "bg-emerald-50 text-emerald-700" : "bg-gray-50 text-gray-500"
+                            accountInstalled ? "bg-brand-soft text-brand-ink" : "bg-gray-50 text-gray-500"
                           }`}
                         >
                           {accountInstalled ? "账号已安装" : "账号未安装"}
@@ -375,8 +375,8 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                           title={!currentDeviceOnline && !currentAvailable ? "当前没有唯一在线的本机 Connector，点击后需要先连接本机" : undefined}
                           className={`h-9 min-w-32 rounded-lg px-3 text-xs font-medium transition ${
                             currentAvailable
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-gray-900 text-white hover:bg-black disabled:bg-gray-200 disabled:text-gray-400"
+                              ? "bg-brand-soft text-brand-ink"
+                              : "bg-gray-900 text-white disabled:bg-gray-200 disabled:text-gray-400"
                           }`}
                         >
                           {actionText}

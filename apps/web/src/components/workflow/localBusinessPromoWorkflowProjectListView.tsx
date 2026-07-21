@@ -23,7 +23,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
             type="button"
             onClick={() => void actions.createProject()}
             disabled={state.isCreatingProject}
-            className="flex h-10 items-center justify-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+            className="flex h-10 items-center justify-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             <Icon icon={state.isCreatingProject ? "mdi:loading" : "mdi:plus"} className={state.isCreatingProject ? "animate-spin" : ""} aria-hidden />
             {state.isCreatingProject ? "创建中" : "新建项目"}
@@ -40,7 +40,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                   type="button"
                   onClick={() => void actions.selectProject(item.id)}
                   disabled={opening || state.isLoadingProject}
-                  className="group grid min-h-[156px] content-between rounded-[12px] border border-[#e8e8ed] bg-white p-4 text-left transition hover:border-brand/40 hover:bg-[#fbfefd] hover:shadow-[0_10px_28px_rgba(15,23,42,0.06)] disabled:opacity-60"
+                  className="group grid min-h-[156px] content-between rounded-[12px] border border-[#e8e8ed] bg-white p-4 text-left transition disabled:opacity-60"
                 >
                   <span className="flex min-w-0 items-start justify-between gap-3">
                     <span className="min-w-0">
@@ -49,7 +49,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                     </span>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                       item.status === "completed"
-                        ? "bg-[#eef8f0] text-[#177245]"
+                        ? "bg-brand-soft text-brand-ink"
                         : item.status === "generating"
                           ? "bg-[#fff4e5] text-[#9a5a00]"
                           : item.status === "failed"
@@ -64,7 +64,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                     <span>{item.latestRunId ? "已有生成记录" : "待开始制作"}</span>
                     <span className="flex items-center gap-1 font-semibold text-brand-ink">
                       {opening ? "进入中" : "进入工作台"}
-                      <Icon icon={opening ? "mdi:loading" : "mdi:arrow-right"} className={opening ? "animate-spin" : "transition group-hover:translate-x-0.5"} aria-hidden />
+                      <Icon icon={opening ? "mdi:loading" : "mdi:arrow-right"} className={opening ? "animate-spin" : "transition "} aria-hidden />
                     </span>
                   </span>
                 </button>
@@ -80,7 +80,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                 type="button"
                 onClick={() => void actions.createProject()}
                 disabled={state.isCreatingProject}
-                className="mt-4 inline-flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                className="mt-4 inline-flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
               >
                 <Icon icon={state.isCreatingProject ? "mdi:loading" : "mdi:plus"} className={state.isCreatingProject ? "animate-spin" : ""} aria-hidden />
                 {state.isCreatingProject ? "创建中" : "新建项目"}

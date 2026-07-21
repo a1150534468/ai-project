@@ -38,7 +38,7 @@ export function DownloadLinkDialog({
               {dialog.description ?? "复制链接到浏览器地址栏打开后保存原图。"}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-[9px] text-[#6e6e73] hover:bg-[#f5f5f7]">
+          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-[9px] text-[#6e6e73] ">
             <Icon icon="mdi:close" aria-hidden />
           </button>
         </div>
@@ -64,10 +64,10 @@ export function DownloadLinkDialog({
           />
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink">
+          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] ">
             关闭
           </button>
-          <RippleButton type="button" onClick={handleCopy} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover">
+          <RippleButton type="button" onClick={handleCopy} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white ">
             {copied ? "已复制" : "复制链接"}
           </RippleButton>
         </div>

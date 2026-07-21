@@ -267,7 +267,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               key={item.id}
               type="button"
               onClick={() => void refreshProject(item.id)}
-              className={`w-full rounded-[10px] border px-3 py-3 text-left transition ${project?.id === item.id ? "border-brand bg-brand-soft" : "border-[#e8e8ed] hover:border-brand/50"}`}
+              className={`w-full rounded-[10px] border px-3 py-3 text-left transition ${project?.id === item.id ? "border-brand bg-brand-soft" : "border-[#e8e8ed] "}`}
             >
               <p className="truncate text-sm font-semibold text-[#1d1d1f]">{item.title}</p>
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6e6e73]">{item.logline || item.style || "未填写简介"}</p>
@@ -296,7 +296,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               </div>
               <div className="flex flex-wrap gap-2">
                 {STAGES.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`h-9 rounded-[10px] px-3 text-sm font-semibold ${stage === item.id ? "bg-brand text-white" : "bg-[#f5f5f7] text-[#6e6e73] hover:text-brand-ink"}`}>
+                  <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`h-9 rounded-[10px] px-3 text-sm font-semibold ${stage === item.id ? "bg-brand text-white" : "bg-[#f5f5f7] text-[#6e6e73] "}`}>
                     <Icon icon={item.icon} className="mr-1 inline-block" aria-hidden />{item.label}
                   </button>
                 ))}

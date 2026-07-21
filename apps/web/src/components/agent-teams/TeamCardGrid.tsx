@@ -76,7 +76,7 @@ export function TeamCardGrid({
                   aria-label={`删除团队 ${team.name}`}
                   disabled={deleting}
                   onClick={() => onRequestDelete(team.id)}
-                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-red-100 bg-white text-red-600 transition hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-red-100 bg-white text-red-600 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className="text-base" aria-hidden />
                   <span className="sr-only">删除团队</span>
@@ -90,7 +90,7 @@ export function TeamCardGrid({
                       type="button"
                       onClick={onCancelDelete}
                       disabled={deleting}
-                      className="rounded-[8px] border border-[#d2d2d7] bg-white px-3 py-1.5 text-xs font-medium text-[#424245] transition hover:border-brand/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-[8px] border border-[#d2d2d7] bg-white px-3 py-1.5 text-xs font-medium text-[#424245] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       取消
                     </button>
@@ -98,7 +98,7 @@ export function TeamCardGrid({
                       type="button"
                       onClick={() => onConfirmDelete(team.id)}
                       disabled={deleting}
-                      className="rounded-[8px] bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-[8px] bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {deleting ? "删除中" : "确认删除"}
                     </button>

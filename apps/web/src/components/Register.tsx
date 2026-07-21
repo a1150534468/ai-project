@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { register } from "../api";
-import { RippleButton } from "../motion";
+import { BrandLogo, RippleButton } from "../motion";
+import { ThemeToggle } from "./ThemeToggle";
 
 interface RegisterProps {
   onAuthed: (token: string) => void;
@@ -65,22 +66,21 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
   };
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
+    <div className="auth-shell min-h-screen bg-[#f5f5f7] flex items-center justify-center overflow-y-auto p-4 py-8">
+      <ThemeToggle compact className="fixed right-5 top-5 z-10" />
+      <div className="w-full max-w-[420px]">
         {/* Logo & Branding */}
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-              AI
-            </div>
+          <div className="flex justify-center mb-5">
+            <BrandLogo size={52} />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">AI 助手</h1>
-          <p className="text-gray-500 text-sm">您的全能 AI 助手</p>
+          <h1 className="text-[34px] font-semibold leading-tight text-gray-900 mb-2">AI 助手</h1>
+          <p className="text-gray-500 text-[15px]">您的全能 AI 助手</p>
         </div>
 
         {/* Register Card */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl p-8 border border-white/20">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">创建账户</h2>
+        <div className="auth-card bg-white rounded-[18px] p-7 sm:p-8 border border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">创建账户</h2>
 
           {/* Input Fields */}
           <div className="space-y-4 mb-6">
@@ -100,7 +100,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="3-32 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-gray-50/50"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
                 />
               </div>
             </div>
@@ -122,7 +122,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="2 位大写字母，如 AB"
                   maxLength={2}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-gray-50/50"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
                 />
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="至少 8 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-gray-50/50"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
                 />
               </div>
             </div>
@@ -164,7 +164,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="再输入一遍密码"
-                  className="w-full pl-10 pr-4 py-3 rounded-lg border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-gray-50/50"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
                 />
               </div>
             </div>
@@ -184,7 +184,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
           <RippleButton
             onClick={handleRegister}
             disabled={isLoading}
-            className="w-full bg-brand hover:bg-brand/90 disabled:bg-gray-300 text-white font-medium py-3 rounded-lg transition-all shadow-lg hover:shadow-xl disabled:shadow-none"
+            className="w-full bg-brand disabled:bg-gray-300 text-white font-normal py-3 rounded-full transition-transform active:scale-[0.98] disabled:shadow-none"
           >
             {isLoading ? (
               <span className="flex items-center justify-center">
@@ -201,7 +201,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
             已有账户？{" "}
             <button
               onClick={onSwitchToLogin}
-              className="text-brand hover:underline font-medium"
+              className="text-brand font-medium"
             >
               去登录
             </button>

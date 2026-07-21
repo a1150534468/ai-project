@@ -78,7 +78,7 @@ export function useConfirm() {
           <RippleButton
             onClick={dialog.onCancel}
             disabled={dialog.loading}
-            className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-50 transition-colors"
           >
             {dialog.cancelText}
           </RippleButton>
@@ -87,8 +87,8 @@ export function useConfirm() {
             disabled={dialog.loading}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
               dialog.isDangerous
-                ? "bg-red-500 hover:bg-red-600 disabled:opacity-50"
-                : "bg-brand hover:bg-brand-hover disabled:opacity-50"
+                ? "bg-red-500 disabled:opacity-50"
+                : "bg-brand disabled:opacity-50"
             }`}
           >
             {dialog.loading ? (

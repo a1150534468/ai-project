@@ -148,7 +148,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
               onChange={(e) => onChange(items.map((it, idx) => (idx === i ? e.target.value : it)))}
               className="min-w-0 flex-1 rounded-none border-0 bg-transparent text-[13px] leading-5 text-[#1d1d1f] outline-none"
             />
-            <button type="button" aria-label={`删除 ${item}`} onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="shrink-0 text-[#cfcfd6] opacity-0 transition hover:text-[#dc2626] group-hover:opacity-100 group-focus-within:opacity-100">
+            <button type="button" aria-label={`删除 ${item}`} onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="shrink-0 text-[#cfcfd6] opacity-100 transition group-focus-within:opacity-100">
               <Icon icon="mdi:close" className="text-sm" aria-hidden />
             </button>
           </div>
@@ -156,7 +156,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
         <button
           type="button"
           onClick={add}
-          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-[#e2e2e8] px-3 py-2 text-left text-[13px] text-[#a0a0a8] transition hover:border-brand hover:text-brand"
+          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-[#e2e2e8] px-3 py-2 text-left text-[13px] text-[#a0a0a8] transition "
         >
           <Icon icon="mdi:plus" className="text-base" aria-hidden />
           <input
@@ -181,7 +181,7 @@ function PillGroup({ label, options, value, onChange }: { label: string; options
         const on = opt === value;
         return (
           <button key={opt} type="button" onClick={() => onChange(opt)}
-            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#6e6e73] hover:border-[#d2d2d7]"}`}>
+            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#6e6e73] "}`}>
             {opt}
             {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-[#1d1d1f]" aria-hidden />}
           </button>
@@ -292,7 +292,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#ececf0] px-5">
             <span className="text-[15px] font-semibold text-[#1d1d1f]">{STEPS[active].title}</span>
-            <button type="button" aria-label="关闭" onClick={onClose} className="text-[#b6b6bd] transition hover:text-[#8a8a90]">
+            <button type="button" aria-label="关闭" onClick={onClose} className="text-[#b6b6bd] transition ">
               <Icon icon="mdi:close" className="text-xl" aria-hidden />
             </button>
           </header>
@@ -403,7 +403,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       const on = mode === m;
                       return (
                         <button key={m} type="button" onClick={() => setMode(m)}
-                          className={`relative rounded-[8px] border p-3.5 text-left transition ${on ? "border-[#1d1d1f]" : "border-[#e8e8ed] hover:border-[#d2d2d7]"}`}>
+                          className={`relative rounded-[8px] border p-3.5 text-left transition ${on ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}>
                           <span className="flex items-center gap-2 text-[13.5px] font-semibold text-[#1d1d1f]">
                             <Icon icon={icon} className="text-base" aria-hidden />{title}
                           </span>
@@ -422,7 +422,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       const on = hasNarration === val;
                       return (
                         <button key={label} type="button" onClick={() => setHasNarration(val)}
-                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#6e6e73] hover:border-[#d2d2d7]"}`}>
+                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#6e6e73] "}`}>
                           {label}
                           {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-[#1d1d1f]" aria-hidden />}
                         </button>
@@ -446,7 +446,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 ) : (
                   <section className="grid gap-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-[#e3e3e8] bg-[#f6f6f8] hover:border-[#c9c9d1]"}`}>
+                      <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-[#e3e3e8] bg-[#f6f6f8] "}`}>
                         <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.08)]">
                           <Icon icon="mdi:tray-arrow-up" className="text-xl text-[#1d1d1f]" aria-hidden />
                         </span>
@@ -500,26 +500,26 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
           <footer className="flex h-16 shrink-0 items-center justify-between border-t border-[#ececf0] px-5">
             {stage === "confirm" && (
               <>
-                <button type="button" onClick={onClose} className="text-[13px] font-medium text-[#8a8a8f] hover:text-[#1d1d1f]">取消</button>
+                <button type="button" onClick={onClose} className="text-[13px] font-medium text-[#8a8a8f] ">取消</button>
                 <button type="button" onClick={() => void startAnalyze()} disabled={!canAnalyze}
-                  className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition hover:bg-[#333] disabled:cursor-not-allowed disabled:bg-[#c7c7cc]">
+                  className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[#c7c7cc]">
                   {materials.length === 0 ? "请先上传素材" : estimatedCost > 0 ? `开始分析 · 预计 ${estimatedCost} 点` : "开始分析"}
                 </button>
               </>
             )}
             {stage === "insight" && (
               <>
-                <button type="button" onClick={onClose} className="text-[13px] font-medium text-[#8a8a8f] hover:text-[#1d1d1f]">重新分析</button>
+                <button type="button" onClick={onClose} className="text-[13px] font-medium text-[#8a8a8f] ">重新分析</button>
                 <button type="button" onClick={() => setStage("creating")} disabled={!insight}
-                  className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition hover:bg-[#333] disabled:bg-[#c7c7cc]">下一步</button>
+                  className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">下一步</button>
               </>
             )}
             {stage === "creating" && (
               <>
-                <button type="button" onClick={() => setStage("insight")} className="text-[13px] font-medium text-[#8a8a8f] hover:text-[#1d1d1f]">返回上一步</button>
+                <button type="button" onClick={() => setStage("insight")} className="text-[13px] font-medium text-[#8a8a8f] ">返回上一步</button>
                 {mode === "config" ? (
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
-                    className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition hover:bg-[#333] disabled:bg-[#c7c7cc]">生成脚本</button>
+                    className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">生成脚本</button>
                 ) : (
                   <span className="text-[12px] text-[#8a8a8f]">{busy ? "分析并生成中…" : "上传参考视频后自动分析并生成脚本"}</span>
                 )}
@@ -527,12 +527,12 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
             )}
             {stage === "preview" && (
               <>
-                <button type="button" onClick={() => setStage("creating")} className="text-[13px] font-medium text-[#8a8a8f] hover:text-[#1d1d1f]">返回上一步</button>
+                <button type="button" onClick={() => setStage("creating")} className="text-[13px] font-medium text-[#8a8a8f] ">返回上一步</button>
                 <div className="flex gap-2.5">
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
-                    className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-[#1d1d1f] transition hover:bg-[#f6f6f8] disabled:opacity-50">重新生成脚本</button>
+                    className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-[#1d1d1f] transition disabled:opacity-50">重新生成脚本</button>
                   <button type="button" onClick={() => { onApply(script, { hasNarration }); onClose(); }} disabled={!script}
-                    className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition hover:bg-[#333] disabled:bg-[#c7c7cc]">应用脚本</button>
+                    className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">应用脚本</button>
                 </div>
               </>
             )}

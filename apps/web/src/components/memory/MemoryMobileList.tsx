@@ -76,10 +76,10 @@ export default function MemoryMobileList({
               tone.mobileAccent
             } ${
               isSelected
-                ? "border-brand shadow-[0_12px_28px_rgba(0,184,169,0.10)]"
+                ? "border-brand shadow-[0_12px_28px_rgba(0,102,204,0.10)]"
                 : isHighlighted
                   ? "border-brand/60 bg-brand/5"
-                  : "border-[#d2d2d7] hover:border-brand/50"
+                  : "border-[#d2d2d7] "
             }`}
           >
             <div className="flex items-start justify-between gap-3">

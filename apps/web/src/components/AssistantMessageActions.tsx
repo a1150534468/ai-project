@@ -117,7 +117,7 @@ export function AssistantMessageActions({ content }: AssistantMessageActionsProp
     ? "text-brand"
     : copyState === "failed"
       ? "text-red-500"
-      : "text-gray-500 hover:text-gray-800";
+      : "text-gray-500 ";
   const glyph = copyState === "copied" ? <CheckGlyph /> : copyState === "failed" ? <AlertGlyph /> : <CopyGlyph />;
 
   return (
@@ -125,7 +125,7 @@ export function AssistantMessageActions({ content }: AssistantMessageActionsProp
       <button
         type="button"
         onClick={handleCopy}
-        className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${colorClass}`}
+        className={`flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${colorClass}`}
         aria-label={label}
         title={label}
       >

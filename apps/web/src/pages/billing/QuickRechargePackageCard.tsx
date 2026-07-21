@@ -27,7 +27,7 @@ export function QuickRechargePackageCard({
   return (
     <div
       className={`bg-white rounded-2xl p-5 border transition-all cursor-pointer ${
-        recommended ? "border-brand border-2 shadow-sm relative" : "border-gray-50 hover:border-brand/30 hover:shadow-sm"
+        recommended ? "border-brand border-2 shadow-sm relative" : "border-gray-50 "
       }`}
     >
       {recommended && (
@@ -53,8 +53,8 @@ export function QuickRechargePackageCard({
         disabled={loading}
         className={`w-full mt-3 py-2 text-xs font-medium rounded-full transition-all ${
           recommended
-            ? "bg-brand text-white hover:bg-brand-hover disabled:opacity-50"
-            : "bg-gray-50 text-gray-600 hover:bg-brand hover:text-white disabled:opacity-50"
+            ? "bg-brand text-white disabled:opacity-50"
+            : "bg-gray-50 text-gray-600 disabled:opacity-50"
         }`}
       >
         {loading ? "处理中..." : "立即购买"}

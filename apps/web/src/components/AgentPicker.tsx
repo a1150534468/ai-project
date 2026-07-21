@@ -88,7 +88,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
           <RippleButton
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-gray-50 flex items-center justify-center text-gray-500"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
             aria-label="关闭"
           >
             <Icon icon="mdi:close" className="text-lg" />
@@ -153,7 +153,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
                   setError("");
                   setMode("create");
                 }}
-                className="w-full rounded-xl border border-dashed border-brand/40 bg-brand-soft/50 px-4 py-3 text-left flex items-center gap-3 hover:bg-brand-soft transition-colors"
+                className="w-full rounded-xl border border-dashed border-brand/40 bg-brand-soft/50 px-4 py-3 text-left flex items-center gap-3 transition-colors"
               >
                 <span className="w-9 h-9 rounded-lg bg-brand text-white flex items-center justify-center flex-none">
                   <Icon icon="mdi:creation-outline" className="text-lg" />
@@ -176,7 +176,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
               className="w-full h-40 rounded-xl border border-gray-200 p-4 text-sm resize-none focus:outline-none focus:border-brand"
             />
             <div className="flex justify-end gap-2">
-              <RippleButton type="button" onClick={() => setMode("list")} className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+              <RippleButton type="button" onClick={() => setMode("list")} className="px-4 py-2 rounded-lg text-sm text-gray-600 ">
                 返回
               </RippleButton>
               <RippleButton type="button" onClick={createAgent} className="px-4 py-2 rounded-lg text-sm bg-brand text-white">
@@ -219,7 +219,7 @@ function AgentCard({ agent, onClick }: { agent: AgentOption; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="p-3 rounded-xl border border-gray-100 hover:border-brand/30 hover:bg-gray-50 text-left transition-colors"
+      className="p-3 rounded-xl border border-gray-100 text-left transition-colors"
     >
       <div className="flex items-start gap-3">
         <span className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center flex-none">

@@ -114,7 +114,7 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
         aria-label={ariaLabel}
         aria-expanded={open}
         onClick={toggle}
-        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-[#1d1d1f]" : "border-[#e8e8ed] hover:border-[#d2d2d7]"}`}
+        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}
       >
         {!compact && <span className="text-xs text-[#8a8a8f]">{ariaLabel}</span>}
         <span className={`truncate text-sm font-medium text-[#1d1d1f] ${compact ? "" : "ml-auto"}`}>{current?.label ?? value}</span>
@@ -129,7 +129,7 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
                 key={c.value}
                 type="button"
                 onClick={() => { onSelect(c.value); setOpen(false); }}
-                className={`flex w-full items-center gap-2 rounded-[9px] px-2.5 py-2 text-left transition hover:bg-[#f6f6f8] ${on ? "bg-[#f6f6f8]" : ""}`}
+                className={`flex w-full items-center gap-2 rounded-[9px] px-2.5 py-2 text-left transition ${on ? "bg-[#f6f6f8]" : ""}`}
               >
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-sm ${on ? "font-semibold text-[#1d1d1f]" : "text-[#1d1d1f]"}`}>{c.label}</span>
@@ -248,7 +248,7 @@ export function VideoGenerationStudio({
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
         <div className="mb-3 flex items-center justify-between">
           <h1 className="text-base font-semibold text-[#1d1d1f]">AI 视频</h1>
-          <button type="button" onClick={() => { setSelected(null); onNewTask(); }} className="inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-xs font-semibold text-[#1d1d1f] hover:bg-[#f5f5f7]">
+          <button type="button" onClick={() => { setSelected(null); onNewTask(); }} className="inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-xs font-semibold text-[#1d1d1f] ">
             <Icon icon="mdi:plus" className="text-sm" aria-hidden />
             新建
           </button>
@@ -262,7 +262,7 @@ export function VideoGenerationStudio({
           onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget === event.target) setDragActive(false); }}
           onDrop={(event) => { event.preventDefault(); handleDropFiles(event.dataTransfer.files); }}
           className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-[13px] border-[1.5px] border-dashed p-4 text-center transition ${
-            dragActive ? "border-brand bg-brand-soft" : "border-[#e3e3e8] bg-[#f6f6f8] hover:border-[#c9c9d1] hover:bg-[#f1f1f4]"
+            dragActive ? "border-brand bg-brand-soft" : "border-[#e3e3e8] bg-[#f6f6f8] "
           }`}
         >
           <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.07)]">
@@ -302,7 +302,7 @@ export function VideoGenerationStudio({
                     <span className="block truncate text-[12.5px] font-medium text-[#1d1d1f]">{m.name}</span>
                     <span className="block text-[10.5px] text-[#8a8a8f]">{meta.label}{m.durationSec > 0 ? ` · ${m.durationSec}s` : ""}</span>
                   </span>
-                  <button type="button" aria-label={`移除 ${m.name}`} onClick={() => onRemoveMaterial(m.url)} className="px-1 text-[#b7b7bf] transition hover:text-[#8a8a90]">
+                  <button type="button" aria-label={`移除 ${m.name}`} onClick={() => onRemoveMaterial(m.url)} className="px-1 text-[#b7b7bf] transition ">
                     <Icon icon="mdi:close" className="text-base" aria-hidden />
                   </button>
                 </div>
@@ -318,7 +318,7 @@ export function VideoGenerationStudio({
           <button
             type="button"
             onClick={onHelpWrite}
-            className="inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1 text-[11px] font-semibold text-white transition hover:bg-brand-hover"
+            className="inline-flex items-center gap-1 rounded-full bg-brand px-3 py-1 text-[11px] font-semibold text-white transition "
           >
             <Icon icon="mdi:auto-fix" className="text-sm" aria-hidden />
             帮我写
@@ -357,7 +357,7 @@ export function VideoGenerationStudio({
           type="button"
           onClick={() => setConfirmOpen(true)}
           disabled={isSubmitting || !prompt.trim() || estimate === null}
-          className="z-10 h-11 w-full rounded-[9px] bg-[#1d1d1f] text-sm font-semibold text-white transition hover:bg-[#333] disabled:cursor-not-allowed disabled:bg-[#c7c7cc]"
+          className="z-10 h-11 w-full rounded-[9px] bg-[#1d1d1f] text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[#c7c7cc]"
         >
           {isSubmitting ? "提交中" : "立即生成视频"}
           <span className="ml-3 text-xs font-medium opacity-80">
@@ -390,14 +390,14 @@ export function VideoGenerationStudio({
                 <button
                   type="button"
                   onClick={() => setConfirmOpen(false)}
-                  className="h-10 flex-1 rounded-[10px] border border-[#e3e3e8] text-[13px] font-semibold text-[#1d1d1f] transition hover:bg-[#f6f6f8]"
+                  className="h-10 flex-1 rounded-[10px] border border-[#e3e3e8] text-[13px] font-semibold text-[#1d1d1f] transition "
                 >
                   取消
                 </button>
                 <button
                   type="button"
                   onClick={() => { setConfirmOpen(false); setSelected(undefined); onSubmit(); }}
-                  className="h-10 flex-1 rounded-[10px] bg-[#1d1d1f] text-[13px] font-semibold text-white transition hover:bg-[#333]"
+                  className="h-10 flex-1 rounded-[10px] bg-[#1d1d1f] text-[13px] font-semibold text-white transition "
                 >
                   确认生成
                 </button>
@@ -435,7 +435,7 @@ export function VideoGenerationStudio({
                 <button
                   type="button"
                   onClick={() => setDownloadOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#333]"
+                  className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white transition "
                 >
                   <Icon icon="mdi:download" className="text-sm" aria-hidden />
                   下载
@@ -458,7 +458,7 @@ export function VideoGenerationStudio({
                 <StaggerItem key={task.id}>
                   <motion.div
                     onClick={() => setSelected(task.requestId)}
-                    className={`cursor-pointer rounded-[10px] border p-3 transition hover:border-[#c9c9d1] ${selected === task.requestId ? "border-[#1d1d1f] bg-[#fafafa]" : "border-[#e8e8ed]"}`}
+                    className={`cursor-pointer rounded-[10px] border p-3 transition ${selected === task.requestId ? "border-[#1d1d1f] bg-[#fafafa]" : "border-[#e8e8ed]"}`}
                     layout
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -514,13 +514,13 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
         <p className="mt-2 text-[13px] leading-6 text-[#6e6e73]">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
         <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-[#e8e8ed] bg-[#fafafa] p-2">
           <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-[12px] text-[#1d1d1f] outline-none" />
-          <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-2 text-[12px] font-semibold text-white transition hover:bg-[#333]">
+          <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-2 text-[12px] font-semibold text-white transition ">
             <Icon icon={copied ? "mdi:check" : "mdi:content-copy"} className="text-sm" aria-hidden />
             {copied ? "已复制" : "复制"}
           </button>
         </div>
         <div className="mt-4 flex justify-end">
-          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-[#1d1d1f] transition hover:bg-[#f6f6f8]">关闭</button>
+          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-[#1d1d1f] transition ">关闭</button>
         </div>
       </div>
     </div>

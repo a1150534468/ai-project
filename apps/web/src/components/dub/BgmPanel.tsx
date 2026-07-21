@@ -78,7 +78,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
         <button
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed py-8 text-[#8a8a8f] hover:border-brand/40 disabled:opacity-40 ${bgmObjectKey ? "border-brand/50" : "border-gray-200"}`}
+          className={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed py-8 text-[#8a8a8f] disabled:opacity-40 ${bgmObjectKey ? "border-brand/50" : "border-gray-200"}`}
         >
           <Icon icon="mdi:music-note-plus" className="text-2xl" />
           <span className="text-[13px]">{bgmObjectKey ? `已上传：${uploadedName || "自定义配乐"}` : "点击上传配乐（≤20MB，mp3/wav）"}</span>

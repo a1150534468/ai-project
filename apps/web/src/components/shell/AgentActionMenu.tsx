@@ -24,7 +24,7 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
     setRenaming(false);
   };
 
-  const row = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-40";
+  const row = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-gray-600 transition-colors  disabled:opacity-40";
 
   return (
     <div className="min-w-[172px] rounded-xl border border-gray-100 bg-white p-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
@@ -74,7 +74,7 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
 
       <div className="my-1 h-px bg-gray-100" />
 
-      <button type="button" className={`${row} text-red-600 hover:bg-red-50`} disabled={busy} onClick={onDelete}>
+      <button type="button" className={`${row} text-red-600 `} disabled={busy} onClick={onDelete}>
         <Icon icon="mdi:trash-can-outline" className="flex-none text-base" aria-hidden />
         <span>删除 Agent</span>
       </button>

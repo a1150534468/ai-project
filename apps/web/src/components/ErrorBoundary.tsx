@@ -36,7 +36,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             this.setState({ error: null });
             location.reload();
           }}
-          style={{ marginTop: 16, padding: "8px 16px", borderRadius: 8, background: "#10b981", color: "#fff", border: "none", cursor: "pointer" }}
+          style={{ marginTop: 16, padding: "8px 16px", borderRadius: 8, background: "var(--accent-primary, #0066cc)", color: "#fff", border: "none", cursor: "pointer" }}
         >
           重新加载
         </button>

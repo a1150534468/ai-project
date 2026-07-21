@@ -247,7 +247,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                       <Icon
                         icon="mdi:check-circle"
                         className={`text-lg ${
-                          bindingState === "confirmed" ? "text-green-600" : "text-blue-600"
+                          bindingState === "confirmed" ? "text-brand-ink" : "text-blue-600"
                         }`}
                       />
                       <span className="text-sm font-medium text-gray-900">
@@ -311,7 +311,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                         setBindingState("disconnected");
                         setSelectedAgentId("");
                       }}
-                      className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                      className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
                     >
                       取消
                     </button>
@@ -319,7 +319,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                       <button
                         onClick={handleConfirmBinding}
                         disabled={isBindingLoading || !selectedAgentId}
-                        className="flex-1 px-4 py-2.5 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-1 px-4 py-2.5 bg-brand text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {isBindingLoading && (
                           <Icon icon="mdi:loading" className="text-lg animate-spin" />
@@ -338,7 +338,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                   <button
                     onClick={handleGenerateQr}
                     disabled={isLoading}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-brand text-white rounded-lg font-medium hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-brand text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading && (
                       <Icon icon="mdi:loading" className="text-lg animate-spin" />
@@ -373,7 +373,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                           <div className="flex items-center gap-1 mt-2">
                             <div
                               className={`w-2 h-2 rounded-full ${
-                                binding.online ? "bg-green-500" : "bg-gray-400"
+                                binding.online ? "bg-brand" : "bg-gray-400"
                               }`}
                             />
                             <span className="text-xs text-gray-600">
@@ -383,7 +383,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                         </div>
                         <button
                           onClick={() => handleUnbind(binding.id)}
-                          className="text-xs text-red-600 hover:text-red-700 font-medium flex-none"
+                          className="text-xs text-red-600 font-medium flex-none"
                         >
                           解绑
                         </button>

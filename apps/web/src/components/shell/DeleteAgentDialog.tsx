@@ -47,14 +47,14 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
       )}
 
       <div className="flex gap-3">
-        <RippleButton onClick={onCancel} className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
+        <RippleButton onClick={onCancel} className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors ">
           取消
         </RippleButton>
         <button
           type="button"
           onClick={onConfirm}
           disabled={!canDelete}
-          className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           删除
         </button>

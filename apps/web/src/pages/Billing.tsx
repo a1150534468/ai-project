@@ -101,7 +101,7 @@ export function PaymentStatusPanel({
       </p>
       <button
         onClick={onClose}
-        className="px-6 py-2 bg-gray-50 text-gray-600 text-sm font-medium rounded-full hover:bg-gray-100 transition-all"
+        className="px-6 py-2 bg-gray-50 text-gray-600 text-sm font-medium rounded-full transition-all"
       >
         {success ? "知道了" : "关闭二维码"}
       </button>
@@ -109,7 +109,7 @@ export function PaymentStatusPanel({
         <button
           onClick={onRefresh}
           disabled={refreshing}
-          className="ml-3 px-6 py-2 bg-brand text-white text-sm font-medium rounded-full hover:bg-brand-hover transition-all disabled:opacity-60"
+          className="ml-3 px-6 py-2 bg-brand text-white text-sm font-medium rounded-full transition-all disabled:opacity-60"
         >
           {refreshing ? "检查中..." : "我已完成支付，检查到账"}
         </button>
@@ -406,7 +406,7 @@ export default function Billing({ token, onBalanceChange }: BillingProps) {
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className={`relative pb-1 text-base font-semibold transition-colors ${activeTab === t ? "text-[#1d1d1f]" : "text-gray-400 hover:text-[#1d1d1f]"}`}
+                className={`relative pb-1 text-base font-semibold transition-colors ${activeTab === t ? "text-[#1d1d1f]" : "text-gray-400 "}`}
               >
                 {t === "member" ? "会员" : "积分充值"}
                 {activeTab === t && <span className="absolute left-0 right-0 -bottom-[11px] h-0.5 rounded bg-brand" />}
@@ -477,7 +477,7 @@ export default function Billing({ token, onBalanceChange }: BillingProps) {
             className={`rounded-2xl p-4 border ${
               message.includes("失败") || message.includes("错误")
                 ? "bg-red-50 border-red-200 text-red-700"
-                : "bg-green-50 border-green-200 text-green-700"
+                : "bg-brand-soft border-brand/30 text-brand-ink"
             }`}
           >
             <div className="flex items-start gap-3">

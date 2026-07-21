@@ -47,7 +47,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
           <button
             type="button"
             onClick={() => void actions.openProjectsPage()}
-            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink"
+            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] "
           >
             <Icon icon="mdi:format-list-bulleted" className="text-base" aria-hidden />
             项目列表
@@ -56,7 +56,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             type="button"
             onClick={() => void actions.createProject()}
             disabled={state.isCreatingProject}
-            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] disabled:opacity-50"
           >
             <Icon icon="mdi:plus" className="text-base" aria-hidden />
             新建项目
@@ -65,7 +65,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             type="button"
             onClick={() => void actions.savePendingChanges()}
             disabled={!derived.dirty || state.isSavingProject}
-            className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+            className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
           >
             {state.isSavingProject ? "保存中" : "保存项目"}
           </button>
@@ -160,7 +160,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <button
                           type="button"
                           onClick={() => actions.openUploadPicker(group)}
-                          className="inline-flex items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 py-2 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink"
+                          className="inline-flex items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 py-2 text-[12px] font-semibold text-[#1d1d1f] "
                         >
                           <Icon icon={state.uploadingGroup === group ? "mdi:loading" : "mdi:upload"} className={state.uploadingGroup === group ? "animate-spin" : ""} aria-hidden />
                           上传
@@ -179,7 +179,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                                 type="button"
                                 aria-label={`删除 ${item.name || "素材"}`}
                                 onClick={() => actions.removeMaterial(group, item.url)}
-                                className="grid h-7 w-7 place-items-center rounded-[8px] text-[#8a8a8f] hover:bg-white hover:text-[#1d1d1f]"
+                                className="grid h-7 w-7 place-items-center rounded-[8px] text-[#8a8a8f] "
                               >
                                 <Icon icon="mdi:close" aria-hidden />
                               </button>
@@ -268,7 +268,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     type="button"
                     onClick={() => void actions.generateScript()}
                     disabled={state.isGeneratingScript}
-                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                   >
                     <Icon icon={state.isGeneratingScript ? "mdi:loading" : "mdi:auto-fix"} className={state.isGeneratingScript ? "animate-spin" : ""} aria-hidden />
                     {state.isGeneratingScript ? "生成中" : "一键生成"}
@@ -277,7 +277,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     type="button"
                     onClick={() => void actions.saveScript()}
                     disabled={state.isSavingProject || !derived.dirty}
-                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                   >
                     <Icon icon="mdi:content-save-outline" aria-hidden />
                     保存文案
@@ -372,7 +372,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={actions.openVoiceSamplePicker}
                           disabled={state.isUploadingVoiceSample}
-                          className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                          className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                         >
                           <Icon icon={state.isUploadingVoiceSample ? "mdi:loading" : "mdi:upload"} className={state.isUploadingVoiceSample ? "animate-spin" : ""} aria-hidden />
                           {state.isUploadingVoiceSample ? "上传中" : "上传样本"}
@@ -392,7 +392,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       type="button"
                       onClick={() => void actions.previewNarration()}
                       disabled={!derived.narrationPreviewReady || state.narrationPreviewState === "loading"}
-                      className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                      className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                     >
                       <Icon icon={derived.narrationPreviewButtonIcon} className={state.narrationPreviewState === "loading" ? "animate-spin" : ""} aria-hidden />
                       {derived.narrationPreviewButtonLabel}
@@ -401,7 +401,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       type="button"
                       onClick={() => void actions.generateNarration()}
                       disabled={!derived.narrationGenerateReady || state.isGeneratingNarration}
-                      className="inline-flex h-10 items-center gap-1 rounded-[10px] bg-brand px-3 text-[12px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                      className="inline-flex h-10 items-center gap-1 rounded-[10px] bg-brand px-3 text-[12px] font-semibold text-white disabled:opacity-50"
                     >
                       <Icon icon={state.isGeneratingNarration ? "mdi:loading" : "mdi:microphone-outline"} className={state.isGeneratingNarration ? "animate-spin" : ""} aria-hidden />
                       {state.isGeneratingNarration ? "生成中" : "生成正式口播"}
@@ -446,7 +446,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={() => actions.selectBgmMode(item.value as LocalBusinessPromoBgmMode)}
                           className={`rounded-[10px] border px-3 py-2.5 text-left transition ${
-                            active ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-[#d2d2d7] hover:border-brand/30 hover:bg-[#f7f7f9]"
+                            active ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-[#d2d2d7] "
                           }`}
                         >
                           <p className={`text-[12px] ${active ? "font-semibold" : "font-medium"} text-current`}>{item.label}</p>
@@ -478,7 +478,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={() => void actions.previewBgm()}
                           disabled={state.isPreviewingBgm}
-                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                         >
                           <Icon icon={state.isPreviewingBgm ? "mdi:loading" : "mdi:play-circle-outline"} className={state.isPreviewingBgm ? "animate-spin" : ""} aria-hidden />
                           {state.isPreviewingBgm ? "试听中" : "试听"}
@@ -487,7 +487,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={() => void actions.generateBgm()}
                           disabled={state.isGeneratingBgm}
-                          className="inline-flex h-10 items-center gap-1 rounded-[10px] bg-brand px-3 text-[12px] font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+                          className="inline-flex h-10 items-center gap-1 rounded-[10px] bg-brand px-3 text-[12px] font-semibold text-white disabled:opacity-50"
                         >
                           <Icon icon={state.isGeneratingBgm ? "mdi:loading" : "mdi:check-circle-outline"} className={state.isGeneratingBgm ? "animate-spin" : ""} aria-hidden />
                           {state.isGeneratingBgm ? "设置中" : "设为当前 BGM"}
@@ -528,7 +528,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={actions.openBgmUploadPicker}
                           disabled={state.isUploadingBgm}
-                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] hover:border-brand/40 hover:text-brand-ink disabled:opacity-50"
+                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
                         >
                           <Icon icon={state.isUploadingBgm ? "mdi:loading" : "mdi:upload"} className={state.isUploadingBgm ? "animate-spin" : ""} aria-hidden />
                           {state.isUploadingBgm ? "上传中" : "上传 BGM"}
@@ -567,7 +567,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               type="button"
               onClick={() => void actions.startRun()}
               disabled={state.isStartingRun || !derived.canGenerate}
-              className="mt-5 h-11 w-full rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-50"
+              className="mt-5 h-11 w-full rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50"
             >
               {state.isStartingRun ? "启动中" : "开始生成"}
             </button>

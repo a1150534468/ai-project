@@ -316,7 +316,7 @@ function StatusPill({ status }: { readonly status: string }) {
   const failed = status === "failed" || status === "cancelled";
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-      complete ? "bg-emerald-50 text-emerald-700" : failed ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"
+      complete ? "bg-brand-soft text-brand-ink" : failed ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"
     }`}>
       {codexPetStatusLabel(status)}
     </span>
@@ -333,10 +333,10 @@ function PrimaryButton(props: {
 }) {
   const kind = props.kind ?? "primary";
   const colors = kind === "primary"
-    ? "bg-brand text-white hover:brightness-95"
+    ? "bg-brand text-white "
     : kind === "danger"
-      ? "border border-red-200 bg-white text-red-600 hover:bg-red-50"
-      : "border border-[#dfe1e6] bg-white text-[#34343a] hover:bg-[#f7f7f9]";
+      ? "border border-red-200 bg-white text-red-600 "
+      : "border border-[#dfe1e6] bg-white text-[#34343a] ";
   return (
     <button
       type="button"
@@ -1023,7 +1023,7 @@ export function CodexPetStudio({
 
   return (
     <section className="space-y-3" data-testid="codex-pet-studio">
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-[16px] border border-[#e6e7eb] bg-[linear-gradient(120deg,#ffffff_0%,#f5fffd_100%)] px-5 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 rounded-[16px] border border-[#e6e7eb] bg-white px-5 py-4">
         <div>
           <div className="mb-1 flex items-center gap-2">
             <span className="grid size-9 place-items-center rounded-[12px] bg-brand text-white shadow-sm">
@@ -1036,7 +1036,7 @@ export function CodexPetStudio({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full border border-[#dcf3ef] bg-white px-3 py-1.5 text-[#477069]">
+          <span className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-brand-ink">
             生图 {draft.imageModel} · 视觉推理 / QA {draft.visualQaModel}
           </span>
           <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
@@ -1052,7 +1052,7 @@ export function CodexPetStudio({
         </div>
       )}
       {notice && !error && (
-        <div aria-live="polite" className="flex items-start gap-2 rounded-[12px] border border-[#cdeee8] bg-brand-soft px-3 py-2.5 text-sm text-brand-ink">
+        <div aria-live="polite" className="flex items-start gap-2 rounded-[12px] border border-brand/30 bg-brand-soft px-3 py-2.5 text-sm text-brand-ink">
           <Icon icon="mdi:check-circle-outline" className="mt-0.5 flex-none text-base" aria-hidden />
           <span>{notice}</span>
         </div>
@@ -1069,24 +1069,24 @@ export function CodexPetStudio({
                   type="button"
                   disabled={interactionLocked}
                   onClick={startNewProject}
-                  className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-semibold text-brand-ink hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-45"
+                  className="inline-flex items-center gap-1 rounded-[8px] px-2 py-1 text-[11px] font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   <Icon icon="mdi:plus" aria-hidden /> 新建
                 </button>
               )}
             />
             <div className="max-h-56 space-y-1 overflow-y-auto p-2" aria-label="桌宠项目列表">
-              {bootstrapping && <p className="px-2 py-4 text-center text-xs text-[#8b8b94]">正在加载项目...</p>}
+              {bootstrapping && <p className="px-2 py-4 text-center text-xs text-[#6e6e73]">正在加载项目...</p>}
               {!bootstrapping && projects.length === 0 && (
-                <p className="px-3 py-5 text-center text-xs leading-5 text-[#8b8b94]">还没有桌宠项目，从文字或参考图开始吧。</p>
+                <p className="px-3 py-5 text-center text-xs leading-5 text-[#6e6e73]">还没有桌宠项目，从文字或参考图开始吧。</p>
               )}
               {projects.map((project) => (
                 <div
                   key={project.id}
                   className={`group flex w-full items-center rounded-[10px] border pr-1 transition ${
                     project.id === selectedProjectId
-                      ? "border-[#bde8e2] bg-brand-soft"
-                      : "border-transparent hover:border-[#e6e7eb] hover:bg-[#fafafa]"
+                      ? "border-brand/30 bg-brand-soft"
+                      : "border-transparent "
                   }`}
                 >
                   <button
@@ -1111,10 +1111,10 @@ export function CodexPetStudio({
                     className="min-w-0 flex-1 px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#2d2d31]">{project.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#1d1d1f]">{project.name}</span>
                       <StatusPill status={project.status} />
                     </div>
-                    <p className="mt-1 truncate text-[10px] text-[#8b8b94]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
+                    <p className="mt-1 truncate text-[10px] text-[#6e6e73]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
                   </button>
                   <button
                     type="button"
@@ -1122,7 +1122,7 @@ export function CodexPetStudio({
                     title="从历史中删除"
                     disabled={interactionLocked}
                     onClick={() => handleDeleteProject(project)}
-                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-[#a0a1a8] transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-45"
+                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-[#86868b] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <Icon
                       icon={deletingProjectId === project.id ? "mdi:loading" : "mdi:trash-can-outline"}
@@ -1198,7 +1198,7 @@ export function CodexPetStudio({
                             aria-label={`移除参考图 ${asset.name ?? asset.id}`}
                             disabled={interactionLocked}
                             onClick={() => updateDraft("referenceAssets", draft.referenceAssets.filter((item) => item.id !== asset.id))}
-                            className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/65 text-white opacity-90 transition hover:bg-black"
+                            className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/65 text-white opacity-90 transition "
                           >
                             <Icon icon="mdi:close" aria-hidden />
                           </button>
@@ -1207,7 +1207,7 @@ export function CodexPetStudio({
                     );
                   })}
                   {draft.referenceAssets.length < CODEX_PET_MAX_REFERENCES && (
-                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-[#fafafd] text-center text-[10px] text-[#7d7d86] transition hover:border-brand hover:text-brand-ink ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
+                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-[#fafafd] text-center text-[10px] text-[#7d7d86] transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
                       <span><Icon icon={busyAction === "uploading" ? "mdi:loading" : "mdi:image-plus-outline"} className={`mx-auto mb-1 text-lg ${busyAction === "uploading" ? "animate-spin" : ""}`} aria-hidden />上传参考图</span>
                       <input
                         type="file"
@@ -1268,8 +1268,8 @@ export function CodexPetStudio({
                       onClick={() => updateDraft("stylePreset", option.value)}
                       className={`rounded-[9px] border px-2 py-1.5 text-left text-[11px] transition ${
                         draft.stylePreset === option.value
-                          ? "border-[#9eddd4] bg-brand-soft font-semibold text-brand-ink"
-                          : "border-[#e2e3e8] bg-white text-[#66666e] hover:border-[#c8ccd3]"
+                          ? "border-brand/40 bg-brand-soft font-semibold text-brand-ink"
+                          : "border-[#e2e3e8] bg-white text-[#66666e] "
                       }`}
                     >
                       {option.label}
@@ -1397,7 +1397,7 @@ export function CodexPetStudio({
                           disabled={latestRun.status !== "awaiting_base_review" || interactionLocked}
                           aria-pressed={selected}
                           onClick={() => setSelectedBaseArtifactId(candidate.id)}
-                          className={`overflow-hidden rounded-[13px] border-2 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-[#e2e4e9] bg-white hover:border-[#c9cdd4]"}`}
+                          className={`overflow-hidden rounded-[13px] border-2 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-[#e2e4e9] bg-white "}`}
                         >
                           <div className="aspect-[3/2] bg-[#f5f5f7]">
                             {url ? <img src={url} alt={`主形象候选 ${index + 1}`} className="size-full object-contain" /> : (
@@ -1479,7 +1479,7 @@ export function CodexPetStudio({
                     <button
                       type="button"
                       onClick={() => setShowActualSize((current) => !current)}
-                      className="rounded-[8px] border border-[#dfe1e6] px-2 py-1 text-[10px] font-semibold text-[#55555d] hover:bg-[#f6f6f8]"
+                      className="rounded-[8px] border border-[#dfe1e6] px-2 py-1 text-[10px] font-semibold text-[#55555d] "
                     >
                       {showActualSize ? "适应窗口" : "1:1 实际尺寸"}
                     </button>
@@ -1499,12 +1499,12 @@ export function CodexPetStudio({
               )}
 
               {latestRun && deliveryReady && (
-                <div className="space-y-3 rounded-[14px] border border-emerald-200 bg-emerald-50/50 p-4">
+                <div className="space-y-3 rounded-[14px] border border-brand/30 bg-brand-soft/50 p-4">
                   <div className="flex items-start gap-2">
-                    <Icon icon="mdi:check-decagram" className="mt-0.5 text-xl text-emerald-600" aria-hidden />
+                    <Icon icon="mdi:check-decagram" className="mt-0.5 text-xl text-brand-ink" aria-hidden />
                     <div>
-                      <h3 className="text-sm font-semibold text-emerald-800">桌宠已孵化并归档</h3>
-                      <p className="mt-0.5 text-[11px] text-emerald-700">最终验证、ZIP 打包与「AI 产物」知识库 Document 均已完成。</p>
+                      <h3 className="text-sm font-semibold text-brand-ink">桌宠已孵化并归档</h3>
+                      <p className="mt-0.5 text-[11px] text-brand-ink">最终验证、ZIP 打包与「AI 产物」知识库 Document 均已完成。</p>
                     </div>
                   </div>
                   <div>
@@ -1532,7 +1532,7 @@ export function CodexPetStudio({
                     </div>
                   </div>
                   {finalContactSheet && (
-                    <div className="rounded-[10px] border border-emerald-100 bg-white p-2.5" data-testid="codex-pet-final-contact-sheet">
+                    <div className="rounded-[10px] border border-brand/30 bg-white p-2.5" data-testid="codex-pet-final-contact-sheet">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
                         <h4 className="text-[11px] font-semibold text-[#52525a]">最终 Contact Sheet</h4>
                         <span className="text-[9px] text-[#8b8b94]">完整 v2 预览 · 非单组动画</span>
@@ -1557,7 +1557,7 @@ export function CodexPetStudio({
                   <div className="rounded-[10px] bg-white px-3 py-2 text-[11px] text-[#5f6068]">
                     质量报告：{validationSummary(latestRun.validationReport)}
                   </div>
-                  <details className="rounded-[10px] border border-emerald-100 bg-white px-3 py-2 text-[10px] text-[#64646c]">
+                  <details className="rounded-[10px] border border-brand/30 bg-white px-3 py-2 text-[10px] text-[#64646c]">
                     <summary className="cursor-pointer font-semibold text-[#4f5057]">查看完整质量报告</summary>
                     <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#f7f8fa] p-2 font-mono text-[9px] leading-4">
                       {JSON.stringify(latestRun.validationReport, null, 2)}
@@ -1593,7 +1593,7 @@ export function CodexPetStudio({
             <CardTitle
               icon="mdi:progress-clock"
               title="阶段进度"
-              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-emerald-600" : "text-[#85858d]"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-emerald-500" : "bg-[#a8a8af]"}`} />{streamLabel}</span>}
+              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-brand-ink" : "text-[#85858d]"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-brand" : "bg-[#a8a8af]"}`} />{streamLabel}</span>}
             />
             <div className="space-y-3 p-4">
               <div>
@@ -1651,7 +1651,7 @@ export function CodexPetStudio({
                     <span className="text-[9px] text-[#85858d]">{job.attempt}/{job.maxAttempts}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1 text-[9px] text-[#96969d]">
-                    <span className={`size-1.5 rounded-full ${job.status === "completed" ? "bg-emerald-500" : job.status === "failed" ? "bg-red-500" : "bg-brand"}`} />
+                    <span className={`size-1.5 rounded-full ${job.status === "completed" ? "bg-brand" : job.status === "failed" ? "bg-red-500" : "bg-brand"}`} />
                     {job.status}{job.error ? ` · ${job.error}` : ""}
                   </div>
                 </div>
@@ -1672,7 +1672,7 @@ export function CodexPetStudio({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">知识库</span>
-                <span className={`font-semibold ${latestRun?.knowledgeDocumentId ? "text-emerald-700" : latestRun?.status === "archiving" ? "text-brand-ink" : "text-[#8d8d95]"}`}>
+                <span className={`font-semibold ${latestRun?.knowledgeDocumentId ? "text-brand-ink" : latestRun?.status === "archiving" ? "text-brand-ink" : "text-[#8d8d95]"}`}>
                   {latestRun?.knowledgeDocumentId ? "AI 产物 · 已归档" : latestRun?.status === "archiving" ? "正在归档" : "等待最终产物"}
                 </span>
               </div>

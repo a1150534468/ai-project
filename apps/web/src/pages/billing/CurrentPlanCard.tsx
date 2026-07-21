@@ -28,7 +28,7 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
     <div className="bg-white rounded-2xl p-5 border border-gray-50 mb-6">
       <div className="flex flex-col lg:flex-row gap-5">
         {/* 品牌块 */}
-        <div className="rounded-2xl p-5 text-white flex-none w-full lg:w-[260px] bg-gradient-to-br from-brand-ink via-[#0b3b3a] to-[#132b2e]">
+        <div className="rounded-2xl bg-[#1d1d1f] p-5 text-white flex-none w-full lg:w-[260px]">
           <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/15">
             ● {membership ? "生效中" : "未开通"}
           </span>
@@ -53,8 +53,8 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
               </p>
             </div>
             <div className="flex gap-2 flex-none">
-              <button onClick={onGotoUsage} className="px-4 py-2 text-[13px] font-medium rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all">消耗明细</button>
-              <button onClick={onGotoPlans} className="px-4 py-2 text-[13px] font-medium rounded-full bg-brand text-white hover:bg-brand-hover transition-all">购买 / 升级会员</button>
+              <button onClick={onGotoUsage} className="px-4 py-2 text-[13px] font-medium rounded-full bg-gray-50 text-gray-600 transition-all">消耗明细</button>
+              <button onClick={onGotoPlans} className="px-4 py-2 text-[13px] font-medium rounded-full bg-brand text-white transition-all">购买 / 升级会员</button>
             </div>
           </div>
 

@@ -157,19 +157,19 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           预计消耗 {estimated === null ? "—" : `${estimated} 算力点`}（{perImageRate === null ? "—" : `${perImageRate} 点/张`} × {count} 张）
         </div>
 
-        <RippleButton type="button" onClick={handleGenerate} disabled={busy} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-[#00b8a9] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#8edbd4]">
+        <RippleButton type="button" onClick={handleGenerate} disabled={busy} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
           {isSubmitting ? <><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成 {count} 张…</> : "生成主图"}
         </RippleButton>
 
         {(error || notice) && (
-          <p className={`mt-4 rounded-[10px] px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-[#eaf8f6] text-[#00867c]"}`}>{error || notice}</p>
+          <p className={`mt-4 rounded-[10px] px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
         )}
       </aside>
 
       <div className="min-w-0 rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
         <h3 className="text-[16px] font-semibold text-[#1d1d1f]">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3>
         {isSubmitting && (
-          <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-[#eaf8f6] px-3 py-2 text-sm font-medium text-[#00867c]">
+          <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
             <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
             正在按张生成 {count} 张主图，请稍候…（离开页面会中断本次生成）
           </div>
@@ -198,13 +198,13 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                       : <span className="text-xs text-[#8a8a8f]">{image.status === "failed" ? "生成失败" : "待生成"}</span>}
                     {image.originalUrl && onDownloadImage && (
                       <button type="button" onClick={() => onDownloadImage(image.originalUrl!)}
-                        className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                        className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-100 transition ">
                         <Icon icon="mdi:download" aria-hidden />下载原图
                       </button>
                     )}
                     {redrawingIndexes.includes(image.index) && (
                       <div className="absolute inset-0 grid place-items-center bg-white/70">
-                        <Icon icon="mdi:loading" className="animate-spin text-2xl text-[#00b8a9]" aria-hidden />
+                        <Icon icon="mdi:loading" className="animate-spin text-2xl text-brand" aria-hidden />
                       </div>
                     )}
                   </div>
@@ -214,7 +214,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                     <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">画面要求：</span>{image.sceneRequirement}</p>
                     <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">文案要求：</span>{image.copyRequirement}</p>
                     {image.status === "failed" && (
-                      <RippleButton type="button" onClick={() => handleRedraw(image.index)} disabled={busy} className="h-9 rounded-[8px] border border-[#d2d2d7] text-xs font-semibold text-[#00867c] disabled:text-[#8a8a8f]">
+                      <RippleButton type="button" onClick={() => handleRedraw(image.index)} disabled={busy} className="h-9 rounded-[8px] border border-[#d2d2d7] text-xs font-semibold text-brand-ink disabled:text-[#8a8a8f]">
                         {redrawingIndexes.includes(image.index) ? "重绘中…" : "重绘这张"}
                       </RippleButton>
                     )}

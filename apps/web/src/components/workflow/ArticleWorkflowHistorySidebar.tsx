@@ -50,7 +50,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
               className={`rounded-[14px] border px-3 py-3 text-left transition ${
                 selected
                   ? "border-brand bg-[#eef8f5]"
-                  : "border-[#edf0f5] bg-white hover:border-[#cfd7e3]"
+                  : "border-[#edf0f5] bg-white "
               }`}
             >
               <div className="flex items-start justify-between gap-2">

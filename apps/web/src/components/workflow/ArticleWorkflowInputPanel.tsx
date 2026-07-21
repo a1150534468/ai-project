@@ -100,7 +100,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                 type="button"
                 onClick={props.onGenerate}
                 disabled={!props.canGenerate}
-                className="flex h-11 items-center justify-center gap-2 rounded-[12px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:bg-brand/40"
+                className="flex h-11 items-center justify-center gap-2 rounded-[12px] bg-brand px-4 text-sm font-semibold text-white disabled:bg-brand/40"
               >
                 <Icon icon={props.creating ? "mdi:loading" : "mdi:auto-fix"} className={props.creating ? "animate-spin" : ""} aria-hidden />
                 {props.creating ? "提交中" : "生成图文"}

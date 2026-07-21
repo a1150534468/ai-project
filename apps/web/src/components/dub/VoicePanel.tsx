@@ -138,7 +138,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
         <div>
           <button
             onClick={() => refInput.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-[#8a8a8f] hover:border-brand/40"
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-[#8a8a8f] "
           >
             <Icon icon="mdi:microphone-outline" className="text-2xl" />
             <span className="text-[13px]">{refFile ? refFile.name : "上传参考音频复刻音色（≤10MB，mp3/wav）"}</span>
@@ -159,7 +159,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
                   type="button"
                   onClick={() => setStyleId(on ? null : p.id)}
                   title={p.prompt}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${on ? "bg-brand text-white" : "bg-gray-100 text-[#5a5a60] hover:bg-gray-200"}`}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${on ? "bg-brand text-white" : "bg-gray-100 text-[#5a5a60] "}`}
                 >
                   <Icon icon={p.icon} className="text-[15px]" />
                   {p.label}

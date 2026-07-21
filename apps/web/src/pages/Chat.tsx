@@ -443,7 +443,7 @@ export default function Chat({
                 <button
                   type="button"
                   onClick={() => removeAttachment(attachment.id)}
-                  className="w-6 h-6 rounded-md text-gray-400 hover:bg-white hover:text-red-500 flex items-center justify-center flex-none"
+                  className="w-6 h-6 rounded-md text-gray-400 flex items-center justify-center flex-none"
                   aria-label="移除附件"
                 >
                   <Icon icon="mdi:close" className="text-sm" aria-hidden />
@@ -458,7 +458,7 @@ export default function Chat({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-9 h-9 flex-none rounded-full text-gray-500 hover:bg-gray-50 hover:text-gray-800 flex items-center justify-center transition-colors"
+              className="w-9 h-9 flex-none rounded-full text-gray-500 flex items-center justify-center transition-colors"
               aria-label="添加附件"
               title="添加附件"
             >
@@ -470,7 +470,7 @@ export default function Chat({
               className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
                 attachAllOwn || selectedKbIds.length > 0
                   ? "bg-brand-soft border-brand/20 text-brand-ink"
-                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                  : "bg-white border-gray-200 text-gray-600 "
               }`}
             >
               <Icon icon="mdi:database-search-outline" className="text-base flex-none" aria-hidden />
@@ -481,8 +481,8 @@ export default function Chat({
               onClick={openToolPicker}
               className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
                 selectedToolIds.length > 0
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-800"
-                  : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                  ? "bg-brand-soft border-brand/30 text-brand-ink"
+                  : "bg-white border-gray-200 text-gray-600 "
               }`}
             >
               <Icon icon="mdi:wrench-outline" className="text-base flex-none" aria-hidden />
@@ -503,7 +503,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={() => setModelPickerOpen(true)}
-                className="h-9 max-w-[calc(100vw-10rem)] px-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 flex items-center gap-2 hover:bg-gray-50 transition-colors sm:max-w-48"
+                className="h-9 max-w-[calc(100vw-10rem)] px-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 flex items-center gap-2 transition-colors sm:max-w-48"
                 aria-label="选择模型"
               >
                 <Icon icon="mdi:chip" className="text-base text-gray-500 flex-none" aria-hidden />
@@ -530,7 +530,7 @@ export default function Chat({
                           className={`w-full px-3 py-2.5 rounded-lg text-left flex items-center gap-3 transition-colors ${
                             checked
                               ? "bg-brand-soft text-brand-ink"
-                              : "text-gray-700 hover:bg-gray-50"
+                              : "text-gray-700 "
                           }`}
                         >
                           <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-none ${
@@ -554,7 +554,7 @@ export default function Chat({
             <RippleButton
               onClick={handleSend}
               disabled={isLoading || (!input.trim() && attachments.length === 0)}
-              className="w-10 h-10 flex-none rounded-full bg-gray-900 text-white hover:bg-black disabled:bg-gray-200 disabled:text-gray-400 flex items-center justify-center transition-colors"
+              className="w-10 h-10 flex-none rounded-full bg-brand text-white disabled:bg-gray-200 disabled:text-gray-400 flex items-center justify-center transition-colors"
               aria-label="发送"
             >
               <Icon icon="mdi:arrow-up" className="text-xl" aria-hidden />
@@ -579,7 +579,7 @@ export default function Chat({
         <button
           type="button"
           onClick={() => setToolGroupExpanded((prev) => !prev)}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-50 hover:text-gray-800"
+          className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-medium text-gray-500 transition-colors "
         >
           <Icon icon="mdi:console-line" className="text-sm flex-none text-gray-400" aria-hidden />
           <span className="truncate">{toolGroupVerb} {toolActivities.length} {toolGroupUnit}</span>
@@ -612,7 +612,7 @@ export default function Chat({
                     type="button"
                     onClick={() => canExpand && toggleExpandedTool(tool.id)}
                     className={`flex w-full min-w-0 items-start justify-between gap-2 rounded-md px-1 py-0.5 text-left text-xs leading-5 text-gray-500 transition-colors ${
-                      canExpand ? "hover:bg-gray-50 hover:text-gray-800" : "cursor-default"
+                      canExpand ? " " : "cursor-default"
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">
@@ -676,7 +676,7 @@ export default function Chat({
               type="button"
               onClick={onToggleAgentPanel}
               aria-label={agentPanelCollapsed ? "展开对话列表" : "收起对话列表"}
-              className="flex-none w-9 h-9 rounded-lg text-gray-400 hover:bg-gray-50 hover:text-gray-700 flex items-center justify-center transition-colors"
+              className="flex-none w-9 h-9 rounded-lg text-gray-400 flex items-center justify-center transition-colors"
             >
               <Icon icon="mdi:dock-left" className="text-xl" aria-hidden />
             </button>
@@ -700,7 +700,7 @@ export default function Chat({
                 </span>
               )}
               {selectedToolIds.length > 0 && (
-                <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-medium rounded">
+                <span className="px-2 py-0.5 bg-brand-soft text-brand-ink text-[10px] font-medium rounded">
                   已挂载 {selectedToolIds.length} 工具
                 </span>
               )}
@@ -832,14 +832,14 @@ export default function Chat({
                 <button
                   type="button"
                   onClick={openMarketFromPicker}
-                  className="h-8 rounded-lg border border-gray-200 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50"
+                  className="h-8 rounded-lg border border-gray-200 px-3 text-xs font-medium text-gray-700 "
                 >
                   工具市场
                 </button>
                 <button
                   type="button"
                   onClick={() => setToolPickerOpen(false)}
-                  className="w-8 h-8 rounded-lg hover:bg-gray-50 flex items-center justify-center text-gray-500"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
                   aria-label="关闭"
                 >
                   <Icon icon="mdi:close" className="text-lg" />
@@ -867,13 +867,13 @@ export default function Chat({
                         onClick={() => toggleDraftTool(tool.toolName)}
                         className={`w-full rounded-lg border px-3 py-3 text-left transition-colors flex items-start gap-3 ${
                           checked
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                            : "border-gray-100 text-gray-700 hover:bg-gray-50"
+                            ? "border-brand/30 bg-brand-soft text-brand-ink"
+                            : "border-gray-100 text-gray-700 "
                         }`}
                       >
                         <span
                           className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-none ${
-                            checked ? "bg-emerald-600 border-emerald-600 text-white" : "border-gray-300"
+                            checked ? "bg-brand border-brand text-white" : "border-gray-300"
                           }`}
                         >
                           {checked && <Icon icon="mdi:check" className="text-xs" aria-hidden />}
@@ -896,7 +896,7 @@ export default function Chat({
                   <button
                     type="button"
                     onClick={openMarketFromPicker}
-                    className="mt-4 h-9 rounded-lg bg-gray-900 px-4 text-xs font-medium text-white hover:bg-black"
+                    className="mt-4 h-9 rounded-lg bg-gray-900 px-4 text-xs font-medium text-white "
                   >
                     打开工具市场
                   </button>
@@ -908,7 +908,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={disableTools}
-                className="px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50"
+                className="px-3 py-2 rounded-lg text-sm text-red-600 "
               >
                 关闭工具
               </button>
@@ -916,7 +916,7 @@ export default function Chat({
                 <button
                   type="button"
                   onClick={() => setToolPickerOpen(false)}
-                  className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                  className="px-4 py-2 rounded-lg text-sm text-gray-600 "
                 >
                   取消
                 </button>
@@ -950,7 +950,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={() => setKbPickerOpen(false)}
-                className="w-8 h-8 rounded-lg hover:bg-gray-50 flex items-center justify-center text-gray-500"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
                 aria-label="关闭"
               >
                 <Icon icon="mdi:close" className="text-lg" />
@@ -967,7 +967,7 @@ export default function Chat({
                 className={`w-full p-4 rounded-xl border text-left transition-colors flex items-start gap-3 ${
                   draftAttachAllOwn
                     ? "border-brand/30 bg-brand-soft text-brand-ink"
-                    : "border-gray-100 hover:bg-gray-50 text-gray-700"
+                    : "border-gray-100 text-gray-700"
                 }`}
               >
                 <span className="mt-0.5 w-7 h-7 rounded-lg bg-brand/10 text-brand flex items-center justify-center flex-none">
@@ -1005,7 +1005,7 @@ export default function Chat({
                           className={`w-full px-3 py-2.5 rounded-lg border text-left flex items-center gap-3 transition-colors ${
                             checked
                               ? "bg-[#f5f5f7] text-gray-900 border-gray-200"
-                              : "text-gray-700 hover:bg-gray-50 border-gray-100"
+                              : "text-gray-700 border-gray-100"
                           }`}
                         >
                           <span
@@ -1048,7 +1048,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={disableKnowledge}
-                className="px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50"
+                className="px-3 py-2 rounded-lg text-sm text-red-600 "
               >
                 关闭知识库
               </button>
@@ -1056,7 +1056,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={() => setKbPickerOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+                className="px-4 py-2 rounded-lg text-sm text-gray-600 "
               >
                 取消
               </button>

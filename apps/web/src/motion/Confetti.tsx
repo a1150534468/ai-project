@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { shouldRenderDecoration } from "./anim";
 
-const COLORS = ["#00b8a9", "#3ec6ff", "#ffd66b", "#ff7a9c", "#7fffd8"];
+const COLORS = ["#0066cc", "#2997ff", "#ffd60a", "#ff375f", "#64d2ff"];
 
 export function Confetti({ trigger }: { trigger: boolean }) {
   const reduced = useReducedMotion();

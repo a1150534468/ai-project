@@ -62,7 +62,7 @@ export function FanoutStudioView(props: FanoutStudioViewProps) {
         />
         <button
           onClick={onExtract} disabled={extracting || raw.trim().length === 0}
-          className="btn-primary mt-3 inline-flex items-center gap-1 disabled:opacity-40 disabled:hover:scale-100"
+          className="btn-primary mt-3 inline-flex items-center gap-1 disabled:opacity-40 "
         >
           {extracting ? <Icon icon="mdi:loading" className="animate-spin" /> : <Icon icon="mdi:magic-staff" />}
           AI 理解原文
@@ -126,7 +126,7 @@ export function FanoutStudioView(props: FanoutStudioViewProps) {
           )}
           <button
             onClick={onGenerate} disabled={generating || !canGenerate}
-            className="btn-primary inline-flex items-center gap-1 disabled:opacity-40 disabled:hover:scale-100"
+            className="btn-primary inline-flex items-center gap-1 disabled:opacity-40 "
           >
             {generating ? <Icon icon="mdi:loading" className="animate-spin" /> : <Icon icon="mdi:shape-plus" />}
             开始裂变
@@ -146,13 +146,13 @@ export function FanoutStudioView(props: FanoutStudioViewProps) {
               {partialFailure && <span className="text-[#d4380d]"> · 部分批次失败</span>}
               {stoppedByBalance && <span className="text-[#d4380d]"> · 余额不足已停止</span>}
             </span>
-            <button onClick={onExport} className="inline-flex items-center gap-1 rounded-full border border-[#e8e8ed] px-3 py-1 text-xs font-semibold text-[#1d1d1f] transition hover:border-brand hover:text-brand">
+            <button onClick={onExport} className="inline-flex items-center gap-1 rounded-full border border-[#e8e8ed] px-3 py-1 text-xs font-semibold text-[#1d1d1f] transition ">
               <Icon icon="mdi:download" /> 导出
             </button>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {variants.map((v) => (
-              <div key={v.id} className="flex flex-col rounded-[10px] border border-[#e8e8ed] p-3 transition hover:border-brand/40 hover:shadow-[0_2px_12px_rgba(0,184,169,0.08)]">
+              <div key={v.id} className="flex flex-col rounded-[10px] border border-[#e8e8ed] p-3 transition ">
                 <div className="mb-1 flex items-center justify-between">
                   <span className="badge bg-brand-soft text-brand-ink">{v.label}</span>
                   {v.highSimilarity && <span className="text-xs text-[#d4380d]">高相似</span>}
@@ -160,7 +160,7 @@ export function FanoutStudioView(props: FanoutStudioViewProps) {
                 <p className="flex-1 whitespace-pre-wrap text-sm text-[#1d1d1f]">{v.text}</p>
                 <div className="mt-2 flex items-center justify-between text-xs text-[#8a8a8f]">
                   <span>{v.charCount} 字</span>
-                  <button onClick={() => onCopy(v.text)} className="inline-flex items-center gap-1 transition hover:text-brand">
+                  <button onClick={() => onCopy(v.text)} className="inline-flex items-center gap-1 transition ">
                     <Icon icon="mdi:content-copy" /> 复制
                   </button>
                 </div>
@@ -193,7 +193,7 @@ function Chip(props: { active: boolean; onClick: () => void; title?: string; chi
   return (
     <button
       onClick={props.onClick} title={props.title}
-      className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${props.active ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f] hover:border-brand hover:text-brand"}`}
+      className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${props.active ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f] "}`}
     >
       {props.children}
     </button>

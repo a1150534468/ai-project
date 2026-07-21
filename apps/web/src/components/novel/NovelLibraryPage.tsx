@@ -84,7 +84,7 @@ export function NovelLibraryPage({
             {visible.map((project, index) => {
               const checked = selected.includes(project.id);
               return (
-                <article key={project.id} className={`group relative grid min-h-[218px] w-[310px] flex-none snap-start overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${checked ? "border-brand ring-2 ring-brand/10" : "border-[#e1e5e3] hover:border-brand/35"}`}>
+                <article key={project.id} className={`group relative grid min-h-[218px] w-[310px] flex-none snap-start overflow-hidden rounded-2xl border bg-white shadow-sm transition ${checked ? "border-brand ring-2 ring-brand/10" : "border-[#e1e5e3] "}`}>
                   <div className={`h-2 ${index % 3 === 0 ? "bg-brand" : index % 3 === 1 ? "bg-[#557b95]" : "bg-[#8a7297]"}`} />
                   <div className="grid content-between p-5">
                     <div>
@@ -96,7 +96,7 @@ export function NovelLibraryPage({
                     </div>
                     <div className="mt-8 flex items-end justify-between gap-3 border-t border-[#edf0ef] pt-4">
                       <p className="text-[11px] leading-5 text-[#8b9390]">最近更新<br />{formatUpdate(project.updatedAt)}</p>
-                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-[#9ca29f] opacity-0 transition hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-[#f1f6f4] px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
+                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-[#9ca29f] opacity-100 transition " aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-[#f1f6f4] px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
                     </div>
                   </div>
                 </article>

@@ -9,6 +9,7 @@ import { Icon } from "@iconify/react";
 import { loadNavCollapsed, saveNavCollapsed } from "../../shellState";
 import { spring } from "../../motion";
 import { isClientMenuVisible, type ClientMenuVisibility } from "../../clientMenu";
+import { ThemeToggle } from "../ThemeToggle";
 
 export type { ViewType, WorkflowSubId } from "./NavRail";
 
@@ -79,11 +80,11 @@ export default function Shell({
   };
 
   return (
-    <div className="flex h-dvh min-h-0 overflow-hidden bg-[#f5f7fa]">
+    <div className="apple-shell flex h-dvh min-h-0 overflow-hidden bg-[#f5f5f7]">
       <motion.aside
         animate={{ width: collapsed ? 56 : 240 }}
         transition={reduceMotion ? { duration: 0 } : spring.smooth}
-        className="hidden flex-none flex-col overflow-hidden border-r border-gray-100 bg-white lg:flex"
+        className="apple-sidebar hidden flex-none flex-col overflow-hidden border-r border-gray-100 bg-white lg:flex"
       >
         <NavRail
           currentView={currentView}
@@ -115,8 +116,9 @@ export default function Shell({
       )}
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <nav className="border-b border-gray-100 bg-white px-4 py-3 lg:hidden">
-          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="apple-mobile-nav border-b border-gray-100 bg-white px-3 py-2.5 lg:hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleNavItems.flatMap((item) =>
               item.id === "workflow"
                 ? visibleWorkflowSubItems.filter((sub) => !sub.developing).map((sub) => {
@@ -129,7 +131,7 @@ export default function Shell({
                         className={`inline-flex flex-none items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
                           active
                             ? "border-brand bg-brand text-white"
-                            : "border-[#d2d2d7] bg-[#f7faf9] text-[#6e6e73] hover:border-brand/40 hover:text-[#1d1d1f]"
+                            : "border-[#d2d2d7] bg-[#f7faf9] text-[#6e6e73] "
                         }`}
                       >
                         <Icon icon={sub.icon} className="text-sm" aria-hidden />
@@ -145,7 +147,7 @@ export default function Shell({
                       className={`inline-flex flex-none items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
                         currentView === item.id
                           ? "border-brand bg-brand text-white"
-                          : "border-[#d2d2d7] bg-[#f7faf9] text-[#6e6e73] hover:border-brand/40 hover:text-[#1d1d1f]"
+                          : "border-[#d2d2d7] bg-[#f7faf9] text-[#6e6e73] "
                       }`}
                     >
                       <Icon icon={item.icon} className="text-sm" aria-hidden />
@@ -153,6 +155,8 @@ export default function Shell({
                     </button>,
                   ]
             )}
+            </div>
+            <ThemeToggle compact className="flex-none" />
           </div>
         </nav>
 

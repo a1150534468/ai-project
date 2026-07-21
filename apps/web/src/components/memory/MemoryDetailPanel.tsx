@@ -163,7 +163,7 @@ export default function MemoryDetailPanel({
               type="button"
               onClick={onClose}
               aria-label="关闭记忆详情"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d2d2d7] bg-white text-[#1d1d1f] shadow-sm transition hover:border-brand/40 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d2d2d7] bg-white text-[#1d1d1f] shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -184,7 +184,7 @@ export default function MemoryDetailPanel({
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-[#1d1d1f] transition hover:border-brand/50 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-[#1d1d1f] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <Icon icon="mdi:pencil-outline" className="text-sm" />
               编辑
@@ -193,7 +193,7 @@ export default function MemoryDetailPanel({
             <button
               type="button"
               onClick={resetEditor}
-              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-[#6e6e73] transition hover:border-[#b9bbc2] hover:text-[#1d1d1f] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-[#6e6e73] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <Icon icon="mdi:close-circle-outline" className="text-sm" />
               取消
@@ -248,7 +248,7 @@ export default function MemoryDetailPanel({
           type="button"
           onClick={() => void onDelete()}
           disabled={saving || deleting}
-          className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Icon
             icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"}
@@ -262,7 +262,7 @@ export default function MemoryDetailPanel({
             type="button"
             onClick={() => void handleSave()}
             disabled={saving || deleting}
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Icon
               icon={saving ? "mdi:loading" : "mdi:content-save-outline"}

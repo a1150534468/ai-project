@@ -6,13 +6,13 @@ const IMAGE_PIPELINE_STEPS = [
   { label: "优化提示词", icon: "mdi:creation-outline", className: "text-indigo-600 bg-indigo-50 border-indigo-200" },
   { label: "批量生成", icon: "mdi:layers-triple-outline", className: "text-violet-600 bg-violet-50 border-violet-200" },
   { label: "风格筛选", icon: "mdi:tune-variant", className: "text-amber-600 bg-amber-50 border-amber-200" },
-  { label: "导出", icon: "mdi:download-box-outline", className: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  { label: "导出", icon: "mdi:download-box-outline", className: "text-brand-ink bg-brand-soft border-brand/30" },
 ] as const;
 
 const NOVEL_PIPELINE_STEPS = [
   { label: "基础设定", icon: "mdi:book-edit-outline", className: "text-sky-600 bg-sky-50 border-sky-200" },
   { label: "宏观架构", icon: "mdi:graph-outline", className: "text-indigo-600 bg-indigo-50 border-indigo-200" },
-  { label: "世界观", icon: "mdi:earth", className: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  { label: "世界观", icon: "mdi:earth", className: "text-brand-ink bg-brand-soft border-brand/30" },
   { label: "角色设定", icon: "mdi:account-group-outline", className: "text-rose-600 bg-rose-50 border-rose-200" },
   { label: "卷纲章节", icon: "mdi:format-list-numbered", className: "text-amber-600 bg-amber-50 border-amber-200" },
 ] as const;
@@ -20,7 +20,7 @@ const NOVEL_PIPELINE_STEPS = [
 const ECOM_PIPELINE_STEPS = [
   { label: "参考图", icon: "mdi:image-plus-outline", className: "text-sky-600 bg-sky-50 border-sky-200" },
   { label: "商品信息", icon: "mdi:tag-text-outline", className: "text-indigo-600 bg-indigo-50 border-indigo-200" },
-  { label: "母版生成", icon: "mdi:image-filter-center-focus", className: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  { label: "母版生成", icon: "mdi:image-filter-center-focus", className: "text-brand-ink bg-brand-soft border-brand/30" },
   { label: "三段长图", icon: "mdi:view-sequential-outline", className: "text-rose-600 bg-rose-50 border-rose-200" },
   { label: "拼接保存", icon: "mdi:download-box-outline", className: "text-amber-600 bg-amber-50 border-amber-200" },
 ] as const;
@@ -28,7 +28,7 @@ const ECOM_PIPELINE_STEPS = [
 const LOCAL_BUSINESS_PROMO_PIPELINE_STEPS = [
   { label: "填写资料", icon: "mdi:form-select", className: "text-sky-600 bg-sky-50 border-sky-200" },
   { label: "生成文案", icon: "mdi:text-box-edit-outline", className: "text-indigo-600 bg-indigo-50 border-indigo-200" },
-  { label: "多段视频", icon: "mdi:filmstrip-box-multiple", className: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+  { label: "多段视频", icon: "mdi:filmstrip-box-multiple", className: "text-brand-ink bg-brand-soft border-brand/30" },
   { label: "任务轮询", icon: "mdi:progress-clock", className: "text-rose-600 bg-rose-50 border-rose-200" },
   { label: "成片拼接", icon: "mdi:content-cut", className: "text-amber-600 bg-amber-50 border-amber-200" },
 ] as const;

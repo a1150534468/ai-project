@@ -69,7 +69,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             type="button"
             onClick={props.onSave}
             disabled={!props.canSave}
-            className="flex h-9 items-center gap-2 rounded-[10px] bg-brand px-3.5 text-sm font-semibold text-white hover:bg-brand-hover disabled:bg-brand/40"
+            className="flex h-9 items-center gap-2 rounded-[10px] bg-brand px-3.5 text-sm font-semibold text-white disabled:bg-brand/40"
           >
             <Icon icon={props.saving ? "mdi:loading" : "mdi:content-save-outline"} className={props.saving ? "animate-spin" : ""} aria-hidden />
             {props.saving ? "保存中" : "保存修改"}
@@ -198,7 +198,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
               type="button"
               onClick={props.onRewrite}
               disabled={!props.canRewrite}
-              className="flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-hover disabled:bg-brand/40"
+              className="flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:bg-brand/40"
             >
               <Icon icon={props.rewriting ? "mdi:loading" : "mdi:auto-fix"} className={props.rewriting ? "animate-spin" : ""} aria-hidden />
               {props.rewriting ? "提交中" : "按要求重新生成"}

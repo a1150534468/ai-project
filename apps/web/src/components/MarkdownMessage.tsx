@@ -35,7 +35,7 @@ export function MarkdownMessage({ content, variant = "chat" }: MarkdownMessagePr
               href={href}
               target="_blank"
               rel="noreferrer"
-              className="text-brand underline underline-offset-2 hover:text-brand-hover"
+              className="text-brand underline underline-offset-2 "
             >
               {children}
             </a>

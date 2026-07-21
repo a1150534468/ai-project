@@ -22,7 +22,7 @@ export function StepRail({ active, busy = false, onSelect }: StepRailProps) {
               disabled={!clickable}
               onClick={() => onSelect?.(i)}
               title={clickable ? `跳到「${step.title}」` : undefined}
-              className={`flex items-center gap-2.5 rounded-lg px-1.5 py-1 text-left transition-colors ${clickable ? "cursor-pointer hover:bg-gray-50" : "cursor-default"}`}
+              className={`flex items-center gap-2.5 rounded-lg px-1.5 py-1 text-left transition-colors ${clickable ? "cursor-pointer " : "cursor-default"}`}
             >
             <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
               {/* 当前步：脉冲光环；忙碌时加速为 ping，让用户一眼看出「这一步正在跑」 */}

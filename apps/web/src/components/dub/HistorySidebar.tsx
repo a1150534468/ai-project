@@ -25,7 +25,7 @@ export function HistorySidebar({ projects, activeId, onSelect, onCreate, onDelet
     <aside className="flex w-60 shrink-0 flex-col gap-3 border-r border-gray-100 pr-4">
       <button
         onClick={onCreate}
-        className="flex items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[13px] font-medium text-white hover:bg-brand-hover"
+        className="flex items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[13px] font-medium text-white "
       >
         <Icon icon="mdi:plus" className="text-base" /> 新建口播
       </button>
@@ -40,7 +40,7 @@ export function HistorySidebar({ projects, activeId, onSelect, onCreate, onDelet
           return (
             <div
               key={p.id}
-              className={`group rounded-lg border px-2.5 py-2 transition-colors ${on ? "border-brand bg-brand/5" : "border-transparent hover:bg-gray-50"}`}
+              className={`group rounded-lg border px-2.5 py-2 transition-colors ${on ? "border-brand bg-brand/5" : "border-transparent "}`}
             >
               <button onClick={() => onSelect(p.id)} className="w-full text-left">
                 <div className="flex items-center gap-1.5">
@@ -55,7 +55,7 @@ export function HistorySidebar({ projects, activeId, onSelect, onCreate, onDelet
               <button
                 onClick={() => onDelete(p.id)}
                 title="删除"
-                className="mt-1 text-[11px] text-[#c7c7cc] opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+                className="mt-1 text-[11px] text-[#c7c7cc] opacity-100 transition-opacity "
               >
                 <Icon icon="mdi:trash-can-outline" className="text-[13px]" />
               </button>

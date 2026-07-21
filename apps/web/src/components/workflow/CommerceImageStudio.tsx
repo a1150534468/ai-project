@@ -165,7 +165,7 @@ export function CommerceImageStudio({
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f] sm:col-span-2">
             <div className="flex items-center justify-between">
               <span>卖点文案</span>
-              <button type="button" onClick={() => handleHelpWrite("sellingPoints")} disabled={helpWriting !== null} className="flex items-center gap-1 rounded-[8px] border border-[#00b8a9]/40 px-2 py-1 text-xs font-semibold text-[#00867c] transition hover:bg-[#eaf8f6] disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => handleHelpWrite("sellingPoints")} disabled={helpWriting !== null} className="flex items-center gap-1 rounded-[8px] border border-brand/40 px-2 py-1 text-xs font-semibold text-brand-ink transition disabled:cursor-not-allowed disabled:opacity-50">
                 <Icon icon={helpWriting === "sellingPoints" ? "mdi:loading" : "mdi:auto-fix"} className={helpWriting === "sellingPoints" ? "animate-spin" : ""} aria-hidden />
                 {helpWriting === "sellingPoints" ? "生成中…" : "AI 帮我写"}
               </button>
@@ -175,7 +175,7 @@ export function CommerceImageStudio({
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f] sm:col-span-2">
             <div className="flex items-center justify-between">
               <span>额外说明</span>
-              <button type="button" onClick={() => handleHelpWrite("extra")} disabled={helpWriting !== null} className="flex items-center gap-1 rounded-[8px] border border-[#00b8a9]/40 px-2 py-1 text-xs font-semibold text-[#00867c] transition hover:bg-[#eaf8f6] disabled:cursor-not-allowed disabled:opacity-50">
+              <button type="button" onClick={() => handleHelpWrite("extra")} disabled={helpWriting !== null} className="flex items-center gap-1 rounded-[8px] border border-brand/40 px-2 py-1 text-xs font-semibold text-brand-ink transition disabled:cursor-not-allowed disabled:opacity-50">
                 <Icon icon={helpWriting === "extra" ? "mdi:loading" : "mdi:auto-fix"} className={helpWriting === "extra" ? "animate-spin" : ""} aria-hidden />
                 {helpWriting === "extra" ? "生成中…" : "AI 帮我写"}
               </button>
@@ -204,8 +204,8 @@ export function CommerceImageStudio({
       </section>
 
       <div className="flex gap-2">
-        <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "main" ? "bg-[#00b8a9] text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品主图</RippleButton>
-        <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "detail" ? "bg-[#00b8a9] text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品详情图</RippleButton>
+        <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "main" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品主图</RippleButton>
+        <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "detail" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品详情图</RippleButton>
       </div>
 
         {tab === "main"

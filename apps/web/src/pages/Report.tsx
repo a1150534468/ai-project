@@ -229,7 +229,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
   if (stage === "loading") {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <div className="min-h-screen bg-[#f5f5f7]">
         <div className="container mx-auto px-4 py-8">
           <LoadingReport stage={currentTask?.stage === "pending" ? "pending" : "running"} />
         </div>
@@ -240,7 +240,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
   if (stage === "confirm") {
     const modelDisplay = models.find((m) => m.model === selectedModel)?.displayName || selectedModel;
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <div className="min-h-screen bg-[#f5f5f7]">
         <div className="container mx-auto px-4 py-12">
           {error && (
             <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">
@@ -262,10 +262,10 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
               </div>
 
               {exhaustive && (
-                <div className="rounded-xl border border-teal-200 bg-teal-50 p-4">
+                <div className="rounded-xl border border-brand/30 bg-brand-soft p-4">
                   <div className="flex gap-3">
-                    <Icon icon="mdi:playlist-check" className="text-teal-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-teal-800">
+                    <Icon icon="mdi:playlist-check" className="text-brand-ink flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-brand-ink">
                       <p className="font-semibold mb-1">全面详尽模式</p>
                       <ul className="list-disc list-inside space-y-1 text-xs">
                         <li>完整读取所有分表数据，绝不遗漏</li>
@@ -294,14 +294,14 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
               <div className="flex gap-3">
                 <button
                   onClick={handleBack}
-                  className="flex-1 rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition-colors"
                 >
                   <Icon icon="mdi:arrow-left" className="inline mr-2" />
                   返回
                 </button>
                 <button
                   onClick={handleStartGenerate}
-                  className="flex-1 rounded-lg bg-brand px-4 py-3 font-semibold text-white hover:bg-brand/90 transition-colors"
+                  className="flex-1 rounded-lg bg-brand px-4 py-3 font-semibold text-white transition-colors"
                 >
                   <Icon icon="mdi:play-circle-outline" className="inline mr-2" />
                   开始生成
@@ -316,7 +316,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
   if (stage === "preview") {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+      <div className="min-h-screen bg-[#f5f5f7]">
         {showDownloadDialog && (
           <DownloadLinkDialog
             dialog={{ title: "下载报告", links: [downloadUrl] }}
@@ -335,14 +335,14 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             <div className="flex gap-2">
               <button
                 onClick={handleDownload}
-                className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50 transition-colors flex items-center gap-2"
+                className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition-colors flex items-center gap-2"
               >
                 <Icon icon="mdi:download" />
                 下载 HTML
               </button>
               <button
                 onClick={handleReset}
-                className="rounded-lg bg-brand px-4 py-2 font-semibold text-white hover:bg-brand/90 transition-colors flex items-center gap-2"
+                className="rounded-lg bg-brand px-4 py-2 font-semibold text-white transition-colors flex items-center gap-2"
               >
                 <Icon icon="mdi:plus" />
                 再做一份
@@ -363,7 +363,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
   // === input 态 ===
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className="min-h-screen bg-[#f5f5f7]">
       <div className="container mx-auto px-4 py-12">
         {error && (
           <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">
@@ -402,7 +402,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                   <button
                     type="button"
                     onClick={() => setSelectedFile(null)}
-                    className="ml-auto text-slate-400 hover:text-slate-600"
+                    className="ml-auto text-slate-400 "
                   >
                     <Icon icon="mdi:close" />
                   </button>
@@ -445,7 +445,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                       className={
                         active
                           ? "rounded-full border border-brand bg-brand/10 px-4 py-2 text-sm font-medium text-brand transition-colors"
-                          : "rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 hover:border-brand/50 hover:text-brand transition-colors"
+                          : "rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 transition-colors"
                       }
                     >
                       {active && <Icon icon="mdi:check" className="inline-block mr-1 -mt-0.5" />}
@@ -477,7 +477,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             <button
               onClick={handleNext}
               disabled={!hasInput}
-              className="w-full rounded-lg bg-brand px-4 py-3 font-semibold text-white hover:bg-brand/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              className="w-full rounded-lg bg-brand px-4 py-3 font-semibold text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
             >
               <Icon icon="mdi:arrow-right" />
               下一步
@@ -492,7 +492,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                 {history.map((item) => {
                   const canOpen = item.stage === "ready";
                   const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-                    ready: { bg: "bg-green-50", text: "text-green-600", label: "已完成" },
+                    ready: { bg: "bg-brand-soft", text: "text-brand-ink", label: "已完成" },
                     failed: { bg: "bg-red-50", text: "text-red-600", label: "失败" },
                     running: { bg: "bg-blue-50", text: "text-blue-600", label: "进行中" },
                     pending: { bg: "bg-yellow-50", text: "text-yellow-600", label: "排队中" },
@@ -506,7 +506,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                       disabled={!canOpen}
                       className={`w-full rounded-lg border border-slate-200 px-4 py-3 text-left transition-colors ${
                         canOpen
-                          ? "hover:bg-slate-50 hover:border-brand/30 cursor-pointer"
+                          ? " cursor-pointer"
                           : "opacity-60 cursor-not-allowed"
                       }`}
                     >

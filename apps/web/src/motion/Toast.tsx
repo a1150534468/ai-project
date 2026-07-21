@@ -37,7 +37,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               <span style={{
                 width: 22, height: 22, borderRadius: "50%", display: "grid", placeItems: "center",
-                color: "#fff", background: t.kind === "ok" ? "var(--accent-primary,#00b8a9)" : "#dc2626",
+                color: "#fff", background: t.kind === "ok" ? "var(--accent-primary,#0066cc)" : "#dc2626",
               }}>{t.kind === "ok" ? "✓" : "!"}</span>
               {t.text}
             </motion.div>

@@ -100,7 +100,7 @@ export default function MemoryGalaxyCanvas({
 
   return (
     <section className="relative flex min-h-0 flex-1 overflow-hidden rounded-[14px] border border-[#d2d2d7] bg-white">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,184,169,0.06),transparent_48%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,102,204,0.06),transparent_48%)]" />
       <div
         className="absolute inset-0 opacity-60"
         style={{
@@ -140,7 +140,7 @@ export default function MemoryGalaxyCanvas({
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
                 zoom === level
                   ? "bg-brand text-white"
-                  : "text-[#6e6e73] hover:bg-[#f5f5f7] hover:text-[#1d1d1f]"
+                  : "text-[#6e6e73] "
               }`}
             >
               {level}%
@@ -207,7 +207,7 @@ export default function MemoryGalaxyCanvas({
                       ? "z-20 border-brand ring-4 ring-brand/15"
                       : isHighlighted
                         ? "z-10 border-brand/70 ring-4 ring-brand/10"
-                        : "hover:border-brand/50 hover:shadow-[0_14px_28px_rgba(0,184,169,0.10)]"
+                        : " "
                   }`}
                   style={{
                     left: node.x,

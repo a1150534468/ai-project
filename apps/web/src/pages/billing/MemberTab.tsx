@@ -59,7 +59,7 @@ export function MemberTab({ detail, balance, videoBalance, vip, membershipCards,
                   <button
                     onClick={() => onBuyMembership(card)}
                     disabled={loading}
-                    className={`w-full mt-4 py-2.5 text-[13px] font-medium rounded-full transition-all disabled:opacity-50 ${isCurrent ? "bg-gray-50 text-gray-600 hover:bg-gray-100" : "bg-brand text-white hover:bg-brand-hover"}`}
+                    className={`w-full mt-4 py-2.5 text-[13px] font-medium rounded-full transition-all disabled:opacity-50 ${isCurrent ? "bg-gray-50 text-gray-600 " : "bg-brand text-white "}`}
                   >
                     {loading ? "处理中..." : isCurrent ? "再次购买" : "购买会员"}
                   </button>

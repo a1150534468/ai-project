@@ -91,7 +91,7 @@ export function ScheduledTaskStudio({ token }: Props) {
           <Icon icon="mdi:calendar-clock-outline" /> 新建定时任务
         </h3>
         <div className="grid gap-3">
-          <div className="flex items-center gap-2 rounded-[8px] border border-dashed border-[#00b8a9]/40 bg-[#00b8a9]/5 p-2">
+          <div className="flex items-center gap-2 rounded-[8px] border border-dashed border-brand/40 bg-brand/5 p-2">
             <input
               className="flex-1 rounded-[8px] border border-[#e8e8ed] bg-white px-3 py-2 text-sm placeholder-[#8a8a8f]"
               placeholder="用一句话描述需求，AI 帮你填好"
@@ -101,7 +101,7 @@ export function ScheduledTaskStudio({ token }: Props) {
             <button
               type="button"
               disabled={aiLoading || !aiDesc.trim()}
-              className="inline-flex flex-none items-center gap-1 rounded-full bg-[#00b8a9] px-3 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
+              className="inline-flex flex-none items-center gap-1 rounded-full bg-brand px-3 py-2 text-sm font-medium text-white transition disabled:opacity-40"
               onClick={() => void generateFromAi()}
             >
               <Icon icon={aiLoading ? "mdi:loading" : "mdi:auto-fix"} className={aiLoading ? "animate-spin" : ""} /> AI 生成
@@ -128,7 +128,7 @@ export function ScheduledTaskStudio({ token }: Props) {
           </div>
           <label className="flex items-center gap-2 text-sm text-[#1d1d1f]"><input type="checkbox" checked={oneShot} onChange={(e) => setOneShot(e.target.checked)} /> 仅执行一次</label>
           {err && <p className="text-sm text-[#d4380d]">{err}</p>}
-          <button className="mt-2 inline-flex items-center gap-1 rounded-full bg-[#00b8a9] px-4 py-2 font-medium text-white transition hover:opacity-90 disabled:opacity-40" onClick={() => void submit()}>
+          <button className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand px-4 py-2 font-medium text-white transition disabled:opacity-40" onClick={() => void submit()}>
             <Icon icon="mdi:plus" /> 创建
           </button>
         </div>
@@ -143,9 +143,9 @@ export function ScheduledTaskStudio({ token }: Props) {
                 <p className="text-xs text-[#6e6e73]">{humanizeSchedule(t.cron)}｜下次 {new Date(t.nextRunAt).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button className="text-xs text-[#6e6e73] transition hover:text-[#1d1d1f]" onClick={() => void toggle(t)}>{t.enabled ? "暂停" : "启用"}</button>
-                <button className="text-xs text-[#d4380d] transition hover:opacity-70" onClick={() => void remove(t.id)}>删除</button>
-                <button className="text-xs text-[#00b8a9] transition hover:opacity-70" onClick={() => void listScheduledTaskRuns(token, t.id).then((r) => setOpenRuns((m) => ({ ...m, [t.id]: r }))).catch((e) => setErr(e instanceof Error ? e.message : "获取运行记录失败"))}>记录</button>
+                <button className="text-xs text-[#6e6e73] transition " onClick={() => void toggle(t)}>{t.enabled ? "暂停" : "启用"}</button>
+                <button className="text-xs text-[#d4380d] transition " onClick={() => void remove(t.id)}>删除</button>
+                <button className="text-xs text-brand transition " onClick={() => void listScheduledTaskRuns(token, t.id).then((r) => setOpenRuns((m) => ({ ...m, [t.id]: r }))).catch((e) => setErr(e instanceof Error ? e.message : "获取运行记录失败"))}>记录</button>
               </div>
             </div>
             {openRuns[t.id] && (

@@ -60,7 +60,7 @@ export default function MemoryFilters({
             <button
               type="submit"
               disabled={searchPending}
-              className="inline-flex h-11 w-full flex-none items-center justify-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-medium text-white transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              className="inline-flex h-11 w-full flex-none items-center justify-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-medium text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
             >
               <Icon
                 icon={searchPending ? "mdi:loading" : "mdi:magnify"}
@@ -81,7 +81,7 @@ export default function MemoryFilters({
               aria-checked={enabled}
               onClick={onToggleEnabled}
               disabled={togglePending}
-              className="inline-flex h-11 min-w-0 items-center justify-between gap-3 rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 text-left transition hover:border-brand/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 min-w-0 items-center justify-between gap-3 rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="min-w-0 truncate text-sm font-medium text-[#1d1d1f]">
                 {enabled ? "长期记忆已启用" : "长期记忆已关闭"}

@@ -5,15 +5,16 @@ export default {
     extend: {
       colors: {
         brand: {
-          DEFAULT: "#00b8a9",
-          hover: "#00a096",
-          soft: "#e6f7f5",
-          ink: "#067a70",
+          DEFAULT: "rgb(var(--color-brand) / <alpha-value>)",
+          soft: "rgb(var(--color-brand-soft) / <alpha-value>)",
+          ink: "rgb(var(--color-brand-ink) / <alpha-value>)",
         },
       },
       fontFamily: {
         sans: [
-          "Inter",
+          "SF Pro Text",
+          "SF Pro Display",
+          "system-ui",
           "-apple-system",
           "BlinkMacSystemFont",
           "Segoe UI",

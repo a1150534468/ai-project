@@ -26,7 +26,7 @@ export type LayoutMemoryNode = PositionedMemoryNode;
 const MEMORY_TYPE_META = {
   CORE: { label: "核心记忆", colorClass: "bg-amber-400/15 text-amber-200 ring-amber-300/40" },
   PERMANENT: { label: "常驻记忆", colorClass: "bg-blue-400/15 text-blue-200 ring-blue-300/40" },
-  TEMPORARY: { label: "临时记忆", colorClass: "bg-teal-400/15 text-teal-200 ring-teal-300/40" },
+  TEMPORARY: { label: "临时记忆", colorClass: "bg-brand/15 text-brand-ink ring-brand/30" },
   KNOWLEDGE: { label: "知识星云", colorClass: "bg-violet-400/15 text-violet-200 ring-violet-300/40" },
   OTHER: { label: "其他记忆", colorClass: "bg-gray-400/15 text-gray-200 ring-gray-300/40" },
 } as const satisfies Record<MemoryType, MemoryTypeMeta>;

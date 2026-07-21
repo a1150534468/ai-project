@@ -97,7 +97,7 @@ export default function MemoryTable({
                       ? "bg-brand/[0.08]"
                       : highlighted
                         ? "bg-brand/5"
-                        : "hover:bg-[#f7faf9]"
+                        : ""
                   }`}
                   onClick={() => onSelectNode(node.id)}
                 >
@@ -152,7 +152,7 @@ export default function MemoryTable({
                   <td className="px-3 py-4 text-right align-top">
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#8a8a8f] transition hover:bg-brand/10 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#8a8a8f] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                       aria-label={`查看记忆：${title}`}
                       onClick={(event) => {
                         event.stopPropagation();

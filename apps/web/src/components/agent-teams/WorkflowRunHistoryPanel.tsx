@@ -84,7 +84,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
                 type="button"
                 onClick={() => onSelectRun(run)}
                 className={`rounded-[10px] border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
-                  active ? "border-brand/50 bg-brand-soft" : "border-[#e8e8ed] bg-white hover:border-brand/30 hover:bg-[#f7faf9]"
+                  active ? "border-brand/50 bg-brand-soft" : "border-[#e8e8ed] bg-white "
                 }`}
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">

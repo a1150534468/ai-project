@@ -4,6 +4,14 @@ import { motion } from "motion/react";
 import { RippleButton, useToast, spring } from "../motion";
 import { getBalance, listModels } from "../api";
 import { formatBalanceLabel } from "../balanceSync";
+import {
+  THEME_CHANGE_EVENT,
+  THEME_STORAGE_KEY,
+  getThemePreference,
+  preferredTheme,
+  saveThemePreference,
+  type ThemePreference,
+} from "../theme";
 
 interface SettingsPageProps {
   token: string;
@@ -29,6 +37,7 @@ export default function SettingsPage({
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getThemePreference);
 
   useEffect(() => {
     const loadData = async () => {
@@ -59,6 +68,19 @@ export default function SettingsPage({
     loadData();
   }, [preferredModel, token]);
 
+  useEffect(() => {
+    const syncThemePreference = () => setThemePreference(getThemePreference());
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === THEME_STORAGE_KEY) syncThemePreference();
+    };
+    window.addEventListener(THEME_CHANGE_EVENT, syncThemePreference);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, syncThemePreference);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
   const handleModelChange = (model: string) => {
     setSelectedModel(model);
     setIsSaving(true);
@@ -78,6 +100,12 @@ export default function SettingsPage({
     }, 400);
   };
 
+  const handleSystemThemeChange = () => {
+    const nextPreference: ThemePreference = themePreference === "system" ? preferredTheme() : "system";
+    setThemePreference(nextPreference);
+    saveThemePreference(nextPreference);
+  };
+
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -91,7 +119,7 @@ export default function SettingsPage({
       {/* Content */}
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         {/* Account Section */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:account-circle-outline" className="text-2xl text-brand mr-3" />
             <h2 className="text-lg font-bold text-gray-900">账号信息</h2>
@@ -121,8 +149,37 @@ export default function SettingsPage({
           </div>
         </div>
 
+        {/* Appearance Preference */}
+        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm">
+          <div className="flex items-center mb-4">
+            <Icon icon="mdi:theme-light-dark" className="text-2xl text-brand mr-3" />
+            <h2 className="text-lg font-bold text-gray-900">外观</h2>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={themePreference === "system"}
+            onClick={handleSystemThemeChange}
+            className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg border border-gray-100 px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-brand/30"
+          >
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-gray-900">跟随系统</span>
+              <span className="mt-1 block text-xs text-gray-500">使用设备或浏览器的显示模式</span>
+            </span>
+            <span
+              className={`relative h-6 w-[42px] flex-none rounded-full transition-colors ${themePreference === "system" ? "bg-brand" : "bg-gray-300"}`}
+              aria-hidden
+            >
+              <span
+                className={`absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${themePreference === "system" ? "translate-x-[18px]" : "translate-x-0"}`}
+              />
+            </span>
+          </button>
+        </div>
+
         {/* Model Preference */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:robot-outline" className="text-2xl text-brand mr-3" />
             <h2 className="text-lg font-bold text-gray-900">默认模型</h2>
@@ -133,8 +190,7 @@ export default function SettingsPage({
               {models.map((model) => (
                 <motion.label
                   key={model.model}
-                  className="flex items-center p-4 border border-gray-100 rounded-lg cursor-pointer hover:bg-gray-50 transition-colors"
-                  whileHover={{ boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}
+                  className="flex items-center p-4 border border-gray-100 rounded-lg cursor-pointer transition-colors"
                 >
                   <motion.div
                     initial={false}
@@ -179,7 +235,7 @@ export default function SettingsPage({
         </div>
 
         {/* Logout Section */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:logout-variant" className="text-2xl text-gray-400 mr-3" />
             <h2 className="text-lg font-bold text-gray-900">登出</h2>
@@ -190,7 +246,7 @@ export default function SettingsPage({
           </p>
           <RippleButton
             onClick={handleLogout}
-            className="w-full px-4 py-2.5 bg-red-50 text-red-600 rounded-lg font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+            className="w-full px-4 py-2.5 bg-red-50 text-red-600 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Icon icon="mdi:logout-variant" />
             登出登录

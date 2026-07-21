@@ -22,7 +22,7 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
           type="button"
           onClick={onConfirm}
           disabled={isConfirming}
-          className="inline-flex h-10 w-full flex-none items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-60 lg:w-auto"
+          className="inline-flex h-10 w-full flex-none items-center justify-center gap-2 whitespace-nowrap rounded-[10px] bg-brand px-4 text-sm font-semibold text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:opacity-60 lg:w-auto"
         >
           <Icon icon={isConfirming ? "mdi:loading" : "mdi:check"} className={isConfirming ? "animate-spin" : ""} aria-hidden />
           确认团队并创建工作流

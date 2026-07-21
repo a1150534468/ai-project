@@ -1,18 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
   <title id="title">AI 助手</title>
-  <defs>
-    <linearGradient id="background" x1="120" y1="96" x2="904" y2="928" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#22D3EE"/>
-      <stop offset="0.52" stop-color="#168BFF"/>
-      <stop offset="1" stop-color="#3157E8"/>
-    </linearGradient>
-    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#A7F3D0"/>
-      <stop offset="1" stop-color="#FFFFFF"/>
-    </linearGradient>
-  </defs>
-  <rect x="56" y="56" width="912" height="912" rx="224" fill="url(#background)"/>
+  <rect x="56" y="56" width="912" height="912" rx="224" fill="#0066CC"/>
   <path d="M250 274c0-52 42-94 94-94h336c52 0 94 42 94 94v302c0 52-42 94-94 94H487L335 806c-28 25-72 5-72-33V650c-9-16-13-35-13-54V274Z" fill="#FFFFFF"/>
-  <path d="m710 221 15 42 42 15-42 15-15 42-15-42-42-15 42-15 15-42Z" fill="url(#spark)"/>
-  <path d="M382 540 464 320h50l82 220h-52l-17-49h-80l-17 49h-48Zm79-91h52l-26-77-26 77Zm160 91V320h49v220h-49Z" fill="#176FEA"/>
+  <path d="m710 221 15 42 42 15-42 15-15 42-15-42-42-15 42-15 15-42Z" fill="#DCEEFF"/>
+  <path d="M382 540 464 320h50l82 220h-52l-17-49h-80l-17 49h-48Zm79-91h52l-26-77-26 77Zm160 91V320h49v220h-49Z" fill="#0066CC"/>
 </svg>

@@ -86,10 +86,10 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
               <span className="truncate text-[13px] font-medium text-[#1d1d1f]">{a.title}</span>
             </button>
             <div className="mt-2 flex gap-2 text-[11px]">
-              <button onClick={() => void star(a)} className="text-[#8a8a8f] hover:text-brand">
+              <button onClick={() => void star(a)} className="text-[#8a8a8f] ">
                 <Icon icon={a.isFavorite ? "mdi:star" : "mdi:star-outline"} className="text-base" />
               </button>
-              <button onClick={() => void remove(a.id)} className="text-[#8a8a8f] hover:text-red-500">
+              <button onClick={() => void remove(a.id)} className="text-[#8a8a8f] ">
                 <Icon icon="mdi:trash-can-outline" className="text-base" />
               </button>
             </div>
@@ -109,7 +109,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         <button
           disabled={busy || !priced}
           onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-[#8a8a8f] hover:border-brand/40 disabled:opacity-40"
+          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-[#8a8a8f] disabled:opacity-40"
         >
           <Icon icon={cloning ? "mdi:loading" : "mdi:video-account"} className={`text-2xl ${cloning ? "animate-spin text-brand" : ""}`} />
           <span className="text-[13px]">{cloning ? "克隆中，请稍候…" : "上传无配音的场景视频（≤100MB）"}</span>

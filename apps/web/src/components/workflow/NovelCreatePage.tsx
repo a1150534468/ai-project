@@ -133,7 +133,7 @@ export function NovelCreatePage({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-[#e2e7e5] bg-white shadow-[0_18px_60px_rgba(15,23,42,0.07)]">
-      <div className="border-b border-[#edf0ef] bg-[radial-gradient(circle_at_top_right,rgba(0,184,169,0.13),transparent_38%)] px-5 py-5 sm:px-7">
+      <div className="border-b border-[#edf0ef] bg-[#f5f5f7] px-5 py-5 sm:px-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             {canGoBack && <button type="button" onClick={onBack} className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d9dfdd] bg-white text-[#50575a]" aria-label="返回书库"><Icon icon="mdi:arrow-left" /></button>}
@@ -165,10 +165,10 @@ export function NovelCreatePage({
         <div className="grid gap-3">
           <div><p className="text-sm font-semibold text-[#28302f]">市场分区</p><p className="mt-1 text-xs text-[#818986]">大类 → 细分主题；选择后自动推导世界、结构、节奏与文风，后续都可修改。</p></div>
           <div className="flex flex-wrap gap-2">
-            {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-[#d9dfdd] bg-white text-[#4c5553] hover:border-brand/40"}`}><Icon icon={item.icon} />{item.label}</button>)}
+            {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-[#d9dfdd] bg-white text-[#4c5553] "}`}><Icon icon={item.icon} />{item.label}</button>)}
           </div>
           <div className="flex flex-wrap gap-2 rounded-2xl bg-[#f6f8f7] p-3">
-            {taxonomy.topics.map((topic) => <button key={topic} type="button" onClick={() => update({ subgenre: topic })} className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-white text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-[#626b68] hover:bg-white"}`}>{topic}</button>)}
+            {taxonomy.topics.map((topic) => <button key={topic} type="button" onClick={() => update({ subgenre: topic })} className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-white text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-[#626b68] "}`}>{topic}</button>)}
           </div>
         </div>
 
@@ -176,7 +176,7 @@ export function NovelCreatePage({
           <div className="grid gap-3">
             <div><p className="text-sm font-semibold text-[#28302f]">目标篇幅</p><p className="mt-1 text-xs text-[#818986]">按网文常用节奏推导章数与单章字数。</p></div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              {LENGTH_TIERS.map((option) => <button key={option.value} type="button" onClick={() => chooseLength(option.value)} className={`rounded-xl border p-3 text-left transition ${draft.lengthTier === option.value ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white hover:border-brand/35"}`}><span className="block text-sm font-semibold text-[#28302f]">{option.title}</span><span className="mt-1 block text-xs text-[#7a8380]">{option.hint}</span></button>)}
+              {LENGTH_TIERS.map((option) => <button key={option.value} type="button" onClick={() => chooseLength(option.value)} className={`rounded-xl border p-3 text-left transition ${draft.lengthTier === option.value ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white "}`}><span className="block text-sm font-semibold text-[#28302f]">{option.title}</span><span className="mt-1 block text-xs text-[#7a8380]">{option.hint}</span></button>)}
             </div>
           </div>
         ) : (
@@ -198,7 +198,7 @@ export function NovelCreatePage({
 
         <div className="flex flex-col gap-3 border-t border-[#edf0ef] pt-5 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-[#818986]"><Icon icon="mdi:shield-check-outline" className="mr-1 inline text-brand-ink" />创建后先进入可修改的设置向导，不会直接开始整书生成。</p>
-          <button type="button" onClick={onSubmit} disabled={!ready || isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-hover disabled:cursor-not-allowed disabled:opacity-45"><Icon icon={isSubmitting ? "mdi:loading" : "mdi:creation-outline"} className={isSubmitting ? "animate-spin" : ""} />{isSubmitting ? "正在建档" : "建档并进入设置向导"}</button>
+          <button type="button" onClick={onSubmit} disabled={!ready || isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45"><Icon icon={isSubmitting ? "mdi:loading" : "mdi:creation-outline"} className={isSubmitting ? "animate-spin" : ""} />{isSubmitting ? "正在建档" : "建档并进入设置向导"}</button>
         </div>
       </div>
     </section>

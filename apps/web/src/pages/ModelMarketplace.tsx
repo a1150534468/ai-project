@@ -157,7 +157,7 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
           <h3 className="truncate text-base font-semibold text-[#1d1d1f]">{model.displayName || "未命名模型"}</h3>
         </div>
         <span className={`inline-flex flex-none items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-          openAIOnly ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"
+          openAIOnly ? "bg-amber-50 text-amber-700" : "bg-brand-soft text-brand-ink"
         }`}>
           <Icon icon={openAIOnly ? "mdi:api" : "mdi:check-circle-outline"} className="text-sm" aria-hidden />
           {openAIOnly ? "仅 OpenAI 接口" : "对话可用"}

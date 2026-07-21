@@ -6,6 +6,7 @@ import { WORKFLOW_MODULES, type WorkflowModuleId } from "../../workflowState";
 import { HoverPopover } from "./HoverPopover";
 import { WorkflowFlyout } from "./WorkflowFlyout";
 import { isClientMenuVisible, type ClientMenuVisibility } from "../../clientMenu";
+import { ThemeToggle } from "../ThemeToggle";
 
 export type ViewType = "chat" | "models" | "kb" | "tool-market" | "workflow" | "video" | "digital-human" | "report" | "agent-teams" | "billing" | "memory" | "settings" | "wechat";
 
@@ -169,7 +170,7 @@ export function NavRail({
               animate={{ opacity: 1, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.2 }}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 "
               aria-label="折叠侧边栏"
             >
               <Icon icon="mdi:chevron-double-left" className="text-base" />
@@ -210,7 +211,7 @@ export function NavRail({
                     } ${
                       workflowGroupActive
                         ? "text-gray-900 font-600"
-                        : "text-gray-500 hover:bg-gray-50"
+                        : "text-gray-500 "
                     }`}
                   >
                     <Icon icon={item.icon} className="relative z-10 text-xl flex-none" />
@@ -254,7 +255,7 @@ export function NavRail({
                                 ? "text-gray-900 font-semibold"
                                 : sub.developing
                                   ? "cursor-not-allowed text-gray-300"
-                                  : "text-gray-500 hover:bg-gray-50"
+                                  : "text-gray-500 "
                             }`}
                           >
                             {active && (
@@ -298,7 +299,7 @@ export function NavRail({
                 } ${
                   currentView === item.id
                     ? "text-gray-900 font-600"
-                    : "text-gray-500 hover:bg-gray-50"
+                    : "text-gray-500 "
                 }`}
               >
                 {currentView === item.id && (
@@ -329,7 +330,7 @@ export function NavRail({
               animate={{ opacity: 1, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.2 }}
-              className="w-full flex justify-center py-2.5 text-gray-500 hover:text-gray-900 transition-colors"
+              className="w-full flex justify-center py-2.5 text-gray-500 transition-colors"
               aria-label="展开侧边栏"
             >
               <Icon icon="mdi:chevron-double-right" className="text-base" />
@@ -340,6 +341,9 @@ export function NavRail({
 
       {/* Bottom Card + Logout */}
       <div className="flex-none border-t border-gray-100">
+        <div className={`border-b border-gray-100 ${collapsed ? "flex justify-center py-2.5" : "px-3 py-2"}`}>
+          <ThemeToggle compact={collapsed} />
+        </div>
         {/* Balance Card */}
         <HoverPopover
           disabled={!collapsed}
@@ -352,7 +356,7 @@ export function NavRail({
           {collapsed ? (
             <button
               type="button"
-              className="w-full flex justify-center py-3 text-gray-500 hover:text-gray-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="w-full flex justify-center py-3 text-gray-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
               onClick={() => onViewChange("billing")}
               aria-label="充值算力点"
             >
@@ -361,7 +365,7 @@ export function NavRail({
           ) : (
             <button
               type="button"
-              className="w-full p-4 text-left hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-inset"
+              className="w-full p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-inset"
               onClick={() => onViewChange("billing")}
               aria-label="充值算力点"
             >
@@ -389,7 +393,7 @@ export function NavRail({
         <div className={`flex-none border-t border-gray-100 ${collapsed ? "flex justify-center py-3" : "p-4"}`}>
           <button
             onClick={onLogout}
-            className={`text-gray-500 transition-colors hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
+            className={`text-gray-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
               collapsed ? "text-lg" : "w-full text-xs"
             }`}
             title={collapsed ? "登出" : undefined}

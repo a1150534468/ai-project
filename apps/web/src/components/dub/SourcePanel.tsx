@@ -109,7 +109,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
         <div className="space-y-3">
           <button
             onClick={() => inputRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-10 text-[#8a8a8f] hover:border-brand/40"
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-10 text-[#8a8a8f] "
           >
             <Icon icon="mdi:cloud-upload-outline" className="text-3xl" />
             <span className="text-[13px]">{file ? file.name : "点击选择参考视频（≤50MB）"}</span>
