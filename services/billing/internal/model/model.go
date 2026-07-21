@@ -45,6 +45,7 @@ type PriceRule struct {
 	CacheOutputPriceRMBPerMillion float64 `gorm:"column:cache_output_price_rmb_per_million;not null;default:0" json:"cacheOutputPriceRmbPerMillion"`
 	Description                   string  `gorm:"type:text" json:"description"`
 	CapabilityTags                string  `gorm:"type:text" json:"tags"`
+	Category                      string  `gorm:"size:32;not null;default:''" json:"category"` // 模型分类：语言模型/语音模型/视觉模型/向量模型 等
 	ContextWindow                 int64   `gorm:"not null;default:0" json:"contextLength"`
 	MaxOutputTokens               int64   `gorm:"not null;default:0" json:"maxOutputTokens"` // 单次输出上限；0=用后端默认
 	UseCases                      string  `gorm:"type:text" json:"useCases"`

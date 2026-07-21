@@ -27,6 +27,7 @@ type deleteVipLevelReq struct {
 type marketplaceMetaReq struct {
 	Description          *string `json:"description"`
 	CapabilityTags       *string `json:"tags"`
+	Category             *string `json:"category"`
 	ContextWindow        *int64  `json:"contextLength"`
 	MaxOutputTokens      *int64  `json:"maxOutputTokens"`
 	UseCases             *string `json:"useCases"`
@@ -38,6 +39,7 @@ func (h *Handler) updateModelMarketplaceIfProvided(modelName string, input marke
 	return h.registry.UpdateMarketplaceFields(modelName, registry.MarketplaceMetaPatch{
 		Description:          input.Description,
 		CapabilityTags:       input.CapabilityTags,
+		Category:             input.Category,
 		ContextWindow:        input.ContextWindow,
 		MaxOutputTokens:      input.MaxOutputTokens,
 		UseCases:             input.UseCases,

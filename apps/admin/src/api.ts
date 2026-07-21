@@ -171,6 +171,7 @@ export interface ModelRow {
   cacheOutputPriceRmbPerMillion: number;
   description: string;
   tags: string;
+  category: string;
   contextLength: number;
   maxOutputTokens: number;
   useCases: string;
@@ -201,7 +202,7 @@ export type UpsertModelRow = Pick<
   | "outputPriceRmbPerMillion"
   | "cacheInputPriceRmbPerMillion"
   | "cacheOutputPriceRmbPerMillion"
-> & Partial<Pick<ModelRow, "description" | "tags" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
+> & Partial<Pick<ModelRow, "description" | "tags" | "category" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
 export async function upsertModel(a: UpsertModelRow): Promise<void> {
   await req("POST", "/api/admin/models", a);
 }
@@ -211,7 +212,7 @@ export async function updateModelPricing(
 ): Promise<void> {
   await req("PATCH", "/api/admin/models/pricing", { model, ...pricing });
 }
-export type ModelMarketplacePatch = Partial<Pick<ModelRow, "description" | "tags" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
+export type ModelMarketplacePatch = Partial<Pick<ModelRow, "description" | "tags" | "category" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
 export async function updateModelDisplay(model: string, displayName: string, enabled: boolean, patch: ModelMarketplacePatch = {}): Promise<void> {
   await req("PATCH", "/api/admin/models/display", { model, displayName, enabled, ...patch });
 }

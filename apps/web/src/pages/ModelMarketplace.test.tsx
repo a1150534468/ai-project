@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { ModelCard } from "./ModelMarketplace";
+import { ModelCard, groupByCategory, selectVisibleGroups } from "./ModelMarketplace";
 import type { ModelMarketplaceRow } from "../api";
 
 function marketplaceModel(overrides: Partial<ModelMarketplaceRow> = {}): ModelMarketplaceRow {
@@ -10,6 +10,7 @@ function marketplaceModel(overrides: Partial<ModelMarketplaceRow> = {}): ModelMa
     enabled: true,
     description: "适合复杂代码生成和工程理解。",
     tags: "coding",
+    category: "语言模型",
     contextLength: 0,
     useCases: "AI 编程 / 代码生成",
     sortOrder: 1,
@@ -26,6 +27,7 @@ function marketplaceModel(overrides: Partial<ModelMarketplaceRow> = {}): ModelMa
     vipOutputPrice: { original: 4500, discounted: 4500 },
     vipCacheInputPrice: { original: 0, discounted: 0 },
     vipCacheOutputPrice: { original: 0, discounted: 0 },
+    imagePrice: null,
     ...overrides,
   };
 }
@@ -55,5 +57,49 @@ describe("ModelCard", () => {
     })} />);
 
     expect(html).toContain("免费额度");
+  });
+
+  it("renders per-image pricing and a generation badge for image models", () => {
+    const html = renderToStaticMarkup(<ModelCard model={marketplaceModel({
+      model: "doubao-seedream-4-5-251128",
+      displayName: "豆包 Seedream 4.5",
+      tags: "image-gen,vision",
+      category: "视觉模型",
+      imagePrice: { originalPoints: 20, discountedPoints: 16, resolution: "2K" },
+    })} />);
+
+    expect(html).toContain("生图可用");
+    expect(html).toContain("生图（按次计费）");
+    expect(html).toContain("2K");
+    expect(html).toContain("16");
+    expect(html).not.toContain("对话可用");
+  });
+});
+
+describe("marketplace grouping and tab switching", () => {
+  const rows: ModelMarketplaceRow[] = [
+    marketplaceModel({ model: "gpt", displayName: "GPT", category: "语言模型" }),
+    marketplaceModel({ model: "doubao", displayName: "豆包", category: "视觉模型", tags: "image-gen,vision", imagePrice: { originalPoints: 20, discountedPoints: 16, resolution: "2K" } }),
+    marketplaceModel({ model: "embedding", displayName: "Embedding", category: "向量模型" }),
+  ];
+  const groups = groupByCategory(rows);
+
+  it("groups models by their category in the fixed display order", () => {
+    expect(groups.map((group) => group.category)).toEqual(["语言模型", "视觉模型", "向量模型"]);
+  });
+
+  it('shows every group when the "全部" tab is active', () => {
+    expect(selectVisibleGroups(groups, "全部")).toHaveLength(3);
+  });
+
+  it("narrows to a single category when its tab is selected", () => {
+    const visible = selectVisibleGroups(groups, "视觉模型");
+    expect(visible).toHaveLength(1);
+    expect(visible[0]!.category).toBe("视觉模型");
+    expect(visible[0]!.rows.map((row) => row.model)).toEqual(["doubao"]);
+  });
+
+  it("returns an empty list when the active category has no models", () => {
+    expect(selectVisibleGroups(groups, "语音模型")).toHaveLength(0);
   });
 });

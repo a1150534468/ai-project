@@ -258,12 +258,19 @@ export interface ModelMarketplacePrice {
   discounted: number;
 }
 
+export interface ModelMarketplaceImagePrice {
+  originalPoints: number;
+  discountedPoints: number;
+  resolution: string;
+}
+
 export interface ModelMarketplaceRow {
   model: string;
   displayName: string;
   enabled: boolean;
   description: string;
   tags: string;
+  category: string;
   contextLength: number;
   useCases: string;
   sortOrder: number;
@@ -280,6 +287,7 @@ export interface ModelMarketplaceRow {
   vipOutputPrice: ModelMarketplacePrice;
   vipCacheInputPrice: ModelMarketplacePrice;
   vipCacheOutputPrice: ModelMarketplacePrice;
+  imagePrice: ModelMarketplaceImagePrice | null;
 }
 
 export interface ModelMarketplaceResponse {

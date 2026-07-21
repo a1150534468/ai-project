@@ -27,6 +27,7 @@ const upsertSchema = z.object({
   enabled: z.boolean(),
   description: z.string().max(2000).optional(),
   tags: z.string().max(1000).optional(),
+  category: z.string().max(32).optional(),
   contextLength: z.number().int().nonnegative().optional(),
   useCases: z.string().max(2000).optional(),
   sortOrder: z.number().int().optional(),
@@ -45,6 +46,7 @@ const displaySchema = z.object({
   enabled: z.boolean(),
   description: z.string().max(2000).optional(),
   tags: z.string().max(1000).optional(),
+  category: z.string().max(32).optional(),
   contextLength: z.number().int().nonnegative().optional(),
   useCases: z.string().max(2000).optional(),
   sortOrder: z.number().int().optional(),
@@ -268,6 +270,7 @@ function pricingPayload(value: ParsedPricing) {
 function marketplacePayload(value: {
   description?: string;
   tags?: string;
+  category?: string;
   contextLength?: number;
   useCases?: string;
   sortOrder?: number;
@@ -276,6 +279,7 @@ function marketplacePayload(value: {
   return {
     ...(value.description !== undefined ? { description: value.description } : {}),
     ...(value.tags !== undefined ? { tags: value.tags } : {}),
+    ...(value.category !== undefined ? { category: value.category } : {}),
     ...(value.contextLength !== undefined ? { contextLength: value.contextLength } : {}),
     ...(value.useCases !== undefined ? { useCases: value.useCases } : {}),
     ...(value.sortOrder !== undefined ? { sortOrder: value.sortOrder } : {}),

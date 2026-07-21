@@ -2,10 +2,55 @@ import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import {
   listModelMarketplace,
+  type ModelMarketplaceImagePrice,
   type ModelMarketplacePrice,
   type ModelMarketplaceRow,
   type VipSummary,
 } from "../api";
+
+const CATEGORY_ORDER = ["语言模型", "语音模型", "视觉模型", "向量模型"] as const;
+
+const CATEGORY_ICON: Record<string, string> = {
+  语言模型: "mdi:translate",
+  语音模型: "mdi:waveform",
+  视觉模型: "mdi:image-multiple",
+  向量模型: "mdi:vector-polyline",
+};
+
+interface ModelGroup {
+  category: string;
+  rows: ModelMarketplaceRow[];
+}
+
+export function groupByCategory(rows: ModelMarketplaceRow[]): ModelGroup[] {
+  const map = new Map<string, ModelMarketplaceRow[]>();
+  for (const row of rows) {
+    const key = row.category || "其他模型";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(row);
+  }
+  const groups: ModelGroup[] = [];
+  for (const category of CATEGORY_ORDER) {
+    const items = map.get(category);
+    if (items) {
+      groups.push({ category, rows: sortedRows(items) });
+      map.delete(category);
+    }
+  }
+  const remaining = [...map.keys()].sort((a, b) => a.localeCompare(b));
+  for (const category of remaining) {
+    groups.push({ category, rows: sortedRows(map.get(category)!) });
+  }
+  return groups;
+}
+
+/** Pure filter used by the top tab bar: "全部" shows every group, a specific
+ *  category narrows the view to that single group. */
+export function selectVisibleGroups(groups: ModelGroup[], activeCategory: string): ModelGroup[] {
+  return activeCategory === "全部"
+    ? groups
+    : groups.filter((group) => group.category === activeCategory);
+}
 
 interface ModelMarketplaceProps {
   token: string;
@@ -29,6 +74,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
   const [vip, setVip] = useState<VipSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
+  const [activeCategory, setActiveCategory] = useState("全部");
 
   useEffect(() => {
     let cancelled = false;
@@ -51,22 +97,23 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
     };
   }, [token]);
 
+  const groups = groupByCategory(models);
+  const tabs = ["全部", ...groups.map((group) => group.category)];
+  const visibleGroups = selectVisibleGroups(groups, activeCategory);
+
   return (
     <div className="flex-1 overflow-auto bg-[#f5f7fa]">
       <div className="mx-auto max-w-6xl p-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-[28px] font-bold tracking-tight text-[#1d1d1f]">模型广场</h1>
-            <p className="mt-1 text-sm text-gray-500">查看当前账号可用模型、适用场景和每百万 token 计价</p>
+            <p className="mt-1 text-sm text-gray-500">查看当前账号可用模型、适用场景与计价（按类型分组展示）</p>
           </div>
           <VipSummaryBadge vip={vip} />
         </div>
 
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-[#1d1d1f]">全部模型</h2>
-            <p className="mt-1 text-xs text-gray-400">{models.length} 个模型可用</p>
-          </div>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-gray-400">{models.length} 个模型可用 · {groups.length} 个分类</p>
           {loading && (
             <span className="inline-flex items-center gap-2 text-xs text-gray-400">
               <Icon icon="mdi:loading" className="animate-spin text-sm" aria-hidden />
@@ -75,18 +122,57 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
           )}
         </div>
 
+        <div className="sticky top-0 z-10 -mx-2 mb-6 flex gap-2 overflow-x-auto px-2 pb-2">
+          {tabs.map((tab) => {
+            const isActive = tab === activeCategory;
+            const count = tab === "全部"
+              ? models.length
+              : (groups.find((group) => group.category === tab)?.rows.length ?? 0);
+            const icon = tab === "全部" ? "mdi:apps" : (CATEGORY_ICON[tab] ?? "mdi:shape-outline");
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveCategory(tab)}
+                className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+                  isActive
+                    ? "border-brand bg-brand text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-brand/40 hover:text-brand"
+                }`}
+              >
+                <Icon icon={icon} className="text-base" aria-hidden />
+                {tab}
+                <span className={`ml-0.5 rounded-full px-1.5 text-[11px] ${
+                  isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                }`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {message && (
           <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
             {message}
           </div>
         )}
 
-        {models.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {models.map((model) => (
-              <ModelCard key={model.model} model={model} />
-            ))}
-          </div>
+        {visibleGroups.length > 0 ? (
+          visibleGroups.map((group) => (
+            <section key={group.category} className="mb-8">
+              {activeCategory === "全部" && (
+                <div className="mb-4 flex items-center gap-2">
+                  <Icon icon={CATEGORY_ICON[group.category] ?? "mdi:shape-outline"} className="text-lg text-brand" aria-hidden />
+                  <h2 className="text-base font-semibold text-[#1d1d1f]">{group.category}</h2>
+                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{group.rows.length}</span>
+                </div>
+              )}
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                {group.rows.map((model) => (
+                  <ModelCard key={model.model} model={model} />
+                ))}
+              </div>
+            </section>
+          ))
         ) : !loading && !message ? (
           <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
             暂无可用模型
@@ -134,12 +220,14 @@ function VipSummaryBadge({ vip }: { vip: VipSummary | null }) {
 export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
   const tags = model.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
   const openAIOnly = tags.includes("openai-only");
+  const isImage = Boolean(model.imagePrice);
   const tagLabels: Record<string, string> = {
     "free-quota": "免费额度",
     chat: "对话",
     coding: "编程",
     reasoning: "推理",
     vision: "视觉",
+    "image-gen": "生图",
     "tool-use": "工具调用",
     preview: "预览版",
     versioned: "固定版本",
@@ -157,10 +245,10 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
           <h3 className="truncate text-base font-semibold text-[#1d1d1f]">{model.displayName || "未命名模型"}</h3>
         </div>
         <span className={`inline-flex flex-none items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-          openAIOnly ? "bg-amber-50 text-amber-700" : "bg-brand-soft text-brand-ink"
+          isImage ? "bg-violet-50 text-violet-700" : openAIOnly ? "bg-amber-50 text-amber-700" : "bg-brand-soft text-brand-ink"
         }`}>
-          <Icon icon={openAIOnly ? "mdi:api" : "mdi:check-circle-outline"} className="text-sm" aria-hidden />
-          {openAIOnly ? "仅 OpenAI 接口" : "对话可用"}
+          <Icon icon={isImage ? "mdi:image-outline" : openAIOnly ? "mdi:api" : "mdi:check-circle-outline"} className="text-sm" aria-hidden />
+          {isImage ? "生图可用" : openAIOnly ? "仅 OpenAI 接口" : "对话可用"}
         </span>
       </div>
 
@@ -186,12 +274,16 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
         <p className="truncate font-medium text-gray-700">{model.useCases || "通用"}</p>
       </div>
 
-      <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <PriceBlock title="输入" price={model.vipInputPrice} />
-        <PriceBlock title="输出" price={model.vipOutputPrice} />
-        <PriceBlock title="缓存创建" price={model.vipCacheInputPrice} muted />
-        <PriceBlock title="缓存读取" price={model.vipCacheOutputPrice} muted />
-      </div>
+      {model.imagePrice ? (
+        <ImagePriceBlock imagePrice={model.imagePrice} />
+      ) : (
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <PriceBlock title="输入" price={model.vipInputPrice} />
+          <PriceBlock title="输出" price={model.vipOutputPrice} />
+          <PriceBlock title="缓存创建" price={model.vipCacheInputPrice} muted />
+          <PriceBlock title="缓存读取" price={model.vipCacheOutputPrice} muted />
+        </div>
+      )}
     </article>
   );
 }
@@ -208,6 +300,23 @@ function PriceBlock({ title, price, muted = false }: { title: string; price: Mod
       </div>
       <p className="mt-1 text-[10px] text-gray-400">
         {hasDiscount ? <>原价 <span className="line-through">{formatPoints(price.original)}</span> 点</> : <>原价 {formatPoints(price.original)} 点</>}
+      </p>
+    </div>
+  );
+}
+
+function ImagePriceBlock({ imagePrice }: { imagePrice: ModelMarketplaceImagePrice }) {
+  const discounted = imagePrice.discountedPoints;
+  const hasDiscount = discounted < Math.ceil(imagePrice.originalPoints);
+  return (
+    <div className="mt-5 rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-3">
+      <p className="text-[11px] font-medium text-violet-600">生图（按次计费）</p>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="text-lg font-bold text-[#1d1d1f]">{formatPoints(discounted)}</span>
+        <span className="text-[10px] text-gray-400">点 / 张 · {imagePrice.resolution}</span>
+      </div>
+      <p className="mt-1 text-[10px] text-gray-400">
+        {hasDiscount ? <>原价 <span className="line-through">{formatPoints(imagePrice.originalPoints)}</span> 点</> : <>原价 {formatPoints(imagePrice.originalPoints)} 点</>}
       </p>
     </div>
   );

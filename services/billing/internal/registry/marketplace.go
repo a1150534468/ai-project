@@ -9,6 +9,7 @@ import (
 type MarketplaceMeta struct {
 	Description          string
 	CapabilityTags       string
+	Category             string
 	ContextWindow        int64
 	MaxOutputTokens      int64
 	UseCases             string
@@ -19,6 +20,7 @@ type MarketplaceMeta struct {
 type MarketplaceMetaPatch struct {
 	Description          *string
 	CapabilityTags       *string
+	Category             *string
 	ContextWindow        *int64
 	MaxOutputTokens      *int64
 	UseCases             *string
@@ -30,6 +32,7 @@ func (s *Service) UpdateMarketplace(modelName string, meta MarketplaceMeta) erro
 	return s.UpdateMarketplaceFields(modelName, MarketplaceMetaPatch{
 		Description:          &meta.Description,
 		CapabilityTags:       &meta.CapabilityTags,
+		Category:             &meta.Category,
 		ContextWindow:        &meta.ContextWindow,
 		MaxOutputTokens:      &meta.MaxOutputTokens,
 		UseCases:             &meta.UseCases,
@@ -45,6 +48,9 @@ func (s *Service) UpdateMarketplaceFields(modelName string, meta MarketplaceMeta
 	}
 	if meta.CapabilityTags != nil {
 		updates["capability_tags"] = *meta.CapabilityTags
+	}
+	if meta.Category != nil {
+		updates["category"] = *meta.Category
 	}
 	if meta.ContextWindow != nil {
 		updates["context_window"] = *meta.ContextWindow

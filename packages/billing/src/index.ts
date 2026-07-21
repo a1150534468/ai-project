@@ -77,6 +77,7 @@ export interface VipSummary {
 export interface ModelMarketplaceMeta {
   description?: string;
   tags?: string;
+  category?: string;
   contextLength?: number;
   maxOutputTokens?: number;
   useCases?: string;
@@ -85,7 +86,7 @@ export interface ModelMarketplaceMeta {
 }
 export interface ModelRow extends TokenPricing, RmbPricing {
   model: string; displayName: string; modelRatio?: number; completionRatio?: number; enabled: boolean;
-  description: string; tags: string; contextLength: number; maxOutputTokens: number; useCases: string; sortOrder: number; showInMarketplace: boolean;
+  description: string; tags: string; category: string; contextLength: number; maxOutputTokens: number; useCases: string; sortOrder: number; showInMarketplace: boolean;
 }
 export interface ModelMarketplaceRow extends ModelRow {
   vipInputPrice: VipPriceView;

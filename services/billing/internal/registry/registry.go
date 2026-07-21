@@ -2,6 +2,7 @@ package registry
 
 import (
 	"errors"
+	"os"
 
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/resource"
@@ -152,6 +153,7 @@ func (s *Service) SeedDefault() error {
 			InputPriceRMBPerMillion: spec.Pricing.InputPriceRMBPerMillion, OutputPriceRMBPerMillion: spec.Pricing.OutputPriceRMBPerMillion,
 			CacheInputPriceRMBPerMillion: spec.Pricing.CacheInputPriceRMBPerMillion, CacheOutputPriceRMBPerMillion: spec.Pricing.CacheOutputPriceRMBPerMillion,
 			Description: spec.Description, CapabilityTags: capabilityTags,
+			Category: "语言模型",
 			ContextWindow: spec.ContextWindow, MaxOutputTokens: spec.MaxOutputTokens,
 			UseCases: spec.UseCases, MarketplaceSortOrder: spec.SortOrder,
 			ShowInMarketplace: true, Enabled: true,
@@ -161,7 +163,60 @@ func (s *Service) SeedDefault() error {
 		Model: embeddingModel, DisplayName: embeddingDisplay,
 		ModelRatio: embeddingModelRatio, CompletionRatio: embeddingCompletionRatio,
 		InputPricePerMillion: embeddingModelRatio * 1_000_000, OutputPricePerMillion: 0,
+		Category: "向量模型",
 		Enabled: true,
+	})
+	// 生图模型（豆包 Seedream）。按次计费，无 token 价格；image-gen 标签让广场显示“按次计费”。
+	doubaoImageModel := os.Getenv("DOUBAO_IMAGE_MODEL")
+	if doubaoImageModel == "" {
+		doubaoImageModel = "doubao-seedream-4-5-251128"
+	}
+	models = append(models, model.PriceRule{
+		Model: doubaoImageModel, DisplayName: "豆包 Seedream 4.5 文生图",
+		ModelRatio: 0, CompletionRatio: 0,
+		InputPricePerMillion: 0, OutputPricePerMillion: 0,
+		CacheInputPricePerMillion: 0, CacheOutputPricePerMillion: 0,
+		Description: "火山方舟豆包 Seedream 文生图模型，支持中英文提示词生成高质量图片，可用于电商素材、插画、海报等场景。",
+		CapabilityTags: "image-gen,vision",
+		Category: "视觉模型",
+		UseCases: "文生图、电商素材、插画海报、创意设计",
+		MarketplaceSortOrder: 100,
+		ShowInMarketplace: true, Enabled: true,
+	})
+	// 生图模型（通义万相 Qwen Image 2.0 Pro），与豆包同款结构。模型 ID 必须与
+	// apps/api 的 image-service 常量一致，生图工作台才能按模型加载对应配置。
+	qwenImageModel := os.Getenv("QWEN_IMAGE_MODEL")
+	if qwenImageModel == "" {
+		qwenImageModel = "qwen-image-2.0-pro-2026-04-22"
+	}
+	models = append(models, model.PriceRule{
+		Model: qwenImageModel, DisplayName: "通义万相 Qwen Image 2.0 Pro",
+		ModelRatio: 0, CompletionRatio: 0,
+		InputPricePerMillion: 0, OutputPricePerMillion: 0,
+		CacheInputPricePerMillion: 0, CacheOutputPricePerMillion: 0,
+		Description: "阿里通义万相 Qwen Image 2.0 Pro 文生图模型，支持高质量图像生成与参考图编辑，适用于设计、电商、内容创作等场景。",
+		CapabilityTags: "image-gen,vision",
+		Category: "视觉模型",
+		UseCases: "文生图、参考图编辑、电商素材、创意设计",
+		MarketplaceSortOrder: 101,
+		ShowInMarketplace: true, Enabled: true,
+	})
+	// 生图模型（GPT Image 2），同样按次计费、无 token 价格。
+	gptImageModel := os.Getenv("GPT_IMAGE_MODEL")
+	if gptImageModel == "" {
+		gptImageModel = "gpt-image-2"
+	}
+	models = append(models, model.PriceRule{
+		Model: gptImageModel, DisplayName: "GPT Image 2",
+		ModelRatio: 0, CompletionRatio: 0,
+		InputPricePerMillion: 0, OutputPricePerMillion: 0,
+		CacheInputPricePerMillion: 0, CacheOutputPricePerMillion: 0,
+		Description: "OpenAI GPT Image 2 生图模型，支持文生图与多轮编辑，擅长写实风格与复杂构图。",
+		CapabilityTags: "image-gen,vision",
+		Category: "视觉模型",
+		UseCases: "文生图、图像编辑、写实创作",
+		MarketplaceSortOrder: 102,
+		ShowInMarketplace: true, Enabled: true,
 	})
 	for _, m := range models {
 		var existing model.PriceRule
@@ -177,7 +232,7 @@ func (s *Service) SeedDefault() error {
 				"cache_input_price_per_million": m.CacheInputPricePerMillion, "cache_output_price_per_million": m.CacheOutputPricePerMillion,
 				"input_price_rmb_per_million": m.InputPriceRMBPerMillion, "output_price_rmb_per_million": m.OutputPriceRMBPerMillion,
 				"cache_input_price_rmb_per_million": m.CacheInputPriceRMBPerMillion, "cache_output_price_rmb_per_million": m.CacheOutputPriceRMBPerMillion,
-				"description": m.Description, "capability_tags": m.CapabilityTags,
+				"description": m.Description, "capability_tags": m.CapabilityTags, "category": m.Category,
 				"context_window": m.ContextWindow, "max_output_tokens": m.MaxOutputTokens,
 				"use_cases": m.UseCases, "marketplace_sort_order": m.MarketplaceSortOrder,
 				"show_in_marketplace": m.ShowInMarketplace,
@@ -205,6 +260,18 @@ func (s *Service) SeedDefault() error {
 				return err
 			}
 		}
+	}
+	// 一次性分类回填：对尚未设置分类的存量模型，按能力推断（有输出 token 视为语言模型，
+	// embedding 类视为向量模型）。仅作用于 category 为空，运营在后台设置的分类不会被覆盖。
+	if err := s.st.DB.Model(&model.PriceRule{}).
+		Where("category = ? AND (completion_ratio > 0 OR output_price_per_million > 0 OR cache_output_price_per_million > 0)", "").
+		Update("category", "语言模型").Error; err != nil {
+		return err
+	}
+	if err := s.st.DB.Model(&model.PriceRule{}).
+		Where("category = ? AND model LIKE ?", "", "%embedding%").
+		Update("category", "向量模型").Error; err != nil {
+		return err
 	}
 	return nil
 }

@@ -3,10 +3,12 @@ import { randomUUID } from "node:crypto";
 import sharp from "sharp";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js";
+import { imageResolutionFromSize } from "./image-upstream-options.js";
 
 export const QWEN_IMAGE_MODEL = "qwen-image-2.0-pro-2026-04-22";
 export const GPT_IMAGE_MODEL = "gpt-image-2";
-export const IMAGE_GENERATION_MODELS = [QWEN_IMAGE_MODEL, GPT_IMAGE_MODEL] as const;
+export const DOUBAO_IMAGE_MODEL = "doubao-seedream-4-5-251128";
+export const IMAGE_GENERATION_MODELS = [QWEN_IMAGE_MODEL, GPT_IMAGE_MODEL, DOUBAO_IMAGE_MODEL] as const;
 /** Qwen Image 编辑接口与现有生图工作台共同遵守的参考图上限。 */
 export const IMAGE_MAX_REFERENCE_COUNT = 3;
 export const IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
@@ -20,6 +22,7 @@ export const IMAGE_REFERENCE_MIME_TYPES = new Set([
 ]);
 const DEFAULT_IMAGE_MODEL = QWEN_IMAGE_MODEL;
 const DEFAULT_GPT_IMAGE_GENERATION_ENDPOINT = "https://api.ai-pixel.online/v1/images/generations";
+const DEFAULT_DOUBAO_IMAGE_ENDPOINT = "https://ark.cn-beijing.volces.com/api/v3/images/generations";
 const DEFAULT_BAILIAN_REGION = "cn-beijing";
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const DEFAULT_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
@@ -37,7 +40,7 @@ export interface ImageGenerationConfig {
   readonly endpoint: string;
   readonly apiKey: string;
   readonly model: string;
-  readonly protocol: "bailian" | "openai";
+  readonly protocol: "bailian" | "openai" | "volcengine";
 }
 
 export type ImageGenerationModel = typeof IMAGE_GENERATION_MODELS[number];
@@ -620,6 +623,16 @@ export function loadImageGenerationConfigForModel(
   model: string,
   env: NodeJS.ProcessEnv = process.env,
 ): ImageGenerationConfig {
+  if (model === DOUBAO_IMAGE_MODEL || model.toLowerCase().startsWith("doubao")) {
+    const apiKey = env.ARK_API_KEY?.trim() || "";
+    if (!apiKey) throw new Error("ARK_API_KEY required for doubao image generation");
+    return {
+      endpoint: env.ARK_IMAGE_ENDPOINT?.trim() || DEFAULT_DOUBAO_IMAGE_ENDPOINT,
+      apiKey,
+      model,
+      protocol: "volcengine",
+    };
+  }
   if (model === GPT_IMAGE_MODEL) {
     const apiKey = env.GPT_IMAGE_API_KEY?.trim() || "";
     if (!apiKey) throw new Error("GPT_IMAGE_API_KEY required for gpt-image-2");
@@ -734,13 +747,23 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
         quality: requestedQuality,
         output_format: requestedFormat,
       }
-    : {
-        model: args.config.model,
-        input: {
-          messages: [{ role: "user", content: [{ text: args.prompt }] }],
-        },
-        parameters: qwenImageParameters(args.size),
-      };
+    : args.config.protocol === "volcengine"
+      ? {
+          model: args.config.model,
+          prompt: args.prompt,
+          n: 1,
+          // Volcengine Seedream 使用 1K/2K/4K 档位，与计费分辨率一致。
+          size: imageResolutionFromSize(args.size).toLowerCase(),
+          response_format: "url",
+          watermark: false,
+        }
+      : {
+          model: args.config.model,
+          input: {
+            messages: [{ role: "user", content: [{ text: args.prompt }] }],
+          },
+          parameters: qwenImageParameters(args.size),
+        };
   const response = await fetchWithTimeout(args.fetchFn, args.config.endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
@@ -760,6 +783,9 @@ export async function callImageGeneration(args: CallImageGenerationArgs): Promis
 }
 
 export async function callImageEditDetailed(args: CallImageEditArgs): Promise<ImageGenerationResult> {
+  if (args.config.protocol === "volcengine") {
+    throw new Error("豆包生图暂不支持以图生图编辑");
+  }
   if (args.referenceImages.length < 1 || args.referenceImages.length > IMAGE_MAX_REFERENCE_COUNT) {
     throw new Error(`image editing requires 1 to ${IMAGE_MAX_REFERENCE_COUNT} reference images`);
   }

@@ -9,6 +9,7 @@ import { getPrisma, getRedis } from "@ai-assistant/db";
 import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
 import { enqueueCodexPetRun } from "./codex-pet-queue.js";
 import {
+  DOUBAO_IMAGE_MODEL,
   GPT_IMAGE_MODEL,
   IMAGE_GENERATION_MODELS,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -807,10 +808,12 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const fallbackVisual = [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }];
     return {
       visualModels: visualModels.length > 0 ? visualModels : fallbackVisual,
-      imageModels: IMAGE_GENERATION_MODELS.map((model) => ({
-        model,
-        displayName: model === GPT_IMAGE_MODEL ? "GPT Image 2" : "Qwen Image 2.0 Pro",
-      })),
+      imageModels: IMAGE_GENERATION_MODELS
+        .filter((model) => model !== DOUBAO_IMAGE_MODEL)
+        .map((model) => ({
+          model,
+          displayName: model === GPT_IMAGE_MODEL ? "GPT Image 2" : "Qwen Image 2.0 Pro",
+        })),
     } as const;
   }
 

@@ -10,10 +10,12 @@ type RmbPricing = Pick<
 
 type ModelMetaDraft = Pick<
   api.ModelRow,
-  "displayName" | "description" | "useCases" | "sortOrder" | "showInMarketplace" | "enabled" | "maxOutputTokens"
+  "displayName" | "description" | "useCases" | "sortOrder" | "showInMarketplace" | "enabled" | "maxOutputTokens" | "category"
 > & {
   newModel: string;
 };
+
+const MODEL_CATEGORIES = ["语言模型", "语音模型", "视觉模型", "向量模型"] as const;
 
 const emptyPricing: RmbPricing = {
   inputPriceRmbPerMillion: 0,
@@ -64,6 +66,7 @@ export function ModelsPage() {
         showInMarketplace: row.showInMarketplace,
         enabled: row.enabled,
         maxOutputTokens: row.maxOutputTokens ?? 0,
+        category: row.category ?? "",
       },
     });
   };
@@ -99,6 +102,7 @@ export function ModelsPage() {
         sortOrder: draft.sortOrder,
         showInMarketplace: draft.showInMarketplace,
         maxOutputTokens: draft.maxOutputTokens,
+        category: draft.category.trim(),
       });
       if (nextModel !== row.model) {
         await api.updateModelIdentity({
@@ -156,6 +160,7 @@ export function ModelsPage() {
           <tr>
             <th>模型</th>
             <th>广场</th>
+            <th>分类</th>
             <th>适用场景</th>
             <th className="num">输入价格</th>
             <th className="num">输出价格</th>
@@ -181,6 +186,9 @@ export function ModelsPage() {
                   </div>
                 </td>
                 <td>
+                  <Pill kind={row.category ? "b" : "n"}>{row.category || "未分类"}</Pill>
+                </td>
+                <td>
                   <div style={{ display: "grid", gap: 4 }}>
                     <span>{row.useCases ? clip(row.useCases, 56) : "未配置适用场景"}</span>
                   </div>
@@ -200,7 +208,7 @@ export function ModelsPage() {
           })}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={6} className="muted">无数据</td>
+              <td colSpan={7} className="muted">无数据</td>
             </tr>
           )}
         </tbody>
@@ -335,6 +343,7 @@ function UpsertModel({
     cacheOutputPriceRmbPerMillion: 0,
   });
   const [enabled, setEnabled] = useState(true);
+  const [category, setCategory] = useState("");
 
   const reset = () => {
     setOpen(false);
@@ -352,6 +361,7 @@ function UpsertModel({
       cacheOutputPriceRmbPerMillion: 0,
     });
     setEnabled(true);
+    setCategory("");
   };
 
   const submit = async () => {
@@ -373,6 +383,7 @@ function UpsertModel({
         sortOrder,
         maxOutputTokens,
         showInMarketplace,
+        category: category.trim(),
         ...pricing,
       });
       reset();
@@ -398,6 +409,14 @@ function UpsertModel({
         <Field label="排序"><input type="number" value={sortOrder} onChange={(event) => setSortOrder(Number(event.target.value || "0"))} /></Field>
         <Field label="最大输出 token（0=用默认）"><input type="number" min={0} value={maxOutputTokens} onChange={(event) => setMaxOutputTokens(Number(event.target.value || "0"))} /></Field>
         <Field label="上架广场"><input type="checkbox" checked={showInMarketplace} onChange={(event) => setShowInMarketplace(event.target.checked)} /></Field>
+        <Field label="模型分类">
+          <select value={category} onChange={(event) => setCategory(event.target.value)}>
+            <option value="">未分类</option>
+            {MODEL_CATEGORIES.map((item) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
+          </select>
+        </Field>
         <Field label="模型介绍"><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} /></Field>
         <Field label="适用场景"><textarea rows={3} value={useCases} onChange={(event) => setUseCases(event.target.value)} /></Field>
         <PricingFields value={pricing} onChange={setPricing} />

@@ -95,6 +95,37 @@ func TestListMarketplaceFiltersVisibleEnabledAndSorts(t *testing.T) {
 	}
 }
 
+func TestListMarketplaceIncludesZeroPriceImageGenModels(t *testing.T) {
+	st := openTask5RegistrySQLiteStore(t)
+	svc := New(st)
+	// 生图模型按次计费，token 价格全为 0；必须仍能进入广场（与 chat 模型
+	// 的 output_price>0 过滤区分开，见 ListEnabled 的语义差异）。
+	if err := st.DB.Create(&model.PriceRule{
+		Model:            "qwen-image-2.0-pro-2026-04-22",
+		DisplayName:     "通义万相 Qwen Image 2.0 Pro",
+		CapabilityTags:  "image-gen,vision",
+		Category:        "视觉模型",
+		Enabled:         true,
+		ShowInMarketplace: true,
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.ListMarketplace()
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, row := range got {
+		if row.Model == "qwen-image-2.0-pro-2026-04-22" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("zero-price image-gen model should appear in marketplace, got %d rows", len(got))
+	}
+}
+
 func TestUpdateMarketplacePersistsMetadata(t *testing.T) {
 	st := openTask5RegistrySQLiteStore(t)
 	svc := New(st)
