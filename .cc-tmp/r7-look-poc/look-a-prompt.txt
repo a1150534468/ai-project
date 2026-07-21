@@ -1,0 +1,48 @@
+Character name: 像素小助手 GPT 全流程 R7.
+Visual style: crisp pixel-art sprite with deliberately sized pixels and no anti-aliased scenery.
+Additional style constraint: 圆润、低饱和、单一主体、保持角色身份一致.
+The first attached canonical character image is the sole visual source of truth for this animation. Do not redesign it from the longer text brief.
+Keep exactly the same face, head shape, body proportions, palette, marking count and topology, material, silhouette, clothing and props in every pose.
+Treat every stripe, patch and symbol-like body mark as a fixed part of the character: never rewrite, add, remove or substitute it between frames.
+Approved canonical anatomy and identity guide:
+头：超大圆润薄荷绿头盔状头部，以短深色颈段连接圆鼓躯干；顶部中央为一根深色短杆天线，末端一枚薄荷绿圆球。耳：头部左右各一枚相连的圆盘状侧耳舱，画面右侧完整且较大，左侧部分被头部轮廓遮挡。眼：白色面板内左右各一只独立的深墨绿色竖椭圆大眼，均有白色高光与下部绿色眼内区域；二者是真实眼睛，不是装饰花纹。嘴：双眼下方中央仅一条短深绿色横线，为嘴而非花纹。四肢：两条短粗薄荷绿手臂经深色肩部连接件接入躯干，末端为实体手爪；两条短腿经深色踝段连接两只宽大的薄荷绿靴形足，手爪与足均不是花纹。尾巴：不可见，无可确认尾巴。固定花纹：共两块彼此不相连的浅色封闭面板，一块嵌于头部并包围双眼和嘴，一块嵌于躯干正面腹部；其余浅色块主要为像素高光，不另算固定花纹。可动特征：仅许可头部转倾、双眼眨动或移视、嘴部变化、天线摆动、双臂与手爪活动、双腿与双足活动。歧义：侧面圆盘究竟是耳朵还是功能舱无法仅凭正面图确定；手爪的精确指爪数量受像素轮廓影响无法确认，左侧耳舱的真实尺寸也因遮挡不明。
+Treat this guide as authoritative when distinguishing anatomy (especially eyes, paws/feet and mouth) from fixed markings. Preserve fixed features. A feature listed as movable is merely allowed to move when the requested action naturally needs it; it does not have to move in every animation or every frame.
+
+Look mechanics: 足底接触点锚定屏幕；眼珠先领视线，眼睑眨动，头部随后转倾，嘴随面板微变，躯干滞后扭转，短肢、手爪与靴足平衡补偿，天线柔性拖随；无道具。16向等角过渡：000上为背/顶向且脸遮蔽，090右为右侧面，180下为完整正面，270左为左侧面，斜向融合邻向特征。
+Reference roles are strict: Image 1 is the primary 4×2 partial anchor storyboard in ordinary row-major target geometry. Its physical top-left already contains approved Frame 1 and its physical bottom-left already contains approved Frame 5; preserve both anchor poses and their positions. Every other chroma-only slot in Image 1 is intentionally blank for you to fill, not an unused output slot. Image 2 is the approved canonical identity. Image 3 contains the complete approved 2×2 cardinal basis (top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT) plus secondary continuity/layout guidance; it must never override Image 1's placed endpoints or Image 2's identity.
+
+Viewer-coordinate appearance lock: Authoritative cardinal appearance contract (viewer/screen coordinates): 000 UP means the character's natural front/aim points toward the top edge; for a standing character with a visible front this is the rear/back-facing or top-facing pose family, with the front face normally occluded. 090 SCREEN-RIGHT means the natural front/aim points toward the right edge and must show the right-facing profile or matching right-side landmarks. 180 DOWN means the natural front/aim points toward the bottom edge; for a standing character with a visible front this is the front-facing or bottom-facing pose family, with the canonical face visible again. 270 SCREEN-LEFT means the natural front/aim points toward the left edge and must show the left-facing profile or matching left-side landmarks. Do not reinterpret 000 as a front portrait or 180 as a rear portrait. Do not let a repair diagnostic override this contract. For eyeless or non-directional objects, use the object's natural aiming feature and the same four screen edges. The approved cardinal images are the source of truth for the exact anatomy, but they must themselves obey this screen-heading contract.
+
+Generate exactly eight separated poses as a 4 columns × 2 rows row-major board. Direction order: 000, 022.5, 045, 067.5, 090, 112.5, 135, 157.5 degrees (chronological). Place frames 1, 2, 3, 4 from left-to-right across the TOP row, then place frames 5, 6, 7, 8 from left-to-right across the BOTTOM row. Follow the attached layout's visible frame numbers exactly. 000 is UP, 090 SCREEN-RIGHT, 180 DOWN, 270 SCREEN-LEFT.
+Use this exact anchor path:
+- Frame 1 (physical top-left) MUST reproduce the approved 000 UP pose family from the cardinal reference's top-left cell.
+- Frame 5 (physical bottom-left) MUST reproduce the approved 090 SCREEN-RIGHT pose family from the cardinal reference's top-right cell.
+- Frame 8 (physical bottom-right) MUST be exactly one 22.5-degree step before the approved 180 DOWN pose family from the cardinal reference's bottom-left cell; it is not yet 180.
+- Frames 1 through 8 may advance only along 000 UP -> 090 SCREEN-RIGHT -> almost 180 DOWN. Never enter the 270 SCREEN-LEFT pose family, never reverse into the opposite facial quadrant, and never make eyes, mouth, markings, limbs, props or tail teleport to the other side between adjacent frames.
+Binding visible pose-family plan for the half-turn from back/up through screen-right toward front/down:
+- Frame 1: exact approved 000 rear/back-facing UP family; front face normally hidden.
+- Frame 2: rear view with only a slight SCREEN-RIGHT-side reveal.
+- Frame 3: rear-right three-quarter view; never show the screen-left profile family.
+- Frame 4: approaching the approved SCREEN-RIGHT profile from the rear.
+- Frame 5: exact approved 090 SCREEN-RIGHT profile, with the face/front edge on the same screen side as the approved top-right cardinal.
+- Frame 6: right-front three-quarter view; reveal more of the face while remaining unmistakably on the screen-right half-turn.
+- Frame 7: near-front view still offset toward screen-right.
+- Frame 8: almost the approved 180 front/down-facing family, but still one visible step on its screen-right side.
+This is one 157.5-degree half-turn, not a full 360-degree turntable. No frame may use the approved 270 SCREEN-LEFT family or put the face/front edge on its screen side.
+
+Redraw this as one coherent interpolation family, not eight unrelated variants. Every adjacent 22.5-degree step must change the same anatomical landmarks by a similar visual amount. Keep the feet/base/torso anchor, scale, baseline and identity fixed. Preserve already-correct grid clearance, connectivity and body scale during repairs. Do not rotate, mirror, skew or tilt the whole raster sprite to fake gaze. Do not replace the original eye design.
+Frames 4 and 5 are the row-boundary neighbors in chronological order; continue directly from the top-right pose into the bottom-left pose without a reset, mirror point or viewpoint jump. Frames 5 through 8 then continue left-to-right across the bottom row without reversing the clockwise turn.
+
+Background color must be exactly #ff00ff.
+Create production sprite source art, not a presentation sheet.
+Use one perfectly flat solid chroma background and keep every character color clearly different from it.
+Show the complete whole body with generous padding. Nothing may touch or cross a slot or outer canvas edge.
+No text, labels, numbers, logos, borders, visible grid, scenery, floor, cast shadow, glow, halo, blur or transparency checkerboard.
+No detached effects: no motion lines, dust, floating icons, punctuation, stars or separate droplets.
+Every pose must be one readable connected sprite component. Preserve identity and scale across all poses.
+
+The previous failed look-a board is attached only as diagnostic evidence. Do not copy its wrong or missing poses. Apply this sanitized cumulative repair requirement:
+Authoritative cardinal appearance contract (viewer/screen coordinates): 000 UP means the character's natural front/aim points toward the top edge; for a standing character with a visible front this is the rear/back-facing or top-facing pose family, with the front face normally occluded. 090 SCREEN-RIGHT means the natural front/aim points toward the right edge and must show the right-facing profile or matching right-side landmarks. 180 DOWN means the natural front/aim points toward the bottom edge; for a standing character with a visible front this is the front-facing or bottom-facing pose family, with the canonical face visible again. 270 SCREEN-LEFT means the natural front/aim points toward the left edge and must show the left-facing profile or matching left-side landmarks. Do not reinterpret 000 as a front portrait or 180 as a rear portrait. Do not let a repair diagnostic override this contract. For eyeless or non-directional objects, use the object's natural aiming feature and the same four screen edges. Accepted non-conflicting repair evidence: 重建directions动作组：按000、22.5、45、67.5、90、112.5、135、157.5的顺时针顺序提供完整八帧，保持统一尺寸、基线和像素风格。首帧必须为000上向的背面族，逐帧从背面经屏幕右侧转向近正面；末帧不得停留在090纯右侧面。
+方向动作序列不完整：缺少六个中间姿态。
+下方姿态是明确的屏幕右向侧面、约090姿态，不符合应位于000至157.5区间末端的渐进近正面姿态。
+两个可见姿态之间没有可验证的连续顺时针转向过渡。

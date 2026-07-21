@@ -12,6 +12,7 @@ import { ApiError } from "../../apiError";
 import * as codexPetApi from "../../codexPetApi";
 import {
   CODEX_PET_IMAGE_MODEL,
+  CODEX_PET_IMAGE_MODELS,
   CODEX_PET_VISUAL_QA_MODEL,
 } from "../../codexPetApi";
 import type {
@@ -21,6 +22,7 @@ import type {
   CodexPetEvent,
   CodexPetInstallLink,
   CodexPetPricing,
+  CodexPetModelOptions,
   CodexPetProject,
   CodexPetProjectDetail,
   CodexPetProjectSummary,
@@ -61,6 +63,7 @@ import {
 
 export interface CodexPetStudioClient {
   readonly getPricing: (token: string) => Promise<CodexPetPricing>;
+  readonly getModelOptions?: (token: string) => Promise<CodexPetModelOptions>;
   readonly listProjects: (token: string) => Promise<readonly CodexPetProjectSummary[]>;
   readonly createProject: (token: string, payload: CodexPetCreatePayload) => Promise<CodexPetProject>;
   readonly getProject: (token: string, projectId: string, signal?: AbortSignal) => Promise<CodexPetProjectDetail>;
@@ -73,6 +76,7 @@ export interface CodexPetStudioClient {
     runId: string,
     selection: CodexPetBaseSelection,
   ) => Promise<CodexPetRun>;
+  readonly approveNextImage: (token: string, projectId: string, runId: string) => Promise<CodexPetRun>;
   readonly cancelRun: (token: string, projectId: string, runId: string) => Promise<CodexPetRun>;
   readonly listEvents: (
     token: string,
@@ -89,6 +93,7 @@ export interface CodexPetStudioClient {
 
 const DEFAULT_CLIENT: CodexPetStudioClient = {
   getPricing: codexPetApi.getCodexPetPricing,
+  getModelOptions: codexPetApi.getCodexPetModelOptions,
   listProjects: codexPetApi.listCodexPetProjects,
   createProject: codexPetApi.createCodexPetProject,
   getProject: codexPetApi.getCodexPetProject,
@@ -96,6 +101,7 @@ const DEFAULT_CLIENT: CodexPetStudioClient = {
   deleteProject: codexPetApi.deleteCodexPetProject,
   startRun: codexPetApi.startCodexPetRun,
   selectBase: codexPetApi.selectCodexPetBase,
+  approveNextImage: codexPetApi.approveCodexPetNextImage,
   cancelRun: codexPetApi.cancelCodexPetRun,
   listEvents: codexPetApi.listCodexPetEvents,
   streamEvents: codexPetApi.streamCodexPetEvents,
@@ -121,6 +127,7 @@ type BusyAction =
   | "cancelling"
   | "selecting-base"
   | "regenerating-base"
+  | "approving-image"
   | "installing"
   | "downloading"
   | null;
@@ -131,6 +138,8 @@ const TERMINAL_RUN_STATUSES = new Set(["ready", "failed", "cancelled"]);
 const DETAIL_REFRESH_EVENTS = new Set([
   "preview.ready",
   "base.review_required",
+  "image.approval_required",
+  "image.call.started",
   "job.completed",
   "validation.failed",
   "package.ready",
@@ -150,6 +159,9 @@ const EVENT_LABELS: Record<string, string> = {
   "job.completed": "视觉任务完成",
   "preview.ready": "新预览可用",
   "base.review_required": "请确认主形象",
+  "image.call.started": "已发起真实生图调用",
+  "image.call.approved": "已批准一次真实生图",
+  "image.approval_required": "等待批准下一次真实生图",
   "validation.warning": "质量检查警告",
   "validation.failed": "质量检查未通过",
   "run.repairing": "正在自动修复",
@@ -360,9 +372,17 @@ export function CodexPetStudio({
   const [detail, setDetail] = useState<CodexPetProjectDetail | null>(null);
   const [draft, setDraft] = useState<CodexPetDraft>(EMPTY_CODEX_PET_DRAFT);
   const [pricing, setPricing] = useState<CodexPetPricing | null>(null);
+  const [modelOptions, setModelOptions] = useState<CodexPetModelOptions>({
+    visualModels: [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }],
+    imageModels: CODEX_PET_IMAGE_MODELS.map((model) => ({
+      model,
+      displayName: model === CODEX_PET_IMAGE_MODEL ? "GPT Image 2" : "Qwen Image 2.0 Pro",
+    })),
+  });
   const [events, setEvents] = useState<readonly CodexPetEvent[]>([]);
   const [selectedBaseArtifactId, setSelectedBaseArtifactId] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<BusyAction>(null);
+  const [deletingProjectId, setDeletingProjectId] = useState<string | null>(null);
   const [streamState, setStreamState] = useState<StreamState>("idle");
   const [bootstrapping, setBootstrapping] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -508,9 +528,10 @@ export function CodexPetStudio({
   useEffect(() => {
     let disposed = false;
     void (async () => {
-      const [pricingResult, projectsResult] = await Promise.allSettled([
+      const [pricingResult, projectsResult, modelOptionsResult] = await Promise.allSettled([
         client.getPricing(token),
         client.listProjects(token),
+        (client.getModelOptions ?? codexPetApi.getCodexPetModelOptions)(token),
       ]);
       if (disposed) return;
       if (pricingResult.status === "fulfilled") setPricing(pricingResult.value);
@@ -524,6 +545,8 @@ export function CodexPetStudio({
         setError(errorMessage(projectsResult.reason, "加载桌宠项目失败"));
         if (selectedProjectIdRef.current === undefined) setSelectedProjectId(null);
       }
+      if (modelOptionsResult.status === "fulfilled") setModelOptions(modelOptionsResult.value);
+      else setNotice("模型目录暂时无法加载，已保留 GPT 默认选项");
       setBootstrapping(false);
     })();
     return () => { disposed = true; };
@@ -814,38 +837,66 @@ export function CodexPetStudio({
     })();
   };
 
-  const handleDeleteProject = () => {
-    const projectId = detail?.project.id;
-    if (!projectId || interactionLocked) return;
+  const handleDeleteProject = (project: CodexPetProjectSummary) => {
+    if (interactionLocked) return;
+    const projectId = project.id;
+    const selectedRunIsActive = detail?.project.id === projectId && latestRun && !runIsTerminal;
+    const projectMayBeRunning = Boolean(selectedRunIsActive)
+      || (project.status !== "draft"
+        && project.status !== "deleting"
+        && !TERMINAL_RUN_STATUSES.has(project.status));
     const confirmed = typeof window === "undefined" || window.confirm(
-      latestRun && !runIsTerminal
-        ? "项目仍在运行。删除会先请求取消，并清理对应知识库文档与产物，确认继续？"
-        : "删除项目会清理对应知识库文档与桌宠产物，确认继续？",
+      projectMayBeRunning
+        ? "项目仍可能在运行。删除后会停止制作并处理退款；项目数据和产物会保留，但不再显示在历史中。确认删除？"
+        : "删除后项目将从历史中隐藏，项目数据和产物仍会保留。确认删除？",
     );
     if (!confirmed) return;
     clearFeedback();
     setBusyAction("deleting");
-    void client.deleteProject(token, projectId)
-      .then(() => {
-        const remaining = projects.filter((project) => project.id !== projectId);
-        setProjects(remaining);
+    setDeletingProjectId(projectId);
+
+    const applyDeletedProject = (remaining: readonly CodexPetProjectSummary[]) => {
+      setProjects(remaining);
+      if (selectedProjectIdRef.current === projectId) {
         const nextProjectId = remaining[0]?.id ?? null;
         setSelectedProjectId(nextProjectId);
         selectedProjectIdRef.current = nextProjectId;
         detailRevisionRef.current += 1;
         setDetail(null);
-        setNotice("项目已提交删除清理");
+        setDraft(EMPTY_CODEX_PET_DRAFT);
+        setEvents([]);
+        setSelectedBaseArtifactId(null);
+        draftProjectIdRef.current = null;
+        eventCursorRef.current = 0;
+      }
+      setNotice("项目已从历史中删除，数据和产物仍保留");
+    };
+
+    void client.deleteProject(token, projectId)
+      .then(() => {
+        const remaining = projects.filter((project) => project.id !== projectId);
+        applyDeletedProject(remaining);
       })
       .catch(async (deleteError: unknown) => {
+        // The marker is committed atomically, but the response can still be
+        // lost in transit. Reconcile the history before reporting failure so
+        // a successfully hidden project does not remain as a stale item.
+        try {
+          const currentProjects = await client.listProjects(token);
+          if (!currentProjects.some((item) => item.id === projectId)) {
+            applyDeletedProject(currentProjects);
+            return;
+          }
+          setProjects(currentProjects);
+        } catch {
+          // Preserve the local list and surface the original delete error.
+        }
         setError(errorMessage(deleteError, "删除桌宠项目失败"));
-        // DELETE marks the project as `deleting` before it enqueues durable
-        // cleanup. If Redis is unavailable the API deliberately returns 503,
-        // but the tombstone is already committed and maintenance will retry.
-        // Refresh so the browser cannot keep offering save/start actions for
-        // a project that the server has already made immutable.
-        await refreshSelectedProject(true);
       })
-      .finally(() => setBusyAction(null));
+      .finally(() => {
+        setBusyAction(null);
+        setDeletingProjectId(null);
+      });
   };
 
   const handleCancelRun = () => {
@@ -886,6 +937,22 @@ export function CodexPetStudio({
         void refreshSelectedProject(true);
       })
       .catch((selectionError: unknown) => setError(errorMessage(selectionError, "处理主形象失败")))
+      .finally(() => setBusyAction(null));
+  };
+
+  const handleApproveNextImage = () => {
+    const project = detail?.project;
+    const run = latestRun;
+    if (!project || !run || run.status !== "awaiting_direction_review" || interactionLocked) return;
+    clearFeedback();
+    setBusyAction("approving-image");
+    void client.approveNextImage(token, project.id, run.id)
+      .then((nextRun) => {
+        setDetail((current) => current ? { ...current, latestRun: nextRun } : current);
+        setNotice(`已批准 ${run.pendingImageJobKey || "当前方向任务"} 的 1 次真实生图调用；失败后会立即停下`);
+        void refreshSelectedProject(true);
+      })
+      .catch((approvalError: unknown) => setError(errorMessage(approvalError, "批准下一次真实生图失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -970,7 +1037,7 @@ export function CodexPetStudio({
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-[#dcf3ef] bg-white px-3 py-1.5 text-[#477069]">
-            生图 {CODEX_PET_IMAGE_MODEL} · 视觉推理 / QA {CODEX_PET_VISUAL_QA_MODEL}
+            生图 {draft.imageModel} · 视觉推理 / QA {draft.visualQaModel}
           </span>
           <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
             {pricing ? `${pricing.rate} 积分 / 完整 v2 套餐` : "套餐价格加载中"}
@@ -1014,38 +1081,56 @@ export function CodexPetStudio({
                 <p className="px-3 py-5 text-center text-xs leading-5 text-[#8b8b94]">还没有桌宠项目，从文字或参考图开始吧。</p>
               )}
               {projects.map((project) => (
-                <button
+                <div
                   key={project.id}
-                  type="button"
-                  disabled={interactionLocked}
-                  onClick={() => {
-                    if (interactionLocked) return;
-                    setSelectedProjectId(project.id);
-                    selectedProjectIdRef.current = project.id;
-                    detailRevisionRef.current += 1;
-                    // Clear the old detail synchronously. The effect below
-                    // also sets this state, but doing it here closes the
-                    // one-render window in which destructive actions could
-                    // still target the previously selected project.
-                    setDetail(null);
-                    setDraft(EMPTY_CODEX_PET_DRAFT);
-                    setLoadingDetail(true);
-                    setEvents([]);
-                    eventCursorRef.current = 0;
-                    clearFeedback();
-                  }}
-                  className={`w-full rounded-[10px] border px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                  className={`group flex w-full items-center rounded-[10px] border pr-1 transition ${
                     project.id === selectedProjectId
                       ? "border-[#bde8e2] bg-brand-soft"
                       : "border-transparent hover:border-[#e6e7eb] hover:bg-[#fafafa]"
                   }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#2d2d31]">{project.name}</span>
-                    <StatusPill status={project.status} />
-                  </div>
-                  <p className="mt-1 truncate text-[10px] text-[#8b8b94]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
-                </button>
+                  <button
+                    type="button"
+                    disabled={interactionLocked}
+                    onClick={() => {
+                      if (interactionLocked) return;
+                      setSelectedProjectId(project.id);
+                      selectedProjectIdRef.current = project.id;
+                      detailRevisionRef.current += 1;
+                      // Clear the old detail synchronously. The effect below
+                      // also sets this state, but doing it here closes the
+                      // one-render window in which destructive actions could
+                      // still target the previously selected project.
+                      setDetail(null);
+                      setDraft(EMPTY_CODEX_PET_DRAFT);
+                      setLoadingDetail(true);
+                      setEvents([]);
+                      eventCursorRef.current = 0;
+                      clearFeedback();
+                    }}
+                    className="min-w-0 flex-1 px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#2d2d31]">{project.name}</span>
+                      <StatusPill status={project.status} />
+                    </div>
+                    <p className="mt-1 truncate text-[10px] text-[#8b8b94]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`删除项目 ${project.name}`}
+                    title="从历史中删除"
+                    disabled={interactionLocked}
+                    onClick={() => handleDeleteProject(project)}
+                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-[#a0a1a8] transition hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    <Icon
+                      icon={deletingProjectId === project.id ? "mdi:loading" : "mdi:trash-can-outline"}
+                      className={deletingProjectId === project.id ? "animate-spin text-base" : "text-base"}
+                      aria-hidden
+                    />
+                  </button>
+                </div>
               ))}
             </div>
           </Card>
@@ -1137,6 +1222,40 @@ export function CodexPetStudio({
                 </div>
               </div>
 
+              <div className="grid gap-2 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">生图模型</span>
+                  <select
+                    aria-label="生图模型"
+                    value={draft.imageModel}
+                    disabled={!canEdit || interactionLocked}
+                    onChange={(event) => updateDraft("imageModel", event.currentTarget.value as CodexPetDraft["imageModel"])}
+                    className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  >
+                    {modelOptions.imageModels.map((option) => (
+                      <option key={option.model} value={option.model}>{option.displayName}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">视觉理解 / 质检模型</span>
+                  <select
+                    aria-label="视觉理解 / 质检模型"
+                    value={draft.visualQaModel}
+                    disabled={!canEdit || interactionLocked}
+                    onChange={(event) => updateDraft("visualQaModel", event.currentTarget.value)}
+                    className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  >
+                    {!modelOptions.visualModels.some((option) => option.model === draft.visualQaModel) && (
+                      <option value={draft.visualQaModel}>{draft.visualQaModel}（已不可选）</option>
+                    )}
+                    {modelOptions.visualModels.map((option) => (
+                      <option key={option.model} value={option.model}>{option.displayName}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
               <fieldset disabled={!canEdit || interactionLocked}>
                 <legend className="mb-1.5 text-[11px] font-semibold text-[#4b4b52]">风格预设</legend>
                 <div className="grid grid-cols-2 gap-1.5">
@@ -1213,8 +1332,13 @@ export function CodexPetStudio({
                       取消运行
                     </PrimaryButton>
                   )}
-                  <PrimaryButton kind="danger" icon="mdi:trash-can-outline" disabled={interactionLocked} onClick={handleDeleteProject}>
-                    删除项目
+                  <PrimaryButton
+                    kind="danger"
+                    icon={deletingProjectId === detail.project.id ? "mdi:loading" : "mdi:trash-can-outline"}
+                    disabled={interactionLocked}
+                    onClick={() => handleDeleteProject(summaryFromProject(detail.project))}
+                  >
+                    从历史中删除
                   </PrimaryButton>
                 </div>
               )}
@@ -1308,6 +1432,18 @@ export function CodexPetStudio({
 
               {latestRun && baseCandidates.length === 0 && latestRun.status === "base_generating" && (
                 <ImagePlaceholder text="正在并行生成 2 个主形象候选；完成后会实时出现在这里。" />
+              )}
+
+              {latestRun?.status === "awaiting_direction_review" && (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-900">下一张真实生图已暂停</p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-amber-800">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，失败后不会自动重画。</p>
+                  </div>
+                  <PrimaryButton icon={busyAction === "approving-image" ? "mdi:loading" : "mdi:check-circle-outline"} disabled={interactionLocked} onClick={handleApproveNextImage}>
+                    批准 1 次生图
+                  </PrimaryButton>
+                </div>
               )}
 
               {latestRun && (currentPoseBoard || animationPreview) && (
@@ -1486,7 +1622,7 @@ export function CodexPetStudio({
                 })}
               </ol>
               {latestRun && (
-                <div className="grid grid-cols-2 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
+                <div className="grid grid-cols-3 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">当前子任务</span>
                     <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-[#52525a]">{currentSubtask}</span>
@@ -1494,6 +1630,10 @@ export function CodexPetStudio({
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">成功图片</span>
                     <span className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.hasSuccessfulImage ? "已有" : "暂无"}</span>
+                  </div>
+                  <div className="rounded-[9px] bg-[#f7f8fa] p-2">
+                    <span className="block text-[#919198]">真实生图调用</span>
+                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.imageGenerationCallCount ?? 0}</span>
                   </div>
                 </div>
               )}
@@ -1550,18 +1690,18 @@ export function CodexPetStudio({
               )}
               {latestRun && (
                 <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#72727a]">
-                  生图固定 {CODEX_PET_IMAGE_MODEL}<br />
+                  生图请求 {latestRun.requestedModel}<br />
                   生图实际 {latestRun.actualModels?.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}<br />
-                  视觉推理 / QA 固定 {CODEX_PET_VISUAL_QA_MODEL}<br />
+                  视觉推理 / QA 请求 {latestRun.visualQaModel}<br />
                   视觉实际 {latestRun.visualQaActualModels?.length > 0 ? latestRun.visualQaActualModels.join("、") : "等待最终模型来源汇总"}<br />
                   模型合同 {modelContractState === "valid"
-                    ? "GPT-only · 已验证"
+                    ? "所选模型来源 · 已验证"
                     : modelContractState === "invalid"
-                      ? "不符合 GPT-only · 已阻止交付"
-                      : "GPT-only · 等待实际模型来源"}
+                      ? "来源不一致 · 已阻止交付"
+                      : "等待实际模型来源"}
                   {modelContractState === "invalid" && (
                     <span role="alert" className="mt-1 block font-semibold text-red-700">
-                      接口返回的模型或路由与桌宠固定合同不一致；不会回退到通用聊天模型或 Qwen。
+                      接口返回的模型或路由与项目启动时冻结的选择不一致。
                     </span>
                   )}
                 </div>

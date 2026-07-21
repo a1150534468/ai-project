@@ -9,10 +9,11 @@ import {
   PET_CELL_HEIGHT,
   PET_CELL_WIDTH,
   PET_ROW_SPECS,
+  LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
   type PetRowSpec,
 } from "./constants.js";
 import { colorDistance, countOpaqueKeyPixels, formatHexColor, parseHexColor } from "./chroma.js";
-import { inspectFrame, type FrameInspectionOptions } from "./extraction.js";
+import { inspectFrame, mirrorFramesPreservingOrder, type FrameInspectionOptions } from "./extraction.js";
 
 export type PetFramesByState = Partial<Record<PetRowSpec["state"], readonly Buffer[]>>;
 
@@ -195,11 +196,10 @@ export async function composeCardinalAnchorStrip(frames: readonly Buffer[]): Pro
 }
 
 /**
- * Remap the two exact cardinal endpoints used inside one serpentine look row
- * into their physical target slots. GPT Image edits treats its first image as
- * the primary edit canvas; supplying the original 2×2 cardinal layout there
- * would incorrectly map 270 into the 4×2 bottom-right slot, where serpentine
- * chronology requires frame 5 (090 for row A, 270 for row B).
+ * Place the two exact cardinal endpoints used inside one row-major look row.
+ * GPT Image edits treats its first image as the primary edit canvas, so the
+ * endpoint storyboard must match the same physical left-to-right order that
+ * the generated row prompt describes.
  *
  * The other six slots remain pure chroma and are explicitly filled by the
  * image model. The complete 2×2 cardinal strip remains a separate supporting
@@ -215,7 +215,7 @@ export async function createLookAnchorStoryboard(
     throw new Error("Look anchor storyboard requires a 384x416 approved cardinal strip");
   }
   const cardinalIndices = row === "look-a" ? [0, 1] : [2, 3];
-  const targetSlots = [0, 7];
+  const targetSlots = [0, 4];
   const slotWidth = 1536 / 4;
   const slotHeight = 1024 / 2;
   const targetWidth = 278;
@@ -247,6 +247,52 @@ export async function createLookAnchorStoryboard(
     }))
     .png()
     .toBuffer();
+}
+
+/**
+ * Repack chronological look-direction cells into the model's physical 4x2
+ * source board without resampling. The extraction layer reverses this mapping
+ * after generation, so row-major direction order remains explicit in both
+ * the runner and recovery tools.
+ */
+export async function composeLookSourceBoardReference(
+  frames: readonly Buffer[],
+  chromaKey: string,
+): Promise<Buffer> {
+  if (frames.length !== LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.length) {
+    throw new Error("Look source-board reference requires exactly eight chronological frames");
+  }
+  const sourceSlots = new Array<Buffer>(frames.length);
+  LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.forEach((sourceSlot, chronologicalIndex) => {
+    sourceSlots[sourceSlot] = frames[chronologicalIndex]!;
+  });
+  return composeNormalizedPoseBoard(sourceSlots, { columns: 4, rows: 2, chromaKey });
+}
+
+/**
+ * Build the non-deliverable row-10 trajectory scaffold from approved row 9
+ * cells and cardinal endpoints. It supplies direction meaning only; a fresh
+ * coherent row-10 generation is still required before any atlas assembly.
+ */
+export async function composeLookBScreenLeftTrajectoryReference(
+  registeredLookAFrames: readonly Buffer[],
+  cardinalFrames: readonly Buffer[],
+  chromaKey: string,
+): Promise<Buffer> {
+  if (registeredLookAFrames.length !== 8 || cardinalFrames.length !== 4) {
+    throw new Error("look-b screen-left trajectory scaffold requires eight row-A cells and four cardinals");
+  }
+  const mirrored = await mirrorFramesPreservingOrder(registeredLookAFrames);
+  return composeLookSourceBoardReference([
+    cardinalFrames[2]!,
+    mirrored[7]!,
+    mirrored[6]!,
+    mirrored[5]!,
+    cardinalFrames[3]!,
+    mirrored[3]!,
+    mirrored[2]!,
+    mirrored[1]!,
+  ], chromaKey);
 }
 
 /**

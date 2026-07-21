@@ -11,6 +11,8 @@ import {
   assemblePetAtlas,
   assembleStandardPetAtlas,
   composeCardinalAnchorStrip,
+  composeLookBScreenLeftTrajectoryReference,
+  composeLookSourceBoardReference,
   buildCodexInstallDeepLink,
   chooseChromaKey,
   createAnimatedWebpPreview,
@@ -99,7 +101,7 @@ describe("codex pet deterministic pipeline", () => {
     await expect(createLayoutGuide({ columns: 2, rows: 2, frameCount: 4, slotLabels: ["1"] })).rejects.toThrow(/one label/);
   });
 
-  it("restores serpentine 4x2 look boards to chronological frame order", async () => {
+  it("keeps row-major 4x2 look boards in chronological frame order", async () => {
     const sourceColors = ["#aa1100", "#bb2200", "#cc3300", "#dd4400", "#1155aa", "#2266bb", "#3377cc", "#4488dd"];
     const overlays = sourceColors.map((color, index) => ({
       input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360"><rect x="90" y="70" width="140" height="240" rx="30" fill="${color}"/></svg>`),
@@ -127,7 +129,48 @@ describe("codex pet deterministic pipeline", () => {
     expect(sampled).toEqual(LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.map((sourceSlot) => sourceColors[sourceSlot]));
   });
 
-  it("maps approved cardinal endpoints into a sparse serpentine edit storyboard", async () => {
+  it("builds the row-10 trajectory scaffold from locked row 9 and approved 180/270 endpoints", async () => {
+    const row9Colors = ["#aa1100", "#bb2200", "#cc3300", "#dd4400", "#1155aa", "#2266bb", "#3377cc", "#4488dd"];
+    const row9Frames = await Promise.all(row9Colors.map((color, index) => solidFrame(color, 24 + index * 4)));
+    const cardinalColors = ["#11aa33", "#22bb44", "#cc1155", "#dd2266"];
+    const cardinalFrames = await Promise.all(cardinalColors.map((color, index) => solidFrame(color, 30 + index * 6)));
+
+    const row9Reference = await composeLookSourceBoardReference(row9Frames, "#ff00ff");
+    const row9Extracted = await extractPoseBoard(row9Reference, {
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+      frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
+      chromaKey: "#ff00ff",
+    });
+    expect(row9Extracted.ok, row9Extracted.errors.join("; ")).toBe(true);
+
+    const scaffold = await composeLookBScreenLeftTrajectoryReference(row9Frames, cardinalFrames, "#ff00ff");
+    const extracted = await extractPoseBoard(scaffold, {
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+      frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
+      chromaKey: "#ff00ff",
+    });
+    expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
+    const sampled = await Promise.all(extracted.frames.map(async (frame, index) => {
+      const bounds = extracted.diagnostics[index]!.normalizedBounds!;
+      const { data } = await sharp(frame).extract({
+        left: Math.round(bounds.left + (bounds.width - 1) / 2),
+        top: Math.round(bounds.top + (bounds.height - 1) / 2),
+        width: 1,
+        height: 1,
+      }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return `#${[data[0], data[1], data[2]].map((value) => value!.toString(16).padStart(2, "0")).join("")}`;
+    }));
+    expect(sampled).toEqual([
+      cardinalColors[2], row9Colors[7], row9Colors[6], row9Colors[5],
+      cardinalColors[3], row9Colors[3], row9Colors[2], row9Colors[1],
+    ]);
+  });
+
+  it("maps approved cardinal endpoints into a sparse row-major edit storyboard", async () => {
     const cardinals = await composeCardinalAnchorStrip(await Promise.all([
       solidFrame("#aa1100"),
       solidFrame("#bb2200"),
@@ -151,8 +194,8 @@ describe("codex pet deterministic pipeline", () => {
         return count;
       });
       expect(foregroundBySlot[0]).toBeGreaterThan(1_000);
-      expect(foregroundBySlot[7]).toBeGreaterThan(1_000);
-      expect(foregroundBySlot.slice(1, 7).every((count) => count === 0)).toBe(true);
+      expect(foregroundBySlot[4]).toBeGreaterThan(1_000);
+      expect(foregroundBySlot.filter((_, index) => index !== 0 && index !== 4).every((count) => count === 0)).toBe(true);
     }
   });
 
@@ -318,6 +361,48 @@ describe("codex pet deterministic pipeline", () => {
     expect(crossing.errors).toContain("frame-2:source-touches-slot-edge");
   });
 
+  it("ignores isolated chroma residue on slot edges without hiding a genuinely clipped pose", async () => {
+    const centeredPoses = Array.from({ length: 4 }, (_, index) => ({
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="105" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+        <rect x="${index % 2 === 0 ? 0 : 319}" y="${index < 2 ? 0 : 359}" width="1" height="1" fill="#2459c7"/>
+      </svg>`),
+      left: (index % 2) * 320,
+      top: Math.floor(index / 2) * 360,
+    }));
+    const residue = await extractPoseBoard(await boardWithOverlays(2, 2, centeredPoses), {
+      columns: 2,
+      rows: 2,
+      frameCount: 4,
+      chromaKey: "#ff00ff",
+    });
+
+    expect(residue.errors).toEqual([]);
+    expect(residue.diagnostics.every((item) => item.edgePixels === 0)).toBe(true);
+    expect(residue.diagnostics.map((item) => item.sourceBounds)).toEqual(Array.from({ length: 4 }, () => ({
+      left: 105,
+      top: 70,
+      right: 214,
+      bottom: 309,
+      width: 110,
+      height: 240,
+    })));
+
+    const clipped = await extractPoseBoard(await boardWithOverlays(1, 1, [{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="0" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+      </svg>`),
+      left: 0,
+      top: 0,
+    }]), {
+      columns: 1,
+      rows: 1,
+      frameCount: 1,
+      chromaKey: "#ff00ff",
+    });
+    expect(clipped.errors).toContain("frame-0:source-touches-slot-edge");
+  });
+
   it("preserves intentional vertical travel across jumping frames", async () => {
     const yPositions = [170, 100, 30, 100, 170];
     const overlays = yPositions.map((y, index) => ({
@@ -474,7 +559,7 @@ describe("codex pet deterministic pipeline", () => {
     const directions = await createDirectionQaSheet(atlas);
     expect((await sharp(contact).metadata()).width).toBe(768);
     expect((await sharp(directions).metadata()).width).toBeGreaterThan(1000);
-  });
+  }, 15_000);
 
   it("validates the 8x9 standard atlas before direction generation", async () => {
     const frame = await solidFrame();

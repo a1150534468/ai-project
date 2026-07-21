@@ -1,0 +1,354 @@
+{
+  "deterministic": {
+    "diagnostics": [
+      {
+        "index": 0,
+        "sourceBounds": {
+          "left": 140,
+          "top": 99,
+          "right": 345,
+          "bottom": 435,
+          "width": 206,
+          "height": 337
+        },
+        "opaquePixels": 43643,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.77899169921875,
+        "normalizedBounds": {
+          "left": 41,
+          "top": 15,
+          "right": 151,
+          "bottom": 195,
+          "width": 111,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "sourceBounds": {
+          "left": 106,
+          "top": 100,
+          "right": 283,
+          "bottom": 438,
+          "width": 178,
+          "height": 339
+        },
+        "opaquePixels": 40488,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 25,
+        "chromaCoverage": 0.7946879069010416,
+        "normalizedBounds": {
+          "left": 48,
+          "top": 14,
+          "right": 143,
+          "bottom": 195,
+          "width": 96,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "sourceBounds": {
+          "left": 76,
+          "top": 99,
+          "right": 237,
+          "bottom": 435,
+          "width": 162,
+          "height": 337
+        },
+        "opaquePixels": 37082,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8120829264322916,
+        "normalizedBounds": {
+          "left": 53,
+          "top": 15,
+          "right": 139,
+          "bottom": 195,
+          "width": 87,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "sourceBounds": {
+          "left": 30,
+          "top": 100,
+          "right": 202,
+          "bottom": 435,
+          "width": 173,
+          "height": 336
+        },
+        "opaquePixels": 39080,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 15,
+        "chromaCoverage": 0.8019917805989584,
+        "normalizedBounds": {
+          "left": 50,
+          "top": 16,
+          "right": 142,
+          "bottom": 195,
+          "width": 93,
+          "height": 180
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "sourceBounds": {
+          "left": 55,
+          "top": 43,
+          "right": 196,
+          "bottom": 363,
+          "width": 142,
+          "height": 321
+        },
+        "opaquePixels": 29509,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8504231770833334,
+        "normalizedBounds": {
+          "left": 58,
+          "top": 24,
+          "right": 133,
+          "bottom": 195,
+          "width": 76,
+          "height": 172
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "sourceBounds": {
+          "left": 61,
+          "top": 42,
+          "right": 250,
+          "bottom": 368,
+          "width": 190,
+          "height": 327
+        },
+        "opaquePixels": 38944,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8027089436848959,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 20,
+          "right": 146,
+          "bottom": 195,
+          "width": 102,
+          "height": 176
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 6,
+        "sourceBounds": {
+          "left": 108,
+          "top": 41,
+          "right": 268,
+          "bottom": 373,
+          "width": 161,
+          "height": 333
+        },
+        "opaquePixels": 36676,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8145395914713541,
+        "normalizedBounds": {
+          "left": 53,
+          "top": 17,
+          "right": 138,
+          "bottom": 195,
+          "width": 86,
+          "height": 179
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 7,
+        "sourceBounds": {
+          "left": 153,
+          "top": 40,
+          "right": 318,
+          "bottom": 373,
+          "width": 166,
+          "height": 334
+        },
+        "opaquePixels": 38101,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 21,
+        "chromaCoverage": 0.8067067464192709,
+        "normalizedBounds": {
+          "left": 52,
+          "top": 17,
+          "right": 140,
+          "bottom": 195,
+          "width": 89,
+          "height": 179
+        },
+        "errors": [],
+        "warnings": []
+      }
+    ],
+    "unusedSlotOpaquePixels": [],
+    "chroma": [
+      {
+        "removedPixels": 152947,
+        "softenedPixels": 209,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 156101,
+        "softenedPixels": 141,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 159509,
+        "softenedPixels": 153,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 157519,
+        "softenedPixels": 159,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 167091,
+        "softenedPixels": 109,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 157647,
+        "softenedPixels": 172,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 159914,
+        "softenedPixels": 231,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 158494,
+        "softenedPixels": 111,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      }
+    ],
+    "sourceWidth": 1536,
+    "sourceHeight": 1024,
+    "sharedScale": 0.5368731563421829,
+    "geometry": {
+      "heightRatio": 1.058139534883721,
+      "widthRatio": 1.4605263157894737,
+      "baselineSpreadPixels": 0,
+      "centerSpreadPixels": 0.5,
+      "warnings": []
+    },
+    "jumpingArc": null,
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "visual": {
+    "pass": false,
+    "verdicts": [
+      {
+        "pass": false,
+        "score": 42,
+        "mirrorSafe": true,
+        "identity": true,
+        "structure": false,
+        "semantics": false,
+        "continuity": false,
+        "warnings": [
+          "The contact sheet has no frame labels; continuity assessment assumes standard left-to-right, top-to-bottom order.",
+          "Flat magenta background, pixel style, scale, cropping, and limb count are otherwise consistent."
+        ],
+        "failures": [
+          "The presented frame order is not a continuous clockwise 000→157.5 sweep: it jumps from rear and rear three-quarter views to front views, then returns to side/rear views.",
+          "Several rear-facing poses still show the light abdominal front panel while the head shows its back, and head and torso yaw are not consistently aligned."
+        ],
+        "repairPrompt": "Rebuild the observation sequence in presented order as a smooth clockwise 000→157.5 sweep with 22.5-degree increments: front, front three-quarter, side, rear three-quarter, and rear. Keep head and torso yaw aligned, hide or occlude the front abdominal panel in rear views, and preserve the canonical mint pixel robot, anatomy, scale, baseline, and flat magenta background.",
+        "repairRows": [
+          "look-a"
+        ],
+        "modelProvenance": {
+          "requestedModel": "gpt-5.6-sol",
+          "actualModel": "gpt-5.6-sol",
+          "route": "chatgpt_model_route"
+        }
+      }
+    ],
+    "score": 42,
+    "mirrorSafe": true,
+    "warnings": [
+      "The contact sheet has no frame labels; continuity assessment assumes standard left-to-right, top-to-bottom order.",
+      "Flat magenta background, pixel style, scale, cropping, and limb count are otherwise consistent."
+    ],
+    "failures": [
+      "The presented frame order is not a continuous clockwise 000→157.5 sweep: it jumps from rear and rear three-quarter views to front views, then returns to side/rear views.",
+      "Several rear-facing poses still show the light abdominal front panel while the head shows its back, and head and torso yaw are not consistently aligned."
+    ],
+    "modelProvenance": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "route": "chatgpt_model_route"
+    }
+  },
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

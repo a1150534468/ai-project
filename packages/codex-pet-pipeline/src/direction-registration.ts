@@ -147,20 +147,26 @@ function pixelBounds(left: number, top: number, right: number, bottom: number): 
   return { left, top, right, bottom, width: right - left + 1, height: bottom - top + 1 };
 }
 
-async function measureGeometry(input: Buffer, minAlpha = 24): Promise<DirectionCellGeometry | null> {
+async function measureGeometry(
+  input: Buffer,
+  minAlpha = 24,
+  significantBounds?: PixelBounds | null,
+): Promise<DirectionCellGeometry | null> {
   const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  let left = info.width;
-  let right = -1;
-  let top = info.height;
-  let bottom = -1;
-  for (let y = 0; y < info.height; y += 1) {
-    for (let x = 0; x < info.width; x += 1) {
-      const alpha = data[(y * info.width + x) * info.channels + 3]!;
-      if (alpha < minAlpha) continue;
-      left = Math.min(left, x);
-      right = Math.max(right, x);
-      top = Math.min(top, y);
-      bottom = Math.max(bottom, y);
+  let left = significantBounds?.left ?? info.width;
+  let right = significantBounds?.right ?? -1;
+  let top = significantBounds?.top ?? info.height;
+  let bottom = significantBounds?.bottom ?? -1;
+  if (significantBounds === undefined) {
+    for (let y = 0; y < info.height; y += 1) {
+      for (let x = 0; x < info.width; x += 1) {
+        const alpha = data[(y * info.width + x) * info.channels + 3]!;
+        if (alpha < minAlpha) continue;
+        left = Math.min(left, x);
+        right = Math.max(right, x);
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y);
+      }
     }
   }
   if (right < left || bottom < top) return null;
@@ -249,13 +255,17 @@ async function extractCleanedDirectionCells(
       feather: options.chromaFeather,
     });
     chroma ??= { key: removed.key, threshold: removed.threshold, feather: removed.feather };
+    const inspection = await inspectFrame(removed.image, index, {
+      allowMultipleForegroundComponents: options.allowMultipleForegroundComponents,
+      allowTransparentHoles: options.allowTransparentHoles,
+    });
     cells.push({
       image: removed.image,
-      inspection: await inspectFrame(removed.image, index, {
-        allowMultipleForegroundComponents: options.allowMultipleForegroundComponents,
-        allowTransparentHoles: options.allowTransparentHoles,
-      }),
-      geometry: await measureGeometry(removed.image),
+      inspection,
+      // inspectFrame excludes insignificant disconnected residue from its
+      // source bounds. Reuse those bounds for registration geometry so one
+      // chroma-spill pixel cannot shrink or displace the complete look row.
+      geometry: await measureGeometry(removed.image, 24, inspection.sourceBounds),
       chromaCoverage: removed.totalPixels > 0
         ? (removed.removedPixels + removed.softenedPixels) / removed.totalPixels
         : 0,

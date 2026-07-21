@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 import type { ImageBinaryInput } from "./image-service.js";
 import { assertCodexPetVisualQaRoute, codexPetImageRetryDelayMs, codexPetVisualQaConsensusPasses, generateCodexPetIdentityGuide, generateCodexPetVisual, resolveCodexPetVisualQaModel, runCodexPetVisualQa, runLabeledDirectionSemantics, type PetVisualQaVerdict } from "./codex-pet-visual.js";
+import { codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 
 async function reference(index: number): Promise<ImageBinaryInput> {
   const buffer = await sharp({
@@ -46,13 +47,13 @@ describe("Codex pet visual generation", () => {
     expect(codexPetVisualQaConsensusPasses(consensus([passed, semanticFailure, semanticFailure]))).toBe(false);
   });
 
-  it("defaults every pet visual reasoning task to GPT-5.6 and rejects non-GPT overrides", () => {
+  it("defaults to GPT-5.6, accepts marketplace choices, and rejects exhausted qwen3.7 models", () => {
     expect(resolveCodexPetVisualQaModel({ CHAT_MULTIMODAL_MODEL: "qwen3.7-plus" })).toBe("gpt-5.6-sol");
     expect(resolveCodexPetVisualQaModel({ PET_VISUAL_QA_MODEL: "gpt-5.6-sol" })).toBe("gpt-5.6-sol");
     expect(() => resolveCodexPetVisualQaModel({ PET_VISUAL_QA_MODEL: "qwen3.7-plus" }))
-      .toThrow("must be gpt-5.6-sol");
-    expect(() => resolveCodexPetVisualQaModel({ PET_VISUAL_QA_MODEL: "gpt-5.6-terra" }))
-      .toThrow("must be gpt-5.6-sol");
+      .toThrow("non-qwen3.7 marketplace model");
+    expect(resolveCodexPetVisualQaModel({ PET_VISUAL_QA_MODEL: "gpt-5.6-terra" })).toBe("gpt-5.6-terra");
+    expect(resolveCodexPetVisualQaModel({ PET_VISUAL_QA_MODEL: "qwen3.6-flash" })).toBe("qwen3.6-flash");
   });
 
   it("requires an explicit GPT-5.6 model route instead of falling back to Bailian", () => {
@@ -79,6 +80,12 @@ describe("Codex pet visual generation", () => {
       CHATGPT_MODELS: "gpt-5.6-sol",
       CHATGPT_BASE_URL: "file:///tmp/not-a-model-route",
     })).toThrow("must use HTTP(S)");
+  });
+
+  it("routes Codex Auto Review to Pixel when CHATGPT_MODELS uses its default catalog", () => {
+    expect(codexPetVisualQaRouteForModel("codex-auto-review", {})).toBe("chatgpt_model_route");
+    expect(codexPetVisualQaRouteForModel("codex-auto-review", { CHATGPT_MODELS: "gpt-5.6-sol" })).toBe("chatgpt_model_route");
+    expect(codexPetVisualQaRouteForModel("qwen3.6-flash", {})).toBe("bailian_model_route");
   });
 
   it("persists the actual GPT-5.6 response model and rejects a Qwen response", async () => {
@@ -201,6 +208,32 @@ describe("Codex pet visual generation", () => {
     expect(prompt).toContain("胸前棕色 U 形");
     expect(prompt).toContain("merely allowed to move when a state needs it");
     expect(prompt).toContain("do not require it to move in every animation or frame");
+    expect(prompt).toContain("Do not reinterpret 000 as a front portrait or 180 as a rear portrait");
+  });
+
+  it("rejects stale cardinal semantics even when the visual model reports pass", async () => {
+    const sheet = await sharp({ create: { width: 16, height: 16, channels: 4, background: "#ffffff" } }).png().toBuffer();
+    const create = vi.fn(async () => ({
+      content: [{
+        type: "text",
+        text: JSON.stringify({ directions: [
+          { direction: "000", verdict: "pass", expected: "front", observed: "front", reason: "old yaw convention" },
+          { direction: "090", verdict: "pass", expected: "left", observed: "screen-left profile", reason: "horizontal swap" },
+          { direction: "180", verdict: "pass", expected: "rear", observed: "rear", reason: "old yaw convention" },
+          { direction: "270", verdict: "pass", expected: "right", observed: "screen-right profile", reason: "horizontal swap" },
+        ] }),
+      }],
+    }));
+
+    const verdicts = await runLabeledDirectionSemantics({
+      sheet,
+      expectedDirections: ["000", "090", "180", "270"],
+      client: { messages: { create } } as never,
+      env: { LLM_BASE_URL: "https://llm.example.test", LLM_API_KEY: "test-key" },
+    });
+
+    expect(verdicts.map((verdict) => verdict.verdict)).toEqual(["fail", "fail", "fail", "fail"]);
+    expect(verdicts.every((verdict) => verdict.reason.startsWith("Rejected stale cardinal semantics"))).toBe(true);
   });
 
   it.each([4, 5])(
@@ -270,6 +303,31 @@ describe("Codex pet visual generation", () => {
       },
     })).rejects.toThrow("image model mismatch");
     expect(fetchFn).toHaveBeenCalledOnce();
+  });
+
+  it("honors a one-call approval budget without transport retries", async () => {
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      error: { message: "temporarily unavailable", code: "service_unavailable" },
+    }), { status: 503, headers: { "content-type": "application/json" } }));
+    const onAttempt = vi.fn();
+    const onRetry = vi.fn();
+
+    await expect(generateCodexPetVisual({
+      prompt: "one approved direction board",
+      maxAttempts: 1,
+      onAttempt,
+      onRetry,
+      fetchFn: fetchFn as typeof fetch,
+      env: {
+        GPT_IMAGE_API_KEY: "test-key",
+        GPT_IMAGE_GENERATION_ENDPOINT: "https://images.example.test/v1/images/generations",
+      },
+    })).rejects.toMatchObject({ status: 503, retryable: true });
+
+    expect(fetchFn).toHaveBeenCalledOnce();
+    expect(onAttempt).toHaveBeenCalledOnce();
+    expect(onAttempt).toHaveBeenCalledWith(1);
+    expect(onRetry).not.toHaveBeenCalled();
   });
 
   it.each([undefined, "gpt-image-2-qwen-fallback"])(

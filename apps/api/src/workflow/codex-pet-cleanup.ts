@@ -42,6 +42,7 @@ const CODEX_PET_NON_TERMINAL_RUN_STATUSES = new Set([
   "queued",
   "base_generating",
   "awaiting_base_review",
+  "awaiting_direction_review",
   "standard_generating",
   "direction_generating",
   "validating",
@@ -114,6 +115,9 @@ export async function executeCodexPetProjectCleanup(args: {
     await deleteObjectRefs(retainedRefs);
     return { deleted: true, objectCount: retainedRefs.length };
   }
+  // New project deletion is a tombstone operation. Keep the legacy cleanup
+  // worker safe for old `status=deleting` rows created before soft delete.
+  if (project.deletedAt) return { deleted: false, objectCount: 0 };
   if (project.status !== "deleting") return { deleted: false, objectCount: 0 };
   const runs = await args.prisma.codexPetRun.findMany({
     where: { projectId: project.id, userId: args.userId },

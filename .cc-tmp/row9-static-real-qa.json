@@ -1,0 +1,40 @@
+{
+  "pass": true,
+  "verdicts": [
+    {
+      "pass": true,
+      "score": 98,
+      "mirrorSafe": false,
+      "identity": true,
+      "structure": true,
+      "semantics": true,
+      "continuity": true,
+      "warnings": [
+        "Horizontal mirroring would reverse the directional meaning, so the opposite-facing row must be generated separately.",
+        "Profile frames naturally occlude one eye and part of the face panel; this is consistent with the registered rotation."
+      ],
+      "failures": [],
+      "repairPrompt": "",
+      "repairRows": [],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    }
+  ],
+  "score": 98,
+  "mirrorSafe": false,
+  "warnings": [
+    "Horizontal mirroring would reverse the directional meaning, so the opposite-facing row must be generated separately.",
+    "Profile frames naturally occlude one eye and part of the face panel; this is consistent with the registered rotation."
+  ],
+  "failures": [],
+  "modelProvenance": {
+    "requestedModel": "gpt-5.6-sol",
+    "actualModels": [
+      "gpt-5.6-sol"
+    ],
+    "route": "chatgpt_model_route"
+  }
+}

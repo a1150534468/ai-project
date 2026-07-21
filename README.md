@@ -1,8 +1,10 @@
 # AI 助手
 
-## 本地开发（推荐）
+多业务 AI 工作台 monorepo：Web / Admin / 桌面端 + Fastify API + 多 Worker + Go 计费服务。完整文档见 [docs/README.md](docs/README.md)。
 
-项目默认采用混合开发模式：PostgreSQL、Redis、MinIO 运行在 Docker 中，API、Billing、Web 和 Admin 直接在本机运行并热更新。
+## 快速开始
+
+混合开发模式：PostgreSQL、Redis、MinIO 跑在 Docker 里，API、Billing、Web、Admin 在本机热更新。
 
 ```bash
 cp .env.example .env.local # 首次使用；已有 .env 可跳过
@@ -14,62 +16,33 @@ pnpm dev
 
 - Web：<http://localhost:5174>
 - Admin：<http://localhost:5175>
-- API：<http://localhost:8090>
+- API：<http://localhost:8090>（Swagger 见 <http://localhost:8090/docs>，[使用说明](docs/reference/api-reference.md)）
 - Billing：<http://localhost:8093>
+- Novel Worker 健康检查：<http://localhost:8091/health>
 - Codex 桌宠 Worker 健康检查：<http://localhost:8092/health>
-- Swagger 接口文档：<http://localhost:8090/docs>（[使用与分组说明](docs/api-reference.md)）
-- Codex 桌宠部署与验收：[docs/codex-pet-workflow.md](docs/codex-pet-workflow.md)
 
-`Ctrl+C` 只停止本机业务服务，Docker 数据层会保留。需要停止数据层时运行：
+`Ctrl+C` 只停止本机业务服务，Docker 数据层会保留；停止数据层用 `pnpm dev:infra:stop`。桌面端按需另开终端 `pnpm dev:desktop`。
+
+模型网关（百炼 / AI Pixel / 生图 / 向量）配置详见 [docs/setup/model-providers.md](docs/setup/model-providers.md)；本地开发细节与常见问题见 [docs/setup/local-dev.md](docs/setup/local-dev.md)。
+
+## 仓库布局
+
+```
+apps/       api（Fastify 单体 + workers）、web、admin、desktop（Electron）
+packages/   db（Prisma）、llm、billing 客户端、novel/article/codex-pet 流水线、connector-protocol
+services/   billing（Go + Gin，独立数据库）
+infra/      docker 镜像与 k8s 部署（部署文档见 docs/setup/deploy-k8s.md）
+docs/       项目文档（架构 / 业务线 / 搭建 / 历史 / 踩坑 / 计划归档 / 参考）
+```
+
+## 常用命令
 
 ```bash
-pnpm dev:infra:stop
+pnpm dev             # 启动混合开发环境
+pnpm test            # turbo 全仓测试
+pnpm typecheck       # 生成 Prisma Client 并全仓类型检查
+pnpm build           # 全仓构建
+pnpm k8s:validate    # 校验 k8s kustomize 配置
 ```
 
-桌面端按需另开终端启动：
-
-```bash
-pnpm dev:desktop
-```
-
-## 阿里云百炼模型配置
-
-对话助手直接使用 Anthropic SDK 调用百炼的 Anthropic Messages 兼容接口，不经过 OpenAI 协议转换。华北 2（北京）地域必须使用同一业务空间的 Workspace ID 和 API Key：
-
-```dotenv
-LLM_PROVIDER=bailian
-BAILIAN_WORKSPACE_ID=你的业务空间ID
-BAILIAN_REGION=cn-beijing
-BAILIAN_API_KEY=该业务空间的API-Key
-LLM_DEFAULT_MODEL=qwen3.7-plus
-CHAT_MULTIMODAL_MODEL=qwen3.7-plus
-```
-
-服务会自动生成 `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/apps/anthropic`，Anthropic SDK 会向其 `/v1/messages` 发起请求。也可用 `BAILIAN_BASE_URL` 显式覆盖完整兼容地址。API Key、Workspace ID 与模型授权不属于同一业务空间时，百炼会返回 `Model.AccessDenied`。
-
-长期记忆、知识库和小说向量记忆默认复用同一个 `BAILIAN_API_KEY`，通过 `https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings` 调用 `text-embedding-v4`，固定输出 1024 维向量。数据库迁移会清除旧 4096 维派生向量、保留原始文档，并为三张向量表建立 HNSW 余弦索引。
-
-图片生成与编辑默认复用 `BAILIAN_WORKSPACE_ID`、`BAILIAN_REGION` 和 `BAILIAN_API_KEY`，直连百炼原生多模态接口，默认模型为 `qwen-image-2.0-pro-2026-04-22`。如图片使用独立百炼凭据，可设置 `IMAGE_API_KEY`，如需覆盖入口可设置 `IMAGE_BASE_URL` 或完整的 `IMAGE_GENERATION_ENDPOINT`。Qwen Image 2.0 的输出总像素范围为 `512*512` 至 `2048*2048`。
-
-主生图工作台还可选择 `gpt-image-2`，通过 OpenAI Images API 兼容协议调用 `GPT_IMAGE_GENERATION_ENDPOINT`（默认 `https://api.ai-pixel.online/v1/images/generations`），凭据使用 `GPT_IMAGE_API_KEY`。带 1～3 张参考图时会复用同一生图模块，通过 multipart `image[]` 调用 `GPT_IMAGE_EDIT_ENDPOINT`；该地址未配置时会从 generations 地址推导 `/edits`，`GPT_IMAGE_EDIT_API_KEY` 未配置时复用 generation key。真实 edits POC 只在部署、网关切换或模型升级时通过 `RUN_GPT_IMAGE_EDIT_POC=1` 显式运行。
-
-Codex 桌宠工作流的第一版模型合同固定为：生图 `gpt-image-2`，主形象选择、身份指南、动作/方向/最终视觉质检 `gpt-5.6-sol`。`PET_VISUAL_QA_MODEL` 只能设为 `gpt-5.6-sol`，并且该模型必须存在于带有效 `CHATGPT_API_KEY`（或复用 `GPT_IMAGE_API_KEY`）的 `CHATGPT_MODELS` 路由中；Worker 在健康就绪前校验此路由，禁止回退到默认 Bailian/Qwen 客户端。
-
-对话助手额外接入 AI Pixel 的 Anthropic Messages 兼容接口。当前只开放 `codex-auto-review`、`gpt-5.4`、`gpt-5.4-mini`、`gpt-5.5`、`gpt-5.6-luna`、`gpt-5.6-sol`、`gpt-5.6-terra`，不会把上游列表中的旧 GPT、音频、Realtime 或图片模型混入对话选项。默认地址为 `CHATGPT_BASE_URL=https://api.ai-pixel.online`；`CHATGPT_API_KEY` 未配置时复用 `GPT_IMAGE_API_KEY`。
-
-真实向量链路可用仓库 POC 验证：
-
-```bash
-set -a; source .env; set +a
-RUN_EMBEDDING_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/memory/__tests__/embedding.poc.test.ts
-```
-
-旧 Anthropic/NewAPI 网关只作为兼容回退：设置 `LLM_PROVIDER=anthropic`，并填写 `LLM_BASE_URL`、`LLM_API_KEY`。
-
-Kubernetes 下的 `http://app.localhost:8080` 是镜像联调环境，不用于日常热更新开发。
-
-如果本地数据库已经手工同步过结构、Prisma 提示迁移记录漂移，可临时跳过启动时迁移：
-
-```bash
-DEV_SKIP_MIGRATIONS=1 pnpm dev
-```
+若本地数据库结构与迁移记录漂移，可临时 `DEV_SKIP_MIGRATIONS=1 pnpm dev` 跳过启动迁移（见 [docs/lessons/](docs/lessons/README.md)）。

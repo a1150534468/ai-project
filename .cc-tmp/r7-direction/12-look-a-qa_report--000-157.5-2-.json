@@ -1,0 +1,354 @@
+{
+  "deterministic": {
+    "diagnostics": [
+      {
+        "index": 0,
+        "sourceBounds": {
+          "left": 117,
+          "top": 69,
+          "right": 316,
+          "bottom": 408,
+          "width": 200,
+          "height": 340
+        },
+        "opaquePixels": 41816,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.7879791259765625,
+        "normalizedBounds": {
+          "left": 43,
+          "top": 15,
+          "right": 148,
+          "bottom": 195,
+          "width": 106,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "sourceBounds": {
+          "left": 108,
+          "top": 68,
+          "right": 272,
+          "bottom": 409,
+          "width": 165,
+          "height": 342
+        },
+        "opaquePixels": 37825,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 197,
+        "chromaCoverage": 0.8083394368489584,
+        "normalizedBounds": {
+          "left": 52,
+          "top": 14,
+          "right": 139,
+          "bottom": 195,
+          "width": 88,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "sourceBounds": {
+          "left": 101,
+          "top": 69,
+          "right": 252,
+          "bottom": 409,
+          "width": 152,
+          "height": 341
+        },
+        "opaquePixels": 31515,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8403269449869791,
+        "normalizedBounds": {
+          "left": 56,
+          "top": 15,
+          "right": 136,
+          "bottom": 195,
+          "width": 81,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "sourceBounds": {
+          "left": 76,
+          "top": 69,
+          "right": 217,
+          "bottom": 409,
+          "width": 142,
+          "height": 341
+        },
+        "opaquePixels": 30530,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.84527587890625,
+        "normalizedBounds": {
+          "left": 58,
+          "top": 15,
+          "right": 133,
+          "bottom": 195,
+          "width": 76,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "sourceBounds": {
+          "left": 150,
+          "top": 27,
+          "right": 286,
+          "bottom": 362,
+          "width": 137,
+          "height": 336
+        },
+        "opaquePixels": 28890,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8535614013671875,
+        "normalizedBounds": {
+          "left": 60,
+          "top": 17,
+          "right": 132,
+          "bottom": 195,
+          "width": 73,
+          "height": 179
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "sourceBounds": {
+          "left": 109,
+          "top": 25,
+          "right": 259,
+          "bottom": 364,
+          "width": 151,
+          "height": 340
+        },
+        "opaquePixels": 33127,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 30,
+        "chromaCoverage": 0.83203125,
+        "normalizedBounds": {
+          "left": 56,
+          "top": 15,
+          "right": 135,
+          "bottom": 195,
+          "width": 80,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 6,
+        "sourceBounds": {
+          "left": 88,
+          "top": 27,
+          "right": 252,
+          "bottom": 361,
+          "width": 165,
+          "height": 335
+        },
+        "opaquePixels": 35703,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 194,
+        "chromaCoverage": 0.8188934326171875,
+        "normalizedBounds": {
+          "left": 52,
+          "top": 18,
+          "right": 139,
+          "bottom": 195,
+          "width": 88,
+          "height": 178
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 7,
+        "sourceBounds": {
+          "left": 52,
+          "top": 27,
+          "right": 243,
+          "bottom": 357,
+          "width": 192,
+          "height": 331
+        },
+        "opaquePixels": 38644,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8040262858072916,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 20,
+          "right": 146,
+          "bottom": 195,
+          "width": 102,
+          "height": 176
+        },
+        "errors": [],
+        "warnings": []
+      }
+    ],
+    "unusedSlotOpaquePixels": [],
+    "chroma": [
+      {
+        "removedPixels": 154778,
+        "softenedPixels": 145,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 158765,
+        "softenedPixels": 161,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 165073,
+        "softenedPixels": 142,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 166068,
+        "softenedPixels": 120,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 167713,
+        "softenedPixels": 104,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 163460,
+        "softenedPixels": 124,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 160883,
+        "softenedPixels": 118,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 157941,
+        "softenedPixels": 137,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      }
+    ],
+    "sourceWidth": 1536,
+    "sourceHeight": 1024,
+    "sharedScale": 0.5321637426900585,
+    "geometry": {
+      "heightRatio": 1.0340909090909092,
+      "widthRatio": 1.452054794520548,
+      "baselineSpreadPixels": 0,
+      "centerSpreadPixels": 0.5,
+      "warnings": []
+    },
+    "jumpingArc": null,
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "visual": {
+    "pass": false,
+    "verdicts": [
+      {
+        "pass": false,
+        "score": 32,
+        "mirrorSafe": false,
+        "identity": true,
+        "structure": false,
+        "semantics": false,
+        "continuity": false,
+        "warnings": [
+          "背景为平整纯色，角色本体未见明显身份或像素风格漂移。",
+          "画面仅可见两个完整姿态，无法形成000至157.5的连续八姿态序列。"
+        ],
+        "failures": [
+          "方向动作序列不完整：缺少六个中间姿态。",
+          "下方姿态是明确的屏幕右向侧面、约090姿态，不符合应位于000至157.5区间末端的渐进近正面姿态。",
+          "两个可见姿态之间没有可验证的连续顺时针转向过渡。"
+        ],
+        "repairPrompt": "重建directions动作组：按000、22.5、45、67.5、90、112.5、135、157.5的顺时针顺序提供完整八帧，保持统一尺寸、基线和像素风格。首帧必须为000上向的背面族，逐帧从背面经屏幕右侧转向近正面；末帧不得停留在090纯右侧面。",
+        "repairRows": [],
+        "modelProvenance": {
+          "requestedModel": "gpt-5.6-sol",
+          "actualModel": "gpt-5.6-sol",
+          "route": "chatgpt_model_route"
+        }
+      }
+    ],
+    "score": 32,
+    "mirrorSafe": false,
+    "warnings": [
+      "背景为平整纯色，角色本体未见明显身份或像素风格漂移。",
+      "画面仅可见两个完整姿态，无法形成000至157.5的连续八姿态序列。"
+    ],
+    "failures": [
+      "方向动作序列不完整：缺少六个中间姿态。",
+      "下方姿态是明确的屏幕右向侧面、约090姿态，不符合应位于000至157.5区间末端的渐进近正面姿态。",
+      "两个可见姿态之间没有可验证的连续顺时针转向过渡。"
+    ],
+    "modelProvenance": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "route": "chatgpt_model_route"
+    }
+  },
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

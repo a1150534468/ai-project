@@ -1,0 +1,610 @@
+{
+  "continuity": {
+    "ok": true,
+    "reviewRequired": true,
+    "semanticAssessment": "not-assessed",
+    "thresholds": {
+      "bboxCenterDeltaPixels": 8,
+      "bboxAreaRatio": 1.15,
+      "alphaMassRatio": 1.18,
+      "alphaDifferenceRatio": 0.18,
+      "alphaDifferenceOutlierMultiplier": 1.45,
+      "baselineDeltaPixels": 8,
+      "bboxDimensionRatio": 1.15
+    },
+    "frames": [
+      {
+        "direction": "000",
+        "row": 9,
+        "column": 0,
+        "bounds": {
+          "left": 43,
+          "top": 18,
+          "right": 147,
+          "bottom": 195,
+          "width": 105,
+          "height": 178
+        },
+        "bboxCenter": {
+          "x": 95,
+          "y": 106.5
+        },
+        "bboxArea": 18690,
+        "alphaMass": 12170.498,
+        "opaquePixels": 12465
+      },
+      {
+        "direction": "022.5",
+        "row": 9,
+        "column": 1,
+        "bounds": {
+          "left": 48,
+          "top": 17,
+          "right": 144,
+          "bottom": 195,
+          "width": 97,
+          "height": 179
+        },
+        "bboxCenter": {
+          "x": 96,
+          "y": 106
+        },
+        "bboxArea": 17363,
+        "alphaMass": 11801.4745,
+        "opaquePixels": 12089
+      },
+      {
+        "direction": "045",
+        "row": 9,
+        "column": 2,
+        "bounds": {
+          "left": 48,
+          "top": 20,
+          "right": 142,
+          "bottom": 195,
+          "width": 95,
+          "height": 176
+        },
+        "bboxCenter": {
+          "x": 95,
+          "y": 107.5
+        },
+        "bboxArea": 16720,
+        "alphaMass": 10860.1451,
+        "opaquePixels": 11097
+      },
+      {
+        "direction": "067.5",
+        "row": 9,
+        "column": 3,
+        "bounds": {
+          "left": 53,
+          "top": 19,
+          "right": 136,
+          "bottom": 195,
+          "width": 84,
+          "height": 177
+        },
+        "bboxCenter": {
+          "x": 94.5,
+          "y": 107
+        },
+        "bboxArea": 14868,
+        "alphaMass": 8715.3608,
+        "opaquePixels": 8914
+      },
+      {
+        "direction": "090",
+        "row": 9,
+        "column": 4,
+        "bounds": {
+          "left": 52,
+          "top": 15,
+          "right": 134,
+          "bottom": 195,
+          "width": 83,
+          "height": 181
+        },
+        "bboxCenter": {
+          "x": 93,
+          "y": 105
+        },
+        "bboxArea": 15023,
+        "alphaMass": 8814.0039,
+        "opaquePixels": 9037
+      },
+      {
+        "direction": "112.5",
+        "row": 9,
+        "column": 5,
+        "bounds": {
+          "left": 52,
+          "top": 15,
+          "right": 142,
+          "bottom": 195,
+          "width": 91,
+          "height": 181
+        },
+        "bboxCenter": {
+          "x": 97,
+          "y": 105
+        },
+        "bboxArea": 16471,
+        "alphaMass": 10686.5216,
+        "opaquePixels": 10916
+      },
+      {
+        "direction": "135",
+        "row": 9,
+        "column": 6,
+        "bounds": {
+          "left": 52,
+          "top": 14,
+          "right": 143,
+          "bottom": 195,
+          "width": 92,
+          "height": 182
+        },
+        "bboxCenter": {
+          "x": 97.5,
+          "y": 104.5
+        },
+        "bboxArea": 16744,
+        "alphaMass": 11202.0784,
+        "opaquePixels": 11465
+      },
+      {
+        "direction": "157.5",
+        "row": 9,
+        "column": 7,
+        "bounds": {
+          "left": 54,
+          "top": 16,
+          "right": 142,
+          "bottom": 195,
+          "width": 89,
+          "height": 180
+        },
+        "bboxCenter": {
+          "x": 98,
+          "y": 105.5
+        },
+        "bboxArea": 16020,
+        "alphaMass": 10037.3765,
+        "opaquePixels": 10250
+      }
+    ],
+    "pairs": [
+      {
+        "from": "000",
+        "to": "022.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 95,
+          "y": 106.5
+        },
+        "toBboxCenter": {
+          "x": 96,
+          "y": 106
+        },
+        "bboxCenterDelta": {
+          "x": 1,
+          "y": -0.5,
+          "distance": 1.118
+        },
+        "fromBboxArea": 18690,
+        "toBboxArea": 17363,
+        "bboxAreaRatio": 1.0764,
+        "bboxAreaRelativeDifference": 0.071,
+        "bboxWidthRatio": 1.0825,
+        "bboxHeightRatio": 1.0056,
+        "fromAlphaMass": 12170.498,
+        "toAlphaMass": 11801.4745,
+        "alphaMassRatio": 1.0313,
+        "alphaMassRelativeDifference": 0.0303,
+        "alphaDifferencePixels": 1714,
+        "alphaDifferenceRatio": 0.0291,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "000",
+            "to": "022.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.0291,
+            "threshold": 0.0221,
+            "message": "000->022.5 alphaDifferenceRatio is 0.0291 (review threshold 0.0221)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0153,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 1714
+            }
+          }
+        ]
+      },
+      {
+        "from": "022.5",
+        "to": "045",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 96,
+          "y": 106
+        },
+        "toBboxCenter": {
+          "x": 95,
+          "y": 107.5
+        },
+        "bboxCenterDelta": {
+          "x": -1,
+          "y": 1.5,
+          "distance": 1.8028
+        },
+        "fromBboxArea": 17363,
+        "toBboxArea": 16720,
+        "bboxAreaRatio": 1.0385,
+        "bboxAreaRelativeDifference": 0.037,
+        "bboxWidthRatio": 1.0211,
+        "bboxHeightRatio": 1.017,
+        "fromAlphaMass": 11801.4745,
+        "toAlphaMass": 10860.1451,
+        "alphaMassRatio": 1.0867,
+        "alphaMassRelativeDifference": 0.0798,
+        "alphaDifferencePixels": 1692,
+        "alphaDifferenceRatio": 0.0305,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "045",
+        "to": "067.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 95,
+          "y": 107.5
+        },
+        "toBboxCenter": {
+          "x": 94.5,
+          "y": 107
+        },
+        "bboxCenterDelta": {
+          "x": -0.5,
+          "y": -0.5,
+          "distance": 0.7071
+        },
+        "fromBboxArea": 16720,
+        "toBboxArea": 14868,
+        "bboxAreaRatio": 1.1246,
+        "bboxAreaRelativeDifference": 0.1108,
+        "bboxWidthRatio": 1.131,
+        "bboxHeightRatio": 1.0057,
+        "fromAlphaMass": 10860.1451,
+        "toAlphaMass": 8715.3608,
+        "alphaMassRatio": 1.2461,
+        "alphaMassRelativeDifference": 0.1975,
+        "alphaDifferencePixels": 2801,
+        "alphaDifferenceRatio": 0.0586,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "alpha-mass-jump",
+            "from": "045",
+            "to": "067.5",
+            "metric": "alphaMassRatio",
+            "value": 1.2461,
+            "threshold": 1.18,
+            "message": "045->067.5 alphaMassRatio is 1.2461 (review threshold 1.18)",
+            "evidence": {
+              "fromAlphaMass": 10860.1451,
+              "toAlphaMass": 8715.3608,
+              "relativeDifference": 0.1975
+            }
+          },
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "045",
+            "to": "067.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.0586,
+            "threshold": 0.0351,
+            "message": "045->067.5 alphaDifferenceRatio is 0.0586 (review threshold 0.0351)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0242,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 2801
+            }
+          }
+        ]
+      },
+      {
+        "from": "067.5",
+        "to": "090",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 94.5,
+          "y": 107
+        },
+        "toBboxCenter": {
+          "x": 93,
+          "y": 105
+        },
+        "bboxCenterDelta": {
+          "x": -1.5,
+          "y": -2,
+          "distance": 2.5
+        },
+        "fromBboxArea": 14868,
+        "toBboxArea": 15023,
+        "bboxAreaRatio": 1.0104,
+        "bboxAreaRelativeDifference": 0.0103,
+        "bboxWidthRatio": 1.012,
+        "bboxHeightRatio": 1.0226,
+        "fromAlphaMass": 8715.3608,
+        "toAlphaMass": 8814.0039,
+        "alphaMassRatio": 1.0113,
+        "alphaMassRelativeDifference": 0.0112,
+        "alphaDifferencePixels": 1124,
+        "alphaDifferenceRatio": 0.0179,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "090",
+        "to": "112.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 93,
+          "y": 105
+        },
+        "toBboxCenter": {
+          "x": 97,
+          "y": 105
+        },
+        "bboxCenterDelta": {
+          "x": 4,
+          "y": 0,
+          "distance": 4
+        },
+        "fromBboxArea": 15023,
+        "toBboxArea": 16471,
+        "bboxAreaRatio": 1.0964,
+        "bboxAreaRelativeDifference": 0.0879,
+        "bboxWidthRatio": 1.0964,
+        "bboxHeightRatio": 1,
+        "fromAlphaMass": 8814.0039,
+        "toAlphaMass": 10686.5216,
+        "alphaMassRatio": 1.2124,
+        "alphaMassRelativeDifference": 0.1752,
+        "alphaDifferencePixels": 2573,
+        "alphaDifferenceRatio": 0.0541,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "alpha-mass-jump",
+            "from": "090",
+            "to": "112.5",
+            "metric": "alphaMassRatio",
+            "value": 1.2124,
+            "threshold": 1.18,
+            "message": "090->112.5 alphaMassRatio is 1.2124 (review threshold 1.18)",
+            "evidence": {
+              "fromAlphaMass": 8814.0039,
+              "toAlphaMass": 10686.5216,
+              "relativeDifference": 0.1752
+            }
+          },
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "090",
+            "to": "112.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.0541,
+            "threshold": 0.0259,
+            "message": "090->112.5 alphaDifferenceRatio is 0.0541 (review threshold 0.0259)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0178,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 2573
+            }
+          }
+        ]
+      },
+      {
+        "from": "112.5",
+        "to": "135",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 97,
+          "y": 105
+        },
+        "toBboxCenter": {
+          "x": 97.5,
+          "y": 104.5
+        },
+        "bboxCenterDelta": {
+          "x": 0.5,
+          "y": -0.5,
+          "distance": 0.7071
+        },
+        "fromBboxArea": 16471,
+        "toBboxArea": 16744,
+        "bboxAreaRatio": 1.0166,
+        "bboxAreaRelativeDifference": 0.0163,
+        "bboxWidthRatio": 1.011,
+        "bboxHeightRatio": 1.0055,
+        "fromAlphaMass": 10686.5216,
+        "toAlphaMass": 11202.0784,
+        "alphaMassRatio": 1.0482,
+        "alphaMassRelativeDifference": 0.046,
+        "alphaDifferencePixels": 1153,
+        "alphaDifferenceRatio": 0.0178,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "135",
+        "to": "157.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 97.5,
+          "y": 104.5
+        },
+        "toBboxCenter": {
+          "x": 98,
+          "y": 105.5
+        },
+        "bboxCenterDelta": {
+          "x": 0.5,
+          "y": 1,
+          "distance": 1.118
+        },
+        "fromBboxArea": 16744,
+        "toBboxArea": 16020,
+        "bboxAreaRatio": 1.0452,
+        "bboxAreaRelativeDifference": 0.0432,
+        "bboxWidthRatio": 1.0337,
+        "bboxHeightRatio": 1.0111,
+        "fromAlphaMass": 11202.0784,
+        "toAlphaMass": 10037.3765,
+        "alphaMassRatio": 1.116,
+        "alphaMassRelativeDifference": 0.104,
+        "alphaDifferencePixels": 1890,
+        "alphaDifferenceRatio": 0.0353,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      }
+    ],
+    "medianAlphaDifferenceRatio": 0.0305,
+    "warnings": [
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "000",
+        "to": "022.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.0291,
+        "threshold": 0.0221,
+        "message": "000->022.5 alphaDifferenceRatio is 0.0291 (review threshold 0.0221)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0153,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 1714
+        }
+      },
+      {
+        "code": "alpha-mass-jump",
+        "from": "045",
+        "to": "067.5",
+        "metric": "alphaMassRatio",
+        "value": 1.2461,
+        "threshold": 1.18,
+        "message": "045->067.5 alphaMassRatio is 1.2461 (review threshold 1.18)",
+        "evidence": {
+          "fromAlphaMass": 10860.1451,
+          "toAlphaMass": 8715.3608,
+          "relativeDifference": 0.1975
+        }
+      },
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "045",
+        "to": "067.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.0586,
+        "threshold": 0.0351,
+        "message": "045->067.5 alphaDifferenceRatio is 0.0586 (review threshold 0.0351)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0242,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 2801
+        }
+      },
+      {
+        "code": "alpha-mass-jump",
+        "from": "090",
+        "to": "112.5",
+        "metric": "alphaMassRatio",
+        "value": 1.2124,
+        "threshold": 1.18,
+        "message": "090->112.5 alphaMassRatio is 1.2124 (review threshold 1.18)",
+        "evidence": {
+          "fromAlphaMass": 8814.0039,
+          "toAlphaMass": 10686.5216,
+          "relativeDifference": 0.1752
+        }
+      },
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "090",
+        "to": "112.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.0541,
+        "threshold": 0.0259,
+        "message": "090->112.5 alphaDifferenceRatio is 0.0541 (review threshold 0.0259)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0178,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 2573
+        }
+      }
+    ],
+    "errors": []
+  },
+  "visualQa": {
+    "pass": false,
+    "verdicts": [
+      {
+        "pass": false,
+        "score": 40,
+        "mirrorSafe": false,
+        "identity": true,
+        "structure": true,
+        "semantics": false,
+        "continuity": false,
+        "warnings": [
+          "The flagged alpha changes at 000→022.5, 045→067.5, and 090→112.5 correspond to uneven silhouette pacing; much of the mass variation is viewpoint-related rather than a clear zoom, but it should be smoothed during repair.",
+          "Cell 5 is approximately the required screen-right profile, and the character's canonical identity remains consistent."
+        ],
+        "failures": [
+          "Cell 1 labeled 000 shows the full white face panel and both eyes—the authoritative 180 DOWN/front appearance—instead of the required 000 UP/back appearance.",
+          "Cells 2–4 depict the down/front-to-right portion of the turn rather than remaining in the required up-to-screen-right quadrant.",
+          "Cells 6–8 move from screen-right toward the back/up side rather than toward down/front; cell 8 is predominantly back-facing with a left-edge face sliver instead of visibly approaching the authoritative bottom-left 180 DOWN/front pose.",
+          "The chronological row advances down→screen-right→up and begins entering the left side, which is the reverse of the required clockwise up→screen-right→down progression. This is a systematic angular registration reversal, not an isolated frame defect."
+        ],
+        "repairPrompt": "Regenerate and register the complete eight-frame review direction row in exact chronological order: 000 UP, 022.5, 045, 067.5, 090 SCREEN-RIGHT, 112.5, 135, 157.5. Cell 1 must match the authoritative UP/back pose with no visible face panel; cells 2–4 must remain in the up-to-right quadrant; cell 5 must match the strict screen-right profile; cells 6–8 must remain in the right-to-down quadrant and progressively reveal more of the white face panel, with cell 8 nearly front/down without crossing to the opposite side. Preserve canonical anatomy, pixel scale, center/baseline, and identity while making every angular step visibly monotonic clockwise. Smooth the flagged silhouette and alpha-mass transitions without zoom, registration snaps, duplicate stalls, or reversal.",
+        "repairRows": [
+          "review"
+        ],
+        "modelProvenance": {
+          "requestedModel": "gpt-5.6-sol",
+          "actualModel": "gpt-5.6-sol",
+          "route": "chatgpt_model_route"
+        }
+      }
+    ],
+    "score": 40,
+    "mirrorSafe": false,
+    "warnings": [
+      "The flagged alpha changes at 000→022.5, 045→067.5, and 090→112.5 correspond to uneven silhouette pacing; much of the mass variation is viewpoint-related rather than a clear zoom, but it should be smoothed during repair.",
+      "Cell 5 is approximately the required screen-right profile, and the character's canonical identity remains consistent."
+    ],
+    "failures": [
+      "Cell 1 labeled 000 shows the full white face panel and both eyes—the authoritative 180 DOWN/front appearance—instead of the required 000 UP/back appearance.",
+      "Cells 2–4 depict the down/front-to-right portion of the turn rather than remaining in the required up-to-screen-right quadrant.",
+      "Cells 6–8 move from screen-right toward the back/up side rather than toward down/front; cell 8 is predominantly back-facing with a left-edge face sliver instead of visibly approaching the authoritative bottom-left 180 DOWN/front pose.",
+      "The chronological row advances down→screen-right→up and begins entering the left side, which is the reverse of the required clockwise up→screen-right→down progression. This is a systematic angular registration reversal, not an isolated frame defect."
+    ],
+    "modelProvenance": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "route": "chatgpt_model_route"
+    }
+  }
+}

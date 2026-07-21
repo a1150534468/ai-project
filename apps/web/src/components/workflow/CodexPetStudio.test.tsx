@@ -84,6 +84,7 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     previewArtifactId: null,
     validationReport: null,
     requestedModel: "gpt-image-2",
+    imageGenerationCallCount: 24,
     modelContractVersion: "gpt-only-v1",
     visualQaModel: "gpt-5.6-sol",
     visualQaActualModels: ["gpt-5.6-sol"],
@@ -165,6 +166,7 @@ function makeClient(args: {
     deleteProject: vi.fn().mockResolvedValue(undefined),
     startRun: vi.fn().mockResolvedValue({ project: { ...project, status: "queued", latestRunId: "run-1" }, run: makeRun({ status: "queued" }) }),
     selectBase: vi.fn().mockResolvedValue(makeRun({ status: "standard_generating", selectedBaseArtifactId: "base-2" })),
+    approveNextImage: vi.fn().mockResolvedValue(makeRun({ status: "direction_generating", imageGenerationApprovalBudget: 1, pendingImageJobKey: null })),
     cancelRun: vi.fn().mockResolvedValue(makeRun({ cancelRequested: true })),
     listEvents: vi.fn().mockImplementation(async (_token: string, _projectId: string, _runId: string, after = 0) => ({
       events: (args.replay ?? []).filter((event) => event.sequence > after),
@@ -233,7 +235,7 @@ describe("CodexPetStudio", () => {
     expect(html).toContain("视觉推理 / QA gpt-5.6-sol");
   });
 
-  it("shows the fixed GPT-5.6 contract and blocks a legacy Qwen request from delivery", async () => {
+  it("shows the frozen selection and blocks an excluded qwen3.7 request from delivery", async () => {
     const run = makeRun({
       status: "ready",
       progressStage: "ready",
@@ -249,10 +251,9 @@ describe("CodexPetStudio", () => {
     const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
     const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
 
-    expect(mounted.container.textContent).toContain("视觉推理 / QA 固定 gpt-5.6-sol");
-    expect(mounted.container.textContent).toContain("不符合 GPT-only · 已阻止交付");
-    expect(mounted.container.textContent).toContain("不会回退到通用聊天模型或 Qwen");
-    expect(mounted.container.textContent).not.toContain("视觉推理 / QA 固定 qwen3.7-plus");
+    expect(mounted.container.textContent).toContain("视觉推理 / QA 请求 qwen3.7-plus");
+    expect(mounted.container.textContent).toContain("来源不一致 · 已阻止交付");
+    expect(mounted.container.textContent).toContain("项目启动时冻结的选择不一致");
     expect(Array.from(mounted.container.querySelectorAll("button"))
       .some((button) => button.textContent?.includes("安装到 Codex"))).toBe(false);
 
@@ -512,6 +513,30 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
+  it("shows the real image-call count and grants exactly one paused direction call", async () => {
+    const run = makeRun({
+      status: "awaiting_direction_review",
+      progressStage: "awaiting_direction_review",
+      progressMessage: "等待批准 look-a",
+      pendingImageJobKey: "look-a",
+      imageGenerationApprovalBudget: 0,
+      imageGenerationCallCount: 24,
+    });
+    const project = makeProject({ status: "awaiting_direction_review", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail });
+    const mounted = await mountStudio({ token: "token", client });
+
+    expect(mounted.container.querySelector('[data-testid="codex-pet-image-call-count"]')?.textContent).toBe("24");
+    const approve = buttonByText(mounted.container, "批准 1 次生图");
+    await act(async () => { approve.click(); });
+    await flushEffects();
+
+    expect(client.approveNextImage).toHaveBeenCalledWith("token", "project-1", "run-1");
+    expect(mounted.container.textContent).toContain("已批准 look-a 的 1 次真实生图调用");
+    await act(async () => { mounted.root.unmount(); });
+  });
+
   it("rejects unsupported and oversized references, uploads at most three, and shows the rights notice", async () => {
     const project = makeProject();
     const detail: CodexPetProjectDetail = { project, latestRun: null, runs: [], artifacts: [], jobs: [] };
@@ -579,31 +604,46 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
-  it("hydrates the durable deleting tombstone when cleanup enqueue returns an error", async () => {
-    const project = makeProject();
-    const deletingProject = makeProject({ status: "deleting" });
+  it("deletes an unselected history item without changing the active workspace", async () => {
+    const project = makeProject({ id: "project-current", name: "当前桌宠" });
+    const historyProject = makeProject({ id: "project-history", name: "历史桌宠", status: "failed" });
     const client = makeClient({
       project,
       detail: { project, latestRun: null, runs: [], artifacts: [], jobs: [] },
     });
-    let detailReads = 0;
-    vi.mocked(client.getProject).mockImplementation(async () => {
-      detailReads += 1;
-      return detailReads === 1
-        ? { project, latestRun: null, runs: [], artifacts: [], jobs: [] }
-        : { project: deletingProject, latestRun: null, runs: [], artifacts: [], jobs: [] };
+    vi.mocked(client.listProjects).mockResolvedValue([summary(project), summary(historyProject)]);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const mounted = await mountStudio({ token: "token", client, initialProjectId: project.id });
+
+    const deleteButton = mounted.container.querySelector<HTMLButtonElement>('button[aria-label="删除项目 历史桌宠"]');
+    if (!deleteButton) throw new Error("history delete button missing");
+    await act(async () => { deleteButton.click(); });
+    await flushEffects();
+
+    expect(client.deleteProject).toHaveBeenCalledWith("token", historyProject.id);
+    expect(mounted.container.textContent).not.toContain(historyProject.name);
+    expect(mounted.container.querySelector<HTMLInputElement>('input[placeholder="例如：码仔"]')?.value).toBe(project.name);
+    expect(mounted.container.textContent).toContain("项目已从历史中删除，数据和产物仍保留");
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining("数据和产物仍会保留"));
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("keeps the history item when soft deletion fails", async () => {
+    const project = makeProject({ name: "保留桌宠" });
+    const client = makeClient({
+      project,
+      detail: { project, latestRun: null, runs: [], artifacts: [], jobs: [] },
     });
-    vi.mocked(client.deleteProject).mockRejectedValue(new Error("桌宠删除任务暂未入队，请重试"));
+    vi.mocked(client.deleteProject).mockRejectedValue(new Error("软删除失败，请重试"));
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const mounted = await mountStudio({ token: "token", client });
 
-    await act(async () => { buttonByText(mounted.container, "删除项目").click(); });
+    await act(async () => { buttonByText(mounted.container, "从历史中删除").click(); });
     await flushEffects();
 
     expect(client.deleteProject).toHaveBeenCalledWith("token", project.id);
-    expect(detailReads).toBeGreaterThan(1);
-    expect(mounted.container.textContent).toContain("正在删除");
-    expect(buttonByText(mounted.container, "开始制作").disabled).toBe(true);
+    expect(mounted.container.textContent).toContain(project.name);
+    expect(mounted.container.textContent).toContain("软删除失败，请重试");
     await act(async () => { mounted.root.unmount(); });
   });
 

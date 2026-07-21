@@ -1,0 +1,823 @@
+{
+  "neutralRegistration": {
+    "ok": false,
+    "neutral": {
+      "bounds": {
+        "left": 42,
+        "top": 14,
+        "right": 149,
+        "bottom": 195,
+        "width": 108,
+        "height": 182
+      },
+      "bodyHeight": 182,
+      "bodyWidth": 108,
+      "lowerBodyAnchorX": 95.59610351846467,
+      "baseline": 195
+    },
+    "frames": [
+      {
+        "index": 0,
+        "geometry": {
+          "bounds": {
+            "left": 54,
+            "top": 55,
+            "right": 136,
+            "bottom": 195,
+            "width": 83,
+            "height": 141
+          },
+          "bodyHeight": 141,
+          "bodyWidth": 83,
+          "lowerBodyAnchorX": 95.04927940492794,
+          "baseline": 195
+        },
+        "heightRatio": 0.7747252747252747,
+        "widthRatio": 0.7685185185185185,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.5468241135367293,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "geometry": {
+          "bounds": {
+            "left": 59,
+            "top": 56,
+            "right": 133,
+            "bottom": 195,
+            "width": 75,
+            "height": 140
+          },
+          "bodyHeight": 140,
+          "bodyWidth": 75,
+          "lowerBodyAnchorX": 95.14631578947369,
+          "baseline": 195
+        },
+        "heightRatio": 0.7692307692307693,
+        "widthRatio": 0.6944444444444444,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.44978772899098374,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "geometry": {
+          "bounds": {
+            "left": 61,
+            "top": 56,
+            "right": 129,
+            "bottom": 195,
+            "width": 69,
+            "height": 140
+          },
+          "bodyHeight": 140,
+          "bodyWidth": 69,
+          "lowerBodyAnchorX": 95.33561218147918,
+          "baseline": 195
+        },
+        "heightRatio": 0.7692307692307693,
+        "widthRatio": 0.6388888888888888,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.26049133698549554,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "geometry": {
+          "bounds": {
+            "left": 62,
+            "top": 55,
+            "right": 127,
+            "bottom": 195,
+            "width": 66,
+            "height": 141
+          },
+          "bodyHeight": 141,
+          "bodyWidth": 66,
+          "lowerBodyAnchorX": 95.40993788819875,
+          "baseline": 195
+        },
+        "heightRatio": 0.7747252747252747,
+        "widthRatio": 0.6111111111111112,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.18616563026591848,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "geometry": {
+          "bounds": {
+            "left": 63,
+            "top": 58,
+            "right": 125,
+            "bottom": 195,
+            "width": 63,
+            "height": 138
+          },
+          "bodyHeight": 138,
+          "bodyWidth": 63,
+          "lowerBodyAnchorX": 95.46609360076408,
+          "baseline": 195
+        },
+        "heightRatio": 0.7582417582417582,
+        "widthRatio": 0.5833333333333334,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.13000991770059045,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "geometry": {
+          "bounds": {
+            "left": 60,
+            "top": 57,
+            "right": 130,
+            "bottom": 195,
+            "width": 71,
+            "height": 139
+          },
+          "bodyHeight": 139,
+          "bodyWidth": 71,
+          "lowerBodyAnchorX": 94.76532769556026,
+          "baseline": 195
+        },
+        "heightRatio": 0.7637362637362637,
+        "widthRatio": 0.6574074074074074,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.830775822904414,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 6,
+        "geometry": {
+          "bounds": {
+            "left": 63,
+            "top": 57,
+            "right": 129,
+            "bottom": 195,
+            "width": 67,
+            "height": 139
+          },
+          "bodyHeight": 139,
+          "bodyWidth": 67,
+          "lowerBodyAnchorX": 95.13313432835821,
+          "baseline": 195
+        },
+        "heightRatio": 0.7637362637362637,
+        "widthRatio": 0.6203703703703703,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.4629691901064632,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 7,
+        "geometry": {
+          "bounds": {
+            "left": 63,
+            "top": 14,
+            "right": 130,
+            "bottom": 154,
+            "width": 68,
+            "height": 141
+          },
+          "bodyHeight": 141,
+          "bodyWidth": 68,
+          "lowerBodyAnchorX": 96.02422407267221,
+          "baseline": 154
+        },
+        "heightRatio": 0.7747252747252747,
+        "widthRatio": 0.6296296296296297,
+        "baselineDeltaPixels": -41,
+        "lowerBodyAnchorDeltaPixels": 0.42812055420753836,
+        "edgePixels": 0,
+        "errors": [
+          "floating-baseline-delta:-41.0:max:2.0"
+        ],
+        "warnings": []
+      }
+    ],
+    "medianHeightRatio": 0.7692307692307693,
+    "medianWidthRatio": 0.6342592592592593,
+    "errors": [
+      "frame-7:floating-baseline-delta:-41.0:max:2.0",
+      "look-scale-too-small:median-height-ratio:0.769:min:0.800"
+    ],
+    "warnings": []
+  },
+  "deterministicContinuity": {
+    "ok": true,
+    "reviewRequired": true,
+    "semanticAssessment": "not-assessed",
+    "thresholds": {
+      "bboxCenterDeltaPixels": 8,
+      "bboxAreaRatio": 1.15,
+      "alphaMassRatio": 1.18,
+      "alphaDifferenceRatio": 0.18,
+      "alphaDifferenceOutlierMultiplier": 1.45,
+      "baselineDeltaPixels": 8,
+      "bboxDimensionRatio": 1.15
+    },
+    "frames": [
+      {
+        "direction": "000",
+        "row": 9,
+        "column": 0,
+        "bounds": {
+          "left": 54,
+          "top": 55,
+          "right": 136,
+          "bottom": 195,
+          "width": 83,
+          "height": 141
+        },
+        "bboxCenter": {
+          "x": 95,
+          "y": 125
+        },
+        "bboxArea": 11703,
+        "alphaMass": 7507.349,
+        "opaquePixels": 7767
+      },
+      {
+        "direction": "022.5",
+        "row": 9,
+        "column": 1,
+        "bounds": {
+          "left": 59,
+          "top": 56,
+          "right": 133,
+          "bottom": 195,
+          "width": 75,
+          "height": 140
+        },
+        "bboxCenter": {
+          "x": 96,
+          "y": 125.5
+        },
+        "bboxArea": 10500,
+        "alphaMass": 7013.0745,
+        "opaquePixels": 7249
+      },
+      {
+        "direction": "045",
+        "row": 9,
+        "column": 2,
+        "bounds": {
+          "left": 61,
+          "top": 56,
+          "right": 129,
+          "bottom": 195,
+          "width": 69,
+          "height": 140
+        },
+        "bboxCenter": {
+          "x": 95,
+          "y": 125.5
+        },
+        "bboxArea": 9660,
+        "alphaMass": 6157.0235,
+        "opaquePixels": 6333
+      },
+      {
+        "direction": "067.5",
+        "row": 9,
+        "column": 3,
+        "bounds": {
+          "left": 62,
+          "top": 55,
+          "right": 127,
+          "bottom": 195,
+          "width": 66,
+          "height": 141
+        },
+        "bboxCenter": {
+          "x": 94.5,
+          "y": 125
+        },
+        "bboxArea": 9306,
+        "alphaMass": 5394.7725,
+        "opaquePixels": 5566
+      },
+      {
+        "direction": "090",
+        "row": 9,
+        "column": 4,
+        "bounds": {
+          "left": 63,
+          "top": 58,
+          "right": 125,
+          "bottom": 195,
+          "width": 63,
+          "height": 138
+        },
+        "bboxCenter": {
+          "x": 94,
+          "y": 126.5
+        },
+        "bboxArea": 8694,
+        "alphaMass": 5083.1412,
+        "opaquePixels": 5255
+      },
+      {
+        "direction": "112.5",
+        "row": 9,
+        "column": 5,
+        "bounds": {
+          "left": 60,
+          "top": 57,
+          "right": 130,
+          "bottom": 195,
+          "width": 71,
+          "height": 139
+        },
+        "bboxCenter": {
+          "x": 95,
+          "y": 126
+        },
+        "bboxArea": 9869,
+        "alphaMass": 6717.498,
+        "opaquePixels": 6945
+      },
+      {
+        "direction": "135",
+        "row": 9,
+        "column": 6,
+        "bounds": {
+          "left": 63,
+          "top": 57,
+          "right": 129,
+          "bottom": 195,
+          "width": 67,
+          "height": 139
+        },
+        "bboxCenter": {
+          "x": 96,
+          "y": 126
+        },
+        "bboxArea": 9313,
+        "alphaMass": 6117.0706,
+        "opaquePixels": 6345
+      },
+      {
+        "direction": "157.5",
+        "row": 9,
+        "column": 7,
+        "bounds": {
+          "left": 63,
+          "top": 14,
+          "right": 130,
+          "bottom": 154,
+          "width": 68,
+          "height": 141
+        },
+        "bboxCenter": {
+          "x": 96.5,
+          "y": 84
+        },
+        "bboxArea": 9588,
+        "alphaMass": 5772.9843,
+        "opaquePixels": 5969
+      }
+    ],
+    "pairs": [
+      {
+        "from": "000",
+        "to": "022.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 95,
+          "y": 125
+        },
+        "toBboxCenter": {
+          "x": 96,
+          "y": 125.5
+        },
+        "bboxCenterDelta": {
+          "x": 1,
+          "y": 0.5,
+          "distance": 1.118
+        },
+        "fromBboxArea": 11703,
+        "toBboxArea": 10500,
+        "bboxAreaRatio": 1.1146,
+        "bboxAreaRelativeDifference": 0.1028,
+        "bboxWidthRatio": 1.1067,
+        "bboxHeightRatio": 1.0071,
+        "fromAlphaMass": 7507.349,
+        "toAlphaMass": 7013.0745,
+        "alphaMassRatio": 1.0705,
+        "alphaMassRelativeDifference": 0.0658,
+        "alphaDifferencePixels": 1295,
+        "alphaDifferenceRatio": 0.0208,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "000",
+            "to": "022.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.0208,
+            "threshold": 0.0189,
+            "message": "000->022.5 alphaDifferenceRatio is 0.0208 (review threshold 0.0189)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0131,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 1295
+            }
+          }
+        ]
+      },
+      {
+        "from": "022.5",
+        "to": "045",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 96,
+          "y": 125.5
+        },
+        "toBboxCenter": {
+          "x": 95,
+          "y": 125.5
+        },
+        "bboxCenterDelta": {
+          "x": -1,
+          "y": 0,
+          "distance": 1
+        },
+        "fromBboxArea": 10500,
+        "toBboxArea": 9660,
+        "bboxAreaRatio": 1.087,
+        "bboxAreaRelativeDifference": 0.08,
+        "bboxWidthRatio": 1.087,
+        "bboxHeightRatio": 1,
+        "fromAlphaMass": 7013.0745,
+        "toAlphaMass": 6157.0235,
+        "alphaMassRatio": 1.139,
+        "alphaMassRelativeDifference": 0.1221,
+        "alphaDifferencePixels": 1452,
+        "alphaDifferenceRatio": 0.0261,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "045",
+        "to": "067.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 95,
+          "y": 125.5
+        },
+        "toBboxCenter": {
+          "x": 94.5,
+          "y": 125
+        },
+        "bboxCenterDelta": {
+          "x": -0.5,
+          "y": -0.5,
+          "distance": 0.7071
+        },
+        "fromBboxArea": 9660,
+        "toBboxArea": 9306,
+        "bboxAreaRatio": 1.038,
+        "bboxAreaRelativeDifference": 0.0366,
+        "bboxWidthRatio": 1.0455,
+        "bboxHeightRatio": 1.0071,
+        "fromAlphaMass": 6157.0235,
+        "toAlphaMass": 5394.7725,
+        "alphaMassRatio": 1.1413,
+        "alphaMassRelativeDifference": 0.1238,
+        "alphaDifferencePixels": 1274,
+        "alphaDifferenceRatio": 0.0236,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "067.5",
+        "to": "090",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 94.5,
+          "y": 125
+        },
+        "toBboxCenter": {
+          "x": 94,
+          "y": 126.5
+        },
+        "bboxCenterDelta": {
+          "x": -0.5,
+          "y": 1.5,
+          "distance": 1.5811
+        },
+        "fromBboxArea": 9306,
+        "toBboxArea": 8694,
+        "bboxAreaRatio": 1.0704,
+        "bboxAreaRelativeDifference": 0.0658,
+        "bboxWidthRatio": 1.0476,
+        "bboxHeightRatio": 1.0217,
+        "fromAlphaMass": 5394.7725,
+        "toAlphaMass": 5083.1412,
+        "alphaMassRatio": 1.0613,
+        "alphaMassRelativeDifference": 0.0578,
+        "alphaDifferencePixels": 718,
+        "alphaDifferenceRatio": 0.0103,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "090",
+        "to": "112.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 94,
+          "y": 126.5
+        },
+        "toBboxCenter": {
+          "x": 95,
+          "y": 126
+        },
+        "bboxCenterDelta": {
+          "x": 1,
+          "y": -0.5,
+          "distance": 1.118
+        },
+        "fromBboxArea": 8694,
+        "toBboxArea": 9869,
+        "bboxAreaRatio": 1.1352,
+        "bboxAreaRelativeDifference": 0.1191,
+        "bboxWidthRatio": 1.127,
+        "bboxHeightRatio": 1.0072,
+        "fromAlphaMass": 5083.1412,
+        "toAlphaMass": 6717.498,
+        "alphaMassRatio": 1.3215,
+        "alphaMassRelativeDifference": 0.2433,
+        "alphaDifferencePixels": 2233,
+        "alphaDifferenceRatio": 0.0466,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "alpha-mass-jump",
+            "from": "090",
+            "to": "112.5",
+            "metric": "alphaMassRatio",
+            "value": 1.3215,
+            "threshold": 1.18,
+            "message": "090->112.5 alphaMassRatio is 1.3215 (review threshold 1.18)",
+            "evidence": {
+              "fromAlphaMass": 5083.1412,
+              "toAlphaMass": 6717.498,
+              "relativeDifference": 0.2433
+            }
+          },
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "090",
+            "to": "112.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.0466,
+            "threshold": 0.0228,
+            "message": "090->112.5 alphaDifferenceRatio is 0.0466 (review threshold 0.0228)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0158,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 2233
+            }
+          }
+        ]
+      },
+      {
+        "from": "112.5",
+        "to": "135",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 95,
+          "y": 126
+        },
+        "toBboxCenter": {
+          "x": 96,
+          "y": 126
+        },
+        "bboxCenterDelta": {
+          "x": 1,
+          "y": 0,
+          "distance": 1
+        },
+        "fromBboxArea": 9869,
+        "toBboxArea": 9313,
+        "bboxAreaRatio": 1.0597,
+        "bboxAreaRelativeDifference": 0.0563,
+        "bboxWidthRatio": 1.0597,
+        "bboxHeightRatio": 1,
+        "fromAlphaMass": 6717.498,
+        "toAlphaMass": 6117.0706,
+        "alphaMassRatio": 1.0982,
+        "alphaMassRelativeDifference": 0.0894,
+        "alphaDifferencePixels": 1223,
+        "alphaDifferenceRatio": 0.0212,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "135",
+        "to": "157.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 96,
+          "y": 126
+        },
+        "toBboxCenter": {
+          "x": 96.5,
+          "y": 84
+        },
+        "bboxCenterDelta": {
+          "x": 0.5,
+          "y": -42,
+          "distance": 42.003
+        },
+        "fromBboxArea": 9313,
+        "toBboxArea": 9588,
+        "bboxAreaRatio": 1.0295,
+        "bboxAreaRelativeDifference": 0.0287,
+        "bboxWidthRatio": 1.0149,
+        "bboxHeightRatio": 1.0144,
+        "fromAlphaMass": 6117.0706,
+        "toAlphaMass": 5772.9843,
+        "alphaMassRatio": 1.0596,
+        "alphaMassRelativeDifference": 0.0563,
+        "alphaDifferencePixels": 6214,
+        "alphaDifferenceRatio": 0.1449,
+        "baselineDeltaPixels": 41,
+        "warnings": [
+          {
+            "code": "bbox-center-jump",
+            "from": "135",
+            "to": "157.5",
+            "metric": "bboxCenterDelta.distance",
+            "value": 42.003,
+            "threshold": 8,
+            "message": "135->157.5 bboxCenterDelta.distance is 42.003 (review threshold 8)",
+            "evidence": {
+              "fromCenterX": 96,
+              "fromCenterY": 126,
+              "toCenterX": 96.5,
+              "toCenterY": 84,
+              "deltaX": 0.5,
+              "deltaY": -42,
+              "crossesAtlasRowBoundary": false
+            }
+          },
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "135",
+            "to": "157.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.1449,
+            "threshold": 0.141,
+            "message": "135->157.5 alphaDifferenceRatio is 0.1449 (review threshold 0.141)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0973,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 6214
+            }
+          },
+          {
+            "code": "baseline-jump",
+            "from": "135",
+            "to": "157.5",
+            "metric": "baselineDeltaPixels",
+            "value": 41,
+            "threshold": 8,
+            "message": "135->157.5 baselineDeltaPixels is 41 (review threshold 8)",
+            "evidence": {
+              "fromBottom": 195,
+              "toBottom": 154
+            }
+          }
+        ]
+      }
+    ],
+    "medianAlphaDifferenceRatio": 0.0236,
+    "warnings": [
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "000",
+        "to": "022.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.0208,
+        "threshold": 0.0189,
+        "message": "000->022.5 alphaDifferenceRatio is 0.0208 (review threshold 0.0189)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0131,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 1295
+        }
+      },
+      {
+        "code": "alpha-mass-jump",
+        "from": "090",
+        "to": "112.5",
+        "metric": "alphaMassRatio",
+        "value": 1.3215,
+        "threshold": 1.18,
+        "message": "090->112.5 alphaMassRatio is 1.3215 (review threshold 1.18)",
+        "evidence": {
+          "fromAlphaMass": 5083.1412,
+          "toAlphaMass": 6717.498,
+          "relativeDifference": 0.2433
+        }
+      },
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "090",
+        "to": "112.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.0466,
+        "threshold": 0.0228,
+        "message": "090->112.5 alphaDifferenceRatio is 0.0466 (review threshold 0.0228)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0158,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 2233
+        }
+      },
+      {
+        "code": "bbox-center-jump",
+        "from": "135",
+        "to": "157.5",
+        "metric": "bboxCenterDelta.distance",
+        "value": 42.003,
+        "threshold": 8,
+        "message": "135->157.5 bboxCenterDelta.distance is 42.003 (review threshold 8)",
+        "evidence": {
+          "fromCenterX": 96,
+          "fromCenterY": 126,
+          "toCenterX": 96.5,
+          "toCenterY": 84,
+          "deltaX": 0.5,
+          "deltaY": -42,
+          "crossesAtlasRowBoundary": false
+        }
+      },
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "135",
+        "to": "157.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.1449,
+        "threshold": 0.141,
+        "message": "135->157.5 alphaDifferenceRatio is 0.1449 (review threshold 0.141)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0973,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 6214
+        }
+      },
+      {
+        "code": "baseline-jump",
+        "from": "135",
+        "to": "157.5",
+        "metric": "baselineDeltaPixels",
+        "value": 41,
+        "threshold": 8,
+        "message": "135->157.5 baselineDeltaPixels is 41 (review threshold 8)",
+        "evidence": {
+          "fromBottom": 195,
+          "toBottom": 154
+        }
+      }
+    ],
+    "errors": []
+  },
+  "failures": [
+    "frame-7:floating-baseline-delta:-41.0:max:2.0",
+    "look-scale-too-small:median-height-ratio:0.769:min:0.800"
+  ],
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [],
+      "routes": []
+    }
+  }
+}

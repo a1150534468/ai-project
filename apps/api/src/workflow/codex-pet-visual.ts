@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonrepair } from "jsonrepair";
 import sharp from "sharp";
+import { buildBailianBaseURL } from "@ai-assistant/llm";
 import type { DirectionBlindAnswerKey } from "@ai-assistant/codex-pet-pipeline";
 import {
   GPT_IMAGE_MODEL,
@@ -15,9 +16,12 @@ import {
 import {
   CodexPetModelContractError,
   CODEX_PET_VISUAL_QA_MODEL,
+  codexPetVisualQaRouteForModel,
   isAllowedCodexPetImageModel,
   isAllowedCodexPetVisualModel,
+  type CodexPetVisualQaRoute,
 } from "./codex-pet-model-contract.js";
+import { CODEX_PET_CARDINAL_APPEARANCE_CONTRACT } from "./codex-pet-prompts.js";
 
 export const DEFAULT_CODEX_PET_VISUAL_QA_MODEL = CODEX_PET_VISUAL_QA_MODEL;
 const DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL = "https://api.ai-pixel.online";
@@ -25,14 +29,16 @@ const DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL = "https://api.ai-pixel.online";
 export interface CodexPetVisualModelProvenance {
   readonly requestedModel: string;
   readonly actualModel: string;
-  readonly route: "chatgpt_model_route" | "injected_test_client";
+  readonly route: CodexPetVisualQaRoute | "injected_test_client";
 }
 
-/** First-version Codex pet visual reasoning is GPT-only by product contract. */
-export function resolveCodexPetVisualQaModel(env: NodeJS.ProcessEnv): string {
-  const model = env.PET_VISUAL_QA_MODEL?.trim() || DEFAULT_CODEX_PET_VISUAL_QA_MODEL;
-  if (model !== DEFAULT_CODEX_PET_VISUAL_QA_MODEL) {
-    throw new CodexPetModelContractError(`PET_VISUAL_QA_MODEL must be ${DEFAULT_CODEX_PET_VISUAL_QA_MODEL} for the Codex pet workflow`);
+/** Resolve and validate the project-selected visual reasoning model. */
+export function resolveCodexPetVisualQaModel(env: NodeJS.ProcessEnv, requestedModel?: string): string {
+  const model = requestedModel?.trim()
+    || env.PET_VISUAL_QA_MODEL?.trim()
+    || DEFAULT_CODEX_PET_VISUAL_QA_MODEL;
+  if (!isAllowedCodexPetVisualModel(model)) {
+    throw new CodexPetModelContractError("PET_VISUAL_QA_MODEL must be an enabled non-qwen3.7 marketplace model");
   }
   return model;
 }
@@ -40,24 +46,36 @@ export function resolveCodexPetVisualQaModel(env: NodeJS.ProcessEnv): string {
 /**
  * The shared LLM client intentionally falls back to its primary provider when
  * a model route is missing. That is useful for ordinary chat, but unsafe for
- * this GPT-only workflow because the primary provider may be Bailian/Qwen.
- * Fail before accepting work instead of sending a GPT model name to the wrong
- * endpoint.
+ * this selectable-model workflow because the primary provider may not match
+ * the frozen model route. Fail before accepting work instead of sending a
+ * selected model name to the wrong endpoint.
  */
-export function assertCodexPetVisualQaRoute(env: NodeJS.ProcessEnv = process.env): {
+export function assertCodexPetVisualQaRoute(env: NodeJS.ProcessEnv = process.env, requestedModel?: string): {
   readonly model: string;
   readonly baseURL: string;
 } {
-  const { model, baseURL } = loadCodexPetVisualQaRoute(env);
+  const { model, baseURL } = loadCodexPetVisualQaRoute(env, requestedModel);
   return { model, baseURL };
 }
 
-function loadCodexPetVisualQaRoute(env: NodeJS.ProcessEnv): {
+function loadCodexPetVisualQaRoute(env: NodeJS.ProcessEnv, requestedModel?: string): {
   readonly model: string;
   readonly baseURL: string;
   readonly apiKey: string;
+  readonly route: CodexPetVisualQaRoute;
 } {
-  const model = resolveCodexPetVisualQaModel(env);
+  const model = resolveCodexPetVisualQaModel(env, requestedModel);
+  const route = codexPetVisualQaRouteForModel(model, env);
+  if (route === "bailian_model_route") {
+    const workspaceId = env.BAILIAN_WORKSPACE_ID?.trim() || "";
+    const baseURL = env.BAILIAN_BASE_URL?.trim()
+      || (workspaceId ? buildBailianBaseURL(workspaceId, env.BAILIAN_REGION ?? "cn-beijing") : "");
+    const apiKey = env.BAILIAN_API_KEY?.trim() || env.DASHSCOPE_API_KEY?.trim() || "";
+    if (!baseURL) throw new CodexPetModelContractError(`${model} requires BAILIAN_WORKSPACE_ID or BAILIAN_BASE_URL`);
+    if (!apiKey) throw new CodexPetModelContractError(`${model} requires BAILIAN_API_KEY or DASHSCOPE_API_KEY`);
+    assertHttpModelRoute(baseURL, "Bailian visual model route");
+    return { model, baseURL, apiKey, route };
+  }
   const configuredModels = env.CHATGPT_MODELS
     ?.split(",")
     .map((candidate) => candidate.trim())
@@ -70,14 +88,18 @@ function loadCodexPetVisualQaRoute(env: NodeJS.ProcessEnv): {
     throw new CodexPetModelContractError(`${model} requires CHATGPT_API_KEY or GPT_IMAGE_API_KEY for the Codex pet workflow`);
   }
   const baseURL = env.CHATGPT_BASE_URL?.trim() || DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL;
+  assertHttpModelRoute(baseURL, "CHATGPT_BASE_URL");
+  return { model, baseURL, apiKey, route };
+}
+
+function assertHttpModelRoute(baseURL: string, label: string): void {
   let parsed: URL;
   try { parsed = new URL(baseURL); } catch {
-    throw new CodexPetModelContractError(`CHATGPT_BASE_URL is invalid for the Codex pet workflow`);
+    throw new CodexPetModelContractError(`${label} is invalid for the Codex pet workflow`);
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-    throw new CodexPetModelContractError(`CHATGPT_BASE_URL must use HTTP(S) for the Codex pet workflow`);
+    throw new CodexPetModelContractError(`${label} must use HTTP(S) for the Codex pet workflow`);
   }
-  return { model, baseURL, apiKey };
 }
 
 function codexPetVisualClient(env: NodeJS.ProcessEnv, injected?: Anthropic): {
@@ -87,14 +109,14 @@ function codexPetVisualClient(env: NodeJS.ProcessEnv, injected?: Anthropic): {
 } {
   const requestedModel = resolveCodexPetVisualQaModel(env);
   if (injected) return { client: injected, requestedModel, route: "injected_test_client" };
-  const route = loadCodexPetVisualQaRoute(env);
+  const route = loadCodexPetVisualQaRoute(env, requestedModel);
   return {
-    // Use the exact GPT route directly. The shared LLM client intentionally
-    // owns a primary-provider fallback (often Bailian/Qwen); that behavior is
-    // useful for ordinary chat but is forbidden by the desktop-pet contract.
+    // Use the exact selected route directly. The shared LLM client intentionally
+    // owns a primary-provider fallback; that behavior is useful for ordinary
+    // chat but is forbidden by the desktop-pet contract.
     client: new Anthropic({ baseURL: route.baseURL, apiKey: route.apiKey }),
     requestedModel,
-    route: "chatgpt_model_route",
+    route: route.route,
   };
 }
 
@@ -110,7 +132,9 @@ function responseModel(message: Anthropic.Message | string, requestedModel: stri
     if (allowMissing) return requestedModel;
     throw new CodexPetModelContractError(`Codex pet visual response did not report its model for requested ${requestedModel}`);
   }
-  if (requestedModel !== CODEX_PET_VISUAL_QA_MODEL || !isAllowedCodexPetVisualModel(actualModel)) {
+  if (!isAllowedCodexPetVisualModel(requestedModel)
+    || !isAllowedCodexPetVisualModel(actualModel)
+    || actualModel !== requestedModel) {
     throw new CodexPetModelContractError(`Codex pet visual model mismatch: requested ${requestedModel}, received ${actualModel || "unknown"}`);
   }
   return actualModel;
@@ -141,10 +165,13 @@ class CodexPetImageModelMismatchError extends CodexPetModelContractError {
   }
 }
 
-function assertCodexPetImageModel(result: ImageGenerationResult): void {
+function assertCodexPetImageModel(result: ImageGenerationResult, requestedModel: string): void {
   const actual = result.actualModel.trim();
-  if (result.requestedModel !== GPT_IMAGE_MODEL
-    || !isAllowedCodexPetImageModel(actual)) {
+  const exactOrRelayAlias = actual === requestedModel
+    || (requestedModel === GPT_IMAGE_MODEL && actual === "gpt-image-2-codex");
+  if (result.requestedModel !== requestedModel
+    || !isAllowedCodexPetImageModel(actual)
+    || !exactOrRelayAlias) {
     throw new CodexPetImageModelMismatchError(result.requestedModel, actual || "unknown");
   }
 }
@@ -235,6 +262,31 @@ export interface DirectionSemanticVerdict {
   readonly verticalEvidence: string;
   readonly reason: string;
   readonly modelProvenance?: CodexPetVisualModelProvenance;
+}
+
+function contradictsCardinalAppearance(direction: string, expected: string, observed: string): boolean {
+  const statement = `${expected} ${observed}`.toLowerCase();
+  const observedText = observed.toLowerCase();
+  switch (direction) {
+    case "000":
+      return /\bfront(?:[- ]?(?:facing|view|portrait))\b|正面|正视/.test(statement)
+        || /\bfront\b|正面|正视/.test(expected.toLowerCase())
+        || /\bfront\b|正面|正视/.test(observedText);
+    case "090":
+      return /\b(?:screen[- ]?left|left[- ]?(?:facing|view|profile))\b|朝左|向左|左侧/.test(statement)
+        || /\bleft\b|左侧|向左|朝左/.test(expected.toLowerCase())
+        || /\bleft\b|左侧|向左|朝左/.test(observedText);
+    case "180":
+      return /\b(?:back|rear)(?:[- ]?(?:facing|view|portrait))\b|背面|后视/.test(statement)
+        || /\b(?:back|rear)\b|背面|后视/.test(expected.toLowerCase())
+        || /\b(?:back|rear)\b|背面|后视/.test(observedText);
+    case "270":
+      return /\b(?:screen[- ]?right|right[- ]?(?:facing|view|profile))\b|朝右|向右|右侧/.test(statement)
+        || /\bright\b|右侧|向右|朝右/.test(expected.toLowerCase())
+        || /\bright\b|右侧|向右|朝右/.test(observedText);
+    default:
+      return false;
+  }
 }
 
 /**
@@ -365,6 +417,7 @@ export function codexPetImageRetryDelayMs(attempt: number, env: NodeJS.ProcessEn
 
 export async function generateCodexPetVisual(input: {
   readonly prompt: string;
+  readonly model?: string;
   readonly references?: readonly ImageBinaryInput[];
   readonly size?: string;
   readonly quality?: "low" | "medium" | "high" | "auto";
@@ -372,11 +425,13 @@ export async function generateCodexPetVisual(input: {
   readonly env?: NodeJS.ProcessEnv;
   readonly signal?: AbortSignal;
   readonly maxAttempts?: number;
+  readonly onAttempt?: (attempt: number) => Promise<void> | void;
   readonly onRetry?: (error: unknown, attempt: number) => Promise<void> | void;
 }): Promise<GeneratedPetVisual> {
   const env = input.env ?? process.env;
   const fetchFn = input.fetchFn ?? fetch;
-  const config = loadImageGenerationConfigForModel(GPT_IMAGE_MODEL, env);
+  const requestedModel = input.model?.trim() || GPT_IMAGE_MODEL;
+  const config = loadImageGenerationConfigForModel(requestedModel, env);
   const maxAttempts = Math.max(1, input.maxAttempts ?? 3);
   // Compact deterministic guidance before entering the retry loop.  Without
   // this normalization, direction rows (which carry canonical, cardinal,
@@ -387,6 +442,7 @@ export async function generateCodexPetVisual(input: {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
+      await input.onAttempt?.(attempt);
       const provider = references.length > 0
         ? await callImageEditDetailed({
             config,
@@ -409,7 +465,7 @@ export async function generateCodexPetVisual(input: {
             env,
             signal: input.signal,
           });
-      assertCodexPetImageModel(provider);
+      assertCodexPetImageModel(provider, requestedModel);
       const binary = await generatedImageBuffer(provider, fetchFn, input.signal);
       const metadata = await sharp(binary.buffer, { limitInputPixels: 40_000_000 }).metadata();
       if (!metadata.width || !metadata.height) throw new Error("image provider returned an unreadable raster");
@@ -689,7 +745,7 @@ export async function runLabeledDirectionSemantics(input: {
     temperature: 0,
     messages: [{ role: "user", content: [
       { type: "image", source: { type: "base64", media_type: "image/png", data: input.sheet.toString("base64") } },
-      { type: "text", text: `Review the labeled neutral plus 16 Codex-pet look poses at displayed size as one clockwise loop. Expected order: ${input.expectedDirections.join(", ")}.${input.identityGuide?.trim() ? ` Approved canonical anatomy guide: ${input.identityGuide.trim()} Use it to identify the real eyes, mouth and movable anatomy; do not interpret fixed markings as gaze features. A feature listed as movable is merely allowed to move when a state needs it; do not require it to move in every animation or frame.` : ""} Return only {"directions":[{"direction":"000","verdict":"pass|warning|fail","expected":"up","observed":"...","horizontalEvidence":"...","verticalEvidence":"...","reason":"..."}]}. Include every direction exactly once. Fail wrong/ambiguous cardinals, wrong quadrant, reversal, visible snap, identity/scale/registration change. Subtle intermediate cues may be warnings.` },
+      { type: "text", text: `Review the labeled neutral plus 16 Codex-pet look poses at displayed size as one clockwise loop. Expected order: ${input.expectedDirections.join(", ")}. ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT}${input.identityGuide?.trim() ? ` Approved canonical anatomy guide: ${input.identityGuide.trim()} Use it to identify the real eyes, mouth and movable anatomy; do not interpret fixed markings as gaze features. A feature listed as movable is merely allowed to move when a state needs it; do not require it to move in every animation or frame.` : ""} Return only {"directions":[{"direction":"000","verdict":"pass|warning|fail","expected":"up","observed":"...","horizontalEvidence":"...","verticalEvidence":"...","reason":"..."}]}. Include every direction exactly once. Fail wrong/ambiguous cardinals, wrong quadrant, reversal, visible snap, identity/scale/registration change. Subtle intermediate cues may be warnings.` },
     ] }],
   }, { signal: input.signal, timeout: 180_000 });
   const message = raw as Anthropic.Message | string;
@@ -701,9 +757,26 @@ export async function runLabeledDirectionSemantics(input: {
   const byDirection = new Map(rawDirections.map((item) => {
     const row = item && typeof item === "object" ? item as Record<string, unknown> : {};
     const direction = typeof row.direction === "string" ? row.direction : "";
-    const verdict = ["pass", "warning", "fail"].includes(String(row.verdict)) ? row.verdict as DirectionSemanticVerdict["verdict"] : "fail";
     const text = (key: string) => typeof row[key] === "string" ? String(row[key]).slice(0, 400) : "";
-    return [direction, { direction, verdict, expected: text("expected"), observed: text("observed"), horizontalEvidence: text("horizontalEvidence"), verticalEvidence: text("verticalEvidence"), reason: text("reason"), modelProvenance: provenance }] as const;
+    const expected = text("expected");
+    const observed = text("observed");
+    const reportedVerdict = ["pass", "warning", "fail"].includes(String(row.verdict))
+      ? row.verdict as DirectionSemanticVerdict["verdict"]
+      : "fail";
+    const contradiction = contradictsCardinalAppearance(direction, expected, observed);
+    const reason = contradiction
+      ? `Rejected stale cardinal semantics for ${direction}: ${text("reason") || observed}`.slice(0, 400)
+      : text("reason");
+    return [direction, {
+      direction,
+      verdict: contradiction ? "fail" as const : reportedVerdict,
+      expected,
+      observed,
+      horizontalEvidence: text("horizontalEvidence"),
+      verticalEvidence: text("verticalEvidence"),
+      reason,
+      modelProvenance: provenance,
+    }] as const;
   }));
   return input.expectedDirections.map((direction) => byDirection.get(direction) ?? {
     direction,

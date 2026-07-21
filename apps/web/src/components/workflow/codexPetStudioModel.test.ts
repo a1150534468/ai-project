@@ -131,7 +131,7 @@ describe("codexPetStudioModel", () => {
     expect(codexPetDisplayProgress({ ...ready, packageArtifactId: null }, 100)).toBe(98);
   });
 
-  it("accepts only the fixed GPT Image and GPT-5.6 model provenance", () => {
+  it("accepts exact selected-model provenance and rejects mismatches", () => {
     const ready = makeRun({
       status: "ready",
       knowledgeDocumentId: "document-1",
@@ -155,6 +155,24 @@ describe("codexPetStudioModel", () => {
       expect(codexPetModelContractState(invalid)).toBe("invalid");
       expect(isCodexPetDeliveryReady(invalid)).toBe(false);
     }
+  });
+
+  it("accepts frozen Bailian and Codex Auto Review provenance", () => {
+    expect(codexPetModelContractState(makeRun({
+      modelContractVersion: "selectable-visual-v2",
+      requestedModel: "qwen-image-2.0-pro-2026-04-22",
+      actualModels: ["qwen-image-2.0-pro-2026-04-22"],
+      visualQaModel: "qwen3.6-flash",
+      visualQaActualModels: ["qwen3.6-flash"],
+      visualQaRoutes: ["bailian_model_route"],
+    }))).toBe("valid");
+
+    expect(codexPetModelContractState(makeRun({
+      modelContractVersion: "selectable-visual-v2",
+      visualQaModel: "codex-auto-review",
+      visualQaActualModels: ["codex-auto-review"],
+      visualQaRoutes: ["chatgpt_model_route"],
+    }))).toBe("valid");
   });
 
   it("accepts the supported validation report status shapes", () => {

@@ -1,0 +1,890 @@
+{
+  "runId": "cpr_3a7a7ee330675f6f5f3b4d58e0ef5b5b",
+  "selectedBaseArtifactId": "01e1fafc-5e57-4e04-b3a5-881b17e34258",
+  "artifacts": [
+    {
+      "id": "01e1fafc-5e57-4e04-b3a5-881b17e34258",
+      "jobKey": "base-candidate-2",
+      "jobAttempt": 1,
+      "kind": "base_candidate",
+      "name": "主形象候选 2",
+      "mime": "image/png",
+      "width": 1205,
+      "height": 1305,
+      "status": "ready",
+      "filename": "base-candidate-2--base_candidate--2--01e1fafc-5e57-4e04-b3a5-881b17e34258.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 242,
+          "totalTokens": 2129,
+          "outputTokens": 1887,
+          "textInputTokens": 242,
+          "imageInputTokens": 0,
+          "imageOutputTokens": 1887
+        },
+        "selected": true,
+        "actualSize": "1205x1305",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1024x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "db580ec8-64ff-40ee-9614-e42fc839af6e"
+      }
+    },
+    {
+      "id": "24d6d399-4987-42b1-a5b0-d48877955a9d",
+      "jobKey": "row-running-right",
+      "jobAttempt": 1,
+      "kind": "pose_board",
+      "name": "running-right 动作组：身份、8 帧结构、动作语义和连续性姿势板 · 第 1 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-running-right--pose_board--running-right-8-1--24d6d399-4987-42b1-a5b0-d48877955a9d.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 3639,
+          "totalTokens": 5011,
+          "outputTokens": 1372,
+          "textInputTokens": 623,
+          "imageInputTokens": 3016,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-running-right",
+        "attempt": 1,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "fce7f570-4231-447c-b9ce-688f0e1cc929"
+      }
+    },
+    {
+      "id": "b7fb6f7c-6af7-4620-ab51-f9bdccde473d",
+      "jobKey": "row-idle",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "idle 动作组：身份、6 帧结构、动作语义和连续性姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-idle--pose_board--idle-6-2--b7fb6f7c-6af7-4620-ab51-f9bdccde473d.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5028,
+          "totalTokens": 6400,
+          "outputTokens": 1372,
+          "textInputTokens": 476,
+          "imageInputTokens": 4552,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-idle",
+        "attempt": 2,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "d104fb6b-6f51-486b-a3d2-526cec65be78"
+      }
+    },
+    {
+      "id": "e5be2fa3-63c3-4d5c-a370-96ad54f152a4",
+      "jobKey": "row-running-left",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "running-left 动作组：身份、8 帧结构、动作语义和连续性姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-running-left--pose_board--running-left-8-2--e5be2fa3-63c3-4d5c-a370-96ad54f152a4.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5093,
+          "totalTokens": 6465,
+          "outputTokens": 1372,
+          "textInputTokens": 541,
+          "imageInputTokens": 4552,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-running-left",
+        "attempt": 2,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "56db901c-8f87-45a4-a492-58cce33ef785"
+      }
+    },
+    {
+      "id": "ec27ae76-2e49-463d-82d2-0db7e9124d16",
+      "jobKey": "row-jumping",
+      "jobAttempt": 1,
+      "kind": "pose_board",
+      "name": "jumping 动作组：身份、5 帧结构、动作语义和连续性姿势板 · 第 1 次",
+      "mime": "image/png",
+      "width": 1983,
+      "height": 793,
+      "status": "ready",
+      "filename": "row-jumping--pose_board--jumping-5-1--ec27ae76-2e49-463d-82d2-0db7e9124d16.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 3623,
+          "totalTokens": 4438,
+          "outputTokens": 815,
+          "textInputTokens": 607,
+          "imageInputTokens": 3016,
+          "imageOutputTokens": 815
+        },
+        "jobKey": "row-jumping",
+        "attempt": 1,
+        "actualSize": "1983x793",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "795f2067-29ae-4d7c-ae4a-5094bc9f1dfa"
+      }
+    },
+    {
+      "id": "515ac07d-a750-4f34-b7cf-9c1be95a99b0",
+      "jobKey": "row-waving",
+      "jobAttempt": 1,
+      "kind": "pose_board",
+      "name": "waving 动作组：身份、4 帧结构、动作语义和连续性姿势板 · 第 1 次",
+      "mime": "image/png",
+      "width": 1254,
+      "height": 1254,
+      "status": "ready",
+      "filename": "row-waving--pose_board--waving-4-1--515ac07d-a750-4f34-b7cf-9c1be95a99b0.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 3374,
+          "totalTokens": 5432,
+          "outputTokens": 2058,
+          "textInputTokens": 358,
+          "imageInputTokens": 3016,
+          "imageOutputTokens": 2058
+        },
+        "jobKey": "row-waving",
+        "attempt": 1,
+        "actualSize": "1254x1254",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "77c40280-bb84-4d06-b5fe-3239296c1bd1"
+      }
+    },
+    {
+      "id": "58a22089-0b38-469e-ba37-8bbadc65b911",
+      "jobKey": "row-running",
+      "jobAttempt": 1,
+      "kind": "pose_board",
+      "name": "running 动作组：身份、6 帧结构、动作语义和连续性姿势板 · 第 1 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-running--pose_board--running-6-1--58a22089-0b38-469e-ba37-8bbadc65b911.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 3508,
+          "totalTokens": 4880,
+          "outputTokens": 1372,
+          "textInputTokens": 492,
+          "imageInputTokens": 3016,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-running",
+        "attempt": 1,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "e8e55947-1e94-4e87-9ca9-2d98154f5f26"
+      }
+    },
+    {
+      "id": "a7610cef-ffdb-41e6-b051-c30214ca4043",
+      "jobKey": "row-failed",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "failed 动作组：身份、8 帧结构、动作语义和连续性姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-failed--pose_board--failed-8-2--a7610cef-ffdb-41e6-b051-c30214ca4043.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5038,
+          "totalTokens": 6410,
+          "outputTokens": 1372,
+          "textInputTokens": 486,
+          "imageInputTokens": 4552,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-failed",
+        "attempt": 2,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "d1234be4-05c3-42d7-94bf-6952ab9eab9f"
+      }
+    },
+    {
+      "id": "5ef0acdf-9210-4ff1-a236-28ac42c2998a",
+      "jobKey": "row-waiting",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "waiting 动作组：身份、6 帧结构、动作语义和连续性姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-waiting--pose_board--waiting-6-2--5ef0acdf-9210-4ff1-a236-28ac42c2998a.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5184,
+          "totalTokens": 6556,
+          "outputTokens": 1372,
+          "textInputTokens": 632,
+          "imageInputTokens": 4552,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-waiting",
+        "attempt": 2,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "41ddf616-3320-493b-b7af-bae3f9186a71"
+      }
+    },
+    {
+      "id": "ee5772bb-b982-4009-b00e-b9ac5d4855c7",
+      "jobKey": "row-review",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "review 动作组：身份、6 帧结构、动作语义和连续性姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "row-review--pose_board--review-6-2--ee5772bb-b982-4009-b00e-b9ac5d4855c7.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5071,
+          "totalTokens": 6443,
+          "outputTokens": 1372,
+          "textInputTokens": 519,
+          "imageInputTokens": 4552,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "row-review",
+        "attempt": 2,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "7f0c275b-8285-40a1-98b8-3f7367829097"
+      }
+    },
+    {
+      "id": "55739315-5790-43e5-8839-24b15fab808c",
+      "jobKey": "standard-atlas",
+      "jobAttempt": 1,
+      "kind": "qa_contact_sheet",
+      "name": "标准动作 Contact Sheet",
+      "mime": "image/png",
+      "width": 768,
+      "height": 936,
+      "status": "ready",
+      "filename": "standard-atlas--qa_contact_sheet--Contact-Sheet--55739315-5790-43e5-8839-24b15fab808c.png",
+      "metadata": {}
+    },
+    {
+      "id": "826957f1-adfa-4300-a460-b8aa86d47614",
+      "jobKey": "standard-atlas",
+      "jobAttempt": 1,
+      "kind": "standard_atlas",
+      "name": "标准 8×9 中间图集",
+      "mime": "image/webp",
+      "width": 1536,
+      "height": 1872,
+      "status": "ready",
+      "filename": "standard-atlas--standard_atlas--8-9--826957f1-adfa-4300-a460-b8aa86d47614.webp",
+      "metadata": {}
+    },
+    {
+      "id": "34518943-1167-46f3-9e4c-9267184b98df",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左姿势板 · 第 1 次",
+      "mime": "image/png",
+      "width": 1254,
+      "height": 1254,
+      "status": "ready",
+      "filename": "look-cardinals--pose_board--000-090-180-270-1--34518943-1167-46f3-9e4c-9267184b98df.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 4277,
+          "totalTokens": 6335,
+          "outputTokens": 2058,
+          "textInputTokens": 397,
+          "imageInputTokens": 3880,
+          "imageOutputTokens": 2058
+        },
+        "jobKey": "look-cardinals",
+        "attempt": 1,
+        "actualSize": "1254x1254",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "394b08d3-c3e3-442f-8a7a-f5ae7c3351e6"
+      }
+    },
+    {
+      "id": "5c5fb174-6261-42f6-bd48-dd1c6d1e15c0",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "qa_report",
+      "name": "四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左失败诊断 · 第 1 次",
+      "mime": "application/json",
+      "width": null,
+      "height": null,
+      "status": "ready",
+      "filename": "look-cardinals--qa_report--000-090-180-270-1--5c5fb174-6261-42f6-bd48-dd1c6d1e15c0.json",
+      "metadata": {
+        "visualQa": {
+          "routes": [
+            "chatgpt_model_route"
+          ],
+          "actualModels": [
+            "gpt-5.6-sol"
+          ],
+          "requestedModel": "gpt-5.6-sol"
+        }
+      }
+    },
+    {
+      "id": "00813238-255b-4f52-8f1d-11f41eac4714",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "pose_board",
+      "name": "四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1254,
+      "height": 1254,
+      "status": "ready",
+      "filename": "look-cardinals--pose_board--000-090-180-270-2--00813238-255b-4f52-8f1d-11f41eac4714.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 4088,
+          "totalTokens": 6146,
+          "outputTokens": 2058,
+          "textInputTokens": 592,
+          "imageInputTokens": 3496,
+          "imageOutputTokens": 2058
+        },
+        "jobKey": "look-cardinals",
+        "attempt": 2,
+        "actualSize": "1254x1254",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "942d53ab-cd55-493a-85da-88b9b16dbff8"
+      }
+    },
+    {
+      "id": "6625e262-916d-4432-b0de-51cc3d472225",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "frame",
+      "name": "look-cardinals · frame 00",
+      "mime": "image/png",
+      "width": 192,
+      "height": 208,
+      "status": "ready",
+      "filename": "look-cardinals--frame--look-cardinals-frame-00--6625e262-916d-4432-b0de-51cc3d472225.png",
+      "metadata": {
+        "index": 0,
+        "jobKey": "look-cardinals",
+        "diagnostics": {
+          "index": 0,
+          "errors": [],
+          "warnings": [],
+          "edgePixels": 0,
+          "opaquePixels": 84147,
+          "sourceBounds": {
+            "top": 52,
+            "left": 219,
+            "right": 503,
+            "width": 285,
+            "bottom": 536,
+            "height": 485
+          },
+          "chromaCoverage": 0.7865636979210386,
+          "componentCount": 1,
+          "normalizedBounds": {
+            "top": 15,
+            "left": 43,
+            "right": 149,
+            "width": 107,
+            "bottom": 195,
+            "height": 181
+          },
+          "internalTransparentPixels": 0
+        }
+      }
+    },
+    {
+      "id": "a2aaf294-5a07-47c8-ade1-323e7519e714",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "frame",
+      "name": "look-cardinals · frame 01",
+      "mime": "image/png",
+      "width": 192,
+      "height": 208,
+      "status": "ready",
+      "filename": "look-cardinals--frame--look-cardinals-frame-01--a2aaf294-5a07-47c8-ade1-323e7519e714.png",
+      "metadata": {
+        "index": 1,
+        "jobKey": "look-cardinals",
+        "diagnostics": {
+          "index": 1,
+          "errors": [],
+          "warnings": [],
+          "edgePixels": 0,
+          "opaquePixels": 64165,
+          "sourceBounds": {
+            "top": 53,
+            "left": 146,
+            "right": 364,
+            "width": 219,
+            "bottom": 538,
+            "height": 486
+          },
+          "chromaCoverage": 0.8372595254992636,
+          "componentCount": 1,
+          "normalizedBounds": {
+            "top": 14,
+            "left": 55,
+            "right": 136,
+            "width": 82,
+            "bottom": 195,
+            "height": 182
+          },
+          "internalTransparentPixels": 0
+        }
+      }
+    },
+    {
+      "id": "fd2ad515-bb53-4604-94ba-64071f597f6a",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "frame",
+      "name": "look-cardinals · frame 02",
+      "mime": "image/png",
+      "width": 192,
+      "height": 208,
+      "status": "ready",
+      "filename": "look-cardinals--frame--look-cardinals-frame-02--fd2ad515-bb53-4604-94ba-64071f597f6a.png",
+      "metadata": {
+        "index": 2,
+        "jobKey": "look-cardinals",
+        "diagnostics": {
+          "index": 2,
+          "errors": [],
+          "warnings": [],
+          "edgePixels": 0,
+          "opaquePixels": 83726,
+          "sourceBounds": {
+            "top": 16,
+            "left": 219,
+            "right": 503,
+            "width": 285,
+            "bottom": 502,
+            "height": 487
+          },
+          "chromaCoverage": 0.7874997774267479,
+          "componentCount": 1,
+          "normalizedBounds": {
+            "top": 14,
+            "left": 43,
+            "right": 149,
+            "width": 107,
+            "bottom": 195,
+            "height": 182
+          },
+          "internalTransparentPixels": 0
+        }
+      }
+    },
+    {
+      "id": "0452cd74-cfb4-47f0-ad51-e79b360ae9b6",
+      "jobKey": "look-cardinals",
+      "jobAttempt": 2,
+      "kind": "frame",
+      "name": "look-cardinals · frame 03",
+      "mime": "image/png",
+      "width": 192,
+      "height": 208,
+      "status": "ready",
+      "filename": "look-cardinals--frame--look-cardinals-frame-03--0452cd74-cfb4-47f0-ad51-e79b360ae9b6.png",
+      "metadata": {
+        "index": 3,
+        "jobKey": "look-cardinals",
+        "diagnostics": {
+          "index": 3,
+          "errors": [],
+          "warnings": [],
+          "edgePixels": 0,
+          "opaquePixels": 62569,
+          "sourceBounds": {
+            "top": 18,
+            "left": 175,
+            "right": 385,
+            "width": 211,
+            "bottom": 502,
+            "height": 485
+          },
+          "chromaCoverage": 0.8412149701497473,
+          "componentCount": 1,
+          "normalizedBounds": {
+            "top": 15,
+            "left": 57,
+            "right": 135,
+            "width": 79,
+            "bottom": 195,
+            "height": 181
+          },
+          "internalTransparentPixels": 0
+        }
+      }
+    },
+    {
+      "id": "1ce2224a-57d0-4df7-b846-1742ec92be21",
+      "jobKey": "cardinal-anchor-strip",
+      "jobAttempt": 1,
+      "kind": "cardinal_anchor_strip",
+      "name": "已批准四方向锚点参考",
+      "mime": "image/png",
+      "width": 384,
+      "height": 416,
+      "status": "ready",
+      "filename": "cardinal-anchor-strip--cardinal_anchor_strip--artifact--1ce2224a-57d0-4df7-b846-1742ec92be21.png",
+      "metadata": {
+        "width": 384,
+        "height": 416,
+        "approved": true,
+        "directions": [
+          "000",
+          "090",
+          "180",
+          "270"
+        ],
+        "cardinalEvidence": [
+          {
+            "direction": "000",
+            "semanticQa": {
+              "pass": true,
+              "score": 97,
+              "failures": [],
+              "warnings": [
+                "侧面圆盘的耳朵/功能舱属性及手爪精确指爪数仍属规范允许的像素级歧义。",
+                "侧面圆盘仍存在耳朵或功能舱的既定语义歧义，但不影响方向判定。"
+              ]
+            },
+            "frameArtifactId": "6625e262-916d-4432-b0de-51cc3d472225",
+            "extractionDiagnostics": {
+              "index": 0,
+              "errors": [],
+              "warnings": [],
+              "edgePixels": 0,
+              "opaquePixels": 84147,
+              "sourceBounds": {
+                "top": 52,
+                "left": 219,
+                "right": 503,
+                "width": 285,
+                "bottom": 536,
+                "height": 485
+              },
+              "chromaCoverage": 0.7865636979210386,
+              "componentCount": 1,
+              "normalizedBounds": {
+                "top": 15,
+                "left": 43,
+                "right": 149,
+                "width": 107,
+                "bottom": 195,
+                "height": 181
+              },
+              "internalTransparentPixels": 0
+            }
+          },
+          {
+            "direction": "090",
+            "semanticQa": {
+              "pass": true,
+              "score": 97,
+              "failures": [],
+              "warnings": [
+                "侧面圆盘的耳朵/功能舱属性及手爪精确指爪数仍属规范允许的像素级歧义。",
+                "侧面圆盘仍存在耳朵或功能舱的既定语义歧义，但不影响方向判定。"
+              ]
+            },
+            "frameArtifactId": "a2aaf294-5a07-47c8-ade1-323e7519e714",
+            "extractionDiagnostics": {
+              "index": 1,
+              "errors": [],
+              "warnings": [],
+              "edgePixels": 0,
+              "opaquePixels": 64165,
+              "sourceBounds": {
+                "top": 53,
+                "left": 146,
+                "right": 364,
+                "width": 219,
+                "bottom": 538,
+                "height": 486
+              },
+              "chromaCoverage": 0.8372595254992636,
+              "componentCount": 1,
+              "normalizedBounds": {
+                "top": 14,
+                "left": 55,
+                "right": 136,
+                "width": 82,
+                "bottom": 195,
+                "height": 182
+              },
+              "internalTransparentPixels": 0
+            }
+          },
+          {
+            "direction": "180",
+            "semanticQa": {
+              "pass": true,
+              "score": 97,
+              "failures": [],
+              "warnings": [
+                "侧面圆盘的耳朵/功能舱属性及手爪精确指爪数仍属规范允许的像素级歧义。",
+                "侧面圆盘仍存在耳朵或功能舱的既定语义歧义，但不影响方向判定。"
+              ]
+            },
+            "frameArtifactId": "fd2ad515-bb53-4604-94ba-64071f597f6a",
+            "extractionDiagnostics": {
+              "index": 2,
+              "errors": [],
+              "warnings": [],
+              "edgePixels": 0,
+              "opaquePixels": 83726,
+              "sourceBounds": {
+                "top": 16,
+                "left": 219,
+                "right": 503,
+                "width": 285,
+                "bottom": 502,
+                "height": 487
+              },
+              "chromaCoverage": 0.7874997774267479,
+              "componentCount": 1,
+              "normalizedBounds": {
+                "top": 14,
+                "left": 43,
+                "right": 149,
+                "width": 107,
+                "bottom": 195,
+                "height": 182
+              },
+              "internalTransparentPixels": 0
+            }
+          },
+          {
+            "direction": "270",
+            "semanticQa": {
+              "pass": true,
+              "score": 97,
+              "failures": [],
+              "warnings": [
+                "侧面圆盘的耳朵/功能舱属性及手爪精确指爪数仍属规范允许的像素级歧义。",
+                "侧面圆盘仍存在耳朵或功能舱的既定语义歧义，但不影响方向判定。"
+              ]
+            },
+            "frameArtifactId": "0452cd74-cfb4-47f0-ad51-e79b360ae9b6",
+            "extractionDiagnostics": {
+              "index": 3,
+              "errors": [],
+              "warnings": [],
+              "edgePixels": 0,
+              "opaquePixels": 62569,
+              "sourceBounds": {
+                "top": 18,
+                "left": 175,
+                "right": 385,
+                "width": 211,
+                "bottom": 502,
+                "height": 485
+              },
+              "chromaCoverage": 0.8412149701497473,
+              "componentCount": 1,
+              "normalizedBounds": {
+                "top": 15,
+                "left": 57,
+                "right": 135,
+                "width": 79,
+                "bottom": 195,
+                "height": 181
+              },
+              "internalTransparentPixels": 0
+            }
+          }
+        ],
+        "sourceBoardArtifactId": "00813238-255b-4f52-8f1d-11f41eac4714",
+        "sourceFrameArtifactIds": [
+          "6625e262-916d-4432-b0de-51cc3d472225",
+          "a2aaf294-5a07-47c8-ade1-323e7519e714",
+          "fd2ad515-bb53-4604-94ba-64071f597f6a",
+          "0452cd74-cfb4-47f0-ad51-e79b360ae9b6"
+        ]
+      }
+    },
+    {
+      "id": "0f1e1247-d086-409e-b1f9-1cd71cb253d1",
+      "jobKey": "look-a",
+      "jobAttempt": 3,
+      "kind": "pose_board",
+      "name": "方向 000 到 157.5 的连续顺时针观察动作姿势板 · 第 1 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "look-a--pose_board--000-157.5-1--0f1e1247-d086-409e-b1f9-1cd71cb253d1.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5029,
+          "totalTokens": 6401,
+          "outputTokens": 1372,
+          "textInputTokens": 492,
+          "imageInputTokens": 4537,
+          "imageOutputTokens": 1372
+        },
+        "jobKey": "look-a",
+        "attempt": 1,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "b54a1363-4c14-4146-b153-21b282c5c4e2"
+      }
+    },
+    {
+      "id": "8fc2105c-45ac-4fb1-912e-5cef912899a9",
+      "jobKey": "look-a",
+      "jobAttempt": 3,
+      "kind": "qa_report",
+      "name": "方向 000 到 157.5 的连续顺时针观察动作失败诊断 · 第 1 次",
+      "mime": "application/json",
+      "width": null,
+      "height": null,
+      "status": "ready",
+      "filename": "look-a--qa_report--000-157.5-1--8fc2105c-45ac-4fb1-912e-5cef912899a9.json",
+      "metadata": {
+        "visualQa": {
+          "routes": [
+            "chatgpt_model_route"
+          ],
+          "actualModels": [
+            "gpt-5.6-sol"
+          ],
+          "requestedModel": "gpt-5.6-sol"
+        }
+      }
+    },
+    {
+      "id": "4f084224-36e5-44c2-8876-642358ef5d58",
+      "jobKey": "look-a",
+      "jobAttempt": 3,
+      "kind": "pose_board",
+      "name": "方向 000 到 157.5 的连续顺时针观察动作姿势板 · 第 2 次",
+      "mime": "image/png",
+      "width": 1536,
+      "height": 1024,
+      "status": "ready",
+      "filename": "look-a--pose_board--000-157.5-2--4f084224-36e5-44c2-8876-642358ef5d58.png",
+      "metadata": {
+        "usage": {
+          "inputTokens": 5180,
+          "totalTokens": 10668,
+          "outputTokens": 5488,
+          "textInputTokens": 643,
+          "imageInputTokens": 4537,
+          "imageOutputTokens": 5488
+        },
+        "jobKey": "look-a",
+        "attempt": 2,
+        "actualSize": "1536x1024",
+        "actualModel": "gpt-image-2-codex",
+        "actualQuality": "auto",
+        "requestedSize": "1536x1024",
+        "requestedModel": "gpt-image-2",
+        "requestedQuality": "low",
+        "upstreamRequestId": "688b6938-d574-4fb9-b336-be162c47dd92"
+      }
+    },
+    {
+      "id": "5f7b4638-292c-4232-9ef0-7f351ec210cd",
+      "jobKey": "look-a",
+      "jobAttempt": 3,
+      "kind": "qa_report",
+      "name": "方向 000 到 157.5 的连续顺时针观察动作失败诊断 · 第 2 次",
+      "mime": "application/json",
+      "width": null,
+      "height": null,
+      "status": "ready",
+      "filename": "look-a--qa_report--000-157.5-2--5f7b4638-292c-4232-9ef0-7f351ec210cd.json",
+      "metadata": {
+        "visualQa": {
+          "routes": [
+            "chatgpt_model_route"
+          ],
+          "actualModels": [
+            "gpt-5.6-sol"
+          ],
+          "requestedModel": "gpt-5.6-sol"
+        }
+      }
+    }
+  ]
+}

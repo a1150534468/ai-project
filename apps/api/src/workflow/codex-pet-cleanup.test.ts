@@ -12,13 +12,14 @@ function fixture(options: {
   refundStatus?: string;
   refundedAt?: Date | null;
   activatedAt?: Date | null;
+  deletedAt?: Date | null;
 } = {}) {
   const tx = {
     document: { deleteMany: vi.fn(async () => ({ count: 1 })) },
     codexPetProject: { deleteMany: vi.fn(async () => ({ count: 1 })) },
   };
   const prisma = {
-    codexPetProject: { findFirst: vi.fn(async () => options.projectMissing ? null : ({ id: "project-1", userId: "user-1", status: options.projectStatus ?? "deleting" })) },
+    codexPetProject: { findFirst: vi.fn(async () => options.projectMissing ? null : ({ id: "project-1", userId: "user-1", status: options.projectStatus ?? "deleting", deletedAt: options.deletedAt ?? null })) },
     codexPetRun: {
       findMany: vi.fn(async () => [{
         id: "run-1",
@@ -47,6 +48,14 @@ function fixture(options: {
 describe("Codex pet durable project cleanup", () => {
   it("does not delete a project that was not marked for deletion", async () => {
     const value = fixture({ projectStatus: "cancelled" });
+    await expect(executeCodexPetProjectCleanup({ prisma: value.prisma, s3: value.s3, userId: "user-1", projectId: "project-1", persistObjectRefs: value.persistObjectRefs }))
+      .resolves.toEqual({ deleted: false, objectCount: 0 });
+    expect(value.send).not.toHaveBeenCalled();
+    expect(value.tx.codexPetProject.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("does not hard-delete a project marked with the soft-delete timestamp", async () => {
+    const value = fixture({ deletedAt: new Date("2026-07-19T00:00:00.000Z") });
     await expect(executeCodexPetProjectCleanup({ prisma: value.prisma, s3: value.s3, userId: "user-1", projectId: "project-1", persistObjectRefs: value.persistObjectRefs }))
       .resolves.toEqual({ deleted: false, objectCount: 0 });
     expect(value.send).not.toHaveBeenCalled();

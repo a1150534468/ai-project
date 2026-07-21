@@ -1,0 +1,1267 @@
+{
+  "artifactId": "0f1e1247-d086-409e-b1f9-1cd71cb253d1",
+  "ok": true,
+  "errors": [],
+  "warnings": [],
+  "validation": {
+    "ok": true,
+    "neutral": {
+      "bounds": {
+        "left": 44,
+        "top": 15,
+        "right": 148,
+        "bottom": 195,
+        "width": 105,
+        "height": 181
+      },
+      "bodyHeight": 181,
+      "bodyWidth": 105,
+      "lowerBodyAnchorX": 96.50576368876081,
+      "baseline": 195
+    },
+    "frames": [
+      {
+        "index": 0,
+        "geometry": {
+          "bounds": {
+            "left": 43,
+            "top": 16,
+            "right": 150,
+            "bottom": 195,
+            "width": 108,
+            "height": 180
+          },
+          "bodyHeight": 180,
+          "bodyWidth": 108,
+          "lowerBodyAnchorX": 96.91868758915834,
+          "baseline": 195
+        },
+        "heightRatio": 0.994475138121547,
+        "widthRatio": 1.0285714285714285,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": 0.41292390039753,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "geometry": {
+          "bounds": {
+            "left": 50,
+            "top": 16,
+            "right": 136,
+            "bottom": 195,
+            "width": 87,
+            "height": 180
+          },
+          "bodyHeight": 180,
+          "bodyWidth": 87,
+          "lowerBodyAnchorX": 96.23051258720048,
+          "baseline": 195
+        },
+        "heightRatio": 0.994475138121547,
+        "widthRatio": 0.8285714285714286,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.27525110156032895,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "geometry": {
+          "bounds": {
+            "left": 55,
+            "top": 15,
+            "right": 139,
+            "bottom": 195,
+            "width": 85,
+            "height": 181
+          },
+          "bodyHeight": 181,
+          "bodyWidth": 85,
+          "lowerBodyAnchorX": 96.0996064184075,
+          "baseline": 195
+        },
+        "heightRatio": 1,
+        "widthRatio": 0.8095238095238095,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.4061572703533045,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "geometry": {
+          "bounds": {
+            "left": 50,
+            "top": 15,
+            "right": 146,
+            "bottom": 195,
+            "width": 97,
+            "height": 181
+          },
+          "bodyHeight": 181,
+          "bodyWidth": 97,
+          "lowerBodyAnchorX": 95.5734149054505,
+          "baseline": 195
+        },
+        "heightRatio": 1,
+        "widthRatio": 0.9238095238095239,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.932348783310303,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "geometry": {
+          "bounds": {
+            "left": 61,
+            "top": 18,
+            "right": 139,
+            "bottom": 195,
+            "width": 79,
+            "height": 178
+          },
+          "bodyHeight": 178,
+          "bodyWidth": 79,
+          "lowerBodyAnchorX": 96.10211946050096,
+          "baseline": 195
+        },
+        "heightRatio": 0.9834254143646409,
+        "widthRatio": 0.7523809523809524,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.40364422825985,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "geometry": {
+          "bounds": {
+            "left": 52,
+            "top": 15,
+            "right": 139,
+            "bottom": 195,
+            "width": 88,
+            "height": 181
+          },
+          "bodyHeight": 181,
+          "bodyWidth": 88,
+          "lowerBodyAnchorX": 95.86817903126916,
+          "baseline": 195
+        },
+        "heightRatio": 1,
+        "widthRatio": 0.8380952380952381,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.6375846574916437,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 6,
+        "geometry": {
+          "bounds": {
+            "left": 48,
+            "top": 17,
+            "right": 145,
+            "bottom": 195,
+            "width": 98,
+            "height": 179
+          },
+          "bodyHeight": 179,
+          "bodyWidth": 98,
+          "lowerBodyAnchorX": 96.46131128174838,
+          "baseline": 195
+        },
+        "heightRatio": 0.988950276243094,
+        "widthRatio": 0.9333333333333333,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": -0.04445240701242881,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 7,
+        "geometry": {
+          "bounds": {
+            "left": 46,
+            "top": 19,
+            "right": 148,
+            "bottom": 195,
+            "width": 103,
+            "height": 177
+          },
+          "bodyHeight": 177,
+          "bodyWidth": 103,
+          "lowerBodyAnchorX": 96.83428399879917,
+          "baseline": 195
+        },
+        "heightRatio": 0.9779005524861878,
+        "widthRatio": 0.9809523809523809,
+        "baselineDeltaPixels": 0,
+        "lowerBodyAnchorDeltaPixels": 0.3285203100383569,
+        "edgePixels": 0,
+        "errors": [],
+        "warnings": []
+      }
+    ],
+    "medianHeightRatio": 0.994475138121547,
+    "medianWidthRatio": 0.8809523809523809,
+    "errors": [],
+    "warnings": []
+  },
+  "diagnostics": [
+    {
+      "index": 0,
+      "sourceBounds": {
+        "left": 140,
+        "top": 104,
+        "right": 341,
+        "bottom": 442,
+        "width": 202,
+        "height": 339
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 140,
+          "top": 104,
+          "right": 341,
+          "bottom": 442,
+          "width": 202,
+          "height": 339
+        },
+        "bodyHeight": 339,
+        "bodyWidth": 202,
+        "lowerBodyAnchorX": 241.0113345832623,
+        "baseline": 442
+      },
+      "normalizedBounds": {
+        "left": 43,
+        "top": 16,
+        "right": 150,
+        "bottom": 195,
+        "width": 108,
+        "height": 180
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 43,
+          "top": 16,
+          "right": 150,
+          "bottom": 195,
+          "width": 108,
+          "height": 180
+        },
+        "bodyHeight": 180,
+        "bodyWidth": 108,
+        "lowerBodyAnchorX": 96.91868758915834,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.7892049153645834,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 1,
+      "sourceBounds": {
+        "left": 102,
+        "top": 106,
+        "right": 264,
+        "bottom": 444,
+        "width": 163,
+        "height": 339
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 102,
+          "top": 106,
+          "right": 264,
+          "bottom": 444,
+          "width": 163,
+          "height": 339
+        },
+        "bodyHeight": 339,
+        "bodyWidth": 163,
+        "lowerBodyAnchorX": 189.27385300668152,
+        "baseline": 444
+      },
+      "normalizedBounds": {
+        "left": 50,
+        "top": 16,
+        "right": 136,
+        "bottom": 195,
+        "width": 87,
+        "height": 180
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 50,
+          "top": 16,
+          "right": 136,
+          "bottom": 195,
+          "width": 87,
+          "height": 180
+        },
+        "bodyHeight": 180,
+        "bodyWidth": 87,
+        "lowerBodyAnchorX": 96.23051258720048,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.8106180826822916,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 2,
+      "sourceBounds": {
+        "left": 92,
+        "top": 107,
+        "right": 250,
+        "bottom": 446,
+        "width": 159,
+        "height": 340
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 92,
+          "top": 107,
+          "right": 250,
+          "bottom": 446,
+          "width": 159,
+          "height": 340
+        },
+        "bodyHeight": 340,
+        "bodyWidth": 159,
+        "lowerBodyAnchorX": 169.26890003582946,
+        "baseline": 446
+      },
+      "normalizedBounds": {
+        "left": 55,
+        "top": 15,
+        "right": 139,
+        "bottom": 195,
+        "width": 85,
+        "height": 181
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 55,
+          "top": 15,
+          "right": 139,
+          "bottom": 195,
+          "width": 85,
+          "height": 181
+        },
+        "bodyHeight": 181,
+        "bodyWidth": 85,
+        "lowerBodyAnchorX": 96.0996064184075,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.809356689453125,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 3,
+      "sourceBounds": {
+        "left": 36,
+        "top": 108,
+        "right": 218,
+        "bottom": 447,
+        "width": 183,
+        "height": 340
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 36,
+          "top": 108,
+          "right": 218,
+          "bottom": 447,
+          "width": 183,
+          "height": 340
+        },
+        "bodyHeight": 340,
+        "bodyWidth": 183,
+        "lowerBodyAnchorX": 122.6405627388794,
+        "baseline": 447
+      },
+      "normalizedBounds": {
+        "left": 50,
+        "top": 15,
+        "right": 146,
+        "bottom": 195,
+        "width": 97,
+        "height": 181
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 50,
+          "top": 15,
+          "right": 146,
+          "bottom": 195,
+          "width": 97,
+          "height": 181
+        },
+        "bodyHeight": 181,
+        "bodyWidth": 97,
+        "lowerBodyAnchorX": 95.5734149054505,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.7875569661458334,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 4,
+      "sourceBounds": {
+        "left": 162,
+        "top": 34,
+        "right": 309,
+        "bottom": 368,
+        "width": 148,
+        "height": 335
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 162,
+          "top": 34,
+          "right": 309,
+          "bottom": 368,
+          "width": 148,
+          "height": 335
+        },
+        "bodyHeight": 335,
+        "bodyWidth": 148,
+        "lowerBodyAnchorX": 228.27194710185705,
+        "baseline": 368
+      },
+      "normalizedBounds": {
+        "left": 61,
+        "top": 18,
+        "right": 139,
+        "bottom": 195,
+        "width": 79,
+        "height": 178
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 61,
+          "top": 18,
+          "right": 139,
+          "bottom": 195,
+          "width": 79,
+          "height": 178
+        },
+        "bodyHeight": 178,
+        "bodyWidth": 79,
+        "lowerBodyAnchorX": 96.10211946050096,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.8459981282552084,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 5,
+      "sourceBounds": {
+        "left": 106,
+        "top": 32,
+        "right": 271,
+        "bottom": 371,
+        "width": 166,
+        "height": 340
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 106,
+          "top": 32,
+          "right": 271,
+          "bottom": 371,
+          "width": 166,
+          "height": 340
+        },
+        "bodyHeight": 340,
+        "bodyWidth": 166,
+        "lowerBodyAnchorX": 189.2144914491449,
+        "baseline": 371
+      },
+      "normalizedBounds": {
+        "left": 52,
+        "top": 15,
+        "right": 139,
+        "bottom": 195,
+        "width": 88,
+        "height": 181
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 52,
+          "top": 15,
+          "right": 139,
+          "bottom": 195,
+          "width": 88,
+          "height": 181
+        },
+        "bodyHeight": 181,
+        "bodyWidth": 88,
+        "lowerBodyAnchorX": 95.86817903126916,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.8048858642578125,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 6,
+      "sourceBounds": {
+        "left": 83,
+        "top": 36,
+        "right": 266,
+        "bottom": 371,
+        "width": 184,
+        "height": 336
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 83,
+          "top": 36,
+          "right": 266,
+          "bottom": 371,
+          "width": 184,
+          "height": 336
+        },
+        "bodyHeight": 336,
+        "bodyWidth": 184,
+        "lowerBodyAnchorX": 174.642697209783,
+        "baseline": 371
+      },
+      "normalizedBounds": {
+        "left": 48,
+        "top": 17,
+        "right": 145,
+        "bottom": 195,
+        "width": 98,
+        "height": 179
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 48,
+          "top": 17,
+          "right": 145,
+          "bottom": 195,
+          "width": 98,
+          "height": 179
+        },
+        "bodyHeight": 179,
+        "bodyWidth": 98,
+        "lowerBodyAnchorX": 96.46131128174838,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.7945963541666666,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 7,
+      "sourceBounds": {
+        "left": 32,
+        "top": 35,
+        "right": 224,
+        "bottom": 367,
+        "width": 193,
+        "height": 333
+      },
+      "sourceGeometry": {
+        "bounds": {
+          "left": 32,
+          "top": 35,
+          "right": 224,
+          "bottom": 367,
+          "width": 193,
+          "height": 333
+        },
+        "bodyHeight": 333,
+        "bodyWidth": 193,
+        "lowerBodyAnchorX": 127.70621872766262,
+        "baseline": 367
+      },
+      "normalizedBounds": {
+        "left": 46,
+        "top": 19,
+        "right": 148,
+        "bottom": 195,
+        "width": 103,
+        "height": 177
+      },
+      "normalizedGeometry": {
+        "bounds": {
+          "left": 46,
+          "top": 19,
+          "right": 148,
+          "bottom": 195,
+          "width": 103,
+          "height": 177
+        },
+        "bodyHeight": 177,
+        "bodyWidth": 103,
+        "lowerBodyAnchorX": 96.83428399879917,
+        "baseline": 195
+      },
+      "chromaCoverage": 0.7983449300130209,
+      "edgePixels": 0,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "continuity": {
+    "ok": true,
+    "reviewRequired": true,
+    "semanticAssessment": "not-assessed",
+    "thresholds": {
+      "bboxCenterDeltaPixels": 8,
+      "bboxAreaRatio": 1.15,
+      "alphaMassRatio": 1.18,
+      "alphaDifferenceRatio": 0.18,
+      "alphaDifferenceOutlierMultiplier": 1.45,
+      "baselineDeltaPixels": 8,
+      "bboxDimensionRatio": 1.15
+    },
+    "frames": [
+      {
+        "direction": "000",
+        "row": 9,
+        "column": 0,
+        "bounds": {
+          "left": 43,
+          "top": 16,
+          "right": 150,
+          "bottom": 195,
+          "width": 108,
+          "height": 180
+        },
+        "bboxCenter": {
+          "x": 96.5,
+          "y": 105.5
+        },
+        "bboxArea": 19440,
+        "alphaMass": 11784.9608,
+        "opaquePixels": 12116
+      },
+      {
+        "direction": "022.5",
+        "row": 9,
+        "column": 1,
+        "bounds": {
+          "left": 50,
+          "top": 16,
+          "right": 136,
+          "bottom": 195,
+          "width": 87,
+          "height": 180
+        },
+        "bboxCenter": {
+          "x": 93,
+          "y": 105.5
+        },
+        "bboxArea": 15660,
+        "alphaMass": 10570.5647,
+        "opaquePixels": 10849
+      },
+      {
+        "direction": "045",
+        "row": 9,
+        "column": 2,
+        "bounds": {
+          "left": 55,
+          "top": 15,
+          "right": 139,
+          "bottom": 195,
+          "width": 85,
+          "height": 181
+        },
+        "bboxCenter": {
+          "x": 97,
+          "y": 105
+        },
+        "bboxArea": 15385,
+        "alphaMass": 10682.0314,
+        "opaquePixels": 10965
+      },
+      {
+        "direction": "067.5",
+        "row": 9,
+        "column": 3,
+        "bounds": {
+          "left": 50,
+          "top": 15,
+          "right": 146,
+          "bottom": 195,
+          "width": 97,
+          "height": 181
+        },
+        "bboxCenter": {
+          "x": 98,
+          "y": 105
+        },
+        "bboxArea": 17557,
+        "alphaMass": 11805.7569,
+        "opaquePixels": 12097
+      },
+      {
+        "direction": "090",
+        "row": 9,
+        "column": 4,
+        "bounds": {
+          "left": 61,
+          "top": 18,
+          "right": 139,
+          "bottom": 195,
+          "width": 79,
+          "height": 178
+        },
+        "bboxCenter": {
+          "x": 100,
+          "y": 106.5
+        },
+        "bboxArea": 14062,
+        "alphaMass": 8599.3569,
+        "opaquePixels": 8819
+      },
+      {
+        "direction": "112.5",
+        "row": 9,
+        "column": 5,
+        "bounds": {
+          "left": 52,
+          "top": 15,
+          "right": 139,
+          "bottom": 195,
+          "width": 88,
+          "height": 181
+        },
+        "bboxCenter": {
+          "x": 95.5,
+          "y": 105
+        },
+        "bboxArea": 15928,
+        "alphaMass": 10843.7961,
+        "opaquePixels": 11116
+      },
+      {
+        "direction": "135",
+        "row": 9,
+        "column": 6,
+        "bounds": {
+          "left": 48,
+          "top": 17,
+          "right": 145,
+          "bottom": 195,
+          "width": 98,
+          "height": 179
+        },
+        "bboxCenter": {
+          "x": 96.5,
+          "y": 106
+        },
+        "bboxArea": 17542,
+        "alphaMass": 11474.4784,
+        "opaquePixels": 11764
+      },
+      {
+        "direction": "157.5",
+        "row": 9,
+        "column": 7,
+        "bounds": {
+          "left": 46,
+          "top": 19,
+          "right": 148,
+          "bottom": 195,
+          "width": 103,
+          "height": 177
+        },
+        "bboxCenter": {
+          "x": 97,
+          "y": 107
+        },
+        "bboxArea": 18231,
+        "alphaMass": 11261.2824,
+        "opaquePixels": 11563
+      }
+    ],
+    "pairs": [
+      {
+        "from": "000",
+        "to": "022.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 96.5,
+          "y": 105.5
+        },
+        "toBboxCenter": {
+          "x": 93,
+          "y": 105.5
+        },
+        "bboxCenterDelta": {
+          "x": -3.5,
+          "y": 0,
+          "distance": 3.5
+        },
+        "fromBboxArea": 19440,
+        "toBboxArea": 15660,
+        "bboxAreaRatio": 1.2414,
+        "bboxAreaRelativeDifference": 0.1944,
+        "bboxWidthRatio": 1.2414,
+        "bboxHeightRatio": 1,
+        "fromAlphaMass": 11784.9608,
+        "toAlphaMass": 10570.5647,
+        "alphaMassRatio": 1.1149,
+        "alphaMassRelativeDifference": 0.103,
+        "alphaDifferencePixels": 2438,
+        "alphaDifferenceRatio": 0.047,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "bbox-area-jump",
+            "from": "000",
+            "to": "022.5",
+            "metric": "bboxAreaRatio",
+            "value": 1.2414,
+            "threshold": 1.15,
+            "message": "000->022.5 bboxAreaRatio is 1.2414 (review threshold 1.15)",
+            "evidence": {
+              "fromBboxArea": 19440,
+              "toBboxArea": 15660,
+              "relativeDifference": 0.1944
+            }
+          },
+          {
+            "code": "bbox-dimension-jump",
+            "from": "000",
+            "to": "022.5",
+            "metric": "maxBboxDimensionRatio",
+            "value": 1.2414,
+            "threshold": 1.15,
+            "message": "000->022.5 maxBboxDimensionRatio is 1.2414 (review threshold 1.15)",
+            "evidence": {
+              "bboxWidthRatio": 1.2414,
+              "bboxHeightRatio": 1
+            }
+          },
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "000",
+            "to": "022.5",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.047,
+            "threshold": 0.0225,
+            "message": "000->022.5 alphaDifferenceRatio is 0.047 (review threshold 0.0225)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0156,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 2438
+            }
+          }
+        ]
+      },
+      {
+        "from": "022.5",
+        "to": "045",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 93,
+          "y": 105.5
+        },
+        "toBboxCenter": {
+          "x": 97,
+          "y": 105
+        },
+        "bboxCenterDelta": {
+          "x": 4,
+          "y": -0.5,
+          "distance": 4.0311
+        },
+        "fromBboxArea": 15660,
+        "toBboxArea": 15385,
+        "bboxAreaRatio": 1.0179,
+        "bboxAreaRelativeDifference": 0.0176,
+        "bboxWidthRatio": 1.0235,
+        "bboxHeightRatio": 1.0056,
+        "fromAlphaMass": 10570.5647,
+        "toAlphaMass": 10682.0314,
+        "alphaMassRatio": 1.0105,
+        "alphaMassRelativeDifference": 0.0104,
+        "alphaDifferencePixels": 1772,
+        "alphaDifferenceRatio": 0.0311,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "045",
+        "to": "067.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 97,
+          "y": 105
+        },
+        "toBboxCenter": {
+          "x": 98,
+          "y": 105
+        },
+        "bboxCenterDelta": {
+          "x": 1,
+          "y": 0,
+          "distance": 1
+        },
+        "fromBboxArea": 15385,
+        "toBboxArea": 17557,
+        "bboxAreaRatio": 1.1412,
+        "bboxAreaRelativeDifference": 0.1237,
+        "bboxWidthRatio": 1.1412,
+        "bboxHeightRatio": 1,
+        "fromAlphaMass": 10682.0314,
+        "toAlphaMass": 11805.7569,
+        "alphaMassRatio": 1.1052,
+        "alphaMassRelativeDifference": 0.0952,
+        "alphaDifferencePixels": 2367,
+        "alphaDifferenceRatio": 0.0452,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "067.5",
+        "to": "090",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 98,
+          "y": 105
+        },
+        "toBboxCenter": {
+          "x": 100,
+          "y": 106.5
+        },
+        "bboxCenterDelta": {
+          "x": 2,
+          "y": 1.5,
+          "distance": 2.5
+        },
+        "fromBboxArea": 17557,
+        "toBboxArea": 14062,
+        "bboxAreaRatio": 1.2485,
+        "bboxAreaRelativeDifference": 0.1991,
+        "bboxWidthRatio": 1.2278,
+        "bboxHeightRatio": 1.0169,
+        "fromAlphaMass": 11805.7569,
+        "toAlphaMass": 8599.3569,
+        "alphaMassRatio": 1.3729,
+        "alphaMassRelativeDifference": 0.2716,
+        "alphaDifferencePixels": 4112,
+        "alphaDifferenceRatio": 0.0906,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "bbox-area-jump",
+            "from": "067.5",
+            "to": "090",
+            "metric": "bboxAreaRatio",
+            "value": 1.2485,
+            "threshold": 1.15,
+            "message": "067.5->090 bboxAreaRatio is 1.2485 (review threshold 1.15)",
+            "evidence": {
+              "fromBboxArea": 17557,
+              "toBboxArea": 14062,
+              "relativeDifference": 0.1991
+            }
+          },
+          {
+            "code": "bbox-dimension-jump",
+            "from": "067.5",
+            "to": "090",
+            "metric": "maxBboxDimensionRatio",
+            "value": 1.2278,
+            "threshold": 1.15,
+            "message": "067.5->090 maxBboxDimensionRatio is 1.2278 (review threshold 1.15)",
+            "evidence": {
+              "bboxWidthRatio": 1.2278,
+              "bboxHeightRatio": 1.0169
+            }
+          },
+          {
+            "code": "alpha-mass-jump",
+            "from": "067.5",
+            "to": "090",
+            "metric": "alphaMassRatio",
+            "value": 1.3729,
+            "threshold": 1.18,
+            "message": "067.5->090 alphaMassRatio is 1.3729 (review threshold 1.18)",
+            "evidence": {
+              "fromAlphaMass": 11805.7569,
+              "toAlphaMass": 8599.3569,
+              "relativeDifference": 0.2716
+            }
+          },
+          {
+            "code": "alpha-difference-local-outlier",
+            "from": "067.5",
+            "to": "090",
+            "metric": "alphaDifferenceRatio",
+            "value": 0.0906,
+            "threshold": 0.0813,
+            "message": "067.5->090 alphaDifferenceRatio is 0.0906 (review threshold 0.0813)",
+            "evidence": {
+              "neighborAverageAlphaDifferenceRatio": 0.0561,
+              "outlierMultiplier": 1.45,
+              "alphaDifferencePixels": 4112
+            }
+          }
+        ]
+      },
+      {
+        "from": "090",
+        "to": "112.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 100,
+          "y": 106.5
+        },
+        "toBboxCenter": {
+          "x": 95.5,
+          "y": 105
+        },
+        "bboxCenterDelta": {
+          "x": -4.5,
+          "y": -1.5,
+          "distance": 4.7434
+        },
+        "fromBboxArea": 14062,
+        "toBboxArea": 15928,
+        "bboxAreaRatio": 1.1327,
+        "bboxAreaRelativeDifference": 0.1172,
+        "bboxWidthRatio": 1.1139,
+        "bboxHeightRatio": 1.0169,
+        "fromAlphaMass": 8599.3569,
+        "toAlphaMass": 10843.7961,
+        "alphaMassRatio": 1.261,
+        "alphaMassRelativeDifference": 0.207,
+        "alphaDifferencePixels": 3144,
+        "alphaDifferenceRatio": 0.067,
+        "baselineDeltaPixels": 0,
+        "warnings": [
+          {
+            "code": "alpha-mass-jump",
+            "from": "090",
+            "to": "112.5",
+            "metric": "alphaMassRatio",
+            "value": 1.261,
+            "threshold": 1.18,
+            "message": "090->112.5 alphaMassRatio is 1.261 (review threshold 1.18)",
+            "evidence": {
+              "fromAlphaMass": 8599.3569,
+              "toAlphaMass": 10843.7961,
+              "relativeDifference": 0.207
+            }
+          }
+        ]
+      },
+      {
+        "from": "112.5",
+        "to": "135",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 95.5,
+          "y": 105
+        },
+        "toBboxCenter": {
+          "x": 96.5,
+          "y": 106
+        },
+        "bboxCenterDelta": {
+          "x": 1,
+          "y": 1,
+          "distance": 1.4142
+        },
+        "fromBboxArea": 15928,
+        "toBboxArea": 17542,
+        "bboxAreaRatio": 1.1013,
+        "bboxAreaRelativeDifference": 0.092,
+        "bboxWidthRatio": 1.1136,
+        "bboxHeightRatio": 1.0112,
+        "fromAlphaMass": 10843.7961,
+        "toAlphaMass": 11474.4784,
+        "alphaMassRatio": 1.0582,
+        "alphaMassRelativeDifference": 0.055,
+        "alphaDifferencePixels": 1902,
+        "alphaDifferenceRatio": 0.0338,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      },
+      {
+        "from": "135",
+        "to": "157.5",
+        "crossesAtlasRowBoundary": false,
+        "wrapsLoop": false,
+        "fromBboxCenter": {
+          "x": 96.5,
+          "y": 106
+        },
+        "toBboxCenter": {
+          "x": 97,
+          "y": 107
+        },
+        "bboxCenterDelta": {
+          "x": 0.5,
+          "y": 1,
+          "distance": 1.118
+        },
+        "fromBboxArea": 17542,
+        "toBboxArea": 18231,
+        "bboxAreaRatio": 1.0393,
+        "bboxAreaRelativeDifference": 0.0378,
+        "bboxWidthRatio": 1.051,
+        "bboxHeightRatio": 1.0113,
+        "fromAlphaMass": 11474.4784,
+        "toAlphaMass": 11261.2824,
+        "alphaMassRatio": 1.0189,
+        "alphaMassRelativeDifference": 0.0186,
+        "alphaDifferencePixels": 1592,
+        "alphaDifferenceRatio": 0.0252,
+        "baselineDeltaPixels": 0,
+        "warnings": []
+      }
+    ],
+    "medianAlphaDifferenceRatio": 0.0452,
+    "warnings": [
+      {
+        "code": "bbox-area-jump",
+        "from": "000",
+        "to": "022.5",
+        "metric": "bboxAreaRatio",
+        "value": 1.2414,
+        "threshold": 1.15,
+        "message": "000->022.5 bboxAreaRatio is 1.2414 (review threshold 1.15)",
+        "evidence": {
+          "fromBboxArea": 19440,
+          "toBboxArea": 15660,
+          "relativeDifference": 0.1944
+        }
+      },
+      {
+        "code": "bbox-dimension-jump",
+        "from": "000",
+        "to": "022.5",
+        "metric": "maxBboxDimensionRatio",
+        "value": 1.2414,
+        "threshold": 1.15,
+        "message": "000->022.5 maxBboxDimensionRatio is 1.2414 (review threshold 1.15)",
+        "evidence": {
+          "bboxWidthRatio": 1.2414,
+          "bboxHeightRatio": 1
+        }
+      },
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "000",
+        "to": "022.5",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.047,
+        "threshold": 0.0225,
+        "message": "000->022.5 alphaDifferenceRatio is 0.047 (review threshold 0.0225)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0156,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 2438
+        }
+      },
+      {
+        "code": "bbox-area-jump",
+        "from": "067.5",
+        "to": "090",
+        "metric": "bboxAreaRatio",
+        "value": 1.2485,
+        "threshold": 1.15,
+        "message": "067.5->090 bboxAreaRatio is 1.2485 (review threshold 1.15)",
+        "evidence": {
+          "fromBboxArea": 17557,
+          "toBboxArea": 14062,
+          "relativeDifference": 0.1991
+        }
+      },
+      {
+        "code": "bbox-dimension-jump",
+        "from": "067.5",
+        "to": "090",
+        "metric": "maxBboxDimensionRatio",
+        "value": 1.2278,
+        "threshold": 1.15,
+        "message": "067.5->090 maxBboxDimensionRatio is 1.2278 (review threshold 1.15)",
+        "evidence": {
+          "bboxWidthRatio": 1.2278,
+          "bboxHeightRatio": 1.0169
+        }
+      },
+      {
+        "code": "alpha-mass-jump",
+        "from": "067.5",
+        "to": "090",
+        "metric": "alphaMassRatio",
+        "value": 1.3729,
+        "threshold": 1.18,
+        "message": "067.5->090 alphaMassRatio is 1.3729 (review threshold 1.18)",
+        "evidence": {
+          "fromAlphaMass": 11805.7569,
+          "toAlphaMass": 8599.3569,
+          "relativeDifference": 0.2716
+        }
+      },
+      {
+        "code": "alpha-difference-local-outlier",
+        "from": "067.5",
+        "to": "090",
+        "metric": "alphaDifferenceRatio",
+        "value": 0.0906,
+        "threshold": 0.0813,
+        "message": "067.5->090 alphaDifferenceRatio is 0.0906 (review threshold 0.0813)",
+        "evidence": {
+          "neighborAverageAlphaDifferenceRatio": 0.0561,
+          "outlierMultiplier": 1.45,
+          "alphaDifferencePixels": 4112
+        }
+      },
+      {
+        "code": "alpha-mass-jump",
+        "from": "090",
+        "to": "112.5",
+        "metric": "alphaMassRatio",
+        "value": 1.261,
+        "threshold": 1.18,
+        "message": "090->112.5 alphaMassRatio is 1.261 (review threshold 1.18)",
+        "evidence": {
+          "fromAlphaMass": 8599.3569,
+          "toAlphaMass": 10843.7961,
+          "relativeDifference": 0.207
+        }
+      }
+    ],
+    "errors": []
+  }
+}

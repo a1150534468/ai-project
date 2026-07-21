@@ -601,7 +601,7 @@ export async function persistOrResumeCodexPetFinalPackage(
     throw error;
   }
   if (!codexPetValidationPassed(initialized.output.report)) {
-    throw new Error("最终打包验证报告不满足 GPT-only 交付合同");
+    throw new Error("最终打包验证报告不满足可选视觉模型交付合同");
   }
   if (!input.seed) {
     const recoverableArtifacts = await input.prisma.codexPetArtifact.count({

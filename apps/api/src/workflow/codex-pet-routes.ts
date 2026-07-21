@@ -9,6 +9,8 @@ import { getPrisma, getRedis } from "@ai-assistant/db";
 import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
 import { enqueueCodexPetRun } from "./codex-pet-queue.js";
 import {
+  GPT_IMAGE_MODEL,
+  IMAGE_GENERATION_MODELS,
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
   isVerifiedWorkflowImageObjectKeyForUser,
@@ -25,10 +27,13 @@ import {
   reconcileCodexPetRunBilling,
 } from "./codex-pet-billing.js";
 import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
-import { assertCodexPetImageRoute, CODEX_PET_MODEL_CONTRACT_VERSION } from "./codex-pet-model-contract.js";
+import {
+  assertCodexPetImageRoute,
+  CODEX_PET_MODEL_CONTRACT_VERSION,
+  CODEX_PET_VISUAL_QA_MODEL,
+} from "./codex-pet-model-contract.js";
 import {
   assertCodexPetVisualQaRoute,
-  resolveCodexPetVisualQaModel,
 } from "./codex-pet-visual.js";
 
 export { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
@@ -67,6 +72,7 @@ const ACTIVE_RUN_STATUSES = [
   "queued",
   "base_generating",
   "awaiting_base_review",
+  "awaiting_direction_review",
   "standard_generating",
   "direction_generating",
   "validating",
@@ -104,6 +110,8 @@ const projectFieldsSchema = z.object({
   styleNotes: z.string().trim().max(1_000).default(""),
   referenceAssetIds: z.array(idSchema).max(3).default([]),
   autoContinue: z.boolean().default(false),
+  imageModel: z.enum(IMAGE_GENERATION_MODELS).default(GPT_IMAGE_MODEL),
+  visualQaModel: z.string().trim().min(1).max(128).default(CODEX_PET_VISUAL_QA_MODEL),
 });
 
 const createProjectSchema = projectFieldsSchema.extend({
@@ -145,6 +153,9 @@ export interface CodexPetBilling {
   }) => Promise<{ readonly charged: number }>;
   readonly refundResource: (operationId: string) => Promise<{ readonly success: boolean }>;
   readonly listResourcePrices?: () => Promise<{ readonly data: readonly ResourcePrice[] }>;
+  readonly listEnabledModels?: () => Promise<{
+    readonly data: readonly { readonly model: string; readonly displayName: string; readonly maxOutputTokens?: number }[];
+  }>;
 }
 
 export interface CodexPetArtifactShape {
@@ -188,7 +199,7 @@ export interface CodexPetRouteDeps {
     readonly objectKey: string;
     readonly mime: string;
   }) => Promise<boolean>;
-  /** Required durable retry hook for every project-deletion path. */
+  /** Legacy hard-cleanup hook for pre-soft-delete tombstones. */
   readonly enqueueProjectCleanup?: (input: { readonly userId: string; readonly projectId: string }) => Promise<void>;
   readonly artifactPreviewUrl?: (
     artifact: CodexPetArtifactShape,
@@ -217,9 +228,12 @@ type ProjectShape = {
   readonly styleNotes: string;
   readonly referenceAssetIds: readonly string[];
   readonly autoContinue: boolean;
+  readonly imageModel: string;
+  readonly visualQaModel: string;
   readonly status: string;
   readonly latestRunId: string | null;
   readonly createIdempotencyKey: string | null;
+  readonly deletedAt?: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 };
@@ -254,6 +268,10 @@ type RunShape = {
   readonly previewArtifactId: string | null;
   readonly validationReport: unknown;
   readonly requestedModel: string;
+  readonly visualQaModel: string;
+  readonly imageGenerationCallCount: number;
+  readonly imageGenerationApprovalBudget: number;
+  readonly pendingImageJobKey: string | null;
   readonly actualModels: readonly string[];
   readonly usage: unknown;
   readonly knowledgeDocumentId: string | null;
@@ -319,6 +337,8 @@ function serializeProject(project: ProjectShape) {
     styleNotes: project.styleNotes,
     referenceAssetIds: [...project.referenceAssetIds],
     autoContinue: project.autoContinue,
+    imageModel: project.imageModel || GPT_IMAGE_MODEL,
+    visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
     status: project.status,
     latestRunId: project.latestRunId,
     createdAt: project.createdAt.toISOString(),
@@ -377,11 +397,14 @@ function serializeRun(run: RunShape) {
     previewArtifactId: run.previewArtifactId,
     validationReport: run.validationReport,
     requestedModel: run.requestedModel,
-    modelContractVersion: typeof inputSnapshot.modelContractVersion === "string"
-      ? inputSnapshot.modelContractVersion
-      : "",
+    imageGenerationCallCount: run.imageGenerationCallCount,
+    imageGenerationApprovalBudget: run.imageGenerationApprovalBudget,
+    pendingImageJobKey: run.pendingImageJobKey,
     visualQaModel: typeof inputSnapshot.visualQaModel === "string"
       ? inputSnapshot.visualQaModel
+      : run.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
+    modelContractVersion: typeof inputSnapshot.modelContractVersion === "string"
+      ? inputSnapshot.modelContractVersion
       : "",
     visualQaActualModels,
     visualQaRoutes,
@@ -745,7 +768,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
   ));
 
   async function ownedProject(userId: string, projectId: string) {
-    return prisma.codexPetProject.findFirst({ where: { id: projectId, userId } });
+    return prisma.codexPetProject.findFirst({ where: { id: projectId, userId, deletedAt: null } });
   }
 
   async function ownedRun(userId: string, projectId: string, runId: string) {
@@ -768,6 +791,32 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       mime: asset.mime,
     }).catch(() => false)));
     return checks.every(Boolean);
+  }
+
+  async function codexPetModelOptions() {
+    const configured = await billing.listEnabledModels?.();
+    const visualModels = (configured?.data ?? [])
+      .filter((model) => {
+        const normalized = model.model.trim().toLowerCase();
+        return normalized.length > 0
+          && !normalized.includes("embedding")
+          && !normalized.startsWith("qwen3.7")
+          && !normalized.includes("image");
+      })
+      .map((model) => ({ model: model.model, displayName: model.displayName || model.model }));
+    const fallbackVisual = [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }];
+    return {
+      visualModels: visualModels.length > 0 ? visualModels : fallbackVisual,
+      imageModels: IMAGE_GENERATION_MODELS.map((model) => ({
+        model,
+        displayName: model === GPT_IMAGE_MODEL ? "GPT Image 2" : "Qwen Image 2.0 Pro",
+      })),
+    } as const;
+  }
+
+  async function selectedVisualModelIsAvailable(model: string): Promise<boolean> {
+    const options = await codexPetModelOptions();
+    return options.visualModels.some((candidate) => candidate.model === model);
   }
 
   async function price(): Promise<ResourcePrice> {
@@ -1008,11 +1057,21 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   });
 
+  app.get("/api/workflow/codex-pets/models", async (request, reply) => {
+    if (!userIdOf(request)) return reply.code(401).send({ error: "未登录" });
+    try {
+      return { success: true, data: await codexPetModelOptions() };
+    } catch (error) {
+      app.log.warn({ error: safeDiagnostic(error) }, "failed to load Codex pet model catalog");
+      return reply.code(503).send({ error: "模型目录暂不可用，请稍后重试" });
+    }
+  });
+
   app.get("/api/workflow/codex-pets/projects", async (request, reply) => {
     const userId = userIdOf(request);
     if (!userId) return reply.code(401).send({ error: "未登录" });
     const projects = await prisma.codexPetProject.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: { updatedAt: "desc" },
       take: 50,
     });
@@ -1049,6 +1108,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           styleNotes: parsed.data.styleNotes,
           referenceAssetIds: parsed.data.referenceAssetIds,
           autoContinue: parsed.data.autoContinue,
+          imageModel: parsed.data.imageModel,
+          visualQaModel: parsed.data.visualQaModel,
           createIdempotencyKey: idempotencyKey,
           status: "draft",
         },
@@ -1185,8 +1246,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         referenceAssetIds: updatedProject.referenceAssetIds,
         autoContinue: updatedProject.autoContinue,
         modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
-        requestedModel: "gpt-image-2",
-        visualQaModel: resolveCodexPetVisualQaModel(process.env),
+        requestedModel: updatedProject.imageModel || GPT_IMAGE_MODEL,
+        visualQaModel: updatedProject.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
       };
       const supersededAt = now();
       await tx.codexPetArtifact.updateMany({
@@ -1226,6 +1287,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         data: {
           inputSnapshot,
           autoContinue: updatedProject.autoContinue,
+          requestedModel: updatedProject.imageModel || GPT_IMAGE_MODEL,
+          visualQaModel: updatedProject.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
           colorKey: null,
           selectedBaseArtifactId: null,
           status: "base_generating",
@@ -1284,17 +1347,15 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
     const project = await ownedProject(userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
-    if (!deps.enqueueProjectCleanup) {
-      app.log.error({ status: "cleanup_not_configured" }, "Codex pet durable project cleanup is not configured");
-      return reply.code(503).send({ error: "桌宠删除服务暂不可用，请稍后重试", retryable: true });
-    }
+    const deletedAt = now();
     const marked = await prisma.$transaction(async (tx) => {
-      // Serialize with /start for this user. Once marked, every mutating
-      // project endpoint rejects the project while durable cleanup converges.
+      // Serialize with /start for this user. The deleting status stops
+      // workers from publishing new project state while deletedAt hides this
+      // durable tombstone from the user's history and detail endpoints.
       await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
       return tx.codexPetProject.updateMany({
-        where: { id: project.id, userId },
-        data: { status: "deleting" },
+        where: { id: project.id, userId, deletedAt: null },
+        data: { status: "deleting", deletedAt, createIdempotencyKey: null },
       });
     });
     if (marked.count === 0) return reply.code(404).send({ error: "桌宠项目不存在" });
@@ -1309,7 +1370,13 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
             waitingForWorker ||= Boolean(cancellation.run.workerId);
             await notifyEvent(app, deps, run.id);
           } catch (error) {
-            if ((error as Error).message !== "CODEX_PET_RUN_TERMINAL") throw error;
+            if ((error as Error).message !== "CODEX_PET_RUN_TERMINAL") {
+              // The soft-delete marker is already committed. Keep DELETE
+              // successful and let persisted project/run state plus billing
+              // maintenance converge instead of exposing a stale history row
+              // after a transient cancellation/refund failure.
+              app.log.warn({ error: safeDiagnostic(error), runId: run.id }, "Codex pet soft-delete cancellation deferred");
+            }
           }
         }
         try {
@@ -1319,19 +1386,14 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         }
       }
     }
-    try {
-      await deps.enqueueProjectCleanup({ userId, projectId: project.id });
-    } catch (error) {
-      app.log.error({ error: safeDiagnostic(error), status: "cleanup_enqueue_failed" }, "failed to enqueue durable Codex pet project cleanup");
-      return reply.code(503).send({ error: "桌宠删除任务暂未入队，请重试", retryable: true });
-    }
     return reply.code(202).send({
       success: true,
       data: {
         projectId: project.id,
-        deletionPending: true,
+        softDeleted: true,
+        deletionPending: waitingForWorker,
         waitingForWorker,
-        message: waitingForWorker ? "已请求停止运行，worker 退出后将完成删除" : "删除任务已进入可靠清理队列",
+        message: waitingForWorker ? "已从项目历史隐藏，正在停止运行" : "项目已从历史隐藏，数据和产物已保留",
       },
     });
   });
@@ -1347,6 +1409,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
 
     const initialProject = await ownedProject(userId, params.data.projectId);
     if (!initialProject) return reply.code(404).send({ error: "桌宠项目不存在" });
+    const selectedImageModel = initialProject.imageModel || GPT_IMAGE_MODEL;
+    const selectedVisualQaModel = initialProject.visualQaModel || CODEX_PET_VISUAL_QA_MODEL;
     if (initialProject.status === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能开始新制作" });
     if (!initialProject.prompt.trim() && initialProject.referenceAssetIds.length === 0) {
       return reply.code(400).send({ error: "请填写角色提示词或上传至少一张参考图" });
@@ -1355,11 +1419,19 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       return reply.code(400).send({ error: "项目参考图不存在、无权使用或已失效" });
     }
     try {
-      (deps.assertVisualQaReady ?? (() => { assertCodexPetVisualQaRoute(process.env); }))();
-      (deps.assertImageReady ?? (() => { assertCodexPetImageRoute(process.env); }))();
+      if (!await selectedVisualModelIsAvailable(selectedVisualQaModel)) {
+        return reply.code(409).send({ error: "所选视觉理解/质检模型已不在模型广场，请重新选择" });
+      }
     } catch (error) {
-      app.log.error({ error: safeDiagnostic(error), status: "gpt_model_route_unavailable" }, "Codex pet GPT model route preflight failed");
-      return reply.code(503).send({ error: "桌宠 GPT 生图或 GPT-5.6 视觉服务未就绪，请稍后重试" });
+      app.log.warn({ error: safeDiagnostic(error) }, "failed to verify Codex pet visual model selection");
+      return reply.code(503).send({ error: "模型目录暂不可用，请稍后重试" });
+    }
+    try {
+      (deps.assertVisualQaReady ?? (() => { assertCodexPetVisualQaRoute(process.env, selectedVisualQaModel); }))();
+      (deps.assertImageReady ?? (() => { assertCodexPetImageRoute(process.env, selectedImageModel); }))();
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), status: "model_route_unavailable" }, "Codex pet model route preflight failed");
+      return reply.code(503).send({ error: "桌宠 GPT 生图或所选视觉模型（如 GPT-5.6）服务未就绪，请稍后重试" });
     }
     let pricing: ResourcePrice;
     try {
@@ -1417,11 +1489,12 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
                   referenceAssetIds: project.referenceAssetIds,
                   autoContinue: project.autoContinue,
                   modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
-                  requestedModel: "gpt-image-2",
-                  visualQaModel: resolveCodexPetVisualQaModel(process.env),
+                  requestedModel: project.imageModel || GPT_IMAGE_MODEL,
+                  visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
                 },
                 autoContinue: project.autoContinue,
-                requestedModel: "gpt-image-2",
+                requestedModel: project.imageModel || GPT_IMAGE_MODEL,
+                visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
                 error: null,
               },
             });
@@ -1456,8 +1529,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           referenceAssetIds: project.referenceAssetIds,
           autoContinue: project.autoContinue,
           modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
-          requestedModel: "gpt-image-2",
-          visualQaModel: resolveCodexPetVisualQaModel(process.env),
+          requestedModel: project.imageModel || GPT_IMAGE_MODEL,
+          visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
         };
         const created = await tx.codexPetRun.create({
           data: {
@@ -1467,7 +1540,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
             idempotencyKey: key.value,
             inputSnapshot,
             autoContinue: project.autoContinue,
-            requestedModel: "gpt-image-2",
+            requestedModel: project.imageModel || GPT_IMAGE_MODEL,
+            visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
             ...codexPetPendingBillingFields(operationId),
             createdAt,
           },
@@ -1894,6 +1968,88 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       }
       throw error;
     }
+  });
+
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/approve-next-image", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(request.params);
+    if (!params.success) return reply.code(400).send({ error: "生图批准参数不合法" });
+    const project = await ownedProject(userId, params.data.projectId);
+    const run = await ownedRun(userId, params.data.projectId, params.data.runId);
+    if (!project || !run || project.latestRunId !== run.id) return reply.code(404).send({ error: "桌宠运行不存在" });
+
+    if (run.status === "direction_generating" && run.imageGenerationApprovalBudget === 1) {
+      try {
+        await enqueueRun(run.id);
+      } catch (error) {
+        app.log.error({ error: safeDiagnostic(error), runId: run.id }, "approved Codex pet image call re-enqueue failed");
+        return reply.code(503).send({ error: "批准已保存，任务暂未入队；可再次点击重试", retryable: true });
+      }
+      return reply.code(200).send({ success: true, data: { run: serializeRun(run as RunShape) } });
+    }
+    if (run.status !== "awaiting_direction_review" || project.status !== "awaiting_direction_review" || !run.pendingImageJobKey) {
+      return reply.code(409).send({ error: "当前没有等待批准的真实生图调用" });
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-image:${run.id}`);
+      const current = await tx.codexPetRun.findFirst({
+        where: { id: run.id, projectId: project.id, userId, status: "awaiting_direction_review" },
+      });
+      if (!current?.pendingImageJobKey || current.imageGenerationApprovalBudget !== 0) return null;
+      const job = await tx.codexPetJob.findFirst({
+        where: { runId: current.id, projectId: project.id, userId, key: current.pendingImageJobKey },
+      });
+      if (!job || job.attempt >= job.maxAttempts) return null;
+      await tx.codexPetJob.update({
+        where: { id: job.id },
+        data: { status: "queued", workerId: null, completedAt: null, error: null },
+      });
+      const next = await tx.codexPetRun.update({
+        where: { id: current.id },
+        data: {
+          status: "direction_generating",
+          progressStage: "direction_generating",
+          progressMessage: `已批准 ${job.key} 的 1 次真实生图调用`,
+          imageGenerationApprovalBudget: 1,
+          pendingImageJobKey: null,
+          workerId: null,
+          heartbeatAt: null,
+          error: null,
+          completedAt: null,
+          lastEventSequence: { increment: 1 },
+        },
+      });
+      await tx.codexPetProject.updateMany({
+        where: { id: project.id, userId, latestRunId: current.id, status: "awaiting_direction_review" },
+        data: { status: "direction_generating" },
+      });
+      await tx.codexPetEvent.create({
+        data: {
+          projectId: project.id,
+          runId: current.id,
+          userId,
+          sequence: next.lastEventSequence,
+          type: "image.call.approved",
+          stage: "direction_generating",
+          jobKey: job.key,
+          message: `用户已批准 ${job.key} 的 1 次真实生图调用`,
+          progress: next.progressPercent,
+          payload: { jobKey: job.key, approvedCalls: 1 },
+        },
+      });
+      return next;
+    });
+    if (!updated) return reply.code(409).send({ error: "批准状态已变化或该方向任务已用完尝试次数，请刷新后重试" });
+    try {
+      await enqueueRun(updated.id);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: updated.id }, "approved Codex pet image call enqueue failed");
+      return reply.code(503).send({ error: "批准已保存，任务暂未入队；可再次点击重试", retryable: true });
+    }
+    await notifyEvent(app, deps, updated.id);
+    return reply.code(202).send({ success: true, data: { run: serializeRun(updated as RunShape) } });
   });
 
   app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events", async (request, reply) => {

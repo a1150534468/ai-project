@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildBasePetPrompt,
   buildBaseChoiceQaContext,
+  buildCardinalPrompt,
   buildJumpingQaEvidenceContext,
   buildLookRowPrompt,
   buildStandardRowPrompt,
   buildVisualQaPrompt,
+  sanitizeCodexPetDirectionRepairPrompt,
   type CodexPetJumpingQaEvidence,
   type CodexPetVisualIdentity,
 } from "./codex-pet-prompts.js";
@@ -55,25 +57,60 @@ describe("Codex pet prompts", () => {
   it("locks both look rows to the approved cardinal quadrants and exact board cells", () => {
     const lookA = buildLookRowPrompt(identity, "look-a", "脚底固定，头部随视线转动");
     expect(lookA).toContain("Image 1 is the primary 4×2 partial anchor storyboard");
-    expect(lookA).toContain("physical bottom-right already contains approved Frame 5");
+    expect(lookA).toContain("physical bottom-left already contains approved Frame 5");
     expect(lookA).toContain("Every other chroma-only slot in Image 1 is intentionally blank for you to fill");
     expect(lookA).toContain("top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT");
+    expect(lookA).toContain("000 UP means the character's natural front/aim points toward the top edge");
+    expect(lookA).toContain("Do not reinterpret 000 as a front portrait or 180 as a rear portrait");
     expect(lookA).toContain("Frame 1 (physical top-left) MUST reproduce the approved 000 UP");
-    expect(lookA).toContain("Frame 5 (physical bottom-right) MUST reproduce the approved 090 SCREEN-RIGHT");
-    expect(lookA).toContain("Frame 8 (physical bottom-left) MUST be exactly one 22.5-degree step before the approved 180 DOWN");
+    expect(lookA).toContain("Frame 5 (physical bottom-left) MUST reproduce the approved 090 SCREEN-RIGHT");
+    expect(lookA).toContain("Frame 8 (physical bottom-right) MUST be exactly one 22.5-degree step before the approved 180 DOWN");
     expect(lookA).toContain("Never enter the 270 SCREEN-LEFT pose family");
     expect(lookA).toContain("never make eyes, mouth, markings, limbs, props or tail teleport to the other side");
-    expect(lookA).toContain("SERPENTINE board");
-    expect(lookA).toContain("physical bottom row, read left-to-right, is frames 8, 7, 6, 5");
-    expect(lookA).toContain("Frames 4 and 5 are vertically adjacent at the physical right edge");
-    expect(lookA).toContain("the row change is never a reset, mirror point or viewpoint jump");
+    expect(lookA).toContain("row-major board");
+    expect(lookA).toContain("Frames 4 and 5 are the row-boundary neighbors in chronological order");
+    expect(lookA).toContain("without a reset, mirror point or viewpoint jump");
+    expect(lookA).toContain("Frame 2: rear view with only a slight SCREEN-RIGHT-side reveal");
+    expect(lookA).toContain("Frame 5: exact approved 090 SCREEN-RIGHT profile");
+    expect(lookA).toContain("This is one 157.5-degree half-turn, not a full 360-degree turntable");
+    expect(lookA).toContain("No frame may use the approved 270 SCREEN-LEFT family");
 
     const lookB = buildLookRowPrompt(identity, "look-b", "脚底固定，头部随视线转动");
     expect(lookB).toContain("Frame 1 (physical top-left) MUST reproduce the approved 180 DOWN");
-    expect(lookB).toContain("Frame 5 (physical bottom-right) MUST reproduce the approved 270 SCREEN-LEFT");
-    expect(lookB).toContain("Frame 8 (physical bottom-left) MUST be exactly one 22.5-degree step before the approved 000 UP");
+    expect(lookB).toContain("Frame 5 (physical bottom-left) MUST reproduce the approved 270 SCREEN-LEFT");
+    expect(lookB).toContain("Frame 8 (physical bottom-right) MUST be exactly one 22.5-degree step before the approved 000 UP");
     expect(lookB).toContain("Never enter the 090 SCREEN-RIGHT pose family");
     expect(lookB).toContain("Continue exactly one step after the approved 157.5 pose");
+    expect(lookB).toContain("keep its viewer/screen side monotonic across this arc");
+    expect(lookB).toContain("must never jump to screen-right");
+    expect(lookB).toContain("primary full 4×2 SCREEN-LEFT trajectory scaffold");
+    expect(lookB).toContain("reference-only evidence assembled from the approved 180 DOWN and 270 SCREEN-LEFT cardinals");
+    expect(lookB).toContain("Redraw all eight poses as one fresh coherent family");
+    expect(lookB).toContain("Frame 2: front view with only a slight SCREEN-LEFT-side turn");
+    expect(lookB).toContain("Frame 5: exact approved 270 SCREEN-LEFT profile");
+    expect(lookB).toContain("No frame may use the approved 090 SCREEN-RIGHT family");
+  });
+
+  it("fixes cardinal appearance to screen-heading semantics", () => {
+    const cardinal = buildCardinalPrompt(identity, "脚底固定，头部和眼睛随屏幕方向转动");
+    expect(cardinal).toContain("000 UP means the character's natural front/aim points toward the top edge");
+    expect(cardinal).toContain("180 DOWN means the natural front/aim points toward the bottom edge");
+    expect(cardinal).toContain("Do not reinterpret 000 as a front portrait or 180 as a rear portrait");
+
+    const qa = buildVisualQaPrompt("cardinals", "四个方向锚点");
+    expect(qa).toContain("the normalized board's physical cells are top-left 000, top-right 090, bottom-left 180, bottom-right 270");
+    expect(qa).toContain("a front/back reversal is a hard failure");
+  });
+
+  it("rejects repair diagnostics that reverse the approved 000/180 contract", () => {
+    const accepted = sanitizeCodexPetDirectionRepairPrompt("Keep 090 screen-right and 270 screen-left distinct");
+    expect(accepted).toContain("090 SCREEN-RIGHT");
+    expect(accepted).toContain("Accepted non-conflicting repair evidence");
+
+    const rejected = sanitizeCodexPetDirectionRepairPrompt("Make 000 front-facing and 180 a rear portrait");
+    expect(rejected).toContain("diagnostic was discarded");
+    expect(rejected).toContain("000 UP means the character's natural front/aim points toward the top edge");
+    expect(rejected).not.toContain("Make 000 front-facing");
   });
 
   it("injects the approved anatomy guide only after base generation", () => {
@@ -107,6 +144,20 @@ describe("Codex pet prompts", () => {
     expect(failedQa).toContain("may hold the defeated expression for several frames");
     expect(failedQa).toContain("Do not require the tail, ears or every other movable feature");
     expect(failedQa).toContain("name only that current action in repairRows");
+  });
+
+  it("keeps the non-directional running state focused on active task work", () => {
+    const generation = buildStandardRowPrompt(identity, "running");
+    expect(generation).toContain("this is not physical running, walking or jogging");
+
+    const rowQa = buildVisualQaPrompt("row", "running 动作组：身份、6 帧结构、动作语义和连续性");
+    expect(rowQa).toContain("means active task processing, not physical locomotion");
+    expect(rowQa).toContain("Never require or reward alternating leg stride");
+    expect(rowQa).toContain("those are wrong-action failures");
+
+    const directionalQa = buildVisualQaPrompt("row", "running-right 动作组");
+    expect(directionalQa).not.toContain("means active task processing, not physical locomotion");
+    expect(buildVisualQaPrompt("final", "完整 v2 atlas")).toContain("means active task processing, not physical locomotion");
   });
 
   it("binds jumping visual QA to shared-scale evidence instead of top, bottom or Y travel", () => {

@@ -120,44 +120,40 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
   const width = info.width;
   const height = info.height;
   const mask = new Uint8Array(width * height);
+  let rawOpaquePixels = 0;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const alpha = data[(indexOf(x, y, width) * info.channels) + 3]!;
+      if (alpha < minAlpha) continue;
+      mask[indexOf(x, y, width)] = 1;
+      rawOpaquePixels += 1;
+    }
+  }
+  if (rawOpaquePixels === 0) {
+    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0 };
+  }
+
+  const visited = new Uint8Array(mask.length);
+  const retainedMask = new Uint8Array(mask.length);
+  const queue = new Int32Array(mask.length);
+  const componentFloor = Math.max(12, Math.floor(rawOpaquePixels * 0.001));
   let left = width;
   let right = -1;
   let top = height;
   let bottom = -1;
   let opaquePixels = 0;
   let edgePixels = 0;
+  let componentCount = 0;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const alpha = data[(indexOf(x, y, width) * info.channels) + 3]!;
-      if (alpha < minAlpha) continue;
-      mask[indexOf(x, y, width)] = 1;
-      opaquePixels += 1;
-      left = Math.min(left, x);
-      right = Math.max(right, x);
-      top = Math.min(top, y);
-      bottom = Math.max(bottom, y);
-      if (x === 0 || y === 0 || x === width - 1 || y === height - 1) edgePixels += 1;
-    }
-  }
-  if (opaquePixels === 0) {
-    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0 };
-  }
-
-  const visited = new Uint8Array(mask.length);
-  const componentSizes: number[] = [];
-  const queue = new Int32Array(mask.length);
-  for (let y = top; y <= bottom; y += 1) {
-    for (let x = left; x <= right; x += 1) {
       const seed = indexOf(x, y, width);
       if (!mask[seed] || visited[seed]) continue;
       let head = 0;
       let tail = 0;
-      let size = 0;
       queue[tail++] = seed;
       visited[seed] = 1;
       while (head < tail) {
         const current = queue[head++]!;
-        size += 1;
         const cx = current % width;
         const cy = Math.floor(current / width);
         const neighbors = [
@@ -172,11 +168,25 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
           queue[tail++] = neighbor;
         }
       }
-      componentSizes.push(size);
+      if (tail < componentFloor) continue;
+      componentCount += 1;
+      opaquePixels += tail;
+      for (let componentIndex = 0; componentIndex < tail; componentIndex += 1) {
+        const current = queue[componentIndex]!;
+        retainedMask[current] = 1;
+        const cx = current % width;
+        const cy = Math.floor(current / width);
+        left = Math.min(left, cx);
+        right = Math.max(right, cx);
+        top = Math.min(top, cy);
+        bottom = Math.max(bottom, cy);
+        if (cx === 0 || cy === 0 || cx === width - 1 || cy === height - 1) edgePixels += 1;
+      }
     }
   }
-  const componentFloor = Math.max(12, Math.floor(opaquePixels * 0.001));
-  const componentCount = componentSizes.filter((size) => size >= componentFloor).length;
+  if (opaquePixels === 0) {
+    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0 };
+  }
 
   // Flood transparent pixels from the foreground bounding-box edge; remaining transparent pixels are holes.
   const transparentVisited = new Uint8Array(mask.length);
@@ -184,7 +194,7 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
   let tail = 0;
   const pushTransparent = (x: number, y: number) => {
     const index = indexOf(x, y, width);
-    if (mask[index] || transparentVisited[index]) return;
+    if (retainedMask[index] || transparentVisited[index]) return;
     transparentVisited[index] = 1;
     queue[tail++] = index;
   };
@@ -207,7 +217,7 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
       cy < bottom ? current + width : -1,
     ];
     for (const neighbor of neighbors) {
-      if (neighbor < 0 || transparentVisited[neighbor] || mask[neighbor]) continue;
+      if (neighbor < 0 || transparentVisited[neighbor] || retainedMask[neighbor]) continue;
       transparentVisited[neighbor] = 1;
       queue[tail++] = neighbor;
     }
@@ -216,7 +226,7 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
   for (let y = top; y <= bottom; y += 1) {
     for (let x = left; x <= right; x += 1) {
       const index = indexOf(x, y, width);
-      if (!mask[index] && !transparentVisited[index]) internalTransparentPixels += 1;
+      if (!retainedMask[index] && !transparentVisited[index]) internalTransparentPixels += 1;
     }
   }
   return {

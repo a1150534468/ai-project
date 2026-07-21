@@ -4,19 +4,25 @@ import { ApiError, readErrorMessage } from "./apiError";
 export const CODEX_PET_API_BASE = "/api/workflow/codex-pets";
 
 /**
- * The desktop-pet workflow has a deliberately fixed GPT-only model contract.
- * Keep these values independent from the general chat/image workspace
- * defaults: a CHAT_MULTIMODAL_MODEL or Qwen fallback is never valid here.
+ * Keep desktop-pet model defaults independent from general chat/image
+ * defaults. The selected visual model is frozen per run and routed to Pixel
+ * or Bailian according to the model marketplace.
  */
 export const CODEX_PET_IMAGE_MODEL = "gpt-image-2" as const;
+export const CODEX_PET_IMAGE_MODELS = [
+  "qwen-image-2.0-pro-2026-04-22",
+  CODEX_PET_IMAGE_MODEL,
+] as const;
+export type CodexPetImageModel = typeof CODEX_PET_IMAGE_MODELS[number];
 export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol" as const;
-export const CODEX_PET_MODEL_CONTRACT_VERSION = "gpt-only-v1" as const;
+export const CODEX_PET_MODEL_CONTRACT_VERSION = "selectable-visual-v2" as const;
 export const CODEX_PET_IMAGE_ACTUAL_MODELS = [
+  "qwen-image-2.0-pro-2026-04-22",
   CODEX_PET_IMAGE_MODEL,
   "gpt-image-2-codex",
 ] as const;
-export const CODEX_PET_VISUAL_QA_ACTUAL_MODELS = [CODEX_PET_VISUAL_QA_MODEL] as const;
-export const CODEX_PET_VISUAL_QA_ROUTES = ["chatgpt_model_route"] as const;
+export const CODEX_PET_VISUAL_QA_ACTUAL_MODELS = [CODEX_PET_VISUAL_QA_MODEL, "qwen3.6-flash"] as const;
+export const CODEX_PET_VISUAL_QA_ROUTES = ["chatgpt_model_route", "bailian_model_route"] as const;
 
 export type CodexPetStylePreset =
   | "auto"
@@ -33,6 +39,7 @@ export type CodexPetProjectStatus =
   | "queued"
   | "base_generating"
   | "awaiting_base_review"
+  | "awaiting_direction_review"
   | "standard_generating"
   | "direction_generating"
   | "validating"
@@ -42,7 +49,7 @@ export type CodexPetProjectStatus =
   | "ready"
   | "failed"
   | "cancelled"
-  /** Internal project-only tombstone while durable artifact/archive cleanup converges. */
+  /** Internal project-only tombstone used by soft-deleted project records. */
   | "deleting";
 
 export type CodexPetRunStatus = Exclude<CodexPetProjectStatus, "draft" | "deleting">;
@@ -75,6 +82,18 @@ export interface CodexPetProject extends CodexPetProjectSummary {
   readonly referenceAssetIds: readonly string[];
   readonly referenceAssets?: readonly CodexPetReferenceAsset[];
   readonly autoContinue: boolean;
+  readonly imageModel?: CodexPetImageModel;
+  readonly visualQaModel?: string;
+}
+
+export interface CodexPetModelOption {
+  readonly model: string;
+  readonly displayName: string;
+}
+
+export interface CodexPetModelOptions {
+  readonly visualModels: readonly CodexPetModelOption[];
+  readonly imageModels: readonly CodexPetModelOption[];
 }
 
 export interface CodexPetReferenceAsset extends Pick<WorkflowImageAsset, "id" | "mime" | "originalUrl" | "thumbnailUrl" | "createdAt"> {
@@ -116,6 +135,9 @@ export interface CodexPetRun {
   readonly previewArtifactId: string | null;
   readonly validationReport: unknown;
   readonly requestedModel: string;
+  readonly imageGenerationCallCount?: number;
+  readonly imageGenerationApprovalBudget?: number;
+  readonly pendingImageJobKey?: string | null;
   readonly modelContractVersion: string;
   readonly visualQaModel: string;
   readonly visualQaActualModels: readonly string[];
@@ -192,6 +214,8 @@ export interface CodexPetCreatePayload {
   readonly styleNotes?: string;
   readonly referenceAssetIds?: readonly string[];
   readonly autoContinue?: boolean;
+  readonly imageModel?: CodexPetImageModel;
+  readonly visualQaModel?: string;
   readonly idempotencyKey?: string;
 }
 
@@ -260,6 +284,14 @@ export async function getCodexPetPricing(token: string): Promise<CodexPetPricing
     fallback: "获取桌宠套餐价格失败",
   });
   return "pricing" in data ? data.pricing : data;
+}
+
+export async function getCodexPetModelOptions(token: string): Promise<CodexPetModelOptions> {
+  return requestCodexPet<CodexPetModelOptions>({
+    token,
+    path: "/models",
+    fallback: "获取桌宠模型列表失败",
+  });
 }
 
 export async function listCodexPetProjects(token: string): Promise<readonly CodexPetProjectSummary[]> {
@@ -357,6 +389,20 @@ export async function selectCodexPetBase(
     method: "POST",
     body: selection,
     fallback: "确认主形象失败",
+  });
+  return "run" in data ? data.run : data;
+}
+
+export async function approveCodexPetNextImage(
+  token: string,
+  projectId: string,
+  runId: string,
+): Promise<CodexPetRun> {
+  const data = await requestCodexPet<CodexPetRun | { readonly run: CodexPetRun }>({
+    token,
+    path: `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/approve-next-image`,
+    method: "POST",
+    fallback: "批准下一次真实生图失败",
   });
   return "run" in data ? data.run : data;
 }

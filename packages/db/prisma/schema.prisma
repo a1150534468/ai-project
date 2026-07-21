@@ -252,40 +252,40 @@ model KnowledgeBase {
   updatedAt   DateTime   @updatedAt
   documents   Document[]
 
+  @@unique([userId, systemKey])
   @@index([userId])
   @@index([ownerType])
-  @@unique([userId, systemKey])
 }
 
 model Document {
-  id         String        @id @default(cuid())
-  kbId       String
-  name       String
-  sourceType String // "FILE" | "URL" | "TEXT" | "ARTIFACT"
-  sourceUri  String?
-  content    String?
-  mime       String?
-  sizeBytes  Int?
-  status     String        @default("pending") // pending|indexing|indexed|failed
-  error      String?
-  chunkCount Int           @default(0)
-  tokensUsed Int           @default(0)
-  opId       String?
+  id           String        @id @default(cuid())
+  kbId         String
+  name         String
+  sourceType   String // "FILE" | "URL" | "TEXT" | "ARTIFACT"
+  sourceUri    String?
+  content      String?
+  mime         String?
+  sizeBytes    Int?
+  status       String        @default("pending") // pending|indexing|indexed|failed
+  error        String?
+  chunkCount   Int           @default(0)
+  tokensUsed   Int           @default(0)
+  opId         String?
   sourceModule String?
   sourceId     String?
   metadata     Json?
-  lockedBy   String?
-  lockedAt   DateTime?
-  attempts   Int           @default(0)
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
-  kb         KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
-  chunks     Chunk[]
-  codexPetRun CodexPetRun?
+  lockedBy     String?
+  lockedAt     DateTime?
+  attempts     Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  kb           KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  chunks       Chunk[]
+  codexPetRun  CodexPetRun?
 
+  @@unique([sourceModule, sourceId])
   @@index([kbId])
   @@index([status])
-  @@unique([sourceModule, sourceId])
 }
 
 model CodexPetProject {
@@ -298,9 +298,12 @@ model CodexPetProject {
   styleNotes           String             @default("")
   referenceAssetIds    String[]           @default([])
   autoContinue         Boolean            @default(false)
+  imageModel           String             @default("gpt-image-2")
+  visualQaModel        String             @default("gpt-5.6-sol")
   status               String             @default("draft")
   latestRunId          String?
   createIdempotencyKey String?
+  deletedAt            DateTime?
   createdAt            DateTime           @default(now())
   updatedAt            DateTime           @updatedAt
   user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -312,61 +315,66 @@ model CodexPetProject {
   @@unique([userId, createIdempotencyKey])
   @@index([userId, updatedAt])
   @@index([userId, status])
+  @@index([userId, deletedAt, updatedAt])
 }
 
 model CodexPetRun {
-  id                         String             @id @default(cuid())
-  projectId                  String
-  userId                     String
-  idempotencyKey             String?
-  inputSnapshot              Json               @default("{}")
-  status                     String             @default("queued")
-  progressStage              String             @default("queued")
-  progressPercent            Int                @default(0)
-  progressMessage            String?
-  autoContinue               Boolean            @default(false)
-  colorKey                   String?
-  billingOperationId         String?            @unique
-  billingPoints              Int                @default(0)
-  billingChargeStatus        String             @default("pending")
-  billingChargeAttemptCount  Int                @default(0)
-  billingChargeError         String?
-  billingChargeLastAttemptAt DateTime?
-  billingChargeNextRetryAt   DateTime?
-  billingChargeLeaseUntil    DateTime?
-  billingChargedAt           DateTime?
-  billingActivatedAt         DateTime?
-  billingRefundedAt          DateTime?
-  billingRefundStatus        String             @default("none")
-  billingRefundError         String?
-  billingRefundRetryCount    Int                @default(0)
-  billingRefundLastAttemptAt DateTime?
-  billingRefundNextRetryAt   DateTime?
-  cancelRequested            Boolean            @default(false)
-  hasSuccessfulImage         Boolean            @default(false)
-  selectedBaseArtifactId     String?
-  spritesheetArtifactId      String?
-  packageArtifactId          String?
-  previewArtifactId          String?
-  validationReport           Json?
-  requestedModel             String             @default("gpt-image-2")
-  actualModels               String[]           @default([])
-  usage                      Json?
-  knowledgeDocumentId        String?            @unique
-  lastEventSequence          Int                @default(0)
-  workerId                   String?
-  heartbeatAt                DateTime?
-  startedAt                  DateTime?
-  completedAt                DateTime?
-  error                      String?
-  createdAt                  DateTime           @default(now())
-  updatedAt                  DateTime           @updatedAt
-  project                    CodexPetProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user                       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  knowledgeDocument          Document?          @relation(fields: [knowledgeDocumentId], references: [id], onDelete: SetNull)
-  jobs                       CodexPetJob[]
-  artifacts                  CodexPetArtifact[]
-  events                     CodexPetEvent[]
+  id                            String             @id @default(cuid())
+  projectId                     String
+  userId                        String
+  idempotencyKey                String?
+  inputSnapshot                 Json               @default("{}")
+  status                        String             @default("queued")
+  progressStage                 String             @default("queued")
+  progressPercent               Int                @default(0)
+  progressMessage               String?
+  autoContinue                  Boolean            @default(false)
+  colorKey                      String?
+  billingOperationId            String?            @unique
+  billingPoints                 Int                @default(0)
+  billingChargeStatus           String             @default("pending")
+  billingChargeAttemptCount     Int                @default(0)
+  billingChargeError            String?
+  billingChargeLastAttemptAt    DateTime?
+  billingChargeNextRetryAt      DateTime?
+  billingChargeLeaseUntil       DateTime?
+  billingChargedAt              DateTime?
+  billingActivatedAt            DateTime?
+  billingRefundedAt             DateTime?
+  billingRefundStatus           String             @default("none")
+  billingRefundError            String?
+  billingRefundRetryCount       Int                @default(0)
+  billingRefundLastAttemptAt    DateTime?
+  billingRefundNextRetryAt      DateTime?
+  cancelRequested               Boolean            @default(false)
+  hasSuccessfulImage            Boolean            @default(false)
+  selectedBaseArtifactId        String?
+  spritesheetArtifactId         String?
+  packageArtifactId             String?
+  previewArtifactId             String?
+  validationReport              Json?
+  requestedModel                String             @default("gpt-image-2")
+  visualQaModel                 String             @default("gpt-5.6-sol")
+  imageGenerationCallCount      Int                @default(0)
+  imageGenerationApprovalBudget Int                @default(0)
+  pendingImageJobKey            String?
+  actualModels                  String[]           @default([])
+  usage                         Json?
+  knowledgeDocumentId           String?            @unique
+  lastEventSequence             Int                @default(0)
+  workerId                      String?
+  heartbeatAt                   DateTime?
+  startedAt                     DateTime?
+  completedAt                   DateTime?
+  error                         String?
+  createdAt                     DateTime           @default(now())
+  updatedAt                     DateTime           @updatedAt
+  project                       CodexPetProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  knowledgeDocument             Document?          @relation(fields: [knowledgeDocumentId], references: [id], onDelete: SetNull)
+  jobs                          CodexPetJob[]
+  artifacts                     CodexPetArtifact[]
+  events                        CodexPetEvent[]
 
   @@unique([projectId, idempotencyKey])
   @@index([projectId, createdAt])
@@ -911,43 +919,43 @@ model NovelVectorMemory {
 }
 
 model NovelChapter {
-  id               String                @id @default(cuid())
-  projectId        String
-  volumeIndex      Int                   @default(1)
-  chapterIndex     Int
-  title            String                @default("")
-  summary          String                @default("")
-  outline          String                @default("")
-  generationHint   String                @default("")
-  executionPlan    Json?
-  microBeats       Json                  @default("[]")
-  content          String                @default("")
-  rawContent       String                @default("")
-  openThreads      Json                  @default("[]")
-  contextSnapshot  Json?
-  generationMeta   Json?
-  consistencyJson  Json?
-  status           String                @default("draft")
-  reviewStatus     String                @default("pending")
-  reviewNotes      String                @default("")
-  aiReview         String                @default("")
-  aiActionItems    Json                  @default("[]")
-  modificationRate Int                   @default(0)
-  reviewedAt       DateTime?
-  tensionScore     Float                 @default(0)
-  plotTension      Float                 @default(0)
-  emotionalTension Float                 @default(0)
-  pacingTension    Float                 @default(0)
-  qualityScore     Float                 @default(0)
-  billableChars    Int                   @default(0)
-  lastTaskId       String?
-  createdAt        DateTime              @default(now())
-  updatedAt        DateTime              @updatedAt
-  project          NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  versions         NovelChapterVersion[]
-  qualityReports   NovelQualityReport[]
+  id                 String                   @id @default(cuid())
+  projectId          String
+  volumeIndex        Int                      @default(1)
+  chapterIndex       Int
+  title              String                   @default("")
+  summary            String                   @default("")
+  outline            String                   @default("")
+  generationHint     String                   @default("")
+  executionPlan      Json?
+  microBeats         Json                     @default("[]")
+  content            String                   @default("")
+  rawContent         String                   @default("")
+  openThreads        Json                     @default("[]")
+  contextSnapshot    Json?
+  generationMeta     Json?
+  consistencyJson    Json?
+  status             String                   @default("draft")
+  reviewStatus       String                   @default("pending")
+  reviewNotes        String                   @default("")
+  aiReview           String                   @default("")
+  aiActionItems      Json                     @default("[]")
+  modificationRate   Int                      @default(0)
+  reviewedAt         DateTime?
+  tensionScore       Float                    @default(0)
+  plotTension        Float                    @default(0)
+  emotionalTension   Float                    @default(0)
+  pacingTension      Float                    @default(0)
+  qualityScore       Float                    @default(0)
+  billableChars      Int                      @default(0)
+  lastTaskId         String?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  project            NovelProject             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions           NovelChapterVersion[]
+  qualityReports     NovelQualityReport[]
   generationRequests NovelGenerationRequest[]
-  foreshadowEvents NovelForeshadowEvent[]
+  foreshadowEvents   NovelForeshadowEvent[]
 
   @@unique([projectId, chapterIndex])
   @@index([projectId, updatedAt])
@@ -975,23 +983,23 @@ model NovelKnowledgeFact {
 }
 
 model NovelForeshadowItem {
-  id                       String       @id @default(cuid())
+  id                       String                 @id @default(cuid())
   projectId                String
   introducedInChapterId    String?
   introducedInChapterIndex Int?
   title                    String
-  description              String       @default("")
-  expectedPayoffChapter    Int          @default(0)
-  status                   String       @default("open")
-  relatedCharacter         String       @default("")
-  source                   String       @default("manual")
+  description              String                 @default("")
+  expectedPayoffChapter    Int                    @default(0)
+  status                   String                 @default("open")
+  relatedCharacter         String                 @default("")
+  source                   String                 @default("manual")
   sourceKey                String?
   lastMentionedChapter     Int?
   resolvedInChapterIndex   Int?
-  resolutionEvidence       String       @default("")
-  createdAt                DateTime     @default(now())
-  updatedAt                DateTime     @updatedAt
-  project                  NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  resolutionEvidence       String                 @default("")
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  project                  NovelProject           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   events                   NovelForeshadowEvent[]
   narrativeDebts           NovelNarrativeDebt[]
 
@@ -1015,29 +1023,29 @@ model NovelChapterVersion {
 }
 
 model NovelTask {
-  id              String              @id @default(cuid())
-  projectId       String
-  userId          String
-  kind            String
-  targetKind      String
-  targetId        String?
-  status          String              @default("queued")
-  progressPercent Int                 @default(0)
-  progressStage   String              @default("queued")
-  progressMessage String?
-  progressPreview String              @default("")
-  streamedChars   Int                 @default(0)
-  requestPayload  Json?
-  resultPayload   Json?
-  operationId     String              @unique
-  error           String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  completedAt     DateTime?
-  cancelledAt     DateTime?
-  project         NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outboxCommand   NovelCommandOutbox?
+  id                String                  @id @default(cuid())
+  projectId         String
+  userId            String
+  kind              String
+  targetKind        String
+  targetId          String?
+  status            String                  @default("queued")
+  progressPercent   Int                     @default(0)
+  progressStage     String                  @default("queued")
+  progressMessage   String?
+  progressPreview   String                  @default("")
+  streamedChars     Int                     @default(0)
+  requestPayload    Json?
+  resultPayload     Json?
+  operationId       String                  @unique
+  error             String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  completedAt       DateTime?
+  cancelledAt       DateTime?
+  project           NovelProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user              User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outboxCommand     NovelCommandOutbox?
   generationRequest NovelGenerationRequest?
 
   @@index([userId, updatedAt])
@@ -1046,15 +1054,15 @@ model NovelTask {
 }
 
 model NovelGenerationRequest {
-  id              String       @id @default(cuid())
+  id              String        @id @default(cuid())
   projectId       String
   chapterId       String?
   chapterIndex    Int?
-  taskId          String       @unique
+  taskId          String        @unique
   runId           String?
   stepId          String?
   targetKind      String
-  attempt         Int          @default(1)
+  attempt         Int           @default(1)
   systemPrompt    String
   userPrompt      String
   model           String
@@ -1063,13 +1071,13 @@ model NovelGenerationRequest {
   templateId      String?
   templateVersion Int?
   requestHash     String
-  status          String       @default("submitted")
+  status          String        @default("submitted")
   error           String?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
-  project         NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  project         NovelProject  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   chapter         NovelChapter? @relation(fields: [chapterId], references: [id], onDelete: SetNull)
-  task            NovelTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task            NovelTask     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   @@index([projectId, chapterIndex, createdAt])
   @@index([chapterId, createdAt])
@@ -1392,24 +1400,24 @@ model NovelCausalEdge {
 }
 
 model NovelNarrativeDebt {
-  id                String       @id @default(cuid())
-  projectId         String
-  debtType          String
-  title             String
-  description       String       @default("")
-  introducedChapter Int?
-  dueChapter        Int?
-  status            String       @default("open")
-  severity          String       @default("medium")
-  foreshadowId      String?
-  resolvedInChapter Int?
-  resolutionEvidence String      @default("")
-  source            String       @default("manual")
-  sourceKey         String?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  project           NovelProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  foreshadow        NovelForeshadowItem? @relation(fields: [foreshadowId], references: [id], onDelete: SetNull)
+  id                 String               @id @default(cuid())
+  projectId          String
+  debtType           String
+  title              String
+  description        String               @default("")
+  introducedChapter  Int?
+  dueChapter         Int?
+  status             String               @default("open")
+  severity           String               @default("medium")
+  foreshadowId       String?
+  resolvedInChapter  Int?
+  resolutionEvidence String               @default("")
+  source             String               @default("manual")
+  sourceKey          String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  project            NovelProject         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  foreshadow         NovelForeshadowItem? @relation(fields: [foreshadowId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, sourceKey])
   @@index([projectId, status, dueChapter])
@@ -1417,20 +1425,20 @@ model NovelNarrativeDebt {
 }
 
 model NovelForeshadowEvent {
-  id            String                @id @default(cuid())
-  projectId     String
-  foreshadowId  String
-  chapterId     String?
-  chapterIndex  Int
-  action        String
-  evidence      String                @default("")
-  confidence    Float                 @default(0.7)
-  source        String                @default("chapterPostprocess")
-  sourceKey     String?
-  createdAt     DateTime              @default(now())
-  project       NovelProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  foreshadow    NovelForeshadowItem    @relation(fields: [foreshadowId], references: [id], onDelete: Cascade)
-  chapter       NovelChapter?         @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  id           String              @id @default(cuid())
+  projectId    String
+  foreshadowId String
+  chapterId    String?
+  chapterIndex Int
+  action       String
+  evidence     String              @default("")
+  confidence   Float               @default(0.7)
+  source       String              @default("chapterPostprocess")
+  sourceKey    String?
+  createdAt    DateTime            @default(now())
+  project      NovelProject        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  foreshadow   NovelForeshadowItem @relation(fields: [foreshadowId], references: [id], onDelete: Cascade)
+  chapter      NovelChapter?       @relation(fields: [chapterId], references: [id], onDelete: SetNull)
 
   @@unique([projectId, sourceKey])
   @@index([foreshadowId, chapterIndex])

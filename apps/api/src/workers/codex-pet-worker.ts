@@ -412,7 +412,9 @@ export async function recoverDeletingProjects(input: {
   // transaction and a first Queue.add failure without multiplying jobs.
   const limit = Math.max(1, Math.floor(positiveNumber("CODEX_PET_CLEANUP_RECOVERY_LIMIT", 100, env)));
   const projects = await prisma.codexPetProject.findMany({
-    where: { status: "deleting" },
+    // `deletedAt` marks the new soft-delete path. Only legacy tombstones
+    // without that marker still belong to the old hard-cleanup queue.
+    where: { status: "deleting", deletedAt: null },
     orderBy: { updatedAt: "asc" },
     select: { id: true, userId: true },
     take: limit,
@@ -467,7 +469,7 @@ export async function recoverStaleRuns(input: {
   const staleBefore = new Date(now().getTime() - positiveNumber("CODEX_PET_STALE_RUN_MS", 15 * 60_000, env));
   const runs = await prisma.codexPetRun.findMany({
     where: {
-      status: { in: [...CODEX_PET_ACTIVE_STATUSES].filter((status) => status !== "awaiting_base_review") },
+      status: { in: [...CODEX_PET_ACTIVE_STATUSES].filter((status) => !["awaiting_base_review", "awaiting_direction_review"].includes(status)) },
       billingChargeStatus: "charged",
       billingActivatedAt: { not: null },
       OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }, { status: "queued" }],

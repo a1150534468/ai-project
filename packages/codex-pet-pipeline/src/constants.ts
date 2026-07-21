@@ -52,13 +52,12 @@ export const LOOK_DIRECTIONS = [
 ] as const;
 
 /**
- * Direction boards are generated in a 4×2 serpentine path so frame 4→5 is
- * physically adjacent at the right edge instead of jumping from top-right to
- * bottom-left. Values map chronological frame index to the source board's
- * row-major slot index. Deterministic extraction restores normal clockwise
- * order before QA, registration and atlas assembly.
+ * Direction boards use ordinary row-major placement: frames 1–4 occupy the
+ * top row left-to-right and frames 5–8 occupy the bottom row left-to-right.
+ * Keeping physical and chronological order identical prevents image models
+ * from misreading the bottom row as a reversed trajectory.
  */
-export const LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT = [0, 1, 2, 3, 7, 6, 5, 4] as const;
+export const LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT = [0, 1, 2, 3, 4, 5, 6, 7] as const;
 
 export const DEFAULT_CHROMA_CANDIDATES = [
   "#ff00ff",

@@ -1,7 +1,7 @@
 import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import {
   CODEX_PET_MODEL_CONTRACT_VERSION,
-  CODEX_PET_VISUAL_QA_MODEL,
+  codexPetVisualQaRouteForModel,
   isAllowedCodexPetImageModel,
   isAllowedCodexPetVisualModel,
 } from "./codex-pet-model-contract.js";
@@ -24,8 +24,6 @@ const REQUIRED_PASSED_GATES = [
 ] as const;
 
 const EXPECTED_DIRECTIONS = new Set<string>(LOOK_DIRECTIONS);
-const REQUIRED_IMAGE_MODEL = "gpt-image-2";
-const REQUIRED_VISUAL_QA_MODEL = CODEX_PET_VISUAL_QA_MODEL;
 
 function recordOf(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -49,9 +47,10 @@ function hasContradictoryFailure(value: JsonRecord): boolean {
  */
 export function codexPetValidationPassed(report: unknown): boolean {
   const value = recordOf(report);
+  const legacyGptContract = value.modelContractVersion === "gpt-only-v1";
   if (value.ok !== true
     || value.spriteVersionNumber !== 2
-    || value.modelContractVersion !== CODEX_PET_MODEL_CONTRACT_VERSION
+    || (value.modelContractVersion !== CODEX_PET_MODEL_CONTRACT_VERSION && !legacyGptContract)
     || hasContradictoryFailure(value)) return false;
 
   const provenance = recordOf(value.modelProvenance);
@@ -66,14 +65,21 @@ export function codexPetValidationPassed(report: unknown): boolean {
   const visualRoutes = Array.isArray(visualQa.routes)
     ? visualQa.routes.filter((route): route is string => typeof route === "string")
     : [];
-  if (imageGeneration.requestedModel !== REQUIRED_IMAGE_MODEL
+  const requestedVisualModel = typeof visualQa.requestedModel === "string" ? visualQa.requestedModel.trim() : "";
+  const requestedImageModel = typeof imageGeneration.requestedModel === "string" ? imageGeneration.requestedModel.trim() : "";
+  let expectedVisualRoute = "";
+  try { expectedVisualRoute = codexPetVisualQaRouteForModel(requestedVisualModel); } catch { return false; }
+  const imageModelMatches = (model: string) => model === requestedImageModel
+    || (requestedImageModel === "gpt-image-2" && model === "gpt-image-2-codex");
+  if ((legacyGptContract && (requestedImageModel !== "gpt-image-2" || requestedVisualModel !== "gpt-5.6-sol"))
+    || !isAllowedCodexPetImageModel(requestedImageModel)
     || imageActualModels.length === 0
-    || imageActualModels.some((model) => !isAllowedCodexPetImageModel(model))
-    || visualQa.requestedModel !== REQUIRED_VISUAL_QA_MODEL
+    || imageActualModels.some((model) => !isAllowedCodexPetImageModel(model) || !imageModelMatches(model))
+    || !isAllowedCodexPetVisualModel(requestedVisualModel)
     || visualActualModels.length === 0
-    || visualActualModels.some((model) => !isAllowedCodexPetVisualModel(model))
+    || visualActualModels.some((model) => !isAllowedCodexPetVisualModel(model) || model !== requestedVisualModel)
     || visualRoutes.length === 0
-    || visualRoutes.some((route) => route !== "chatgpt_model_route")) return false;
+    || visualRoutes.some((route) => route !== expectedVisualRoute)) return false;
 
   for (const key of REQUIRED_OK_GATES) {
     const gate = recordOf(value[key]);

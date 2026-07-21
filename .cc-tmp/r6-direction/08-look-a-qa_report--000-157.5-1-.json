@@ -1,0 +1,354 @@
+{
+  "deterministic": {
+    "diagnostics": [
+      {
+        "index": 0,
+        "sourceBounds": {
+          "left": 154,
+          "top": 99,
+          "right": 354,
+          "bottom": 439,
+          "width": 201,
+          "height": 341
+        },
+        "opaquePixels": 44116,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.7765706380208334,
+        "normalizedBounds": {
+          "left": 43,
+          "top": 14,
+          "right": 149,
+          "bottom": 195,
+          "width": 107,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "sourceBounds": {
+          "left": 112,
+          "top": 99,
+          "right": 301,
+          "bottom": 439,
+          "width": 190,
+          "height": 341
+        },
+        "opaquePixels": 42546,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 455,
+        "chromaCoverage": 0.7842051188151041,
+        "normalizedBounds": {
+          "left": 46,
+          "top": 14,
+          "right": 146,
+          "bottom": 195,
+          "width": 101,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "sourceBounds": {
+          "left": 90,
+          "top": 99,
+          "right": 258,
+          "bottom": 439,
+          "width": 169,
+          "height": 341
+        },
+        "opaquePixels": 38512,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 135,
+        "chromaCoverage": 0.8047027587890625,
+        "normalizedBounds": {
+          "left": 51,
+          "top": 14,
+          "right": 140,
+          "bottom": 195,
+          "width": 90,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "sourceBounds": {
+          "left": 55,
+          "top": 99,
+          "right": 195,
+          "bottom": 439,
+          "width": 141,
+          "height": 341
+        },
+        "opaquePixels": 35124,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 58,
+        "chromaCoverage": 0.821746826171875,
+        "normalizedBounds": {
+          "left": 59,
+          "top": 14,
+          "right": 133,
+          "bottom": 195,
+          "width": 75,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "sourceBounds": {
+          "left": 185,
+          "top": 19,
+          "right": 321,
+          "bottom": 356,
+          "width": 137,
+          "height": 338
+        },
+        "opaquePixels": 29533,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.8503926595052084,
+        "normalizedBounds": {
+          "left": 60,
+          "top": 16,
+          "right": 132,
+          "bottom": 195,
+          "width": 73,
+          "height": 180
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "sourceBounds": {
+          "left": 134,
+          "top": 19,
+          "right": 277,
+          "bottom": 356,
+          "width": 144,
+          "height": 338
+        },
+        "opaquePixels": 33281,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 14,
+        "chromaCoverage": 0.8312835693359375,
+        "normalizedBounds": {
+          "left": 58,
+          "top": 16,
+          "right": 134,
+          "bottom": 195,
+          "width": 77,
+          "height": 180
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 6,
+        "sourceBounds": {
+          "left": 77,
+          "top": 19,
+          "right": 267,
+          "bottom": 354,
+          "width": 191,
+          "height": 336
+        },
+        "opaquePixels": 40947,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.7923838297526041,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 17,
+          "right": 146,
+          "bottom": 195,
+          "width": 102,
+          "height": 179
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 7,
+        "sourceBounds": {
+          "left": 60,
+          "top": 19,
+          "right": 201,
+          "bottom": 356,
+          "width": 142,
+          "height": 338
+        },
+        "opaquePixels": 34086,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 228,
+        "chromaCoverage": 0.8270772298177084,
+        "normalizedBounds": {
+          "left": 58,
+          "top": 16,
+          "right": 133,
+          "bottom": 195,
+          "width": 76,
+          "height": 180
+        },
+        "errors": [],
+        "warnings": []
+      }
+    ],
+    "unusedSlotOpaquePixels": [],
+    "chroma": [
+      {
+        "removedPixels": 152467,
+        "softenedPixels": 213,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 154056,
+        "softenedPixels": 125,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 158086,
+        "softenedPixels": 125,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 161475,
+        "softenedPixels": 87,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 167065,
+        "softenedPixels": 129,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 163308,
+        "softenedPixels": 129,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 155644,
+        "softenedPixels": 145,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 162510,
+        "softenedPixels": 100,
+        "totalPixels": 196608,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      }
+    ],
+    "sourceWidth": 1536,
+    "sourceHeight": 1024,
+    "sharedScale": 0.533724340175953,
+    "geometry": {
+      "heightRatio": 1.0167597765363128,
+      "widthRatio": 1.4657534246575343,
+      "baselineSpreadPixels": 0,
+      "centerSpreadPixels": 0.5,
+      "warnings": []
+    },
+    "jumpingArc": null,
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "visual": {
+    "pass": false,
+    "verdicts": [
+      {
+        "pass": false,
+        "score": 56,
+        "mirrorSafe": true,
+        "identity": true,
+        "structure": true,
+        "semantics": false,
+        "continuity": false,
+        "warnings": [
+          "Mint robot anatomy, pixel style, scale, flat background, and pose completeness remain consistent across the row.",
+          "The first two frames are nearly front-identical, providing little visible 000-to-22.5 yaw progression.",
+          "The sequence reaches a rear view before the final frame and then switches to a screen-left-facing view."
+        ],
+        "failures": [
+          "The chronological directions are not a continuous clockwise progression from 000 through 157.5: the final pose is in the wrong quadrant and reverses past the approved front/right/back progression.",
+          "The transition into the final pose is discontinuous relative to the cardinal anchors; 157.5 should remain a near-back, screen-right-side orientation rather than become screen-left-facing."
+        ],
+        "repairPrompt": "重做当前 directions 行为的方向序列，严格按 000、22.5、45、67.5、90、112.5、135、157.5 顺时针渐进。以 Image 4 为锚点：从正面 000 平滑转向屏幕右侧 090，再继续转向接近背面 180；最后一帧必须是接近背面且仍位于屏幕右侧的后方三分之四视角，不得跳到屏幕左侧。保持每帧角色身份、比例、基线、完整四肢和固定胸口徽记一致。",
+        "repairRows": [],
+        "modelProvenance": {
+          "requestedModel": "gpt-5.6-sol",
+          "actualModel": "gpt-5.6-sol",
+          "route": "chatgpt_model_route"
+        }
+      }
+    ],
+    "score": 56,
+    "mirrorSafe": true,
+    "warnings": [
+      "Mint robot anatomy, pixel style, scale, flat background, and pose completeness remain consistent across the row.",
+      "The first two frames are nearly front-identical, providing little visible 000-to-22.5 yaw progression.",
+      "The sequence reaches a rear view before the final frame and then switches to a screen-left-facing view."
+    ],
+    "failures": [
+      "The chronological directions are not a continuous clockwise progression from 000 through 157.5: the final pose is in the wrong quadrant and reverses past the approved front/right/back progression.",
+      "The transition into the final pose is discontinuous relative to the cardinal anchors; 157.5 should remain a near-back, screen-right-side orientation rather than become screen-left-facing."
+    ],
+    "modelProvenance": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "route": "chatgpt_model_route"
+    }
+  },
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

@@ -3,6 +3,8 @@ import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
+import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import {
   CODEX_PET_RESOURCE_KEY,
   codexPetRoutes,
@@ -59,6 +61,7 @@ function projectRow(overrides: Record<string, unknown> = {}) {
     status: "draft",
     latestRunId: null as string | null,
     createIdempotencyKey: null as string | null,
+    deletedAt: null as Date | null,
     createdAt: new Date("2026-07-17T10:00:00.000Z"),
     updatedAt: new Date("2026-07-17T10:00:00.000Z"),
     ...overrides,
@@ -102,6 +105,10 @@ function runRow(overrides: Record<string, unknown> = {}) {
     previewArtifactId: null as string | null,
     validationReport: null as unknown,
     requestedModel: "gpt-image-2",
+    visualQaModel: "gpt-5.6-sol",
+    imageGenerationCallCount: 0,
+    imageGenerationApprovalBudget: 0,
+    pendingImageJobKey: null as string | null,
     actualModels: [] as string[],
     usage: null as unknown,
     knowledgeDocumentId: null as string | null,
@@ -190,6 +197,8 @@ function applyData(target: Record<string, unknown>, data: Record<string, unknown
   for (const [key, value] of Object.entries(data)) {
     if (value && typeof value === "object" && !Array.isArray(value) && "increment" in value) {
       target[key] = Number(target[key] ?? 0) + Number((value as { increment: number }).increment);
+    } else if (value && typeof value === "object" && !Array.isArray(value) && "decrement" in value) {
+      target[key] = Number(target[key] ?? 0) - Number((value as { decrement: number }).decrement);
     } else {
       target[key] = value;
     }
@@ -333,6 +342,13 @@ function createPrismaMock(seed: {
   };
   const jobDelegate = {
     findMany: vi.fn(async ({ where = {} }: { where?: Record<string, unknown> } = {}) => jobs.filter((row) => matches(row, where))),
+    findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => jobs.find((row) => matches(row, where)) ?? null),
+    update: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      const row = jobs.find((candidate) => matches(candidate, where));
+      if (!row) throw new Error("job not found");
+      applyData(row, data);
+      return row;
+    }),
     updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
       const found = jobs.filter((row) => matches(row, where));
       found.forEach((row) => applyData(row, data));
@@ -551,6 +567,81 @@ describe("Codex pet routes", () => {
       includedRepairAttempts: 2,
     });
     await app.close();
+  });
+
+  it("filters qwen3.7 from the marketplace and freezes selected models into the run snapshot", async () => {
+    const project = projectRow({
+      imageModel: QWEN_IMAGE_MODEL,
+      visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
+    });
+    const { prisma, state } = createPrismaMock({ projects: [project] });
+    const billing = createBilling({
+      listEnabledModels: vi.fn(async () => ({ data: [
+        { model: CODEX_PET_BAILIAN_VISUAL_QA_MODEL, displayName: "Qwen3.6 Flash" },
+        { model: "gpt-5.6-sol", displayName: "GPT-5.6 Sol" },
+        { model: "qwen3.7-plus", displayName: "Qwen3.7 Plus" },
+        { model: "text-embedding-v4", displayName: "Text Embedding V4" },
+        { model: QWEN_IMAGE_MODEL, displayName: "Qwen Image 2.0 Pro" },
+      ] })),
+    });
+    const { app } = await createApp(prisma, { billing });
+
+    const catalog = await app.inject({
+      method: "GET",
+      url: "/api/workflow/codex-pets/models",
+      headers: auth,
+    });
+    expect(catalog.statusCode).toBe(200);
+    expect(catalog.json().data).toEqual({
+      visualModels: [
+        { model: CODEX_PET_BAILIAN_VISUAL_QA_MODEL, displayName: "Qwen3.6 Flash" },
+        { model: "gpt-5.6-sol", displayName: "GPT-5.6 Sol" },
+      ],
+      imageModels: [
+        { model: QWEN_IMAGE_MODEL, displayName: "Qwen Image 2.0 Pro" },
+        { model: GPT_IMAGE_MODEL, displayName: "GPT Image 2" },
+      ],
+    });
+
+    const started = await app.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/${project.id}/start`,
+      headers: { ...auth, "idempotency-key": "selected-model-run-1" },
+      payload: { idempotencyKey: "selected-model-run-1" },
+    });
+    expect([200, 202]).toContain(started.statusCode);
+    expect(state.runs).toHaveLength(1);
+    expect(state.runs[0]).toMatchObject({
+      requestedModel: QWEN_IMAGE_MODEL,
+      visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
+      inputSnapshot: {
+        modelContractVersion: "selectable-visual-v2",
+        requestedModel: QWEN_IMAGE_MODEL,
+        visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
+      },
+    });
+    await app.close();
+
+    const qwen37Project = projectRow({ id: "project-qwen37", visualQaModel: "qwen3.7-plus" });
+    const { prisma: qwen37Prisma, state: qwen37State } = createPrismaMock({ projects: [qwen37Project] });
+    const qwen37Billing = createBilling({
+      listEnabledModels: vi.fn(async () => ({ data: [
+        { model: "qwen3.7-plus", displayName: "Qwen3.7 Plus" },
+        { model: CODEX_PET_BAILIAN_VISUAL_QA_MODEL, displayName: "Qwen3.6 Flash" },
+      ] })),
+    });
+    const { app: qwen37App } = await createApp(qwen37Prisma, { billing: qwen37Billing });
+    const rejected = await qwen37App.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/${qwen37Project.id}/start`,
+      headers: { ...auth, "idempotency-key": "qwen37-blocked-run-1" },
+      payload: { idempotencyKey: "qwen37-blocked-run-1" },
+    });
+    expect(rejected.statusCode).toBe(409);
+    expect(rejected.json().error).toContain("模型广场");
+    expect(qwen37State.runs).toHaveLength(0);
+    expect(qwen37Billing.chargeResource).not.toHaveBeenCalled();
+    await qwen37App.close();
   });
 
   it("rejects start before creating a run or charging when the package is disabled", async () => {
@@ -919,6 +1010,54 @@ describe("Codex pet routes", () => {
     const recovered = await app.inject(request);
     expect(recovered.statusCode).toBe(200);
     expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("grants exactly one approved image call to a paused direction job", async () => {
+    const project = projectRow({ status: "awaiting_direction_review", latestRunId: "run-1" });
+    const run = runRow({
+      status: "awaiting_direction_review",
+      progressStage: "awaiting_direction_review",
+      progressPercent: 72,
+      pendingImageJobKey: "look-a",
+      imageGenerationApprovalBudget: 0,
+    });
+    const job = {
+      id: "job-look-a",
+      projectId: project.id,
+      runId: run.id,
+      userId: "u1",
+      key: "look-a",
+      kind: "look_row",
+      status: "awaiting_approval",
+      attempt: 1,
+      maxAttempts: 3,
+      workerId: null,
+      completedAt: null,
+      error: "等待用户批准",
+      createdAt: new Date(NOW),
+      updatedAt: new Date(NOW),
+    };
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [run], jobs: [job] });
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, { enqueueRun });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/codex-pets/projects/project-1/runs/run-1/approve-next-image",
+      headers: auth,
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(state.runs[0]).toMatchObject({
+      status: "direction_generating",
+      imageGenerationApprovalBudget: 1,
+      pendingImageJobKey: null,
+    });
+    expect(state.projects[0]).toMatchObject({ status: "direction_generating" });
+    expect(state.jobs[0]).toMatchObject({ status: "queued", attempt: 1, error: null });
+    expect(state.events.at(-1)).toMatchObject({ type: "image.call.approved", jobKey: "look-a" });
+    expect(enqueueRun).toHaveBeenCalledOnce();
     await app.close();
   });
 
@@ -1626,69 +1765,72 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
-  it("cancels before deletion and routes both live and stopped-worker requests through durable cleanup", async () => {
+  it("soft-deletes a live project, requests cancellation, and preserves its records", async () => {
     const project = projectRow({ latestRunId: "run-1", status: "base_generating" });
     const run = runRow({ status: "base_generating", workerId: "worker-1" });
     const artifact = artifactRow();
     const { prisma, state } = createPrismaMock({ projects: [project], runs: [run], artifacts: [artifact] });
     const requestCancellation = vi.fn(async () => undefined);
-    const enqueueProjectCleanup = vi.fn(async () => undefined);
-    const { app } = await createApp(prisma, { requestCancellation, enqueueProjectCleanup });
+    const { app } = await createApp(prisma, { requestCancellation });
 
     const pending = await app.inject({ method: "DELETE", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
     expect(pending.statusCode).toBe(202);
-    expect(pending.json().data).toMatchObject({ deletionPending: true, waitingForWorker: true });
+    expect(pending.json().data).toMatchObject({ softDeleted: true, deletionPending: true, waitingForWorker: true });
     expect(requestCancellation).toHaveBeenCalledWith("run-1");
-    expect(enqueueProjectCleanup).toHaveBeenCalledWith({ userId: "u1", projectId: "project-1" });
     expect(state.projects).toHaveLength(1);
-
-    state.runs[0]!.workerId = null;
-    state.runs[0]!.status = "cancelled";
-    const removed = await app.inject({ method: "DELETE", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
-    expect(removed.statusCode).toBe(202);
-    expect(removed.json().data).toMatchObject({ deletionPending: true, waitingForWorker: false });
-    expect(enqueueProjectCleanup).toHaveBeenCalledTimes(2);
-    expect(state.projects).toHaveLength(1);
+    expect(state.projects[0]).toMatchObject({ status: "deleting", deletedAt: NOW, createIdempotencyKey: null });
+    expect(state.runs).toHaveLength(1);
+    expect(state.artifacts).toHaveLength(1);
     expect(state.deletedDocumentSourceIds).toEqual([]);
+
+    const duplicate = await app.inject({ method: "DELETE", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
+    expect(duplicate.statusCode).toBe(404);
     await app.close();
   });
 
-  it("queues durable cleanup even when a queued or review-stage run has no live worker", async () => {
+  it("soft-deletes a queued project without a live worker and preserves audit data", async () => {
     const project = projectRow({ latestRunId: "run-1", status: "queued" });
     const run = runRow({ status: "queued", workerId: null, hasSuccessfulImage: false });
     const artifact = artifactRow();
     const { prisma, state } = createPrismaMock({ projects: [project], runs: [run], artifacts: [artifact] });
-    const enqueueProjectCleanup = vi.fn(async () => undefined);
-    const { app, billing } = await createApp(prisma, { enqueueProjectCleanup });
+    const { app, billing } = await createApp(prisma);
 
     const response = await app.inject({ method: "DELETE", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
     expect(response.statusCode).toBe(202);
-    expect(response.json().data).toMatchObject({ deletionPending: true, waitingForWorker: false });
+    expect(response.json().data).toMatchObject({ softDeleted: true, deletionPending: false, waitingForWorker: false });
     expect(state.projects).toHaveLength(1);
-    expect(state.projects[0]!.status).toBe("deleting");
+    expect(state.projects[0]).toMatchObject({ status: "deleting", deletedAt: NOW });
+    expect(state.runs).toHaveLength(1);
+    expect(state.artifacts).toHaveLength(1);
     expect(billing.refundResource).toHaveBeenCalledWith("codex-pet:run-1");
-    expect(enqueueProjectCleanup).toHaveBeenCalledWith({ userId: "u1", projectId: "project-1" });
 
     const restarted = await app.inject({
       method: "POST",
       url: "/api/workflow/codex-pets/projects/project-1/start",
       headers: { ...auth, "idempotency-key": "must-not-restart-1" },
     });
-    expect(restarted.statusCode).toBe(409);
+    expect(restarted.statusCode).toBe(404);
     expect(billing.chargeResource).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("keeps project state when the required durable cleanup queue is unavailable", async () => {
+  it("hides a soft-deleted project from history and detail without requiring a cleanup queue", async () => {
     const project = projectRow({ status: "draft" });
     const { prisma, state } = createPrismaMock({ projects: [project] });
     const { app } = await createApp(prisma);
 
     const response = await app.inject({ method: "DELETE", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
 
-    expect(response.statusCode).toBe(503);
-    expect(response.json()).toMatchObject({ retryable: true });
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data).toMatchObject({ softDeleted: true, deletionPending: false });
     expect(state.projects).toHaveLength(1);
+    expect(state.projects[0]).toMatchObject({ status: "deleting", deletedAt: NOW });
+
+    const history = await app.inject({ method: "GET", url: "/api/workflow/codex-pets/projects", headers: auth });
+    expect(history.statusCode).toBe(200);
+    expect(history.json().data.projects).toEqual([]);
+    const detail = await app.inject({ method: "GET", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
+    expect(detail.statusCode).toBe(404);
     await app.close();
   });
 });

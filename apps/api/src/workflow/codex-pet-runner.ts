@@ -8,6 +8,8 @@ import {
   assemblePetAtlas,
   assembleStandardPetAtlas,
   composeCardinalAnchorStrip,
+  composeLookBScreenLeftTrajectoryReference,
+  composeLookSourceBoardReference,
   composeNormalizedPoseBoard,
   chooseChromaKey,
   createAnimatedWebpPreview,
@@ -48,6 +50,7 @@ import {
 import {
   CodexPetModelContractError,
   CODEX_PET_MODEL_CONTRACT_VERSION,
+  codexPetVisualQaRouteForModel,
   isAllowedCodexPetImageModel,
   isAllowedCodexPetVisualModel,
 } from "./codex-pet-model-contract.js";
@@ -56,11 +59,13 @@ import {
   buildBasePetPrompt,
   buildBaseChoiceQaContext,
   buildCardinalPrompt,
+  CODEX_PET_CARDINAL_APPEARANCE_CONTRACT,
   buildJumpingQaEvidenceContext,
   buildLookMechanicsPrompt,
   buildLookRowPrompt,
   buildStandardRowPrompt,
   buildVisualQaPrompt,
+  sanitizeCodexPetDirectionRepairPrompt,
   type CodexPetVisualIdentity,
 } from "./codex-pet-prompts.js";
 import {
@@ -89,7 +94,7 @@ import {
 
 export const CODEX_PET_ACTIVE_STATUSES = [
   "queued", "base_generating", "awaiting_base_review", "standard_generating", "direction_generating",
-  "validating", "repairing", "packaging", "archiving",
+  "awaiting_direction_review", "validating", "repairing", "packaging", "archiving",
 ] as const;
 
 export const CODEX_PET_RESOURCE_KEY = "codex_pet_v2_package";
@@ -98,7 +103,8 @@ const WORKER_ID = `codex-pet-${process.pid}-${randomUUID().slice(0, 8)}`;
 const DEFAULT_STALE_RUN_MS = 15 * 60_000;
 const IDENTITY_GUIDE_VERSION = 2;
 const BOARD_JOB_INPUT_SCHEMA_VERSION = "codex-pet-board-input-v2";
-const BOARD_JOB_PROMPT_VERSION = "codex-pet-board-prompt-v2";
+const BOARD_JOB_PROMPT_VERSION = "codex-pet-board-prompt-v3";
+const CODEX_PET_RECOVERY_SCHEMA_VERSION = "codex-pet-recovery-v1";
 
 /**
  * The queue is at-least-once. A stale delivery must not be allowed to keep
@@ -113,7 +119,7 @@ export class CodexPetLeaseLostError extends Error {
   }
 }
 
-export type CodexPetExecutionStatus = "awaiting_base_review" | "packaging" | "archiving" | "ready" | "failed" | "cancelled" | "busy";
+export type CodexPetExecutionStatus = "awaiting_base_review" | "awaiting_direction_review" | "packaging" | "archiving" | "ready" | "failed" | "cancelled" | "busy";
 export interface CodexPetExecutionResult {
   readonly status: CodexPetExecutionStatus;
   readonly runId: string;
@@ -182,6 +188,7 @@ interface RunnerContext extends CodexPetRunnerDeps {
   readonly workerId: string;
   readonly project: CodexPetProject;
   readonly runId: string;
+  readonly imageModel: string;
   readonly visualQaModel: string;
   readonly identity: CodexPetVisualIdentity;
   readonly referenceAssetIds: readonly string[];
@@ -225,6 +232,16 @@ class CodexPetCancelledError extends Error {
   constructor() {
     super("用户已取消桌宠制作");
     this.name = "CodexPetCancelledError";
+  }
+}
+
+class CodexPetImageApprovalRequiredError extends Error {
+  constructor(
+    readonly jobKey: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "CodexPetImageApprovalRequiredError";
   }
 }
 
@@ -423,6 +440,16 @@ function providerMetadata(result: ImageGenerationResult): Record<string, unknown
   };
 }
 
+function isCodexPetRecoverySnapshot(value: unknown): boolean {
+  const snapshot = asRecord(value);
+  const recovery = asRecord(snapshot.recovery);
+  return recovery.schemaVersion === CODEX_PET_RECOVERY_SCHEMA_VERSION
+    && typeof recovery.sourceRunId === "string"
+    && recovery.sourceRunId.length > 0
+    && typeof recovery.fingerprint === "string"
+    && recovery.fingerprint.length > 0;
+}
+
 function imageFailureMetadata(error: unknown): Record<string, unknown> {
   const classification = classifyImageGenerationError(error);
   return {
@@ -479,6 +506,107 @@ async function currentRun(ctx: RunnerContext): Promise<CodexPetRun> {
   return run;
 }
 
+async function recordImageGenerationAttempt(ctx: RunnerContext, jobKey: string, providerAttempt: number): Promise<void> {
+  const updated = await ctx.prisma.codexPetRun.updateMany({
+    where: {
+      id: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      workerId: ctx.workerId,
+      status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
+      cancelRequested: false,
+    },
+    data: {
+      imageGenerationCallCount: { increment: 1 },
+      heartbeatAt: new Date(),
+    },
+  });
+  if (updated.count !== 1) throw new CodexPetLeaseLostError();
+  const run = await currentRun(ctx);
+  await ctx.appendEvent({
+    prisma: ctx.prisma,
+    runId: ctx.runId,
+    type: "image.call.started",
+    stage: run.progressStage,
+    progress: run.progressPercent,
+    message: `已发起第 ${run.imageGenerationCallCount} 次真实生图调用`,
+    payload: {
+      callCount: run.imageGenerationCallCount,
+      requestedModel: ctx.imageModel,
+      providerAttempt,
+    },
+    jobKey,
+  });
+}
+
+async function consumeImageGenerationApproval(ctx: RunnerContext, jobKey: string): Promise<void> {
+  const consumed = await ctx.prisma.codexPetRun.updateMany({
+    where: {
+      id: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      workerId: ctx.workerId,
+      status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
+      imageGenerationApprovalBudget: { gt: 0 },
+      cancelRequested: false,
+    },
+    data: {
+      imageGenerationApprovalBudget: { decrement: 1 },
+      pendingImageJobKey: null,
+      heartbeatAt: new Date(),
+    },
+  });
+  if (consumed.count !== 1) {
+    throw new CodexPetImageApprovalRequiredError(jobKey, `${jobKey} 需要用户明确批准下一次真实生图调用`);
+  }
+}
+
+async function pauseForImageApproval(ctx: RunnerContext, error: CodexPetImageApprovalRequiredError): Promise<void> {
+  const message = `${error.message}；当前不会自动重试或生成下一张图`;
+  await ctx.prisma.$transaction(async (tx) => {
+    await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', ctx.runId);
+    const changed = await tx.codexPetRun.updateMany({
+      where: {
+        id: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        workerId: ctx.workerId,
+        status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
+        cancelRequested: false,
+      },
+      data: {
+        status: "awaiting_direction_review",
+        progressStage: "awaiting_direction_review",
+        progressMessage: message,
+        pendingImageJobKey: error.jobKey,
+        imageGenerationApprovalBudget: 0,
+        workerId: null,
+        heartbeatAt: null,
+        error: null,
+      },
+    });
+    if (changed.count !== 1) throw new CodexPetLeaseLostError();
+    await tx.codexPetJob.updateMany({
+      where: { runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, key: error.jobKey },
+      data: { status: "awaiting_approval", workerId: null, completedAt: null, error: message },
+    });
+    await tx.codexPetProject.updateMany({
+      where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } },
+      data: { status: "awaiting_direction_review" },
+    });
+  });
+  await ctx.appendEvent({
+    prisma: ctx.prisma,
+    runId: ctx.runId,
+    type: "image.approval_required",
+    stage: "awaiting_direction_review",
+    progress: (await currentRun(ctx)).progressPercent,
+    message,
+    payload: { jobKey: error.jobKey, maxApprovedCalls: 1 },
+    jobKey: error.jobKey,
+  });
+}
+
 function staleRunMs(env: NodeJS.ProcessEnv): number {
   const value = Number(env.CODEX_PET_STALE_RUN_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_STALE_RUN_MS;
@@ -499,6 +627,7 @@ async function claimRunLease(
   env: NodeJS.ProcessEnv,
   expectedProjectId?: string,
   expectedUserId?: string,
+  zeroChargeRecovery = false,
 ): Promise<{ claimed: boolean; run: RunnerRunWithProject | null }> {
   const now = new Date();
   const staleBefore = new Date(now.getTime() - staleRunMs(env));
@@ -509,8 +638,9 @@ async function claimRunLease(
         ...(expectedProjectId ? { projectId: expectedProjectId } : {}),
         ...(expectedUserId ? { userId: expectedUserId } : {}),
         status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-        billingChargeStatus: "charged",
-        billingActivatedAt: { not: null },
+        ...(zeroChargeRecovery
+          ? { billingChargeStatus: "not_required", billingPoints: 0 }
+          : { billingChargeStatus: "charged", billingActivatedAt: { not: null } }),
         OR: [
           { workerId: null },
           { heartbeatAt: null },
@@ -860,6 +990,7 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
       quality: "low",
       env: ctx.env,
       signal: ctx.signal,
+      onAttempt: (providerAttempt) => recordImageGenerationAttempt(ctx, key, providerAttempt),
       onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", "base_generating", 8, "生图服务暂时不可用，正在重试", {
         transportAttempt,
         retryKind: "transport",
@@ -901,7 +1032,7 @@ async function selectBaseAutomatically(ctx: RunnerContext, candidates: readonly 
   const job = await ensureJob(ctx, "base-selection", "visual_qa", ["base-candidate-1", "base-candidate-2"]);
   const output = asRecord(job.output);
   if (job.status === "completed" && typeof output.selectedArtifactId === "string") {
-    assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "base-selection");
+    assertCodexPetVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "base-selection");
     return output.selectedArtifactId;
   }
   const verdicts = await Promise.all(candidates.map((candidate, index) => ctx.qa({
@@ -915,7 +1046,7 @@ async function selectBaseAutomatically(ctx: RunnerContext, candidates: readonly 
   })));
   await checkCancelled(ctx);
   const baseQaProvenance = verdicts.map((verdict, index) => (
-    assertVisualQaProvenance(verdict.modelProvenance, ctx.visualQaModel, `base-selection-candidate-${index + 1}`)
+    assertCodexPetVisualQaProvenance(verdict.modelProvenance, ctx.visualQaModel, `base-selection-candidate-${index + 1}`)
   ));
   const eligible = codexPetVisualQaVerdictPasses;
   // Never silently pick a visually rejected candidate.  Continuing with the
@@ -1047,7 +1178,7 @@ async function getIdentityGuide(
       && Boolean(persisted.trim())
       && persisted.length <= 1600;
     if (matchesCanonical) {
-      assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "identity-guide");
+      assertCodexPetVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "identity-guide");
       return persisted.trim();
     }
 
@@ -1113,7 +1244,7 @@ async function getIdentityGuide(
       });
       const guide = generatedGuide.replace(/\s+/g, " ").trim().slice(0, 1600);
       if (!guide) throw new Error("角色解剖与身份指南为空");
-      const guideProvenance = assertVisualQaProvenance(guideModelProvenance, ctx.visualQaModel, "identity-guide");
+      const guideProvenance = assertCodexPetVisualQaProvenance(guideModelProvenance, ctx.visualQaModel, "identity-guide");
       await checkCancelled(ctx);
       const completed = await ctx.prisma.codexPetJob.updateMany({
         where: {
@@ -1169,7 +1300,7 @@ async function completedBoardJob(ctx: RunnerContext, job: CodexPetJob): Promise<
   if (job.status !== "completed" || job.outputArtifactIds.length === 0) return null;
   const output = asRecord(job.output);
   if (typeof output.boardArtifactId !== "string") return null;
-  assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, job.key);
+  assertCodexPetVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, job.key);
   const loadedFrames = await loadArtifactsInOrder(ctx, job.outputArtifactIds);
   const boardArtifact = await ctx.prisma.codexPetArtifact.findFirst({
     where: {
@@ -1465,7 +1596,15 @@ async function runBoardJob(ctx: RunnerContext, input: {
       return completed;
     }
   }
-  const repairRequirements = input.repairHint?.trim() ? [input.repairHint.trim()] : [];
+  const normalizeRepairRequirement = (value: string) => input.qaKind === "directions"
+    ? value.includes("The following cardinal appearance contract is authoritative and overrides any contradictory wording in a model diagnostic:")
+      ? value
+      : sanitizeCodexPetDirectionRepairPrompt(value)
+    : value.trim();
+  const initialRepairRequirement = input.repairHint?.trim()
+    ? normalizeRepairRequirement(input.repairHint)
+    : "";
+  const repairRequirements = initialRepairRequirement ? [initialRepairRequirement] : [];
   let previousFailedBoard: Buffer | null = null;
   let lastError = "";
   // A process may die after persisting status=running but before producing a
@@ -1477,9 +1616,17 @@ async function runBoardJob(ctx: RunnerContext, input: {
     : Math.max(1, job.attempt + 1);
   const workflowStage = input.workflowStage
     ?? (input.qaKind === "row" ? "standard_generating" : "direction_generating");
+  const requiresSingleCallApproval = ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0"
+    && (input.qaKind === "directions" || workflowStage === "validating");
   for (let attempt = firstAttempt; attempt <= job.maxAttempts; attempt += 1) {
     await checkCancelled(ctx);
     job = await startJob(ctx, job, attempt, input.progress, `${input.qaContext}${attempt > 1 ? `（自动修复 ${attempt - 1}/2）` : ""}`);
+    // Establish a durable running job before consuming the one-call budget.
+    // If the job transition itself fails, no approval is lost because no
+    // provider request could have started. A missing budget still raises the
+    // approval-required signal and is converted into an awaiting-review pause
+    // by the outer runner without contacting the model.
+    if (requiresSingleCallApproval) await consumeImageGenerationApproval(ctx, input.key);
     try {
       const generated = await ctx.generate({
         prompt: `${input.prompt}${repairRequirements.length > 0
@@ -1494,6 +1641,8 @@ async function runBoardJob(ctx: RunnerContext, input: {
         quality: "low",
         env: ctx.env,
         signal: ctx.signal,
+        maxAttempts: requiresSingleCallApproval ? 1 : undefined,
+        onAttempt: (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, providerAttempt),
         onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", workflowStage, input.progress, "上游生图调用重试中", {
           transportAttempt,
           retryKind: "transport",
@@ -1540,24 +1689,44 @@ async function runBoardJob(ctx: RunnerContext, input: {
           : "";
         const canonicalReference = input.references.find((reference) => reference.filename?.includes("canonical-base"))
           ?? input.references[0];
-        const qaImages = [
-          { buffer: canonicalReference ? Buffer.from(canonicalReference.b64, "base64") : generated.buffer, mime: canonicalReference?.mime },
-          { buffer: normalizedBoard, mime: "image/png" },
-        ];
+        const directionEvidence = input.qaKind === "directions"
+          ? input.references.filter((reference) => reference.filename?.includes("approved-anchor-storyboard")
+            || reference.filename?.includes("trajectory-scaffold")
+            || reference.filename === "approved-cardinal-anchor-strip.png"
+            || reference.filename === "approved-registered-look-row-9-4x2.png")
+          : [];
+        const canonicalQaImage = {
+          buffer: canonicalReference ? Buffer.from(canonicalReference.b64, "base64") : generated.buffer,
+          mime: canonicalReference?.mime,
+        };
+        // Direction reviewers must see the complete generated eight-pose row
+        // first. In R7 the reviewer fixated on the intentionally sparse
+        // two-endpoint storyboard and incorrectly reported six missing poses
+        // even though deterministic extraction recovered all eight cells.
+        const qaImages = input.qaKind === "directions"
+          ? [
+              { buffer: normalizedBoard, mime: "image/png" },
+              canonicalQaImage,
+              ...directionEvidence.map((reference) => ({ buffer: Buffer.from(reference.b64, "base64"), mime: reference.mime })),
+            ]
+          : [canonicalQaImage, { buffer: normalizedBoard, mime: "image/png" }];
+        const directionEvidenceContext = input.qaKind === "directions"
+          ? " Image 1 is the complete normalized eight-pose row under review in chronological row-major reading order; inspect all eight of its visible poses before any supporting image. Image 2 is the canonical identity. Image 3 is the intentionally sparse row-major direction scaffold with only approved endpoints placed; its blank slots are not missing output poses. Image 4 is the complete approved 2x2 cardinal basis: top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT. When present, Image 5 is the already-approved preceding direction row. Never count poses from Image 3; count and judge the eight poses in Image 1. Compare visible front/back/side appearance against the anchors; never assume 000 is front-facing or 180 is rear-facing."
+          : "";
         const visualQa = await ctx.qaConsensus({
           images: qaImages,
           prompt: buildVisualQaPrompt(
             input.qaKind,
             `${input.qaContext}${jumpingEvidence ? `。${jumpingEvidence}` : ""}${extracted.geometry.warnings.length > 0
               ? `。确定性尺寸/基线指标需要复核：${extracted.geometry.warnings.join("；")}`
-              : ""}`,
+              : ""}${directionEvidenceContext.replace("row-major anchor storyboard", "row-major direction scaffold")}`,
             ctx.identity.canonicalGuide,
           ),
           env: ctx.env,
           signal: ctx.signal,
           repetitions: input.qaRepetitions ?? 1,
         });
-        assertVisualQaProvenance(visualQa.modelProvenance, ctx.visualQaModel, `${input.key}-visual-qa`);
+        assertCodexPetVisualQaProvenance(visualQa.modelProvenance, ctx.visualQaModel, `${input.key}-visual-qa`);
         qa = {
           ...visualQa,
           warnings: [...new Set([...extracted.warnings, ...visualQa.warnings])],
@@ -1574,7 +1743,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
             signal: ctx.signal,
             repetitions: 3,
           });
-          assertVisualQaProvenance(adjudication.modelProvenance, ctx.visualQaModel, `${input.key}-jumping-adjudication`);
+          assertCodexPetVisualQaProvenance(adjudication.modelProvenance, ctx.visualQaModel, `${input.key}-jumping-adjudication`);
           await putJsonArtifact(ctx, {
             jobId: job.id,
             kind: "qa_report",
@@ -1600,7 +1769,11 @@ async function runBoardJob(ctx: RunnerContext, input: {
             ];
             qa = {
               pass: true,
-              verdicts: [...visualQa.verdicts, ...adjudication.verdicts],
+              // The independent adjudication supersedes this one disputed
+              // scale-only gate. Keeping the rejected initial vote in the
+              // active consensus would turn a valid 1-of-1 adjudication into
+              // a synthetic 1:1 tie and force needless image regeneration.
+              verdicts: [...adjudication.verdicts],
               score: adjudication.score,
               mirrorSafe: visualQa.mirrorSafe,
               warnings: [...new Set(acceptedWarnings)],
@@ -1630,8 +1803,9 @@ async function runBoardJob(ctx: RunnerContext, input: {
         const nextRepairRequirement = extracted.ok
           ? qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt || lastError
           : poseBoardRepairPrompt(extracted.errors);
-        if (nextRepairRequirement.trim() && !repairRequirements.includes(nextRepairRequirement.trim())) {
-          repairRequirements.push(nextRepairRequirement.trim());
+        const normalizedRepairRequirement = normalizeRepairRequirement(nextRepairRequirement);
+        if (normalizedRepairRequirement && !repairRequirements.includes(normalizedRepairRequirement)) {
+          repairRequirements.push(normalizedRepairRequirement);
         }
         previousFailedBoard = generated.buffer;
         await putJsonArtifact(ctx, {
@@ -1661,13 +1835,16 @@ async function runBoardJob(ctx: RunnerContext, input: {
           expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
         });
         await failJobAttempt(ctx, job, attempt, lastError, input.progress);
+        if (requiresSingleCallApproval) {
+          throw new CodexPetImageApprovalRequiredError(input.key, `${input.qaContext}未通过检查，需要确认后才能重新生成`);
+        }
         if (attempt >= job.maxAttempts) throw new Error(`${input.qaContext}经两轮自动修复后仍未通过：${lastError}`);
         continue;
       }
       // Only now has this image passed both deterministic extraction and the
       // visual action/identity gate.  A generated-but-rejected board must not
       // affect the cancellation refund decision.
-      const qaProvenance = assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, input.key);
+      const qaProvenance = assertCodexPetVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, input.key);
       await markImageSucceeded(ctx, job, generated.provider);
       const frameArtifacts: CodexPetArtifact[] = [];
       for (let index = 0; index < extracted.frames.length; index += 1) {
@@ -1752,11 +1929,15 @@ async function runBoardJob(ctx: RunnerContext, input: {
       await emit(ctx, "job.completed", eventStage, input.progress, `${input.qaContext}已通过检查`, { attempt, warnings: qa.warnings }, input.key);
       return { job, frames: extracted.frames, frameArtifacts, board: generated.buffer, boardArtifact, mirrorSafe: qa.mirrorSafe, qa };
     } catch (error) {
+      if (error instanceof CodexPetImageApprovalRequiredError) throw error;
       if (error instanceof CodexPetLeaseLostError || ctx.signal?.reason instanceof CodexPetLeaseLostError) throw new CodexPetLeaseLostError();
       if (error instanceof CodexPetCancelledError || ctx.signal?.aborted) throw new CodexPetCancelledError();
       lastError = safeError(error);
       const latest = await ctx.prisma.codexPetJob.findUnique({ where: { id: job.id } });
       if (latest?.status !== "failed") await failJobAttempt(ctx, job, attempt, lastError, input.progress, true);
+      if (requiresSingleCallApproval) {
+        throw new CodexPetImageApprovalRequiredError(input.key, `${input.qaContext}调用失败，需要确认后才能再次生成`);
+      }
       // Transport retries are already bounded inside generateCodexPetVisual.
       // Infrastructure, moderation and invalid-parameter failures must not be
       // multiplied by the complete-action-group visual repair loop.
@@ -1777,6 +1958,11 @@ async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, cano
   ].filter(Boolean))];
   job = await startJob(ctx, job, 1, 30, "逐帧镜像生成向左移动动画");
   const frames = await mirrorFramesPreservingOrder(right.frames);
+  const normalizedBoard = await composeNormalizedPoseBoard(frames, {
+    columns: 4,
+    rows: 2,
+    chromaKey: ctx.identity.chromaKey,
+  });
   const preview = await createAnimatedWebpPreview(frames, petRowSpec("running-left").durations);
   const boardArtifact = await ctx.artifacts.put({
     userId: ctx.project.userId,
@@ -1823,10 +2009,14 @@ async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, cano
   let qa: PetVisualQaConsensus;
   try {
     qa = await ctx.qaConsensus({
-      images: [{ buffer: canonical.buffer, mime: canonical.artifact.mime }, { buffer: preview.image, mime: "image/webp" }],
+      images: [
+        { buffer: canonical.buffer, mime: canonical.artifact.mime },
+        { buffer: normalizedBoard, mime: "image/png" },
+        { buffer: preview.image, mime: "image/webp" },
+      ],
       prompt: buildVisualQaPrompt(
         "row",
-        "running-left must face/travel left; mirroring must preserve identity, timing and all asymmetric meaning",
+        "running-left must face/travel left; the second image is the complete static chronological eight-frame cycle and the third is its animation preview; mirroring must preserve identity, timing and all asymmetric meaning. Images 2 and 3 are pre-despill intermediate assets. Bright magenta/chroma fringe at the alpha boundary is expected here and must never fail mirror suitability: the single deterministic final-atlas despill pass owns chroma cleanup. Judge only facing direction, gait cadence, identity, asymmetric meaning, attachment, clipping and motion continuity.",
         ctx.identity.canonicalGuide,
       ),
       env: ctx.env,
@@ -1838,7 +2028,7 @@ async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, cano
     await failJobAttempt(ctx, job, 1, safeError(error), 30, true).catch(() => undefined);
     throw error;
   }
-  const qaProvenance = assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row-running-left");
+  const qaProvenance = assertCodexPetVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row-running-left");
   if (!codexPetVisualQaConsensusPasses(qa)) {
     await supersedeRejectedMirror();
     await failJobAttempt(ctx, job, 1, qa.failures.join("；") || "镜像结果不适用", 30);
@@ -1889,15 +2079,16 @@ function imageInput(buffer: Buffer, mime = "image/png", filename = "reference.pn
 /**
  * GPT Image edits preserves only the first two direction references as
  * independent multipart images and compacts the remaining guidance into one
- * contact sheet. Direction edits keep a deterministic 4×2 cardinal endpoint
- * storyboard first as the primary edit target and canonical identity second.
- * The complete cardinal basis remains in supporting guidance. Standard
- * motion, layout, the registered first row and failed-board diagnostics are
- * useful continuity evidence, but none may outrank the cardinal semantics.
+ * contact sheet. Direction edits keep a deterministic 4×2 direction scaffold
+ * first as the primary edit target and canonical identity second. The complete
+ * cardinal basis remains in supporting guidance. Standard motion, layout, the
+ * registered first row and failed-board diagnostics are useful continuity
+ * evidence, but none may outrank the cardinal semantics.
  */
 function lookRowReferences(input: {
   readonly row: "look-a" | "look-b";
   readonly anchorStoryboard: Buffer;
+  readonly directionArcGuide?: Buffer;
   readonly canonical: { readonly buffer: Buffer; readonly mime: string };
   readonly cardinalAnchor: { readonly buffer: Buffer; readonly mime: string };
   readonly standardContact: Buffer;
@@ -1905,8 +2096,15 @@ function lookRowReferences(input: {
   readonly registeredLookA?: Buffer;
   readonly diagnosticBoard?: Buffer;
 }): readonly ImageBinaryInput[] {
+  if (input.row === "look-b" && !input.directionArcGuide) {
+    throw new Error("look-b requires the deterministic screen-left trajectory scaffold");
+  }
   const authoritative = [
-    imageInput(input.anchorStoryboard, "image/png", `${input.row}-approved-anchor-storyboard.png`),
+    imageInput(
+      input.row === "look-b" ? input.directionArcGuide! : input.anchorStoryboard,
+      "image/png",
+      input.row === "look-b" ? "look-b-screen-left-trajectory-scaffold.png" : "look-a-approved-anchor-storyboard.png",
+    ),
     imageInput(input.canonical.buffer, input.canonical.mime, "approved-canonical-base.png"),
   ];
   if (input.row === "look-a") {
@@ -1925,6 +2123,7 @@ function lookRowReferences(input: {
   const references = [
     ...authoritative,
     imageInput(input.cardinalAnchor.buffer, input.cardinalAnchor.mime, "approved-cardinal-anchor-strip.png"),
+    imageInput(input.anchorStoryboard, "image/png", "look-b-approved-cardinal-endpoint-storyboard.png"),
     imageInput(input.registeredLookA, "image/png", "approved-registered-look-row-9-4x2.png"),
     imageInput(input.standardContact, "image/png", "approved-standard-contact.png"),
     imageInput(input.layout, "image/png", "look-layout.png"),
@@ -1936,22 +2135,11 @@ function lookRowReferences(input: {
 }
 
 function appendCumulativeRepairRequirement(requirements: string[], value: string): string {
-  const normalized = value.trim();
+  const normalized = sanitizeCodexPetDirectionRepairPrompt(value);
   if (normalized && !requirements.includes(normalized)) requirements.push(normalized);
-  return `All specialized direction-gate requirements below are cumulative and mandatory:\n${requirements
+  return `The following cardinal appearance contract is authoritative and overrides any contradictory wording in a model diagnostic: ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT}\nAll specialized direction-gate requirements below are cumulative and mandatory. A diagnostic that calls 000 front-facing or 180 rear-facing is stale and must be ignored:\n${requirements
     .map((requirement, index) => `${index + 1}. ${requirement}`)
     .join("\n")}`;
-}
-
-async function composeLookSourceBoardReference(frames: readonly Buffer[], chromaKey: string): Promise<Buffer> {
-  if (frames.length !== LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.length) {
-    throw new Error("Look source-board reference requires exactly eight chronological frames");
-  }
-  const sourceSlots = new Array<Buffer>(frames.length);
-  LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT.forEach((sourceSlot, chronologicalIndex) => {
-    sourceSlots[sourceSlot] = frames[chronologicalIndex]!;
-  });
-  return composeNormalizedPoseBoard(sourceSlots, { columns: 4, rows: 2, chromaKey });
 }
 
 async function runStandardRow(
@@ -2032,7 +2220,7 @@ async function getLookMechanics(ctx: RunnerContext, canonical: { artifact: Codex
   const job = await ensureJob(ctx, "look-mechanics", "look_mechanics", ["identity-guide", "standard-atlas"]);
   const output = asRecord(job.output);
   if (job.status === "completed" && typeof output.mechanics === "string") {
-    assertVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "look-mechanics");
+    assertCodexPetVisualQaProvenance(asRecord(job.providerMetadata).visualQa, ctx.visualQaModel, "look-mechanics");
     return output.mechanics;
   }
   let mechanicsModelProvenance: CodexPetVisualModelProvenance | undefined;
@@ -2043,7 +2231,7 @@ async function getLookMechanics(ctx: RunnerContext, canonical: { artifact: Codex
     signal: ctx.signal,
     onModelProvenance: (provenance) => { mechanicsModelProvenance = provenance; },
   });
-  const mechanicsProvenance = assertVisualQaProvenance(mechanicsModelProvenance, ctx.visualQaModel, "look-mechanics");
+  const mechanicsProvenance = assertCodexPetVisualQaProvenance(mechanicsModelProvenance, ctx.visualQaModel, "look-mechanics");
   await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: {
     status: "completed",
     attempt: 1,
@@ -2399,12 +2587,19 @@ async function reviewFirstLookRow(
       { buffer: input.canonical.buffer, mime: input.canonical.artifact.mime },
       { buffer: input.standardContact, mime: "image/png" },
       { buffer: input.cardinalAnchor.buffer, mime: input.cardinalAnchor.artifact.mime },
+      // Keep the complete registered row as a static, inspectable artifact in
+      // addition to the animated preview. Some multimodal reviewers inspect
+      // only the first animation frame and otherwise cannot verify all eight
+      // direction cells or a local reversal.
+      { buffer: input.look.registeredRow, mime: "image/png" },
       { buffer: preview.image, mime: preview.mime },
     ],
     prompt: buildVisualQaPrompt(
       "directions",
       `Pre-row-10 gate for the registered row-9 sequence 000, 022.5, 045, 067.5, 090, 112.5, 135, 157.5. `
       + `Confirm 000 unmistakably up, 090 unmistakably screen-right, every intermediate stays in its labeled quadrant, and the animated sequence advances clockwise without reversal, registration snap, scale pop or identity drift. `
+      + `Image 3 is the authoritative 2x2 cardinal basis: top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT. Row-9 cell 1 must match Image 3 top-left's visible front/back appearance, cell 5 must match its top-right, and cell 8 must visibly approach its bottom-left without entering the opposite side. `
+      + `Image 4 is the complete static eight-frame registered row in chronological left-to-right order; inspect every cell. Image 5 is its animation preview. `
       + `Continuity metrics are review evidence only: ${continuity.warnings.map((warning) => warning.message).slice(0, 16).join(" | ") || "none"}.`,
       ctx.identity.canonicalGuide,
     ),
@@ -2412,7 +2607,7 @@ async function reviewFirstLookRow(
     signal: ctx.signal,
     repetitions: 1,
   });
-  assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
+  assertCodexPetVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
   await putJsonArtifact(ctx, {
     jobId: input.look.registrationJob.id,
     kind: "qa_report",
@@ -2473,6 +2668,7 @@ async function reviewSecondLookRow(
         "directions",
         `Independent pre-row-10 gate for registered directions 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5. `
         + `Confirm 180 unmistakably down, 270 unmistakably screen-left, every intermediate remains in its labeled quadrant, and the animated row advances clockwise without reversal, registration snap, scale pop or identity drift. `
+        + `Image 3 is the authoritative 2x2 cardinal basis: top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT. Image 4 is approved row 9; Image 5 is the complete static row 10 in chronological left-to-right order; Image 6 is its animation preview. Row-10 cell 1 must match Image 3 bottom-left and cell 5 must match Image 3 bottom-right. `
         + `Compare the preceding 157.5 frame from row 9 and the 000 anchor for both row-boundary seams. `
         + `Continuity metrics are review evidence only: ${continuity.warnings.map((warning) => warning.message).slice(0, 16).join(" | ") || "none"}.`,
         ctx.identity.canonicalGuide,
@@ -2481,7 +2677,7 @@ async function reviewSecondLookRow(
       signal: ctx.signal,
       repetitions: 1,
     });
-    assertVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
+    assertCodexPetVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
   }
   const failures = [...input.look.errors, ...continuity.errors, ...qa.failures];
   const repairPrompt = qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt
@@ -2559,7 +2755,7 @@ interface VisualQaProvenanceSummary {
   readonly routes: readonly string[];
 }
 
-function assertVisualQaProvenance(value: unknown, expectedModel: string, label: string): VisualQaProvenanceSummary {
+export function assertCodexPetVisualQaProvenance(value: unknown, expectedModel: string, label: string): VisualQaProvenanceSummary {
   const row = asRecord(value);
   const actualModels = [...new Set([
     ...(typeof row.actualModel === "string" ? [row.actualModel.trim()] : []),
@@ -2573,11 +2769,12 @@ function assertVisualQaProvenance(value: unknown, expectedModel: string, label: 
       ? row.routes.filter((route): route is string => typeof route === "string").map((route) => route.trim())
       : []),
   ].filter(Boolean))];
+  const expectedRoute = codexPetVisualQaRouteForModel(expectedModel);
   if (row.requestedModel !== expectedModel
     || actualModels.length === 0
-    || actualModels.some((model) => !isAllowedCodexPetVisualModel(model))
+    || actualModels.some((model) => !isAllowedCodexPetVisualModel(model) || model !== expectedModel)
     || routes.length === 0
-    || routes.some((route) => route !== "chatgpt_model_route")) {
+    || routes.some((route) => route !== expectedRoute)) {
     throw new CodexPetModelContractError(`${label} 缺少可信的 ${expectedModel} 模型来源证明`);
   }
   return { requestedModel: expectedModel, actualModels, routes };
@@ -2594,16 +2791,16 @@ async function summarizeRequiredVisualJobProvenance(ctx: RunnerContext): Promise
   });
   const requiredKeys: string[] = [...REQUIRED_VISUAL_JOB_KEYS];
   const baseSelection = jobs.find((job) => job.key === "base-selection");
-  if (!baseSelection) throw new Error("主形象选择任务缺失，不能证明 GPT-only 模型合同");
+  if (!baseSelection) throw new Error("主形象选择任务缺失，不能证明可选视觉模型合同");
   if (asRecord(baseSelection.output).selectionMode !== "manual") requiredKeys.push("base-selection");
 
   const actualModels = new Set<string>();
   const routes = new Set<string>();
   for (const key of requiredKeys) {
     const job = jobs.find((candidate) => candidate.key === key);
-    if (!job || job.status !== "completed") throw new Error(`${key} 未完成，不能证明 GPT-only 模型合同`);
+    if (!job || job.status !== "completed") throw new Error(`${key} 未完成，不能证明可选视觉模型合同`);
     const visualQa = asRecord(job.providerMetadata).visualQa;
-    const provenance = assertVisualQaProvenance(visualQa, ctx.visualQaModel, key);
+    const provenance = assertCodexPetVisualQaProvenance(visualQa, ctx.visualQaModel, key);
     provenance.actualModels.forEach((model) => actualModels.add(model));
     provenance.routes.forEach((route) => routes.add(route));
   }
@@ -3161,6 +3358,39 @@ async function releaseDeferredPackagingLease(ctx: RunnerContext, error: CodexPet
   return released.count === 1;
 }
 
+async function deferRecoveryPackaging(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
+  const released = await ctx.prisma.$transaction(async (tx) => {
+    const changed = await tx.codexPetRun.updateMany({
+      where: {
+        id: ctx.runId,
+        projectId: ctx.project.id,
+        userId: ctx.project.userId,
+        workerId: ctx.workerId,
+        status: "packaging",
+        billingChargeStatus: "not_required",
+        billingPoints: 0,
+        cancelRequested: false,
+      },
+      data: {
+        progressStage: "packaging",
+        progressPercent: 94,
+        progressMessage: "恢复运行正在等待最终打包 checkpoint",
+        error: null,
+        workerId: null,
+        heartbeatAt: null,
+      },
+    });
+    if (changed.count !== 1) return false;
+    await tx.codexPetProject.updateMany({
+      where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } },
+      data: { status: "packaging" },
+    });
+    return true;
+  });
+  if (!released) throw new CodexPetLeaseLostError();
+  return { status: "packaging", runId: ctx.runId };
+}
+
 async function continueAfterDurablePackaging(
   ctx: RunnerContext,
   packaged: CodexPetDurablePackagingResult,
@@ -3204,6 +3434,16 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   if (run.status === "cancelled" || run.cancelRequested) throw new CodexPetCancelledError();
   if (run.status === "archiving") return completeKnowledgeArchive(ctx);
   if (run.status === "packaging") {
+    const recoveryRun = isCodexPetRecoverySnapshot(run.inputSnapshot);
+    if (recoveryRun) {
+      const finalPackageJob = await ctx.prisma.codexPetJob.findUnique({
+        where: { runId_key: { runId: ctx.runId, key: "final-package" } },
+        select: { id: true },
+      });
+      if (!finalPackageJob) return deferRecoveryPackaging(ctx);
+      const resumed = await resumeDurablePackaging(ctx);
+      return resumed ?? deferRecoveryPackaging(ctx);
+    }
     const resumed = await resumeDurablePackaging(ctx);
     if (resumed) return resumed;
     // Legacy packaging rows predate final-package checkpoints. Replay the
@@ -3333,8 +3573,8 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     columns: 4,
     rows: 2,
     frameCount: 8,
-    title: "Eight clockwise look directions · follow the serpentine frame numbers",
-    slotLabels: ["1", "2", "3", "4", "8", "7", "6", "5"],
+    title: "Eight clockwise look directions · follow the row-major frame numbers",
+    slotLabels: ["1", "2", "3", "4", "5", "6", "7", "8"],
   });
   let lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
   let lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
@@ -3425,6 +3665,11 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   // rearrangement with no resampling and avoids an unnecessarily extreme
   // 1536x208 reference aspect ratio.
   let registeredLookAReference = await composeLookSourceBoardReference(registeredLookA.frames, ctx.identity.chromaKey);
+  let lookBScreenLeftTrajectoryReference = await composeLookBScreenLeftTrajectoryReference(
+    registeredLookA.frames,
+    cardinals.frames,
+    ctx.identity.chromaKey,
+  );
   await emit(ctx, "stage.completed", "direction_generating", 74, "第一组观察方向已完成注册、边缘、语义和连续性门禁", {
     row: 9,
     registeredRowArtifactId: registeredLookA.registeredRowArtifact.id,
@@ -3441,6 +3686,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     references: lookRowReferences({
       row: "look-b",
       anchorStoryboard: lookBAnchorStoryboard,
+      directionArcGuide: lookBScreenLeftTrajectoryReference,
       canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
       cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
       registeredLookA: registeredLookAReference,
@@ -3485,6 +3731,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       references: lookRowReferences({
         row: "look-b",
         anchorStoryboard: lookBAnchorStoryboard,
+        directionArcGuide: lookBScreenLeftTrajectoryReference,
         canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
         cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
         registeredLookA: registeredLookAReference,
@@ -3577,11 +3824,16 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       lookADiagnosticBoard = lookA.board;
       lookAHint = appendCumulativeRepairRequirement(
         lookARequirements,
-        firstLookGate.repairPrompt || firstLookGate.failures.join("；") || "Keep row A monotonic across the cell 4 to cell 5 board wrap.",
+        firstLookGate.repairPrompt || firstLookGate.failures.join("；") || "Keep row A monotonic across the top-to-bottom row boundary between chronological cells 4 and 5.",
       );
     }
     requireApprovedRegisteredRow(registeredLookA, "修复后的第一组观察方向");
     registeredLookAReference = await composeLookSourceBoardReference(registeredLookA.frames, ctx.identity.chromaKey);
+    lookBScreenLeftTrajectoryReference = await composeLookBScreenLeftTrajectoryReference(
+      registeredLookA.frames,
+      cardinals.frames,
+      ctx.identity.chromaKey,
+    );
     const lookBRequirements: string[] = [];
     let lookBDiagnosticBoard = lookB.board;
     let lookBHint = appendCumulativeRepairRequirement(
@@ -3594,6 +3846,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
         prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics), references: lookRowReferences({
           row: "look-b",
           anchorStoryboard: lookBAnchorStoryboard,
+          directionArcGuide: lookBScreenLeftTrajectoryReference,
           canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
           cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
           registeredLookA: registeredLookAReference,
@@ -3616,7 +3869,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       lookBDiagnosticBoard = lookB.board;
       lookBHint = appendCumulativeRepairRequirement(
         lookBRequirements,
-        secondLookGate.repairPrompt || secondLookGate.failures.join("；") || "Keep row B monotonic across the cell 4 to cell 5 board wrap and both row seams.",
+        secondLookGate.repairPrompt || secondLookGate.failures.join("；") || "Keep row B monotonic across the top-to-bottom row boundary between chronological cells 4 and 5 and both row seams.",
       );
     }
     requireApprovedRegisteredRow(registeredLookB, "修复后的第二组观察方向");
@@ -3684,9 +3937,9 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       ctx.blindQa({ sheet: blind.image, answerKey: blind.answerKey, identityGuide: ctx.identity.canonicalGuide, env: ctx.env, signal: ctx.signal }),
       ctx.directionSemantics({ sheet: directionSheet, expectedDirections: LOOK_DIRECTIONS, identityGuide: ctx.identity.canonicalGuide, env: ctx.env, signal: ctx.signal }),
     ]);
-    assertVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
+    assertCodexPetVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
     semantics.forEach((item) => {
-      assertVisualQaProvenance(item.modelProvenance, ctx.visualQaModel, `direction-${item.direction}`);
+      assertCodexPetVisualQaProvenance(item.modelProvenance, ctx.visualQaModel, `direction-${item.direction}`);
     });
     const semanticFailures = semantics.filter((item) => item.verdict === "fail");
     if (!(blindValidation.ok && semanticFailures.length === 0)) {
@@ -3725,7 +3978,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       env: ctx.env,
       signal: ctx.signal,
     });
-    assertVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
+    assertCodexPetVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
     if (codexPetVisualQaVerdictPasses(finalQa)) break;
     if (directionAttempt >= 3) {
       throw new Error(`最终独立视觉质检经两轮自动修复后仍未通过：${finalQa.failures.join("；") || "角色一致性或动作连续性失败"}`);
@@ -3799,14 +4052,14 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   if (!packagedValidation.ok) {
     throw new Error(`Codex v2 WebP 图集验证失败：${packagedValidation.errors.join("；")}`);
   }
-  if (!firstLookGate.visual) throw new Error("row9 前置门禁缺少 GPT-5.6 视觉证明");
+  if (!firstLookGate.visual) throw new Error("row9 前置门禁缺少所选视觉模型证明");
   const requiredJobProvenance = await summarizeRequiredVisualJobProvenance(ctx);
-  const row9GateProvenance = assertVisualQaProvenance(firstLookGate.visual.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
-  const row10GateProvenance = assertVisualQaProvenance(secondLookGate.visual.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
-  const finalQaProvenance = assertVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
-  const blindQaProvenance = assertVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
+  const row9GateProvenance = assertCodexPetVisualQaProvenance(firstLookGate.visual.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
+  const row10GateProvenance = assertCodexPetVisualQaProvenance(secondLookGate.visual.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
+  const finalQaProvenance = assertCodexPetVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
+  const blindQaProvenance = assertCodexPetVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
   const semanticProvenance = semantics.map((item) => (
-    assertVisualQaProvenance(item.modelProvenance, ctx.visualQaModel, `direction-${item.direction}`)
+    assertCodexPetVisualQaProvenance(item.modelProvenance, ctx.visualQaModel, `direction-${item.direction}`)
   ));
   const visualQaActualModels = [...new Set([
     ...requiredJobProvenance.actualModels,
@@ -3829,17 +4082,20 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     ...semanticProvenance.flatMap((item) => item.routes),
   ])];
   const provider = await summarizeProviderUsage(ctx);
-  if (provider.actualModels.length === 0 || provider.actualModels.some((model) => !isAllowedCodexPetImageModel(model))) {
-    throw new Error(`最终生图模型不符合 ${GPT_IMAGE_MODEL} 合同`);
+  const imageModelMatches = (model: string) => model === ctx.imageModel
+    || (ctx.imageModel === GPT_IMAGE_MODEL && model === "gpt-image-2-codex");
+  if (provider.actualModels.length === 0
+    || provider.actualModels.some((model) => !isAllowedCodexPetImageModel(model) || !imageModelMatches(model))) {
+    throw new Error(`最终生图模型不符合 ${ctx.imageModel} 合同`);
   }
   const report = {
     ok: true,
     spriteVersionNumber: 2,
     modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
-    requestedModel: GPT_IMAGE_MODEL,
+    requestedModel: ctx.imageModel,
     modelProvenance: {
       imageGeneration: {
-        requestedModel: GPT_IMAGE_MODEL,
+        requestedModel: ctx.imageModel,
         actualModels: provider.actualModels,
       },
       visualQa: {
@@ -3927,15 +4183,22 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   // observed during an upgrade. Terminal database state is authoritative: a
   // failed/refunded or API-cancelled run must never regenerate artifacts,
   // emit another terminal event, or attempt another refund.
-  if (initialRun.status === "ready" || initialRun.status === "failed" || initialRun.status === "cancelled") {
+  if (initialRun.status === "ready" || initialRun.status === "failed" || initialRun.status === "cancelled" || initialRun.status === "awaiting_direction_review") {
     return { status: initialRun.status, runId: initialRun.id };
   }
   const initialSnapshot = asRecord(initialRun.inputSnapshot);
+  const zeroChargeRecovery = ["packaging", "archiving"].includes(initialRun.status)
+    && isCodexPetRecoverySnapshot(initialRun.inputSnapshot)
+    && initialRun.billingChargeStatus === "not_required"
+    && initialRun.billingPoints === 0;
+  const initialVisualQaModel = typeof initialSnapshot.visualQaModel === "string"
+    ? initialSnapshot.visualQaModel.trim()
+    : "";
   const initialModelContractValid = initialSnapshot.modelContractVersion === CODEX_PET_MODEL_CONTRACT_VERSION
-    && initialSnapshot.requestedModel === GPT_IMAGE_MODEL
-    && typeof initialSnapshot.visualQaModel === "string"
-    && initialSnapshot.visualQaModel.trim() === resolveCodexPetVisualQaModel(env)
-    && initialRun.requestedModel === GPT_IMAGE_MODEL;
+    && typeof initialSnapshot.requestedModel === "string"
+    && isAllowedCodexPetImageModel(initialSnapshot.requestedModel)
+    && initialRun.requestedModel === initialSnapshot.requestedModel
+    && initialVisualQaModel === resolveCodexPetVisualQaModel(env, initialVisualQaModel);
   // Waiting for an explicit user choice is a durable pause, not runnable
   // work. A duplicate Bull delivery (for example an old retained/stalled job)
   // must not claim the run and replay base generation while the workbench is
@@ -3950,7 +4213,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   }
   // Queue delivery must never start visual work before the external package
   // charge is durably confirmed and the activation transaction has committed.
-  if (initialRun.billingChargeStatus !== "charged" || !initialRun.billingActivatedAt) {
+  if (!zeroChargeRecovery && (initialRun.billingChargeStatus !== "charged" || !initialRun.billingActivatedAt)) {
     throw new Error("Codex pet run billing is not activated");
   }
   // A caller that does not supply a worker identity is generally a direct
@@ -3959,7 +4222,15 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   // still obey the same CAS rule. Queue workers supply their own unique token
   // and use it for the heartbeat below.
   const workerId = deps.workerId ?? `${WORKER_ID}:${randomUUID().slice(0, 12)}`;
-  const claimed = await claimRunLease(deps.prisma, input.runId, workerId, env, initialRun.projectId, initialRun.userId);
+  const claimed = await claimRunLease(
+    deps.prisma,
+    input.runId,
+    workerId,
+    env,
+    initialRun.projectId,
+    initialRun.userId,
+    zeroChargeRecovery,
+  );
   if (!claimed.claimed) {
     const fresh = claimed.run;
     if (!fresh) throw new Error("Codex pet run not found");
@@ -3975,11 +4246,20 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   const run = claimed.run;
   if (!run) throw new Error("Codex pet run disappeared after lease claim");
   const snapshot = asRecord(run.inputSnapshot);
-  const visualQaModel = resolveCodexPetVisualQaModel(env);
   const snapshottedModelContractVersion = typeof snapshot.modelContractVersion === "string" ? snapshot.modelContractVersion.trim() : "";
   const snapshottedImageModel = typeof snapshot.requestedModel === "string" ? snapshot.requestedModel.trim() : "";
   const snapshottedVisualQaModel = typeof snapshot.visualQaModel === "string" ? snapshot.visualQaModel.trim() : "";
-  const referenceAssetIds = Array.isArray(snapshot.referenceAssetIds)
+  const visualQaModel = resolveCodexPetVisualQaModel(env, snapshottedVisualQaModel || run.visualQaModel || undefined);
+  const imageModel = snapshottedImageModel || run.requestedModel;
+  // All visual calls in this run use the snapshotted project choice. Keeping
+  // it in the context environment lets the existing visual helpers and their
+  // injected test clients share one durable route without consulting the
+  // mutable process default.
+  const visualEnv = { ...env, PET_VISUAL_QA_MODEL: visualQaModel };
+  // Recovery packaging is bound to already-approved bytes and never needs to
+  // reload user references. Avoid making a zero-charge recovery depend on
+  // reference-object availability after the original run has finished.
+  const referenceAssetIds = zeroChargeRecovery ? [] : Array.isArray(snapshot.referenceAssetIds)
     ? snapshot.referenceAssetIds.filter((value): value is string => typeof value === "string")
     : [...run.project.referenceAssetIds];
   const snapshotString = (key: string, fallback: string) => typeof snapshot[key] === "string" ? snapshot[key] as string : fallback;
@@ -3996,8 +4276,8 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     if (snapshottedModelContractVersion !== CODEX_PET_MODEL_CONTRACT_VERSION) {
       throw new Error(`Codex pet run is missing the required ${CODEX_PET_MODEL_CONTRACT_VERSION} model contract`);
     }
-    if (run.requestedModel !== GPT_IMAGE_MODEL || snapshottedImageModel !== GPT_IMAGE_MODEL) {
-      throw new Error(`Codex pet image model contract must remain ${GPT_IMAGE_MODEL}`);
+    if (!isAllowedCodexPetImageModel(imageModel) || run.requestedModel !== imageModel) {
+      throw new Error(`Codex pet image model contract is invalid: ${imageModel || "missing"}`);
     }
     if (snapshottedVisualQaModel !== visualQaModel) {
       throw new Error(`Codex pet visual model contract changed after start: ${snapshottedVisualQaModel} -> ${visualQaModel}`);
@@ -4051,8 +4331,9 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
         id: run.id,
         workerId,
         status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-        billingChargeStatus: "charged",
-        billingActivatedAt: { not: null },
+        ...(zeroChargeRecovery
+          ? { billingChargeStatus: "not_required", billingPoints: 0 }
+          : { billingChargeStatus: "charged", billingActivatedAt: { not: null } }),
       },
       data: { heartbeatAt: new Date() },
     }).then((updated) => {
@@ -4061,11 +4342,12 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   }, leaseHeartbeatMs);
   const ctx: RunnerContext = {
     ...deps,
-    env,
+    env: visualEnv,
     workerId,
     signal: controller.signal,
     project: run.project,
     runId: run.id,
+    imageModel,
     visualQaModel,
     referenceAssetIds,
     identity: {
@@ -4073,7 +4355,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
       chromaKey,
     },
     userReferences: loadedReferences.map((loaded) => imageInput(loaded.buffer, loaded.mime, loaded.filename)),
-    generate: deps.visual?.generate ?? generateCodexPetVisual,
+    generate: deps.visual?.generate ?? ((input) => generateCodexPetVisual({ ...input, model: imageModel })),
     qa: deps.visual?.qa ?? runCodexPetVisualQa,
     qaConsensus: deps.visual?.qaConsensus ?? runCodexPetVisualQaConsensus,
     blindQa: deps.visual?.blindQa ?? runBlindDirectionQa,
@@ -4084,6 +4366,10 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   try {
     return await executeRun(ctx);
   } catch (error) {
+    if (error instanceof CodexPetImageApprovalRequiredError) {
+      await pauseForImageApproval(ctx, error);
+      return { status: "awaiting_direction_review", runId: run.id };
+    }
     if (error instanceof CodexPetPackagingDeferredError) {
       if (await releaseDeferredPackagingLease(ctx, error)) {
         return { status: "packaging", runId: run.id };

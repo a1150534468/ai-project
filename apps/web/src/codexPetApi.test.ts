@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createCodexPetInstallLink,
   createCodexPetProject,
+  approveCodexPetNextImage,
+  deleteCodexPetProject,
   downloadCodexPetPackage,
   getCodexPetProject,
   listCodexPetEvents,
@@ -94,6 +96,31 @@ describe("codex pet API", () => {
         headers: expect.objectContaining({ "idempotency-key": "codex-pet-run-key" }),
         body: JSON.stringify({ idempotencyKey: "codex-pet-run-key" }),
       }),
+    );
+  });
+
+  it("soft-deletes a project through the encoded history endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      data: { projectId: project.id, softDeleted: true },
+    }), { status: 202 }));
+
+    await expect(deleteCodexPetProject("token", project.id)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workflow/codex-pets/projects/project%20%2F%201",
+      expect.objectContaining({
+        method: "DELETE",
+        headers: { authorization: "Bearer token" },
+      }),
+    );
+  });
+
+  it("approves one image call through encoded project and run paths", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { run } }), { status: 202 }));
+
+    await expect(approveCodexPetNextImage("token", project.id, run.id)).resolves.toEqual(run);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workflow/codex-pets/projects/project%20%2F%201/runs/run%20%2F%201/approve-next-image",
+      expect.objectContaining({ method: "POST", headers: { authorization: "Bearer token" } }),
     );
   });
 

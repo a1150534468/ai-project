@@ -274,7 +274,7 @@ describe("Codex pet deleting-project recovery", () => {
     ];
     const findMany = vi.fn(async (args: Record<string, unknown>) => {
       expect(args).toEqual({
-        where: { status: "deleting" },
+        where: { status: "deleting", deletedAt: null },
         orderBy: { updatedAt: "asc" },
         select: { id: true, userId: true },
         take: 2,

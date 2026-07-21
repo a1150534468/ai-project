@@ -41,6 +41,15 @@ async function directionBoard(bodyWidth: number, bodyHeight: number): Promise<Bu
     .toBuffer();
 }
 
+async function directionBoardWithEdgeResidue(): Promise<Buffer> {
+  const board = await directionBoard(120, 300);
+  return sharp(board).composite([{
+    // This isolated pixel is in physical source slot 4, the fifth
+    // chronological frame in the row-major board.
+    input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024"><rect x="0" y="1023" width="1" height="1" fill="#ffffff"/></svg>`),
+  }]).png().toBuffer();
+}
+
 async function coloredDirectionBoard(colors: readonly string[]): Promise<Buffer> {
   const width = 1536;
   const height = 1024;
@@ -63,7 +72,7 @@ function digests(frames: readonly Buffer[]): readonly string[] {
 }
 
 describe("neutral-locked direction registration", () => {
-  it("registers serpentine source slots in chronological direction order", async () => {
+  it("registers row-major source slots in chronological direction order", async () => {
     const colors = ["#aa1100", "#bb2200", "#cc3300", "#dd4400", "#1155aa", "#2266bb", "#3377cc", "#4488dd"];
     const registered = await registerFirstDirectionRowToNeutral(await coloredDirectionBoard(colors), await neutralCell(), {
       chromaKey: "#ff00ff",
@@ -125,5 +134,18 @@ describe("neutral-locked direction registration", () => {
     const validation = await validateNeutralLockedDirectionFrames(neutral, floating);
     expect(validation.ok).toBe(false);
     expect(validation.errors.some((error) => error.includes("floating-baseline-delta"))).toBe(true);
+  });
+
+  it("ignores insignificant slot-edge residue when deriving registration geometry", async () => {
+    const registered = await registerFirstDirectionRowToNeutral(
+      await directionBoardWithEdgeResidue(),
+      await neutralCell(),
+      { chromaKey: "#ff00ff", frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT },
+    );
+
+    expect(registered.ok, registered.errors.join("; ")).toBe(true);
+    expect(registered.diagnostics[7]?.sourceGeometry?.bounds).toEqual(registered.diagnostics[7]?.sourceBounds);
+    expect(registered.validation.frames[7]?.baselineDeltaPixels).toBe(0);
+    expect(registered.validation.medianHeightRatio).toBeGreaterThanOrEqual(0.8);
   });
 });

@@ -142,6 +142,37 @@ const GLOBAL_SPRITE_RULES = [
   "Every pose must be one readable connected sprite component. Preserve identity and scale across all poses.",
 ].join("\n");
 
+/**
+ * Direction rows use screen-heading semantics, not the conventional portrait
+ * yaw convention where zero degrees is a front portrait.  Keeping this as a
+ * single contract prevents the cardinal generator, row repair prompts and
+ * visual QA from silently choosing opposite front/back meanings.
+ */
+export const CODEX_PET_CARDINAL_APPEARANCE_CONTRACT = [
+  "Authoritative cardinal appearance contract (viewer/screen coordinates): 000 UP means the character's natural front/aim points toward the top edge; for a standing character with a visible front this is the rear/back-facing or top-facing pose family, with the front face normally occluded.",
+  "090 SCREEN-RIGHT means the natural front/aim points toward the right edge and must show the right-facing profile or matching right-side landmarks.",
+  "180 DOWN means the natural front/aim points toward the bottom edge; for a standing character with a visible front this is the front-facing or bottom-facing pose family, with the canonical face visible again.",
+  "270 SCREEN-LEFT means the natural front/aim points toward the left edge and must show the left-facing profile or matching left-side landmarks.",
+  "Do not reinterpret 000 as a front portrait or 180 as a rear portrait. Do not let a repair diagnostic override this contract. For eyeless or non-directional objects, use the object's natural aiming feature and the same four screen edges.",
+].join(" ");
+
+export function sanitizeCodexPetDirectionRepairPrompt(value: string): string {
+  const diagnostic = value.trim();
+  if (diagnostic.includes("The previous repair diagnostic was discarded because it reversed the approved 000/180 front-back contract.")) {
+    return diagnostic;
+  }
+  const evidence = diagnostic.replaceAll(CODEX_PET_CARDINAL_APPEARANCE_CONTRACT, "").trim();
+  const normalized = evidence.toLowerCase();
+  const contradictsUp = /(?:000|0(?:\.0)?\s*(?:deg(?:ree)?s?|°))\s*(?:is|must be|means|as)?\s*(?:a\s+)?(?:front(?:-facing)?|front portrait|正面|正视)|(?:make|render|treat|show).{0,24}000.{0,24}(?:front(?:-facing)?|正面|正视)/is.test(normalized);
+  const contradictsDown = /180(?:\.0)?\s*(?:deg(?:ree)?s?|°)?\s*(?:is|must be|means|as)?\s*(?:a\s+)?(?:back(?:-facing)?|rear(?:-facing)?|rear portrait|背面|后视)|(?:make|render|treat|show).{0,24}180.{0,24}(?:back(?:-facing)?|rear(?:-facing)?|背面|后视)/is.test(normalized);
+  if (contradictsUp || contradictsDown) {
+    return `${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} The previous repair diagnostic was discarded because it reversed the approved 000/180 front-back contract. Repair only the observed continuity, identity, spacing or registration defect without changing any approved cardinal meaning.`;
+  }
+  return evidence
+    ? `${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} Accepted non-conflicting repair evidence: ${evidence}`
+    : CODEX_PET_CARDINAL_APPEARANCE_CONTRACT;
+}
+
 export function buildBasePetPrompt(identity: CodexPetVisualIdentity, candidateIndex: number): string {
   const variation = candidateIndex === 1
     ? "Use a calm front-facing stance with both paws relaxed, visibly attached, and lowered away from the eyes and mouth."
@@ -169,11 +200,15 @@ export function buildStandardRowPrompt(identity: CodexPetVisualIdentity, state: 
     ? "For this 5×1 board the exact left-to-right mapping is: frame 1 grounded anticipation; frame 2 airborne rise; frame 3 the unique highest peak; frame 4 airborne descent visibly lower than frame 3; frame 5 grounded settle on the same foot baseline as frame 1. Use all five slots and never reorder the phases."
     : "";
   const rowWord = spec.boardRows === 1 ? "row" : "rows";
+  const directionalProfileRule = state === "running-right" || state === "running-left"
+    ? "This is a directional running cycle. A natural side or three-quarter running pose may occlude the far eye and part of the front face panel; preserve the visible eye, fixed face-panel topology, head module, markings and body identity without forcing every frame into a frontal two-eye view. The travel direction must remain consistent across the complete cycle."
+    : "";
   return `${canonicalReferenceBlock(identity)}
 
 Generate exactly ${spec.frameCount} separated sequential poses for the “${state}” animation as a ${spec.boardColumns} columns × ${spec.boardRows} ${rowWord} pose board, read left-to-right then top-to-bottom. Action: ${STATE_INSTRUCTIONS[state]}.
 ${jumpingSlotMap}
 ${unused}
+${directionalProfileRule}
 All poses share one scale. ${state === "jumping"
     ? "Show clear vertical lift and descent through body height."
     : "Keep the character horizontally centered on one stable foot baseline in every slot; express motion through the pose, not by moving the sprite around the board."} Scale down wide or extreme poses as needed so the complete silhouette keeps at least 15% clear background from every slot boundary. The attached layout is construction guidance only and must not appear in the result.
@@ -188,6 +223,7 @@ export function buildCardinalPrompt(identity: CodexPetVisualIdentity, mechanics:
 Look mechanics: ${mechanics}
 
 Generate exactly four separated cardinal looking poses as a 2×2 board, in this order: 000 looking UP, 090 looking toward SCREEN-RIGHT, 180 looking DOWN, 270 looking toward SCREEN-LEFT. These are viewer/screen coordinates. Make each cardinal unmistakable at 192×208 while preserving a stable lower-body anchor. Use eyes, eyelids, head, face, upper body, appendages and existing props only as physically natural for this character.
+${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT}
 
 Background color must be exactly ${identity.chromaKey}.
 ${GLOBAL_SPRITE_RULES}`;
@@ -195,35 +231,64 @@ ${GLOBAL_SPRITE_RULES}`;
 
 export function buildLookRowPrompt(identity: CodexPetVisualIdentity, row: "look-a" | "look-b", mechanics: string): string {
   const directions = row === "look-a" ? LOOK_DIRECTIONS.slice(0, 8) : LOOK_DIRECTIONS.slice(8);
+  const referenceRoles = row === "look-a"
+    ? "Reference roles are strict: Image 1 is the primary 4×2 partial anchor storyboard in ordinary row-major target geometry. Its physical top-left already contains approved Frame 1 and its physical bottom-left already contains approved Frame 5; preserve both anchor poses and their positions. Every other chroma-only slot in Image 1 is intentionally blank for you to fill, not an unused output slot. Image 2 is the approved canonical identity. Image 3 contains the complete approved 2×2 cardinal basis (top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT) plus secondary continuity/layout guidance; it must never override Image 1's placed endpoints or Image 2's identity."
+    : "Reference roles are strict: Image 1 is the primary full 4×2 SCREEN-LEFT trajectory scaffold in ordinary row-major target geometry. It is reference-only evidence assembled from the approved 180 DOWN and 270 SCREEN-LEFT cardinals plus horizontally reflected pose-family evidence from approved row A. Redraw all eight poses as one fresh coherent family; do not paste or ship the scaffold pixels. Preserve its screen-side trajectory, its exact Frame 1 and Frame 5 cardinal families, and its monotonically changing asymmetric landmarks. Image 2 is the approved canonical identity. Supporting images contain the complete approved cardinal basis, endpoint storyboard, approved row A and layout evidence; they must never override Image 1's SCREEN-LEFT path or Image 2's identity.";
   const continuity = row === "look-a"
     ? `Use this exact anchor path:
 - Frame 1 (physical top-left) MUST reproduce the approved 000 UP pose family from the cardinal reference's top-left cell.
-- Frame 5 (physical bottom-right) MUST reproduce the approved 090 SCREEN-RIGHT pose family from the cardinal reference's top-right cell.
-- Frame 8 (physical bottom-left) MUST be exactly one 22.5-degree step before the approved 180 DOWN pose family from the cardinal reference's bottom-left cell; it is not yet 180.
+- Frame 5 (physical bottom-left) MUST reproduce the approved 090 SCREEN-RIGHT pose family from the cardinal reference's top-right cell.
+- Frame 8 (physical bottom-right) MUST be exactly one 22.5-degree step before the approved 180 DOWN pose family from the cardinal reference's bottom-left cell; it is not yet 180.
 - Frames 1 through 8 may advance only along 000 UP -> 090 SCREEN-RIGHT -> almost 180 DOWN. Never enter the 270 SCREEN-LEFT pose family, never reverse into the opposite facial quadrant, and never make eyes, mouth, markings, limbs, props or tail teleport to the other side between adjacent frames.`
     : `Use this exact anchor path:
 - Frame 1 (physical top-left) MUST reproduce the approved 180 DOWN pose family from the cardinal reference's bottom-left cell.
-- Frame 5 (physical bottom-right) MUST reproduce the approved 270 SCREEN-LEFT pose family from the cardinal reference's bottom-right cell.
-- Frame 8 (physical bottom-left) MUST be exactly one 22.5-degree step before the approved 000 UP pose family from the cardinal reference's top-left cell; it is not yet 000.
+- Frame 5 (physical bottom-left) MUST reproduce the approved 270 SCREEN-LEFT pose family from the cardinal reference's bottom-right cell.
+- Frame 8 (physical bottom-right) MUST be exactly one 22.5-degree step before the approved 000 UP pose family from the cardinal reference's top-left cell; it is not yet 000.
 - Frames 1 through 8 may advance only along 180 DOWN -> 270 SCREEN-LEFT -> almost 000 UP. Never enter the 090 SCREEN-RIGHT pose family, never reverse into the opposite facial quadrant, and never make eyes, mouth, markings, limbs, props or tail teleport to the other side between adjacent frames.
+- For every asymmetric identity landmark that distinguishes the two horizontal sides (such as a side module, face panel edge, antenna, marking or attached prop), keep its viewer/screen side monotonic across this arc: frames 1-4 may only move from the approved 180 DOWN family toward the approved 270 SCREEN-LEFT family, frames 5-8 may only move from 270 toward the approved 000 UP family. A landmark that is on the screen-left side at 270 must never jump to screen-right in frames 2-4 or 6-8; do not mirror or swap the landmark midway through the row.
+- The chronological order is 1,2,3,4 across the top row then 5,6,7,8 across the bottom row from left to right; never reset the viewpoint at the row boundary.
 - Continue exactly one step after the approved 157.5 pose in completed row A and end exactly one step before its 000 pose, preserving both row boundaries.`;
+  const frameAppearancePlan = row === "look-a"
+    ? `Binding visible pose-family plan for the half-turn from back/up through screen-right toward front/down:
+- Frame 1: exact approved 000 rear/back-facing UP family; front face normally hidden.
+- Frame 2: rear view with only a slight SCREEN-RIGHT-side reveal.
+- Frame 3: rear-right three-quarter view; never show the screen-left profile family.
+- Frame 4: approaching the approved SCREEN-RIGHT profile from the rear.
+- Frame 5: exact approved 090 SCREEN-RIGHT profile, with the face/front edge on the same screen side as the approved top-right cardinal.
+- Frame 6: right-front three-quarter view; reveal more of the face while remaining unmistakably on the screen-right half-turn.
+- Frame 7: near-front view still offset toward screen-right.
+- Frame 8: almost the approved 180 front/down-facing family, but still one visible step on its screen-right side.
+This is one 157.5-degree half-turn, not a full 360-degree turntable. No frame may use the approved 270 SCREEN-LEFT family or put the face/front edge on its screen side.`
+    : `Binding visible pose-family plan for the half-turn from front/down through screen-left toward back/up:
+- Frame 1: exact approved 180 front/down-facing family, with the canonical face visible.
+- Frame 2: front view with only a slight SCREEN-LEFT-side turn.
+- Frame 3: front-left three-quarter view; never show the screen-right profile family.
+- Frame 4: approaching the approved SCREEN-LEFT profile from the front.
+- Frame 5: exact approved 270 SCREEN-LEFT profile, with the face/front edge on the same screen side as the approved bottom-right cardinal.
+- Frame 6: left-rear three-quarter view; hide more of the face while remaining on the screen-left half-turn.
+- Frame 7: near-rear view still offset toward screen-left.
+- Frame 8: almost the approved 000 rear/back-facing UP family, but still one visible step on its screen-left side.
+This is one 157.5-degree half-turn, not a full 360-degree turntable. No frame may use the approved 090 SCREEN-RIGHT family or put the face/front edge on its screen side.`;
   return `${canonicalReferenceBlock(identity)}
 
 Look mechanics: ${mechanics}
-Reference roles are strict: Image 1 is the primary 4×2 partial anchor storyboard in the exact serpentine target geometry. Its physical top-left already contains approved Frame 1 and its physical bottom-right already contains approved Frame 5; preserve both anchor poses and their positions. Every other chroma-only slot in Image 1 is intentionally blank for you to fill, not an unused output slot. Image 2 is the approved canonical identity. Image 3 contains the complete approved 2×2 cardinal basis (top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT) plus secondary continuity/layout guidance; it must never override Image 1's placed endpoints or Image 2's identity.
+${referenceRoles}
 
-Generate exactly eight separated poses as a 4 columns × 2 rows SERPENTINE board. Direction order: ${directions.join(", ")} degrees (chronological). Place frames 1, 2, 3, 4 from left-to-right across the TOP row, then place frames 5, 6, 7, 8 from right-to-left across the BOTTOM row. Therefore the physical bottom row, read left-to-right, is frames 8, 7, 6, 5. Follow the attached layout's visible frame numbers exactly. 000 is UP, 090 SCREEN-RIGHT, 180 DOWN, 270 SCREEN-LEFT.
+Viewer-coordinate appearance lock: ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} The approved cardinal images are the source of truth for the exact anatomy, but they must themselves obey this screen-heading contract.
+
+Generate exactly eight separated poses as a 4 columns × 2 rows row-major board. Direction order: ${directions.join(", ")} degrees (chronological). Place frames 1, 2, 3, 4 from left-to-right across the TOP row, then place frames 5, 6, 7, 8 from left-to-right across the BOTTOM row. Follow the attached layout's visible frame numbers exactly. 000 is UP, 090 SCREEN-RIGHT, 180 DOWN, 270 SCREEN-LEFT.
 ${continuity}
+${frameAppearancePlan}
 
 Redraw this as one coherent interpolation family, not eight unrelated variants. Every adjacent 22.5-degree step must change the same anatomical landmarks by a similar visual amount. Keep the feet/base/torso anchor, scale, baseline and identity fixed. Preserve already-correct grid clearance, connectivity and body scale during repairs. Do not rotate, mirror, skew or tilt the whole raster sprite to fake gaze. Do not replace the original eye design.
-Frames 4 and 5 are vertically adjacent at the physical right edge. Continue directly downward there; the row change is never a reset, mirror point or viewpoint jump. Frames 5 through 8 then continue right-to-left across the bottom row without reversing the clockwise turn.
+Frames 4 and 5 are the row-boundary neighbors in chronological order; continue directly from the top-right pose into the bottom-left pose without a reset, mirror point or viewpoint jump. Frames 5 through 8 then continue left-to-right across the bottom row without reversing the clockwise turn.
 
 Background color must be exactly ${identity.chromaKey}.
 ${GLOBAL_SPRITE_RULES}`;
 }
 
 export function buildLookMechanicsPrompt(identity: CodexPetVisualIdentity): string {
-  return `Describe the natural 16-direction look mechanics for this Codex desktop pet in at most 180 Chinese characters. State what remains anchored, what leads the gaze, what follows, how eyes/eyelids/head/body/appendages and existing props move, and how the four cardinals become unmistakable. Do not invent new props.\n\n${identityBlock(identity)}\n${canonicalGuideBlock(identity)}`;
+  return `Describe the natural 16-direction look mechanics for this Codex desktop pet in at most 180 Chinese characters. State what remains anchored, what leads the gaze, what follows, how eyes/eyelids/head/body/appendages and existing props move, and how the four cardinals become unmistakable. Use this fixed screen-heading contract: ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} Do not invent new props.\n\n${identityBlock(identity)}\n${canonicalGuideBlock(identity)}`;
 }
 
 export function buildVisualQaPrompt(
@@ -232,8 +297,20 @@ export function buildVisualQaPrompt(
   canonicalGuide?: string,
 ): string {
   const guide = canonicalGuide?.trim();
+  const directionalProfileRule = kind === "row" && /(running-right|running-left)/.test(context)
+    ? "For this directional running row, side and three-quarter views are expected: the far eye and part of the frontal face panel may be naturally occluded. Do not call the missing frontal second eye identity drift when the visible eye, head module, face-panel boundary, fixed markings, proportions and travel direction remain coherent. Judge the complete cycle's facing direction and identity topology, not frontal eye count."
+    : "";
+  const activeTaskRule = (kind === "row" && context.trimStart().startsWith("running 动作组")) || kind === "final"
+    ? "Codex state semantics are authoritative: the state named running (without -left or -right) means active task processing, not physical locomotion. It should read through attentive eyes, a small head shift, and subtle attached-paw working motion while the feet/base stay fixed. Never require or reward alternating leg stride, foot displacement, walking, jogging, sprinting, body travel, or other locomotion cues in this state; those are wrong-action failures."
+    : "";
+  const directionContract = kind === "cardinals" || kind === "directions" || kind === "final"
+    ? `\n${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} For cardinal QA, the normalized board's physical cells are top-left 000, top-right 090, bottom-left 180, bottom-right 270. For direction-row QA, compare row endpoints to those exact pose families; a front/back reversal is a hard failure even when the numeric labels are present.`
+    : "";
   return `You are a strict visual QA gate for a Codex v2 desktop pet. Inspect only the attached images. Return one compact JSON object without markdown. Kind: ${kind}. Context: ${context}.
 ${guide ? `Approved canonical anatomy and identity guide: ${guide}\nUse it to distinguish anatomical features—especially eyes, paws/feet and mouth—from fixed decorative markings, and report any genuine ambiguity instead of relabeling a feature. A feature listed as movable is merely allowed to move when the requested action naturally needs it; do not fail a state just because that feature stays still in this animation or frame.` : ""}
+${directionalProfileRule}
+${activeTaskRule}
+${directionContract}
 Required JSON: {"pass":boolean,"score":0-100,"mirrorSafe":boolean,"identity":boolean,"structure":boolean,"semantics":boolean,"continuity":boolean,"warnings":[string],"failures":[string],"repairPrompt":string,"repairRows":[string]}.
 For a failed final review, repairRows must list complete action groups (never individual frames) using only these names when applicable: idle, running-right, running-left, waving, jumping, failed, waiting, running, review, look-a, look-b. Use an empty array when no repair is needed.
 For a row review, the action name in Context is authoritative: assess that action instead of relabeling it as another row, and if repair is needed name only that current action in repairRows. In particular, “failed” is a sad/error reaction, not an idle blink: its guide-identified eyes may progressively narrow, droop or close and may hold the defeated expression for several frames before recovery. Do not require the tail, ears or every other movable feature to animate in a failed row. Do not call an action-appropriate deformation of guide-identified anatomy identity drift merely because its temporary outline resembles another feature; use its color, canonical position and frame-to-frame continuity to distinguish it from fixed markings or paws.
