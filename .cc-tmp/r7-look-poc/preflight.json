@@ -9,6 +9,7 @@
     "billingRefundStatus": "refunded",
     "requestedModel": "gpt-image-2",
     "visualQaModel": "gpt-5.6-sol",
+    "chromaKey": "#ff00ff",
     "imageGenerationCallCountBefore": 24,
     "imageGenerationCallCountAfterPreparation": 24
   },

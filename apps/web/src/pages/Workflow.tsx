@@ -19,8 +19,8 @@ import { ComicWorkflowStudio } from "../components/workflow/ComicWorkflowStudio"
 import { FanoutStudio } from "../components/workflow/FanoutStudio";
 import { ArticleWorkflowStudio } from "../components/workflow/ArticleWorkflowStudio";
 import { ScheduledTaskStudio } from "../components/workflow/ScheduledTaskStudio";
-import { EcomHistorySidebar } from "../components/workflow/EcomHistorySidebar";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
+import { PortraitWorkflowStudio } from "../components/workflow/PortraitWorkflowStudio";
 import { readFileAsInlineImage } from "../components/workflow/ecomWorkflowStudioModel";
 import { LocalBusinessPromoWorkflowStudio } from "../components/workflow/LocalBusinessPromoWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
@@ -97,6 +97,8 @@ function remainingImageCount(tasks: readonly ImageTask[]): number {
     .reduce((sum, task) => sum + Math.max(task.count - (task.completedCount ?? 0), 0), 0);
 }
 
+const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerce-long-image", "codex-pet"]);
+
 export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument }: WorkflowProps) {
   const toast = useToast();
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
@@ -121,6 +123,27 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   const [commerceLoadDetailWorkflow, setCommerceLoadDetailWorkflow] = useState<WorkflowEcomWorkflow | null>(null);
   const [commerceHistoryKey, setCommerceHistoryKey] = useState(0);
   const activeModule = WORKFLOW_MODULES.find((module) => module.id === activeModuleId) ?? WORKFLOW_MODULES[0];
+  const isFullscreen = FULLSCREEN_MODULES.has(activeModuleId);
+  const showModuleHeader = activeModuleId !== "novel" && activeModuleId !== "codex-pet";
+  // 全屏模式下给工作区留出页面级留白：外层满屏铺底，工作室卡片浮在灰色背景上，
+  // 保留四周与顶栏之间的间距（原来的 gap / padding）。novel 自带全屏外壳，不额外缩进。
+  const studioWrapperClass = isFullscreen
+    ? activeModuleId === "novel"
+      ? "min-w-0 min-h-0 flex-1 h-full"
+      : "min-w-0 min-h-0 flex-1 px-4 py-4 lg:px-6 lg:py-5"
+    : showModuleHeader
+      ? "min-w-0"
+      : "min-w-0 h-full";
+
+  // 生图模块与 AI 电商图、形象照合并为同一个全屏工作区（Hub）：顶部 tab 切换。
+  // 三套 studio 同时常驻 DOM，用 hidden 切换，表单内容零丢失。
+  const isImageHub = activeModuleId === "image" || activeModuleId === "commerce-long-image";
+  const [imageSubMode, setImageSubMode] = useState<"general" | "ecom" | "portrait">(
+    activeModuleId === "commerce-long-image" ? "ecom" : "general",
+  );
+  useEffect(() => {
+    setImageSubMode(activeModuleId === "commerce-long-image" ? "ecom" : "general");
+  }, [activeModuleId]);
   const size = buildImageSize(aspectRatio, resolution);
   const estimatedImagePointCost = useMemo(() => {
     const rate = imagePricing?.[resolution]?.rate;
@@ -361,33 +384,48 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   };
 
   return (
-    <div className={`${activeModuleId === "novel" ? "h-full min-h-0 overflow-hidden" : "min-h-full px-4 py-6 lg:px-6 lg:py-6"} bg-[#f5f5f7]`}>
-      <div className={`mx-auto flex flex-col gap-4 lg:flex-row ${activeModuleId === "novel" ? "h-full min-h-0 max-w-none" : "max-w-[1480px] lg:items-start"}`}>
-        {activeModuleId === "commerce-long-image" && (
-          <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-3 lg:sticky lg:top-6 lg:w-[236px] lg:flex-none">
-            <EcomHistorySidebar
-              token={token}
-              refreshKey={commerceHistoryKey}
-              onSelectMain={(job) => {
-                setCommerceTab("main");
-                setCommerceLoadMainJob(job);
-              }}
-              onSelectDetail={(w) => {
-                setCommerceTab("detail");
-                setCommerceLoadDetailWorkflow(w);
-              }}
-            />
-          </aside>
-        )}
+    <div className={`${isFullscreen ? "h-full min-h-0 overflow-y-auto xl:overflow-hidden" : "min-h-full px-4 py-6 lg:px-6 lg:py-6"} bg-[#f5f5f7]`}>
+      <div className={`${isFullscreen ? "flex min-h-0 flex-col lg:flex-row xl:h-full" : "mx-auto flex max-w-[1480px] flex-col gap-4 lg:flex-row lg:items-start"}`}>
+        <main className={`min-w-0 ${isFullscreen ? "flex min-h-0 flex-1 flex-col" : "flex-1"}`}>
+          {showModuleHeader && (
+            <header className="flex-none px-4 pb-3 pt-4 lg:px-6">
+              <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
+              <h1 className="page-title text-[24px]">{activeModule.title}</h1>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
+            </header>
+          )}
+          {isImageHub && (
+            <div className="flex-none px-4 pt-3 lg:px-6">
+              <div className="inline-flex rounded-[10px] bg-[#ececf0] p-1">
+                <button
+                  type="button"
+                  onClick={() => setImageSubMode("general")}
+                  className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === "general" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
+                >
+                  通用生图
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageSubMode("ecom")}
+                  className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === "ecom" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
+                >
+                  电商生图
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImageSubMode("portrait")}
+                  className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === "portrait" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
+                >
+                  形象照
+                </button>
+              </div>
+            </div>
+          )}
+          <div className={studioWrapperClass}>
 
-        <main className={`min-w-0 flex-1 ${activeModuleId === "novel" ? "h-full min-h-0 overflow-hidden" : ""}`}>
-          {activeModuleId !== "novel" && activeModuleId !== "codex-pet" && <header className="mb-4">
-            <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
-            <h1 className="page-title text-[24px]">{activeModule.title}</h1>
-            <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
-          </header>}
-
-          {activeModuleId === "image" ? (
+          {isImageHub ? (
+            <>
+              <div className={imageSubMode === "general" ? "min-h-0 xl:h-full" : "hidden"}>
           <ImageWorkflowStudio
             prompt={prompt}
             model={imageModel}
@@ -432,16 +470,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             onReferenceUpload={handleReferenceUpload}
             onRemoveReference={handleRemoveReference}
           />
-        ) : activeModuleId === "novel" ? (
-          <NovelWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
-        ) : activeModuleId === "codex-pet" ? (
-          <CodexPetStudio
-            token={token}
-            initialProjectId={initialCodexPetProjectId}
-            onBalanceRefresh={onBalanceRefresh}
-            onOpenKnowledgeDocument={onOpenKnowledgeDocument}
-          />
-        ) : activeModuleId === "commerce-long-image" ? (
+              </div>
+              <div className={imageSubMode === "ecom" ? "min-h-0 xl:h-full" : "hidden"}>
           <CommerceImageStudio
             token={token}
             onBalanceRefresh={onBalanceRefresh}
@@ -450,6 +480,29 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             loadMainJob={commerceLoadMainJob}
             loadDetailWorkflow={commerceLoadDetailWorkflow}
             onActivity={() => setCommerceHistoryKey((k) => k + 1)}
+            historyRefreshKey={commerceHistoryKey}
+            onSelectMainHistory={(job) => {
+              setCommerceTab("main");
+              setCommerceLoadMainJob(job);
+            }}
+            onSelectDetailHistory={(w) => {
+              setCommerceTab("detail");
+              setCommerceLoadDetailWorkflow(w);
+            }}
+          />
+              </div>
+              <div className={imageSubMode === "portrait" ? "min-h-0 xl:h-full" : "hidden"}>
+                <PortraitWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
+              </div>
+            </>
+        ) : activeModuleId === "novel" ? (
+          <NovelWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
+        ) : activeModuleId === "codex-pet" ? (
+          <CodexPetStudio
+            token={token}
+            initialProjectId={initialCodexPetProjectId}
+            onBalanceRefresh={onBalanceRefresh}
+            onOpenKnowledgeDocument={onOpenKnowledgeDocument}
           />
         ) : activeModuleId === "local-business-promo" ? (
           <LocalBusinessPromoWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
@@ -467,6 +520,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
               <p className="text-sm font-semibold">模块开发中</p>
             </section>
           )}
+          </div>
         </main>
       </div>
       {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}

@@ -47,7 +47,7 @@ export function NovelLibraryPage({
   };
 
   return (
-    <section className="mx-auto grid w-full max-w-[1500px] gap-8 px-4 pb-32 pt-6 lg:px-7">
+    <section className="grid min-h-full w-full gap-8 px-4 pb-32 pt-6 lg:px-7">
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-ink"><Icon icon="mdi:bookshelf" /> Novel Studio</p>

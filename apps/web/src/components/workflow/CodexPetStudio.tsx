@@ -1022,8 +1022,8 @@ export function CodexPetStudio({
             : "等待运行";
 
   return (
-    <section className="space-y-3" data-testid="codex-pet-studio">
-      <div className="flex flex-wrap items-start justify-between gap-3 rounded-[16px] border border-[#e6e7eb] bg-white px-5 py-4">
+    <section className="flex xl:h-full min-h-0 flex-col gap-3" data-testid="codex-pet-studio">
+      <div className="flex flex-none flex-wrap items-start justify-between gap-3 rounded-[16px] border border-[#e6e7eb] bg-white px-5 py-4">
         <div>
           <div className="mb-1 flex items-center gap-2">
             <span className="grid size-9 place-items-center rounded-[12px] bg-brand text-white shadow-sm">
@@ -1058,8 +1058,8 @@ export function CodexPetStudio({
         </div>
       )}
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[280px_minmax(440px,1fr)_330px]">
-        <aside className="min-w-0 space-y-3">
+      <div className="grid xl:h-full min-h-0 min-w-0 flex-1 gap-3 xl:grid-cols-[1fr_3fr_1fr]">
+        <aside className="min-h-0 xl:h-full min-w-0 space-y-3 overflow-y-auto">
           <Card ariaLabel="桌宠项目历史">
             <CardTitle
               icon="mdi:history"
@@ -1346,7 +1346,7 @@ export function CodexPetStudio({
           </Card>
         </aside>
 
-        <main className="min-w-0 space-y-3">
+        <main className="min-h-0 xl:h-full min-w-0 space-y-3 overflow-y-auto">
           <Card ariaLabel="桌宠视觉工作台">
             <CardTitle
               icon="mdi:monitor-dashboard"
@@ -1588,7 +1588,7 @@ export function CodexPetStudio({
           </Card>
         </main>
 
-        <aside className="min-w-0 space-y-3">
+        <aside className="min-h-0 xl:h-full min-w-0 space-y-3 overflow-y-auto">
           <Card ariaLabel="桌宠运行进度">
             <CardTitle
               icon="mdi:progress-clock"

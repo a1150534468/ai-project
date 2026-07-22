@@ -40,7 +40,6 @@ export function EcomHistorySidebar({
 
   return (
     <div>
-      <p className="text-[13px] font-semibold text-[#1d1d1f]">任务历史</p>
       <div className="mt-3 grid gap-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold text-[#a1a1a6]">商品主图</p>

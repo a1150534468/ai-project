@@ -9,6 +9,7 @@ import { DownloadLinkDialog, type DownloadDialogState } from "../ui/DownloadLink
 import { ECOM_MAX_REFERENCE_COUNT, FALLBACK_PLATFORMS, formatEcomError, readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { EcomWorkflowStudio } from "./EcomWorkflowStudio";
 import { EcomMainImageStudio } from "./EcomMainImageStudio";
+import { EcomHistorySidebar } from "./EcomHistorySidebar";
 
 interface CommerceImageStudioProps {
   readonly token: string;
@@ -18,6 +19,9 @@ interface CommerceImageStudioProps {
   readonly loadMainJob?: EcomMainJob | null;
   readonly loadDetailWorkflow?: WorkflowEcomWorkflow | null;
   readonly onActivity?: () => void;
+  readonly historyRefreshKey: number;
+  readonly onSelectMainHistory: (job: EcomMainJob) => void;
+  readonly onSelectDetailHistory: (workflow: WorkflowEcomWorkflow) => void;
 }
 
 const CATEGORY_OTHER = "other";
@@ -42,6 +46,9 @@ export function CommerceImageStudio({
   loadMainJob,
   loadDetailWorkflow,
   onActivity,
+  historyRefreshKey,
+  onSelectMainHistory,
+  onSelectDetailHistory,
 }: CommerceImageStudioProps) {
   const [platforms, setPlatforms] = useState<readonly WorkflowEcomPlatform[]>(FALLBACK_PLATFORMS);
   const [platformId, setPlatformId] = useState<WorkflowEcomPlatformId>("taobao");
@@ -142,8 +149,14 @@ export function CommerceImageStudio({
   };
 
   return (
-    <div className="grid min-w-0 gap-5">
-        <section className="rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <section className="grid xl:h-full min-h-0 gap-5 xl:grid-cols-[1fr_3fr_1fr]">
+      <div className="flex xl:h-full min-h-0 flex-col gap-5">
+        <aside className="min-h-0 flex-1 overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
+          <h2 className="mb-3 text-lg font-semibold text-[#1d1d1f]">生成历史</h2>
+          <EcomHistorySidebar token={token} refreshKey={historyRefreshKey} onSelectMain={onSelectMainHistory} onSelectDetail={onSelectDetailHistory} />
+        </aside>
+
+        <aside className="min-h-0 flex-[1.3] overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
         <h2 className="text-[18px] font-semibold text-[#1d1d1f]">产品资料</h2>
         <p className="mt-1 text-sm text-[#6e6e73]">填一次，主图与详情图共用。</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -201,18 +214,60 @@ export function CommerceImageStudio({
           </div>
           {uploadError && <p className="mt-2 rounded-[8px] bg-red-50 px-3 py-2 text-xs text-red-700">{uploadError}</p>}
         </div>
-      </section>
-
-      <div className="flex gap-2">
-        <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "main" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品主图</RippleButton>
-        <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "detail" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品详情图</RippleButton>
+      </aside>
       </div>
 
+      <div className="flex xl:h-full min-h-0 flex-col gap-5">
+        <div className="flex flex-none gap-2">
+          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "main" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品主图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "detail" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品详情图</RippleButton>
+        </div>
+
+        <div className="min-h-0 flex-1">
         {tab === "main"
           ? <EcomMainImageStudio token={token} shared={mainShared} loadJob={loadMainJob} onActivity={onActivity} onBalanceRefresh={onBalanceRefresh} onDownloadImage={openDownload} />
           : <EcomWorkflowStudio token={token} shared={detailShared} mainImages={mainImages} loadWorkflow={loadDetailWorkflow} onActivity={onActivity} onBalanceRefresh={onBalanceRefresh} onDownloadImage={openDownload} />}
+        </div>
+      </div>
 
-        {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}
-    </div>
+      <aside className="flex xl:h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-[#e8e8ed] bg-white p-4 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-[#1d1d1f]">生成概览</h2>
+        </div>
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]">
+          <div className="rounded-[11px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
+            <p className="text-[11px] font-semibold text-[#8a8a8f]">当前视图</p>
+            <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{tab === "main" ? "商品主图" : "商品详情图"}</p>
+          </div>
+          <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
+            <p className="text-[11px] font-semibold text-[#8a8a8f]">平台</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#1d1d1f]">{platforms.find((p) => p.id === platformId)?.name ?? platformId}</p>
+          </div>
+          <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
+            <p className="text-[11px] font-semibold text-[#8a8a8f]">商品名称</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#1d1d1f]">{productName.trim() || "未填写"}</p>
+          </div>
+          <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
+            <p className="text-[11px] font-semibold text-[#8a8a8f]">商品类目</p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#1d1d1f]">{effectiveCategory || "未选择"}</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
+              <p className="text-[11px] font-semibold text-[#8a8a8f]">卖点</p>
+              <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{sellingPointsInput.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0).length} 条</p>
+            </div>
+            <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
+              <p className="text-[11px] font-semibold text-[#8a8a8f]">参考图</p>
+              <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{referenceAssets.length} 张</p>
+            </div>
+          </div>
+          <p className="rounded-[11px] bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-ink">
+            生成按张消耗算力点，预估消耗见中间工作区设置。
+          </p>
+        </div>
+      </aside>
+
+      {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}
+    </section>
   );
 }

@@ -1,0 +1,123 @@
+import { ApiError, readErrorMessage } from "./apiError";
+
+export type PortraitPresetId = "business" | "social" | "lifestyle" | "traditional" | "poster" | "custom";
+export type PortraitAspectRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
+export type PortraitResolution = "2K" | "4K";
+export type PortraitTaskStatus = "pending" | "running" | "completed" | "partial" | "failed" | "cancelled";
+
+export type PortraitPreset = { readonly id: PortraitPresetId; readonly name: string; readonly description: string };
+export type PortraitPrice = { readonly resourceKey: string; readonly displayName: string; readonly rate: number; readonly enabled: boolean };
+export type PortraitOptions = {
+  readonly model: string;
+  readonly consentVersion: string;
+  readonly presets: readonly PortraitPreset[];
+  readonly aspectRatios: readonly PortraitAspectRatio[];
+  readonly resolutions: readonly PortraitResolution[];
+  readonly pricing: Record<PortraitResolution, PortraitPrice>;
+};
+export type PortraitReference = {
+  readonly id: string;
+  readonly mime: string;
+  readonly width: number;
+  readonly height: number;
+  readonly sizeBytes: number;
+  readonly previewUrl: string;
+  readonly createdAt: string;
+};
+export type PortraitOutput = {
+  readonly id: string;
+  readonly index: number;
+  readonly mime: string;
+  readonly width: number;
+  readonly height: number;
+  readonly sizeBytes: number;
+  readonly originalUrl: string;
+  readonly createdAt: string;
+};
+export type PortraitTask = {
+  readonly id: string;
+  readonly requestId: string;
+  readonly model: string;
+  readonly presetId: PortraitPresetId;
+  readonly aspectRatio: PortraitAspectRatio;
+  readonly resolution: PortraitResolution;
+  readonly count: number;
+  readonly prompt: string;
+  readonly referenceAssetIds: readonly string[];
+  readonly status: PortraitTaskStatus;
+  readonly completedCount: number;
+  readonly error: string | null;
+  readonly billingStatus: string;
+  readonly outputs: readonly PortraitOutput[];
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly completedAt: string | null;
+};
+export type PortraitState = { readonly references: readonly PortraitReference[]; readonly tasks: readonly PortraitTask[] };
+export type PortraitPromptOptions = {
+  readonly scene: string;
+  readonly outfit: string;
+  readonly composition: string;
+  readonly expression: string;
+  readonly hair: string;
+  readonly makeup: string;
+  readonly extraPrompt: string;
+};
+export type CreatePortraitPayload = {
+  readonly requestId: string;
+  readonly presetId: PortraitPresetId;
+  readonly aspectRatio: PortraitAspectRatio;
+  readonly resolution: PortraitResolution;
+  readonly count: number;
+  readonly referenceAssetIds: readonly string[];
+  readonly options: PortraitPromptOptions;
+  readonly authorizationAccepted: true;
+  readonly consentVersion: string;
+};
+
+async function requestPortrait<T>(args: {
+  readonly token: string;
+  readonly path: string;
+  readonly method?: "GET" | "POST" | "DELETE";
+  readonly body?: unknown;
+  readonly fallback: string;
+}): Promise<T> {
+  const response = await fetch(args.path, {
+    method: args.method ?? "GET",
+    headers: args.body === undefined
+      ? { authorization: `Bearer ${args.token}` }
+      : { authorization: `Bearer ${args.token}`, "content-type": "application/json" },
+    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+  });
+  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
+  const payload = await response.json() as { data?: T } & T;
+  return payload.data ?? payload;
+}
+
+export function getPortraitOptions(token: string): Promise<PortraitOptions> {
+  return requestPortrait({ token, path: "/api/workflow/portraits/options", fallback: "获取形象照配置失败" });
+}
+
+export function getPortraitState(token: string): Promise<PortraitState> {
+  return requestPortrait({ token, path: "/api/workflow/portraits/state", fallback: "获取形象照任务失败" });
+}
+
+export function uploadPortraitReference(token: string, image: { readonly b64: string; readonly mime: string }): Promise<{ readonly asset: PortraitReference }> {
+  return requestPortrait({ token, path: "/api/workflow/portraits/references", method: "POST", body: { image }, fallback: "上传形象参考照失败" });
+}
+
+export function deletePortraitReference(token: string, id: string): Promise<{ readonly success: boolean }> {
+  return requestPortrait({ token, path: `/api/workflow/portraits/references/${encodeURIComponent(id)}`, method: "DELETE", fallback: "删除参考照失败" });
+}
+
+export function createPortraitTask(token: string, payload: CreatePortraitPayload): Promise<{ readonly task: PortraitTask }> {
+  return requestPortrait({ token, path: "/api/workflow/portraits/generate", method: "POST", body: payload, fallback: "形象照生成失败" });
+}
+
+export function cancelPortraitTask(token: string, requestId: string): Promise<{ readonly task: PortraitTask }> {
+  return requestPortrait({ token, path: `/api/workflow/portraits/tasks/${encodeURIComponent(requestId)}/cancel`, method: "POST", fallback: "取消形象照任务失败" });
+}
+
+export function deletePortraitTask(token: string, requestId: string): Promise<{ readonly success: boolean }> {
+  return requestPortrait({ token, path: `/api/workflow/portraits/tasks/${encodeURIComponent(requestId)}`, method: "DELETE", fallback: "删除形象照任务失败" });
+}

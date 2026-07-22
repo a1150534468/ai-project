@@ -33,12 +33,14 @@ const AI_REPORT_SUB_ITEM: WorkflowSubItem = {
   developing: false,
 };
 
-const WORKFLOW_MODULE_SUB_ITEMS: WorkflowSubItem[] = WORKFLOW_MODULES.map((m) => ({
-  id: m.id,
-  label: m.title,
-  icon: m.icon,
-  developing: m.status !== "available",
-}));
+const WORKFLOW_MODULE_SUB_ITEMS: WorkflowSubItem[] = WORKFLOW_MODULES
+  .filter((m) => m.id !== "commerce-long-image")
+  .map((m) => ({
+    id: m.id,
+    label: m.title,
+    icon: m.icon,
+    developing: m.status !== "available",
+  }));
 
 /** AI 智能报告插入到模块列表正中间 */
 export const WORKFLOW_SUB_ITEMS: WorkflowSubItem[] = [

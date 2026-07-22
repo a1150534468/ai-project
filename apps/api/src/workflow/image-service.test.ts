@@ -151,6 +151,18 @@ describe("image service", () => {
     });
   });
 
+  it("loads the portrait-only Seedream 5.0 Lite model through Ark", () => {
+    expect(loadImageGenerationConfigForModel("doubao-seedream-5-0-260128", {
+      ARK_API_KEY: "ark-key",
+      ARK_IMAGE_ENDPOINT: "https://ark.test/api/v3/images/generations",
+    })).toEqual({
+      endpoint: "https://ark.test/api/v3/images/generations",
+      apiKey: "ark-key",
+      model: "doubao-seedream-5-0-260128",
+      protocol: "volcengine",
+    });
+  });
+
   it("returns detailed generation metadata while the legacy wrapper stays image-only", async () => {
     const outputB64 = await pngB64(80, 48);
     const responsePayload = {
@@ -201,6 +213,46 @@ describe("image service", () => {
       },
     });
     expect(legacy).toEqual({ kind: "b64", b64: outputB64, mime: "image/png" });
+  });
+
+  it("posts Seedream reference images through the official image field", async () => {
+    const firstReference = Buffer.from("reference-one").toString("base64");
+    const secondReference = Buffer.from("reference-two").toString("base64");
+    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      model: "doubao-seedream-4-5-251128",
+      data: [{ url: "https://image.test/portrait.png", size: "1728x2304" }],
+    }), { status: 200, headers: { "x-request-id": "seedream-request-1" } }));
+
+    await expect(callImageEdit({
+      config: {
+        endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
+        apiKey: "ark-key",
+        model: "doubao-seedream-4-5-251128",
+        protocol: "volcengine",
+      },
+      prompt: "keep the same person",
+      referenceImages: [
+        { b64: firstReference, mime: "image/jpeg" },
+        { b64: secondReference, mime: "image/png" },
+      ],
+      size: "1728x2304",
+      outputFormat: "png",
+      fetchFn,
+    })).resolves.toEqual({ kind: "url", url: "https://image.test/portrait.png" });
+
+    expect(JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body))).toEqual({
+      model: "doubao-seedream-4-5-251128",
+      prompt: "keep the same person",
+      image: [
+        `data:image/jpeg;base64,${firstReference}`,
+        `data:image/png;base64,${secondReference}`,
+      ],
+      size: "1728x2304",
+      output_format: "png",
+      response_format: "url",
+      sequential_image_generation: "disabled",
+      watermark: false,
+    });
   });
 
   it("posts GPT Image edits as multipart with multiple references, edit credentials, and detailed metadata", async () => {

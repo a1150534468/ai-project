@@ -783,11 +783,36 @@ export async function callImageGeneration(args: CallImageGenerationArgs): Promis
 }
 
 export async function callImageEditDetailed(args: CallImageEditArgs): Promise<ImageGenerationResult> {
-  if (args.config.protocol === "volcengine") {
-    throw new Error("豆包生图暂不支持以图生图编辑");
-  }
   if (args.referenceImages.length < 1 || args.referenceImages.length > IMAGE_MAX_REFERENCE_COUNT) {
     throw new Error(`image editing requires 1 to ${IMAGE_MAX_REFERENCE_COUNT} reference images`);
+  }
+  if (args.config.protocol === "volcengine") {
+    if (args.mask) throw new Error("Seedream image editing does not support a separate mask input");
+    const requestedSize = args.size?.trim() || "2048x2048";
+    const requestedFormat = args.outputFormat ?? "png";
+    const images = args.referenceImages.map((image) => dataUrlForImageInput(image));
+    const body = {
+      model: args.config.model,
+      prompt: args.prompt,
+      image: images.length === 1 ? images[0] : images,
+      size: requestedSize,
+      output_format: requestedFormat,
+      response_format: "url",
+      sequential_image_generation: "disabled",
+      watermark: false,
+    };
+    const response = await fetchWithTimeout(args.fetchFn, args.endpoint ?? args.config.endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+      body: JSON.stringify(body),
+    }, loadImageAttemptTimeoutMs(args.env), args.signal);
+    if (!response.ok) throw await upstreamError(response);
+    const payload = await response.json();
+    return await detailedResult(
+      payload,
+      { model: args.config.model, size: requestedSize, quality: args.quality },
+      imageUpstreamRequestIdFromHeaders(response.headers),
+    );
   }
   if (args.config.protocol === "openai") {
     const env = args.env ?? process.env;

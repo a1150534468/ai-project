@@ -26,6 +26,7 @@ import { membershipUserRoutes } from "./membership/routes.js";
 import { agentRoutes } from "./agents/routes.js";
 import { agentTeamRoutes } from "./agent-teams/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image-routes.js";
+import { portraitWorkflowRoutes } from "./workflow/portrait-routes.js";
 import { codexPetRoutes } from "./workflow/codex-pet-routes.js";
 import { enqueueCodexPetProjectCleanup } from "./workflow/codex-pet-cleanup.js";
 import { videoWorkflowRoutes } from "./workflow/video-routes.js";
@@ -137,6 +138,7 @@ export async function buildServer() {
   await app.register(agentRoutes, { redis: getRedis() });
   await app.register(agentTeamRoutes);
   await app.register(imageWorkflowRoutes);
+  await app.register(portraitWorkflowRoutes);
   await app.register((instance) => codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }));
   await app.register(videoWorkflowRoutes);
   await app.register(dubRoutes);

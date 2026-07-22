@@ -134,11 +134,65 @@ export function ImageWorkflowStudio({
   const activeTaskCount = tasks.filter((task) => task.status === "queued" || task.status === "running").length;
 
   return (
-    <section className="grid min-w-0 gap-5 xl:grid-cols-[minmax(300px,400px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)_minmax(280px,320px)]">
-      <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
-        <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-[#1d1d1f]">生图配置</h2>
-        </div>
+    <section className="grid xl:h-full min-h-0 gap-5 xl:grid-cols-[1fr_3fr_1fr]">
+      <div className="flex xl:h-full min-h-0 flex-col gap-5">
+        <aside className="min-h-0 flex-1 overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-[#1d1d1f]">生成历史</h2>
+            <button
+              type="button"
+              onClick={onDownloadAll}
+              disabled={images.length === 0}
+              className="text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-[#8a8a8f]"
+            >
+              全部原图链接
+            </button>
+          </div>
+          <div
+            aria-label="最近生成历史记录"
+            className="grid max-h-64 gap-2 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]"
+          >
+            {images.length > 0 ? (
+              images.map((image) => {
+                const selected = selectedRequestId === image.requestId;
+                return (
+                  <button
+                    key={image.id}
+                    type="button"
+                    onClick={() => onSelectHistoryImage(image)}
+                    className={`grid min-h-[70px] grid-cols-[54px_minmax(0,1fr)] items-center gap-3 rounded-[10px] border p-2 text-left transition ${
+                      selected
+                        ? "border-brand bg-brand-soft text-brand-ink"
+                        : "border-[#e8e8ed] bg-white text-[#1d1d1f] "
+                    }`}
+                    title={image.prompt}
+                  >
+                    <span className="block h-[54px] w-[54px] overflow-hidden rounded-[8px] bg-[#f7faf9]">
+                      <img src={image.thumbnailUrl} alt={promptSummary(image.prompt)} className="h-full w-full object-cover" loading="lazy" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block overflow-hidden text-xs font-semibold leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
+                        {image.prompt}
+                      </span>
+                      <span className={`mt-1 block truncate text-[11px] font-medium ${selected ? "text-brand-ink/75" : "text-[#8a8a8f]"}`}>
+                        {image.size} · 第 {image.requestIndex + 1} 张 · {formatTaskTime(image.createdAt)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="rounded-[9px] border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-3 py-3 text-center text-xs text-[#8a8a8f]">
+                暂无生成图片
+              </div>
+            )}
+          </div>
+        </aside>
+
+        <aside className="min-h-0 flex-1 overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <h2 className="text-lg font-semibold text-[#1d1d1f]">生图配置</h2>
+          </div>
 
         <div className="mb-3 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
           模型
@@ -302,61 +356,10 @@ export function ImageWorkflowStudio({
           )}
         </div>
 
-        <div className="mt-4 grid gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-[#1d1d1f]">最近生成（{images.length} / 50）</p>
-            <button
-              type="button"
-              onClick={onDownloadAll}
-              disabled={images.length === 0}
-              className="text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-[#8a8a8f]"
-            >
-              全部原图链接
-            </button>
-          </div>
-          <div
-            aria-label="最近生成历史记录"
-            className="grid max-h-64 gap-2 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]"
-          >
-            {images.length > 0 ? (
-              images.map((image) => {
-                const selected = selectedRequestId === image.requestId;
-                return (
-                  <button
-                    key={image.id}
-                    type="button"
-                    onClick={() => onSelectHistoryImage(image)}
-                    className={`grid min-h-[70px] grid-cols-[54px_minmax(0,1fr)] items-center gap-3 rounded-[10px] border p-2 text-left transition ${
-                      selected
-                        ? "border-brand bg-brand-soft text-brand-ink"
-                        : "border-[#e8e8ed] bg-white text-[#1d1d1f] "
-                    }`}
-                    title={image.prompt}
-                  >
-                    <span className="block h-[54px] w-[54px] overflow-hidden rounded-[8px] bg-[#f7faf9]">
-                      <img src={image.thumbnailUrl} alt={promptSummary(image.prompt)} className="h-full w-full object-cover" loading="lazy" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block overflow-hidden text-xs font-semibold leading-5 [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]">
-                        {image.prompt}
-                      </span>
-                      <span className={`mt-1 block truncate text-[11px] font-medium ${selected ? "text-brand-ink/75" : "text-[#8a8a8f]"}`}>
-                        {image.size} · 第 {image.requestIndex + 1} 张 · {formatTaskTime(image.createdAt)}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="rounded-[9px] border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-3 py-3 text-center text-xs text-[#8a8a8f]">
-                暂无生成图片
-              </div>
-            )}
-          </div>
-        </div>
-      </aside>
+        </aside>
+      </div>
 
-      <section className="min-w-0 rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
+      <section className="xl:h-full min-h-0 overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-[#1d1d1f]">生成预览</h2>
           <div className="flex flex-wrap gap-2">
@@ -415,7 +418,7 @@ export function ImageWorkflowStudio({
 
       </section>
 
-      <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-4 shadow-[0_16px_44px_rgba(15,23,42,0.055)] 2xl:sticky 2xl:top-6 2xl:self-start">
+      <aside className="flex xl:h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-[#e8e8ed] bg-white p-4 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
         <div className="mb-3 flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-[#1d1d1f]">任务队列</h2>
           {activeTaskCount > 0 && (
@@ -429,7 +432,7 @@ export function ImageWorkflowStudio({
           )}
         </div>
 
-        <div className="grid max-h-[72vh] gap-3 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]">
+        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]">
           {tasks.length > 0 ? (
             <AnimatePresence mode="popLayout" initial={false}>
               {tasks.map((task) => {
