@@ -1,0 +1,7 @@
+
+> @ai-assistant/api@0.0.0 worker:codex-pet /Users/z/code/ai project/apps/api
+> tsx src/workers/codex-pet-worker.ts
+
+[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+[codex-pet-worker] received SIGTERM, shutting down

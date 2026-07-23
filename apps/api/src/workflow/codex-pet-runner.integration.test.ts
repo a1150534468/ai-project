@@ -1505,7 +1505,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   });
 
-  it("aborts and drains a slow standard-row sibling before failing and refunding the run", async () => {
+  it("does not start a paid running-right sibling when the idle gate fails", async () => {
     const seeded = await seed(true);
     const baseStore = memoryArtifactStore();
     let terminalEventSeen = false;
@@ -1519,34 +1519,14 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     };
     const deps = runnerDeps(store);
     const lifecycle: string[] = [];
-    let siblingObservedAbort = false;
-    let siblingSettled = false;
-    let releaseIdleStart!: () => void;
-    const idleStarted = new Promise<void>((resolve) => { releaseIdleStart = resolve; });
 
-    deps.visual!.generate = vi.fn(async (input: { readonly prompt: string; readonly signal?: AbortSignal }) => {
+    deps.visual!.generate = vi.fn(async (input: { readonly prompt: string }) => {
       if (input.prompt.includes("“idle” animation")) {
-        releaseIdleStart();
-        try {
-          await new Promise<never>((_resolve, reject) => {
-            const abort = () => {
-              siblingObservedAbort = true;
-              reject(input.signal?.reason instanceof Error ? input.signal.reason : new Error("slow sibling aborted"));
-            };
-            if (!input.signal) reject(new Error("standard row did not receive a child abort signal"));
-            else if (input.signal.aborted) abort();
-            else input.signal.addEventListener("abort", abort, { once: true });
-          });
-          throw new Error("slow sibling unexpectedly resumed");
-        } finally {
-          siblingSettled = true;
-          lifecycle.push("idle.settled");
-        }
+        lifecycle.push("idle.failed");
+        throw new Error("synthetic idle gate failure");
       }
       if (input.prompt.includes("“running-right” animation")) {
-        await idleStarted;
-        lifecycle.push("running-right.failed");
-        throw new Error("synthetic fast standard-row failure");
+        lifecycle.push("running-right.started");
       }
       return syntheticVisual(input.prompt);
     }) as never;
@@ -1561,15 +1541,14 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     deps.billing.refundResource = vi.fn(async () => {
       lifecycle.push("refund.called");
-      expect(siblingSettled).toBe(true);
       return { success: true };
     });
 
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .rejects.toThrow("synthetic fast standard-row failure");
+      .rejects.toThrow("synthetic idle gate failure");
 
-    expect(siblingObservedAbort).toBe(true);
-    expect(lifecycle.indexOf("idle.settled")).toBeLessThan(lifecycle.indexOf("run.failed"));
+    expect(lifecycle).not.toContain("running-right.started");
+    expect(lifecycle.indexOf("idle.failed")).toBeLessThan(lifecycle.indexOf("run.failed"));
     expect(lifecycle.indexOf("run.failed")).toBeLessThan(lifecycle.indexOf("refund.called"));
     expect(artifactWritesAfterTerminal).toEqual([]);
 
@@ -1586,13 +1565,12 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const idleJob = await prisma.codexPetJob.findUniqueOrThrow({
       where: { runId_key: { runId: run.id, key: "row-idle" } },
     });
-    expect(idleJob).toMatchObject({ status: "cancelled", workerId: null, providerMetadata: null });
+    expect(idleJob).toMatchObject({ status: "failed", workerId: null });
     expect(idleJob.completedAt).not.toBeNull();
-    const runningRightJob = await prisma.codexPetJob.findUniqueOrThrow({
+    const runningRightJob = await prisma.codexPetJob.findUnique({
       where: { runId_key: { runId: run.id, key: "row-running-right" } },
     });
-    expect(runningRightJob.status).toBe("failed");
-    expect(runningRightJob.completedAt).not.toBeNull();
+    expect(runningRightJob).toBeNull();
 
     const events = await prisma.codexPetEvent.findMany({
       where: { runId: run.id },

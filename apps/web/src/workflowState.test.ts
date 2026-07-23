@@ -8,6 +8,9 @@ import {
   buildImageSize,
   createImageTask,
   parseImageCount,
+  resolveImageSizeSelection,
+  resolveImageSubmissionContext,
+  resolveImageVersionComparison,
   summarizeImageTasks,
 } from "./workflowState";
 
@@ -28,6 +31,40 @@ describe("workflowState", () => {
   it("keeps compatibility size options derived from ratio and resolution", () => {
     expect(IMAGE_SIZE_OPTIONS.map((option) => option.value)).not.toContain("3840x2160");
     expect(IMAGE_SIZE_OPTIONS.map((option) => option.value)).not.toContain("3840x1648");
+  });
+
+  it("restores aspect ratio and resolution from a persisted task size", () => {
+    expect(resolveImageSizeSelection("2048x1152")).toEqual({ aspectRatio: "16:9", resolution: "2K" });
+    expect(resolveImageSizeSelection("not-a-supported-size")).toBeNull();
+  });
+
+  it("only submits an edit source while the workspace is editing", () => {
+    expect(resolveImageSubmissionContext("editing", "variation", "source-1")).toEqual({
+      generationIntent: "variation",
+      sourceImageAssetId: "source-1",
+    });
+    expect(resolveImageSubmissionContext("result", "edit", "stale-source")).toEqual({
+      generationIntent: "new",
+      sourceImageAssetId: null,
+    });
+  });
+
+  it("uses the completed task's persisted source for version comparison", () => {
+    const completedEdit = {
+      ...createImageTask({
+        id: "task-v2",
+        prompt: "新版本",
+        size: "1024x1024",
+        count: 1,
+        createdAt: "2026-07-22T10:00:00.000Z",
+      }),
+      status: "completed" as const,
+      generationIntent: "edit" as const,
+      sourceImageAssetId: "source-v1",
+    };
+
+    expect(resolveImageVersionComparison(completedEdit, "candidate-v2")).toEqual(["source-v1", "candidate-v2"]);
+    expect(resolveImageVersionComparison({ ...completedEdit, status: "running" }, "candidate-v2")).toBeNull();
   });
 
   it("marks image, novel, commerce, fanout, article workflow, local business promo, comic, and scheduled task modules available", () => {

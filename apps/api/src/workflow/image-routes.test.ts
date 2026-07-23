@@ -27,6 +27,9 @@ interface ImageTaskRow {
   prompt: string;
   model: string;
   size: string;
+  referenceAssetIds?: string[];
+  sourceImageAssetId?: string | null;
+  generationIntent?: string;
   count: number;
   status: string;
   completedCount: number;
@@ -461,6 +464,104 @@ describe("image workflow routes", () => {
       { image: `data:image/png;base64,${referenceB64}` },
       { text: "保留杯子造型，改成户外场景" },
     ]);
+    await app.close();
+  });
+
+  it("requires an owned source image for edit and variation tasks", async () => {
+    const foreignSource: ImageRow = {
+      id: "source-foreign",
+      userId: "u2",
+      requestId: "req-foreign-source",
+      requestIndex: 0,
+      prompt: "foreign",
+      model: "gpt-image-2",
+      size: "1024x1024",
+      originalUrl: "data:image/png;base64,cG5n",
+      thumbnailUrl: "data:image/png;base64,cG5n",
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T07:00:00.000Z"),
+    };
+    const prisma = createPrismaMock([foreignSource]);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const missing = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-edit-missing", prompt: "修改", size: "1024x1024", generationIntent: "edit", count: 1 },
+    });
+    expect(missing.statusCode).toBe(400);
+    expect(missing.json().error).toContain("来源图片");
+
+    const foreign = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: {
+        requestId: "req-edit-foreign",
+        prompt: "修改",
+        size: "1024x1024",
+        generationIntent: "variation",
+        sourceImageAssetId: "source-foreign",
+        count: 1,
+      },
+    });
+    expect(foreign.statusCode).toBe(400);
+    expect(foreign.json().error).toContain("无权使用");
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("puts the source image first, deduplicates references, and persists version metadata", async () => {
+    const makeReference = (id: string): ImageRow => ({
+      id,
+      userId: "u1",
+      requestId: `req-${id}`,
+      requestIndex: 0,
+      prompt: id,
+      model: "gpt-image-2",
+      size: "1024x1024",
+      originalUrl: `data:image/png;base64,${Buffer.from(id).toString("base64")}`,
+      thumbnailUrl: `data:image/png;base64,${Buffer.from(id).toString("base64")}`,
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T07:00:00.000Z"),
+    });
+    const prisma = createPrismaMock([makeReference("source-1"), makeReference("ref-2"), makeReference("ref-3")]);
+    const scheduled: Promise<void>[] = [];
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })) as typeof fetch;
+    const app = await createApp({ prisma, billing: createBillingMock(), fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: {
+        requestId: "req-edit-source",
+        prompt: "生成新版本",
+        size: "1024x1024",
+        sourceImageAssetId: "source-1",
+        generationIntent: "edit",
+        referenceAssetIds: ["ref-2", "source-1", "ref-3"],
+        count: 1,
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data.task).toMatchObject({
+      sourceImageAssetId: "source-1",
+      generationIntent: "edit",
+      referenceAssetIds: ["source-1", "ref-2", "ref-3"],
+    });
+    expect(prisma.imageGenerationTask.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        sourceImageAssetId: "source-1",
+        generationIntent: "edit",
+        referenceAssetIds: ["source-1", "ref-2", "ref-3"],
+      }),
+    });
+    await scheduled[0];
+    const body = JSON.parse(String((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
+    expect(body.input.messages[0].content.slice(0, 3)).toHaveLength(3);
     await app.close();
   });
 

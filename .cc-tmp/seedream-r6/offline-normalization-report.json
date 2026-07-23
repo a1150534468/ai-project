@@ -1,0 +1,50 @@
+{
+  "ok": true,
+  "mode": "offline-no-network",
+  "results": [
+    {
+      "candidate": 1,
+      "inputPath": "/Users/z/code/ai project/.cc-tmp/seedream-r6/candidate-1.png",
+      "outputPath": "/Users/z/code/ai project/.cc-tmp/seedream-r6/candidate-1-normalized.png",
+      "width": 1920,
+      "height": 2080,
+      "exactKeyEdgeRatio": 1,
+      "exactKeyCoverage": 0.8257887620192308,
+      "protectedForegroundPixels": 685444,
+      "preservedForegroundRatio": 1,
+      "centerBefore": [
+        188,
+        245,
+        204
+      ],
+      "centerAfter": [
+        188,
+        245,
+        204
+      ],
+      "centerPreserved": true
+    },
+    {
+      "candidate": 2,
+      "inputPath": "/Users/z/code/ai project/.cc-tmp/seedream-r6/candidate-2.png",
+      "outputPath": "/Users/z/code/ai project/.cc-tmp/seedream-r6/candidate-2-normalized.png",
+      "width": 1920,
+      "height": 2080,
+      "exactKeyEdgeRatio": 1,
+      "exactKeyCoverage": 0.6230784254807692,
+      "protectedForegroundPixels": 1346917,
+      "preservedForegroundRatio": 1,
+      "centerBefore": [
+        163,
+        236,
+        191
+      ],
+      "centerAfter": [
+        163,
+        236,
+        191
+      ],
+      "centerPreserved": true
+    }
+  ]
+}

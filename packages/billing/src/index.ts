@@ -356,7 +356,9 @@ export function createBillingClient(opts: BillingClientOpts) {
     getModelStats: (model: string) =>
       get(`internal/admin/models/stats?model=${encodeURIComponent(model)}`) as Promise<{ data: ModelStatsRow }>,
     listEnabledModels: () =>
-      get("internal/models") as Promise<{ data: { model: string; displayName: string; maxOutputTokens: number }[] }>,
+      get("internal/models") as Promise<{
+        data: { model: string; displayName: string; maxOutputTokens: number; tags: string }[];
+      }>,
     // —— BI 分析 ——
     analyticsDaily: (from: string, to: string) =>
       get(`internal/admin/analytics/daily?from=${from}&to=${to}`) as Promise<{ data: AnalyticsDailyRow[] }>,

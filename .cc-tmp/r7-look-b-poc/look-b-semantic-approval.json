@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "codex-pet-look-semantic-approval-v1",
+  "sourceRunId": "cpr_3a7a7ee330675f6f5f3b4d58e0ef5b5b",
+  "row": "look-b",
+  "verdict": "pass",
+  "registeredBoardChecksum": "ed40b73c61b7b284fe6688503417d89e7d734cc549d437d5dbedb9d12db1b10a",
+  "sourceRegisteredLookAChecksum": "6ab40bbc362d40b3152b9a1ddabf3d5cd538eb5f859e6a4121bea7e064c3dfaa",
+  "modelProvenance": {
+    "requestedModel": "gpt-5.6-sol",
+    "actualModel": "gpt-5.6-sol",
+    "route": "chatgpt_model_route"
+  },
+  "qa": {
+    "pass": true,
+    "verdicts": [
+      {
+        "pass": true,
+        "score": 94,
+        "mirrorSafe": true,
+        "identity": true,
+        "structure": true,
+        "semantics": true,
+        "continuity": true,
+        "warnings": [
+          "180→202.5 exceeds the supplied alpha-difference review threshold, but the visible change is consistent with the front pose beginning a clockwise turn toward screen-left; registration, height and identity remain stable.",
+          "270→292.5 exceeds the supplied width, area, alpha-mass and alpha-difference review thresholds; visually this is the expected silhouette widening from a narrow left profile into a rear-left three-quarter pose, not a zoom or scale pop."
+        ],
+        "failures": [],
+        "repairPrompt": "",
+        "repairRows": [],
+        "modelProvenance": {
+          "requestedModel": "gpt-5.6-sol",
+          "actualModel": "gpt-5.6-sol",
+          "route": "chatgpt_model_route"
+        }
+      }
+    ],
+    "score": 94,
+    "mirrorSafe": true,
+    "warnings": [
+      "180→202.5 exceeds the supplied alpha-difference review threshold, but the visible change is consistent with the front pose beginning a clockwise turn toward screen-left; registration, height and identity remain stable.",
+      "270→292.5 exceeds the supplied width, area, alpha-mass and alpha-difference review thresholds; visually this is the expected silhouette widening from a narrow left profile into a rear-left three-quarter pose, not a zoom or scale pop."
+    ],
+    "failures": [],
+    "modelProvenance": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "route": "chatgpt_model_route"
+    }
+  }
+}

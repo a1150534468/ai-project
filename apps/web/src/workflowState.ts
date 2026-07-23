@@ -50,11 +50,22 @@ export type ImageResolution = typeof IMAGE_RESOLUTION_VALUES[number];
 export type ImageModel = typeof IMAGE_MODEL_VALUES[number];
 
 export type ImageTaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled";
+export type ImageGenerationIntent = "new" | "variation" | "edit";
+export type ImageWorkspaceMode = "empty" | "result" | "editing" | "comparing";
+
+export interface ImageSubmissionContext {
+  readonly generationIntent: ImageGenerationIntent;
+  readonly sourceImageAssetId: string | null;
+}
 
 export interface ImageTask {
   readonly id: string;
   readonly prompt: string;
+  readonly model?: ImageModel;
   readonly size: string;
+  readonly referenceAssetIds?: readonly string[];
+  readonly sourceImageAssetId?: string | null;
+  readonly generationIntent?: ImageGenerationIntent;
   readonly count: number;
   readonly status: ImageTaskStatus;
   readonly completedCount?: number;
@@ -127,6 +138,37 @@ export const IMAGE_SIZE_OPTIONS: readonly ImageSizeOption[] = IMAGE_ASPECT_RATIO
 
 export function buildImageSize(aspectRatio: ImageAspectRatio, resolution: ImageResolution): string {
   return IMAGE_SIZE_BY_RATIO_AND_RESOLUTION[aspectRatio][resolution];
+}
+
+export function resolveImageSizeSelection(size: string): { readonly aspectRatio: ImageAspectRatio; readonly resolution: ImageResolution } | null {
+  for (const aspectRatio of IMAGE_ASPECT_RATIO_VALUES) {
+    for (const resolution of IMAGE_RESOLUTION_VALUES) {
+      if (IMAGE_SIZE_BY_RATIO_AND_RESOLUTION[aspectRatio][resolution] === size) {
+        return { aspectRatio, resolution };
+      }
+    }
+  }
+  return null;
+}
+
+export function resolveImageSubmissionContext(
+  workspaceMode: ImageWorkspaceMode,
+  generationIntent: ImageGenerationIntent,
+  sourceImageAssetId: string | null,
+): ImageSubmissionContext {
+  return workspaceMode === "editing"
+    ? { generationIntent, sourceImageAssetId }
+    : { generationIntent: "new", sourceImageAssetId: null };
+}
+
+export function resolveImageVersionComparison(
+  task: ImageTask | null | undefined,
+  candidateImageId: string | null | undefined,
+): readonly [string, string] | null {
+  if (task?.status !== "completed" || task.generationIntent === "new" || !task.sourceImageAssetId || !candidateImageId) {
+    return null;
+  }
+  return [task.sourceImageAssetId, candidateImageId];
 }
 
 export function isImageAspectRatio(value: string): value is ImageAspectRatio {

@@ -31,10 +31,15 @@ import {
 } from "./codex-pet-look-poc-guard.js";
 import {
   buildLookRowPrompt,
+  buildVisualQaPrompt,
   sanitizeCodexPetDirectionRepairPrompt,
   type CodexPetVisualIdentity,
 } from "./codex-pet-prompts.js";
-import { generateCodexPetVisual } from "./codex-pet-visual.js";
+import {
+  codexPetVisualQaConsensusPasses,
+  generateCodexPetVisual,
+  runCodexPetVisualQaConsensus,
+} from "./codex-pet-visual.js";
 
 const launch = captureCodexPetLookBPocLaunch(process.env);
 if (launch.mode !== "disabled") {
@@ -120,7 +125,7 @@ async function loadLookBSource(): Promise<LoadedLookB> {
   if (provider.requestedModel !== CODEX_PET_LOOK_POC_REQUESTED_MODEL
     || provider.actualModel !== CODEX_PET_LOOK_POC_EXPECTED_ACTUAL_MODEL
     || modelCalls.imageGeneration !== 1
-    || modelCalls.visualQa !== 0
+    || modelCalls.visualQa !== 1
     || deterministic.extractionOk !== true
     || deterministic.registrationOk !== true
     || continuity.ok !== true) {
@@ -203,7 +208,7 @@ function lookBPrompt(): string {
     : base;
 }
 
-async function prepareLookB(mode: "prepare" | "live", observedImageCalls = 0) {
+async function prepareLookB(mode: "prepare" | "live", observedImageCalls = 0, observedVisualQaCalls = 0) {
   await mkdir(launch.outputDir, { recursive: true });
   const [anchorStoryboard, trajectory, layout] = await Promise.all([
     createLookAnchorStoryboard(loaded.cardinalAnchor, "look-b", loaded.chromaKey),
@@ -242,7 +247,7 @@ async function prepareLookB(mode: "prepare" | "live", observedImageCalls = 0) {
       automaticRetry: false,
       stopOnFailure: true,
     },
-    visualQaCalls: 0,
+    visualQaCalls: observedVisualQaCalls,
     files: {
       anchorStoryboard: "look-b-anchor-storyboard.png",
       trajectory: "look-b-screen-left-trajectory-scaffold.png",
@@ -331,10 +336,60 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-b POC",
     const continuity = await measureDirectionRowContinuity(registered.frames, LOOK_DIRECTIONS.slice(8));
     const preview = registered.ok ? await createAnimatedWebpPreview(registered.frames, petRowSpec("look-b").durations) : null;
     if (preview) await writeFile(resolve(launch.outputDir, "look-b-preview.webp"), preview.image);
-    await prepareLookB("live", guard.attemptCount());
+
+    if (!extracted.ok) throw new Error(`look-b extraction failed: ${extracted.errors.join("; ")}`);
+    if (!registered.ok) throw new Error(`look-b registration failed: ${registered.errors.join("; ")}`);
+    if (!continuity.ok) throw new Error(`look-b continuity failed: ${continuity.errors.join("; ")}`);
+    if (!preview) throw new Error("look-b preview is unavailable after registration");
+
+    const semanticQa = await runCodexPetVisualQaConsensus({
+      images: [
+        { buffer: loaded.canonical, mime: loaded.canonicalMime },
+        { buffer: loaded.standardContact, mime: "image/png" },
+        { buffer: loaded.cardinalAnchor, mime: loaded.cardinalMime },
+        { buffer: loaded.row9Reference, mime: "image/png" },
+        { buffer: registeredBoard, mime: "image/png" },
+        { buffer: preview.image, mime: preview.mime },
+      ],
+      prompt: buildVisualQaPrompt(
+        "directions",
+        `Checksum-bound row-10 gate for registered directions 180, 202.5, 225, 247.5, 270, 292.5, 315, 337.5. `
+        + `Confirm 180 unmistakably down/front-facing, 270 unmistakably screen-left, every intermediate stays in its labeled quadrant, and the row advances clockwise without reversal, registration snap, scale pop or identity drift. `
+        + `Image 3 is the approved 2x2 cardinal basis, Image 4 is approved row 9, Image 5 is the complete static registered row 10, and Image 6 is its animation preview. `
+        + `Check both row-boundary seams 157.5 to 180 and 337.5 to 000. Continuity metrics are review evidence only: ${continuity.warnings.map((warning) => warning.message).slice(0, 16).join(" | ") || "none"}.`,
+        loaded.identity.canonicalGuide,
+      ),
+      env: process.env,
+      repetitions: 1,
+    });
+    const semanticProvenance = semanticQa.modelProvenance;
+    if (!semanticProvenance
+      || semanticProvenance.requestedModel !== "gpt-5.6-sol"
+      || semanticProvenance.actualModels.length !== 1
+      || semanticProvenance.actualModels[0] !== "gpt-5.6-sol"
+      || semanticProvenance.route !== "chatgpt_model_route") {
+      throw new Error("look-b semantic QA did not use the selected Pixel GPT model route");
+    }
+    const semanticPassed = codexPetVisualQaConsensusPasses(semanticQa);
+    const registeredBoardChecksum = hash(registeredBoard);
+    await writeFile(resolve(launch.outputDir, "look-b-semantic-approval.json"), `${JSON.stringify({
+      schemaVersion: "codex-pet-look-semantic-approval-v1",
+      sourceRunId: launch.sourceRunId,
+      row: "look-b",
+      verdict: semanticPassed ? "pass" : "fail",
+      registeredBoardChecksum,
+      sourceRegisteredLookAChecksum: loaded.row9RegisteredChecksum,
+      modelProvenance: {
+        requestedModel: semanticProvenance.requestedModel,
+        actualModel: semanticProvenance.actualModels[0],
+        route: semanticProvenance.route,
+      },
+      qa: semanticQa,
+    }, null, 2)}\n`);
+    await prepareLookB("live", guard.attemptCount(), 1);
     await writeFile(resolve(launch.outputDir, "look-b-result.json"), `${JSON.stringify({
       provider: generated.provider,
-      modelCalls: { imageGeneration: guard.attemptCount(), visualQa: 0 },
+      modelCalls: { imageGeneration: guard.attemptCount(), visualQa: 1 },
       sourceRegisteredLookAChecksum: loaded.row9RegisteredChecksum,
       registrationManifestSchema: registered.manifest.schemaVersion,
       deterministic: {
@@ -344,6 +399,8 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-b POC",
         registrationErrors: registered.errors,
         continuity,
       },
+      semanticQa,
+      outputs: { semanticApproval: "look-b-semantic-approval.json" },
     }, null, 2)}\n`);
     expect(guard.attemptCount()).toBe(1);
     expect(generated.provider.actualModel).toBe(CODEX_PET_LOOK_POC_EXPECTED_ACTUAL_MODEL);
@@ -351,5 +408,6 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-b POC",
     expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
     expect(registered.ok, registered.errors.join("; ")).toBe(true);
     expect(continuity.ok, continuity.errors.join("; ")).toBe(true);
+    expect(semanticPassed, semanticQa.failures.join("; ")).toBe(true);
   }, 600_000);
 });

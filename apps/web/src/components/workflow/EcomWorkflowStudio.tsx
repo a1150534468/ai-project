@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import * as workflowEcomApi from "../../workflowEcomApi";
 import type {
   WorkflowEcomImageAsset,
@@ -52,6 +52,8 @@ type EcomWorkflowStudioProps = {
   readonly client?: EcomWorkflowStudioClient;
   readonly shared?: EcomSharedProduct;
   readonly mainImages?: readonly { readonly assetId: string; readonly thumbnailUrl: string }[];
+  readonly controlsHeader?: ReactNode;
+  readonly historyFooter?: ReactNode;
 };
 
 type StitchedPreview = {
@@ -65,7 +67,7 @@ export { createEcomMasterPayload, createEcomWorkflowActions, type EcomWorkflowSt
 const DEFAULT_CLIENT: EcomWorkflowStudioClient = workflowEcomApi;
 const ECOM_POLL_MS = 3000;
 
-export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, loadWorkflow, onActivity, client = DEFAULT_CLIENT, shared, mainImages }: EcomWorkflowStudioProps) {
+export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, loadWorkflow, onActivity, client = DEFAULT_CLIENT, shared, mainImages, controlsHeader, historyFooter }: EcomWorkflowStudioProps) {
   const actions = useMemo(() => createEcomWorkflowActions(client, token), [client, token]);
   const [platforms, setPlatforms] = useState<readonly WorkflowEcomPlatform[]>(FALLBACK_PLATFORMS);
   const [templates, setTemplates] = useState<readonly WorkflowEcomTemplate[]>(FALLBACK_TEMPLATES);
@@ -265,6 +267,8 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       canStitch={canStitch}
       canSave={canSave}
       hideProductForm={Boolean(shared)}
+      controlsHeader={controlsHeader}
+      historyFooter={historyFooter}
       onPlatformChange={(value) => { setSelectedPlatformId(value); clearFeedback(); }}
       onTemplateChange={(value) => { setSelectedTemplateId(value); clearFeedback(); }}
       onResolutionChange={(value) => { setSelectedResolution(value); clearFeedback(); setStitchedPreview(null); }}

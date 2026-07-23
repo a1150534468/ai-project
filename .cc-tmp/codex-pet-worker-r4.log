@@ -1,0 +1,8 @@
+
+> @ai-assistant/api@0.0.0 worker:codex-pet /Users/z/code/ai project/apps/api
+> tsx src/workers/codex-pet-worker.ts
+
+[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+[codex-pet-worker] failed run=cpr_b3ea370138428110e4fe0f4f1dafa390: idle 动作组：身份、6 帧结构、动作语义和连续性经两轮自动修复后仍未通过：frame-0:chroma-coverage-too-low:0.0092:min:0.0800；frame-0:source-touches-slot-edge；frame-1:chroma-coverage-too-low:0.0101:min:0.0800；frame-1:source-touches-slot-edge；frame-2:chroma-coverage-too-low:0.0178:min:0.0800；frame-2:source-touches-slot-edge；frame-3:chroma-coverage-too-low:0.0016:min:0.0800；frame-3:source-touches-slot-edge；frame-4:chroma-coverage-too-low:0.0022:min:0.0800；frame-4:source-touches-slot-edge；frame-5:chroma-coverage-too-low:0.0045:min:0.0800；frame-5:source-touches-slot-edge；frame-0:chroma-coverage-too-low:0.0092:min:0.0800；frame-0:source-touches-slot-edge；frame-1:chroma-coverage-too-low:0.0101:min:0.0800；frame-1:source-touches-slot-edge；frame-2:chroma-coverage-too-low:0.0178:min:0.0800；frame-2:source-touches-slot-edge；frame-3:chroma-coverage-too-low:0.0016:min:0.0800；frame-3:source-touches-slot-edge；frame-4:chroma-coverage-too-low:0.0022:min:0.0800；frame-4:source-touches-slot-edge；frame-5:chroma-coverage-too-low:0.0045:min:0.080
+[codex-pet-worker] received SIGTERM, shutting down

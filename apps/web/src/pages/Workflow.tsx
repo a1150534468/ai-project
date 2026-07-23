@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { useToast, RippleButton } from "../motion";
 import {
@@ -33,9 +33,15 @@ import {
   buildImageSize,
   createImageTask,
   type ImageAspectRatio,
+  type ImageGenerationIntent,
   type ImageModel,
   type ImageResolution,
+  type ImageWorkspaceMode,
+  isImageModel,
   parseImageCount,
+  resolveImageSizeSelection,
+  resolveImageSubmissionContext,
+  resolveImageVersionComparison,
   type ImageTask,
   type WorkflowModuleId,
 } from "../workflowState";
@@ -48,6 +54,24 @@ const TASK_POLL_MS = 3000;
 const IMAGE_MAX_REFERENCE_COUNT = 3;
 const IMAGE_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
 const IMAGE_REFERENCE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/bmp", "image/tiff", "image/gif"]);
+
+interface ImageDraft {
+  readonly prompt: string;
+  readonly model: ImageModel;
+  readonly aspectRatio: ImageAspectRatio;
+  readonly resolution: ImageResolution;
+  readonly countInput: string;
+  readonly referenceImages: readonly WorkflowImageAsset[];
+}
+
+const DEFAULT_IMAGE_DRAFT: ImageDraft = {
+  prompt: DEFAULT_PROMPT,
+  model: DEFAULT_IMAGE_MODEL,
+  aspectRatio: DEFAULT_ASPECT_RATIO,
+  resolution: DEFAULT_RESOLUTION,
+  countInput: "1",
+  referenceImages: [],
+};
 
 interface WorkflowProps {
   readonly token: string;
@@ -72,7 +96,11 @@ function toImageTask(task: WorkflowImageTask): ImageTask {
   return {
     id: task.requestId,
     prompt: task.prompt,
+    model: task.model as ImageModel,
     size: task.size,
+    referenceAssetIds: task.referenceAssetIds,
+    sourceImageAssetId: task.sourceImageAssetId,
+    generationIntent: task.generationIntent,
     count: task.count,
     status: task.status,
     completedCount: task.completedCount,
@@ -101,17 +129,21 @@ const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerc
 
 export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument }: WorkflowProps) {
   const toast = useToast();
-  const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
-  const [aspectRatio, setAspectRatio] = useState<ImageAspectRatio>(DEFAULT_ASPECT_RATIO);
-  const [resolution, setResolution] = useState<ImageResolution>(DEFAULT_RESOLUTION);
-  const [imageModel, setImageModel] = useState<ImageModel>(DEFAULT_IMAGE_MODEL);
-  const [countInput, setCountInput] = useState("1");
-  const [selectedQuickCount, setSelectedQuickCount] = useState(1);
+  const [imageDraft, setImageDraft] = useState<ImageDraft>(DEFAULT_IMAGE_DRAFT);
+  const [preEditDraft, setPreEditDraft] = useState<ImageDraft | null>(null);
   const [tasks, setTasks] = useState<readonly ImageTask[]>([]);
   const [images, setImages] = useState<readonly WorkflowImageAsset[]>([]);
-  const [previewRequestId, setPreviewRequestId] = useState<string | null>(null);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<string | null>(null);
+  const [workspaceMode, setWorkspaceMode] = useState<ImageWorkspaceMode>("empty");
+  const [editBaseImageId, setEditBaseImageId] = useState<string | null>(null);
+  const [compareImageIds, setCompareImageIds] = useState<readonly [string, string] | null>(null);
+  const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
+  const [isEditDirty, setIsEditDirty] = useState(false);
+  const [imageGenerationIntent, setImageGenerationIntent] = useState<ImageGenerationIntent>("new");
+  const [pendingVersionRequestId, setPendingVersionRequestId] = useState<string | null>(null);
+  const hasInitializedImageState = useRef(false);
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
-  const [referenceImages, setReferenceImages] = useState<readonly WorkflowImageAsset[]>([]);
   const [isUploadingReference, setIsUploadingReference] = useState(false);
   const [cancellingTaskIds, setCancellingTaskIds] = useState<readonly string[]>([]);
   const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState | null>(null);
@@ -144,6 +176,9 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   useEffect(() => {
     setImageSubMode(activeModuleId === "commerce-long-image" ? "ecom" : "general");
   }, [activeModuleId]);
+  const { prompt, model: imageModel, aspectRatio, resolution, countInput, referenceImages } = imageDraft;
+  const parsedQuickCount = Number.parseInt(countInput, 10);
+  const selectedQuickCount = [1, 2, 4, 8].includes(parsedQuickCount) ? parsedQuickCount : 0;
   const size = buildImageSize(aspectRatio, resolution);
   const estimatedImagePointCost = useMemo(() => {
     const rate = imagePricing?.[resolution]?.rate;
@@ -153,12 +188,12 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
     return rate * count;
   }, [imagePricing, resolution, countInput]);
   const previewTasks = useMemo(
-    () => previewRequestId ? tasks.filter((task) => task.id === previewRequestId) : tasks.filter(isActiveTask),
-    [previewRequestId, tasks],
+    () => selectedRequestId ? tasks.filter((task) => task.id === selectedRequestId) : tasks.filter(isActiveTask),
+    [selectedRequestId, tasks],
   );
   const previewImages = useMemo(
-    () => previewRequestId ? images.filter((image) => image.requestId === previewRequestId) : [],
-    [images, previewRequestId],
+    () => selectedRequestId ? images.filter((image) => image.requestId === selectedRequestId) : [],
+    [images, selectedRequestId],
   );
   const isPreviewGenerating = previewTasks.some(isActiveTask);
   const previewGeneratingCount = useMemo(
@@ -166,13 +201,35 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
     [previewTasks],
   );
 
+  const updateImageDraft = (updates: Partial<ImageDraft>, markDirty = true) => {
+    setImageDraft((current) => ({ ...current, ...updates }));
+    if (markDirty && workspaceMode === "editing") setIsEditDirty(true);
+  };
+
   const refreshImageState = useCallback(async (showFailureNotice: boolean) => {
     try {
       const state = await getWorkflowImageState(token);
       const nextTasks = state.tasks.map(toImageTask);
       setImages(state.images);
       setTasks(nextTasks);
-      setPreviewRequestId((current) => current ?? nextTasks.find(isActiveTask)?.id ?? null);
+
+      if (!hasInitializedImageState.current) {
+        hasInitializedImageState.current = true;
+        const initialTask = nextTasks.find(isActiveTask) ?? nextTasks[0] ?? null;
+        const initialImage = initialTask
+          ? state.images.find((image) => image.requestId === initialTask.id) ?? null
+          : state.images[0] ?? null;
+        if (initialTask || initialImage) {
+          setSelectedRequestId(initialTask?.id ?? initialImage?.requestId ?? null);
+          setSelectedImageId(initialImage?.id ?? null);
+          if (initialTask?.generationIntent !== "new" && initialTask?.sourceImageAssetId && initialTask.status === "completed" && initialImage) {
+            setCompareImageIds([initialTask.sourceImageAssetId, initialImage.id]);
+            setWorkspaceMode("comparing");
+          } else {
+            setWorkspaceMode("result");
+          }
+        }
+      }
       if (showFailureNotice) setNotice("");
     } catch {
       if (showFailureNotice) setNotice("生图任务暂时无法加载");
@@ -203,56 +260,96 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
     return () => window.clearInterval(timer);
   }, [refreshImageState, tasks]);
 
+  useEffect(() => {
+    if (!pendingVersionRequestId) return;
+    const pendingTask = tasks.find((task) => task.id === pendingVersionRequestId);
+    const candidate = images
+      .filter((image) => image.requestId === pendingVersionRequestId)
+      .sort((a, b) => a.requestIndex - b.requestIndex)[0];
+    const comparison = resolveImageVersionComparison(pendingTask, candidate?.id);
+    if (!comparison || !candidate) return;
+    setCompareImageIds(comparison);
+    setSelectedRequestId(candidate.requestId);
+    setSelectedImageId(candidate.id);
+    setWorkspaceMode("comparing");
+    setPendingVersionRequestId(null);
+  }, [images, pendingVersionRequestId, tasks]);
+
   const handleQuickCountChange = (count: number) => {
-    setSelectedQuickCount(count);
-    setCountInput(String(count));
+    updateImageDraft({ countInput: String(count) });
     setError("");
   };
 
   const handleCountInputChange = (value: string) => {
-    setCountInput(value);
-    const parsed = Number.parseInt(value, 10);
-    setSelectedQuickCount([1, 2, 4, 8].includes(parsed) ? parsed : 0);
+    updateImageDraft({ countInput: value });
     setError("");
   };
 
-  // 每次点击 = 一个独立任务，未完成也可继续并发提交（后端按 requestId 独立排队）
-  const handleSubmit = () => {
-    const trimmedPrompt = prompt.trim();
+  const submitImageDraft = (draft: ImageDraft, intent: ImageGenerationIntent, sourceImageAssetId: string | null) => {
+    const trimmedPrompt = draft.prompt.trim();
     if (!trimmedPrompt) {
       setError("请输入提示词");
       return;
     }
 
-    const parsedCount = parseImageCount(countInput);
+    const parsedCount = parseImageCount(draft.countInput);
     if (!parsedCount.ok) {
       setError(parsedCount.error);
       return;
     }
+    if (intent !== "new" && !sourceImageAssetId) {
+      setError("来源图片已不在最近历史中，无法继续生成新版本");
+      return;
+    }
 
     const requestId = createRequestId();
-    const task = createImageTask({
+    const draftSize = buildImageSize(draft.aspectRatio, draft.resolution);
+    const referenceAssetIds = Array.from(new Set([
+      ...(sourceImageAssetId ? [sourceImageAssetId] : []),
+      ...draft.referenceImages.map((image) => image.id),
+    ])).slice(0, IMAGE_MAX_REFERENCE_COUNT);
+    const task: ImageTask = {
+      ...createImageTask({
       id: requestId,
       prompt: trimmedPrompt,
-      size,
+      size: draftSize,
       count: parsedCount.value,
       createdAt: new Date().toISOString(),
-    });
+      }),
+      model: draft.model,
+      referenceAssetIds,
+      sourceImageAssetId,
+      generationIntent: intent,
+    };
 
     setError("");
     setNotice("");
-    setPreviewRequestId(requestId);
+    setSelectedRequestId(requestId);
+    setSelectedImageId(null);
     setTasks((prev) => mergeTask(prev, advanceImageTaskStatus(task, "running")));
+    if (intent === "new") {
+      setWorkspaceMode("result");
+      setCompareImageIds(null);
+      setEditBaseImageId(null);
+      setImageGenerationIntent("new");
+    } else {
+      setWorkspaceMode("editing");
+      setEditBaseImageId(sourceImageAssetId);
+      setPendingVersionRequestId(requestId);
+      setImageGenerationIntent(intent);
+    }
 
     void (async () => {
       try {
         const result = await generateWorkflowImages(token, {
           requestId,
-          model: imageModel,
+          model: draft.model,
           prompt: trimmedPrompt,
-          size,
-          resolution,
-          referenceAssetIds: referenceImages.map((image) => image.id),
+          size: draftSize,
+          resolution: draft.resolution,
+          referenceAssetIds,
+          sourceImageAssetId: sourceImageAssetId ?? undefined,
+          generationIntent: intent,
           count: parsedCount.value,
         });
         setImages(result.recent);
@@ -263,9 +360,17 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
         const message = err instanceof ApiError && err.status === 402 ? "积分不足，请充值" : errorMessage(err, "创建生图任务失败");
         setError(message);
         toast.show("err", message);
-        setTasks((prev) => prev.map((item) => (item.id === requestId ? advanceImageTaskStatus(item, "failed") : item)));
+        setTasks((prev) => prev.map((item) => (item.id === requestId
+          ? { ...item, status: "failed", error: message, updatedAt: new Date().toISOString() }
+          : item)));
       }
     })();
+  };
+
+  // 每次点击都创建独立 requestId，编辑和变体也不会覆盖来源任务。
+  const handleSubmit = () => {
+    const context = resolveImageSubmissionContext(workspaceMode, imageGenerationIntent, editBaseImageId);
+    submitImageDraft(imageDraft, context.generationIntent, context.sourceImageAssetId);
   };
 
   const handleReferenceUpload = (file: File) => {
@@ -286,9 +391,13 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
       try {
         const inlineImage = await readFileAsInlineImage(file);
         const asset = await uploadWorkflowImageReference(token, inlineImage);
-        setReferenceImages((current) => current.some((item) => item.id === asset.id)
-          ? current
-          : [...current, asset].slice(0, IMAGE_MAX_REFERENCE_COUNT));
+        setImageDraft((current) => ({
+          ...current,
+          referenceImages: current.referenceImages.some((item) => item.id === asset.id)
+            ? current.referenceImages
+            : [...current.referenceImages, asset].slice(0, IMAGE_MAX_REFERENCE_COUNT),
+        }));
+        if (workspaceMode === "editing") setIsEditDirty(true);
         setNotice("参考图已上传，生成时将作为画面参考");
         toast.show("ok", "参考图已上传");
       } catch (uploadError) {
@@ -302,14 +411,26 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   };
 
   const handleRemoveReference = (assetId: string) => {
-    setReferenceImages((current) => current.filter((image) => image.id !== assetId));
+    updateImageDraft({ referenceImages: referenceImages.filter((image) => image.id !== assetId) });
     setError("");
     setNotice("");
   };
 
-  // 点击任务卡片：切到该任务的预览
   const handleSelectTask = (task: ImageTask) => {
-    setPreviewRequestId(task.id);
+    const firstImage = images
+      .filter((image) => image.requestId === task.id)
+      .sort((a, b) => a.requestIndex - b.requestIndex)[0] ?? null;
+    setSelectedRequestId(task.id);
+    setSelectedImageId(firstImage?.id ?? null);
+    const comparison = resolveImageVersionComparison(task, firstImage?.id);
+    if (comparison) {
+      setCompareImageIds(comparison);
+      setWorkspaceMode("comparing");
+    } else {
+      setCompareImageIds(null);
+      setWorkspaceMode("result");
+    }
+    setIsTaskDrawerOpen(false);
     setError("");
     setNotice("");
   };
@@ -326,7 +447,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
     void (async () => {
       try {
         const optimized = await optimizeWorkflowPrompt(token, trimmedPrompt);
-        setPrompt(optimized);
+        updateImageDraft({ prompt: optimized });
         setNotice("提示词已优化");
         toast.show("ok", "提示词已优化");
       } catch (err) {
@@ -373,9 +494,92 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   };
 
   const handleSelectHistoryImage = (image: WorkflowImageAsset) => {
-    setPreviewRequestId(image.requestId);
+    setSelectedRequestId(image.requestId);
+    setSelectedImageId(image.id);
+    setCompareImageIds(null);
+    setWorkspaceMode("result");
     setError("");
     setNotice("");
+  };
+
+  const draftFromImage = (image: WorkflowImageAsset): ImageDraft => {
+    const task = tasks.find((item) => item.id === image.requestId);
+    const selection = resolveImageSizeSelection(task?.size ?? image.size)
+      ?? { aspectRatio: DEFAULT_ASPECT_RATIO, resolution: DEFAULT_RESOLUTION };
+    const inheritedReferences = (task?.referenceAssetIds ?? [])
+      .map((id) => [...imageDraft.referenceImages, ...images].find((asset) => asset.id === id))
+      .filter((asset): asset is WorkflowImageAsset => Boolean(asset));
+    const nextReferences = [image, ...inheritedReferences]
+      .filter((asset, index, all) => all.findIndex((candidate) => candidate.id === asset.id) === index)
+      .slice(0, IMAGE_MAX_REFERENCE_COUNT);
+    const taskModel = task?.model ?? image.model;
+    return {
+      prompt: task?.prompt ?? image.prompt,
+      model: isImageModel(taskModel) ? taskModel : DEFAULT_IMAGE_MODEL,
+      aspectRatio: selection.aspectRatio,
+      resolution: selection.resolution,
+      countInput: String(task?.count ?? 1),
+      referenceImages: nextReferences,
+    };
+  };
+
+  const beginEditingImage = (image: WorkflowImageAsset) => {
+    setPreEditDraft(imageDraft);
+    setImageDraft(draftFromImage(image));
+    setSelectedRequestId(image.requestId);
+    setSelectedImageId(image.id);
+    setEditBaseImageId(image.id);
+    setCompareImageIds(null);
+    setImageGenerationIntent("edit");
+    setWorkspaceMode("editing");
+    setIsEditDirty(false);
+    setError("");
+    setNotice("");
+  };
+
+  const handleVariation = (image: WorkflowImageAsset) => {
+    const nextDraft = draftFromImage(image);
+    setPreEditDraft(imageDraft);
+    setImageDraft(nextDraft);
+    setEditBaseImageId(image.id);
+    setSelectedImageId(image.id);
+    setImageGenerationIntent("variation");
+    setIsEditDirty(false);
+    submitImageDraft(nextDraft, "variation", image.id);
+  };
+
+  const handleCancelEditing = () => {
+    if (preEditDraft) setImageDraft(preEditDraft);
+    const baseImage = images.find((image) => image.id === editBaseImageId) ?? null;
+    setSelectedRequestId(baseImage?.requestId ?? selectedRequestId);
+    setSelectedImageId(baseImage?.id ?? selectedImageId);
+    setWorkspaceMode(baseImage || selectedRequestId ? "result" : "empty");
+    setEditBaseImageId(null);
+    setCompareImageIds(null);
+    setPendingVersionRequestId(null);
+    setImageGenerationIntent("new");
+    setPreEditDraft(null);
+    setIsEditDirty(false);
+    setError("");
+    setNotice("");
+  };
+
+  const handleRetryTask = (task: ImageTask) => {
+    submitImageDraft(
+      imageDraft,
+      task.generationIntent ?? "new",
+      task.sourceImageAssetId ?? null,
+    );
+  };
+
+  const handleSetCurrentVersion = (image: WorkflowImageAsset) => {
+    setSelectedRequestId(image.requestId);
+    setSelectedImageId(image.id);
+    setWorkspaceMode("result");
+    setCompareImageIds(null);
+    setEditBaseImageId(null);
+    setPendingVersionRequestId(null);
+    setImageGenerationIntent("new");
   };
 
   const openAllDownloads = () => {
@@ -439,7 +643,12 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             tasks={tasks}
             images={images}
             previewImages={previewImages}
-            selectedRequestId={previewRequestId}
+            selectedRequestId={selectedRequestId}
+            selectedImageId={selectedImageId}
+            workspaceMode={workspaceMode}
+            editBaseImageId={editBaseImageId}
+            compareImageIds={compareImageIds}
+            isTaskDrawerOpen={isTaskDrawerOpen}
             isGenerating={isPreviewGenerating}
             generatingCount={previewGeneratingCount}
             cancellingTaskIds={cancellingTaskIds}
@@ -448,22 +657,35 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             referenceImages={referenceImages}
             isUploadingReference={isUploadingReference}
             onPromptChange={(value) => {
-              setPrompt(value);
+              updateImageDraft({ prompt: value });
               setError("");
             }}
             onModelChange={(value) => {
-              setImageModel(value);
+              updateImageDraft({ model: value });
               setError("");
               setNotice("");
             }}
-            onAspectRatioChange={setAspectRatio}
-            onResolutionChange={setResolution}
+            onAspectRatioChange={(value) => updateImageDraft({ aspectRatio: value })}
+            onResolutionChange={(value) => updateImageDraft({ resolution: value })}
             onCountInputChange={handleCountInputChange}
             onQuickCountChange={handleQuickCountChange}
             onSubmit={handleSubmit}
             onCancelTask={handleCancelTask}
             onSelectTask={handleSelectTask}
             onSelectHistoryImage={handleSelectHistoryImage}
+            onSelectImage={(image) => {
+              setSelectedRequestId(image.requestId);
+              setSelectedImageId(image.id);
+            }}
+            onModifyImage={beginEditingImage}
+            onVariation={handleVariation}
+            onEditImage={beginEditingImage}
+            onCancelEditing={handleCancelEditing}
+            onOpenTaskDrawer={() => setIsTaskDrawerOpen(true)}
+            onCloseTaskDrawer={() => setIsTaskDrawerOpen(false)}
+            onRetryTask={handleRetryTask}
+            onSetCurrentVersion={handleSetCurrentVersion}
+            onContinueModify={beginEditingImage}
             onOptimizePrompt={handleOptimizePrompt}
             onDownloadOne={openSingleDownload}
             onDownloadAll={openAllDownloads}

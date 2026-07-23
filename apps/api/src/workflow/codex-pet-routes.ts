@@ -30,6 +30,7 @@ import {
 import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 import {
   assertCodexPetImageRoute,
+  CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
   CODEX_PET_MODEL_CONTRACT_VERSION,
   CODEX_PET_VISUAL_QA_MODEL,
 } from "./codex-pet-model-contract.js";
@@ -155,7 +156,12 @@ export interface CodexPetBilling {
   readonly refundResource: (operationId: string) => Promise<{ readonly success: boolean }>;
   readonly listResourcePrices?: () => Promise<{ readonly data: readonly ResourcePrice[] }>;
   readonly listEnabledModels?: () => Promise<{
-    readonly data: readonly { readonly model: string; readonly displayName: string; readonly maxOutputTokens?: number }[];
+    readonly data: readonly {
+      readonly model: string;
+      readonly displayName: string;
+      readonly maxOutputTokens?: number;
+      readonly tags?: string;
+    }[];
   }>;
 }
 
@@ -799,20 +805,30 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const visualModels = (configured?.data ?? [])
       .filter((model) => {
         const normalized = model.model.trim().toLowerCase();
+        const tags = new Set((model.tags ?? "").split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean));
+        const verifiedWithoutCatalogTag = normalized === CODEX_PET_VISUAL_QA_MODEL
+          || normalized === CODEX_PET_BAILIAN_VISUAL_QA_MODEL;
         return normalized.length > 0
           && !normalized.includes("embedding")
           && !normalized.startsWith("qwen3.7")
-          && !normalized.includes("image");
+          && !normalized.includes("image")
+          && !normalized.includes("ocr")
+          && !tags.has("image-gen")
+          && !tags.has("ocr")
+          && (verifiedWithoutCatalogTag || tags.has("vision"));
       })
       .map((model) => ({ model: model.model, displayName: model.displayName || model.model }));
     const fallbackVisual = [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }];
     return {
       visualModels: visualModels.length > 0 ? visualModels : fallbackVisual,
       imageModels: IMAGE_GENERATION_MODELS
-        .filter((model) => model !== DOUBAO_IMAGE_MODEL)
         .map((model) => ({
           model,
-          displayName: model === GPT_IMAGE_MODEL ? "GPT Image 2" : "Qwen Image 2.0 Pro",
+          displayName: model === GPT_IMAGE_MODEL
+            ? "GPT Image 2"
+            : model === DOUBAO_IMAGE_MODEL
+              ? "豆包 Seedream 4.5 文生图"
+              : "Qwen Image 2.0 Pro",
         })),
     } as const;
   }

@@ -1,0 +1,8 @@
+
+> @ai-assistant/api@0.0.0 worker:codex-pet /Users/z/code/ai project/apps/api
+> tsx src/workers/codex-pet-worker.ts
+
+[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+[codex-pet-worker] failed run=cpr_bae8f10ea94732e849f2d731a223df08: 两个主形象候选均未通过视觉质检
+[codex-pet-worker] received SIGTERM, shutting down

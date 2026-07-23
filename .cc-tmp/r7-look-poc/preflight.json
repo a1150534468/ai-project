@@ -1,6 +1,6 @@
 {
   "schemaVersion": "codex-pet-look-poc-preflight-v1",
-  "mode": "prepare",
+  "mode": "live",
   "sourceRun": {
     "id": "cpr_3a7a7ee330675f6f5f3b4d58e0ef5b5b",
     "projectId": "cmrteijsv0002c3opa4jyt04z",
@@ -24,12 +24,12 @@
     "requestedModel": "gpt-image-2",
     "expectedActualModel": "gpt-image-2-codex",
     "approvedImageCalls": 1,
-    "observedImageCalls": 0,
+    "observedImageCalls": 1,
     "maxAttempts": 1,
     "automaticRetry": false,
     "stopOnFailure": true
   },
-  "visualQaCalls": 0,
+  "visualQaCalls": 1,
   "repairPrompt": "Authoritative cardinal appearance contract (viewer/screen coordinates): 000 UP means the character's natural front/aim points toward the top edge; for a standing character with a visible front this is the rear/back-facing or top-facing pose family, with the front face normally occluded. 090 SCREEN-RIGHT means the natural front/aim points toward the right edge and must show the right-facing profile or matching right-side landmarks. 180 DOWN means the natural front/aim points toward the bottom edge; for a standing character with a visible front this is the front-facing or bottom-facing pose family, with the canonical face visible again. 270 SCREEN-LEFT means the natural front/aim points toward the left edge and must show the left-facing profile or matching left-side landmarks. Do not reinterpret 000 as a front portrait or 180 as a rear portrait. Do not let a repair diagnostic override this contract. For eyeless or non-directional objects, use the object's natural aiming feature and the same four screen edges. Accepted non-conflicting repair evidence: 重建directions动作组：按000、22.5、45、67.5、90、112.5、135、157.5的顺时针顺序提供完整八帧，保持统一尺寸、基线和像素风格。首帧必须为000上向的背面族，逐帧从背面经屏幕右侧转向近正面；末帧不得停留在090纯右侧面。\n方向动作序列不完整：缺少六个中间姿态。\n下方姿态是明确的屏幕右向侧面、约090姿态，不符合应位于000至157.5区间末端的渐进近正面姿态。\n两个可见姿态之间没有可验证的连续顺时针转向过渡。",
   "artifacts": {
     "canonical": {

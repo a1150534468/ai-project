@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "codex-pet-r7-recovery-preflight-v1",
+  "sourceRunId": "cpr_3a7a7ee330675f6f5f3b4d58e0ef5b5b",
+  "sourceImageGenerationCallCount": 24,
+  "totalApprovedImageGenerationCalls": 26,
+  "recoveryImageGenerationCalls": 0,
+  "atlasChecksum": "5e1a5390d5355cb77b46d5846e2da281e561e7cd70006f57a6cb4a1ef358a6c8",
+  "dimensions": "1536x2288",
+  "requestedImageModel": "gpt-image-2",
+  "actualImageModel": "gpt-image-2-codex",
+  "requestedVisualModel": "gpt-5.6-sol",
+  "visualRoute": "chatgpt_model_route",
+  "qaCalls": {
+    "blindReviewers": 3,
+    "labeledSemantics": 1,
+    "finalVisualQa": 1
+  }
+}

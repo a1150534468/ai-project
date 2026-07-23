@@ -1,0 +1,66 @@
+{
+  "selectedArtifactId": null,
+  "verdicts": [
+    {
+      "pass": false,
+      "score": 86,
+      "mirrorSafe": true,
+      "identity": true,
+      "structure": true,
+      "semantics": true,
+      "continuity": true,
+      "warnings": [
+        "Soft gradients, bloom, and numerous highlight bands may be less consistent than flat pixel shading across future poses."
+      ],
+      "failures": [
+        "The magenta background is visibly textured and vignetted rather than flat or transparent."
+      ],
+      "repairPrompt": "Keep the same centered, calm, symmetrical whole-body design and unobscured face. Replace the background with one uniform flat color or clean transparency. Preserve the attached side-hanging arms, separated legs, antenna, face panel, and clear outer silhouette; simplify soft bloom and gradient shading into stable pixel-art color blocks where possible.",
+      "repairRows": [],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    },
+    {
+      "pass": false,
+      "score": 62,
+      "mirrorSafe": true,
+      "identity": true,
+      "structure": false,
+      "semantics": true,
+      "continuity": false,
+      "warnings": [
+        "Very pale eyes and heavy bloom reduce face readability at desktop-pet size.",
+        "Complex soft gradients and irregular highlight patches are difficult to reproduce consistently across animation poses."
+      ],
+      "failures": [
+        "No clearly visible, unobscured mouth is present in the canonical pose.",
+        "The purple background is visibly mottled/gradient rather than flat.",
+        "Softened, glowing pixel edges undermine a clean pixel-art silhouette and stable animation reproduction."
+      ],
+      "repairPrompt": "Redraw the canonical idle pose with a clearly visible neutral mouth beneath the two unobscured eyes. Preserve the green robot identity, centered antenna, attached side-hanging forelimbs, separated legs, and calm forward-facing stance. Use a perfectly flat single-color background, crisp hard-edged pixel clusters, stronger facial contrast, and a simplified repeatable highlight/shadow pattern without bloom or texture.",
+      "repairRows": [
+        "idle"
+      ],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    }
+  ],
+  "reason": "all_candidates_failed",
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

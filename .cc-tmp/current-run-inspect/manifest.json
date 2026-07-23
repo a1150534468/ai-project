@@ -1,0 +1,47 @@
+{
+  "runId": "cpr_0a170e4db01fe9294e8670a064e1d0f0",
+  "artifacts": [
+    {
+      "id": "e5ded5c9-094f-474a-9002-b83ff8d30fdf",
+      "kind": "base_candidate",
+      "name": "主形象候选 2",
+      "filename": "01-base_candidate-主形象候选-2.png",
+      "objectKey": "workflow/codex-pets/cmrg7sx3w0002c3lsyza7tqci/cmrwmw47m0002c3gy7ov0si7a/cpr_0a170e4db01fe9294e8670a064e1d0f0/e5ded5c9-094f-474a-9002-b83ff8d30fdf/主形象候选 2"
+    },
+    {
+      "id": "df17ce1e-f574-4722-8f93-af26397789cd",
+      "kind": "base_candidate",
+      "name": "主形象候选 1",
+      "filename": "02-base_candidate-主形象候选-1.png",
+      "objectKey": "workflow/codex-pets/cmrg7sx3w0002c3lsyza7tqci/cmrwmw47m0002c3gy7ov0si7a/cpr_0a170e4db01fe9294e8670a064e1d0f0/df17ce1e-f574-4722-8f93-af26397789cd/主形象候选 1"
+    },
+    {
+      "id": "e8d69574-5d19-42e7-a8aa-85b71e13dec6",
+      "kind": "qa_report",
+      "name": "主形象自动选择报告",
+      "filename": "03-qa_report-主形象自动选择报告.json",
+      "objectKey": "workflow/codex-pets/cmrg7sx3w0002c3lsyza7tqci/cmrwmw47m0002c3gy7ov0si7a/cpr_0a170e4db01fe9294e8670a064e1d0f0/e8d69574-5d19-42e7-a8aa-85b71e13dec6/主形象自动选择报告"
+    },
+    {
+      "id": "6a86b589-b5c3-4988-a736-9480e6900ad4",
+      "kind": "pose_board",
+      "name": "running-right 动作组：身份、8 帧结构、动作语义和连续性姿势板 · 第 1 次",
+      "filename": "04-pose_board-running-right-动作组-身份-8-帧结构-动作语义和连续性姿势板-第-1-次.png",
+      "objectKey": "workflow/codex-pets/cmrg7sx3w0002c3lsyza7tqci/cmrwmw47m0002c3gy7ov0si7a/cpr_0a170e4db01fe9294e8670a064e1d0f0/6a86b589-b5c3-4988-a736-9480e6900ad4/running-right 动作组：身份、8 帧结构、动作语义和连续性姿势板 · 第 1 次"
+    },
+    {
+      "id": "8c8149d7-3d3e-4168-b1df-757ef93222b7",
+      "kind": "pose_board",
+      "name": "idle 动作组：身份、6 帧结构、动作语义和连续性姿势板 · 第 1 次",
+      "filename": "05-pose_board-idle-动作组-身份-6-帧结构-动作语义和连续性姿势板-第-1-次.png",
+      "objectKey": "workflow/codex-pets/cmrg7sx3w0002c3lsyza7tqci/cmrwmw47m0002c3gy7ov0si7a/cpr_0a170e4db01fe9294e8670a064e1d0f0/8c8149d7-3d3e-4168-b1df-757ef93222b7/idle 动作组：身份、6 帧结构、动作语义和连续性姿势板 · 第 1 次"
+    },
+    {
+      "id": "5dedb2d5-3285-4c76-bc2c-1412f48ea838",
+      "kind": "qa_report",
+      "name": "idle 动作组：身份、6 帧结构、动作语义和连续性失败诊断 · 第 1 次",
+      "filename": "06-qa_report-idle-动作组-身份-6-帧结构-动作语义和连续性失败诊断-第-1-次.json",
+      "objectKey": "workflow/codex-pets/cmrg7sx3w0002c3lsyza7tqci/cmrwmw47m0002c3gy7ov0si7a/cpr_0a170e4db01fe9294e8670a064e1d0f0/5dedb2d5-3285-4c76-bc2c-1412f48ea838/idle 动作组：身份、6 帧结构、动作语义和连续性失败诊断 · 第 1 次"
+    }
+  ]
+}

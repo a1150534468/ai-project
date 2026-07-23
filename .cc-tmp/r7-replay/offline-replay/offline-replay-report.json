@@ -1482,9 +1482,9 @@
       "errors": [],
       "warnings": []
     },
-    "replayFileHash": "1f4c57298481264d4e07fda923832cd56baefe53c6be9b1f8a974e1c2d2a369f",
+    "replayFileHash": "fb81f6c016d1caa29302d6ce7cc3c2245743897b8bdc5aad319dde2976e33c84",
     "storedFileHash": "1f4c57298481264d4e07fda923832cd56baefe53c6be9b1f8a974e1c2d2a369f",
-    "bytesMatchStoredArtifact": true
+    "bytesMatchStoredArtifact": false
   },
   "directionRows": [
     {

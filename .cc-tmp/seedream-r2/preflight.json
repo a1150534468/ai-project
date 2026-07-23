@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "codex-pet-seedream-preflight-v1",
+  "createdAt": "2026-07-22T13:56:47.552Z",
+  "imagePath": "/Users/z/code/ai project/.cc-tmp/seedream-r2/base-candidate.png",
+  "mime": "image/png",
+  "width": 2048,
+  "height": 2048,
+  "requestedModel": "doubao-seedream-4-5-251128",
+  "actualModel": "doubao-seedream-4-5-251128",
+  "requestedSize": "2048x2048",
+  "actualSize": "2048x2048",
+  "upstreamRequestId": "021784728594633bae19a301e839859fb73b38a483a80f22afb1a",
+  "prompt": "Character name: 像素种子助手.\nDescription: 一只小巧的绿色像素机器人桌宠，有方圆头部、短天线、深色面板、清晰双眼和小嘴，四肢与身体明确连接.\nAuthoritative character brief: 保持绿色像素机器人身份；造型简洁、轮廓连通、适合 192x208 桌宠单元格与后续九组动画.\nVisual style: crisp pixel-art sprite with deliberately sized pixels and no anti-aliased scenery.\nAdditional style constraint: 使用清晰硬边像素块，禁止柔光、渐变材质和细碎装饰.\nKeep exactly the same face, head shape, body proportions, palette, markings, material, silhouette, clothing and props as the supplied canonical character reference.\n\nCreate one centered neutral full-body main character candidate on a flat #FF00FF background. Candidate variation 1: Use a calm front-facing stance with both paws relaxed, visibly attached, and lowered away from the eyes and mouth. Vary only this restrained pose/expression detail, never the character identity. The character must remain readable inside a final 192×208 desktop-pet cell.\nAn attached reference may show a temporary gesture, including paws crossing the face or torso. Preserve the character's real anatomy, paw shape, colors and fixed markings, but translate that temporary gesture into the neutral stance above. Do not copy an action pose as the canonical base. Make every limb-to-body attachment visually unambiguous.\nPreserve defining marks from supplied references, but do not invent tiny decorative marks, letter-like strokes or extra accessories. Prefer a connected, animation-safe design whose important details can remain identical across many poses.\n\nCreate production sprite source art, not a presentation sheet.\nThe background is a production chroma-key matte, not an artistic backdrop: every background pixel must be the exact same requested chroma RGB value. Use one perfectly flat solid chroma background and keep every character color clearly different from it.\nDo not shade, light, vignette, texture, noise, dither, bloom, blur, or gradient the chroma background. No alternate purple/pink/green tones may appear outside the character silhouette.\nShow the complete whole body with generous padding. Nothing may touch or cross a slot or outer canvas edge.\nNo text, labels, numbers, logos, borders, visible grid, scenery, floor, cast shadow, glow, halo, blur or transparency checkerboard.\nNo detached effects: no motion lines, dust, floating icons, punctuation, stars or separate droplets.\nEvery pose must be one readable connected sprite component. Preserve identity and scale across all poses."
+}

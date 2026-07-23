@@ -26,11 +26,16 @@ import {
 } from "./codex-pet-look-poc-guard.js";
 import {
   buildLookRowPrompt,
+  buildVisualQaPrompt,
   sanitizeCodexPetDirectionRepairPrompt,
   type CodexPetVisualIdentity,
 } from "./codex-pet-prompts.js";
 import { loadCodexPetArtifact } from "./codex-pet-storage.js";
-import { generateCodexPetVisual } from "./codex-pet-visual.js";
+import {
+  codexPetVisualQaConsensusPasses,
+  generateCodexPetVisual,
+  runCodexPetVisualQaConsensus,
+} from "./codex-pet-visual.js";
 
 // These controls are intentionally captured before dotenv is loaded. A local
 // env file may provide service credentials, but can never opt into a live call.
@@ -268,7 +273,7 @@ function promptForPoc(): string {
     `Apply this sanitized cumulative repair requirement:\n${loaded.repairPrompt}`;
 }
 
-async function preparePocFiles(mode: "prepare" | "live", observedImageCalls = 0): Promise<{
+async function preparePocFiles(mode: "prepare" | "live", observedImageCalls = 0, observedVisualQaCalls = 0): Promise<{
   readonly layout: Buffer;
   readonly anchorStoryboard: Buffer;
   readonly prompt: string;
@@ -334,7 +339,7 @@ async function preparePocFiles(mode: "prepare" | "live", observedImageCalls = 0)
       automaticRetry: false,
       stopOnFailure: true,
     },
-    visualQaCalls: 0,
+    visualQaCalls: observedVisualQaCalls,
     repairPrompt: loaded.repairPrompt,
     artifacts: loaded.source.artifacts,
     files: paths,
@@ -449,7 +454,56 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-a POC",
       ? await createAnimatedWebpPreview(registered.frames, petRowSpec("look-a").durations)
       : null;
     if (preview) await writeFile(resolve(launch.outputDir, "look-a-preview.webp"), preview.image);
-    await preparePocFiles("live", guard.attemptCount());
+
+    if (!extracted.ok) throw new Error(`look-a extraction failed: ${extracted.errors.join("; ")}`);
+    if (!registered.ok) throw new Error(`look-a registration failed: ${registered.errors.join("; ")}`);
+    if (!continuity.ok) throw new Error(`look-a continuity failed: ${continuity.errors.join("; ")}`);
+    if (!preview) throw new Error("look-a preview is unavailable after registration");
+
+    const semanticQa = await runCodexPetVisualQaConsensus({
+      images: [
+        { buffer: loaded.canonical, mime: loaded.canonicalMime },
+        { buffer: loaded.standardContact, mime: "image/png" },
+        { buffer: loaded.cardinalAnchor, mime: loaded.cardinalMime },
+        { buffer: registeredBoard, mime: "image/png" },
+        { buffer: preview.image, mime: preview.mime },
+      ],
+      prompt: buildVisualQaPrompt(
+        "directions",
+        `Checksum-bound pre-row-10 gate for the registered row-9 sequence 000, 022.5, 045, 067.5, 090, 112.5, 135, 157.5. `
+        + `Confirm 000 unmistakably up/back-facing, 090 unmistakably screen-right, every intermediate stays in its labeled quadrant, and the sequence advances clockwise without reversal, registration snap, scale pop or identity drift. `
+        + `Image 3 is the approved 2x2 cardinal basis: top-left 000 UP, top-right 090 SCREEN-RIGHT, bottom-left 180 DOWN, bottom-right 270 SCREEN-LEFT. `
+        + `Image 4 is the complete static registered row in chronological order and Image 5 is its animation preview. `
+        + `Continuity metrics are review evidence only: ${continuity.warnings.map((warning) => warning.message).slice(0, 16).join(" | ") || "none"}.`,
+        loaded.identity.canonicalGuide,
+      ),
+      env: process.env,
+      repetitions: 1,
+    });
+    const semanticProvenance = semanticQa.modelProvenance;
+    if (!semanticProvenance
+      || semanticProvenance.requestedModel !== loaded.source.visualQaModel
+      || semanticProvenance.actualModels.length !== 1
+      || semanticProvenance.actualModels[0] !== loaded.source.visualQaModel
+      || semanticProvenance.route !== "chatgpt_model_route") {
+      throw new Error("look-a semantic QA did not use the selected Pixel GPT model route");
+    }
+    const semanticPassed = codexPetVisualQaConsensusPasses(semanticQa);
+    const registeredBoardChecksum = createHash("sha256").update(registeredBoard).digest("hex");
+    await writeFile(resolve(launch.outputDir, "look-a-semantic-approval.json"), `${JSON.stringify({
+      schemaVersion: "codex-pet-look-semantic-approval-v1",
+      sourceRunId: loaded.source.runId,
+      row: "look-a",
+      verdict: semanticPassed ? "pass" : "fail",
+      registeredBoardChecksum,
+      modelProvenance: {
+        requestedModel: semanticProvenance.requestedModel,
+        actualModel: semanticProvenance.actualModels[0],
+        route: semanticProvenance.route,
+      },
+      qa: semanticQa,
+    }, null, 2)}\n`);
+    await preparePocFiles("live", guard.attemptCount(), 1);
     await writeFile(resolve(launch.outputDir, "look-a-result.json"), `${JSON.stringify({
       provider: {
         requestedModel: generated.provider.requestedModel,
@@ -460,7 +514,7 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-a POC",
         actualQuality: generated.provider.actualQuality,
         usage: generated.provider.usage,
       },
-      modelCalls: { imageGeneration: guard.attemptCount(), visualQa: 0 },
+      modelCalls: { imageGeneration: guard.attemptCount(), visualQa: 1 },
       outputs: {
         rawBoard: "look-a-raw.png",
         normalizedBoard: "look-a-normalized.png",
@@ -468,6 +522,7 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-a POC",
         registeredFramesDir: "look-a-registered-frames",
         registrationManifest: "look-a-registration.json",
         preview: preview ? "look-a-preview.webp" : null,
+        semanticApproval: "look-a-semantic-approval.json",
       },
       deterministic: {
         extractionOk: extracted.ok,
@@ -478,6 +533,7 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-a POC",
         registrationWarnings: registered.warnings,
         continuity,
       },
+      semanticQa,
     }, null, 2)}\n`);
 
     expect(guard.attemptCount()).toBe(1);
@@ -486,5 +542,6 @@ describe.skipIf(launch.mode === "disabled")("Codex pet guarded real look-a POC",
     expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
     expect(registered.ok, registered.errors.join("; ")).toBe(true);
     expect(continuity.ok, continuity.errors.join("; ")).toBe(true);
+    expect(semanticPassed, semanticQa.failures.join("; ")).toBe(true);
   }, 600_000);
 });

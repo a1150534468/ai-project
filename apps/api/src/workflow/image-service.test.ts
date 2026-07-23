@@ -77,14 +77,14 @@ describe("image service", () => {
     expect(isVerifiedWorkflowImageObjectKeyForUser("workflow/images/u1/../asset.png", "u1")).toBe(false);
   });
 
-  it("loads the native Bailian image endpoint and credentials", () => {
+  it("loads public Qwen Image from DashScope while preserving explicit and custom routes", () => {
     expect(loadImageGenerationConfig({
       BAILIAN_WORKSPACE_ID: "ws-123",
       BAILIAN_REGION: "cn-beijing",
       BAILIAN_API_KEY: "bailian-key",
       IMAGE_API_KEY: "",
     })).toEqual({
-      endpoint: "https://ws-123.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      endpoint: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
       apiKey: "bailian-key",
       model: "qwen-image-2.0-pro-2026-04-22",
       protocol: "bailian",
@@ -108,6 +108,18 @@ describe("image service", () => {
       endpoint: "https://relay.test/custom-endpoint",
       apiKey: "dashscope-key",
       model: "qwen-image-2.0-pro-2026-04-22",
+      protocol: "bailian",
+    });
+
+    expect(loadImageGenerationConfig({
+      BAILIAN_WORKSPACE_ID: "ws-123",
+      BAILIAN_REGION: "cn-beijing",
+      BAILIAN_API_KEY: "bailian-key",
+      IMAGE_GENERATION_MODEL: "custom-workspace-image-model",
+    })).toEqual({
+      endpoint: "https://ws-123.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+      apiKey: "bailian-key",
+      model: "custom-workspace-image-model",
       protocol: "bailian",
     });
   });
@@ -248,11 +260,39 @@ describe("image service", () => {
         `data:image/png;base64,${secondReference}`,
       ],
       size: "1728x2304",
-      output_format: "png",
       response_format: "url",
       sequential_image_generation: "disabled",
       watermark: false,
     });
+  });
+
+  it("raises undersized Seedream generation and edit canvases to the supported 2K preset", async () => {
+    const config: ImageGenerationConfig = {
+      endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
+      apiKey: "ark-key",
+      model: "doubao-seedream-4-5-251128",
+      protocol: "volcengine",
+    };
+    const generationFetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      model: config.model,
+      data: [{ url: "https://image.test/base.png" }],
+    }), { status: 200 }));
+    const editFetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      model: config.model,
+      data: [{ url: "https://image.test/row.png" }],
+    }), { status: 200 }));
+
+    await callImageGeneration({ config, prompt: "base", size: "1024x1024", fetchFn: generationFetch });
+    await callImageEdit({
+      config,
+      prompt: "row",
+      referenceImages: [{ b64: Buffer.from("reference").toString("base64"), mime: "image/png" }],
+      size: "1536x1024",
+      fetchFn: editFetch,
+    });
+
+    expect(JSON.parse(String(generationFetch.mock.calls[0]?.[1]?.body)).size).toBe("2K");
+    expect(JSON.parse(String(editFetch.mock.calls[0]?.[1]?.body)).size).toBe("2K");
   });
 
   it("posts GPT Image edits as multipart with multiple references, edit credentials, and detailed metadata", async () => {
@@ -385,14 +425,18 @@ describe("image service", () => {
       }), { status: 200 })
     );
 
-    const image = await callImageGeneration({
+    const result = await callImageGenerationDetailed({
       config: createConfig(),
       prompt: "ceramic plate",
       size: "2048x1152",
       fetchFn,
     });
 
-    expect(image).toEqual({ kind: "url", url: "https://image.test/result.png" });
+    expect(result).toMatchObject({
+      image: { kind: "url", url: "https://image.test/result.png" },
+      requestedModel: "qwen-image-2.0-pro-2026-04-22",
+      actualModel: "qwen-image-2.0-pro-2026-04-22",
+    });
     expect(fetchFn).toHaveBeenCalledTimes(1);
     expect(fetchFn).toHaveBeenCalledWith(
       "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
@@ -415,6 +459,20 @@ describe("image service", () => {
       input: { messages: [{ role: "user", content: [{ text: "ceramic plate" }] }] },
       parameters: { n: 1, prompt_extend: true, watermark: false, size: "2048*1152" },
     });
+  });
+
+  it("does not claim a request-bound Qwen model for an untrusted compatible relay", async () => {
+    const result = await callImageGenerationDetailed({
+      config: createConfig("https://relay.test/native-generation"),
+      prompt: "one mascot",
+      size: "1024x1024",
+      fetchFn: vi.fn(async () => new Response(JSON.stringify({
+        output: { choices: [{ message: { content: [{ image: "https://image.test/result.png" }] } }] },
+      }), { status: 200 })),
+    });
+
+    expect(result.requestedModel).toBe("qwen-image-2.0-pro-2026-04-22");
+    expect(result.actualModel).toBe("");
   });
 
   it("rejects output sizes beyond Qwen Image 2.0's total-pixel limit", async () => {
@@ -520,6 +578,13 @@ describe("image service", () => {
     expect(loadImageEditEndpoint({
       IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
     })).toBe("https://relay.test/custom-endpoint");
+
+    expect(loadImageEditEndpoint({
+      BAILIAN_WORKSPACE_ID: "ws-123",
+    })).toBe("https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
+
+    expect(loadImageEditEndpoint({}, "https://generation.test/native"))
+      .toBe("https://generation.test/native");
   });
 
   it("throws when the upstream image payload has no url or b64 output", () => {

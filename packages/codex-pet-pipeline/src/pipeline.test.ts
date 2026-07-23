@@ -403,6 +403,95 @@ describe("codex pet deterministic pipeline", () => {
     expect(clipped.errors).toContain("frame-0:source-touches-slot-edge");
   });
 
+  it("removes only small distant line residue from a generated pose slot", async () => {
+    const board = await boardWithOverlays(1, 1, [{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="105" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+        <rect x="235" y="140" width="6" height="32" fill="#111111"/>
+      </svg>`),
+      left: 0,
+      top: 0,
+    }]);
+    const extracted = await extractPoseBoard(board, {
+      columns: 1,
+      rows: 1,
+      frameCount: 1,
+      chromaKey: "#ff00ff",
+    });
+
+    expect(extracted.errors).toEqual([]);
+    expect(extracted.diagnostics[0]!.componentCount).toBe(1);
+    expect(extracted.diagnostics[0]!.sourceBounds).toEqual({
+      left: 105,
+      top: 70,
+      right: 214,
+      bottom: 309,
+      width: 110,
+      height: 240,
+    });
+    expect((await inspectFrame(extracted.frames[0]!)).componentCount).toBe(1);
+  });
+
+  it("removes a sparse detached layout-guide frame that surrounds the pose", async () => {
+    const board = await boardWithOverlays(1, 1, [{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="105" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+        <rect x="28" y="30" width="264" height="300" fill="none" stroke="#ffffff" stroke-width="4"/>
+      </svg>`),
+      left: 0,
+      top: 0,
+    }]);
+    const extracted = await extractPoseBoard(board, {
+      columns: 1,
+      rows: 1,
+      frameCount: 1,
+      chromaKey: "#ff00ff",
+    });
+
+    expect(extracted.errors).toEqual([]);
+    expect(extracted.diagnostics[0]!.componentCount).toBe(1);
+    expect(extracted.diagnostics[0]!.sourceBounds).toEqual({
+      left: 105,
+      top: 70,
+      right: 214,
+      bottom: 309,
+      width: 110,
+      height: 240,
+    });
+    expect((await inspectFrame(extracted.frames[0]!)).componentCount).toBe(1);
+  });
+
+  it("removes a far duplicate-fragment cluster while preserving isolated secondary subjects", async () => {
+    const board = await boardWithOverlays(1, 1, [{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="82" y="55" width="118" height="250" rx="30" fill="#2459c7"/>
+        <rect x="252" y="70" width="12" height="54" rx="4" fill="#2459c7"/>
+        <rect x="248" y="175" width="20" height="30" rx="5" fill="#2459c7"/>
+        <rect x="244" y="272" width="26" height="26" rx="5" fill="#2459c7"/>
+      </svg>`),
+      left: 0,
+      top: 0,
+    }]);
+    const extracted = await extractPoseBoard(board, {
+      columns: 1,
+      rows: 1,
+      frameCount: 1,
+      chromaKey: "#ff00ff",
+    });
+
+    expect(extracted.errors).toEqual([]);
+    expect(extracted.diagnostics[0]!.componentCount).toBe(1);
+    expect(extracted.diagnostics[0]!.sourceBounds).toEqual({
+      left: 82,
+      top: 55,
+      right: 199,
+      bottom: 304,
+      width: 118,
+      height: 250,
+    });
+    expect((await inspectFrame(extracted.frames[0]!)).componentCount).toBe(1);
+  });
+
   it("preserves intentional vertical travel across jumping frames", async () => {
     const yPositions = [170, 100, 30, 100, 170];
     const overlays = yPositions.map((y, index) => ({
@@ -530,6 +619,16 @@ describe("codex pet deterministic pipeline", () => {
     const intentional = await inspectFrame(detached, 0, { allowMultipleForegroundComponents: true });
     expect(intentional.errors).not.toContain("multiple-foreground-components");
     expect(intentional.warnings).toContain("multiple-foreground-components");
+
+    const nearbyLine = await sharp({
+      create: { width: PET_CELL_WIDTH, height: PET_CELL_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="208">
+      <rect x="30" y="40" width="82" height="140" rx="24" fill="#2459c7"/>
+      <rect x="114" y="65" width="4" height="20" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const nearbyLineDiagnostics = await inspectFrame(nearbyLine);
+    expect(nearbyLineDiagnostics.componentCount).toBe(2);
+    expect(nearbyLineDiagnostics.errors).toContain("multiple-foreground-components");
   });
 
   it("mirrors each frame without reversing animation order", async () => {

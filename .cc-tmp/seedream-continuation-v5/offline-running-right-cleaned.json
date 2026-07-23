@@ -1,0 +1,223 @@
+{
+  "ok": true,
+  "errors": [],
+  "warnings": [],
+  "sharedScale": 0.6594202898550725,
+  "geometry": {
+    "heightRatio": 1,
+    "widthRatio": 1.0505050505050506,
+    "baselineSpreadPixels": 0,
+    "centerSpreadPixels": 0.5,
+    "warnings": []
+  },
+  "diagnostics": [
+    {
+      "index": 0,
+      "sourceBounds": {
+        "left": 176,
+        "top": 120,
+        "right": 330,
+        "bottom": 395,
+        "width": 155,
+        "height": 276
+      },
+      "opaquePixels": 25156,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 0,
+      "chromaCoverage": 0.8911501736111112,
+      "normalizedBounds": {
+        "left": 45,
+        "top": 14,
+        "right": 146,
+        "bottom": 195,
+        "width": 102,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 1,
+      "sourceBounds": {
+        "left": 164,
+        "top": 120,
+        "right": 321,
+        "bottom": 395,
+        "width": 158,
+        "height": 276
+      },
+      "opaquePixels": 25293,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 0,
+      "chromaCoverage": 0.8904644097222222,
+      "normalizedBounds": {
+        "left": 44,
+        "top": 14,
+        "right": 147,
+        "bottom": 195,
+        "width": 104,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 2,
+      "sourceBounds": {
+        "left": 153,
+        "top": 120,
+        "right": 309,
+        "bottom": 395,
+        "width": 157,
+        "height": 276
+      },
+      "opaquePixels": 25184,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 0,
+      "chromaCoverage": 0.8893663194444444,
+      "normalizedBounds": {
+        "left": 44,
+        "top": 14,
+        "right": 147,
+        "bottom": 195,
+        "width": 104,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 3,
+      "sourceBounds": {
+        "left": 150,
+        "top": 120,
+        "right": 299,
+        "bottom": 395,
+        "width": 150,
+        "height": 276
+      },
+      "opaquePixels": 24912,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 1,
+      "chromaCoverage": 0.8921831597222222,
+      "normalizedBounds": {
+        "left": 47,
+        "top": 14,
+        "right": 145,
+        "bottom": 195,
+        "width": 99,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 4,
+      "sourceBounds": {
+        "left": 175,
+        "top": 80,
+        "right": 330,
+        "bottom": 355,
+        "width": 156,
+        "height": 276
+      },
+      "opaquePixels": 25382,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 0,
+      "chromaCoverage": 0.8903819444444444,
+      "normalizedBounds": {
+        "left": 45,
+        "top": 14,
+        "right": 147,
+        "bottom": 195,
+        "width": 103,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 5,
+      "sourceBounds": {
+        "left": 164,
+        "top": 80,
+        "right": 321,
+        "bottom": 355,
+        "width": 158,
+        "height": 276
+      },
+      "opaquePixels": 25310,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 2,
+      "chromaCoverage": 0.8904427083333334,
+      "normalizedBounds": {
+        "left": 44,
+        "top": 14,
+        "right": 147,
+        "bottom": 195,
+        "width": 104,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 6,
+      "sourceBounds": {
+        "left": 152,
+        "top": 80,
+        "right": 309,
+        "bottom": 355,
+        "width": 158,
+        "height": 276
+      },
+      "opaquePixels": 25231,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 2,
+      "chromaCoverage": 0.8892664930555556,
+      "normalizedBounds": {
+        "left": 44,
+        "top": 14,
+        "right": 147,
+        "bottom": 195,
+        "width": 104,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "index": 7,
+      "sourceBounds": {
+        "left": 150,
+        "top": 80,
+        "right": 299,
+        "bottom": 355,
+        "width": 150,
+        "height": 276
+      },
+      "opaquePixels": 24897,
+      "edgePixels": 0,
+      "componentCount": 1,
+      "internalTransparentPixels": 0,
+      "chromaCoverage": 0.8923046875,
+      "normalizedBounds": {
+        "left": 47,
+        "top": 14,
+        "right": 145,
+        "bottom": 195,
+        "width": 99,
+        "height": 182
+      },
+      "errors": [],
+      "warnings": []
+    }
+  ]
+}

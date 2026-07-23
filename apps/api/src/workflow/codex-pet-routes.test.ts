@@ -3,7 +3,7 @@ import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
+import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
 import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import {
   CODEX_PET_RESOURCE_KEY,
@@ -569,7 +569,7 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
-  it("filters qwen3.7 from the marketplace and freezes selected models into the run snapshot", async () => {
+  it("keeps only vision-capable non-OCR, non-qwen3.7 marketplace models and freezes selections", async () => {
     const project = projectRow({
       imageModel: QWEN_IMAGE_MODEL,
       visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
@@ -579,6 +579,9 @@ describe("Codex pet routes", () => {
       listEnabledModels: vi.fn(async () => ({ data: [
         { model: CODEX_PET_BAILIAN_VISUAL_QA_MODEL, displayName: "Qwen3.6 Flash" },
         { model: "gpt-5.6-sol", displayName: "GPT-5.6 Sol" },
+        { model: "kimi-k2.7-code", displayName: "Kimi K2.7 Code", tags: "chat,coding,vision" },
+        { model: "qwen3.5-ocr", displayName: "Qwen3.5 OCR", tags: "chat,vision,ocr" },
+        { model: "deepseek-v4-pro", displayName: "DeepSeek V4 Pro", tags: "chat,coding,reasoning" },
         { model: "qwen3.7-plus", displayName: "Qwen3.7 Plus" },
         { model: "text-embedding-v4", displayName: "Text Embedding V4" },
         { model: QWEN_IMAGE_MODEL, displayName: "Qwen Image 2.0 Pro" },
@@ -596,10 +599,12 @@ describe("Codex pet routes", () => {
       visualModels: [
         { model: CODEX_PET_BAILIAN_VISUAL_QA_MODEL, displayName: "Qwen3.6 Flash" },
         { model: "gpt-5.6-sol", displayName: "GPT-5.6 Sol" },
+        { model: "kimi-k2.7-code", displayName: "Kimi K2.7 Code" },
       ],
       imageModels: [
         { model: QWEN_IMAGE_MODEL, displayName: "Qwen Image 2.0 Pro" },
         { model: GPT_IMAGE_MODEL, displayName: "GPT Image 2" },
+        { model: DOUBAO_IMAGE_MODEL, displayName: "豆包 Seedream 4.5 文生图" },
       ],
     });
 

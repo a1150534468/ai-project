@@ -12,6 +12,7 @@ export const CODEX_PET_IMAGE_MODEL = "gpt-image-2" as const;
 export const CODEX_PET_IMAGE_MODELS = [
   "qwen-image-2.0-pro-2026-04-22",
   CODEX_PET_IMAGE_MODEL,
+  "doubao-seedream-4-5-251128",
 ] as const;
 export type CodexPetImageModel = typeof CODEX_PET_IMAGE_MODELS[number];
 export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol" as const;

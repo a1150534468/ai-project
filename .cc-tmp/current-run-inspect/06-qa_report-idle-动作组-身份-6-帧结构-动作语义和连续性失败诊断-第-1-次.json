@@ -1,0 +1,284 @@
+{
+  "deterministic": {
+    "diagnostics": [
+      {
+        "index": 0,
+        "sourceBounds": {
+          "left": 227,
+          "top": 109,
+          "right": 479,
+          "bottom": 553,
+          "width": 253,
+          "height": 445
+        },
+        "opaquePixels": 73288,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 26,
+        "chromaCoverage": 0.82192138671875,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 14,
+          "right": 147,
+          "bottom": 195,
+          "width": 103,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "sourceBounds": {
+          "left": 194,
+          "top": 109,
+          "right": 446,
+          "bottom": 553,
+          "width": 253,
+          "height": 445
+        },
+        "opaquePixels": 73081,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.822197265625,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 14,
+          "right": 147,
+          "bottom": 195,
+          "width": 103,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "sourceBounds": {
+          "left": 161,
+          "top": 109,
+          "right": 411,
+          "bottom": 553,
+          "width": 251,
+          "height": 445
+        },
+        "opaquePixels": 72799,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 4,
+        "chromaCoverage": 0.82287109375,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 14,
+          "right": 147,
+          "bottom": 195,
+          "width": 103,
+          "height": 182
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "sourceBounds": {
+          "left": 228,
+          "top": 86,
+          "right": 479,
+          "bottom": 527,
+          "width": 252,
+          "height": 442
+        },
+        "opaquePixels": 74327,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 37,
+        "chromaCoverage": 0.81915283203125,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 15,
+          "right": 147,
+          "bottom": 195,
+          "width": 103,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "sourceBounds": {
+          "left": 195,
+          "top": 86,
+          "right": 445,
+          "bottom": 527,
+          "width": 251,
+          "height": 442
+        },
+        "opaquePixels": 73420,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 19,
+        "chromaCoverage": 0.8212451171875,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 15,
+          "right": 147,
+          "bottom": 195,
+          "width": 103,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "sourceBounds": {
+          "left": 161,
+          "top": 86,
+          "right": 411,
+          "bottom": 527,
+          "width": 251,
+          "height": 442
+        },
+        "opaquePixels": 73317,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 6,
+        "chromaCoverage": 0.82155029296875,
+        "normalizedBounds": {
+          "left": 45,
+          "top": 15,
+          "right": 147,
+          "bottom": 195,
+          "width": 103,
+          "height": 181
+        },
+        "errors": [],
+        "warnings": []
+      }
+    ],
+    "unusedSlotOpaquePixels": [],
+    "chroma": [
+      {
+        "removedPixels": 336287,
+        "softenedPixels": 372,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 336491,
+        "softenedPixels": 281,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 336758,
+        "softenedPixels": 290,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 335242,
+        "softenedPixels": 283,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 336165,
+        "softenedPixels": 217,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 336238,
+        "softenedPixels": 269,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      }
+    ],
+    "sourceWidth": 1920,
+    "sourceHeight": 1280,
+    "sharedScale": 0.40898876404494383,
+    "geometry": {
+      "heightRatio": 1.0055248618784531,
+      "widthRatio": 1,
+      "baselineSpreadPixels": 0,
+      "centerSpreadPixels": 0,
+      "warnings": []
+    },
+    "jumpingArc": null,
+    "ok": true,
+    "errors": [],
+    "warnings": []
+  },
+  "visual": {
+    "pass": false,
+    "verdicts": [
+      {
+        "pass": false,
+        "score": 82,
+        "mirrorSafe": true,
+        "identity": false,
+        "structure": true,
+        "semantics": true,
+        "continuity": false,
+        "warnings": [
+          "第4帧的右斜带端点线条可能意图表现天线摆动残影，但其颜色、实线轮廓和端头均与正式天线相同，视觉上存在器官数量歧义。"
+        ],
+        "failures": [
+          "第4帧同时呈现竖直和右斜两根带端头天线，违背固定的单天线身份结构。",
+          "天线从第3帧的单根直立形态突然分裂，并在第5帧恢复单根，造成不连续跳变。"
+        ],
+        "repairPrompt": "重制完整 idle 六帧动作组。保持现有六帧排布、角色尺寸、基线、平坦背景、身体结构和眨眼式待机语义；每帧顶部只能有1根与头部中央连接的短天线及1个浅色端头。若表现天线摆动，应让同一根天线逐帧平滑弯曲或倾斜，不得同时保留另一根实线天线，也不要使用会被读作额外器官的同色残影。",
+        "repairRows": [
+          "idle"
+        ],
+        "modelProvenance": {
+          "requestedModel": "gpt-5.6-sol",
+          "actualModel": "gpt-5.6-sol",
+          "route": "chatgpt_model_route"
+        }
+      }
+    ],
+    "score": 82,
+    "mirrorSafe": true,
+    "warnings": [
+      "第4帧的右斜带端点线条可能意图表现天线摆动残影，但其颜色、实线轮廓和端头均与正式天线相同，视觉上存在器官数量歧义。"
+    ],
+    "failures": [
+      "第4帧同时呈现竖直和右斜两根带端头天线，违背固定的单天线身份结构。",
+      "天线从第3帧的单根直立形态突然分裂，并在第5帧恢复单根，造成不连续跳变。"
+    ],
+    "modelProvenance": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "route": "chatgpt_model_route"
+    }
+  },
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

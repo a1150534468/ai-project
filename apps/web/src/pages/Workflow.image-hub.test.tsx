@@ -13,6 +13,9 @@ describe("Workflow image hub", () => {
     expect(html).toContain("产品资料");
     expect(html).toContain("商品主图");
     expect(html).toContain("生成图片");
+    expect(html).toContain('aria-label="电商图生成历史"');
+    expect(html).toContain('aria-label="形象照生成历史"');
+    expect(html).toContain("生成概览");
     expect(html).toMatch(/class="hidden"[^>]*><section data-testid="portrait-studio"/);
   });
 });

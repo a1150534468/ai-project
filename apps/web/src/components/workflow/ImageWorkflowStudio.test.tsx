@@ -61,10 +61,20 @@ function renderStudio({
   images = [],
   previewImages = [],
   estimatedPointCost = null,
+  isTaskDrawerOpen = false,
+  workspaceMode,
+  selectedImageId,
+  editBaseImageId,
+  compareImageIds,
 }: {
   readonly images?: readonly WorkflowImageAsset[];
   readonly previewImages?: readonly WorkflowImageAsset[];
   readonly estimatedPointCost?: number | null;
+  readonly isTaskDrawerOpen?: boolean;
+  readonly workspaceMode?: "empty" | "result" | "editing" | "comparing";
+  readonly selectedImageId?: string | null;
+  readonly editBaseImageId?: string | null;
+  readonly compareImageIds?: readonly [string, string] | null;
 } = {}) {
   return renderToStaticMarkup(
     <ImageWorkflowStudio
@@ -80,6 +90,11 @@ function renderStudio({
       tasks={[runningTask]}
       images={images}
       previewImages={previewImages}
+      isTaskDrawerOpen={isTaskDrawerOpen}
+      workspaceMode={workspaceMode}
+      selectedImageId={selectedImageId}
+      editBaseImageId={editBaseImageId}
+      compareImageIds={compareImageIds}
       isGenerating={true}
       generatingCount={1}
       isOptimizingPrompt={false}
@@ -107,12 +122,12 @@ function renderStudio({
 
 describe("ImageWorkflowStudio", () => {
   it("keeps the generate button enabled while another task is already running", () => {
-    const html = renderStudio();
+    const html = renderStudio({ isTaskDrawerOpen: true });
 
     expect(html).toContain("image relay 503 busy");
     expect(html).toContain("正在重试");
     expect(html).toContain("取消");
-    expect(html).toMatch(/<button[^>]*type="button"[^>]*class="[^"]*bg-brand[^"]*"[^>]*>生成图片<\/button>/);
+    expect(html).toMatch(/<button[^>]*type="button"[^>]*class="[^"]*bg-brand[^"]*[\s\S]*生成图片/);
   });
 
   it("renders aspect ratio and resolution selectors as in-app dropdowns", () => {
@@ -135,10 +150,10 @@ describe("ImageWorkflowStudio", () => {
 
   it("keeps historical images out of the preview until selected", () => {
     const html = renderStudio({ images: [currentImage, historyImage], previewImages: [currentImage] });
-    const previewHtml = html.slice(html.indexOf("生成预览"));
+    const previewHtml = html.slice(html.indexOf("当前结果"));
 
     expect(html).toContain("最近生成（2 / 50）");
-    expect(html).toContain("已完成 1");
+    expect(html).toContain("当前结果");
     expect(previewHtml).toContain("alt=\"当前任务图片\"");
     expect(previewHtml).not.toContain("alt=\"历史任务图片\"");
   });
@@ -149,14 +164,64 @@ describe("ImageWorkflowStudio", () => {
 
     expect(html).toContain("最近生成（8 / 50）");
     expect(html).toContain("历史图片 08");
-    expect(html).toMatch(/aria-label="最近生成历史记录" class="[^"]*overflow-y-auto[^"]*"/);
+    expect(html).toContain("overflow-x-auto");
   });
 
   it("renders recent history as thumbnail cards instead of compact prompt pills", () => {
     const html = renderStudio({ images: [historyImage] });
 
     expect(html).toContain("src=\"https://example.test/history-thumb.png\"");
-    expect(html).toContain("alt=\"历史任务图片\"");
-    expect(html).toContain("1024x1024 · 第 1 张 ·");
+    expect(html).toContain("alt=\"历史任务图片 第 1 张\"");
+    expect(html).toContain("最近生成");
+  });
+
+  it("keeps the task drawer closed by default", () => {
+    const html = renderStudio();
+
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).not.toContain('aria-label="生图任务队列"');
+  });
+
+  it("shows all eight images from the selected task", () => {
+    const taskImages = Array.from({ length: 8 }, (_value, index) => ({
+      ...currentImage,
+      id: `result-${index}`,
+      requestIndex: index,
+      prompt: `批量结果 ${index + 1}`,
+      thumbnailUrl: `https://example.test/result-${index}-thumb.png`,
+    }));
+    const html = renderStudio({ images: taskImages, previewImages: taskImages, selectedImageId: "result-7", workspaceMode: "result" });
+
+    expect(html).toContain('alt="批量结果 8"');
+    expect(html.match(/alt="批量结果 \d"/g)).toHaveLength(8);
+    expect(html).toContain("当前版本");
+  });
+
+  it("keeps the source visible while a new version is generating", () => {
+    const html = renderStudio({
+      images: [currentImage],
+      previewImages: [],
+      workspaceMode: "editing",
+      editBaseImageId: currentImage.id,
+      selectedImageId: currentImage.id,
+    });
+
+    expect(html).toContain("基于结果修改");
+    expect(html).toContain("生成新版本");
+    expect(html).toContain("原图保留中");
+    expect(html).toContain('alt="当前任务图片"');
+  });
+
+  it("renders a V1 and V2 comparison", () => {
+    const html = renderStudio({
+      images: [currentImage, historyImage],
+      workspaceMode: "comparing",
+      compareImageIds: [currentImage.id, historyImage.id],
+    });
+
+    expect(html).toContain("V1 原图");
+    expect(html).toContain("V2 新版本");
+    expect(html).toContain("设为当前版本");
+    expect(html).toContain("继续修改");
   });
 });

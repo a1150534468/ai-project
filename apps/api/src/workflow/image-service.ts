@@ -27,12 +27,16 @@ const DEFAULT_BAILIAN_REGION = "cn-beijing";
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const DEFAULT_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
 const BAILIAN_IMAGE_GENERATION_PATH = "/api/v1/services/aigc/multimodal-generation/generation";
+const DEFAULT_QWEN_IMAGE_ENDPOINT = `https://dashscope.aliyuncs.com${BAILIAN_IMAGE_GENERATION_PATH}`;
 const QWEN_IMAGE_MIN_PIXELS = 512 * 512;
 const QWEN_IMAGE_MAX_PIXELS = 2048 * 2048;
 const GPT_IMAGE_MIN_PIXELS = 655_360;
 const GPT_IMAGE_MAX_PIXELS = 8_294_400;
 const GPT_IMAGE_MAX_EDGE = 3_840;
 const GPT_IMAGE_MAX_ASPECT_RATIO = 3;
+const SEEDREAM_MIN_PIXELS = 3_686_400;
+const SEEDREAM_MAX_PIXELS = 16_777_216;
+const SEEDREAM_MAX_ASPECT_RATIO = 3;
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -236,6 +240,24 @@ function generationEndpointFromEnv(env: NodeJS.ProcessEnv): string {
   throw new Error("BAILIAN_WORKSPACE_ID or IMAGE_GENERATION_ENDPOINT/IMAGE_BASE_URL required for image generation");
 }
 
+function qwenImageEndpointFromEnv(env: NodeJS.ProcessEnv): string {
+  const explicit = env.IMAGE_GENERATION_ENDPOINT?.trim();
+  if (explicit) return explicit;
+  const baseURL = baseURLFromEnv(env);
+  if (baseURL) return endpointFromBase(baseURL);
+  return DEFAULT_QWEN_IMAGE_ENDPOINT;
+}
+
+function usesRequestBoundNativeQwenModel(config: ImageGenerationConfig): boolean {
+  if (config.protocol !== "bailian" || config.model !== QWEN_IMAGE_MODEL) return false;
+  try {
+    const hostname = new URL(config.endpoint).hostname.toLowerCase();
+    return hostname === "dashscope.aliyuncs.com" || hostname.endsWith(".maas.aliyuncs.com");
+  } catch {
+    return false;
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -248,6 +270,22 @@ function stringField(record: Record<string, unknown>, key: string): string {
 function numberField(record: Record<string, unknown>, key: string): number {
   const value = record[key];
   return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function seedreamSize(size: string): string {
+  const match = /^(\d+)x(\d+)$/i.exec(size.trim());
+  if (match) {
+    const width = Number(match[1]);
+    const height = Number(match[2]);
+    const pixels = width * height;
+    const aspectRatio = Math.max(width / height, height / width);
+    if (pixels >= SEEDREAM_MIN_PIXELS
+      && pixels <= SEEDREAM_MAX_PIXELS
+      && aspectRatio <= SEEDREAM_MAX_ASPECT_RATIO) return `${width}x${height}`;
+  }
+  // Seedream 4.5 rejects the 1K tier. Use its provider-side 2K preset for
+  // smaller workflow canvases while preserving already-valid pixel sizes.
+  return imageResolutionFromSize(size) === "4K" ? "4K" : "2K";
 }
 
 const IMAGE_UPSTREAM_REQUEST_ID_HEADERS = [
@@ -397,6 +435,7 @@ async function detailedResult(
   payload: unknown,
   request: { readonly model: string; readonly size?: string; readonly quality?: string },
   upstreamRequestId: string | null,
+  requestBoundModel = false,
 ): Promise<ImageGenerationResult> {
   const record = isRecord(payload) ? payload : {};
   const image = extractGeneratedImage(payload);
@@ -405,10 +444,10 @@ async function detailedResult(
     image,
     upstreamRequestId,
     requestedModel: request.model,
-    // Never present the requested model as observed upstream provenance. A
-    // compatible relay may omit `model`; callers that require a strict model
-    // contract (notably Codex Pet) must then reject the unknown actual model.
-    actualModel: stringField(record, "model"),
+    // Native providers bind the exact model in the authenticated request body
+    // but may omit it from successful responses. Compatible relays do not get
+    // this fallback because they can silently route to another deployment.
+    actualModel: stringField(record, "model") || (requestBoundModel ? request.model : ""),
     requestedSize: request.size || "auto",
     actualSize: decodedSize || stringField(record, "size") || request.size || "auto",
     requestedQuality: request.quality || "auto",
@@ -649,17 +688,22 @@ export function loadImageGenerationConfigForModel(
     || "";
   if (!apiKey) throw new Error("IMAGE_API_KEY/BAILIAN_API_KEY/DASHSCOPE_API_KEY required");
   return {
-    endpoint: generationEndpointFromEnv(env),
+    endpoint: model === QWEN_IMAGE_MODEL
+      ? qwenImageEndpointFromEnv(env)
+      : generationEndpointFromEnv(env),
     apiKey,
     model,
     protocol: "bailian",
   };
 }
 
-export function loadImageEditEndpoint(env: NodeJS.ProcessEnv = process.env): string {
+export function loadImageEditEndpoint(
+  env: NodeJS.ProcessEnv = process.env,
+  generationEndpoint?: string,
+): string {
   const explicit = env.IMAGE_EDIT_ENDPOINT?.trim();
   if (explicit) return explicit;
-  return generationEndpointFromEnv(env);
+  return generationEndpoint?.trim() || qwenImageEndpointFromEnv(env);
 }
 
 export function loadGptImageEditEndpoint(
@@ -752,8 +796,7 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
           model: args.config.model,
           prompt: args.prompt,
           n: 1,
-          // Volcengine Seedream 使用 1K/2K/4K 档位，与计费分辨率一致。
-          size: imageResolutionFromSize(args.size).toLowerCase(),
+          size: seedreamSize(args.size),
           response_format: "url",
           watermark: false,
         }
@@ -775,6 +818,7 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
     payload,
     { model: args.config.model, size: args.size, quality: requestedQuality },
     imageUpstreamRequestIdFromHeaders(response.headers),
+    usesRequestBoundNativeQwenModel(args.config),
   );
 }
 
@@ -788,15 +832,13 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
   }
   if (args.config.protocol === "volcengine") {
     if (args.mask) throw new Error("Seedream image editing does not support a separate mask input");
-    const requestedSize = args.size?.trim() || "2048x2048";
-    const requestedFormat = args.outputFormat ?? "png";
+    const requestedSize = seedreamSize(args.size?.trim() || "2048x2048");
     const images = args.referenceImages.map((image) => dataUrlForImageInput(image));
     const body = {
       model: args.config.model,
       prompt: args.prompt,
       image: images.length === 1 ? images[0] : images,
       size: requestedSize,
-      output_format: requestedFormat,
       response_format: "url",
       sequential_image_generation: "disabled",
       watermark: false,
@@ -872,6 +914,7 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
     payload,
     { model: args.config.model, size: args.size, quality: args.quality },
     imageUpstreamRequestIdFromHeaders(response.headers),
+    usesRequestBoundNativeQwenModel(args.config),
   );
 }
 

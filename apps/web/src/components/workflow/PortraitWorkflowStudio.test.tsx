@@ -114,5 +114,12 @@ describe("PortraitWorkflowStudio", () => {
     expect(download?.getAttribute("href")).toBe("https://example.test/out.png");
     expect(container.textContent).toContain("商务头像");
     expect(container.textContent).toContain("已完成");
+    expect(container.querySelector('[aria-label="形象照生成历史"]')).toBeTruthy();
+    expect(container.querySelector('[aria-label="形象照任务队列"]')).toBeNull();
+
+    const taskButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("任务 0"));
+    expect(taskButton?.getAttribute("aria-expanded")).toBe("false");
+    act(() => { taskButton?.click(); });
+    expect(container.querySelector('[aria-label="形象照任务队列"]')).toBeTruthy();
   });
 });

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
 import { RippleButton, Stagger, StaggerItem, spring } from "../../motion";
@@ -64,6 +64,8 @@ export type EcomWorkflowStudioViewProps = {
   readonly hideProductForm?: boolean;
   readonly mainImages?: readonly { readonly assetId: string; readonly thumbnailUrl: string }[];
   readonly selectedMasterAssetId?: string | null;
+  readonly controlsHeader?: ReactNode;
+  readonly historyFooter?: ReactNode;
   readonly onDownloadImage?: (url: string) => void;
   readonly onPlatformChange: (value: WorkflowEcomPlatformId) => void;
   readonly onTemplateChange: (value: WorkflowEcomTemplateId) => void;
@@ -119,8 +121,10 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
   };
 
   return (
-    <section className="grid xl:h-full min-w-0 gap-5 xl:grid-cols-[minmax(360px,440px)_minmax(0,1fr)]">
-      <aside className="xl:h-full xl:overflow-y-auto rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+    <section className="grid min-h-0 min-w-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
+      <aside className="flex h-[calc(100dvh-18.75rem)] min-h-[460px] max-h-[664px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+        {props.controlsHeader}
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">电商工作台</p>
@@ -254,8 +258,9 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
             </>
           )}
         </div>
+        </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="z-10 grid flex-none grid-cols-2 gap-2 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
           <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
             {props.isSubmittingMaster ? "生成中" : `生成母版${costSuffix(props.masterPointCost)}`}
           </RippleButton>
@@ -271,8 +276,9 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         </div>
       </aside>
 
-      <div className="xl:h-full min-h-0 grid gap-5 overflow-y-auto">
-        <section className="rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+      <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+        <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">任务阶段</p>
@@ -297,7 +303,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           )}
         </section>
 
-        <section className="rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
           <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">分段</p>
           <h3 className="mt-2 text-[18px] font-semibold text-[#1d1d1f]">分段预览</h3>
           <Stagger className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -346,7 +352,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           </Stagger>
         </section>
 
-        <section className="rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
+        <section className="bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">浏览器拼接</p>
@@ -399,6 +405,8 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           )}
         </section>
 
+        </div>
+        {props.historyFooter}
       </div>
     </section>
   );

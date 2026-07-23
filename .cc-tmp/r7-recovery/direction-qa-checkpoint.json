@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "codex-pet-direction-qa-checkpoint-v1",
+  "sourceRunId": "cpr_3a7a7ee330675f6f5f3b4d58e0ef5b5b",
+  "blindSheetChecksum": "a31e68bbf3bdaf2bcb3dfffa89cefff38c0cf7ef78f01668baa8385180d91627",
+  "directionSheetChecksum": "3e2d7677ac848f191037ba8fe59c47313c582bca18b3f8bf4f768bd2073e32c9",
+  "blindValidationFile": "direction-blind-validation.json",
+  "directionSemanticsFile": "direction-semantics.json",
+  "blindReviewerCount": 3,
+  "labeledSemanticsCalls": 1,
+  "requestedModel": "gpt-5.6-sol",
+  "actualModel": "gpt-5.6-sol",
+  "route": "chatgpt_model_route"
+}

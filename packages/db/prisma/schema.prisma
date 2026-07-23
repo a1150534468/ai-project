@@ -531,6 +531,8 @@ model ImageGenerationTask {
   model             String
   size              String
   referenceAssetIds String[] @default([])
+  sourceImageAssetId String?
+  generationIntent   String   @default("new")
   count             Int
   status            String   @default("running")
   completedCount    Int      @default(0)

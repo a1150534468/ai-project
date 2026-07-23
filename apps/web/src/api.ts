@@ -444,21 +444,27 @@ export interface WorkflowImageTask {
   model: string;
   size: string;
   referenceAssetIds: string[];
+  sourceImageAssetId: string | null;
+  generationIntent: ImageGenerationIntent;
   count: number;
-  status: "running" | "completed" | "failed" | "cancelled";
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
   completedCount: number;
   error: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+export type ImageGenerationIntent = "new" | "variation" | "edit";
+
 export interface GenerateWorkflowImagesPayload {
   requestId: string;
   model: "qwen-image-2.0-pro-2026-04-22" | "gpt-image-2";
   prompt: string;
   size: string;
-  resolution?: "1K" | "2K" | "4K";
+  resolution?: "1K" | "2K";
   referenceAssetIds?: string[];
+  sourceImageAssetId?: string;
+  generationIntent?: ImageGenerationIntent;
   count: number;
 }
 

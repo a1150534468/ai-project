@@ -64,6 +64,7 @@ export function CommerceImageStudio({
   const [helpWriteError, setHelpWriteError] = useState("");
   const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState | null>(null);
   const [mainImages, setMainImages] = useState<readonly { readonly assetId: string; readonly thumbnailUrl: string }[]>([]);
+  const [isOverviewOpen, setIsOverviewOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -147,94 +148,102 @@ export function CommerceImageStudio({
     referenceAssets,
     remoteReferenceCount: 0,
   };
+  const historyFooter = (
+    <EcomHistorySidebar
+      token={token}
+      refreshKey={historyRefreshKey}
+      onSelectMain={onSelectMainHistory}
+      onSelectDetail={onSelectDetailHistory}
+    />
+  );
 
-  return (
-    <section className="grid xl:h-full min-h-0 gap-5 xl:grid-cols-[1fr_3fr_1fr]">
-      <div className="flex xl:h-full min-h-0 flex-col gap-5">
-        <aside className="min-h-0 flex-1 overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
-          <h2 className="mb-3 text-lg font-semibold text-[#1d1d1f]">生成历史</h2>
-          <EcomHistorySidebar token={token} refreshKey={historyRefreshKey} onSelectMain={onSelectMainHistory} onSelectDetail={onSelectDetailHistory} />
-        </aside>
-
-        <aside className="min-h-0 flex-[1.3] overflow-y-auto rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
-        <h2 className="text-[18px] font-semibold text-[#1d1d1f]">产品资料</h2>
-        <p className="mt-1 text-sm text-[#6e6e73]">填一次，主图与详情图共用。</p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
-            平台
-            <InAppSelect icon="mdi:storefront-outline" label="平台" value={platformId} options={platforms.map((p) => ({ value: p.id, label: p.name }))} onChange={(v) => setPlatformId(v as WorkflowEcomPlatformId)} />
-          </div>
-          <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
-            商品名称
-            <input value={productName} onChange={(e) => setProductName(e.target.value)} className="h-11 rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f]" />
-          </label>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
-            商品类目
-            <InAppSelect icon="mdi:shape-outline" label="商品类目" value={categoryChoice} options={CATEGORY_OPTIONS} onChange={setCategoryChoice} />
-            {categoryChoice === CATEGORY_OTHER && (
-              <input value={categoryOther} onChange={(e) => setCategoryOther(e.target.value)} placeholder="请填写商品类目" className="h-11 rounded-[10px] border border-[#d2d2d7] px-3 text-sm font-normal text-[#1d1d1f]" />
-            )}
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f] sm:col-span-2">
-            <div className="flex items-center justify-between">
-              <span>卖点文案</span>
-              <button type="button" onClick={() => handleHelpWrite("sellingPoints")} disabled={helpWriting !== null} className="flex items-center gap-1 rounded-[8px] border border-brand/40 px-2 py-1 text-xs font-semibold text-brand-ink transition disabled:cursor-not-allowed disabled:opacity-50">
-                <Icon icon={helpWriting === "sellingPoints" ? "mdi:loading" : "mdi:auto-fix"} className={helpWriting === "sellingPoints" ? "animate-spin" : ""} aria-hidden />
-                {helpWriting === "sellingPoints" ? "生成中…" : "AI 帮我写"}
-              </button>
-            </div>
-            <textarea value={sellingPointsInput} onChange={(e) => setSellingPointsInput(e.target.value)} placeholder="一行一个卖点" className="min-h-[96px] rounded-[10px] border border-[#d2d2d7] p-3 text-sm font-normal leading-6 text-[#1d1d1f]" />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f] sm:col-span-2">
-            <div className="flex items-center justify-between">
-              <span>额外说明</span>
-              <button type="button" onClick={() => handleHelpWrite("extra")} disabled={helpWriting !== null} className="flex items-center gap-1 rounded-[8px] border border-brand/40 px-2 py-1 text-xs font-semibold text-brand-ink transition disabled:cursor-not-allowed disabled:opacity-50">
-                <Icon icon={helpWriting === "extra" ? "mdi:loading" : "mdi:auto-fix"} className={helpWriting === "extra" ? "animate-spin" : ""} aria-hidden />
-                {helpWriting === "extra" ? "生成中…" : "AI 帮我写"}
-              </button>
-            </div>
-            <textarea value={extra} onChange={(e) => setExtra(e.target.value)} className="min-h-[72px] rounded-[10px] border border-[#d2d2d7] p-3 text-sm font-normal leading-6 text-[#1d1d1f]" />
-          </div>
+  const productControls = (
+    <section className="border-b border-[#ececf0] pb-5">
+      <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
+      <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">产品资料</h2>
+      <p className="mt-1 text-xs leading-5 text-[#8a8a8f]">主图与详情图共用。</p>
+      <div className="mt-4 grid gap-3">
+        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          平台
+          <InAppSelect icon="mdi:storefront-outline" label="平台" value={platformId} options={platforms.map((platform) => ({ value: platform.id, label: platform.name }))} onChange={(value) => setPlatformId(value as WorkflowEcomPlatformId)} />
         </div>
-        {helpWriteError && <p className="mt-2 rounded-[8px] bg-red-50 px-3 py-2 text-xs text-red-700">{helpWriteError}</p>}
-
-        <div className="mt-4 rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
+        <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          商品名称
+          <input value={productName} onChange={(event) => setProductName(event.target.value)} className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal text-[#1d1d1f]" />
+        </label>
+        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          商品类目
+          <InAppSelect icon="mdi:shape-outline" label="商品类目" value={categoryChoice} options={CATEGORY_OPTIONS} onChange={setCategoryChoice} />
+          {categoryChoice === CATEGORY_OTHER && (
+            <input value={categoryOther} onChange={(event) => setCategoryOther(event.target.value)} placeholder="请填写商品类目" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal text-[#1d1d1f]" />
+          )}
+        </div>
+        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
-            <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
-              {isUploading ? "上传中" : "上传参考图"}
+            <span>卖点文案</span>
+            <button type="button" onClick={() => handleHelpWrite("sellingPoints")} disabled={helpWriting !== null} className="inline-flex h-8 items-center gap-1 rounded-lg border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50">
+              <Icon icon={helpWriting === "sellingPoints" ? "mdi:loading" : "mdi:auto-fix"} className={helpWriting === "sellingPoints" ? "animate-spin" : ""} aria-hidden />
+              {helpWriting === "sellingPoints" ? "生成中" : "AI 帮我写"}
             </button>
           </div>
-          <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) handleUpload(file); e.currentTarget.value = ""; }} />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {referenceAssets.map((asset) => (
-              <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-[8px] border border-[#d2d2d7] object-cover" />
-            ))}
-            {referenceAssets.length === 0 && <div className="rounded-[8px] border border-dashed border-[#d2d2d7] px-3 py-4 text-xs text-[#8a8a8f]">上传后会展示本地缩略图。</div>}
+          <textarea value={sellingPointsInput} onChange={(event) => setSellingPointsInput(event.target.value)} placeholder="一行一个卖点" className="min-h-[88px] rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" />
+        </div>
+        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="flex items-center justify-between gap-3">
+            <span>额外说明</span>
+            <button type="button" onClick={() => handleHelpWrite("extra")} disabled={helpWriting !== null} className="inline-flex h-8 items-center gap-1 rounded-lg border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50">
+              <Icon icon={helpWriting === "extra" ? "mdi:loading" : "mdi:auto-fix"} className={helpWriting === "extra" ? "animate-spin" : ""} aria-hidden />
+              {helpWriting === "extra" ? "生成中" : "AI 帮我写"}
+            </button>
           </div>
-          {uploadError && <p className="mt-2 rounded-[8px] bg-red-50 px-3 py-2 text-xs text-red-700">{uploadError}</p>}
+          <textarea value={extra} onChange={(event) => setExtra(event.target.value)} className="min-h-[72px] rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" />
         </div>
-      </aside>
       </div>
-
-      <div className="flex xl:h-full min-h-0 flex-col gap-5">
-        <div className="flex flex-none gap-2">
-          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "main" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品主图</RippleButton>
-          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-10 rounded-[10px] px-4 text-sm font-semibold ${tab === "detail" ? "bg-brand text-white" : "border border-[#d2d2d7] text-[#1d1d1f]"}`}>商品详情图</RippleButton>
+      {helpWriteError && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{helpWriteError}</p>}
+      <div className="mt-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-[#b8bdc6] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+            <Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={isUploading ? "animate-spin" : ""} aria-hidden />
+            {isUploading ? "上传中" : "上传"}
+          </button>
         </div>
+        <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) handleUpload(file); event.currentTarget.value = ""; }} />
+        <div className="mt-3 flex flex-wrap gap-2">
+          {referenceAssets.map((asset) => <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-14 w-14 rounded-lg border border-[#d2d2d7] object-cover" />)}
+          {referenceAssets.length === 0 && <p className="text-xs text-[#8a8a8f]">暂无参考图</p>}
+        </div>
+        {uploadError && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{uploadError}</p>}
+      </div>
+    </section>
+  );
 
-        <div className="min-h-0 flex-1">
+  return (
+    <section className="relative flex min-h-0 flex-col bg-white xl:h-full xl:overflow-hidden">
+      <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
+        <div className="inline-flex rounded-lg bg-[#ececf0] p-1" aria-label="电商图类型">
+          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}>商品主图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}>商品详情图</RippleButton>
+        </div>
+        <button type="button" onClick={() => setIsOverviewOpen(true)} aria-expanded={isOverviewOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-xs font-semibold text-[#1d1d1f]">
+          <Icon icon="mdi:view-dashboard-outline" className="text-base" aria-hidden />生成概览
+        </button>
+      </header>
+
+      <div className="min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
         {tab === "main"
-          ? <EcomMainImageStudio token={token} shared={mainShared} loadJob={loadMainJob} onActivity={onActivity} onBalanceRefresh={onBalanceRefresh} onDownloadImage={openDownload} />
-          : <EcomWorkflowStudio token={token} shared={detailShared} mainImages={mainImages} loadWorkflow={loadDetailWorkflow} onActivity={onActivity} onBalanceRefresh={onBalanceRefresh} onDownloadImage={openDownload} />}
-        </div>
+          ? <EcomMainImageStudio token={token} shared={mainShared} controlsHeader={productControls} historyFooter={historyFooter} loadJob={loadMainJob} onActivity={onActivity} onBalanceRefresh={onBalanceRefresh} onDownloadImage={openDownload} />
+          : <EcomWorkflowStudio token={token} shared={detailShared} controlsHeader={productControls} historyFooter={historyFooter} mainImages={mainImages} loadWorkflow={loadDetailWorkflow} onActivity={onActivity} onBalanceRefresh={onBalanceRefresh} onDownloadImage={openDownload} />}
       </div>
 
-      <aside className="flex xl:h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-[#e8e8ed] bg-white p-4 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-[#1d1d1f]">生成概览</h2>
-        </div>
-        <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1 [scrollbar-gutter:stable] [scrollbar-width:thin]">
+      {isOverviewOpen && (
+        <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsOverviewOpen(false)}>
+          <aside role="dialog" aria-modal="true" aria-label="电商图生成概览" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
+            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
+              <div><p className="text-xs font-semibold text-[#6e6e73]">当前配置</p><h2 className="text-base font-semibold text-[#1d1d1f]">生成概览</h2></div>
+              <button type="button" onClick={() => setIsOverviewOpen(false)} aria-label="关闭生成概览" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button>
+            </div>
+            <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
           <div className="rounded-[11px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
             <p className="text-[11px] font-semibold text-[#8a8a8f]">当前视图</p>
             <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{tab === "main" ? "商品主图" : "商品详情图"}</p>
@@ -264,8 +273,10 @@ export function CommerceImageStudio({
           <p className="rounded-[11px] bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-ink">
             生成按张消耗算力点，预估消耗见中间工作区设置。
           </p>
+            </div>
+          </aside>
         </div>
-      </aside>
+      )}
 
       {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}
     </section>

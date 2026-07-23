@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "sourceRunId": "cpr_3a7a7ee330675f6f5f3b4d58e0ef5b5b",
+  "recoveryRunId": "cpr_recovery_5fe64d839dd2f947dd86433e",
+  "projectId": "cmrteijsv0002c3opa4jyt04z",
+  "knowledgeDocumentId": "codex_pet_e4ae3ce73ba649151ba05fb93bd67156",
+  "spritesheetArtifactId": "081d928b-cc64-4b15-bc0b-f02e3d94bbec",
+  "packageArtifactId": "957f0116-dbe8-44e9-a401-8eae7bbd32dd",
+  "previewArtifactId": "926676b7-162b-44b1-8aee-626548b78e2d",
+  "imageGenerationCalls": 26,
+  "recoveryImageGenerationCalls": 0,
+  "acceptedEvidenceCalls": 5,
+  "observedRecoveryVisualQaCalls": 11,
+  "requestedImageModel": "gpt-image-2",
+  "actualImageModels": [
+    "gpt-image-2-codex"
+  ],
+  "requestedVisualModel": "gpt-5.6-sol",
+  "visualRoute": "chatgpt_model_route",
+  "atlasChecksum": "5e1a5390d5355cb77b46d5846e2da281e561e7cd70006f57a6cb4a1ef358a6c8",
+  "storedSpritesheetChecksum": "306cf6679577e34a3b1b89a09271e6ff91107c971fbece246001bd506be3f88b",
+  "packageChecksum": "d687dd1418bfdb66f64a45a28b63fad4527a73e321f226d306d9b2d09b3e0a86",
+  "dimensions": "1536x2288",
+  "spriteVersionNumber": 2
+}

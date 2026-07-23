@@ -79,9 +79,9 @@ export function buildJumpingQaEvidenceContext(evidence: CodexPetJumpingQaEvidenc
 }
 
 const STATE_INSTRUCTIONS: Readonly<Record<string, string>> = {
-  idle: "calm breathing/blinking micro-motion; frames must visibly vary but remain quiet",
-  "running-right": "directional locomotion with every frame unmistakably facing screen-right in side or three-quarter profile; the muzzle, gaze and leading limbs point right and the gait clearly alternates",
-  "running-left": "directional locomotion with every frame unmistakably facing screen-left in side or three-quarter profile; the muzzle, gaze and leading limbs point left and the gait clearly alternates",
+  idle: "calm breathing/blinking micro-motion with this exact six-frame plan: frame 1 eyes open neutral; frame 2 eyes open tiny inhale; frame 3 eyes open tiny exhale; frame 4 eyes open with only a very small head or torso follow-through; frame 5 the single brief blink; frame 6 eyes open neutral return. Keep the single canonical antenna perfectly fixed and unchanged in all six frames; never bend it, duplicate it, echo it, or draw an antenna-like motion trail. Keep both arms lowered and attached in all six frames. Never wave, raise a hand, sleep or keep the eyes closed beyond frame 5",
+  "running-right": "one eight-phase directional run cycle with every frame unmistakably facing screen-right in side or three-quarter profile. Frames 1-4 are right-facing contact, passing, airborne and opposite-contact phases; frames 5-8 continue the same right-facing cycle with the legs and arms alternating. The face panel, muzzle, gaze and chest front stay on the screen-right side in all eight frames. Never mirror or flip any frame toward screen-left, and never repeat one frozen stride in all slots",
+  "running-left": "one eight-phase directional run cycle with every frame unmistakably facing screen-left in side or three-quarter profile. Frames 1-4 are left-facing contact, passing, airborne and opposite-contact phases; frames 5-8 continue the same left-facing cycle with the legs and arms alternating. The face panel, muzzle, gaze and chest front stay on the screen-left side in all eight frames. Never mirror or flip any frame toward screen-right, and never repeat one frozen stride in all slots",
   waving: "a friendly wave expressed only by the limb pose, rising and returning",
   jumping: "exactly one five-frame arc in reading order: frame 1 grounded anticipation; frame 2 clearly airborne and rising, with the whole-body center roughly halfway between ground and peak; frame 3 the single unmistakable highest peak; frame 4 clearly airborne and descending, visibly below the peak but still roughly halfway above ground; frame 5 grounded settle. The whole-body center must follow a monotonic up-up-down-down path—never make frames 2 or 4 ground-level copies or near-duplicates of the peak. Keep identical body size and head/ear silhouette in every frame and show the jump through vertical position and leg pose only, never zoom, squash or stretch the character",
   failed: "one coherent eight-frame sad/error loop: begin neutral, progressively narrow or lower the eyes and droop the attached paws/upper-body pose, hold the readable defeated expression, then recover; keep the body size and every identity-defining outer contour identical—never bend, lower, round or reshape ears, hair, head silhouette, markings or props",
@@ -129,13 +129,15 @@ function canonicalReferenceBlock(identity: CodexPetVisualIdentity): string {
     "The first attached canonical character image is the sole visual source of truth for this animation. Do not redesign it from the longer text brief.",
     "Keep exactly the same face, head shape, body proportions, palette, marking count and topology, material, silhouette, clothing and props in every pose.",
     "Treat every stripe, patch and symbol-like body mark as a fixed part of the character: never rewrite, add, remove or substitute it between frames.",
+    "Keep the count and topology of every identity-defining anatomical feature constant in every frame. A singular feature such as one antenna, one tail, one horn or one nose remains exactly one; never create a duplicate, ghost, echo, afterimage, second endpoint or detached look-alike while showing motion.",
     canonicalGuideBlock(identity),
   ].filter(Boolean).join("\n");
 }
 
 const GLOBAL_SPRITE_RULES = [
   "Create production sprite source art, not a presentation sheet.",
-  "Use one perfectly flat solid chroma background and keep every character color clearly different from it.",
+  "The background is a production chroma-key matte, not an artistic backdrop: every background pixel must be the exact same requested chroma RGB value. Use one perfectly flat solid chroma background and keep every character color clearly different from it.",
+  "Do not shade, light, vignette, texture, noise, dither, bloom, blur, or gradient the chroma background. No alternate purple/pink/green tones may appear outside the character silhouette.",
   "Show the complete whole body with generous padding. Nothing may touch or cross a slot or outer canvas edge.",
   "No text, labels, numbers, logos, borders, visible grid, scenery, floor, cast shadow, glow, halo, blur or transparency checkerboard.",
   "No detached effects: no motion lines, dust, floating icons, punctuation, stars or separate droplets.",
@@ -203,17 +205,23 @@ export function buildStandardRowPrompt(identity: CodexPetVisualIdentity, state: 
   const directionalProfileRule = state === "running-right" || state === "running-left"
     ? "This is a directional running cycle. A natural side or three-quarter running pose may occlude the far eye and part of the front face panel; preserve the visible eye, fixed face-panel topology, head module, markings and body identity without forcing every frame into a frontal two-eye view. The travel direction must remain consistent across the complete cycle."
     : "";
+  const seedreamGaitScaffoldRule = state === "running-right" || state === "running-left"
+    ? "If the attached construction reference alternates two source gait phases A/B across odd and even slots, preserve that left/right limb opposition as a cadence anchor. Expand it into eight freshly drawn chronological poses: contact, passing, airborne, opposite-contact, then the complementary contact, passing, airborne and loop-closing phase. Do not return eight copies of one stride and do not return only two repeated A/B drawings. Every singular antenna or other appendage still appears exactly once per frame with no ghost or duplicate."
+    : "";
   return `${canonicalReferenceBlock(identity)}
 
 Generate exactly ${spec.frameCount} separated sequential poses for the “${state}” animation as a ${spec.boardColumns} columns × ${spec.boardRows} ${rowWord} pose board, read left-to-right then top-to-bottom. Action: ${STATE_INSTRUCTIONS[state]}.
 ${jumpingSlotMap}
 ${unused}
 ${directionalProfileRule}
+${seedreamGaitScaffoldRule}
 All poses share one scale. ${state === "jumping"
     ? "Show clear vertical lift and descent through body height."
     : "Keep the character horizontally centered on one stable foot baseline in every slot; express motion through the pose, not by moving the sprite around the board."} Scale down wide or extreme poses as needed so the complete silhouette keeps at least 15% clear background from every slot boundary. The attached layout is construction guidance only and must not appear in the result.
+Hard extraction gate for every slot: draw exactly one complete character contained wholly inside that slot. The head, torso, arms, hands, legs, feet, ears, tail, antennae and any existing prop must connect to the main body through continuous opaque non-background sprite pixels. A lifted hand or foot must still be visibly joined to its arm or leg; never leave a chroma-key gap at a shoulder, wrist, hip or ankle. Do not split one character across neighboring slots. Do not draw detached sweat beads, action marks, punctuation, droplets, sparkles, dust or any other floating effect.
+The second attached construction reference may repeat the approved canonical character once inside every target slot. Use only its exact one-complete-character-per-slot count, scale, padding and placement. Redraw each requested action phase; do not return repeated static copies. Never merge the top and bottom slots into one tall character, and never split a character across a row boundary.
 
-Background color must be exactly ${identity.chromaKey}.
+Background color must be exactly ${identity.chromaKey} at every background pixel; render it as a uniform solid production key, never as a gradient or lit surface.
 ${GLOBAL_SPRITE_RULES}`;
 }
 

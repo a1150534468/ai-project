@@ -109,10 +109,106 @@ interface AlphaAnalysis {
   readonly edgePixels: number;
   readonly componentCount: number;
   readonly internalTransparentPixels: number;
+  /** Source image with only proven detached line residue removed. */
+  readonly cleanedImage: Buffer | null;
+}
+
+interface AlphaComponent {
+  readonly label: number;
+  readonly pixels: number;
+  readonly bounds: PixelBounds;
+  readonly edgePixels: number;
 }
 
 function indexOf(x: number, y: number, width: number): number {
   return y * width + x;
+}
+
+function axisGap(aStart: number, aEnd: number, bStart: number, bEnd: number): number {
+  if (aEnd < bStart) return bStart - aEnd - 1;
+  if (bEnd < aStart) return aStart - bEnd - 1;
+  return 0;
+}
+
+function isDetachedLineResidue(
+  component: AlphaComponent,
+  primary: AlphaComponent,
+  canvasWidth: number,
+  canvasHeight: number,
+): boolean {
+  if (component.label === primary.label || component.edgePixels > 0) return false;
+  if (component.pixels > primary.pixels * 0.02) return false;
+
+  const shortSide = Math.min(component.bounds.width, component.bounds.height);
+  const longSide = Math.max(component.bounds.width, component.bounds.height);
+  const canvasShortSide = Math.min(canvasWidth, canvasHeight);
+  if (shortSide > Math.max(3, Math.floor(canvasShortSide * 0.025))) return false;
+  if (longSide > Math.max(12, Math.floor(canvasShortSide * 0.12))) return false;
+  if (longSide / shortSide < 3) return false;
+
+  const horizontalGap = axisGap(
+    component.bounds.left,
+    component.bounds.right,
+    primary.bounds.left,
+    primary.bounds.right,
+  );
+  const verticalGap = axisGap(
+    component.bounds.top,
+    component.bounds.bottom,
+    primary.bounds.top,
+    primary.bounds.bottom,
+  );
+  return Math.max(horizontalGap, verticalGap) >= Math.max(3, Math.floor(canvasShortSide * 0.008));
+}
+
+function isDetachedLayoutGuideResidue(
+  component: AlphaComponent,
+  primary: AlphaComponent,
+  canvasWidth: number,
+  canvasHeight: number,
+): boolean {
+  if (component.label === primary.label || component.edgePixels > 0) return false;
+  if (component.pixels > primary.pixels * 0.25) return false;
+  if (component.bounds.width < canvasWidth * 0.75 || component.bounds.height < canvasHeight * 0.75) return false;
+  const fillRatio = component.pixels / (component.bounds.width * component.bounds.height);
+  if (fillRatio > 0.08) return false;
+  return component.bounds.left < primary.bounds.left
+    && component.bounds.right > primary.bounds.right
+    && component.bounds.top < primary.bounds.top
+    && component.bounds.bottom > primary.bounds.bottom;
+}
+
+function detachedDuplicateFragmentLabels(
+  components: readonly AlphaComponent[],
+  primary: AlphaComponent,
+  canvasWidth: number,
+): ReadonlySet<number> {
+  const minimumGap = Math.max(
+    8,
+    Math.floor(canvasWidth * 0.06),
+    Math.floor(primary.bounds.width * 0.18),
+  );
+  const candidates = components.filter((component) => (
+    component.label !== primary.label
+    && component.edgePixels === 0
+    && component.pixels <= primary.pixels * 0.14
+    && component.bounds.width <= primary.bounds.width * 0.65
+    && component.bounds.height <= primary.bounds.height * 0.45
+  ));
+  const groups = [
+    candidates.filter((component) => component.bounds.left - primary.bounds.right - 1 >= minimumGap),
+    candidates.filter((component) => primary.bounds.left - component.bounds.right - 1 >= minimumGap),
+  ];
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    const totalPixels = group.reduce((sum, component) => sum + component.pixels, 0);
+    if (totalPixels > primary.pixels * 0.32) continue;
+    const top = Math.min(...group.map((component) => component.bounds.top));
+    const bottom = Math.max(...group.map((component) => component.bounds.bottom));
+    if (bottom - top + 1 < primary.bounds.height * 0.28) continue;
+    return new Set(group.map((component) => component.label));
+  }
+  return new Set();
 }
 
 async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis> {
@@ -130,32 +226,39 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
     }
   }
   if (rawOpaquePixels === 0) {
-    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0 };
+    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0, cleanedImage: null };
   }
 
   const visited = new Uint8Array(mask.length);
+  const labels = new Int32Array(mask.length);
   const retainedMask = new Uint8Array(mask.length);
   const queue = new Int32Array(mask.length);
   const componentFloor = Math.max(12, Math.floor(rawOpaquePixels * 0.001));
-  let left = width;
-  let right = -1;
-  let top = height;
-  let bottom = -1;
-  let opaquePixels = 0;
-  let edgePixels = 0;
-  let componentCount = 0;
+  const components: AlphaComponent[] = [];
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const seed = indexOf(x, y, width);
       if (!mask[seed] || visited[seed]) continue;
       let head = 0;
       let tail = 0;
+      let componentLeft = width;
+      let componentRight = -1;
+      let componentTop = height;
+      let componentBottom = -1;
+      let componentEdgePixels = 0;
+      const label = components.length + 1;
       queue[tail++] = seed;
       visited[seed] = 1;
+      labels[seed] = label;
       while (head < tail) {
         const current = queue[head++]!;
         const cx = current % width;
         const cy = Math.floor(current / width);
+        componentLeft = Math.min(componentLeft, cx);
+        componentRight = Math.max(componentRight, cx);
+        componentTop = Math.min(componentTop, cy);
+        componentBottom = Math.max(componentBottom, cy);
+        if (cx === 0 || cy === 0 || cx === width - 1 || cy === height - 1) componentEdgePixels += 1;
         const neighbors = [
           cx > 0 ? current - 1 : -1,
           cx + 1 < width ? current + 1 : -1,
@@ -165,27 +268,71 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
         for (const neighbor of neighbors) {
           if (neighbor < 0 || visited[neighbor] || !mask[neighbor]) continue;
           visited[neighbor] = 1;
+          labels[neighbor] = label;
           queue[tail++] = neighbor;
         }
       }
-      if (tail < componentFloor) continue;
-      componentCount += 1;
-      opaquePixels += tail;
-      for (let componentIndex = 0; componentIndex < tail; componentIndex += 1) {
-        const current = queue[componentIndex]!;
-        retainedMask[current] = 1;
-        const cx = current % width;
-        const cy = Math.floor(current / width);
-        left = Math.min(left, cx);
-        right = Math.max(right, cx);
-        top = Math.min(top, cy);
-        bottom = Math.max(bottom, cy);
-        if (cx === 0 || cy === 0 || cx === width - 1 || cy === height - 1) edgePixels += 1;
-      }
+      components.push({
+        label,
+        pixels: tail,
+        bounds: {
+          left: componentLeft,
+          top: componentTop,
+          right: componentRight,
+          bottom: componentBottom,
+          width: componentRight - componentLeft + 1,
+          height: componentBottom - componentTop + 1,
+        },
+        edgePixels: componentEdgePixels,
+      });
     }
   }
+
+  const eligibleComponents = components.filter((component) => component.pixels >= componentFloor);
+  const primary = eligibleComponents.reduce<AlphaComponent | null>(
+    (largest, component) => !largest || component.pixels > largest.pixels ? component : largest,
+    null,
+  );
+  const duplicateFragmentLabels = primary
+    ? detachedDuplicateFragmentLabels(eligibleComponents, primary, width)
+    : new Set<number>();
+  const retainedComponents = primary
+    ? eligibleComponents.filter((component) => (
+        !isDetachedLineResidue(component, primary, width, height)
+        && !isDetachedLayoutGuideResidue(component, primary, width, height)
+        && !duplicateFragmentLabels.has(component.label)
+      ))
+    : [];
+  const retainedLabels = new Set(retainedComponents.map((component) => component.label));
+  let left = width;
+  let right = -1;
+  let top = height;
+  let bottom = -1;
+  const opaquePixels = retainedComponents.reduce((total, component) => total + component.pixels, 0);
+  const edgePixels = retainedComponents.reduce((total, component) => total + component.edgePixels, 0);
+  const componentCount = retainedComponents.length;
+  for (const component of retainedComponents) {
+    left = Math.min(left, component.bounds.left);
+    right = Math.max(right, component.bounds.right);
+    top = Math.min(top, component.bounds.top);
+    bottom = Math.max(bottom, component.bounds.bottom);
+  }
+  let removedComponentPixels = 0;
+  for (let pixelIndex = 0; pixelIndex < mask.length; pixelIndex += 1) {
+    if (!mask[pixelIndex]) continue;
+    if (retainedLabels.has(labels[pixelIndex]!)) {
+      retainedMask[pixelIndex] = 1;
+      continue;
+    }
+    removedComponentPixels += 1;
+    const offset = pixelIndex * info.channels;
+    data[offset] = 0;
+    data[offset + 1] = 0;
+    data[offset + 2] = 0;
+    data[offset + 3] = 0;
+  }
   if (opaquePixels === 0) {
-    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0 };
+    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0, cleanedImage: null };
   }
 
   // Flood transparent pixels from the foreground bounding-box edge; remaining transparent pixels are holes.
@@ -235,6 +382,9 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
     edgePixels,
     componentCount,
     internalTransparentPixels,
+    cleanedImage: removedComponentPixels > 0
+      ? await sharp(data, { raw: { width, height, channels: info.channels } }).png().toBuffer()
+      : null,
   };
 }
 
@@ -305,10 +455,11 @@ export async function extractPoseBoard(
       threshold: options.chromaThreshold,
       feather: options.chromaFeather,
     });
-    cleanedSlots.push(result.image);
+    const analysis = await analyzeAlpha(result.image);
+    cleanedSlots.push(analysis.cleanedImage ?? result.image);
     slotWidths.push(right - left);
     slotHeights.push(bottom - top);
-    analyses.push(await analyzeAlpha(result.image));
+    analyses.push(analysis);
     const { image: _image, ...report } = result;
     chroma.push(report);
   }

@@ -6,15 +6,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"ai-assistant-billing/internal/adjust"
 	"ai-assistant-billing/internal/bucket"
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/redeem"
 	"ai-assistant-billing/internal/registry"
 	"ai-assistant-billing/internal/resource"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (h *Handler) RegisterAdmin(r *gin.Engine) {
@@ -586,10 +586,14 @@ func (h *Handler) listEnabledModels(c *gin.Context) {
 		Model           string `json:"model"`
 		DisplayName     string `json:"displayName"`
 		MaxOutputTokens int64  `json:"maxOutputTokens"`
+		Tags            string `json:"tags"`
 	}
 	out := make([]m, 0, len(rows))
 	for _, r := range rows {
-		out = append(out, m{Model: r.Model, DisplayName: r.DisplayName, MaxOutputTokens: r.MaxOutputTokens})
+		out = append(out, m{
+			Model: r.Model, DisplayName: r.DisplayName,
+			MaxOutputTokens: r.MaxOutputTokens, Tags: r.CapabilityTags,
+		})
 	}
 	c.JSON(http.StatusOK, gin.H{"data": out})
 }

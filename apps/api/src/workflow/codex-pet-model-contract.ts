@@ -2,6 +2,7 @@ import { CHATGPT_MODELS } from "@ai-assistant/llm";
 import {
   GPT_IMAGE_MODEL,
   IMAGE_GENERATION_MODELS,
+  QWEN_IMAGE_MODEL,
   loadGptImageEditEndpoint,
   loadImageEditEndpoint,
   loadImageGenerationConfigForModel,
@@ -89,7 +90,9 @@ export function assertCodexPetImageRoute(env: NodeJS.ProcessEnv = process.env, r
   if (!editApiKey) throw new CodexPetModelContractError("图片编辑所需的模型 API Key 未配置");
   const editEndpoint = requestedModel === GPT_IMAGE_MODEL
     ? loadGptImageEditEndpoint(env, config.endpoint)
-    : loadImageEditEndpoint(env);
+    : requestedModel === QWEN_IMAGE_MODEL
+      ? loadImageEditEndpoint(env, config.endpoint)
+      : config.endpoint;
   for (const [label, endpoint] of [["generation", config.endpoint], ["edit", editEndpoint]] as const) {
     let parsed: URL;
     try { parsed = new URL(endpoint); } catch { throw new CodexPetModelContractError(`Codex pet GPT Image ${label} endpoint is invalid`); }

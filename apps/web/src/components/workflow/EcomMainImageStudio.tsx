@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
 import { InAppSelect } from "../agent-teams/InAppSelect";
@@ -32,12 +32,14 @@ interface EcomMainImageStudioProps {
   readonly onDownloadImage?: (url: string) => void;
   readonly loadJob?: EcomMainJob | null;
   readonly onActivity?: () => void;
+  readonly controlsHeader?: ReactNode;
+  readonly historyFooter?: ReactNode;
   readonly client?: Pick<typeof api, "getEcomMainPricing" | "getCurrentEcomMainJob" | "createEcomMainJob" | "redrawEcomMainImage">;
 }
 
 const DEFAULT_CLIENT = api;
 
-export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloadImage, loadJob, onActivity, client = DEFAULT_CLIENT }: EcomMainImageStudioProps) {
+export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloadImage, loadJob, onActivity, controlsHeader, historyFooter, client = DEFAULT_CLIENT }: EcomMainImageStudioProps) {
   const [ratio, setRatio] = useState<EcomMainRatio>("1:1");
   const [resolution, setResolution] = useState<EcomMainResolution>("1K");
   const [style, setStyle] = useState<EcomMainStyleId>("amazon_clean");
@@ -121,10 +123,15 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   };
 
   return (
-    <section className="grid xl:h-full min-h-0 gap-5 xl:grid-cols-[minmax(320px,380px)_minmax(0,1fr)]">
-      <aside className="min-h-0 xl:h-full overflow-y-auto rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-        <h3 className="text-[16px] font-semibold text-[#1d1d1f]">主图设置</h3>
-        <div className="mt-4 grid gap-3">
+    <section className="grid min-h-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
+      <aside className="flex h-[calc(100dvh-18.75rem)] min-h-[460px] max-h-[664px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+          {controlsHeader}
+          <div className="pt-5">
+            <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
+            <h3 className="mt-1 text-base font-semibold text-[#1d1d1f]">主图设置</h3>
+          </div>
+          <div className="mt-4 grid gap-3">
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
             图片比例
             <InAppSelect icon="mdi:crop" label="图片比例" value={ratio} options={ECOM_MAIN_RATIO_OPTIONS} onChange={(v) => { setRatio(v as EcomMainRatio); clearFeedback(); }} />
@@ -151,30 +158,35 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             生成张数
             <InAppSelect icon="mdi:numeric" label="生成张数" value={String(count)} options={ECOM_MAIN_COUNT_OPTIONS} onChange={(v) => { setCount(Number(v)); clearFeedback(); }} />
           </div>
+          </div>
+          {(error || notice) && (
+            <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
+          )}
         </div>
-
-        <div className="mt-4 rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] px-3 py-2 text-sm text-[#6e6e73]">
-          预计消耗 {estimated === null ? "—" : `${estimated} 算力点`}（{perImageRate === null ? "—" : `${perImageRate} 点/张`} × {count} 张）
+        <div className="sticky bottom-0 z-10 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-[#6e6e73]">
+            <span>预计消耗</span>
+            <span className="text-[#1d1d1f]">{estimated === null ? "--" : `${estimated} 算力点`}</span>
+          </div>
+          <RippleButton type="button" onClick={handleGenerate} disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
+            {isSubmitting ? <><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成 {count} 张...</> : "生成主图"}
+          </RippleButton>
         </div>
-
-        <RippleButton type="button" onClick={handleGenerate} disabled={busy} className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
-          {isSubmitting ? <><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成 {count} 张…</> : "生成主图"}
-        </RippleButton>
-
-        {(error || notice) && (
-          <p className={`mt-4 rounded-[10px] px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
-        )}
       </aside>
 
-      <div className="xl:h-full min-h-0 overflow-y-auto rounded-[14px] border border-[#d2d2d7] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)]">
-        <h3 className="text-[16px] font-semibold text-[#1d1d1f]">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3>
+      <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div><p className="text-xs font-semibold text-[#6e6e73]">当前结果</p><h3 className="mt-1 text-base font-semibold text-[#1d1d1f]">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
+          {isSubmitting && <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink"><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成</span>}
+        </div>
         {isSubmitting && (
           <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
             <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
-            正在按张生成 {count} 张主图，请稍候…（离开页面会中断本次生成）
+            正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
           </div>
         )}
-        {!job && !isSubmitting && <p className="mt-3 text-sm text-[#8a8a8f]">填写产品资料后点「生成主图」，将按张出图并展示每张的主题/画面/文案要求。</p>}
+        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-[#8a8a8f]" aria-hidden /><p className="text-sm font-semibold text-[#6e6e73]">填写左侧产品资料后开始生成</p></div></div>}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {isSubmitting
             ? Array.from({ length: count }).map((_, skeletonIndex) => (
@@ -222,6 +234,8 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                 </article>
               ))}
         </div>
+        </div>
+        {historyFooter}
       </div>
     </section>
   );

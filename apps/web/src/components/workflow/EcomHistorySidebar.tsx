@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { listEcomMainHistory, type EcomMainJob } from "../../workflowEcomMainApi";
 import * as workflowEcomApi from "../../workflowEcomApi";
 import type { WorkflowEcomWorkflow } from "../../workflowEcomApi";
+import { WorkflowHistoryStrip, type WorkflowHistoryGroup } from "./ImageHistoryStrip";
 
 interface EcomHistorySidebarProps {
   readonly token: string;
@@ -38,80 +39,58 @@ export function EcomHistorySidebar({
     })();
   }, [token, refreshKey]);
 
+  const groups: readonly WorkflowHistoryGroup[] = [
+    ...mainHistory.map((job) => ({
+      id: `main-${job.id}`,
+      title: `商品主图 · ${job.count} 张 · ${job.style}`,
+      meta: new Date(job.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      items: job.images.length > 0
+        ? job.images.map((image) => ({
+            id: `main-${job.id}-${image.index}`,
+            imageUrl: image.thumbnailUrl || image.originalUrl,
+            alt: `商品主图第 ${image.index + 1} 张`,
+            placeholderIcon: image.status === "failed" ? "mdi:image-off-outline" : "mdi:image-outline",
+            onSelect: () => onSelectMain(job),
+          }))
+        : [{
+            id: `main-${job.id}-placeholder`,
+            alt: "商品主图任务",
+            placeholderIcon: "mdi:image-outline",
+            onSelect: () => onSelectMain(job),
+          }],
+    })),
+    ...detailHistory.map((workflow) => ({
+      id: `detail-${workflow.id}`,
+      title: `商品详情图 · ${workflow.segmentCount} 段 · ${workflow.resolution}`,
+      meta: new Date(workflow.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" }),
+      items: workflow.masterAsset || workflow.segments.length > 0 ? [
+        ...(workflow.masterAsset ? [{
+          id: `detail-${workflow.id}-master`,
+          imageUrl: workflow.masterAsset.thumbnailUrl || workflow.masterAsset.originalUrl,
+          alt: "商品详情图母版",
+          onSelect: () => onSelectDetail(workflow),
+        }] : []),
+        ...workflow.segments.map((segment) => ({
+          id: `detail-${workflow.id}-segment-${segment.index}`,
+          imageUrl: segment.thumbnailUrl || segment.originalUrl,
+          alt: `商品详情图第 ${segment.index + 1} 段`,
+          onSelect: () => onSelectDetail(workflow),
+        })),
+      ] : [{
+        id: `detail-${workflow.id}-placeholder`,
+        alt: "商品详情图任务",
+        placeholderIcon: "mdi:image-outline",
+        onSelect: () => onSelectDetail(workflow),
+      }],
+    })),
+  ];
+
   return (
-    <div>
-      <div className="mt-3 grid gap-4">
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold text-[#a1a1a6]">商品主图</p>
-          <div className="grid gap-1.5">
-            {mainHistory.length === 0 ? (
-              <p className="text-xs text-[#8a8a8f]">暂无</p>
-            ) : (
-              mainHistory.map((h) => (
-                <button
-                  key={h.id}
-                  type="button"
-                  onClick={() => onSelectMain(h)}
-                  className="flex items-center gap-2 rounded-[8px] border border-[#eef1f3] px-2 py-1.5 text-left "
-                >
-                  <span className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-[6px] bg-[#f5f5f7]">
-                    {h.images.find((i) => i.thumbnailUrl)?.thumbnailUrl ? (
-                      <img
-                        src={h.images.find((i) => i.thumbnailUrl)!.thumbnailUrl!}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs text-[#424245]">
-                      {h.count} 张 · {h.style}
-                    </span>
-                    <span className="block text-[10px] text-[#8a8a8f]">
-                      {new Date(h.createdAt).toLocaleString()}
-                    </span>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-        <div>
-          <p className="mb-1.5 text-[11px] font-semibold text-[#a1a1a6]">商品详情图</p>
-          <div className="grid gap-1.5">
-            {detailHistory.length === 0 ? (
-              <p className="text-xs text-[#8a8a8f]">暂无</p>
-            ) : (
-              detailHistory.map((w) => (
-                <button
-                  key={w.id}
-                  type="button"
-                  onClick={() => onSelectDetail(w)}
-                  className="flex items-center gap-2 rounded-[8px] border border-[#eef1f3] px-2 py-1.5 text-left "
-                >
-                  <span className="grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-[6px] bg-[#f5f5f7]">
-                    {w.masterAsset?.thumbnailUrl ? (
-                      <img
-                        src={w.masterAsset.thumbnailUrl}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    ) : null}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs text-[#424245]">
-                      {w.segmentCount} 段 · {w.resolution}
-                    </span>
-                    <span className="block text-[10px] text-[#8a8a8f]">
-                      {new Date(w.createdAt).toLocaleString()}
-                    </span>
-                  </span>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+    <WorkflowHistoryStrip
+      ariaLabel="电商图生成历史"
+      summary={`${mainHistory.length + detailHistory.length} 个任务`}
+      emptyText="暂无生成记录"
+      groups={groups}
+    />
   );
 }

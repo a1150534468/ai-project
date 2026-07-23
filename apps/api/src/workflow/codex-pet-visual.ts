@@ -3,8 +3,14 @@ import Anthropic from "@anthropic-ai/sdk";
 import { jsonrepair } from "jsonrepair";
 import sharp from "sharp";
 import { buildBailianBaseURL } from "@ai-assistant/llm";
-import type { DirectionBlindAnswerKey } from "@ai-assistant/codex-pet-pipeline";
 import {
+  colorDistance,
+  parseHexColor,
+  removeChroma,
+  type DirectionBlindAnswerKey,
+} from "@ai-assistant/codex-pet-pipeline";
+import {
+  DOUBAO_IMAGE_MODEL,
   GPT_IMAGE_MODEL,
   callImageEditDetailed,
   callImageGenerationDetailed,
@@ -13,6 +19,24 @@ import {
   type ImageBinaryInput,
   type ImageGenerationResult,
 } from "./image-service.js";
+
+const SEEDREAM_CHROMA_NAMES: Readonly<Record<string, string>> = {
+  "#ff00ff": "a perfectly flat solid hot-magenta chroma-key background",
+  "#00ff00": "a perfectly flat solid bright-green chroma-key background",
+  "#0000ff": "a perfectly flat solid pure-blue chroma-key background",
+};
+
+/** Seedream tends to render literal hex tokens as visible text. Keep those
+ * tokens in the provider-neutral prompt for GPT/Qwen, but use natural-language
+ * color instructions for Seedream while retaining the persisted key color. */
+export function adaptCodexPetPromptForModel(prompt: string, model: string): string {
+  const normalizedModel = model.trim().toLowerCase();
+  if (model !== DOUBAO_IMAGE_MODEL && !normalizedModel.startsWith("doubao")) return prompt;
+  const adapted = prompt.replace(/#[0-9a-f]{6}/gi, (value) => (
+    SEEDREAM_CHROMA_NAMES[value.toLowerCase()] ?? "a perfectly flat solid chroma-key background"
+  ));
+  return `${adapted}\nSeedream production constraint: the chroma-key matte is only a background-removal aid. Never draw or print the color name, hex code, RGB values, labels, symbols, or any other text anywhere in the image. Do not add a ground plane, floor strip, contact shadow, cast shadow, glow, vignette, gradient, texture, lighting variation, or decorative background detail.`;
+}
 import {
   CodexPetModelContractError,
   CODEX_PET_VISUAL_QA_MODEL,
@@ -391,6 +415,200 @@ async function generatedImageBuffer(result: ImageGenerationResult, fetchFn: type
   return { buffer, mime: contentType.startsWith("image/") ? contentType : "image/png" };
 }
 
+export async function normalizeSeedreamChromaMatte(
+  input: Buffer,
+  originalPrompt: string,
+  model: string,
+): Promise<{ readonly buffer: Buffer; readonly mime: string }> {
+  if (model !== DOUBAO_IMAGE_MODEL && !model.trim().toLowerCase().startsWith("doubao")) {
+    return { buffer: input, mime: "" };
+  }
+  const keyToken = originalPrompt.match(/#[0-9a-f]{6}/i)?.[0];
+  if (!keyToken) return { buffer: input, mime: "" };
+  const key = parseHexColor(keyToken);
+  const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const border = Math.max(1, Math.floor(Math.min(info.width, info.height) * 0.02));
+  const distances: number[] = [];
+  const sample = (x: number, y: number) => {
+    const offset = (y * info.width + x) * info.channels;
+    distances.push(colorDistance({ r: data[offset]!, g: data[offset + 1]!, b: data[offset + 2]! }, key));
+  };
+  const stride = Math.max(1, Math.floor(Math.max(info.width, info.height) / 512));
+  for (let y = 0; y < info.height; y += stride) {
+    for (let x = 0; x < info.width; x += stride) {
+      if (x < border || x >= info.width - border || y < border || y >= info.height - border) sample(x, y);
+    }
+  }
+  distances.sort((a, b) => a - b);
+  const edgeDistance = distances[Math.floor(Math.max(0, distances.length - 1) * 0.995)] ?? 86;
+  const threshold = Math.min(380, Math.max(86, Math.ceil(edgeDistance + 12)));
+  const removed = await removeChroma(input, { key, threshold, feather: 20 });
+  const coverage = removed.totalPixels > 0
+    ? (removed.removedPixels + removed.softenedPixels) / removed.totalPixels
+    : 0;
+  if (coverage < 0.05 || coverage > 0.95) {
+    throw new Error(`Seedream chroma normalization produced unsafe coverage: ${coverage.toFixed(4)}`);
+  }
+  const layout = originalPrompt.match(/(\d+)\s*columns?\s*[×x]\s*(\d+)\s*rows?/i)
+    ?? originalPrompt.match(/(\d+)\s*[×x]\s*(\d+)\s*(?:pose\s+)?board/i);
+  const columns = layout ? Number(layout[1]) : null;
+  const rows = layout ? Number(layout[2]) : null;
+  const targetWidth = info.width;
+  const targetHeight = columns && rows && columns > 0 && rows > 0
+    ? Math.max(1, Math.round(targetWidth * rows / columns))
+    : info.height;
+  let buffer: Buffer;
+  if (columns && rows) {
+    const composites: Array<{ readonly input: Buffer; readonly left: number; readonly top: number }> = [];
+    const slotWidth = targetWidth / columns;
+    const slotHeight = targetHeight / rows;
+    for (let row = 0; row < rows; row += 1) {
+      for (let column = 0; column < columns; column += 1) {
+        const sourceLeft = Math.floor(column * info.width / columns);
+        const sourceTop = Math.floor(row * info.height / rows);
+        const sourceRight = Math.floor((column + 1) * info.width / columns);
+        const sourceBottom = Math.floor((row + 1) * info.height / rows);
+        const tile = await sharp(removed.image).extract({
+          left: sourceLeft,
+          top: sourceTop,
+          width: sourceRight - sourceLeft,
+          height: sourceBottom - sourceTop,
+        }).png().toBuffer();
+        const contentWidth = Math.max(1, Math.floor(slotWidth * 0.82));
+        const contentHeight = Math.max(1, Math.floor(slotHeight * 0.82));
+        const resized = await sharp(tile).resize({
+          width: contentWidth,
+          height: contentHeight,
+          fit: "contain",
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        }).png().toBuffer();
+        composites.push({
+          input: resized,
+          left: Math.round(column * slotWidth + (slotWidth - contentWidth) / 2),
+          top: Math.round(row * slotHeight + (slotHeight - contentHeight) / 2),
+        });
+      }
+    }
+    buffer = await sharp({
+      create: { width: targetWidth, height: targetHeight, channels: 4, background: keyToken },
+    }).composite(composites).png().toBuffer();
+  } else {
+    const resized = await sharp(removed.image).png().toBuffer();
+    buffer = await sharp({
+      create: { width: targetWidth, height: targetHeight, channels: 4, background: keyToken },
+    }).composite([{ input: resized }]).png().toBuffer();
+  }
+  return { buffer, mime: "image/png" };
+}
+
+/**
+ * Seedream frequently copies labels and dashed borders from a conventional
+ * layout guide. Give it a safe, label-free construction reference instead:
+ * one complete approved character per target slot on the real chroma matte.
+ * This is guidance only; the generation prompt still owns every action pose.
+ */
+export async function createSeedreamPoseBoardScaffold(input: {
+  readonly canonical: Buffer;
+  /** Optional already-paid pose phases used only as construction evidence. */
+  readonly poseVariants?: readonly Buffer[];
+  /** Zero-based variant index for each target slot; defaults to round-robin. */
+  readonly variantSequence?: readonly number[];
+  readonly chromaKey: string;
+  readonly columns: number;
+  readonly rows: number;
+  readonly frameCount: number;
+  readonly width?: number;
+  readonly height?: number;
+}): Promise<Buffer> {
+  const width = input.width ?? 1536;
+  const height = input.height ?? 1024;
+  if (!Number.isInteger(input.columns) || input.columns < 1
+    || !Number.isInteger(input.rows) || input.rows < 1
+    || !Number.isInteger(input.frameCount) || input.frameCount < 1
+    || input.frameCount > input.columns * input.rows
+    || !Number.isInteger(width) || width < 1
+    || !Number.isInteger(height) || height < 1) {
+    throw new Error("Seedream scaffold requires a valid positive layout and frame count");
+  }
+  const sources = input.poseVariants?.length ? [...input.poseVariants] : [input.canonical];
+  const sequence = input.variantSequence
+    ? [...input.variantSequence]
+    : Array.from({ length: input.frameCount }, (_, index) => index % sources.length);
+  if (sequence.length !== input.frameCount
+    || sequence.some((value) => !Number.isInteger(value) || value < 0 || value >= sources.length)) {
+    throw new Error("Seedream scaffold variant sequence must select one available pose per frame");
+  }
+
+  const trimmedVariants = await Promise.all(sources.map(async (source) => {
+    const removed = await removeChroma(source, {
+      key: parseHexColor(input.chromaKey),
+      threshold: 96,
+      feather: 16,
+    });
+    return sharp(removed.image)
+      .trim({ background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .png({ compressionLevel: 9 })
+      .toBuffer();
+  }));
+  const composites: Array<{ readonly input: Buffer; readonly left: number; readonly top: number }> = [];
+  for (let index = 0; index < input.frameCount; index += 1) {
+    const column = index % input.columns;
+    const row = Math.floor(index / input.columns);
+    const slotLeft = Math.floor(column * width / input.columns);
+    const slotRight = Math.floor((column + 1) * width / input.columns);
+    const slotTop = Math.floor(row * height / input.rows);
+    const slotBottom = Math.floor((row + 1) * height / input.rows);
+    const slotWidth = slotRight - slotLeft;
+    const slotHeight = slotBottom - slotTop;
+    const contentWidth = Math.max(1, Math.floor(slotWidth * 0.64));
+    const contentHeight = Math.max(1, Math.floor(slotHeight * 0.72));
+    const sprite = await sharp(trimmedVariants[sequence[index]!]!).resize({
+      width: contentWidth,
+      height: contentHeight,
+      fit: "contain",
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    }).png({ compressionLevel: 9 }).toBuffer();
+    composites.push({
+      input: sprite,
+      left: slotLeft + Math.floor((slotWidth - contentWidth) / 2),
+      top: slotTop + Math.floor(slotHeight * 0.1),
+    });
+  }
+  return sharp({
+    create: { width, height, channels: 4, background: input.chromaKey },
+  }).composite(composites).png({ compressionLevel: 9 }).toBuffer();
+}
+
+/** Pick one stable first phase and the most visually distinct paid phase. */
+export async function selectSeedreamGaitScaffoldVariants(
+  frames: readonly Buffer[],
+): Promise<readonly [Buffer, Buffer]> {
+  if (frames.length < 2) throw new Error("Seedream gait scaffold requires at least two source phases");
+  const decoded = await Promise.all(frames.map((frame) => (
+    sharp(frame).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
+  )));
+  const anchor = decoded[0]!;
+  let selectedIndex = 1;
+  let selectedScore = -1;
+  for (let index = 1; index < decoded.length; index += 1) {
+    const candidate = decoded[index]!;
+    if (candidate.info.width !== anchor.info.width
+      || candidate.info.height !== anchor.info.height
+      || candidate.info.channels !== anchor.info.channels) {
+      throw new Error("Seedream gait scaffold phases must share one normalized geometry");
+    }
+    let score = 0;
+    for (let offset = 0; offset < anchor.data.length; offset += 1) {
+      score += Math.abs(anchor.data[offset]! - candidate.data[offset]!);
+    }
+    if (score > selectedScore) {
+      selectedScore = score;
+      selectedIndex = index;
+    }
+  }
+  return [frames[0]!, frames[selectedIndex]!];
+}
+
 async function wait(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) throw signal.reason ?? new DOMException("Aborted", "AbortError");
   await new Promise<void>((resolve, reject) => {
@@ -415,6 +633,13 @@ export function codexPetImageRetryDelayMs(attempt: number, env: NodeJS.ProcessEn
   return Math.min(max, base * 3 ** Math.max(0, attempt - 1));
 }
 
+export function codexPetImageMaxAttempts(env: NodeJS.ProcessEnv): number {
+  const configured = Number(env.CODEX_PET_IMAGE_MAX_ATTEMPTS);
+  return Number.isInteger(configured) && configured >= 1
+    ? Math.min(3, configured)
+    : 3;
+}
+
 export async function generateCodexPetVisual(input: {
   readonly prompt: string;
   readonly model?: string;
@@ -432,7 +657,14 @@ export async function generateCodexPetVisual(input: {
   const fetchFn = input.fetchFn ?? fetch;
   const requestedModel = input.model?.trim() || GPT_IMAGE_MODEL;
   const config = loadImageGenerationConfigForModel(requestedModel, env);
-  const maxAttempts = Math.max(1, input.maxAttempts ?? 3);
+  const prompt = adaptCodexPetPromptForModel(input.prompt, requestedModel);
+  // A final real verification can cap provider attempts at one without
+  // changing the normal production retry policy. Explicit per-job limits
+  // (for example the direction approval gate) may only reduce this cap.
+  const maxAttempts = Math.max(1, Math.min(
+    input.maxAttempts ?? 3,
+    codexPetImageMaxAttempts(env),
+  ));
   // Compact deterministic guidance before entering the retry loop.  Without
   // this normalization, direction rows (which carry canonical, cardinal,
   // previous-row and layout references) would send four or five `image[]`
@@ -446,7 +678,7 @@ export async function generateCodexPetVisual(input: {
       const provider = references.length > 0
         ? await callImageEditDetailed({
             config,
-            prompt: input.prompt,
+            prompt,
             referenceImages: references,
             size: input.size ?? "1536x1024",
             quality: input.quality ?? "low",
@@ -457,7 +689,7 @@ export async function generateCodexPetVisual(input: {
           })
         : await callImageGenerationDetailed({
             config,
-            prompt: input.prompt,
+            prompt,
             size: input.size ?? "1024x1024",
             quality: input.quality ?? "low",
             outputFormat: "png",
@@ -467,9 +699,14 @@ export async function generateCodexPetVisual(input: {
           });
       assertCodexPetImageModel(provider, requestedModel);
       const binary = await generatedImageBuffer(provider, fetchFn, input.signal);
-      const metadata = await sharp(binary.buffer, { limitInputPixels: 40_000_000 }).metadata();
+      const normalized = await normalizeSeedreamChromaMatte(binary.buffer, input.prompt, requestedModel);
+      const output = {
+        buffer: normalized.buffer,
+        mime: normalized.mime || binary.mime,
+      };
+      const metadata = await sharp(output.buffer, { limitInputPixels: 40_000_000 }).metadata();
       if (!metadata.width || !metadata.height) throw new Error("image provider returned an unreadable raster");
-      return { ...binary, provider: { ...provider, actualSize: `${metadata.width}x${metadata.height}` } };
+      return { ...output, provider: { ...provider, actualSize: `${metadata.width}x${metadata.height}` } };
     } catch (error) {
       lastError = error;
       if (error instanceof CodexPetImageModelMismatchError) throw error;
@@ -491,6 +728,56 @@ function textFromMessage(message: Anthropic.Message | string): string {
   return parsed.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("").trim();
 }
 
+function retryableCodexPetVisualError(error: unknown): boolean {
+  if (error instanceof CodexPetModelContractError) return false;
+  if (!error || typeof error !== "object") return false;
+  const record = error as { name?: unknown; status?: unknown; code?: unknown };
+  const name = typeof record.name === "string" ? record.name.toLowerCase() : "";
+  const code = typeof record.code === "string" ? record.code.toLowerCase() : "";
+  const status = typeof record.status === "number" ? record.status : null;
+  if (status !== null) return status === 408 || status === 409 || status === 429 || status >= 500;
+  return name.includes("connection")
+    || name.includes("timeout")
+    || code.includes("timeout")
+    || ["econnreset", "econnrefused", "enotfound", "eai_again"].includes(code);
+}
+
+function codexPetVisualRetryDelayMs(attempt: number, env: NodeJS.ProcessEnv): number {
+  const configured = Number(env.CODEX_PET_VISUAL_RETRY_BASE_MS);
+  const base = Number.isFinite(configured) && configured >= 0 ? Math.min(30_000, configured) : 5_000;
+  return Math.min(30_000, base * 3 ** Math.max(0, attempt - 1));
+}
+
+async function createCodexPetVisualMessage(
+  visual: ReturnType<typeof codexPetVisualClient>,
+  params: Parameters<Anthropic["messages"]["create"]>[0],
+  options: {
+    readonly env: NodeJS.ProcessEnv;
+    readonly signal?: AbortSignal;
+    readonly timeout: number;
+  },
+): Promise<Anthropic.Message | string> {
+  const configuredAttempts = Number(options.env.CODEX_PET_VISUAL_MAX_ATTEMPTS);
+  const maxAttempts = Number.isInteger(configuredAttempts) && configuredAttempts > 0
+    ? Math.min(3, configuredAttempts)
+    : 3;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await visual.client.messages.create(params, {
+        signal: options.signal,
+        timeout: options.timeout,
+        maxRetries: 0,
+      }) as Anthropic.Message | string;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || options.signal?.aborted || !retryableCodexPetVisualError(error)) throw error;
+      await wait(codexPetVisualRetryDelayMs(attempt, options.env), options.signal);
+    }
+  }
+  throw lastError;
+}
+
 export async function runCodexPetVisualQa(input: {
   readonly images: readonly { readonly buffer: Buffer; readonly mime?: string }[];
   readonly prompt: string;
@@ -505,13 +792,12 @@ export async function runCodexPetVisualQa(input: {
     source: { type: "base64", media_type: image.mime ?? "image/png", data: image.buffer.toString("base64") },
   }));
   blocks.push({ type: "text", text: input.prompt });
-  const raw = await visual.client.messages.create({
+  const message = await createCodexPetVisualMessage(visual, {
     model: visual.requestedModel,
     max_tokens: 1200,
     temperature: 0,
     messages: [{ role: "user", content: blocks as unknown as Anthropic.MessageParam["content"] }],
-  }, { signal: input.signal, timeout: 180_000 });
-  const message = raw as Anthropic.Message | string;
+  }, { env, signal: input.signal, timeout: 180_000 });
   return {
     ...normalizeQaVerdict(parseJsonObject(textFromMessage(message))),
     modelProvenance: modelProvenance(message, visual.requestedModel, visual.route),
@@ -554,7 +840,7 @@ export async function generateCodexPetLookMechanics(input: {
 }): Promise<string> {
   const env = input.env ?? process.env;
   const visual = codexPetVisualClient(env, input.client);
-  const raw = await visual.client.messages.create({
+  const message = await createCodexPetVisualMessage(visual, {
     model: visual.requestedModel,
     max_tokens: 500,
     temperature: 0.2,
@@ -562,8 +848,7 @@ export async function generateCodexPetLookMechanics(input: {
       { type: "image", source: { type: "base64", media_type: "image/png", data: input.reference.toString("base64") } },
       { type: "text", text: input.prompt },
     ] }],
-  }, { signal: input.signal, timeout: 120_000 });
-  const message = raw as Anthropic.Message | string;
+  }, { env, signal: input.signal, timeout: 120_000 });
   const provenance = modelProvenance(message, visual.requestedModel, visual.route);
   input.onModelProvenance?.(provenance);
   const text = textFromMessage(message).replace(/\s+/g, " ").trim();
@@ -620,13 +905,12 @@ Character brief (semantic context only; never use it to redesign the canonical a
 
 Use these exact labeled fields in one short paragraph: 头、耳、眼、嘴、四肢、尾巴、固定花纹、可动特征、歧义. Explicitly distinguish eyes, paws/feet and mouth from decorative markings; state 数量、位置、颜色、连接关系 or 不可见/无 when applicable. Fixed markings must describe count and topology. 可动特征 is only a permission list: a feature may move when the requested action naturally needs it, but it is not required to move in every animation or every frame. A state is not defective merely because an allowed movable feature remains still. Use the original references and brief only to resolve the semantic identity of ambiguous visible canonical features. Put genuinely uncertain interpretations only under 歧义. Do not invent hidden anatomy, new props, markdown, JSON, or production instructions.` },
   ] as unknown as Anthropic.MessageParam["content"];
-  const raw = await visual.client.messages.create({
+  const message = await createCodexPetVisualMessage(visual, {
     model: visual.requestedModel,
     max_tokens: 650,
     temperature: 0,
     messages: [{ role: "user", content }],
-  }, { signal: input.signal, timeout: 120_000 });
-  const message = raw as Anthropic.Message | string;
+  }, { env, signal: input.signal, timeout: 120_000 });
   const provenance = modelProvenance(message, visual.requestedModel, visual.route);
   input.onModelProvenance?.(provenance);
   const text = textFromMessage(message).replace(/\s+/g, " ").trim();
@@ -648,7 +932,7 @@ async function oneBlindDirectionReview(input: {
   readonly identityGuide?: string;
 }): Promise<{ pairs: readonly BlindDirectionPairVerdict[]; modelProvenance: CodexPetVisualModelProvenance }> {
   const visual = codexPetVisualClient(input.env, input.client);
-  const raw = await visual.client.messages.create({
+  const message = await createCodexPetVisualMessage(visual, {
     model: visual.requestedModel,
     max_tokens: 2200,
     temperature: 0,
@@ -656,8 +940,7 @@ async function oneBlindDirectionReview(input: {
       { type: "image", source: { type: "base64", media_type: "image/png", data: input.sheet.toString("base64") } },
       { type: "text", text: `Classify every unlabeled Codex-pet A/B pair. Use only the axis named in each row. For horizontal use screen-left, screen-right, or ambiguous. For vertical use up, down, or ambiguous. Never infer from A/B order.${input.identityGuide?.trim() ? ` Approved canonical anatomy guide: ${input.identityGuide.trim()} Use it only to identify the character's real eyes, mouth and movable anatomy instead of mistaking fixed markings for gaze features. A feature listed as movable is merely allowed to move when a state needs it; do not require it to move in every animation or frame.` : ""} Return only {\"pairs\":[{\"pair\":\"horizontal-1\",\"A\":\"screen-left\",\"B\":\"screen-right\",\"reason\":\"visible landmark\"}]} and include every shown pair.` },
     ] }],
-  }, { signal: input.signal, timeout: 180_000 });
-  const message = raw as Anthropic.Message | string;
+  }, { env: input.env, signal: input.signal, timeout: 180_000 });
   const parsed = parseJsonObject(textFromMessage(message));
   const pairs = parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).pairs)
     ? (parsed as { pairs: unknown[] }).pairs
@@ -739,7 +1022,7 @@ export async function runLabeledDirectionSemantics(input: {
 }): Promise<readonly DirectionSemanticVerdict[]> {
   const env = input.env ?? process.env;
   const visual = codexPetVisualClient(env, input.client);
-  const raw = await visual.client.messages.create({
+  const message = await createCodexPetVisualMessage(visual, {
     model: visual.requestedModel,
     max_tokens: 3000,
     temperature: 0,
@@ -747,8 +1030,7 @@ export async function runLabeledDirectionSemantics(input: {
       { type: "image", source: { type: "base64", media_type: "image/png", data: input.sheet.toString("base64") } },
       { type: "text", text: `Review the labeled neutral plus 16 Codex-pet look poses at displayed size as one clockwise loop. Expected order: ${input.expectedDirections.join(", ")}. ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT}${input.identityGuide?.trim() ? ` Approved canonical anatomy guide: ${input.identityGuide.trim()} Use it to identify the real eyes, mouth and movable anatomy; do not interpret fixed markings as gaze features. A feature listed as movable is merely allowed to move when a state needs it; do not require it to move in every animation or frame.` : ""} Return only {"directions":[{"direction":"000","verdict":"pass|warning|fail","expected":"up","observed":"...","horizontalEvidence":"...","verticalEvidence":"...","reason":"..."}]}. Include every direction exactly once. Fail wrong/ambiguous cardinals, wrong quadrant, reversal, visible snap, identity/scale/registration change. Subtle intermediate cues may be warnings.` },
     ] }],
-  }, { signal: input.signal, timeout: 180_000 });
-  const message = raw as Anthropic.Message | string;
+  }, { env, signal: input.signal, timeout: 180_000 });
   const provenance = modelProvenance(message, visual.requestedModel, visual.route);
   const parsed = parseJsonObject(textFromMessage(message));
   const rawDirections = parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).directions)

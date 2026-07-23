@@ -42,6 +42,7 @@ import {
   type PetRowSpec,
 } from "@ai-assistant/codex-pet-pipeline";
 import {
+  DOUBAO_IMAGE_MODEL,
   GPT_IMAGE_MODEL,
   classifyImageGenerationError,
   type ImageBinaryInput,
@@ -72,6 +73,8 @@ import {
   generateCodexPetIdentityGuide,
   generateCodexPetLookMechanics,
   generateCodexPetVisual,
+  createSeedreamPoseBoardScaffold,
+  selectSeedreamGaitScaffoldVariants,
   codexPetVisualQaConsensusPasses,
   codexPetVisualQaVerdictPasses,
   resolveCodexPetVisualQaModel,
@@ -103,7 +106,7 @@ const WORKER_ID = `codex-pet-${process.pid}-${randomUUID().slice(0, 8)}`;
 const DEFAULT_STALE_RUN_MS = 15 * 60_000;
 const IDENTITY_GUIDE_VERSION = 2;
 const BOARD_JOB_INPUT_SCHEMA_VERSION = "codex-pet-board-input-v2";
-const BOARD_JOB_PROMPT_VERSION = "codex-pet-board-prompt-v3";
+export const CODEX_PET_BOARD_PROMPT_VERSION = "codex-pet-board-prompt-v6";
 const CODEX_PET_RECOVERY_SCHEMA_VERSION = "codex-pet-recovery-v1";
 
 /**
@@ -190,6 +193,7 @@ interface RunnerContext extends CodexPetRunnerDeps {
   readonly runId: string;
   readonly imageModel: string;
   readonly visualQaModel: string;
+  readonly maxBoardAttempts: number;
   readonly identity: CodexPetVisualIdentity;
   readonly referenceAssetIds: readonly string[];
   readonly userReferences: readonly ImageBinaryInput[];
@@ -288,7 +292,7 @@ function poseBoardRepairPrompt(errors: readonly string[]): string {
     } else if (error.includes("empty-frame")) {
       hints.add("Restore every required pose; no used slot may be empty.");
     } else if (error.includes("multiple-foreground-components")) {
-      hints.add("Keep each pose as one connected silhouette with no detached pieces or effects.");
+      hints.add("Redraw every slot as exactly one complete connected character. Join the head, torso, arms, hands, legs, feet, ears, tail, antennae and props through continuous opaque character pixels with no chroma gaps at any joint. Remove every detached sweat bead, action mark, punctuation shape, droplet, sparkle, dust mark or other floating effect.");
     } else if (error.includes("possible-transparent-holes")) {
       hints.add("Remove accidental holes or sliced seams through the filled character body.");
     } else if (error.startsWith("unused-slot-")) {
@@ -306,6 +310,24 @@ function poseBoardRepairPrompt(errors: readonly string[]): string {
     }
   }
   return [...hints].join(" ") || errors.join("; ");
+}
+
+/**
+ * Seedream image edits tend to preserve and amplify a failed board's split
+ * anatomy and broken grid. Repair it from the canonical identity plus the
+ * clean layout guide instead of feeding the rejected pixels back to the model.
+ */
+export function codexPetShouldAttachFailedBoardForRepair(imageModel: string): boolean {
+  return imageModel !== DOUBAO_IMAGE_MODEL;
+}
+
+export function codexPetRepairGenerationReferences(
+  imageModel: string,
+  references: readonly ImageBinaryInput[],
+  previousFailedBoard: Buffer | null,
+): readonly ImageBinaryInput[] {
+  if (!previousFailedBoard || !codexPetShouldAttachFailedBoardForRepair(imageModel)) return references;
+  return [...references, imageInput(previousFailedBoard, "image/png", "previous-failed-pose-board.png")];
 }
 
 function jumpingQaEvidence(extracted: ExtractPoseBoardResult): string {
@@ -813,6 +835,23 @@ async function ensureJob(
   return job;
 }
 
+export function codexPetMaxBoardAttempts(
+  env: NodeJS.ProcessEnv,
+  snapshottedMaxAttempts: unknown,
+): number {
+  const snapshotted = Number(snapshottedMaxAttempts);
+  const durableLimit = Number.isSafeInteger(snapshotted) && snapshotted >= 1 && snapshotted <= 3
+    ? snapshotted
+    : 3;
+  const configured = Number(env.CODEX_PET_MAX_BOARD_ATTEMPTS);
+  const runtimeLimit = Number.isSafeInteger(configured) && configured >= 1 && configured <= 3
+    ? configured
+    : 3;
+  // Runtime configuration is a safety cap only. It cannot silently grant a
+  // resumed run more attempts than its durable continuation contract allows.
+  return Math.min(durableLimit, runtimeLimit);
+}
+
 async function startJob(ctx: RunnerContext, job: CodexPetJob, attempt: number, progress: number, message: string): Promise<CodexPetJob> {
   await checkCancelled(ctx);
   const retrying = attempt > 1;
@@ -975,7 +1014,14 @@ async function loadArtifactsInOrder(ctx: RunnerContext, ids: readonly string[]):
 
 async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number): Promise<{ artifact: CodexPetArtifact; buffer: Buffer }> {
   const key = `base-candidate-${candidateIndex}`;
-  let job = await ensureJob(ctx, key, "base_candidate", [], { candidateIndex, referenceAssetIds: ctx.referenceAssetIds });
+  let job = await ensureJob(
+    ctx,
+    key,
+    "base_candidate",
+    [],
+    { candidateIndex, referenceAssetIds: ctx.referenceAssetIds },
+    ctx.maxBoardAttempts,
+  );
   if (job.status === "completed" && job.outputArtifactIds.length === 1) {
     const loaded = await loadArtifactsInOrder(ctx, job.outputArtifactIds);
     return { artifact: loaded.artifacts[0]!, buffer: loaded.buffers[0]! };
@@ -990,6 +1036,7 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
       quality: "low",
       env: ctx.env,
       signal: ctx.signal,
+      maxAttempts: ctx.maxBoardAttempts === 1 ? 1 : undefined,
       onAttempt: (providerAttempt) => recordImageGenerationAttempt(ctx, key, providerAttempt),
       onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", "base_generating", 8, "生图服务暂时不可用，正在重试", {
         transportAttempt,
@@ -1347,7 +1394,7 @@ interface BoardJobInputBinding {
 export function codexPetBoardInputRevision(input: BoardJobInputBinding): string {
   return createHash("sha256").update(JSON.stringify({
     schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
-    promptVersion: BOARD_JOB_PROMPT_VERSION,
+    promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
     inputArtifactIds: [...input.inputArtifactIds],
     columns: input.columns,
     rows: input.rows,
@@ -1363,7 +1410,7 @@ function sameOrderedStrings(left: readonly string[], right: readonly string[]): 
 function boardJobInputPayload(input: BoardJobInputBinding): Prisma.InputJsonObject {
   return {
     schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
-    promptVersion: BOARD_JOB_PROMPT_VERSION,
+    promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
     inputRevision: codexPetBoardInputRevision(input),
     inputArtifactIds: [...input.inputArtifactIds],
     columns: input.columns,
@@ -1448,7 +1495,7 @@ async function bindBoardJobInput(
           input: {
             ...freshInput,
             schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
-            promptVersion: BOARD_JOB_PROMPT_VERSION,
+            promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
             inputRevision: currentRevision,
           } as Prisma.InputJsonValue,
         },
@@ -1575,7 +1622,14 @@ async function runBoardJob(ctx: RunnerContext, input: {
   readonly force?: boolean;
   readonly repairHint?: string;
 }): Promise<BoardJobResult> {
-  let job = await ensureJob(ctx, input.key, input.kind, input.dependencies, { columns: input.columns, rows: input.rows, frameCount: input.frameCount });
+  let job = await ensureJob(
+    ctx,
+    input.key,
+    input.kind,
+    input.dependencies,
+    { columns: input.columns, rows: input.rows, frameCount: input.frameCount },
+    ctx.maxBoardAttempts,
+  );
   job = await bindBoardJobInput(ctx, job, {
     inputArtifactIds: input.inputArtifactIds,
     columns: input.columns,
@@ -1620,7 +1674,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
     && (input.qaKind === "directions" || workflowStage === "validating");
   for (let attempt = firstAttempt; attempt <= job.maxAttempts; attempt += 1) {
     await checkCancelled(ctx);
-    job = await startJob(ctx, job, attempt, input.progress, `${input.qaContext}${attempt > 1 ? `（自动修复 ${attempt - 1}/2）` : ""}`);
+    job = await startJob(ctx, job, attempt, input.progress, `${input.qaContext}${attempt > 1 ? `（自动修复 ${attempt - 1}/${job.maxAttempts}）` : ""}`);
     // Establish a durable running job before consuming the one-call budget.
     // If the job transition itself fails, no approval is lost because no
     // provider request could have started. A missing budget still raises the
@@ -1628,20 +1682,22 @@ async function runBoardJob(ctx: RunnerContext, input: {
     // by the outer runner without contacting the model.
     if (requiresSingleCallApproval) await consumeImageGenerationApproval(ctx, input.key);
     try {
+      const repairReferences = codexPetRepairGenerationReferences(ctx.imageModel, input.references, previousFailedBoard);
+      const attachPreviousFailedBoard = repairReferences.length > input.references.length;
       const generated = await ctx.generate({
         prompt: `${input.prompt}${repairRequirements.length > 0
           ? `\n\nRepair the complete pose group. Every numbered requirement is cumulative and mandatory; preserve requirements that already passed:\n${repairRequirements.map((requirement, index) => `${index + 1}. ${requirement}`).join("\n")}`
-          : ""}${previousFailedBoard
+          : ""}${attachPreviousFailedBoard
           ? "\nAn attached previous failed pose board is diagnostic guidance only. Preserve its already-passing identity, grid clearance, connectivity, scale and baseline while correcting every numbered failure; still redraw the complete coherent group rather than copying broken cells."
-          : ""}`,
-        references: previousFailedBoard
-          ? [...input.references, imageInput(previousFailedBoard, "image/png", "previous-failed-pose-board.png")]
-          : input.references,
+          : previousFailedBoard
+            ? "\nRedraw the complete pose group from the approved canonical character and clean layout references only. The rejected board is deliberately not attached because its broken anatomy or grid must not be inherited. Preserve the exact requested columns, rows, row-major frame order, scale and baseline while satisfying every numbered repair requirement."
+            : ""}`,
+        references: repairReferences,
         size: "1536x1024",
         quality: "low",
         env: ctx.env,
         signal: ctx.signal,
-        maxAttempts: requiresSingleCallApproval ? 1 : undefined,
+        maxAttempts: requiresSingleCallApproval || ctx.maxBoardAttempts === 1 ? 1 : undefined,
         onAttempt: (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, providerAttempt),
         onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", workflowStage, input.progress, "上游生图调用重试中", {
           transportAttempt,
@@ -1659,7 +1715,13 @@ async function runBoardJob(ctx: RunnerContext, input: {
         name: `${input.qaContext}姿势板 · 第 ${attempt} 次`,
         buffer: generated.buffer,
         mime: generated.mime,
-        metadata: { ...providerMetadata(generated.provider), attempt, jobKey: input.key },
+        metadata: {
+          ...providerMetadata(generated.provider),
+          attempt,
+          jobKey: input.key,
+          promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+          inputRevision: asRecord(job.input).inputRevision,
+        },
         expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
       });
       await persistProviderMetadata(ctx, job, generated.provider);
@@ -1838,7 +1900,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
         if (requiresSingleCallApproval) {
           throw new CodexPetImageApprovalRequiredError(input.key, `${input.qaContext}未通过检查，需要确认后才能重新生成`);
         }
-        if (attempt >= job.maxAttempts) throw new Error(`${input.qaContext}经两轮自动修复后仍未通过：${lastError}`);
+        if (attempt >= job.maxAttempts) throw new Error(`${input.qaContext}经 ${job.maxAttempts} 次真实调用后仍未通过：${lastError}`);
         continue;
       }
       // Only now has this image passed both deterministic extraction and the
@@ -2152,14 +2214,90 @@ async function runStandardRow(
   workflowStage: "standard_generating" | "validating" = "standard_generating",
 ): Promise<BoardJobResult> {
   const spec = petRowSpec(state);
-  const layout = await createLayoutGuide({ columns: spec.boardColumns, rows: spec.boardRows, frameCount: spec.frameCount, title: `${state} ${spec.frameCount}-pose board` });
+  let layout: Buffer | null = null;
+  let scaffoldArtifactId: string | null = null;
+  if (ctx.imageModel === DOUBAO_IMAGE_MODEL) {
+    let poseVariants: readonly Buffer[] | undefined;
+    let variantSequence: readonly number[] | undefined;
+    // A targeted recovery may use the latest already-paid failed board as two
+    // alternating construction phases. The snapshot flag prevents an old
+    // completed board from changing its own input revision on a normal resume.
+    if (state === "running-right") {
+      const retryState = await ctx.prisma.codexPetRun.findFirst({
+        where: { id: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId },
+        select: { inputSnapshot: true },
+      });
+      const targeted = asRecord(asRecord(retryState?.inputSnapshot).targetedBoardRetry);
+      const retryEnabled = targeted.state === "running-right" && targeted.status === "prepared";
+      if (retryEnabled) {
+        const priorJob = await ctx.prisma.codexPetJob.findFirst({
+          where: { runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, key: "row-running-right" },
+          select: { id: true },
+        });
+        const priorBoard = priorJob
+          ? await ctx.prisma.codexPetArtifact.findFirst({
+              where: {
+                runId: ctx.runId,
+                projectId: ctx.project.id,
+                userId: ctx.project.userId,
+                jobId: priorJob.id,
+                kind: "pose_board",
+                status: "ready",
+              },
+              orderBy: { createdAt: "desc" },
+            })
+          : null;
+        const expectedArtifactId = typeof targeted.sourceBoardArtifactId === "string"
+          ? targeted.sourceBoardArtifactId
+          : "";
+        if (priorBoard && priorBoard.id === expectedArtifactId) {
+          const priorBuffer = await ctx.artifacts.load(priorBoard);
+          const priorExtracted = await extractPoseBoard(priorBuffer, {
+            columns: spec.boardColumns,
+            rows: spec.boardRows,
+            frameCount: spec.frameCount,
+            chromaKey: ctx.identity.chromaKey,
+            requireUnusedSlotsEmpty: true,
+          });
+          if (priorExtracted.ok && priorExtracted.frames.length >= 5) {
+            poseVariants = await selectSeedreamGaitScaffoldVariants(priorExtracted.frames);
+            variantSequence = [0, 1, 0, 1, 0, 1, 0, 1];
+            scaffoldArtifactId = priorBoard.id;
+          }
+        }
+      }
+    }
+    // A repeated canonical scaffold is useful for the quiet idle row, but it
+    // makes Seedream copy one frozen pose into every slot of a dynamic row.
+    // Dynamic rows already receive the canonical image separately; omitting
+    // the repeated scaffold leaves the action prompt responsible for phase
+    // changes instead of supplying six/eight static exemplars to copy.
+    if (state === "idle" || poseVariants) {
+      layout = await createSeedreamPoseBoardScaffold({
+        canonical: canonical.buffer,
+        ...(poseVariants ? { poseVariants, variantSequence } : {}),
+        chromaKey: ctx.identity.chromaKey,
+        columns: spec.boardColumns,
+        rows: spec.boardRows,
+        frameCount: spec.frameCount,
+      });
+    }
+  } else {
+    layout = await createLayoutGuide({ columns: spec.boardColumns, rows: spec.boardRows, frameCount: spec.frameCount, title: `${state} ${spec.frameCount}-pose board` });
+  }
+  const inputArtifactIds = scaffoldArtifactId
+    ? [canonical.artifact.id, scaffoldArtifactId]
+    : [canonical.artifact.id];
   return runBoardJob(ctx, {
     key: `row-${state}`,
     kind: "standard_row",
     dependencies: state === "running-left" ? ["row-running-right"] : ["identity-guide"],
-    inputArtifactIds: [canonical.artifact.id],
+    inputArtifactIds,
     prompt: buildStandardRowPrompt(ctx.identity, state),
-    references: [imageInput(canonical.buffer, canonical.artifact.mime, "canonical-base.png"), imageInput(layout, "image/png", `${state}-layout.png`)],
+    references: [
+      imageInput(canonical.buffer, canonical.artifact.mime, "canonical-base.png"),
+      ...(layout ? [imageInput(layout, "image/png", ctx.imageModel === DOUBAO_IMAGE_MODEL ? `${state}-seedream-scaffold.png` : `${state}-layout.png`)] : []),
+    ],
     columns: spec.boardColumns,
     rows: spec.boardRows,
     frameCount: spec.frameCount,
@@ -3509,12 +3647,14 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   ctx.identity.canonicalGuide = await getIdentityGuide(ctx, selected);
 
   await stage(ctx, "standard_generating", 16, "正在制作 9 组标准动作");
-  let [idle, runningRight] = await mapWithConcurrency([
-    { state: "idle" as const, progress: 20 },
-    { state: "running-right" as const, progress: 25 },
-  ], visualConcurrency, (item, _index, signal) => (
-    runStandardRow({ ...ctx, signal }, item.state, selected, item.progress)
-  ), ctx.signal);
+  // Idle is the cheapest identity/continuity gate for the whole standard
+  // stage. Keep it ahead of running-right so a bad canonical micro-loop does
+  // not spend a second real image call on a sibling action that will be
+  // discarded immediately. The remaining rows start only after both critical
+  // gates pass.
+  let idle = await runStandardRow(ctx, "idle", selected, 20);
+  await resumeStageIfRepairing(ctx, "standard_generating", 25, "正在制作 9 组标准动作");
+  let runningRight = await runStandardRow(ctx, "running-right", selected, 25);
   await resumeStageIfRepairing(ctx, "standard_generating", 25, "正在制作 9 组标准动作");
   let runningLeft: BoardJobResult;
   if (runningRight.mirrorSafe) {
@@ -3530,9 +3670,13 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   await resumeStageIfRepairing(ctx, "standard_generating", 30, "正在制作 9 组标准动作");
   const remainingStates = ["waving", "jumping", "failed", "waiting", "running", "review"] as const;
   const remaining = new Map<(typeof remainingStates)[number], BoardJobResult>();
-  const remainingResults = await mapWithConcurrency(remainingStates, visualConcurrency, (stateName, index, signal) => (
-    runStandardRow({ ...ctx, signal }, stateName, selected, 35 + index * 5)
-  ), ctx.signal);
+  // Keep the rest of the standard graph ordered as well. This prevents five
+  // unrelated paid calls from being in flight when one action fails QA, which
+  // is especially important for a user-requested single acceptance run.
+  const remainingResults: BoardJobResult[] = [];
+  for (const [index, stateName] of remainingStates.entries()) {
+    remainingResults.push(await runStandardRow(ctx, stateName, selected, 35 + index * 5));
+  }
   await resumeStageIfRepairing(ctx, "standard_generating", 60, "9 组标准动作已通过逐组检查，正在组装中间图集");
   remainingStates.forEach((stateName, index) => remaining.set(stateName, remainingResults[index]!));
   const frames: PetFramesByState = {
@@ -3551,7 +3695,9 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
 
   await stage(ctx, "direction_generating", 65, "正在制作 16 个观察方向");
   const mechanics = await getLookMechanics(ctx, selected);
-  const cardinalLayout = await createLayoutGuide({ columns: 2, rows: 2, frameCount: 4, title: "Four cardinal look anchors: up, right, down, left" });
+  const cardinalLayout = ctx.imageModel === DOUBAO_IMAGE_MODEL
+    ? await createSeedreamPoseBoardScaffold({ canonical: selected.buffer, chromaKey: ctx.identity.chromaKey, columns: 2, rows: 2, frameCount: 4 })
+    : await createLayoutGuide({ columns: 2, rows: 2, frameCount: 4, title: "Four cardinal look anchors: up, right, down, left" });
   let cardinals = await runBoardJob(ctx, {
     key: "look-cardinals",
     kind: "look_cardinals",
@@ -3569,13 +3715,15 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   });
   let cardinalAnchor = await createApprovedCardinalAnchor(ctx, cardinals);
   await resumeStageIfRepairing(ctx, "direction_generating", 68, "四个观察方向锚点已通过，正在生成第一组方向");
-  const lookLayout = await createLayoutGuide({
-    columns: 4,
-    rows: 2,
-    frameCount: 8,
-    title: "Eight clockwise look directions · follow the row-major frame numbers",
-    slotLabels: ["1", "2", "3", "4", "5", "6", "7", "8"],
-  });
+  const lookLayout = ctx.imageModel === DOUBAO_IMAGE_MODEL
+    ? await createSeedreamPoseBoardScaffold({ canonical: selected.buffer, chromaKey: ctx.identity.chromaKey, columns: 4, rows: 2, frameCount: 8 })
+    : await createLayoutGuide({
+        columns: 4,
+        rows: 2,
+        frameCount: 8,
+        title: "Eight clockwise look directions · follow the row-major frame numbers",
+        slotLabels: ["1", "2", "3", "4", "5", "6", "7", "8"],
+      });
   let lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
   let lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
   let lookA = await runBoardJob(ctx, {
@@ -3876,7 +4024,8 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     await resumeStageIfRepairing(ctx, "validating", 84, "方向修复已通过，正在继续最终质量检查");
   };
 
-  for (let directionAttempt = 1; directionAttempt <= 3; directionAttempt += 1) {
+  const directionMaxAttempts = 3;
+  for (let directionAttempt = 1; directionAttempt <= directionMaxAttempts; directionAttempt += 1) {
     requireApprovedRegisteredRow(registeredLookA, "最终组装第一组观察方向");
     requireApprovedRegisteredRow(registeredLookB, "最终组装第二组观察方向");
     const registrationErrors = [
@@ -3908,11 +4057,11 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
     });
     if (!directionRegistration.ok) {
-      if (directionAttempt >= 3) {
-        throw new Error(`16 个观察方向中立帧锁定注册经两轮自动修复后仍未通过：${directionRegistration.errors.join("；")}`);
+      if (directionAttempt >= directionMaxAttempts) {
+        throw new Error(`16 个观察方向中立帧锁定注册经 ${directionMaxAttempts} 次尝试后仍未通过：${directionRegistration.errors.join("；")}`);
       }
       const repairHint = directionRegistration.errors.join("; ") || "keep all 16 direction poses at the approved neutral body scale, lower-body anchor and baseline";
-      await emit(ctx, "run.repairing", "repairing", 82, `方向中立帧锁定注册自动修复 ${directionAttempt}/2`, { retryKind: "visual", failures: directionRegistration.errors });
+      await emit(ctx, "run.repairing", "repairing", 82, `方向中立帧锁定注册自动修复 ${directionAttempt}/${directionMaxAttempts - 1}`, { retryKind: "visual", failures: directionRegistration.errors });
       await regenerateDirectionRows(repairHint);
       continue;
     }
@@ -3943,11 +4092,11 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     });
     const semanticFailures = semantics.filter((item) => item.verdict === "fail");
     if (!(blindValidation.ok && semanticFailures.length === 0)) {
-      if (directionAttempt >= 3) {
-        throw new Error(`方向质检经两轮自动修复后仍未通过：${[...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}:${item.reason}`)].join("；")}`);
+      if (directionAttempt >= directionMaxAttempts) {
+        throw new Error(`方向质检经 ${directionMaxAttempts} 次尝试后仍未通过：${[...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}:${item.reason}`)].join("；")}`);
       }
       const repairHint = [...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}: ${item.reason}`)].join("; ");
-      await emit(ctx, "run.repairing", "repairing", 84, `方向动作自动修复 ${directionAttempt}/2`, { retryKind: "visual", failures: repairHint });
+      await emit(ctx, "run.repairing", "repairing", 84, `方向动作自动修复 ${directionAttempt}/${directionMaxAttempts - 1}`, { retryKind: "visual", failures: repairHint });
       await regenerateDirectionRows(repairHint);
       continue;
     }
@@ -3980,13 +4129,13 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     });
     assertCodexPetVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
     if (codexPetVisualQaVerdictPasses(finalQa)) break;
-    if (directionAttempt >= 3) {
-      throw new Error(`最终独立视觉质检经两轮自动修复后仍未通过：${finalQa.failures.join("；") || "角色一致性或动作连续性失败"}`);
+    if (directionAttempt >= directionMaxAttempts) {
+      throw new Error(`最终独立视觉质检经 ${directionMaxAttempts} 次尝试后仍未通过：${finalQa.failures.join("；") || "角色一致性或动作连续性失败"}`);
     }
     const repairRows = repairRowsFromFinalQa(finalQa);
     finalRepairHistory.push({ attempt: directionAttempt, rows: repairRows, failures: finalQa.failures });
     const repairHint = finalQa.repairPrompt || finalQa.failures.join("；") || "修复指定动作组的身份、动作语义、节奏与连续性";
-    await emit(ctx, "run.repairing", "repairing", 88, `最终视觉质检动作组修复 ${directionAttempt}/2`, { retryKind: "visual", rows: repairRows, failures: finalQa.failures });
+    await emit(ctx, "run.repairing", "repairing", 88, `最终视觉质检动作组修复 ${directionAttempt}/${directionMaxAttempts - 1}`, { retryKind: "visual", rows: repairRows, failures: finalQa.failures });
 
     const standardRowsSet = new Set(repairRows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
     // The two travel rows form one semantic pair.  If the right-facing source
@@ -4251,6 +4400,9 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   const snapshottedVisualQaModel = typeof snapshot.visualQaModel === "string" ? snapshot.visualQaModel.trim() : "";
   const visualQaModel = resolveCodexPetVisualQaModel(env, snapshottedVisualQaModel || run.visualQaModel || undefined);
   const imageModel = snapshottedImageModel || run.requestedModel;
+  const failedContinuation = asRecord(snapshot.failedContinuation);
+  const snapshottedMaxBoardAttempts = failedContinuation.maxBoardAttemptsPerJob;
+  const maxBoardAttempts = codexPetMaxBoardAttempts(env, snapshottedMaxBoardAttempts);
   // All visual calls in this run use the snapshotted project choice. Keeping
   // it in the context environment lets the existing visual helpers and their
   // injected test clients share one durable route without consulting the
@@ -4349,6 +4501,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     runId: run.id,
     imageModel,
     visualQaModel,
+    maxBoardAttempts,
     referenceAssetIds,
     identity: {
       ...identity,

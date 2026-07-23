@@ -1,0 +1,256 @@
+{
+  "deterministic": {
+    "diagnostics": [
+      {
+        "index": 0,
+        "sourceBounds": {
+          "left": 184,
+          "top": 129,
+          "right": 665,
+          "bottom": 756,
+          "width": 482,
+          "height": 628
+        },
+        "opaquePixels": 216875,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.6870738373705622,
+        "normalizedBounds": {
+          "left": 30,
+          "top": 24,
+          "right": 161,
+          "bottom": 195,
+          "width": 132,
+          "height": 172
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "sourceBounds": {
+          "left": 188,
+          "top": 132,
+          "right": 667,
+          "bottom": 756,
+          "width": 480,
+          "height": 625
+        },
+        "opaquePixels": 205407,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.7035945012019231,
+        "normalizedBounds": {
+          "left": 31,
+          "top": 25,
+          "right": 161,
+          "bottom": 195,
+          "width": 131,
+          "height": 171
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "sourceBounds": {
+          "left": 180,
+          "top": 133,
+          "right": 649,
+          "bottom": 756,
+          "width": 470,
+          "height": 624
+        },
+        "opaquePixels": 207967,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 0,
+        "chromaCoverage": 0.6999627288276628,
+        "normalizedBounds": {
+          "left": 32,
+          "top": 25,
+          "right": 160,
+          "bottom": 195,
+          "width": 129,
+          "height": 171
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "sourceBounds": {
+          "left": 132,
+          "top": 75,
+          "right": 722,
+          "bottom": 694,
+          "width": 591,
+          "height": 620
+        },
+        "opaquePixels": 247020,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 32695,
+        "chromaCoverage": 0.643962070081361,
+        "normalizedBounds": {
+          "left": 15,
+          "top": 26,
+          "right": 176,
+          "bottom": 195,
+          "width": 162,
+          "height": 170
+        },
+        "errors": [
+          "possible-transparent-holes"
+        ],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "sourceBounds": {
+          "left": 139,
+          "top": 75,
+          "right": 688,
+          "bottom": 693,
+          "width": 550,
+          "height": 619
+        },
+        "opaquePixels": 235356,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 33651,
+        "chromaCoverage": 0.6608482225406804,
+        "normalizedBounds": {
+          "left": 21,
+          "top": 27,
+          "right": 170,
+          "bottom": 195,
+          "width": 150,
+          "height": 169
+        },
+        "errors": [
+          "possible-transparent-holes"
+        ],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "sourceBounds": {
+          "left": 118,
+          "top": 75,
+          "right": 724,
+          "bottom": 694,
+          "width": 607,
+          "height": 620
+        },
+        "opaquePixels": 243772,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 33987,
+        "chromaCoverage": 0.6486253004807693,
+        "normalizedBounds": {
+          "left": 13,
+          "top": 26,
+          "right": 178,
+          "bottom": 195,
+          "width": 166,
+          "height": 170
+        },
+        "errors": [
+          "possible-transparent-holes"
+        ],
+        "warnings": []
+      }
+    ],
+    "unusedSlotOpaquePixels": [],
+    "chroma": [
+      {
+        "removedPixels": 475336,
+        "softenedPixels": 273,
+        "totalPixels": 692224,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 486797,
+        "softenedPixels": 248,
+        "totalPixels": 692224,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 484217,
+        "softenedPixels": 314,
+        "totalPixels": 692224,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 445161,
+        "softenedPixels": 605,
+        "totalPixels": 692224,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 456819,
+        "softenedPixels": 636,
+        "totalPixels": 692224,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 448396,
+        "softenedPixels": 598,
+        "totalPixels": 692224,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      }
+    ],
+    "sourceWidth": 2496,
+    "sourceHeight": 1664,
+    "sharedScale": 0.27347611202635913,
+    "geometry": {
+      "heightRatio": 1.017751479289941,
+      "widthRatio": 1.2868217054263567,
+      "baselineSpreadPixels": 0,
+      "centerSpreadPixels": 0.5,
+      "warnings": []
+    },
+    "jumpingArc": null,
+    "ok": false,
+    "errors": [
+      "frame-3:possible-transparent-holes",
+      "frame-4:possible-transparent-holes",
+      "frame-5:possible-transparent-holes"
+    ],
+    "warnings": []
+  },
+  "visual": {
+    "pass": false,
+    "verdicts": [],
+    "score": 0,
+    "mirrorSafe": false,
+    "warnings": [],
+    "failures": [
+      "frame-3:possible-transparent-holes",
+      "frame-4:possible-transparent-holes",
+      "frame-5:possible-transparent-holes"
+    ]
+  },
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [],
+      "routes": []
+    }
+  }
+}

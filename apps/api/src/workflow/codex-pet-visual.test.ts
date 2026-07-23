@@ -1,7 +1,8 @@
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
-import type { ImageBinaryInput } from "./image-service.js";
-import { assertCodexPetVisualQaRoute, codexPetImageRetryDelayMs, codexPetVisualQaConsensusPasses, generateCodexPetIdentityGuide, generateCodexPetVisual, resolveCodexPetVisualQaModel, runCodexPetVisualQa, runLabeledDirectionSemantics, type PetVisualQaVerdict } from "./codex-pet-visual.js";
+import { extractPoseBoard } from "@ai-assistant/codex-pet-pipeline";
+import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "./image-service.js";
+import { adaptCodexPetPromptForModel, assertCodexPetVisualQaRoute, codexPetImageMaxAttempts, codexPetImageRetryDelayMs, codexPetVisualQaConsensusPasses, createSeedreamPoseBoardScaffold, generateCodexPetIdentityGuide, generateCodexPetVisual, normalizeSeedreamChromaMatte, resolveCodexPetVisualQaModel, runCodexPetVisualQa, runLabeledDirectionSemantics, selectSeedreamGaitScaffoldVariants, type PetVisualQaVerdict } from "./codex-pet-visual.js";
 import { codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 
 async function reference(index: number): Promise<ImageBinaryInput> {
@@ -20,7 +21,213 @@ async function reference(index: number): Promise<ImageBinaryInput> {
   };
 }
 
+async function nearEdgePoseBoard(columns: number, rows: number): Promise<Buffer> {
+  const slotSize = 120;
+  const pose = await sharp({
+    create: {
+      width: 80,
+      height: 80,
+      channels: 4,
+      background: { r: 47, g: 179, b: 68, alpha: 1 },
+    },
+  }).png().toBuffer();
+  const composites = Array.from({ length: columns * rows }, (_, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    return {
+      input: pose,
+      left: column * slotSize + (index % 2 === 0 ? 4 : 36),
+      top: row * slotSize + (index % 2 === 0 ? 36 : 4),
+    };
+  });
+  return sharp({
+    create: {
+      width: columns * slotSize,
+      height: rows * slotSize,
+      channels: 4,
+      background: { r: 229, g: 61, b: 50, alpha: 1 },
+    },
+  }).composite(composites).png().toBuffer();
+}
+
 describe("Codex pet visual generation", () => {
+  it("removes literal chroma tokens from Seedream prompts without changing GPT prompts", async () => {
+    const source = "one pet as a 4 columns × 2 rows pose board on #FF00FF; never gradient the #ff00ff background";
+    expect(adaptCodexPetPromptForModel(source, "gpt-image-2")).toBe(source);
+    const adapted = adaptCodexPetPromptForModel(source, DOUBAO_IMAGE_MODEL);
+    expect(adapted).not.toMatch(/#[0-9a-f]{6}/i);
+    expect(adapted).toContain("flat solid hot-magenta chroma-key background");
+    expect(adapted).toContain("Never draw or print the color name, hex code");
+
+    const output = await sharp({
+      create: { width: 64, height: 64, channels: 4, background: { r: 229, g: 61, b: 50, alpha: 1 } },
+    }).composite([{
+      input: await sharp({ create: { width: 16, height: 16, channels: 4, background: "#7bdc32" } }).png().toBuffer(),
+      left: 24,
+      top: 24,
+    }]).png().toBuffer();
+    const fetchFn = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { prompt?: string };
+      expect(body.prompt).not.toMatch(/#[0-9a-f]{6}/i);
+      expect(body.prompt).toContain("Never draw or print the color name, hex code");
+      return new Response(JSON.stringify({
+        model: DOUBAO_IMAGE_MODEL,
+        data: [{ b64_json: output.toString("base64"), mime_type: "image/png" }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const generated = await generateCodexPetVisual({
+      prompt: source,
+      model: DOUBAO_IMAGE_MODEL,
+      fetchFn: fetchFn as typeof fetch,
+      env: { ARK_API_KEY: "test-key", ARK_IMAGE_ENDPOINT: "https://ark.example.test/images/generations" },
+    });
+    expect(generated.provider.actualModel).toBe(DOUBAO_IMAGE_MODEL);
+    expect(generated.mime).toBe("image/png");
+    const normalized = await sharp(generated.buffer).raw().toBuffer({ resolveWithObject: true });
+    expect(normalized.info.width).toBe(64);
+    expect(normalized.info.height).toBe(32);
+    expect([...normalized.data.subarray(0, 3)]).toEqual([255, 0, 255]);
+    let greenPixels = 0;
+    for (let offset = 0; offset < normalized.data.length; offset += normalized.info.channels) {
+      if (normalized.data[offset + 1]! > normalized.data[offset]! + 40) greenPixels += 1;
+    }
+    expect(greenPixels).toBeGreaterThan(0);
+    expect(fetchFn).toHaveBeenCalledOnce();
+  });
+
+  it("does not mistake the final pet-cell size for a Seedream pose-board layout", async () => {
+    const output = await sharp({
+      create: { width: 64, height: 64, channels: 4, background: { r: 229, g: 61, b: 50, alpha: 1 } },
+    }).composite([{
+      input: await sharp({ create: { width: 16, height: 16, channels: 4, background: "#7bdc32" } }).png().toBuffer(),
+      left: 24,
+      top: 24,
+    }]).png().toBuffer();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      model: DOUBAO_IMAGE_MODEL,
+      data: [{ b64_json: output.toString("base64"), mime_type: "image/png" }],
+    }), { status: 200, headers: { "content-type": "application/json" } }));
+    const generated = await generateCodexPetVisual({
+      prompt: "Keep the character readable inside a final 192×208 desktop-pet cell on #ff00ff.",
+      model: DOUBAO_IMAGE_MODEL,
+      fetchFn: fetchFn as typeof fetch,
+      env: { ARK_API_KEY: "test-key", ARK_IMAGE_ENDPOINT: "https://ark.example.test/images/generations" },
+    });
+    const metadata = await sharp(generated.buffer).metadata();
+    expect(metadata.width).toBe(64);
+    expect(metadata.height).toBe(64);
+  });
+
+  it.each([
+    { columns: 3, rows: 2, prompt: "one pet as a 3 columns x 2 rows pose board on #ff00ff" },
+    { columns: 4, rows: 2, prompt: "one pet as a 4 columns × 2 rows pose board on #ff00ff" },
+    { columns: 2, rows: 2, prompt: "one pet as a 2x2 board on #ff00ff" },
+  ])(
+    "normalizes a Seedream $columns x $rows board slot-by-slot before extraction",
+    async ({ columns, rows, prompt }) => {
+      const normalized = await normalizeSeedreamChromaMatte(
+        await nearEdgePoseBoard(columns, rows),
+        prompt,
+        DOUBAO_IMAGE_MODEL,
+      );
+      const metadata = await sharp(normalized.buffer).metadata();
+      expect(metadata.width).toBe(columns * 120);
+      expect(metadata.height).toBe(rows * 120);
+
+      const extracted = await extractPoseBoard(normalized.buffer, {
+        columns,
+        rows,
+        frameCount: columns * rows,
+        chromaKey: "#ff00ff",
+      });
+      expect(extracted.ok, extracted.errors.join("\n")).toBe(true);
+      expect(extracted.frames).toHaveLength(columns * rows);
+      expect(extracted.diagnostics).toHaveLength(columns * rows);
+      for (const diagnostic of extracted.diagnostics) {
+        expect(diagnostic.sourceBounds).not.toBeNull();
+        expect(diagnostic.opaquePixels).toBeGreaterThan(0);
+        expect(diagnostic.componentCount).toBe(1);
+        expect(diagnostic.edgePixels).toBe(0);
+        expect(diagnostic.chromaCoverage).toBeGreaterThanOrEqual(0.08);
+        expect(diagnostic.chromaCoverage).toBeLessThanOrEqual(0.985);
+        expect(diagnostic.errors).not.toContain("empty-frame");
+        expect(diagnostic.errors).not.toContain("source-touches-slot-edge");
+      }
+    },
+  );
+
+  it("builds a label-free Seedream scaffold with one connected canonical character per slot", async () => {
+    const canonical = await sharp({
+      create: { width: 256, height: 256, channels: 4, background: "#ff00ff" },
+    }).composite([{
+      input: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect x="82" y="45" width="92" height="176" rx="30" fill="#35b978"/><circle cx="112" cy="100" r="10" fill="#fff"/><circle cx="144" cy="100" r="10" fill="#fff"/></svg>'),
+    }]).png().toBuffer();
+    const scaffold = await createSeedreamPoseBoardScaffold({
+      canonical,
+      chromaKey: "#ff00ff",
+      columns: 3,
+      rows: 2,
+      frameCount: 6,
+    });
+    const metadata = await sharp(scaffold).metadata();
+    expect(metadata).toMatchObject({ width: 1536, height: 1024 });
+    const extracted = await extractPoseBoard(scaffold, {
+      columns: 3,
+      rows: 2,
+      frameCount: 6,
+      chromaKey: "#ff00ff",
+    });
+    expect(extracted.ok, extracted.errors.join("\n")).toBe(true);
+    expect(extracted.frames).toHaveLength(6);
+    expect(extracted.diagnostics.every((item) => item.componentCount === 1 && item.edgePixels === 0)).toBe(true);
+  });
+
+  it("alternates two supplied gait phases instead of cloning one canonical pose", async () => {
+    const phase = async (rightLegX: number) => sharp({
+      create: { width: 256, height: 256, channels: 4, background: "#ff00ff" },
+    }).composite([{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256">
+        <rect x="78" y="42" width="100" height="128" rx="28" fill="#35b978"/>
+        <rect x="94" y="160" width="28" height="62" rx="8" fill="#35b978"/>
+        <rect x="${rightLegX}" y="160" width="28" height="62" rx="8" fill="#35b978"/>
+        <rect x="150" y="82" width="18" height="18" fill="#ffffff"/>
+      </svg>`),
+    }]).png().toBuffer();
+    const phaseA = await phase(134);
+    const phaseB = await phase(116);
+    const scaffold = await createSeedreamPoseBoardScaffold({
+      canonical: phaseA,
+      poseVariants: [phaseA, phaseB],
+      variantSequence: [0, 1, 0, 1, 0, 1, 0, 1],
+      chromaKey: "#ff00ff",
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+    });
+    const extracted = await extractPoseBoard(scaffold, {
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+      chromaKey: "#ff00ff",
+    });
+    expect(extracted.ok, extracted.errors.join("\n")).toBe(true);
+    expect(extracted.diagnostics.every((item) => item.componentCount === 1 && item.edgePixels === 0)).toBe(true);
+    expect(extracted.frames[0]!.equals(extracted.frames[2]!)).toBe(true);
+    expect(extracted.frames[1]!.equals(extracted.frames[3]!)).toBe(true);
+    expect(extracted.frames[0]!.equals(extracted.frames[1]!)).toBe(false);
+  });
+
+  it("chooses the most distinct normalized paid phase while keeping frame zero as the anchor", async () => {
+    const frames = await Promise.all([0, 1, 2, 3].map((offset) => sharp({
+      create: { width: 32, height: 32, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect x="${4 + offset * 5}" y="8" width="${offset === 3 ? 13 : 10}" height="16" fill="#35b978"/></svg>`),
+    }]).png().toBuffer()));
+    const [anchor, variant] = await selectSeedreamGaitScaffoldVariants(frames);
+    expect(anchor).toEqual(frames[0]);
+    expect(variant).toEqual(frames[3]);
+  });
+
   it("requires a majority for every visual hard gate without demanding unanimity", () => {
     const passed: PetVisualQaVerdict = {
       pass: true,
@@ -108,6 +315,35 @@ describe("Codex pet visual generation", () => {
       .rejects.toThrow("visual model mismatch");
   });
 
+  it("retries transient visual QA connection errors with SDK retries disabled", async () => {
+    const image = await sharp({ create: { width: 8, height: 8, channels: 4, background: "#ffffff" } }).png().toBuffer();
+    const verdict = { pass: true, score: 99, mirrorSafe: true, identity: true, structure: true, semantics: true, continuity: true, warnings: [], failures: [], repairPrompt: "" };
+    let attempts = 0;
+    const create = vi.fn(async (_params?: unknown, _options?: unknown) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error("Connection error.");
+        error.name = "APIConnectionError";
+        throw error;
+      }
+      return { model: "gpt-5.6-sol", content: [{ type: "text", text: JSON.stringify(verdict) }] };
+    });
+    const client = { messages: { create } } as never;
+    await expect(runCodexPetVisualQa({
+      images: [{ buffer: image }],
+      prompt: "qa",
+      env: {
+        CHATGPT_API_KEY: "test-key",
+        CHATGPT_MODELS: "gpt-5.6-sol",
+        CHATGPT_BASE_URL: "https://pixel.test",
+        CODEX_PET_VISUAL_RETRY_BASE_MS: "0",
+      },
+      client,
+    })).resolves.toMatchObject({ pass: true, modelProvenance: { actualModel: "gpt-5.6-sol" } });
+    expect(create).toHaveBeenCalledTimes(2);
+    expect(create.mock.calls[0]?.[1]).toMatchObject({ maxRetries: 0 });
+  });
+
   it("uses a bounded recovery window between transport retries", () => {
     expect(codexPetImageRetryDelayMs(1, {})).toBe(5_000);
     expect(codexPetImageRetryDelayMs(2, {})).toBe(15_000);
@@ -116,6 +352,29 @@ describe("Codex pet visual generation", () => {
       CODEX_PET_IMAGE_RETRY_BASE_MS: "100",
       CODEX_PET_IMAGE_RETRY_MAX_MS: "250",
     })).toBe(250);
+  });
+
+  it("caps real-verification image transport attempts at one", async () => {
+    expect(codexPetImageMaxAttempts({})).toBe(3);
+    expect(codexPetImageMaxAttempts({ CODEX_PET_IMAGE_MAX_ATTEMPTS: "1" })).toBe(1);
+    expect(codexPetImageMaxAttempts({ CODEX_PET_IMAGE_MAX_ATTEMPTS: "99" })).toBe(3);
+
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ error: { message: "temporary" } }), {
+      status: 503,
+      headers: { "content-type": "application/json" },
+    }));
+    await expect(generateCodexPetVisual({
+      prompt: "one pet",
+      model: DOUBAO_IMAGE_MODEL,
+      fetchFn: fetchFn as typeof fetch,
+      env: {
+        ARK_API_KEY: "test-key",
+        ARK_IMAGE_ENDPOINT: "https://ark.example.test/images/generations",
+        CODEX_PET_IMAGE_MAX_ATTEMPTS: "1",
+        CODEX_PET_IMAGE_RETRY_BASE_MS: "0",
+      },
+    })).rejects.toThrow();
+    expect(fetchFn).toHaveBeenCalledOnce();
   });
 
   it("extracts a bounded anatomy guide from the approved canonical image", async () => {

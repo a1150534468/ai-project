@@ -1,0 +1,58 @@
+{
+  "selectedArtifactId": "a6dac317-0849-4b28-b288-a5cd071d0153",
+  "verdicts": [
+    {
+      "pass": true,
+      "score": 91,
+      "mirrorSafe": true,
+      "identity": true,
+      "structure": true,
+      "semantics": true,
+      "continuity": true,
+      "warnings": [
+        "Soft gradients and subtle texture inside the mint panels are less reproducible than a strictly flat pixel palette.",
+        "The highly saturated magenta background may create edge-fringing during extraction or scaling."
+      ],
+      "failures": [],
+      "repairPrompt": "",
+      "repairRows": [],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    },
+    {
+      "pass": true,
+      "score": 88,
+      "mirrorSafe": true,
+      "identity": true,
+      "structure": true,
+      "semantics": true,
+      "continuity": true,
+      "warnings": [
+        "Strong bloom, translucent-looking surface shading, and magenta color spill may reduce edge clarity at very small desktop-pet sizes.",
+        "The viewer-right shoulder attachment is partly hidden by the oversized head but remains readable."
+      ],
+      "failures": [],
+      "repairPrompt": "",
+      "repairRows": [],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    }
+  ],
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

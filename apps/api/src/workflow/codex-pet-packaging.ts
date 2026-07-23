@@ -117,6 +117,13 @@ function canonicalJson(value: unknown): unknown {
       source[key] === undefined ? [] : [[key, canonicalJson(source[key])]]
     )));
   }
+  // PostgreSQL jsonb preserves numeric value, not the exact shortest IEEE-754
+  // decimal spelling emitted by V8. Prisma can therefore round a 17-digit
+  // tail by one ULP on the write/read boundary. Bind reports at 15 significant
+  // digits so the durable artifact checksum is stable across that round trip.
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Object.is(value, -0) ? 0 : Number(value.toPrecision(15));
+  }
   return value;
 }
 

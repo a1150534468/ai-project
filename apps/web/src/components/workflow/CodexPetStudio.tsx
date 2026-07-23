@@ -376,7 +376,11 @@ export function CodexPetStudio({
     visualModels: [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }],
     imageModels: CODEX_PET_IMAGE_MODELS.map((model) => ({
       model,
-      displayName: model === CODEX_PET_IMAGE_MODEL ? "GPT Image 2" : "Qwen Image 2.0 Pro",
+      displayName: model === CODEX_PET_IMAGE_MODEL
+        ? "GPT Image 2"
+        : model === "doubao-seedream-4-5-251128"
+          ? "豆包 Seedream 4.5 文生图"
+          : "Qwen Image 2.0 Pro",
     })),
   });
   const [events, setEvents] = useState<readonly CodexPetEvent[]>([]);

@@ -52,6 +52,13 @@ describe("Codex pet prompts", () => {
     expect(prompt).toContain("fixed part of the character");
     expect(prompt).toContain("one stable foot baseline");
     expect(prompt).toContain("at least 15% clear background");
+    expect(prompt).toContain("exactly one complete character contained wholly inside that slot");
+    expect(prompt).toContain("continuous opaque non-background sprite pixels");
+    expect(prompt).toContain("never leave a chroma-key gap at a shoulder, wrist, hip or ankle");
+    expect(prompt).toContain("detached sweat beads");
+    expect(prompt).toContain("alternates two source gait phases A/B");
+    expect(prompt).toContain("contact, passing, airborne, opposite-contact");
+    expect(prompt).toContain("do not return only two repeated A/B drawings");
   });
 
   it("locks both look rows to the approved cardinal quadrants and exact board cells", () => {
@@ -122,6 +129,29 @@ describe("Codex pet prompts", () => {
     expect(buildStandardRowPrompt(guided, "idle")).toContain("does not have to move in every animation or every frame");
     expect(buildVisualQaPrompt("row", "idle", guide)).toContain("do not fail a state just because that feature stays still");
     expect(buildVisualQaPrompt("base-choice", "candidate")).not.toContain(guide);
+  });
+
+  it("keeps idle awake and limits blinking to one brief pose", () => {
+    const idle = buildStandardRowPrompt(identity, "idle");
+    expect(idle).toContain("frame 5 the single brief blink");
+    expect(idle).toContain("Keep the single canonical antenna perfectly fixed and unchanged");
+    expect(idle).toContain("never bend it, duplicate it, echo it");
+    expect(idle).toContain("A singular feature such as one antenna");
+    expect(idle).toContain("Keep both arms lowered and attached in all six frames");
+    expect(idle).toContain("Never wave, raise a hand, sleep");
+    expect(idle).toContain("Never merge the top and bottom slots into one tall character");
+  });
+
+  it("locks every directional run frame to one screen side and an explicit phase cycle", () => {
+    const right = buildStandardRowPrompt(identity, "running-right");
+    expect(right).toContain("Frames 1-4 are right-facing contact, passing, airborne and opposite-contact phases");
+    expect(right).toContain("stay on the screen-right side in all eight frames");
+    expect(right).toContain("Never mirror or flip any frame toward screen-left");
+    expect(right).toContain("never repeat one frozen stride");
+
+    const left = buildStandardRowPrompt(identity, "running-left");
+    expect(left).toContain("stay on the screen-left side in all eight frames");
+    expect(left).toContain("Never mirror or flip any frame toward screen-right");
   });
 
   it("keeps jumping vertical travel distinct from scale and locks failed silhouettes", () => {

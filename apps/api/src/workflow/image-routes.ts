@@ -44,13 +44,19 @@ const IMAGE_TASK_STATUS = {
   failed: "failed",
   cancelled: "cancelled",
 } as const;
+const IMAGE_GENERATION_INTENTS = ["new", "variation", "edit"] as const;
 const imageRequestSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
   model: z.enum(IMAGE_GENERATION_MODELS).default(QWEN_IMAGE_MODEL),
   prompt: z.string().trim().min(1).max(4000),
   size: z.string().trim().min(1).max(32).default("1024x1024"),
   resolution: z.enum(["1K", "2K"]).optional(),
-  referenceAssetIds: z.array(z.string().trim().min(1).max(128)).max(IMAGE_MAX_REFERENCE_COUNT).default([]),
+  // Normalize and truncate after inserting the source image. The client normally
+  // sends at most three, but accepting a few duplicates here keeps the contract
+  // compatible with older callers that relied on server-side de-duplication.
+  referenceAssetIds: z.array(z.string().trim().min(1).max(128)).max(16).default([]),
+  sourceImageAssetId: z.string().trim().min(1).max(128).optional(),
+  generationIntent: z.enum(IMAGE_GENERATION_INTENTS).default("new"),
   count: z.number().int().min(1).max(IMAGE_MAX_COUNT),
 });
 
@@ -125,6 +131,8 @@ interface ImageGenerationTaskRow {
   readonly model: string;
   readonly size: string;
   readonly referenceAssetIds?: readonly string[];
+  readonly sourceImageAssetId?: string | null;
+  readonly generationIntent?: string;
   readonly count: number;
   readonly status: string;
   readonly completedCount: number;
@@ -314,6 +322,9 @@ function serializeImageRow<Row extends {
 }
 
 function serializeTask(row: ImageGenerationTaskRow) {
+  const generationIntent = IMAGE_GENERATION_INTENTS.includes(row.generationIntent as typeof IMAGE_GENERATION_INTENTS[number])
+    ? row.generationIntent as typeof IMAGE_GENERATION_INTENTS[number]
+    : "new";
   return {
     id: row.id,
     requestId: row.requestId,
@@ -321,6 +332,8 @@ function serializeTask(row: ImageGenerationTaskRow) {
     model: row.model,
     size: row.size,
     referenceAssetIds: [...(row.referenceAssetIds ?? [])],
+    sourceImageAssetId: row.sourceImageAssetId ?? null,
+    generationIntent,
     count: row.count,
     status: row.status as ImageTaskStatus,
     completedCount: row.completedCount,
@@ -345,6 +358,8 @@ function completedTaskFromAssets(
     model: assets[0]?.model ?? cfg.model,
     size: request.size,
     referenceAssetIds: request.referenceAssetIds,
+    sourceImageAssetId: request.sourceImageAssetId ?? null,
+    generationIntent: request.generationIntent,
     count: request.count,
     status: IMAGE_TASK_STATUS.completed,
     completedCount: Math.min(assets.length, request.count),
@@ -912,7 +927,24 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     if (requestedModel === QWEN_IMAGE_MODEL && resolution === "4K") {
       return reply.code(400).send({ error: "Qwen Image 2.0 Pro 最高支持 2K 输出" });
     }
-    const request = { ...parsed.data, size: normalizedSize, resolution };
+    if (parsed.data.generationIntent !== "new" && !parsed.data.sourceImageAssetId) {
+      return reply.code(400).send({ error: "修改或变体任务必须提供来源图片" });
+    }
+    const sourceImageAssetId = parsed.data.sourceImageAssetId;
+    if (sourceImageAssetId) {
+      const sourceAssets = await prisma.imageAsset.findMany({
+        where: { userId, id: { in: [sourceImageAssetId] } },
+        select: { id: true },
+      });
+      if (sourceAssets.length !== 1) {
+        return reply.code(400).send({ error: "来源图片不存在或无权使用" });
+      }
+    }
+    const referenceAssetIds = Array.from(new Set([
+      ...(sourceImageAssetId ? [sourceImageAssetId] : []),
+      ...parsed.data.referenceAssetIds,
+    ])).slice(0, IMAGE_MAX_REFERENCE_COUNT);
+    const request = { ...parsed.data, sourceImageAssetId, referenceAssetIds, size: normalizedSize, resolution };
     if (request.referenceAssetIds.length > 0) {
       const referenceAssets = await prisma.imageAsset.findMany({
         where: { userId, id: { in: [...request.referenceAssetIds] } },
@@ -974,6 +1006,8 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
           model: cfg.model,
           size: request.size,
           referenceAssetIds: request.referenceAssetIds,
+          sourceImageAssetId: request.sourceImageAssetId ?? null,
+          generationIntent: request.generationIntent,
           count: request.count,
           status: IMAGE_TASK_STATUS.running,
           completedCount: existing.length,

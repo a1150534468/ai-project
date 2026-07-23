@@ -1,0 +1,366 @@
+{
+  "ok": true,
+  "reviewers": [
+    {
+      "pairs": [
+        {
+          "pair": "horizontal-1",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "The eye-bearing face panel is visible on the right side in A and on the left side in B."
+        },
+        {
+          "pair": "horizontal-2",
+          "A": "screen-left",
+          "B": "screen-right",
+          "reason": "In these rear three-quarter views, the prominent near ear and arm are on the left in A and on the right in B."
+        },
+        {
+          "pair": "horizontal-3",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "The eye-bearing face panel opens toward the right in A and toward the left in B."
+        },
+        {
+          "pair": "horizontal-4",
+          "A": "screen-left",
+          "B": "screen-right",
+          "reason": "The rear-view ear and limb perspective indicates a leftward heading in A and a rightward heading in B."
+        },
+        {
+          "pair": "horizontal-5",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "The real eyes and face panel are oriented toward the right in A and toward the left in B."
+        },
+        {
+          "pair": "horizontal-6",
+          "A": "screen-left",
+          "B": "screen-right",
+          "reason": "The rear-view ear asymmetry places the nearer side on the left in A and on the right in B."
+        },
+        {
+          "pair": "horizontal-7",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "The face-panel placement and opposite-side ear visibility show a slight rightward turn in A and leftward turn in B."
+        },
+        {
+          "pair": "vertical-1",
+          "A": "down",
+          "B": "up",
+          "reason": "A shows the eye-bearing front and belly panel, while B shows the back."
+        },
+        {
+          "pair": "vertical-2",
+          "A": "up",
+          "B": "down",
+          "reason": "A is a rear three-quarter view, while B shows the eye-bearing front."
+        },
+        {
+          "pair": "vertical-3",
+          "A": "down",
+          "B": "up",
+          "reason": "A shows the real eyes and front belly panel, while B shows the rear of the head and torso."
+        },
+        {
+          "pair": "vertical-4",
+          "A": "up",
+          "B": "down",
+          "reason": "A is rear-facing, while B exposes the eye-bearing face panel and front belly panel."
+        },
+        {
+          "pair": "vertical-5",
+          "A": "down",
+          "B": "up",
+          "reason": "A retains the eye-bearing front panel, whereas B presents the back of the head and torso."
+        },
+        {
+          "pair": "vertical-6",
+          "A": "up",
+          "B": "down",
+          "reason": "A is a rear-side view with no face panel visible, while B is a front-side view with a real eye visible."
+        },
+        {
+          "pair": "vertical-7",
+          "A": "down",
+          "B": "up",
+          "reason": "A is a front-side view with a real eye visible, while B is a rear-side view without the face panel."
+        }
+      ]
+    },
+    {
+      "pairs": [
+        {
+          "pair": "horizontal-1",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A's facial panel is exposed at the screen-right edge, while B's is exposed at the screen-left edge."
+        },
+        {
+          "pair": "horizontal-2",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "The rear three-quarter head and side-ear placement indicate a screen-right heading for A and the mirrored screen-left heading for B."
+        },
+        {
+          "pair": "horizontal-3",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A's facial panel is angled toward screen-right, while B's is angled toward screen-left."
+        },
+        {
+          "pair": "horizontal-4",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "The rear three-quarter silhouettes and exposed side ears indicate that A turns toward screen-right and B toward screen-left."
+        },
+        {
+          "pair": "horizontal-5",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A's facial panel and body front are angled toward screen-right; B's are angled toward screen-left."
+        },
+        {
+          "pair": "horizontal-6",
+          "A": "ambiguous",
+          "B": "screen-left",
+          "reason": "A is shown directly from the rear with no horizontal component; B is a rear three-quarter view heading toward screen-left."
+        },
+        {
+          "pair": "horizontal-7",
+          "A": "ambiguous",
+          "B": "ambiguous",
+          "reason": "Both figures face directly forward, so neither has a visible horizontal heading component."
+        },
+        {
+          "pair": "vertical-1",
+          "A": "down",
+          "B": "up",
+          "reason": "A shows the facial and belly panels, indicating a front-facing/down heading; B shows the back, indicating up."
+        },
+        {
+          "pair": "vertical-2",
+          "A": "up",
+          "B": "down",
+          "reason": "A shows a rear three-quarter view without the facial panel, while B shows the facial and belly panels."
+        },
+        {
+          "pair": "vertical-3",
+          "A": "down",
+          "B": "up",
+          "reason": "A shows the character's front panels, while B shows the back of the head and torso."
+        },
+        {
+          "pair": "vertical-4",
+          "A": "up",
+          "B": "down",
+          "reason": "A is rear-facing with no facial or belly panel visible; B is front-facing with both panels visible."
+        },
+        {
+          "pair": "vertical-5",
+          "A": "down",
+          "B": "up",
+          "reason": "A's facial and belly panels identify a frontward/down component; B's exposed back identifies an upward component."
+        },
+        {
+          "pair": "vertical-6",
+          "A": "up",
+          "B": "down",
+          "reason": "A is a side-rear view with the face absent, while B is a side-front view with the facial and belly panels visible."
+        },
+        {
+          "pair": "vertical-7",
+          "A": "down",
+          "B": "up",
+          "reason": "A is a side-front view with part of the facial panel visible; B is a side-rear view showing the back of the head and torso."
+        }
+      ]
+    },
+    {
+      "pairs": [
+        {
+          "pair": "horizontal-1",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A’s profile face panel and eye are on the right edge; B’s are on the left edge."
+        },
+        {
+          "pair": "horizontal-2",
+          "A": "screen-left",
+          "B": "screen-right",
+          "reason": "The rear three-quarter poses emphasize the left ear pod and limbs in A and the right ear pod and limbs in B."
+        },
+        {
+          "pair": "horizontal-3",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A’s face panel turns toward the right, while B’s turns toward the left."
+        },
+        {
+          "pair": "horizontal-4",
+          "A": "screen-left",
+          "B": "screen-right",
+          "reason": "The rear three-quarter pose exposes the left-side ear and arm in A and the right-side ear and arm in B."
+        },
+        {
+          "pair": "horizontal-5",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A’s face is angled toward the right with the left ear pod behind it; B shows the mirrored leftward turn."
+        },
+        {
+          "pair": "horizontal-6",
+          "A": "ambiguous",
+          "B": "screen-right",
+          "reason": "A is a centered rear view without a reliable horizontal component; B’s exposed right ear pod and right-side limbs indicate a rightward component."
+        },
+        {
+          "pair": "horizontal-7",
+          "A": "screen-right",
+          "B": "screen-left",
+          "reason": "A exposes the left ear pod during a rightward head turn, while B exposes the right ear pod during a leftward turn."
+        },
+        {
+          "pair": "vertical-1",
+          "A": "down",
+          "B": "up",
+          "reason": "A shows the front face and belly panels; B shows the back of the head and torso."
+        },
+        {
+          "pair": "vertical-2",
+          "A": "up",
+          "B": "down",
+          "reason": "A is a rear three-quarter view without the face panel; B is a front three-quarter view with the eyes and belly panel visible."
+        },
+        {
+          "pair": "vertical-3",
+          "A": "down",
+          "B": "up",
+          "reason": "A shows the face and front belly panel, while B shows the rear of the head and torso."
+        },
+        {
+          "pair": "vertical-4",
+          "A": "up",
+          "B": "down",
+          "reason": "A presents the back of the character; B presents the face, eyes, and front belly panel."
+        },
+        {
+          "pair": "vertical-5",
+          "A": "down",
+          "B": "up",
+          "reason": "A has a visible front face panel and eyes; B has no face panel and shows the rear torso."
+        },
+        {
+          "pair": "vertical-6",
+          "A": "up",
+          "B": "down",
+          "reason": "A is a rear-side view with no visible face panel; B is a front-side view with a real eye visible."
+        },
+        {
+          "pair": "vertical-7",
+          "A": "down",
+          "B": "up",
+          "reason": "A is a front-side view with the face panel and eye visible; B is a rear-side view without the face panel."
+        }
+      ]
+    }
+  ],
+  "consensus": [
+    {
+      "pair": "horizontal-1",
+      "A": "screen-right",
+      "B": "screen-left",
+      "reason": "The eye-bearing face panel is visible on the right side in A and on the left side in B. | A's facial panel is exposed at the screen-right edge, while B's is exposed at the screen-left edge. | A’s profile face panel and eye are on the right edge; B’s are on the left edge."
+    },
+    {
+      "pair": "horizontal-2",
+      "A": "screen-left",
+      "B": "screen-right",
+      "reason": "In these rear three-quarter views, the prominent near ear and arm are on the left in A and on the right in B. | The rear three-quarter head and side-ear placement indicate a screen-right heading for A and the mirrored screen-left heading for B. | The rear three-quarter poses emphasize the left ear pod and limbs in A and the right ear pod and limbs in B."
+    },
+    {
+      "pair": "horizontal-3",
+      "A": "screen-right",
+      "B": "screen-left",
+      "reason": "The eye-bearing face panel opens toward the right in A and toward the left in B. | A's facial panel is angled toward screen-right, while B's is angled toward screen-left. | A’s face panel turns toward the right, while B’s turns toward the left."
+    },
+    {
+      "pair": "horizontal-4",
+      "A": "screen-left",
+      "B": "screen-right",
+      "reason": "The rear-view ear and limb perspective indicates a leftward heading in A and a rightward heading in B. | The rear three-quarter silhouettes and exposed side ears indicate that A turns toward screen-right and B toward screen-left. | The rear three-quarter pose exposes the left-side ear and arm in A and the right-side ear and arm in B."
+    },
+    {
+      "pair": "horizontal-5",
+      "A": "screen-right",
+      "B": "screen-left",
+      "reason": "The real eyes and face panel are oriented toward the right in A and toward the left in B. | A's facial panel and body front are angled toward screen-right; B's are angled toward screen-left. | A’s face is angled toward the right with the left ear pod behind it; B shows the mirrored leftward turn."
+    },
+    {
+      "pair": "horizontal-6",
+      "A": "ambiguous",
+      "B": "screen-right",
+      "reason": "The rear-view ear asymmetry places the nearer side on the left in A and on the right in B. | A is shown directly from the rear with no horizontal component; B is a rear three-quarter view heading toward screen-left. | A is a centered rear view without a reliable horizontal component; B’s exposed right ear pod and right-side limbs indicate a rightward component."
+    },
+    {
+      "pair": "horizontal-7",
+      "A": "screen-right",
+      "B": "screen-left",
+      "reason": "The face-panel placement and opposite-side ear visibility show a slight rightward turn in A and leftward turn in B. | Both figures face directly forward, so neither has a visible horizontal heading component. | A exposes the left ear pod during a rightward head turn, while B exposes the right ear pod during a leftward turn."
+    },
+    {
+      "pair": "vertical-1",
+      "A": "down",
+      "B": "up",
+      "reason": "A shows the eye-bearing front and belly panel, while B shows the back. | A shows the facial and belly panels, indicating a front-facing/down heading; B shows the back, indicating up. | A shows the front face and belly panels; B shows the back of the head and torso."
+    },
+    {
+      "pair": "vertical-2",
+      "A": "up",
+      "B": "down",
+      "reason": "A is a rear three-quarter view, while B shows the eye-bearing front. | A shows a rear three-quarter view without the facial panel, while B shows the facial and belly panels. | A is a rear three-quarter view without the face panel; B is a front three-quarter view with the eyes and belly panel visible."
+    },
+    {
+      "pair": "vertical-3",
+      "A": "down",
+      "B": "up",
+      "reason": "A shows the real eyes and front belly panel, while B shows the rear of the head and torso. | A shows the character's front panels, while B shows the back of the head and torso. | A shows the face and front belly panel, while B shows the rear of the head and torso."
+    },
+    {
+      "pair": "vertical-4",
+      "A": "up",
+      "B": "down",
+      "reason": "A is rear-facing, while B exposes the eye-bearing face panel and front belly panel. | A is rear-facing with no facial or belly panel visible; B is front-facing with both panels visible. | A presents the back of the character; B presents the face, eyes, and front belly panel."
+    },
+    {
+      "pair": "vertical-5",
+      "A": "down",
+      "B": "up",
+      "reason": "A retains the eye-bearing front panel, whereas B presents the back of the head and torso. | A's facial and belly panels identify a frontward/down component; B's exposed back identifies an upward component. | A has a visible front face panel and eyes; B has no face panel and shows the rear torso."
+    },
+    {
+      "pair": "vertical-6",
+      "A": "up",
+      "B": "down",
+      "reason": "A is a rear-side view with no face panel visible, while B is a front-side view with a real eye visible. | A is a side-rear view with the face absent, while B is a side-front view with the facial and belly panels visible. | A is a rear-side view with no visible face panel; B is a front-side view with a real eye visible."
+    },
+    {
+      "pair": "vertical-7",
+      "A": "down",
+      "B": "up",
+      "reason": "A is a front-side view with a real eye visible, while B is a rear-side view without the face panel. | A is a side-front view with part of the facial panel visible; B is a side-rear view showing the back of the head and torso. | A is a front-side view with the face panel and eye visible; B is a rear-side view without the face panel."
+    }
+  ],
+  "failures": [],
+  "warnings": [
+    "horizontal-6: A=ambiguous, expected=screen-left"
+  ],
+  "modelProvenance": {
+    "requestedModel": "gpt-5.6-sol",
+    "actualModels": [
+      "gpt-5.6-sol"
+    ],
+    "route": "chatgpt_model_route"
+  }
+}
