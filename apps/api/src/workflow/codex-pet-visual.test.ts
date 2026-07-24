@@ -204,6 +204,7 @@ describe("Codex pet visual generation", () => {
       rows: 2,
       frameCount: 8,
     });
+    expect(await sharp(scaffold).metadata()).toMatchObject({ width: 1536, height: 768 });
     const extracted = await extractPoseBoard(scaffold, {
       columns: 4,
       rows: 2,

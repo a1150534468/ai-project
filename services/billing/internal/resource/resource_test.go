@@ -4,8 +4,6 @@ import (
 	"strconv"
 	"testing"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"ai-assistant-billing/internal/billingmode"
 	"ai-assistant-billing/internal/bucket"
 	"ai-assistant-billing/internal/model"
@@ -13,6 +11,8 @@ import (
 	"ai-assistant-billing/internal/store"
 	"ai-assistant-billing/internal/videopoint"
 	"ai-assistant-billing/internal/vip"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 func TestLearningChargeIsOnePointIdempotentAndRefundable(t *testing.T) {
@@ -172,6 +172,71 @@ func TestQuote(t *testing.T) {
 	}
 	if _, err := s.Quote("nope", 1); err != ErrResourceNotPriced {
 		t.Fatalf("missing want ErrResourceNotPriced got %v", err)
+	}
+}
+
+func TestCodexPetDefaultPriceReservesFourteenCallsAndSettlesActualCalls(t *testing.T) {
+	st := newStore(t)
+	s := New(st)
+	if err := s.EnsureDefaultResourcePrices(); err != nil {
+		t.Fatalf("ensure defaults: %v", err)
+	}
+
+	if quoted, err := s.Quote(defaultCodexPetV2PackageResourceKey, 14); err != nil || quoted != 2800 {
+		t.Fatalf("planned quote=%d err=%v, want 2800", quoted, err)
+	}
+	if quoted, err := s.Quote(defaultCodexPetV2PackageResourceKey, 2); err != nil || quoted != 400 {
+		t.Fatalf("actual quote=%d err=%v, want 400", quoted, err)
+	}
+	if err := bucket.GrantPoints(st.DB, "codex-pet-user", 2800, nil, bucket.SourceSystem); err != nil {
+		t.Fatalf("grant points: %v", err)
+	}
+	if reserved, err := s.Reserve("codex-pet:run:planned", "codex-pet-user", defaultCodexPetV2PackageResourceKey, 14); err != nil || reserved != 2800 {
+		t.Fatalf("reserve=%d err=%v, want 2800", reserved, err)
+	}
+	if settled, err := s.Settle("codex-pet:run:planned", defaultCodexPetV2PackageResourceKey, 2); err != nil || settled != 400 {
+		t.Fatalf("settle=%d err=%v, want 400", settled, err)
+	}
+}
+
+func TestCodexPetDefaultPriceUpgradesOnlyExactLegacyDefault(t *testing.T) {
+	st := newStore(t)
+	s := New(st)
+	if err := st.DB.Create(&model.ResourcePrice{
+		ResourceKey: defaultCodexPetV2PackageResourceKey,
+		DisplayName: "Codex 桌宠 v2 套餐",
+		PricingType: "PER_CALL",
+		Rate:        defaultCodexPetV2PackageResourceRate,
+		PerUnits:    1,
+		Enabled:     true,
+	}).Error; err != nil {
+		t.Fatalf("create legacy default: %v", err)
+	}
+	if err := s.EnsureDefaultResourcePrices(); err != nil {
+		t.Fatalf("ensure defaults: %v", err)
+	}
+	var upgraded model.ResourcePrice
+	if err := st.DB.First(&upgraded, "resource_key = ?", defaultCodexPetV2PackageResourceKey).Error; err != nil {
+		t.Fatalf("find upgraded default: %v", err)
+	}
+	if upgraded.DisplayName != "Codex 桌宠 v2 生图调用" || upgraded.PricingType != "PER_UNIT" || upgraded.Rate != 200 || upgraded.PerUnits != 1 {
+		t.Fatalf("unexpected upgraded default: %+v", upgraded)
+	}
+
+	if err := st.DB.Model(&model.ResourcePrice{}).
+		Where("resource_key = ?", defaultCodexPetV2PackageResourceKey).
+		Updates(map[string]any{"display_name": "自定义桌宠价格", "pricing_type": "PER_CALL", "rate": 260}).Error; err != nil {
+		t.Fatalf("customize price: %v", err)
+	}
+	if err := s.EnsureDefaultResourcePrices(); err != nil {
+		t.Fatalf("ensure defaults after customization: %v", err)
+	}
+	var customized model.ResourcePrice
+	if err := st.DB.First(&customized, "resource_key = ?", defaultCodexPetV2PackageResourceKey).Error; err != nil {
+		t.Fatalf("find customized price: %v", err)
+	}
+	if customized.DisplayName != "自定义桌宠价格" || customized.PricingType != "PER_CALL" || customized.Rate != 260 {
+		t.Fatalf("custom price was changed: %+v", customized)
 	}
 }
 
@@ -377,7 +442,7 @@ func TestEnsureDefaultResourcePricesSeedsNovelResources(t *testing.T) {
 		{"local_business_promo_render_25s", "本地商家宣传成片生成 25 秒", "PER_CALL", 25},
 		{"local_business_promo_render_40s", "本地商家宣传成片生成 40 秒", "PER_CALL", 40},
 		{"local_business_promo_render_60s", "本地商家宣传成片生成 60 秒", "PER_CALL", 60},
-		{"codex_pet_v2_package", "Codex 桌宠 v2 套餐", "PER_CALL", 200},
+		{"codex_pet_v2_package", "Codex 桌宠 v2 生图调用", "PER_UNIT", 200},
 	} {
 		var row model.ResourcePrice
 		if err := st.DB.First(&row, "resource_key = ?", tc.key).Error; err != nil {

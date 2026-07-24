@@ -3,6 +3,7 @@ import {
   CODEX_PET_MODEL_CONTRACT_VERSION,
   codexPetVisualQaRouteForModel,
   isAllowedCodexPetImageModel,
+  isAllowedCodexPetImageProvenance,
   isAllowedCodexPetVisualModel,
 } from "./codex-pet-model-contract.js";
 
@@ -15,7 +16,6 @@ const REQUIRED_OK_GATES = [
   "chromaDespill",
   "directionRegistration",
   "directionContinuity",
-  "blindDirectionValidation",
 ] as const;
 
 const REQUIRED_PASSED_GATES = [
@@ -40,10 +40,9 @@ function hasContradictoryFailure(value: JsonRecord): boolean {
 }
 
 /**
- * The durable delivery contract shared by knowledge archival, install links,
- * downloads, and signed install-image reads. It deliberately accepts only the
- * complete report currently emitted by the runner; a legacy/minimal
- * `{ ok: true, spriteVersionNumber: 2 }` report is not delivery evidence.
+ * Checks the detailed QA report shape emitted by the runner. It is useful for
+ * diagnostics and report consumers, but not an installation/download gate:
+ * those are authorized from the revalidated final artifact records instead.
  */
 export function codexPetValidationPassed(report: unknown): boolean {
   const value = recordOf(report);
@@ -56,6 +55,7 @@ export function codexPetValidationPassed(report: unknown): boolean {
   const provenance = recordOf(value.modelProvenance);
   const imageGeneration = recordOf(provenance.imageGeneration);
   const visualQa = recordOf(provenance.visualQa);
+  const qualityInspectionEnabled = visualQa.enabled !== false;
   const imageActualModels = Array.isArray(imageGeneration.actualModels)
     ? imageGeneration.actualModels.filter((model): model is string => typeof model === "string")
     : [];
@@ -68,18 +68,21 @@ export function codexPetValidationPassed(report: unknown): boolean {
   const requestedVisualModel = typeof visualQa.requestedModel === "string" ? visualQa.requestedModel.trim() : "";
   const requestedImageModel = typeof imageGeneration.requestedModel === "string" ? imageGeneration.requestedModel.trim() : "";
   let expectedVisualRoute = "";
-  try { expectedVisualRoute = codexPetVisualQaRouteForModel(requestedVisualModel); } catch { return false; }
+  if (qualityInspectionEnabled) {
+    try { expectedVisualRoute = codexPetVisualQaRouteForModel(requestedVisualModel); } catch { return false; }
+  }
   const imageModelMatches = (model: string) => model === requestedImageModel
     || (requestedImageModel === "gpt-image-2" && model === "gpt-image-2-codex");
   if ((legacyGptContract && (requestedImageModel !== "gpt-image-2" || requestedVisualModel !== "gpt-5.6-sol"))
     || !isAllowedCodexPetImageModel(requestedImageModel)
     || imageActualModels.length === 0
-    || imageActualModels.some((model) => !isAllowedCodexPetImageModel(model) || !imageModelMatches(model))
-    || !isAllowedCodexPetVisualModel(requestedVisualModel)
-    || visualActualModels.length === 0
-    || visualActualModels.some((model) => !isAllowedCodexPetVisualModel(model) || model !== requestedVisualModel)
-    || visualRoutes.length === 0
-    || visualRoutes.some((route) => route !== expectedVisualRoute)) return false;
+    || imageActualModels.some((model) => !isAllowedCodexPetImageProvenance(model) || !imageModelMatches(model))
+    || (qualityInspectionEnabled && (!isAllowedCodexPetVisualModel(requestedVisualModel)
+      || visualActualModels.length === 0
+      || visualActualModels.some((model) => !isAllowedCodexPetVisualModel(model) || model !== requestedVisualModel)
+      || visualRoutes.length === 0
+      || visualRoutes.some((route) => route !== expectedVisualRoute)))
+    || (!qualityInspectionEnabled && (requestedVisualModel || visualActualModels.length > 0 || visualRoutes.length > 0))) return false;
 
   for (const key of REQUIRED_OK_GATES) {
     const gate = recordOf(value[key]);
@@ -91,15 +94,20 @@ export function codexPetValidationPassed(report: unknown): boolean {
     if (gate.passed !== true || hasContradictoryFailure(gate)) return false;
   }
 
-  const finalVisualQa = recordOf(value.finalVisualQa);
-  if (finalVisualQa.pass !== true
-    || finalVisualQa.identity !== true
-    || finalVisualQa.structure !== true
-    || finalVisualQa.semantics !== true
-    || finalVisualQa.continuity !== true
-    || hasContradictoryFailure(finalVisualQa)) return false;
+  if (qualityInspectionEnabled) {
+    const blindDirectionValidation = recordOf(value.blindDirectionValidation);
+    if (blindDirectionValidation.ok !== true || hasContradictoryFailure(blindDirectionValidation)) return false;
+    const finalVisualQa = recordOf(value.finalVisualQa);
+    if (finalVisualQa.pass !== true
+      || finalVisualQa.identity !== true
+      || finalVisualQa.structure !== true
+      || finalVisualQa.semantics !== true
+      || finalVisualQa.continuity !== true
+      || hasContradictoryFailure(finalVisualQa)) return false;
+  }
 
   const semantics = value.directionSemantics;
+  if (!qualityInspectionEnabled) return true;
   if (!Array.isArray(semantics) || semantics.length !== LOOK_DIRECTIONS.length) return false;
 
   const seen = new Set<string>();

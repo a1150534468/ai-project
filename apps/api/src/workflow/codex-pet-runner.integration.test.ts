@@ -6,9 +6,10 @@ import sharp from "sharp";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { archiveCodexPetRun } from "./codex-pet-archive.js";
 import { appendCodexPetEvent } from "./codex-pet-events.js";
-import { ImageGenerationUpstreamError } from "./image-service.js";
+import { initializeCodexPetTargetedBoardRetry } from "./codex-pet-failed-continuation.js";
+import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, ImageGenerationUpstreamError } from "./image-service.js";
 import { codexPetFinalPackageInputRevision } from "./codex-pet-packaging.js";
-import { CodexPetLeaseLostError, codexPetBoardInputRevision, executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";
+import { CODEX_PET_BOARD_PROMPT_VERSION, CodexPetLeaseLostError, codexPetBoardInputRevision, codexPetStandardRowPromptVersion, executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";
 import type { GeneratedPetVisual, PetVisualQaConsensus, PetVisualQaVerdict } from "./codex-pet-visual.js";
 
 const prisma = getPrisma();
@@ -54,7 +55,7 @@ function completeDeliveryValidationReport() {
   return {
     ok: true,
     spriteVersionNumber: 2,
-    modelContractVersion: "selectable-visual-v2",
+    modelContractVersion: "gpt-only-quality-optional-v3",
     modelProvenance: {
       imageGeneration: { requestedModel: "gpt-image-2", actualModels: ["gpt-image-2-codex"] },
       visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] },
@@ -129,6 +130,18 @@ async function syntheticVisual(
   };
 }
 
+async function syntheticVisualForModel(prompt: string, model: string): Promise<GeneratedPetVisual> {
+  const generated = await syntheticVisual(prompt);
+  return {
+    ...generated,
+    provider: {
+      ...generated.provider,
+      requestedModel: model,
+      actualModel: model,
+    },
+  };
+}
+
 function memoryArtifactStore(): CodexPetArtifactStore & { buffers: Map<string, Buffer> } {
   const buffers = new Map<string, Buffer>();
   return {
@@ -168,6 +181,7 @@ async function seed(autoContinue: boolean, options: {
   readonly stylePreset?: string;
   readonly prompt?: string;
   readonly imageGenerationApprovalBudget?: number;
+  readonly imageModel?: string;
 } = {}) {
   const suffix = randomUUID();
   const user = await prisma.user.create({ data: { uid: `pet-${suffix}`, username: `pet-${suffix}`, passwordHash: "test" } });
@@ -195,6 +209,8 @@ async function seed(autoContinue: boolean, options: {
     stylePreset: options.stylePreset ?? "pixel",
     referenceAssetIds,
     autoContinue,
+    imageModel: options.imageModel ?? GPT_IMAGE_MODEL,
+    qualityInspectionEnabled: true,
     status: "queued",
   } });
   const run = await prisma.codexPetRun.create({ data: {
@@ -207,9 +223,10 @@ async function seed(autoContinue: boolean, options: {
       prompt: project.prompt,
       stylePreset: project.stylePreset,
       referenceAssetIds,
-      modelContractVersion: "selectable-visual-v2",
-      requestedModel: "gpt-image-2",
+      modelContractVersion: "gpt-only-quality-optional-v3",
+      requestedModel: options.imageModel ?? GPT_IMAGE_MODEL,
       visualQaModel: "gpt-5.6-sol",
+      qualityInspectionEnabled: true,
     },
     autoContinue,
     billingOperationId: `codex-pet:test-${suffix}`,
@@ -219,6 +236,8 @@ async function seed(autoContinue: boolean, options: {
     billingChargedAt: new Date(),
     billingActivatedAt: new Date(),
     imageGenerationApprovalBudget: options.imageGenerationApprovalBudget ?? 100,
+    requestedModel: options.imageModel ?? GPT_IMAGE_MODEL,
+    qualityInspectionEnabled: true,
     startedAt: new Date(),
     status: "queued",
   } });
@@ -301,7 +320,10 @@ function runnerDeps(store: ReturnType<typeof memoryArtifactStore>, consensus = v
       mime: asset.mime,
     })),
     archiveRun: archiveCodexPetRun,
-    billing: { refundResource: vi.fn(async () => ({ success: true })) },
+    billing: {
+      refundResource: vi.fn(async () => ({ success: true })),
+      settleResource: vi.fn(async ({ units }: { units: number }) => ({ settled: units * 200 })),
+    },
     visual: {
       generate: vi.fn(async (input: { prompt: string; onAttempt?: (attempt: number) => Promise<void> | void }) => {
         await input.onAttempt?.(1);
@@ -340,6 +362,299 @@ function runnerDeps(store: ReturnType<typeof memoryArtifactStore>, consensus = v
 }
 
 describe.skipIf(!enabled)("Codex pet runner database integration", () => {
+  it.skip("keeps the retired Seedream targeted-retry fixture offline and non-runnable", async () => {
+    const seeded = await seed(false, { imageModel: DOUBAO_IMAGE_MODEL });
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    Object.assign(deps.env, {
+      CODEX_PET_IMAGE_APPROVAL_GATE: "0",
+      CODEX_PET_MAX_BOARD_ATTEMPTS: "1",
+    });
+    deps.visual.generate = vi.fn(async (input: {
+      prompt: string;
+      onAttempt?: (attempt: number) => Promise<void> | void;
+    }) => {
+      await input.onAttempt?.(1);
+      return syntheticVisualForModel(input.prompt, DOUBAO_IMAGE_MODEL);
+    }) as never;
+
+    expect(await executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .toEqual({ status: "awaiting_base_review", runId: seeded.run.id });
+    const canonical = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
+      orderBy: { createdAt: "asc" },
+    });
+    await prisma.$transaction([
+      prisma.codexPetRun.update({
+        where: { id: seeded.run.id },
+        data: {
+          selectedBaseArtifactId: canonical.id,
+          status: "standard_generating",
+          progressStage: "standard_generating",
+        },
+      }),
+      prisma.codexPetProject.update({
+        where: { id: seeded.project.id },
+        data: { status: "standard_generating" },
+      }),
+    ]);
+    deps.visual.qaConsensus = vi.fn(async (input: { prompt: string }) => (
+      input.prompt.includes("Context: running-right 动作组")
+        ? {
+            ...passedConsensus,
+            pass: false,
+            score: 20,
+            failures: ["running gait is static"],
+            verdicts: [{ ...passedVerdict, pass: false, score: 20, failures: ["running gait is static"] }],
+          }
+        : passedConsensus
+    )) as never;
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps })).rejects.toThrow("running gait is static");
+    const [failedRun, idleBefore, runningRightBefore] = await Promise.all([
+      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "row-idle" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "row-running-right" } } }),
+    ]);
+    expect(failedRun).toMatchObject({
+      status: "failed",
+      workerId: null,
+      billingRefundStatus: "refunded",
+      imageGenerationCallCount: 4,
+    });
+    expect(idleBefore).toMatchObject({
+      status: "completed",
+      attempt: 1,
+      maxAttempts: 1,
+    });
+    expect(runningRightBefore).toMatchObject({ status: "failed", attempt: 1, maxAttempts: 1 });
+    const failedBoard = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: {
+        runId: seeded.run.id,
+        jobId: runningRightBefore.id,
+        kind: "pose_board",
+        status: "ready",
+      },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(failedBoard.metadata).toMatchObject({
+      requestedModel: DOUBAO_IMAGE_MODEL,
+      actualModel: DOUBAO_IMAGE_MODEL,
+    });
+
+    const scaffoldBuffer = await sharp({
+      create: { width: 1536, height: 768, channels: 4, background: "#ff00ff" },
+    }).composite([
+      {
+        input: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="768"><rect x="120" y="80" width="240" height="260" rx="60" fill="#28b9a8"/><rect x="504" y="100" width="240" height="240" rx="60" fill="#28b9a8"/></svg>'),
+      },
+    ]).png().toBuffer();
+    const scaffold = await store.put({
+      userId: seeded.user.id,
+      projectId: seeded.project.id,
+      runId: seeded.run.id,
+      jobId: runningRightBefore.id,
+      kind: "pose_board_scaffold",
+      name: "offline-audited-two-phase-scaffold",
+      buffer: scaffoldBuffer,
+      mime: "image/png",
+      width: 1536,
+      height: 768,
+      metadata: { state: "running-right", schemaVersion: "test-explicit-scaffold-v1" },
+    });
+    const mismatchedScaffold = await store.put({
+      userId: seeded.user.id,
+      projectId: seeded.project.id,
+      runId: seeded.run.id,
+      jobId: runningRightBefore.id,
+      kind: "pose_board_scaffold",
+      name: "mismatched-3x2-scaffold",
+      buffer: await sharp(scaffoldBuffer).extend({ bottom: 256, background: "#ff00ff" }).png().toBuffer(),
+      mime: "image/png",
+      width: 1536,
+      height: 1024,
+    });
+    await expect(initializeCodexPetTargetedBoardRetry({
+      prisma,
+      runId: seeded.run.id,
+      projectId: seeded.project.id,
+      userId: seeded.user.id,
+      sourceBoardArtifactId: failedBoard.id,
+      scaffoldArtifactId: mismatchedScaffold.id,
+      reason: "reject a scaffold whose aspect ratio would split target slots",
+    })).rejects.toThrow("定向续跑脚手架必须使用与 4×2 目标一致的方形槽位画布");
+
+    const foreign = await seed(false, { imageModel: DOUBAO_IMAGE_MODEL });
+    const foreignJob = await prisma.codexPetJob.create({
+      data: {
+        projectId: foreign.project.id,
+        runId: foreign.run.id,
+        userId: foreign.user.id,
+        key: "row-running-right",
+        kind: "standard_row",
+        status: "failed",
+      },
+    });
+    const foreignScaffold = await store.put({
+      userId: foreign.user.id,
+      projectId: foreign.project.id,
+      runId: foreign.run.id,
+      jobId: foreignJob.id,
+      kind: "pose_board_scaffold",
+      name: "foreign-scaffold",
+      buffer: scaffoldBuffer,
+      mime: "image/png",
+      width: 1536,
+      height: 1024,
+    });
+    for (const rejectedScaffoldArtifactId of [randomUUID(), foreignScaffold.id]) {
+      await expect(initializeCodexPetTargetedBoardRetry({
+        prisma,
+        runId: seeded.run.id,
+        projectId: seeded.project.id,
+        userId: seeded.user.id,
+        sourceBoardArtifactId: failedBoard.id,
+        scaffoldArtifactId: rejectedScaffoldArtifactId,
+        reason: "reject an unavailable or foreign recovery scaffold",
+      })).rejects.toThrow("定向续跑脚手架不属于 running-right 动作");
+      expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } })).toMatchObject({
+        status: "failed",
+        imageGenerationCallCount: 4,
+        workerId: null,
+      });
+      expect(await prisma.codexPetJob.findUniqueOrThrow({ where: { id: runningRightBefore.id } }))
+        .toMatchObject({ status: "failed", attempt: 1 });
+    }
+
+    await expect(initializeCodexPetTargetedBoardRetry({
+      prisma,
+      runId: seeded.run.id,
+      projectId: seeded.project.id,
+      userId: seeded.user.id,
+      sourceBoardArtifactId: failedBoard.id,
+      scaffoldArtifactId: scaffold.id,
+      reason: "offline-validated two-phase gait scaffold",
+    })).resolves.toMatchObject({
+      resumed: true,
+      preservedImageGenerationCallCount: 4,
+      sourceBoardArtifactId: failedBoard.id,
+    });
+
+    let observedTargetedBinding = false;
+    deps.visual.generate = vi.fn(async (input: {
+      prompt: string;
+      references: Array<{ filename?: string; b64: string }>;
+      maxAttempts?: number;
+    }) => {
+      expect(input.prompt).toContain("running-right");
+      expect(input.maxAttempts).toBe(1);
+      const scaffoldReference = input.references.find((reference) => reference.filename === "running-right-seedream-scaffold.png");
+      expect(scaffoldReference?.b64).toBe(scaffoldBuffer.toString("base64"));
+      observedTargetedBinding = true;
+      throw new Error("offline-stop-after-targeted-binding");
+    }) as never;
+
+    await expect(executeCodexPetRun({
+      runId: seeded.run.id,
+      deps: { ...deps, workerId: "targeted-scaffold-offline-test" },
+    })).rejects.toThrow("offline-stop-after-targeted-binding");
+    expect(observedTargetedBinding).toBe(true);
+
+    const [after, idleAfter, runningRightAfter] = await Promise.all([
+      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "row-idle" } } }),
+      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "row-running-right" } } }),
+    ]);
+    expect(after.imageGenerationCallCount).toBe(4);
+    expect(idleAfter).toMatchObject({
+      status: "completed",
+      attempt: idleBefore.attempt,
+      inputArtifactIds: idleBefore.inputArtifactIds,
+      outputArtifactIds: idleBefore.outputArtifactIds,
+    });
+    expect(runningRightAfter.inputArtifactIds).toEqual([canonical.id, failedBoard.id, scaffold.id]);
+    expect(runningRightAfter.input).toMatchObject({
+      promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+      inputArtifactIds: [canonical.id, failedBoard.id, scaffold.id],
+    });
+  }, 120_000);
+
+  it("runs the GPT-only default path with fourteen ledgered calls and no visual QA calls", async () => {
+    const seeded = await seed(false);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
+    await prisma.$transaction([
+      prisma.codexPetProject.update({
+        where: { id: seeded.project.id },
+        data: { qualityInspectionEnabled: false },
+      }),
+      prisma.codexPetRun.update({
+        where: { id: seeded.run.id },
+        data: {
+          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false, perImageCallPoints: 200 } as Prisma.InputJsonObject,
+          qualityInspectionEnabled: false,
+          billingMode: "per_image_call_v1",
+          billingResourceKey: "codex_pet_v2_package",
+          billingReservedUnits: 14,
+          billingReservedPoints: 2800,
+          billingSettlementStatus: "reserved",
+          billingChargeStatus: "reserved",
+          plannedImageCallLimit: 14,
+          imageGenerationApprovalBudget: 0,
+        },
+      }),
+    ]);
+    deps.visual.generate = vi.fn(async (input: {
+      prompt: string;
+      onRequestDispatching?: (attempt: number) => Promise<void> | void;
+      onRequestSent?: (attempt: number) => Promise<void> | void;
+    }) => {
+      await input.onRequestDispatching?.(1);
+      await input.onRequestSent?.(1);
+      return syntheticVisual(input.prompt);
+    }) as never;
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .resolves.toEqual({ status: "awaiting_base_review", runId: seeded.run.id });
+    const selected = await prisma.codexPetArtifact.findFirstOrThrow({
+      where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
+      orderBy: { createdAt: "asc" },
+    });
+    await prisma.$transaction([
+      prisma.codexPetRun.update({
+        where: { id: seeded.run.id },
+        data: { selectedBaseArtifactId: selected.id, status: "standard_generating", progressStage: "standard_generating" },
+      }),
+      prisma.codexPetProject.update({ where: { id: seeded.project.id }, data: { status: "standard_generating" } }),
+    ]);
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
+
+    const [run, calls] = await Promise.all([
+      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      prisma.codexPetImageCall.findMany({ where: { runId: seeded.run.id }, orderBy: { sentAt: "asc" } }),
+    ]);
+    expect(run).toMatchObject({
+      status: "ready",
+      qualityInspectionEnabled: false,
+      imageGenerationCallCount: 14,
+      billingSettledUnits: 14,
+      billingSettledPoints: 2800,
+      billingSettlementStatus: "settled",
+    });
+    expect(calls).toHaveLength(14);
+    expect(calls.every((call) => call.callKind === "planned" && call.status === "succeeded" && call.requestedModel === GPT_IMAGE_MODEL && call.points === 200)).toBe(true);
+    expect(deps.billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ units: 14 }));
+    expect(deps.visual.qa).not.toHaveBeenCalled();
+    expect(deps.visual.qaConsensus).not.toHaveBeenCalled();
+    expect(deps.visual.blindQa).not.toHaveBeenCalled();
+    expect(deps.visual.directionSemantics).not.toHaveBeenCalled();
+    expect(deps.visual.lookMechanics).not.toHaveBeenCalled();
+    expect(deps.visual.identityGuide).not.toHaveBeenCalled();
+  }, 120_000);
+
   it("runs all visual groups, packages v2 and archives before ready", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
@@ -904,7 +1219,13 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
         progressStage: "standard_generating",
       },
     });
-    const inputBinding = { inputArtifactIds: [candidate.id], columns: 3, rows: 2, frameCount: 6 } as const;
+    const inputBinding = {
+      inputArtifactIds: [candidate.id],
+      columns: 3,
+      rows: 2,
+      frameCount: 6,
+      promptVersion: codexPetStandardRowPromptVersion("idle"),
+    } as const;
     await prisma.codexPetJob.create({
       data: {
         projectId: seeded.project.id,
@@ -1326,7 +1647,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
 
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .rejects.toThrow("missing the required selectable-visual-v2 model contract");
+      .rejects.toThrow("missing the required gpt-only-quality-optional-v3 model contract");
     expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }))
       .toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
     expect(deps.billing.refundResource).toHaveBeenCalledOnce();
@@ -1490,6 +1811,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const failed = jobs.find((job) => job.status === "failed");
     const sibling = jobs.find((job) => job.status === "cancelled");
     expect(failed?.error).toContain("图片生成服务暂时不可用");
+    expect(failed?.error).toContain("本次请求未重试");
     expect(failed?.providerMetadata).toMatchObject({
       failure: { category: "network", transportCode: "ECONNRESET" },
     });
@@ -1502,6 +1824,12 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       errorCategory: "network",
       transportCode: "ECONNRESET",
     });
+    const terminalJobEvent = await prisma.codexPetEvent.findFirst({
+      where: { runId: seeded.run.id, jobKey: failed?.key, type: "validation.failed" },
+      orderBy: { sequence: "desc" },
+    });
+    expect(terminalJobEvent).toMatchObject({ stage: "failed", payload: { failureKind: "terminal" } });
+    expect((terminalJobEvent?.payload as Record<string, unknown> | null)?.retryKind).toBeUndefined();
     expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   });
 
@@ -1956,7 +2284,13 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
         progressStage: "standard_generating",
       },
     });
-    const staleBinding = { inputArtifactIds: [staleInput.id], columns: 3, rows: 2, frameCount: 6 } as const;
+    const staleBinding = {
+      inputArtifactIds: [staleInput.id],
+      columns: 3,
+      rows: 2,
+      frameCount: 6,
+      promptVersion: codexPetStandardRowPromptVersion("idle"),
+    } as const;
     const staleStartedAt = new Date(Date.now() - 120_000);
     const job = await prisma.codexPetJob.create({
       data: {
@@ -2001,7 +2335,13 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       if (!observedReset && prompt.includes("“idle” animation")) {
         observedReset = true;
         const resetJob = await prisma.codexPetJob.findUniqueOrThrow({ where: { id: job.id } });
-        const currentBinding = { inputArtifactIds: [selected.id], columns: 3, rows: 2, frameCount: 6 } as const;
+        const currentBinding = {
+          inputArtifactIds: [selected.id],
+          columns: 3,
+          rows: 2,
+          frameCount: 6,
+          promptVersion: codexPetStandardRowPromptVersion("idle"),
+        } as const;
         expect(resetJob).toMatchObject({
           status: "running",
           attempt: 1,

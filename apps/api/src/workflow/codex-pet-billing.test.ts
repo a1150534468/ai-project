@@ -9,6 +9,7 @@ import {
   reconcileCodexPetRunBilling,
   releaseDefinitelyUnchargedCodexPetRun,
 } from "./codex-pet-billing.js";
+import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 
 const BILLING_SCOPE = {
   runId: "run-1",
@@ -501,5 +502,18 @@ describe("Codex pet durable billing saga", () => {
     }));
     const candidates = await listCodexPetBillingReconciliationCandidates({ prisma, now: at });
     expect(candidates).toEqual([BILLING_SCOPE]);
+  });
+
+  it("does not send per-image reservations through the legacy package reconciler", async () => {
+    const { prisma, state } = createMemoryPrisma();
+    state.runs.push(runRow({
+      id: "per-image-pending",
+      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+      billingOperationId: "codex-pet:run:per-image-pending:planned-images",
+      billingChargeStatus: "uncertain",
+      billingActivatedAt: null,
+    }));
+
+    await expect(listCodexPetBillingReconciliationCandidates({ prisma })).resolves.toEqual([BILLING_SCOPE]);
   });
 });

@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"ai-assistant-billing/internal/billingmode"
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/store"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -337,8 +337,8 @@ func (s *Service) EnsureDefaultResourcePrices() error {
 		},
 		{
 			ResourceKey: defaultCodexPetV2PackageResourceKey,
-			DisplayName: "Codex 桌宠 v2 套餐",
-			PricingType: "PER_CALL",
+			DisplayName: "Codex 桌宠 v2 生图调用",
+			PricingType: "PER_UNIT",
 			Rate:        defaultCodexPetV2PackageResourceRate,
 			PerUnits:    1,
 			Enabled:     true,
@@ -351,6 +351,25 @@ func (s *Service) EnsureDefaultResourcePrices() error {
 			return err
 		}
 		if count > 0 {
+			// Only migrate the exact old default. Administratively customized
+			// resource prices keep their configured rate and pricing contract.
+			if row.ResourceKey == defaultCodexPetV2PackageResourceKey {
+				if err := s.st.DB.Model(&model.ResourcePrice{}).
+					Where("resource_key = ? AND display_name = ? AND pricing_type = ? AND rate = ? AND per_units = ? AND output_rate = ?",
+						defaultCodexPetV2PackageResourceKey,
+						"Codex 桌宠 v2 套餐",
+						"PER_CALL",
+						defaultCodexPetV2PackageResourceRate,
+						1,
+						0,
+					).
+					Updates(map[string]any{
+						"display_name": "Codex 桌宠 v2 生图调用",
+						"pricing_type": "PER_UNIT",
+					}).Error; err != nil {
+					return err
+				}
+			}
 			continue
 		}
 		enabled := row.Enabled

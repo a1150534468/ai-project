@@ -158,6 +158,10 @@ export interface CallImageGenerationArgs {
   readonly env?: NodeJS.ProcessEnv;
   readonly quality?: "low" | "medium" | "high" | "auto";
   readonly outputFormat?: "png" | "jpeg" | "webp";
+  /** Invoked before fetch to reserve an idempotent provider-dispatch slot. */
+  readonly onRequestDispatching?: () => Promise<void> | void;
+  /** Invoked immediately after fetch has been called for the provider POST. */
+  readonly onRequestSent?: () => Promise<void> | void;
 }
 
 export interface CallImageEditArgs {
@@ -172,6 +176,10 @@ export interface CallImageEditArgs {
   readonly endpoint?: string;
   readonly quality?: "low" | "medium" | "high" | "auto";
   readonly outputFormat?: "png" | "jpeg" | "webp";
+  /** Invoked before fetch to reserve an idempotent provider-dispatch slot. */
+  readonly onRequestDispatching?: () => Promise<void> | void;
+  /** Invoked immediately after fetch has been called for the provider POST. */
+  readonly onRequestSent?: () => Promise<void> | void;
 }
 
 export interface StoreWorkflowImageArgs {
@@ -486,6 +494,7 @@ async function fetchWithTimeout(
   init: RequestInit,
   timeoutMs: number,
   signal?: AbortSignal,
+  onRequestSent?: () => Promise<void> | void,
 ): Promise<Response> {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -497,7 +506,19 @@ async function fetchWithTimeout(
   if (signal?.aborted) controller.abort();
   else signal?.addEventListener("abort", abort, { once: true });
   try {
-    return await fetchFn(url, { ...init, signal: controller.signal });
+    if (controller.signal.aborted) throw new DOMException("This operation was aborted", "AbortError");
+    // Calling fetch is the only durable boundary we can observe locally. A
+    // later socket failure is still an attempted provider request.
+    const response = fetchFn(url, { ...init, signal: controller.signal });
+    try {
+      await onRequestSent?.();
+    } catch (error) {
+      // The request may already be in flight. Keep its rejection observed if
+      // persisting the sent transition itself fails.
+      void response.catch(() => undefined);
+      throw error;
+    }
+    return await response;
   } catch (error) {
     if (timedOut && !signal?.aborted) throw new ImageGenerationTimeoutError(timeoutMs);
     throw error;
@@ -807,11 +828,12 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
           },
           parameters: qwenImageParameters(args.size),
         };
+  await args.onRequestDispatching?.();
   const response = await fetchWithTimeout(args.fetchFn, args.config.endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
     body: JSON.stringify(body),
-  }, loadImageAttemptTimeoutMs(args.env), args.signal);
+  }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
   if (!response.ok) throw await upstreamError(response);
   const payload = await response.json();
   return await detailedResult(
@@ -843,11 +865,12 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       sequential_image_generation: "disabled",
       watermark: false,
     };
+    await args.onRequestDispatching?.();
     const response = await fetchWithTimeout(args.fetchFn, args.endpoint ?? args.config.endpoint, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
       body: JSON.stringify(body),
-    }, loadImageAttemptTimeoutMs(args.env), args.signal);
+    }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
     if (!response.ok) throw await upstreamError(response);
     const payload = await response.json();
     return await detailedResult(
@@ -879,11 +902,12 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       const { bytes, mime, filename } = await openAiEditImagePart(args.mask, "mask image", "mask.png");
       form.set("mask", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
     }
+    await args.onRequestDispatching?.();
     const response = await fetchWithTimeout(args.fetchFn, endpoint, {
       method: "POST",
       headers: { authorization: `Bearer ${apiKey}` },
       body: form,
-    }, loadImageAttemptTimeoutMs(env), args.signal);
+    }, loadImageAttemptTimeoutMs(env), args.signal, args.onRequestSent);
     if (!response.ok) throw await upstreamError(response);
     const payload = await response.json();
     return await detailedResult(
@@ -903,11 +927,12 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
   };
   const configuredEditEndpoint = args.env?.IMAGE_EDIT_ENDPOINT?.trim();
   const endpoint = args.endpoint ?? configuredEditEndpoint ?? args.config.endpoint;
+  await args.onRequestDispatching?.();
   const response = await fetchWithTimeout(args.fetchFn, endpoint, {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
     body: JSON.stringify(body),
-  }, loadImageAttemptTimeoutMs(args.env), args.signal);
+  }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
   if (!response.ok) throw await upstreamError(response);
   const payload = await response.json();
   return await detailedResult(

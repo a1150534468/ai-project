@@ -113,21 +113,18 @@ describe("codexPetStudioModel", () => {
     expect(codexPetCurrentSubtask([], null, "standard_generating")).toBe("standard_generating");
   });
 
-  it("keeps the final two percent locked until validation, package, spritesheet and knowledge archive all exist", () => {
+  it("makes a packaged pet available while knowledge archival continues in the background", () => {
     const archiving = makeRun();
-    expect(codexPetDisplayProgress(archiving, 100)).toBe(98);
-    expect(isCodexPetDeliveryReady(archiving)).toBe(false);
+    expect(codexPetDisplayProgress(archiving, 100)).toBe(100);
+    expect(isCodexPetDeliveryReady(archiving)).toBe(true);
 
     const ready = makeRun({ status: "ready", knowledgeDocumentId: "document-1", completedAt: "2026-07-17T08:12:00.000Z" });
     expect(isCodexPetDeliveryReady(ready)).toBe(true);
     expect(codexPetDisplayProgress(ready, 100)).toBe(100);
 
-    expect(isCodexPetDeliveryReady({ ...ready, validationReport: { ok: false } })).toBe(false);
-    expect(isCodexPetDeliveryReady({ ...ready, validationReport: { ok: true, spriteVersionNumber: 1 } })).toBe(false);
-    expect(isCodexPetDeliveryReady({
-      ...ready,
-      validationReport: { ok: true, spriteVersionNumber: 2, directionRegistration: { ok: false } },
-    })).toBe(false);
+    expect(isCodexPetDeliveryReady({ ...archiving, validationReport: { ok: false } })).toBe(true);
+    expect(isCodexPetDeliveryReady({ ...archiving, validationReport: null })).toBe(true);
+    expect(isCodexPetDeliveryReady({ ...archiving, status: "failed" })).toBe(true);
     expect(codexPetDisplayProgress({ ...ready, packageArtifactId: null }, 100)).toBe(98);
   });
 
@@ -153,26 +150,30 @@ describe("codexPetStudioModel", () => {
     ];
     for (const invalid of invalidRuns) {
       expect(codexPetModelContractState(invalid)).toBe("invalid");
-      expect(isCodexPetDeliveryReady(invalid)).toBe(false);
+      expect(isCodexPetDeliveryReady(invalid)).toBe(true);
     }
   });
 
-  it("accepts frozen Bailian and Codex Auto Review provenance", () => {
-    expect(codexPetModelContractState(makeRun({
+  it("keeps retired selectable-model provenance diagnostic-only", () => {
+    const bailian = makeRun({
       modelContractVersion: "selectable-visual-v2",
       requestedModel: "qwen-image-2.0-pro-2026-04-22",
       actualModels: ["qwen-image-2.0-pro-2026-04-22"],
       visualQaModel: "qwen3.6-flash",
       visualQaActualModels: ["qwen3.6-flash"],
       visualQaRoutes: ["bailian_model_route"],
-    }))).toBe("valid");
+    });
+    expect(codexPetModelContractState(bailian)).toBe("invalid");
+    expect(isCodexPetDeliveryReady(bailian)).toBe(true);
 
-    expect(codexPetModelContractState(makeRun({
+    const autoReview = makeRun({
       modelContractVersion: "selectable-visual-v2",
       visualQaModel: "codex-auto-review",
       visualQaActualModels: ["codex-auto-review"],
       visualQaRoutes: ["chatgpt_model_route"],
-    }))).toBe("valid");
+    });
+    expect(codexPetModelContractState(autoReview)).toBe("invalid");
+    expect(isCodexPetDeliveryReady(autoReview)).toBe(true);
   });
 
   it("accepts the supported validation report status shapes", () => {

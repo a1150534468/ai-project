@@ -1,5 +1,6 @@
 import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
+import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
 
 export const CODEX_PET_BILLING_RESOURCE_KEY = "codex_pet_v2_package";
@@ -680,6 +681,10 @@ export async function listCodexPetBillingReconciliationCandidates(args: {
   const statuses = ["pending", "uncertain", ...(args.includeInsufficient ? ["insufficient"] : [])];
   const runs = await args.prisma.codexPetRun.findMany({
     where: {
+      // Per-image runs reserve their maximum budget at start and are settled
+      // from the durable image-call ledger. They must never fall through to
+      // the historical package charge reconciler.
+      billingMode: { not: CODEX_PET_PER_IMAGE_BILLING_MODE },
       billingOperationId: { not: null },
       billingActivatedAt: null,
       OR: [

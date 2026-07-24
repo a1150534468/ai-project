@@ -58,6 +58,9 @@ function projectRow(overrides: Record<string, unknown> = {}) {
     styleNotes: "清爽",
     referenceAssetIds: [] as string[],
     autoContinue: false,
+    imageModel: GPT_IMAGE_MODEL,
+    visualQaModel: "gpt-5.6-sol",
+    qualityInspectionEnabled: false,
     status: "draft",
     latestRunId: null as string | null,
     createIdempotencyKey: null as string | null,
@@ -82,6 +85,13 @@ function runRow(overrides: Record<string, unknown> = {}) {
     autoContinue: false,
     colorKey: "#ff00ff" as string | null,
     billingOperationId: "codex-pet:run-1" as string | null,
+    billingMode: "legacy_package_v1",
+    billingResourceKey: null as string | null,
+    billingReservedUnits: 0,
+    billingSettledUnits: 0,
+    billingReservedPoints: 0,
+    billingSettledPoints: 0,
+    billingSettlementStatus: "none",
     billingPoints: 200,
     billingChargeStatus: "charged",
     billingChargeAttemptCount: 1,
@@ -106,7 +116,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
     validationReport: null as unknown,
     requestedModel: "gpt-image-2",
     visualQaModel: "gpt-5.6-sol",
+    qualityInspectionEnabled: true,
     imageGenerationCallCount: 0,
+    plannedImageCallLimit: 0,
     imageGenerationApprovalBudget: 0,
     pendingImageJobKey: null as string | null,
     actualModels: [] as string[],
@@ -213,6 +225,7 @@ function createPrismaMock(seed: {
   events?: EventRow[];
   images?: Array<Record<string, unknown>>;
   jobs?: Array<Record<string, unknown>>;
+  imageCalls?: Array<Record<string, unknown>>;
   documents?: Array<Record<string, unknown>>;
 } = {}) {
   const projects = seed.projects ?? [];
@@ -221,6 +234,7 @@ function createPrismaMock(seed: {
   const events = seed.events ?? [];
   const images = seed.images ?? [];
   const jobs = seed.jobs ?? [];
+  const imageCalls = seed.imageCalls ?? [];
   const documents = seed.documents ?? runs.flatMap((run) => run.knowledgeDocumentId ? [{
     id: run.knowledgeDocumentId,
     sourceModule: "codex_pet",
@@ -232,6 +246,7 @@ function createPrismaMock(seed: {
   let transactionDepth = 0;
   let projectCounter = projects.length;
   let eventCounter = events.length;
+  let imageCallCounter = imageCalls.length;
 
   const prisma: Record<string, unknown> = {};
   const queryRaw = vi.fn(async () => [{ id: "locked-row" }]);
@@ -355,12 +370,45 @@ function createPrismaMock(seed: {
       return { count: found.length };
     }),
   };
+  const imageCallDelegate = {
+    findMany: vi.fn(async ({ where = {}, orderBy, take }: { where?: Record<string, unknown>; orderBy?: Record<string, "asc" | "desc">; take?: number } = {}) => {
+      const found = imageCalls.filter((row) => matches(row, where));
+      const key = orderBy ? Object.keys(orderBy)[0] : undefined;
+      if (key) found.sort((left, right) => String(left[key]).localeCompare(String(right[key])));
+      return found.slice(0, take ?? found.length);
+    }),
+    findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => imageCalls.find((row) => matches(row, where)) ?? null),
+    findUnique: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      const compound = where.runId_jobKey_logicalAttempt as { runId: string; jobKey: string; logicalAttempt: number } | undefined;
+      if (compound) return imageCalls.find((row) => row.runId === compound.runId && row.jobKey === compound.jobKey && row.logicalAttempt === compound.logicalAttempt) ?? null;
+      return imageCalls.find((row) => matches(row, where)) ?? null;
+    }),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      imageCallCounter += 1;
+      const row = { id: `image-call-${imageCallCounter}`, ...data, createdAt: new Date(NOW), updatedAt: new Date(NOW) };
+      imageCalls.push(row);
+      return row;
+    }),
+    update: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      const row = imageCalls.find((candidate) => matches(candidate, where));
+      if (!row) throw new Error("image call not found");
+      applyData(row, data);
+      return row;
+    }),
+    updateMany: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+      const found = imageCalls.filter((row) => matches(row, where));
+      found.forEach((row) => applyData(row, data));
+      return { count: found.length };
+    }),
+    count: vi.fn(async ({ where = {} }: { where?: Record<string, unknown> } = {}) => imageCalls.filter((row) => matches(row, where)).length),
+  };
   Object.assign(prisma, {
     codexPetProject: projectDelegate,
     codexPetRun: runDelegate,
     codexPetArtifact: artifactDelegate,
     codexPetEvent: eventDelegate,
     codexPetJob: jobDelegate,
+    codexPetImageCall: imageCallDelegate,
     imageAsset: {
       findMany: vi.fn(async ({ where = {}, select }: { where?: Record<string, unknown>; select?: Record<string, boolean> } = {}) => {
         const found = images.filter((row) => {
@@ -406,7 +454,7 @@ function createPrismaMock(seed: {
   });
   return {
     prisma: prisma as unknown as PrismaClient,
-    state: { projects, runs, artifacts, events, images, jobs, documents, deletedDocumentSourceIds },
+    state: { projects, runs, artifacts, events, images, jobs, imageCalls, documents, deletedDocumentSourceIds },
     spies: { queryRaw, executeRaw, projectDelegate, runDelegate, artifactDelegate, eventDelegate, jobDelegate, isTransactionActive: () => transactionDepth > 0 },
   };
 }
@@ -418,11 +466,13 @@ function recordCondition(value: unknown): Record<string, unknown> {
 function createBilling(overrides: Partial<CodexPetBilling> = {}) {
   return {
     chargeResource: vi.fn(async () => ({ charged: 200 })),
+    reserveResource: vi.fn(async () => ({ reserved: 2800 })),
+    settleResource: vi.fn(async () => ({ settled: 200 })),
     refundResource: vi.fn(async () => ({ success: true })),
     listResourcePrices: vi.fn(async () => ({ data: [{
       resourceKey: CODEX_PET_RESOURCE_KEY,
       displayName: "Codex 桌宠",
-      pricingType: "PER_CALL" as const,
+      pricingType: "PER_UNIT" as const,
       rate: 200,
       perUnits: 1,
       enabled: true,
@@ -552,7 +602,7 @@ describe("Codex pet routes", () => {
     await expect(validateCodexPetReferenceAsset(asset, async () => Buffer.from("not an image"))).resolves.toBe(false);
   });
 
-  it("requires authentication and exposes the configurable fixed package price", async () => {
+  it("requires authentication and exposes the per-image planned-call price", async () => {
     const { prisma } = createPrismaMock();
     const { app } = await createApp(prisma);
     expect((await app.inject({ method: "GET", url: "/api/workflow/codex-pets/pricing" })).statusCode).toBe(401);
@@ -561,15 +611,15 @@ describe("Codex pet routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().data.pricing).toMatchObject({
       resourceKey: CODEX_PET_RESOURCE_KEY,
-      pricingType: "PER_CALL",
+      pricingType: "PER_UNIT",
       rate: 200,
+      plannedImageCallLimit: 14,
       includedBaseCandidates: 2,
-      includedRepairAttempts: 2,
     });
     await app.close();
   });
 
-  it("keeps only vision-capable non-OCR, non-qwen3.7 marketplace models and freezes selections", async () => {
+  it("lists GPT Image 2 only and keeps legacy non-GPT projects read-only", async () => {
     const project = projectRow({
       imageModel: QWEN_IMAGE_MODEL,
       visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
@@ -602,9 +652,7 @@ describe("Codex pet routes", () => {
         { model: "kimi-k2.7-code", displayName: "Kimi K2.7 Code" },
       ],
       imageModels: [
-        { model: QWEN_IMAGE_MODEL, displayName: "Qwen Image 2.0 Pro" },
         { model: GPT_IMAGE_MODEL, displayName: "GPT Image 2" },
-        { model: DOUBAO_IMAGE_MODEL, displayName: "豆包 Seedream 4.5 文生图" },
       ],
     });
 
@@ -614,20 +662,11 @@ describe("Codex pet routes", () => {
       headers: { ...auth, "idempotency-key": "selected-model-run-1" },
       payload: { idempotencyKey: "selected-model-run-1" },
     });
-    expect([200, 202]).toContain(started.statusCode);
-    expect(state.runs).toHaveLength(1);
-    expect(state.runs[0]).toMatchObject({
-      requestedModel: QWEN_IMAGE_MODEL,
-      visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
-      inputSnapshot: {
-        modelContractVersion: "selectable-visual-v2",
-        requestedModel: QWEN_IMAGE_MODEL,
-        visualQaModel: CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
-      },
-    });
+    expect(started.statusCode).toBe(409);
+    expect(state.runs).toHaveLength(0);
     await app.close();
 
-    const qwen37Project = projectRow({ id: "project-qwen37", visualQaModel: "qwen3.7-plus" });
+    const qwen37Project = projectRow({ id: "project-qwen37", visualQaModel: "qwen3.7-plus", qualityInspectionEnabled: true });
     const { prisma: qwen37Prisma, state: qwen37State } = createPrismaMock({ projects: [qwen37Project] });
     const qwen37Billing = createBilling({
       listEnabledModels: vi.fn(async () => ({ data: [
@@ -649,13 +688,55 @@ describe("Codex pet routes", () => {
     await qwen37App.close();
   });
 
+  it("keeps a legacy read-only archive viewable while rejecting every mutating entrypoint", async () => {
+    const project = projectRow({
+      status: "legacy_read_only",
+      latestRunId: "run-archive",
+      imageModel: GPT_IMAGE_MODEL,
+    });
+    const run = runRow({
+      id: "run-archive",
+      status: "legacy_read_only",
+      progressStage: "legacy_read_only",
+      projectId: project.id,
+    });
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [run] });
+    const { app, billing, enqueueRun } = await createApp(prisma);
+
+    const detail = await app.inject({ method: "GET", url: `/api/workflow/codex-pets/projects/${project.id}`, headers: auth });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data.detail.project.status).toBe("legacy_read_only");
+
+    const update = await app.inject({ method: "PATCH", url: `/api/workflow/codex-pets/projects/${project.id}`, headers: auth, payload: { name: "不能修改" } });
+    const start = await app.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/${project.id}/start`,
+      headers: { ...auth, "idempotency-key": "read-only-start-0001" },
+      payload: { idempotencyKey: "read-only-start-0001" },
+    });
+    const cancel = await app.inject({ method: "POST", url: `/api/workflow/codex-pets/projects/${project.id}/runs/${run.id}/cancel`, headers: auth });
+    const remove = await app.inject({ method: "DELETE", url: `/api/workflow/codex-pets/projects/${project.id}`, headers: auth });
+
+    for (const response of [update, start, remove]) {
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error).toContain("只读");
+    }
+    expect(cancel.statusCode).toBe(409);
+    expect(cancel.json().error).toContain("已经结束");
+    expect(state.runs).toHaveLength(1);
+    expect(state.runs[0]!.status).toBe("legacy_read_only");
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(enqueueRun).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("rejects start before creating a run or charging when the package is disabled", async () => {
     const { prisma, state } = createPrismaMock({ projects: [projectRow()] });
     const billing = createBilling({
       listResourcePrices: vi.fn(async () => ({ data: [{
         resourceKey: CODEX_PET_RESOURCE_KEY,
         displayName: "Codex 桌宠",
-        pricingType: "PER_CALL" as const,
+        pricingType: "PER_UNIT" as const,
         rate: 200,
         perUnits: 1,
         enabled: false,
@@ -679,8 +760,8 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
-  it("rejects start before creating a run or charging when the GPT-5.6 route is unavailable", async () => {
-    const { prisma, state } = createPrismaMock({ projects: [projectRow()] });
+  it("checks the visual route only when optional AI quality inspection is enabled", async () => {
+    const { prisma, state } = createPrismaMock({ projects: [projectRow({ qualityInspectionEnabled: true })] });
     const billing = createBilling();
     const enqueueRun = vi.fn(async () => undefined);
     const { app } = await createApp(prisma, {
@@ -699,7 +780,7 @@ describe("Codex pet routes", () => {
     expect(response.statusCode).toBe(503);
     expect(response.json().error).toContain("GPT-5.6");
     expect(state.runs).toHaveLength(0);
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     expect(enqueueRun).not.toHaveBeenCalled();
     await app.close();
   });
@@ -955,7 +1036,7 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
-  it("serializes concurrent starts per user, charges once, and re-enqueues idempotent retries", async () => {
+  it("serializes concurrent starts per user, reserves fourteen calls once, and re-enqueues idempotent retries", async () => {
     const project1 = projectRow();
     const project2 = projectRow({ id: "project-2", name: "第二只" });
     const { prisma, state, spies } = createPrismaMock({ projects: [project1, project2] });
@@ -970,12 +1051,13 @@ describe("Codex pet routes", () => {
     ]);
     expect([first.statusCode, duplicate.statusCode].sort()).toEqual([200, 202]);
     expect(state.runs).toHaveLength(1);
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
-    expect(billing.chargeResource).toHaveBeenCalledWith({
-      operationId: `codex-pet:${state.runs[0]!.id}`,
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).toHaveBeenCalledTimes(1);
+    expect(billing.reserveResource).toHaveBeenCalledWith({
+      operationId: `codex-pet:run:${state.runs[0]!.id}:planned-images`,
       userId: "u1",
       resourceKey: CODEX_PET_RESOURCE_KEY,
-      units: 1,
+      units: 14,
     });
     expect(enqueueRun).toHaveBeenCalledTimes(2);
     expect(spies.executeRaw).toHaveBeenCalledWith("SELECT pg_advisory_xact_lock(hashtext($1))", "codex-pet:u1");
@@ -983,6 +1065,10 @@ describe("Codex pet routes", () => {
     expect(state.runs[0]!.inputSnapshot).toMatchObject({
       requestedModel: "gpt-image-2",
       visualQaModel: "gpt-5.6-sol",
+      qualityInspectionEnabled: false,
+      billingMode: "per_image_call_v1",
+      plannedImageCallLimit: 14,
+      perImageCallPoints: 200,
     });
 
     const conflict = await app.inject({
@@ -992,11 +1078,11 @@ describe("Codex pet routes", () => {
       payload: { idempotencyKey: "start-key-0002" },
     });
     expect(conflict.statusCode).toBe(409);
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    expect(billing.reserveResource).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
-  it("keeps a charged queued run retryable when BullMQ is temporarily unavailable", async () => {
+  it("keeps a reserved queued run retryable when BullMQ is temporarily unavailable", async () => {
     const { prisma, state } = createPrismaMock({ projects: [projectRow()] });
     const billing = createBilling();
     const enqueueRun = vi.fn()
@@ -1014,7 +1100,8 @@ describe("Codex pet routes", () => {
     expect(failed.json()).toMatchObject({ retryable: true, runId: state.runs[0]!.id });
     const recovered = await app.inject(request);
     expect(recovered.statusCode).toBe(200);
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).toHaveBeenCalledTimes(1);
     await app.close();
   });
 
@@ -1066,9 +1153,82 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
+  it("charges and queues one extra GPT image call for an approved regeneration exactly once", async () => {
+    const project = projectRow({ status: "awaiting_regeneration_approval", latestRunId: "run-1" });
+    const run = runRow({
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
+      progressPercent: 42,
+      pendingImageJobKey: "row-idle",
+      billingMode: "per_image_call_v1",
+      billingResourceKey: CODEX_PET_RESOURCE_KEY,
+      billingSettlementStatus: "reserved",
+      billingReservedUnits: 14,
+      plannedImageCallLimit: 14,
+      billingChargeStatus: "reserved",
+    });
+    const job = {
+      id: "job-row-idle",
+      projectId: project.id,
+      runId: run.id,
+      userId: "u1",
+      key: "row-idle",
+      kind: "standard_row",
+      status: "awaiting_approval",
+      attempt: 1,
+      maxAttempts: 1,
+      workerId: null,
+      completedAt: new Date(NOW),
+      error: "provider timeout",
+      createdAt: new Date(NOW),
+      updatedAt: new Date(NOW),
+    };
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [run], jobs: [job] });
+    const billing = createBilling();
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, { billing, enqueueRun });
+    const request = {
+      method: "POST" as const,
+      url: `/api/workflow/codex-pets/projects/${project.id}/runs/${run.id}/approve-next-image`,
+      headers: { ...auth, "idempotency-key": "extra-idempotency-0001" },
+      payload: { idempotencyKey: "extra-idempotency-0001" },
+    };
+
+    const [first, duplicate] = await Promise.all([app.inject(request), app.inject(request)]);
+
+    expect([first.statusCode, duplicate.statusCode].sort()).toEqual([202, 409]);
+    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    expect(billing.chargeResource).toHaveBeenCalledWith({
+      operationId: "codex-pet:run:run-1:image:row-idle:2:extra",
+      userId: "u1",
+      resourceKey: CODEX_PET_RESOURCE_KEY,
+      units: 1,
+    });
+    expect(state.imageCalls).toMatchObject([{
+      runId: run.id,
+      jobKey: "row-idle",
+      logicalAttempt: 2,
+      callKind: "extra",
+      status: "prepared",
+    }]);
+    expect(state.jobs[0]).toMatchObject({ status: "queued", maxAttempts: 2, error: null });
+    expect(state.runs[0]).toMatchObject({ status: "direction_generating", pendingImageJobKey: null });
+    expect(enqueueRun).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
   it("rejects a new start for a non-draft project while allowing an idempotent replay", async () => {
     const project = projectRow({ status: "ready", latestRunId: "run-ready" });
-    const existing = runRow({ id: "run-ready", projectId: project.id, status: "ready", idempotencyKey: "start-key-ready" });
+    const existing = runRow({
+      id: "run-ready",
+      projectId: project.id,
+      status: "ready",
+      idempotencyKey: "start-key-ready",
+      billingMode: "per_image_call_v1",
+      billingSettlementStatus: "settled",
+      billingReservedUnits: 14,
+      billingSettledUnits: 14,
+    });
     const { prisma, state } = createPrismaMock({ projects: [project], runs: [existing] });
     const billing = createBilling();
     const enqueueRun = vi.fn(async () => undefined);
@@ -1095,9 +1255,8 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
-  it("does not resurrect an insufficient idempotent run after another project run became active", async () => {
+  it("does not resurrect a legacy insufficient idempotent run", async () => {
     const originalProject = projectRow({ id: "project-1", status: "draft" });
-    const activeProject = projectRow({ id: "project-2", status: "base_generating", latestRunId: "run-active" });
     const insufficient = runRow({
       id: "run-insufficient",
       projectId: originalProject.id,
@@ -1111,14 +1270,7 @@ describe("Codex pet routes", () => {
       startedAt: null,
       completedAt: new Date(NOW),
     });
-    const active = runRow({
-      id: "run-active",
-      projectId: activeProject.id,
-      idempotencyKey: "start-key-active",
-      status: "base_generating",
-      progressStage: "base_generating",
-    });
-    const { prisma } = createPrismaMock({ projects: [originalProject, activeProject], runs: [insufficient, active] });
+    const { prisma } = createPrismaMock({ projects: [originalProject], runs: [insufficient] });
     const billing = createBilling();
     const { app } = await createApp(prisma, { billing });
 
@@ -1130,12 +1282,12 @@ describe("Codex pet routes", () => {
     });
 
     expect(response.statusCode).toBe(409);
-    expect(response.json()).toMatchObject({ activeRunId: "run-active" });
+    expect(response.json().error).toContain("旧计费合同");
     expect(billing.chargeResource).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("refreshes the run snapshot from an edited draft before retrying an insufficient charge", async () => {
+  it("retries the same per-image reservation after an insufficient balance response", async () => {
     const project = projectRow({
       status: "draft",
       prompt: "新的毛绒机器人提示词",
@@ -1146,14 +1298,19 @@ describe("Codex pet routes", () => {
     const insufficient = runRow({
       id: "run-insufficient",
       idempotencyKey: "start-key-topup",
-      status: "cancelled",
-      progressStage: "cancelled",
+      status: "queued",
+      progressStage: "queued",
+      billingMode: "per_image_call_v1",
+      billingSettlementStatus: "insufficient",
+      billingReservedUnits: 14,
+      billingResourceKey: CODEX_PET_RESOURCE_KEY,
+      billingOperationId: "codex-pet:run:run-insufficient:planned-images",
       billingChargeStatus: "insufficient",
       billingPoints: 0,
       billingChargedAt: null,
       billingActivatedAt: null,
       startedAt: null,
-      completedAt: new Date(NOW),
+      completedAt: null,
       autoContinue: false,
       inputSnapshot: {
         name: "代码狐",
@@ -1176,15 +1333,17 @@ describe("Codex pet routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(state.runs[0]).toMatchObject({
-      billingChargeStatus: "charged",
-      autoContinue: true,
-      inputSnapshot: expect.objectContaining({
-        prompt: "新的毛绒机器人提示词",
-        stylePreset: "plush",
-        autoContinue: true,
-      }),
+      billingChargeStatus: "reserved",
+      billingSettlementStatus: "reserved",
+      billingReservedUnits: 14,
     });
-    expect(billing.chargeResource).toHaveBeenCalledOnce();
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).toHaveBeenCalledWith({
+      operationId: "codex-pet:run:run-insufficient:planned-images",
+      userId: "u1",
+      resourceKey: CODEX_PET_RESOURCE_KEY,
+      units: 14,
+    });
     await app.close();
   });
 
@@ -1589,17 +1748,16 @@ describe("Codex pet routes", () => {
     }
   });
 
-  it("gates install/download on ready v2 validation and knowledge archival, then serves only the signed spritesheet", async () => {
-    const project = projectRow({ latestRunId: "run-ready", status: "ready", name: "代码 狐" });
+  it("delivers a revalidated package before knowledge archival completes, then serves only the signed spritesheet", async () => {
+    const project = projectRow({ latestRunId: "run-ready", status: "archiving", name: "代码 狐" });
     const run = runRow({
       id: "run-ready",
-      status: "ready",
+      status: "archiving",
       spritesheetArtifactId: "sprite-final",
       packageArtifactId: "package-final",
       previewArtifactId: "preview-final",
-      validationReport: completeValidationReport(),
-      knowledgeDocumentId: "knowledge-doc-1",
-      completedAt: new Date(NOW),
+      validationReport: { ok: false, errors: ["legacy QA report is incomplete"] },
+      knowledgeDocumentId: null,
     });
     const sprite = artifactRow({
       id: "sprite-final",
@@ -1701,7 +1859,7 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
-  it("validates an explicit run id and retains ownership, ready, validation, and knowledge archive gates", async () => {
+  it("validates an explicit run id and retains ownership plus final-artifact gates", async () => {
     const project = projectRow({ latestRunId: "run-latest", status: "ready" });
     const selected = runRow({
       id: "run-selected",
@@ -1723,23 +1881,18 @@ describe("Codex pet routes", () => {
     expect((await app.inject({ method: "POST", url: `${installUrl}-missing`, headers: auth })).statusCode).toBe(409);
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
 
-    state.runs[0]!.status = "ready";
+    state.runs[0]!.status = "archiving";
     state.runs[0]!.validationReport = { ok: false, spriteVersionNumber: 2 };
-    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
+    state.runs[0]!.knowledgeDocumentId = null;
+    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(200);
 
     state.runs[0]!.validationReport = { ok: true };
-    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
-
-    state.runs[0]!.validationReport = completeValidationReport();
-    state.runs[0]!.knowledgeDocumentId = null;
-    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
-
-    state.runs[0]!.knowledgeDocumentId = "knowledge-selected";
-    (state.documents[0]!.kb as { userId: string }).userId = "u2";
-    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
-
-    (state.documents[0]!.kb as { userId: string }).userId = "u1";
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(200);
+
+    state.runs[0]!.status = "failed";
+    expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(200);
+    state.runs[0]!.status = "archiving";
+
     const selectedSprite = state.artifacts.find((artifact) => artifact.id === "sprite-selected")!;
     const selectedPackage = state.artifacts.find((artifact) => artifact.id === "package-selected")!;
     selectedSprite.expiresAt = new Date("2026-07-24T00:00:00.000Z");

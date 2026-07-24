@@ -167,6 +167,50 @@ describe.skipIf(!databaseEnabled)("Codex pet failed continuation", () => {
       userId: user.id,
       reason: "幂等重试",
     })).resolves.toMatchObject({ resumed: false, runId: run.id, preservedImageGenerationCallCount: 8 });
+
+    const priorPromptVersion = "codex-pet-board-prompt-v6";
+    expect(CODEX_PET_BOARD_PROMPT_VERSION).not.toBe(priorPromptVersion);
+    await prisma.$transaction([
+      prisma.codexPetRun.update({ where: { id: run.id }, data: {
+        status: "failed",
+        progressStage: "failed",
+        completedAt: new Date(),
+        inputSnapshot: {
+          ...(persisted.inputSnapshot as Prisma.InputJsonObject),
+          failedContinuation: {
+            ...recordContinuation(persisted.inputSnapshot),
+            targetPromptVersion: priorPromptVersion,
+          },
+        },
+      } }),
+      prisma.codexPetProject.update({ where: { id: project.id }, data: { status: "failed" } }),
+      ...jobs.filter((job) => job.kind === "standard_row").map((job) => prisma.codexPetJob.update({
+        where: { id: job.id },
+        data: {
+          input: { ...(job.input as Prisma.InputJsonObject), promptVersion: priorPromptVersion },
+        },
+      })),
+    ]);
+
+    await expect(initializeCodexPetFailedContinuation({
+      prisma,
+      runId: run.id,
+      projectId: project.id,
+      userId: user.id,
+      reason: "v6 真实姿势板暴露端球漂移，升级到 v7 后单次续跑",
+    })).resolves.toMatchObject({
+      resumed: true,
+      runId: run.id,
+      targetPromptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+      preservedImageGenerationCallCount: 8,
+    });
+    const upgraded = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: run.id } });
+    expect(recordContinuation(upgraded.inputSnapshot)).toMatchObject({
+      sourcePromptVersions: [priorPromptVersion],
+      targetPromptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+      priorTargetPromptVersions: [priorPromptVersion],
+      maxBoardAttemptsPerJob: 1,
+    });
   });
 });
 

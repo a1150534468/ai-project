@@ -23,13 +23,12 @@ import { CodexPetStudio, type CodexPetStudioClient } from "./CodexPetStudio";
 
 const pricing: CodexPetPricing = {
   resourceKey: "codex_pet_v2_package",
-  displayName: "Codex 桌宠 v2 套餐",
-  pricingType: "PER_CALL",
+  displayName: "Codex 桌宠 v2 生图调用",
+  pricingType: "PER_UNIT",
   rate: 200,
   perUnits: 1,
   enabled: true,
   includedBaseCandidates: 2,
-  includedRepairAttempts: 2,
 };
 
 function makeProject(overrides: Partial<CodexPetProject> = {}): CodexPetProject {
@@ -43,6 +42,8 @@ function makeProject(overrides: Partial<CodexPetProject> = {}): CodexPetProject 
     referenceAssetIds: [],
     referenceAssets: [],
     autoContinue: false,
+    imageModel: "gpt-image-2",
+    qualityInspectionEnabled: false,
     status: "draft",
     latestRunId: null,
     createdAt: "2026-07-17T08:00:00.000Z",
@@ -74,7 +75,13 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     progressMessage: "请选择主形象",
     autoContinue: false,
     colorKey: "#ff00ff",
-    billingPoints: 200,
+    billingPoints: 0,
+    billingMode: "per_image_call_v1",
+    billingReservedUnits: 14,
+    billingSettledUnits: 0,
+    billingReservedPoints: 2800,
+    billingSettledPoints: 0,
+    billingSettlementStatus: "reserved",
     billingRefundedAt: null,
     cancelRequested: false,
     hasSuccessfulImage: true,
@@ -84,11 +91,13 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     previewArtifactId: null,
     validationReport: null,
     requestedModel: "gpt-image-2",
-    imageGenerationCallCount: 24,
-    modelContractVersion: "gpt-only-v1",
+    imageGenerationCallCount: 0,
+    plannedImageCallLimit: 14,
+    modelContractVersion: "gpt-only-quality-optional-v3",
     visualQaModel: "gpt-5.6-sol",
-    visualQaActualModels: ["gpt-5.6-sol"],
-    visualQaRoutes: ["chatgpt_model_route"],
+    qualityInspectionEnabled: false,
+    visualQaActualModels: [],
+    visualQaRoutes: [],
     actualModels: ["gpt-image-2-codex"],
     usage: { totalTokens: 321 },
     knowledgeDocumentId: null,
@@ -231,32 +240,25 @@ describe("CodexPetStudio", () => {
     expect(html).toContain("上传即表示你拥有参考图与角色的使用权");
     expect(html).toContain("验证、打包与归档");
     expect(html).toContain("事件会先持久化，再通过 SSE 实时推送");
-    expect(html).toContain("生图 gpt-image-2");
-    expect(html).toContain("视觉推理 / QA gpt-5.6-sol");
+    expect(html).toContain("GPT Image 2 · Pixel");
+    expect(html).toContain("正常路径最多 14 次计划内 GPT Image 2 调用");
+    expect(html).toContain("AI 质检");
+    expect(html).not.toContain("Seedream");
+    expect(html).not.toContain("Qwen Image");
   });
 
-  it("shows the frozen selection and blocks an excluded qwen3.7 request from delivery", async () => {
-    const run = makeRun({
-      status: "ready",
-      progressStage: "ready",
-      progressPercent: 100,
-      knowledgeDocumentId: "document-1",
-      spritesheetArtifactId: "sheet-1",
-      packageArtifactId: "zip-1",
-      visualQaModel: "qwen3.7-plus",
-      visualQaActualModels: [],
-      validationReport: { ok: true, spriteVersionNumber: 2 },
-    });
-    const project = makeProject({ status: "ready", latestRunId: run.id });
-    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+  it("defaults AI quality inspection off and only exposes its model selector after opt-in", async () => {
+    const project = makeProject();
+    const detail: CodexPetProjectDetail = { project, latestRun: null, runs: [], artifacts: [], jobs: [] };
     const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+    const qualityToggle = mounted.container.querySelector<HTMLInputElement>('input[aria-label="AI 质检"]');
 
-    expect(mounted.container.textContent).toContain("视觉推理 / QA 请求 qwen3.7-plus");
-    expect(mounted.container.textContent).toContain("来源不一致 · 已阻止交付");
-    expect(mounted.container.textContent).toContain("项目启动时冻结的选择不一致");
-    expect(Array.from(mounted.container.querySelectorAll("button"))
-      .some((button) => button.textContent?.includes("安装到 Codex"))).toBe(false);
-
+    expect(qualityToggle?.checked).toBe(false);
+    expect(mounted.container.querySelector('select[aria-label="视觉理解 / 质检模型"]')).toBeNull();
+    expect(mounted.container.textContent).not.toContain("Seedream");
+    expect(mounted.container.textContent).not.toContain("Qwen Image");
+    await act(async () => { qualityToggle?.click(); });
+    expect(mounted.container.querySelector('select[aria-label="视觉理解 / 质检模型"]')).not.toBeNull();
     await act(async () => { mounted.root.unmount(); });
   });
 
@@ -513,26 +515,26 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
-  it("shows the real image-call count and grants exactly one paused direction call", async () => {
+  it("shows the planned-call cap and grants one explicitly approved extra call", async () => {
     const run = makeRun({
-      status: "awaiting_direction_review",
-      progressStage: "awaiting_direction_review",
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
       progressMessage: "等待批准 look-a",
       pendingImageJobKey: "look-a",
       imageGenerationApprovalBudget: 0,
-      imageGenerationCallCount: 24,
+      imageGenerationCallCount: 12,
     });
-    const project = makeProject({ status: "awaiting_direction_review", latestRunId: run.id });
+    const project = makeProject({ status: "awaiting_regeneration_approval", latestRunId: run.id });
     const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
     const client = makeClient({ project, detail });
     const mounted = await mountStudio({ token: "token", client });
 
-    expect(mounted.container.querySelector('[data-testid="codex-pet-image-call-count"]')?.textContent).toBe("24");
+    expect(mounted.container.querySelector('[data-testid="codex-pet-image-call-count"]')?.textContent).toBe("12/14");
     const approve = buttonByText(mounted.container, "批准 1 次生图");
     await act(async () => { approve.click(); });
     await flushEffects();
 
-    expect(client.approveNextImage).toHaveBeenCalledWith("token", "project-1", "run-1");
+    expect(client.approveNextImage).toHaveBeenCalledWith("token", "project-1", "run-1", expect.stringMatching(/^codex-pet-extra-/));
     expect(mounted.container.textContent).toContain("已批准 look-a 的 1 次真实生图调用");
     await act(async () => { mounted.root.unmount(); });
   });
@@ -647,16 +649,16 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
-  it("withholds delivery when a ready run has no knowledge document", async () => {
+  it("allows installation while a packaged pet is still being archived", async () => {
     const run = makeRun({
-      status: "ready",
+      status: "archiving",
       progressPercent: 100,
       spritesheetArtifactId: "sheet-1",
       packageArtifactId: "zip-1",
       validationReport: { ok: true, spriteVersionNumber: 2 },
       knowledgeDocumentId: null,
     });
-    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const project = makeProject({ status: "archiving", latestRunId: run.id });
     const detail: CodexPetProjectDetail = {
       project,
       latestRun: run,
@@ -664,14 +666,20 @@ describe("CodexPetStudio", () => {
       artifacts: [artifact("sheet-1", "spritesheet", { width: 1536, height: 2288 })],
       jobs: [],
     };
-    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+    const client = makeClient({ project, detail });
+    const onInstallUrl = vi.fn();
+    const mounted = await mountStudio({ token: "token", client, onInstallUrl });
 
-    expect(mounted.container.textContent).toContain("工作台保持在 98%");
-    expect(Array.from(mounted.container.querySelectorAll("button")).some((button) => button.textContent?.includes("安装到 Codex"))).toBe(false);
+    expect(mounted.container.textContent).toContain("AI 产物正在后台归档，不影响安装和下载。");
+    await act(async () => { buttonByText(mounted.container, "安装到 Codex").click(); });
+    await flushEffects();
+    expect(client.createInstallLink).toHaveBeenCalledWith("token", "project-1");
+    expect(onInstallUrl).toHaveBeenCalledWith("codex://pets/install?name=%E7%A0%81%E4%BB%94");
+    expect(Array.from(mounted.container.querySelectorAll("button")).some((button) => button.textContent?.includes("在 AI 产物中查看"))).toBe(false);
     await act(async () => { mounted.root.unmount(); });
   });
 
-  it("installs and opens the archived document only after the complete delivery gate passes", async () => {
+  it("installs and opens the archived document when it is available", async () => {
     const run = makeRun({
       status: "ready",
       progressPercent: 100,

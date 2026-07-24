@@ -25,6 +25,12 @@ pnpm dev
 
 模型网关（百炼 / AI Pixel / 生图 / 向量）配置详见 [docs/setup/model-providers.md](docs/setup/model-providers.md)；本地开发细节与常见问题见 [docs/setup/local-dev.md](docs/setup/local-dev.md)。
 
+## Codex 桌宠调用合同
+
+Codex 桌宠的新项目仅使用 `GPT Image 2` 经 Pixel 路由生成和编辑。AI 视觉质检默认关闭；关闭时不会调用视觉模型，仍执行本地兼容性验证和 v2 打包。
+
+一次正常运行最多预留 14 次计划内生图调用，并按实际已发出的请求结算和退回未使用预留。任何第 15 次、修复或重生调用都必须由用户单次明确授权并单独计费。网络、超时、429、5xx 和本地/质检失败均不会静默重试 provider 请求。
+
 ## 仓库布局
 
 ```

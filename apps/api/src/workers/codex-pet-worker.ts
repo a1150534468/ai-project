@@ -26,6 +26,7 @@ import {
 } from "../workflow/codex-pet-runner.js";
 import { createCodexPetArtifactStore, deleteCodexPetArtifact } from "../workflow/codex-pet-storage.js";
 import { assertCodexPetImageRoute } from "../workflow/codex-pet-model-contract.js";
+import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "../workflow/codex-pet-call-ledger.js";
 import {
   isVerifiedWorkflowImageObjectKeyForUser,
   sanitizeImageUpstreamRequestId,
@@ -467,12 +468,21 @@ export async function recoverStaleRuns(input: {
   const now = input.now ?? (() => new Date());
   const enqueue = input.enqueue ?? ((runId: string) => enqueueCodexPetRun({ runId }));
   const staleBefore = new Date(now().getTime() - positiveNumber("CODEX_PET_STALE_RUN_MS", 15 * 60_000, env));
+  const pausedStatuses = new Set(["awaiting_base_review", "awaiting_direction_review", "awaiting_regeneration_approval"]);
   const runs = await prisma.codexPetRun.findMany({
     where: {
-      status: { in: [...CODEX_PET_ACTIVE_STATUSES].filter((status) => !["awaiting_base_review", "awaiting_direction_review"].includes(status)) },
-      billingChargeStatus: "charged",
-      billingActivatedAt: { not: null },
-      OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }, { status: "queued" }],
+      status: { in: [...CODEX_PET_ACTIVE_STATUSES].filter((status) => !pausedStatuses.has(status)) },
+      AND: [
+        {
+          OR: [
+            { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
+            { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
+          ],
+        },
+        {
+          OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }, { status: "queued" }],
+        },
+      ],
       // A cancellation requested while a worker owns the lease intentionally
       // leaves the run active until that worker reaches a safe checkpoint.
       // If the worker dies first, the persisted flag must still be recovered;
@@ -484,6 +494,94 @@ export async function recoverStaleRuns(input: {
   });
   await Promise.all(runs.map((run) => enqueue(run.id).catch(() => undefined)));
   return runs.length;
+}
+
+type CodexPetSettlementClient = {
+  readonly settleResource: (args: {
+    readonly operationId: string;
+    readonly resourceKey: string;
+    readonly units: number;
+  }) => Promise<{ readonly settled: number }>;
+};
+
+/**
+ * A worker can finish the artifact work yet lose connectivity while settling
+ * its reservation. This maintenance path only reconciles durable accounting
+ * for terminal per-image runs; it never enqueues work or contacts Pixel.
+ */
+export async function reconcilePerImageBillingSettlements(input: {
+  readonly prisma: PrismaClient;
+  readonly billing: CodexPetSettlementClient;
+  readonly now?: () => Date;
+  readonly limit?: number;
+}): Promise<number> {
+  const now = input.now ?? (() => new Date());
+  const terminalStatuses = ["ready", "failed", "cancelled"];
+  const candidates = await input.prisma.codexPetRun.findMany({
+    where: {
+      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+      billingSettlementStatus: { in: ["reserved", "settle_failed"] },
+      billingOperationId: { not: null },
+      billingResourceKey: { not: null },
+      status: { in: terminalStatuses },
+    },
+    select: { id: true, projectId: true, userId: true, billingOperationId: true, billingResourceKey: true },
+    take: Math.min(500, Math.max(1, input.limit ?? 50)),
+  });
+  let settled = 0;
+  for (const run of candidates) {
+    try {
+      const units = await input.prisma.codexPetImageCall.count({
+        where: {
+          runId: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          callKind: "planned",
+          sentAt: { not: null },
+        },
+      });
+      const receipt = await input.billing.settleResource({
+        operationId: run.billingOperationId!,
+        resourceKey: run.billingResourceKey!,
+        units,
+      });
+      const changed = await input.prisma.codexPetRun.updateMany({
+        where: {
+          id: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+          billingSettlementStatus: { in: ["reserved", "settle_failed"] },
+          status: { in: terminalStatuses },
+        },
+        data: {
+          billingSettledUnits: units,
+          billingSettledPoints: receipt.settled,
+          billingPoints: receipt.settled,
+          billingSettlementStatus: "settled",
+          billingSettledAt: now(),
+          billingChargeError: null,
+        },
+      });
+      settled += changed.count;
+    } catch (error) {
+      await input.prisma.codexPetRun.updateMany({
+        where: {
+          id: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+          billingSettlementStatus: { in: ["reserved", "settle_failed"] },
+          status: { in: terminalStatuses },
+        },
+        data: {
+          billingSettlementStatus: "settle_failed",
+          billingChargeError: safeWorkerError(error),
+        },
+      }).catch(() => undefined);
+    }
+  }
+  return settled;
 }
 
 export async function releasePreemptedRuns(input: {
@@ -538,10 +636,21 @@ async function reconcileBillingIntents(prisma: PrismaClient, billing: CodexPetCh
 
 async function main() {
   const imageRoute = assertCodexPetImageRoute(process.env);
-  const visualQaRoute = assertCodexPetVisualQaRoute(process.env);
   console.info(`[codex-pet-worker] image route ready model=${imageRoute.model}`);
-  console.info(`[codex-pet-worker] visual QA route ready model=${visualQaRoute.model}`);
   const prisma = getPrisma();
+  const qualityRun = await prisma.codexPetRun.findFirst({
+    where: {
+      status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
+      qualityInspectionEnabled: true,
+    },
+    select: { id: true },
+  });
+  if (qualityRun) {
+    const visualQaRoute = assertCodexPetVisualQaRoute(process.env);
+    console.info(`[codex-pet-worker] visual QA route ready model=${visualQaRoute.model}`);
+  } else {
+    console.info("[codex-pet-worker] visual QA preflight skipped; no quality-enabled Codex pet run is active");
+  }
   const s3 = makeS3();
   const artifacts = createCodexPetArtifactStore({ prisma, s3 });
   const billing = createBillingClient({
@@ -569,6 +678,8 @@ async function main() {
   const activated = await reconcileBillingIntents(prisma, billing);
   metrics.billingActivated += activated;
   if (activated) console.info(`[codex-pet-worker] activated ${activated} billed runs`);
+  const settled = await reconcilePerImageBillingSettlements({ prisma, billing });
+  if (settled) console.info(`[codex-pet-worker] settled ${settled} per-image billed runs`);
   const recovered = await recoverStaleRuns();
   metrics.staleRunsRecovered += recovered;
   if (recovered) console.info(`[codex-pet-worker] recovered ${recovered} queued/stale runs`);
@@ -592,7 +703,13 @@ async function main() {
     const workerLeaseId = `bull:${job.id ?? runId}:${randomUUID().slice(0, 12)}`;
     const controller = new AbortController();
     const eligible = await prisma.codexPetRun.findFirst({
-      where: { id: runId, billingChargeStatus: "charged", billingActivatedAt: { not: null } },
+      where: {
+        id: runId,
+        OR: [
+          { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
+          { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
+        ],
+      },
       select: { id: true },
     });
     // A producer from an older deployment may enqueue before activation. Drop
@@ -613,8 +730,10 @@ async function main() {
           id: runId,
           workerId: workerLeaseId,
           status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-          billingChargeStatus: "charged",
-          billingActivatedAt: { not: null },
+          OR: [
+            { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
+            { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
+          ],
         },
         data: { heartbeatAt: new Date() },
       }).catch(() => undefined);
@@ -737,6 +856,8 @@ async function main() {
       const now = new Date();
       await refreshDatabaseGauges(prisma, metrics);
       metrics.billingActivated += await reconcileBillingIntents(prisma, billing);
+      const settled = await reconcilePerImageBillingSettlements({ prisma, billing });
+      if (settled) console.info(`[codex-pet-worker] settled ${settled} per-image billed runs`);
       metrics.staleRunsRecovered += await recoverStaleRuns();
       const deletionRecovery = await recoverDeletingProjects({
         prisma,

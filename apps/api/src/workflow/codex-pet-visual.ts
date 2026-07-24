@@ -41,7 +41,7 @@ import {
   CodexPetModelContractError,
   CODEX_PET_VISUAL_QA_MODEL,
   codexPetVisualQaRouteForModel,
-  isAllowedCodexPetImageModel,
+  isAllowedCodexPetImageProvenance,
   isAllowedCodexPetVisualModel,
   type CodexPetVisualQaRoute,
 } from "./codex-pet-model-contract.js";
@@ -191,10 +191,19 @@ class CodexPetImageModelMismatchError extends CodexPetModelContractError {
 
 function assertCodexPetImageModel(result: ImageGenerationResult, requestedModel: string): void {
   const actual = result.actualModel.trim();
+  // New runs are constrained before this helper is reached. Keep exact-model
+  // verification for legacy persisted artifact tooling without widening the
+  // request allowlist used by the Codex pet API/runner.
+  if (requestedModel !== GPT_IMAGE_MODEL) {
+    if (result.requestedModel !== requestedModel || actual !== requestedModel) {
+      throw new CodexPetImageModelMismatchError(result.requestedModel, actual || "unknown");
+    }
+    return;
+  }
   const exactOrRelayAlias = actual === requestedModel
     || (requestedModel === GPT_IMAGE_MODEL && actual === "gpt-image-2-codex");
   if (result.requestedModel !== requestedModel
-    || !isAllowedCodexPetImageModel(actual)
+    || !isAllowedCodexPetImageProvenance(actual)
     || !exactOrRelayAlias) {
     throw new CodexPetImageModelMismatchError(result.requestedModel, actual || "unknown");
   }
@@ -520,8 +529,13 @@ export async function createSeedreamPoseBoardScaffold(input: {
   readonly width?: number;
   readonly height?: number;
 }): Promise<Buffer> {
-  const width = input.width ?? 1536;
-  const height = input.height ?? 1024;
+  // Seedream preserves the prompt's square target slots much more reliably
+  // when the construction reference uses the same columns:rows aspect ratio.
+  // A fixed 1536x1024 canvas is correct for 3x2 idle, but it turns a 4x2 gait
+  // board into 3:2 and can make the provider split each character across rows.
+  const width = input.width
+    ?? (input.height ? Math.round(input.height * input.columns / input.rows) : 1536);
+  const height = input.height ?? Math.round(width * input.rows / input.columns);
   if (!Number.isInteger(input.columns) || input.columns < 1
     || !Number.isInteger(input.rows) || input.rows < 1
     || !Number.isInteger(input.frameCount) || input.frameCount < 1
@@ -529,6 +543,9 @@ export async function createSeedreamPoseBoardScaffold(input: {
     || !Number.isInteger(width) || width < 1
     || !Number.isInteger(height) || height < 1) {
     throw new Error("Seedream scaffold requires a valid positive layout and frame count");
+  }
+  if (Math.abs(width / input.columns - height / input.rows) > 1) {
+    throw new Error("Seedream scaffold must use square slots matching the requested columns:rows aspect ratio");
   }
   const sources = input.poseVariants?.length ? [...input.poseVariants] : [input.canonical];
   const sequence = input.variantSequence
@@ -651,6 +668,8 @@ export async function generateCodexPetVisual(input: {
   readonly signal?: AbortSignal;
   readonly maxAttempts?: number;
   readonly onAttempt?: (attempt: number) => Promise<void> | void;
+  readonly onRequestDispatching?: (attempt: number) => Promise<void> | void;
+  readonly onRequestSent?: (attempt: number) => Promise<void> | void;
   readonly onRetry?: (error: unknown, attempt: number) => Promise<void> | void;
 }): Promise<GeneratedPetVisual> {
   const env = input.env ?? process.env;
@@ -682,20 +701,24 @@ export async function generateCodexPetVisual(input: {
             referenceImages: references,
             size: input.size ?? "1536x1024",
             quality: input.quality ?? "low",
-            outputFormat: "png",
-            fetchFn,
-            env,
-            signal: input.signal,
+          outputFormat: "png",
+          fetchFn,
+          env,
+          signal: input.signal,
+          onRequestDispatching: () => input.onRequestDispatching?.(attempt),
+          onRequestSent: () => input.onRequestSent?.(attempt),
           })
         : await callImageGenerationDetailed({
             config,
             prompt,
             size: input.size ?? "1024x1024",
             quality: input.quality ?? "low",
-            outputFormat: "png",
-            fetchFn,
-            env,
-            signal: input.signal,
+          outputFormat: "png",
+          fetchFn,
+          env,
+          signal: input.signal,
+          onRequestDispatching: () => input.onRequestDispatching?.(attempt),
+          onRequestSent: () => input.onRequestSent?.(attempt),
           });
       assertCodexPetImageModel(provider, requestedModel);
       const binary = await generatedImageBuffer(provider, fetchFn, input.signal);

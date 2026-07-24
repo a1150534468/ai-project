@@ -109,7 +109,7 @@ interface AlphaAnalysis {
   readonly edgePixels: number;
   readonly componentCount: number;
   readonly internalTransparentPixels: number;
-  /** Source image with only proven detached line residue removed. */
+  /** Source image with only proven detached generation residue removed. */
   readonly cleanedImage: Buffer | null;
 }
 
@@ -159,6 +159,78 @@ function isDetachedLineResidue(
     primary.bounds.bottom,
   );
   return Math.max(horizontalGap, verticalGap) >= Math.max(3, Math.floor(canvasShortSide * 0.008));
+}
+
+function isDetachedSpeckResidue(
+  component: AlphaComponent,
+  primary: AlphaComponent,
+  canvasWidth: number,
+  canvasHeight: number,
+): boolean {
+  if (component.label === primary.label || component.edgePixels > 0) return false;
+  if (component.pixels > primary.pixels * 0.005) return false;
+
+  const shortSide = Math.min(component.bounds.width, component.bounds.height);
+  const longSide = Math.max(component.bounds.width, component.bounds.height);
+  const canvasShortSide = Math.min(canvasWidth, canvasHeight);
+  const maximumSide = Math.max(8, Math.floor(canvasShortSide * 0.04));
+  if (longSide > maximumSide || longSide / shortSide > 2) return false;
+
+  const fillRatio = component.pixels / (component.bounds.width * component.bounds.height);
+  if (fillRatio < 0.3) return false;
+
+  const horizontalGap = axisGap(
+    component.bounds.left,
+    component.bounds.right,
+    primary.bounds.left,
+    primary.bounds.right,
+  );
+  const verticalGap = axisGap(
+    component.bounds.top,
+    component.bounds.bottom,
+    primary.bounds.top,
+    primary.bounds.bottom,
+  );
+  return Math.max(horizontalGap, verticalGap) >= Math.max(5, Math.floor(canvasShortSide * 0.025));
+}
+
+function isDetachedPartialDuplicateResidue(
+  component: AlphaComponent,
+  primary: AlphaComponent,
+  canvasWidth: number,
+  canvasHeight: number,
+): boolean {
+  if (component.label === primary.label || component.edgePixels > 0) return false;
+
+  const pixelRatio = component.pixels / primary.pixels;
+  const widthRatio = component.bounds.width / primary.bounds.width;
+  const heightRatio = component.bounds.height / primary.bounds.height;
+  if (pixelRatio < 0.25 || pixelRatio > 0.65
+    || widthRatio < 0.75 || widthRatio > 1.2
+    || heightRatio < 0.3 || heightRatio > 0.65) {
+    return false;
+  }
+
+  const primaryCenterX = primary.bounds.left + (primary.bounds.width - 1) / 2;
+  const componentCenterX = component.bounds.left + (component.bounds.width - 1) / 2;
+  if (Math.abs(primaryCenterX - componentCenterX) > primary.bounds.width * 0.15) return false;
+
+  const horizontalGap = axisGap(
+    component.bounds.left,
+    component.bounds.right,
+    primary.bounds.left,
+    primary.bounds.right,
+  );
+  const verticalGap = axisGap(
+    component.bounds.top,
+    component.bounds.bottom,
+    primary.bounds.top,
+    primary.bounds.bottom,
+  );
+  const canvasShortSide = Math.min(canvasWidth, canvasHeight);
+  return horizontalGap === 0
+    && verticalGap >= Math.max(5, Math.floor(canvasShortSide * 0.025))
+    && verticalGap <= primary.bounds.height * 0.35;
 }
 
 function isDetachedLayoutGuideResidue(
@@ -299,6 +371,8 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
   const retainedComponents = primary
     ? eligibleComponents.filter((component) => (
         !isDetachedLineResidue(component, primary, width, height)
+        && !isDetachedSpeckResidue(component, primary, width, height)
+        && !isDetachedPartialDuplicateResidue(component, primary, width, height)
         && !isDetachedLayoutGuideResidue(component, primary, width, height)
         && !duplicateFragmentLabels.has(component.label)
       ))

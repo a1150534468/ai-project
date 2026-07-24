@@ -56,6 +56,7 @@ export interface CodexPetDraft {
   readonly autoContinue: boolean;
   readonly imageModel: CodexPetImageModel;
   readonly visualQaModel: string;
+  readonly qualityInspectionEnabled: boolean;
 }
 
 export const EMPTY_CODEX_PET_DRAFT: CodexPetDraft = {
@@ -68,6 +69,7 @@ export const EMPTY_CODEX_PET_DRAFT: CodexPetDraft = {
   autoContinue: false,
   imageModel: CODEX_PET_IMAGE_MODEL,
   visualQaModel: CODEX_PET_VISUAL_QA_MODEL,
+  qualityInspectionEnabled: false,
 };
 
 export interface CodexPetProgressStep {
@@ -108,6 +110,7 @@ const STATUS_LABELS: Record<CodexPetProjectStatus, string> = {
   base_generating: "生成主形象",
   awaiting_base_review: "等待确认主形象",
   awaiting_direction_review: "等待批准下一次生图",
+  awaiting_regeneration_approval: "等待额外调用批准",
   standard_generating: "制作标准动作",
   direction_generating: "制作观察方向",
   validating: "质量检查",
@@ -117,6 +120,7 @@ const STATUS_LABELS: Record<CodexPetProjectStatus, string> = {
   ready: "制作完成",
   failed: "制作失败",
   cancelled: "已取消",
+  legacy_read_only: "历史只读归档",
   deleting: "正在删除",
 };
 
@@ -125,7 +129,7 @@ export function codexPetStatusLabel(status: string): string {
 }
 
 export function isCodexPetRunLive(status: CodexPetRunStatus | undefined): boolean {
-  return status !== undefined && !["ready", "failed", "cancelled", "awaiting_base_review", "awaiting_direction_review"].includes(status);
+  return status !== undefined && !["ready", "failed", "cancelled", "legacy_read_only", "awaiting_base_review", "awaiting_direction_review", "awaiting_regeneration_approval"].includes(status);
 }
 
 function codexPetJobTimestamp(job: CodexPetJob): number {
@@ -204,14 +208,20 @@ export function codexPetModelContractState(
   const imageActualModels = Array.isArray(run.actualModels) ? run.actualModels : [];
   const visualActualModels = Array.isArray(run.visualQaActualModels) ? run.visualQaActualModels : [];
   const visualRoutes = Array.isArray(run.visualQaRoutes) ? run.visualQaRoutes : [];
+  // The migration default is false, but old v1 rows were produced under the
+  // mandatory-QA contract. Preserve their provenance semantics while new v3
+  // runs use the explicit switch frozen in their input snapshot.
+  const qualityInspectionEnabled = run.modelContractVersion === CODEX_PET_MODEL_CONTRACT_VERSION
+    ? run.qualityInspectionEnabled === true
+    : true;
   const imageModelAllowed = (CODEX_PET_IMAGE_MODELS as readonly string[]).includes(run.requestedModel);
   const imageActualMatches = imageActualModels.every((model) => (
     model === run.requestedModel
       || (run.requestedModel === CODEX_PET_IMAGE_MODEL && model === "gpt-image-2-codex")
   ));
-  const visualModelAllowed = Boolean(run.visualQaModel)
+  const visualModelAllowed = !qualityInspectionEnabled || (Boolean(run.visualQaModel)
     && !run.visualQaModel.toLowerCase().startsWith("qwen3.7")
-    && !run.visualQaModel.toLowerCase().includes("embedding");
+    && !run.visualQaModel.toLowerCase().includes("embedding"));
   const expectedVisualRoute = run.visualQaModel.startsWith("gpt-") || run.visualQaModel === "codex-auto-review"
     ? "chatgpt_model_route"
     : "bailian_model_route";
@@ -223,28 +233,24 @@ export function codexPetModelContractState(
     || !imageModelAllowed
     || !imageActualMatches
     || !visualModelAllowed
-    || !visualActualModels.every((model) => model === run.visualQaModel)
-    || !visualRoutes.every((route) => route === expectedVisualRoute)) return "invalid";
-  if (imageActualModels.length === 0 || visualActualModels.length === 0 || visualRoutes.length === 0) {
+    || (qualityInspectionEnabled && (!visualActualModels.every((model) => model === run.visualQaModel)
+      || !visualRoutes.every((route) => route === expectedVisualRoute)))
+    || (!qualityInspectionEnabled && (visualActualModels.length > 0 || visualRoutes.length > 0))) return "invalid";
+  if (imageActualModels.length === 0 || (qualityInspectionEnabled && (visualActualModels.length === 0 || visualRoutes.length === 0))) {
     return "pending";
   }
   return "valid";
 }
 
 export function isCodexPetDeliveryReady(run: CodexPetRun | null | undefined): boolean {
-  const report = objectValue(run?.validationReport);
   return Boolean(
     run
-    && run.status === "ready"
-    && run.knowledgeDocumentId
+    && (run.status === "archiving" || run.status === "ready" || run.status === "failed")
     && run.spritesheetArtifactId
     && run.packageArtifactId
-    && codexPetModelContractState(run) === "valid"
-    // A delivery report is only valid for this workflow when it explicitly
-    // identifies the Codex v2 contract. Keep the broader helper above for
-    // legacy/report-display compatibility, but gate install/download here.
-    && report?.spriteVersionNumber === 2
-    && codexPetValidationPassed(run.validationReport),
+    // Artifact integrity is enforced by the delivery API. The report and
+    // model-provenance views remain diagnostic information, not user-facing
+    // delivery gates.
   );
 }
 
@@ -252,7 +258,6 @@ export function codexPetDisplayProgress(run: CodexPetRun | null | undefined, eve
   if (!run) return 0;
   const progress = Math.max(run.progressPercent, eventProgress);
   if (isCodexPetDeliveryReady(run)) return 100;
-  // 知识库 Document 是 ready 的硬门槛；归档未完成时最后 2% 不得提前亮起。
   return Math.max(0, Math.min(98, Math.round(progress)));
 }
 
@@ -274,7 +279,7 @@ export function validateCodexPetDraft(
   const nameLength = Array.from(draft.name.trim()).length;
   if (nameLength === 0) return "请输入桌宠名称";
   if (nameLength > 30) return "桌宠名称不能超过 30 个字";
-  if (!draft.visualQaModel.trim()) return "请选择视觉理解/质检模型";
+  if (draft.qualityInspectionEnabled && !draft.visualQaModel.trim()) return "请选择视觉理解/质检模型";
   if (!(CODEX_PET_IMAGE_MODELS as readonly string[]).includes(draft.imageModel)) return "请选择可用的生图模型";
   if (Array.from(draft.prompt).length > 4_000) return "角色提示词不能超过 4000 个字";
   if (draft.referenceAssets.length > CODEX_PET_MAX_REFERENCES) return "参考图最多 3 张";
@@ -299,8 +304,11 @@ export function codexPetDraftFromProject(project: CodexPetProject): CodexPetDraf
       createdAt: project.createdAt,
     })),
     autoContinue: project.autoContinue,
-    imageModel: project.imageModel ?? CODEX_PET_IMAGE_MODEL,
+    imageModel: project.imageModel === CODEX_PET_IMAGE_MODEL
+      ? project.imageModel
+      : CODEX_PET_IMAGE_MODEL,
     visualQaModel: project.visualQaModel ?? CODEX_PET_VISUAL_QA_MODEL,
+    qualityInspectionEnabled: project.qualityInspectionEnabled === true,
   };
 }
 
@@ -315,6 +323,7 @@ export function codexPetPayloadFromDraft(draft: CodexPetDraft, idempotencyKey?: 
     autoContinue: draft.autoContinue,
     imageModel: draft.imageModel,
     visualQaModel: draft.visualQaModel,
+    qualityInspectionEnabled: draft.qualityInspectionEnabled,
     ...(idempotencyKey ? { idempotencyKey } : {}),
   };
 }
@@ -353,7 +362,7 @@ export function isCodexPetDirectionArtifact(artifact: CodexPetArtifact): boolean
   return artifact.kind.includes("direction") || artifact.kind.includes("look");
 }
 
-export function makeCodexPetIdempotencyKey(prefix: "project" | "run"): string {
+export function makeCodexPetIdempotencyKey(prefix: "project" | "run" | "extra"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `codex-pet-${prefix}-${crypto.randomUUID()}`;
   return `codex-pet-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

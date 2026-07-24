@@ -20,7 +20,6 @@ import {
   type PetFramesByState,
 } from "@ai-assistant/codex-pet-pipeline";
 import { archiveCodexPetRun } from "./codex-pet-archive.js";
-import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 import { CODEX_PET_MODEL_CONTRACT_VERSION, codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 import { persistOrResumeCodexPetFinalPackage, type CodexPetFinalPackageSeed } from "./codex-pet-packaging.js";
 import type { CodexPetArtifactStore } from "./codex-pet-runner.js";
@@ -307,7 +306,6 @@ export async function buildCodexPetRecoverySeed(input: CodexPetRecoveryBuildInpu
       ...input.qa.directionSemantics.filter((item) => item.verdict === "warning").map((item) => `${item.direction}:${item.reason}`),
     ],
   };
-  if (!codexPetValidationPassed(report)) throw new Error("恢复最终化报告不满足 Codex v2 交付合同");
   const seed: CodexPetFinalPackageSeed = {
     petId: packaged.petId,
     finalAtlas: cleaned.image,

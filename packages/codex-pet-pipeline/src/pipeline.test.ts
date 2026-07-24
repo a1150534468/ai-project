@@ -631,6 +631,58 @@ describe("codex pet deterministic pipeline", () => {
     expect(nearbyLineDiagnostics.errors).toContain("multiple-foreground-components");
   });
 
+  it("removes only tiny distant specks while preserving nearby disconnected anatomy", async () => {
+    const distantSpeck = await sharp({
+      create: { width: PET_CELL_WIDTH, height: PET_CELL_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="208">
+      <rect x="30" y="40" width="82" height="140" rx="24" fill="#2459c7"/>
+      <circle cx="160" cy="180" r="3" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const distantSpeckDiagnostics = await inspectFrame(distantSpeck);
+    expect(distantSpeckDiagnostics.componentCount).toBe(1);
+    expect(distantSpeckDiagnostics.errors).not.toContain("multiple-foreground-components");
+
+    const nearbyDisconnectedPart = await sharp({
+      create: { width: PET_CELL_WIDTH, height: PET_CELL_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="208">
+      <rect x="30" y="40" width="82" height="140" rx="24" fill="#2459c7"/>
+      <circle cx="116" cy="75" r="3" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const nearbyPartDiagnostics = await inspectFrame(nearbyDisconnectedPart);
+    expect(nearbyPartDiagnostics.componentCount).toBe(2);
+    expect(nearbyPartDiagnostics.errors).toContain("multiple-foreground-components");
+  });
+
+  it("removes an aligned detached half-body duplicate without accepting a second subject", async () => {
+    const duplicatedHalf = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <rect x="105" y="25" width="110" height="190" rx="28" fill="#2459c7"/>
+      <rect x="108" y="250" width="104" height="80" rx="24" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const duplicateDiagnostics = await inspectFrame(duplicatedHalf);
+    expect(duplicateDiagnostics.componentCount).toBe(1);
+    expect(duplicateDiagnostics.errors).not.toContain("multiple-foreground-components");
+    expect(duplicateDiagnostics.sourceBounds).toEqual({
+      left: 105,
+      top: 25,
+      right: 214,
+      bottom: 214,
+      width: 110,
+      height: 190,
+    });
+
+    const secondSubject = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <rect x="40" y="45" width="110" height="190" rx="28" fill="#2459c7"/>
+      <rect x="195" y="70" width="80" height="150" rx="24" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const secondSubjectDiagnostics = await inspectFrame(secondSubject);
+    expect(secondSubjectDiagnostics.componentCount).toBe(2);
+    expect(secondSubjectDiagnostics.errors).toContain("multiple-foreground-components");
+  });
+
   it("mirrors each frame without reversing animation order", async () => {
     const frames = [await solidFrame("#ff2200", 20), await solidFrame("#0044ff", 50)];
     const mirrored = await mirrorFramesPreservingOrder(frames);

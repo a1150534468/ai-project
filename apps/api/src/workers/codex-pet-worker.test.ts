@@ -12,6 +12,7 @@ import {
   recordCodexPetRetryMetrics,
   recordCodexPetUpstreamRequestIdMetric,
   recoverDeletingProjects,
+  reconcilePerImageBillingSettlements,
   recoverStaleRuns,
   releasePreemptedRuns,
 } from "./codex-pet-worker.js";
@@ -336,8 +337,16 @@ describe("Codex pet stale-run recovery", () => {
       // exclusion; the database predicate below models its stale heartbeat
       // OR and keeps a live cancelled worker protected by its lease.
       expect(where.cancelRequested).toBeUndefined();
-      const or = where.OR as readonly Record<string, unknown>[];
-      expect(or).toEqual(expect.arrayContaining([
+      expect((where.status as { readonly in: readonly string[] }).in).not.toEqual(expect.arrayContaining([
+        "awaiting_base_review",
+        "awaiting_direction_review",
+        "awaiting_regeneration_approval",
+      ]));
+      const clauses = where.AND as readonly { readonly OR: readonly Record<string, unknown>[] }[];
+      expect(clauses[0]!.OR).toEqual(expect.arrayContaining([
+        { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
+      ]));
+      expect(clauses[1]!.OR).toEqual(expect.arrayContaining([
         { heartbeatAt: null },
         { heartbeatAt: { lt: new Date("2026-07-18T00:00:09.000Z") } },
         { status: "queued" },
@@ -354,6 +363,110 @@ describe("Codex pet stale-run recovery", () => {
     })).resolves.toBe(1);
     expect(enqueue).toHaveBeenCalledWith("cancel-stale");
     expect(enqueue).not.toHaveBeenCalledWith("cancel-fresh");
+  });
+
+  it("requeues a stale per-image reservation while excluding every approval pause", async () => {
+    const now = new Date("2026-07-18T00:00:10.000Z");
+    const findMany = vi.fn(async ({ where }: { readonly where: Record<string, unknown> }) => {
+      expect((where.status as { readonly in: readonly string[] }).in).not.toEqual(expect.arrayContaining([
+        "awaiting_base_review",
+        "awaiting_direction_review",
+        "awaiting_regeneration_approval",
+      ]));
+      const clauses = where.AND as readonly { readonly OR: readonly Record<string, unknown>[] }[];
+      expect(clauses[0]!.OR).toEqual(expect.arrayContaining([
+        { billingMode: "per_image_call_v1", billingSettlementStatus: "reserved" },
+      ]));
+      return [{ id: "per-image-stale" }];
+    });
+    const enqueue = vi.fn(async (_runId: string) => undefined);
+
+    await expect(recoverStaleRuns({
+      prisma: { codexPetRun: { findMany } } as unknown as PrismaClient,
+      enqueue,
+      now: () => now,
+      env: { CODEX_PET_STALE_RUN_MS: "1000" },
+    })).resolves.toBe(1);
+
+    expect(enqueue).toHaveBeenCalledOnce();
+    expect(enqueue).toHaveBeenCalledWith("per-image-stale");
+  });
+
+  it("settles terminal per-image reservations from sent planned ledger entries only", async () => {
+    const at = new Date("2026-07-18T00:05:00.000Z");
+    const findMany = vi.fn(async () => [{
+      id: "run-terminal",
+      projectId: "project-1",
+      userId: "user-1",
+      billingOperationId: "codex-pet:run:run-terminal:planned-images",
+      billingResourceKey: "image_generation_2k",
+    }]);
+    const count = vi.fn(async () => 7);
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const settleResource = vi.fn(async () => ({ settled: 1400 }));
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: { findMany, updateMany },
+        codexPetImageCall: { count },
+      } as unknown as PrismaClient,
+      billing: { settleResource },
+      now: () => at,
+    })).resolves.toBe(1);
+
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        billingMode: "per_image_call_v1",
+        billingSettlementStatus: { in: ["reserved", "settle_failed"] },
+        status: { in: ["ready", "failed", "cancelled"] },
+      }),
+    }));
+    expect(count).toHaveBeenCalledWith({ where: {
+      runId: "run-terminal",
+      projectId: "project-1",
+      userId: "user-1",
+      callKind: "planned",
+      sentAt: { not: null },
+    } });
+    expect(settleResource).toHaveBeenCalledOnce();
+    expect(settleResource).toHaveBeenCalledWith({
+      operationId: "codex-pet:run:run-terminal:planned-images",
+      resourceKey: "image_generation_2k",
+      units: 7,
+    });
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({
+      billingSettlementStatus: "settled",
+      billingSettledUnits: 7,
+      billingSettledPoints: 1400,
+      billingSettledAt: at,
+    }) }));
+  });
+
+  it("records a failed settlement without queueing or contacting an image provider", async () => {
+    const findMany = vi.fn(async () => [{
+      id: "run-failed-settlement",
+      projectId: "project-1",
+      userId: "user-1",
+      billingOperationId: "codex-pet:run:run-failed-settlement:planned-images",
+      billingResourceKey: "image_generation_2k",
+    }]);
+    const count = vi.fn(async () => 2);
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const settleResource = vi.fn(async () => { throw new Error("billing unavailable"); });
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: { findMany, updateMany },
+        codexPetImageCall: { count },
+      } as unknown as PrismaClient,
+      billing: { settleResource },
+    })).resolves.toBe(0);
+
+    expect(settleResource).toHaveBeenCalledOnce();
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: {
+      billingSettlementStatus: "settle_failed",
+      billingChargeError: "billing unavailable",
+    } }));
   });
 
   it("releases and immediately requeues only leases still owned during graceful shutdown", async () => {

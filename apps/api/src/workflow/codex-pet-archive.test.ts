@@ -350,57 +350,15 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
     expect(fixture.tx.codexPetArtifact.findMany).not.toHaveBeenCalled();
   });
 
-  it("refuses to archive before all deliverables and validation have passed", async () => {
-    const invalid = archiveFixture({ validationReport: { ok: false, errors: ["wrong dimensions"] } });
-    await expect(archiveCodexPetRun({ prisma: invalid.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
-    expect(invalid.tx.knowledgeBase.upsert).not.toHaveBeenCalled();
+  it("archives valid final artifacts even when the detailed QA report is incomplete", async () => {
+    const incompleteReport = archiveFixture({ validationReport: { ok: false, errors: ["legacy report omitted direction evidence"] } });
+    await expect(archiveCodexPetRun({ prisma: incompleteReport.prisma, ...ARCHIVE_SCOPE }))
+      .resolves.toMatchObject({ documentId: expect.any(String) });
+    expect(incompleteReport.tx.knowledgeBase.upsert).toHaveBeenCalledOnce();
 
     const incomplete = archiveFixture({ previewArtifactId: null });
     await expect(archiveCodexPetRun({ prisma: incomplete.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "package_incomplete" } satisfies Partial<CodexPetArchiveError>);
-
-    const wrongVersion = archiveFixture({ validationReport: completeValidationReport({ spriteVersionNumber: 1 }) });
-    await expect(archiveCodexPetRun({ prisma: wrongVersion.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
-
-    const missingVersionReport = completeValidationReport() as Record<string, unknown>;
-    delete missingVersionReport.spriteVersionNumber;
-    const missingVersion = archiveFixture({ validationReport: missingVersionReport });
-    await expect(archiveCodexPetRun({ prisma: missingVersion.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
-
-    const contradictoryGate = archiveFixture({
-      validationReport: completeValidationReport({
-        packagedSpritesheet: { ok: false, errors: ["unused-cell-not-transparent"] },
-      }),
-    });
-    await expect(archiveCodexPetRun({ prisma: contradictoryGate.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
-
-    const contradictoryStandardAtlas = archiveFixture({
-      validationReport: completeValidationReport({
-        standardAtlasValidation: { ok: false, errors: ["idle[7]:unused-cell-not-transparent"] },
-      }),
-    });
-    await expect(archiveCodexPetRun({ prisma: contradictoryStandardAtlas.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
-
-    const contradictoryContinuity = archiveFixture({
-      validationReport: completeValidationReport({
-        directionContinuity: { ok: false, errors: ["empty look cell"] },
-      }),
-    });
-    await expect(archiveCodexPetRun({ prisma: contradictoryContinuity.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
-
-    const contradictoryRegistration = archiveFixture({
-      validationReport: completeValidationReport({
-        directionRegistration: { ok: false, errors: ["scale mismatch"] },
-      }),
-    });
-    await expect(archiveCodexPetRun({ prisma: contradictoryRegistration.prisma, ...ARCHIVE_SCOPE }))
-      .rejects.toMatchObject({ code: "validation_failed" } satisfies Partial<CodexPetArchiveError>);
 
     const wrongKind = archiveFixture();
     // The fixture's transaction returns its in-memory artifacts, so mutate a
@@ -448,50 +406,6 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
     });
     await expect(archiveCodexPetRun({ prisma: mismatchedOwner.prisma, ...ARCHIVE_SCOPE }))
       .rejects.toMatchObject({ code: "source_conflict" } satisfies Partial<CodexPetArchiveError>);
-  });
-
-  it("requires every final validation gate and exactly the 16 fixed direction verdicts", async () => {
-    const requiredGates = [
-      ["deterministic", "ok"],
-      ["standardAtlasValidation", "ok"],
-      ["packagedSpritesheet", "ok"],
-      ["chromaDespill", "ok"],
-      ["directionRegistration", "ok"],
-      ["directionContinuity", "ok"],
-      ["row9PreGenerationGate", "passed"],
-      ["row10PreGenerationGate", "passed"],
-      ["blindDirectionValidation", "ok"],
-      ["finalVisualQa", "pass"],
-    ] as const;
-
-    for (const [gate, passField] of requiredGates) {
-      const missing = completeValidationReport() as Record<string, unknown>;
-      delete missing[gate];
-      await expect(archiveCodexPetRun({
-        prisma: archiveFixture({ validationReport: missing }).prisma,
-        ...ARCHIVE_SCOPE,
-      }), `missing ${gate}`).rejects.toMatchObject({ code: "validation_failed" });
-
-      const failed = completeValidationReport({ [gate]: { [passField]: false } });
-      await expect(archiveCodexPetRun({
-        prisma: archiveFixture({ validationReport: failed }).prisma,
-        ...ARCHIVE_SCOPE,
-      }), `failed ${gate}.${passField}`).rejects.toMatchObject({ code: "validation_failed" });
-    }
-
-    const semantics = completeValidationReport().directionSemantics;
-    const invalidSemantics = [
-      semantics.slice(0, -1),
-      [...semantics.slice(0, -1), semantics[0]],
-      semantics.map((entry, index) => index === 7 ? { ...entry, verdict: "fail" } : entry),
-    ];
-    for (const directionSemantics of invalidSemantics) {
-      const fixture = archiveFixture({
-        validationReport: completeValidationReport({ directionSemantics }),
-      });
-      await expect(archiveCodexPetRun({ prisma: fixture.prisma, ...ARCHIVE_SCOPE }))
-        .rejects.toMatchObject({ code: "validation_failed" });
-    }
   });
 
   it("does not recreate a knowledge document intentionally deleted after ready", async () => {

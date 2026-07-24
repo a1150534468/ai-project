@@ -117,10 +117,14 @@ describe("codex pet API", () => {
   it("approves one image call through encoded project and run paths", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { run } }), { status: 202 }));
 
-    await expect(approveCodexPetNextImage("token", project.id, run.id)).resolves.toEqual(run);
+    await expect(approveCodexPetNextImage("token", project.id, run.id, "codex-pet-extra-key")).resolves.toEqual(run);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/workflow/codex-pets/projects/project%20%2F%201/runs/run%20%2F%201/approve-next-image",
-      expect.objectContaining({ method: "POST", headers: { authorization: "Bearer token" } }),
+      expect.objectContaining({
+        method: "POST",
+        headers: { authorization: "Bearer token", "content-type": "application/json", "idempotency-key": "codex-pet-extra-key" },
+        body: JSON.stringify({ idempotencyKey: "codex-pet-extra-key" }),
+      }),
     );
   });
 
@@ -250,6 +254,7 @@ describe("codex pet API", () => {
       runs: [run],
       artifacts: [],
       jobs: [],
+      imageCalls: [],
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/workflow/codex-pets/projects/project%20%2F%201/install-link");

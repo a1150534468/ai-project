@@ -40,15 +40,15 @@ function positiveInteger(env: NodeJS.ProcessEnv, key: string, fallback: number):
  * Completed jobs are removed immediately. A run intentionally completes its
  * first worker pass while awaiting base review and must be enqueueable again
  * with the same runId after the user confirms a candidate. Failed Bull jobs
- * are removed as well: the runner owns provider/visual retries and persists a
- * terminal failure before throwing, while an infrastructure failure that
- * leaves the run active must remain recoverable by the stale-run scanner.
+ * are removed as well: new per-image runs never retry provider calls, while
+ * legacy runs retain their historical behavior. An infrastructure failure
+ * that leaves a run active remains recoverable by the stale-run scanner.
  */
 export function codexPetDefaultJobOptions(_env: NodeJS.ProcessEnv = process.env): JobsOptions {
   return {
-    // Do not add a second retry layer around executeCodexPetRun. The runner
-    // already performs bounded transport and complete-action-group retries,
-    // then refunds a terminal failure exactly once.
+    // Do not add a second retry layer around executeCodexPetRun. Per-image
+    // runs fail or await one-time approval after the first provider attempt;
+    // historical runs retain their persisted legacy behavior.
     attempts: 1,
     removeOnComplete: true,
     removeOnFail: true,

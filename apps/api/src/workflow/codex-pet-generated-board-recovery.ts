@@ -120,6 +120,13 @@ export async function recoverCodexPetGeneratedBoards(
 
   const snapshot = record(run.inputSnapshot);
   const continuation = record(snapshot.failedContinuation);
+  const targetedRetry = record(snapshot.targetedBoardRetry);
+  const authorizedByPromptContinuation = continuation.schemaVersion === "codex-pet-failed-continuation-v1"
+    && continuation.targetPromptVersion === CODEX_PET_BOARD_PROMPT_VERSION;
+  const authorizedByTargetedRetry = targetedRetry.schemaVersion === "codex-pet-targeted-board-retry-v1"
+    && targetedRetry.status === "prepared"
+    && targetedRetry.state === "running-right"
+    && input.boards.every((board) => board.state === "running-right");
   if (run.status !== "failed"
     || run.billingChargeStatus !== "charged"
     || run.billingRefundStatus !== "refunded"
@@ -129,8 +136,7 @@ export async function recoverCodexPetGeneratedBoards(
     || run.project.latestRunId !== run.id
     || run.project.status !== "failed"
     || run.project.deletedAt
-    || continuation.schemaVersion !== "codex-pet-failed-continuation-v1"
-    || continuation.targetPromptVersion !== CODEX_PET_BOARD_PROMPT_VERSION) {
+    || (!authorizedByPromptContinuation && !authorizedByTargetedRetry)) {
     throw new Error("generated-board recovery requires the current failed continuation with no active lease");
   }
   if (!run.selectedBaseArtifactId) throw new Error("generated-board recovery lacks a selected base");

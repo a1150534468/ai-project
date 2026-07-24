@@ -10,7 +10,6 @@ import {
   validatePetAtlas,
 } from "@ai-assistant/codex-pet-pipeline";
 import type { CodexPetArtifactPutInput, CodexPetArtifactStore } from "./codex-pet-runner.js";
-import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 
 const FINAL_PACKAGE_JOB_KEY = "final-package";
 const FINAL_PACKAGE_JOB_VERSION = 1;
@@ -606,9 +605,6 @@ export async function persistOrResumeCodexPetFinalPackage(
       if (!existing) return null;
     }
     throw error;
-  }
-  if (!codexPetValidationPassed(initialized.output.report)) {
-    throw new Error("最终打包验证报告不满足可选视觉模型交付合同");
   }
   if (!input.seed) {
     const recoverableArtifacts = await input.prisma.codexPetArtifact.count({

@@ -59,6 +59,7 @@ model User {
   codexPetJobs                CodexPetJob[]
   codexPetArtifacts           CodexPetArtifact[]
   codexPetEvents              CodexPetEvent[]
+  codexPetImageCalls          CodexPetImageCall[]
 
   @@index([channelId])
 }
@@ -303,6 +304,7 @@ model CodexPetProject {
   autoContinue         Boolean            @default(false)
   imageModel           String             @default("gpt-image-2")
   visualQaModel        String             @default("gpt-5.6-sol")
+  qualityInspectionEnabled Boolean         @default(false)
   status               String             @default("draft")
   latestRunId          String?
   createIdempotencyKey String?
@@ -314,6 +316,7 @@ model CodexPetProject {
   jobs                 CodexPetJob[]
   artifacts            CodexPetArtifact[]
   events               CodexPetEvent[]
+  imageCalls           CodexPetImageCall[]
 
   @@unique([userId, createIdempotencyKey])
   @@index([userId, updatedAt])
@@ -334,6 +337,14 @@ model CodexPetRun {
   autoContinue                  Boolean            @default(false)
   colorKey                      String?
   billingOperationId            String?            @unique
+  billingMode                   String             @default("legacy_package_v1")
+  billingResourceKey            String?
+  billingReservedUnits          Int                @default(0)
+  billingSettledUnits           Int                @default(0)
+  billingReservedPoints         Int                @default(0)
+  billingSettledPoints          Int                @default(0)
+  billingSettlementStatus       String             @default("none")
+  billingSettledAt              DateTime?
   billingPoints                 Int                @default(0)
   billingChargeStatus           String             @default("pending")
   billingChargeAttemptCount     Int                @default(0)
@@ -358,7 +369,9 @@ model CodexPetRun {
   validationReport              Json?
   requestedModel                String             @default("gpt-image-2")
   visualQaModel                 String             @default("gpt-5.6-sol")
+  qualityInspectionEnabled      Boolean            @default(true)
   imageGenerationCallCount      Int                @default(0)
+  plannedImageCallLimit         Int                @default(0)
   imageGenerationApprovalBudget Int                @default(0)
   pendingImageJobKey            String?
   actualModels                  String[]           @default([])
@@ -378,6 +391,7 @@ model CodexPetRun {
   jobs                          CodexPetJob[]
   artifacts                     CodexPetArtifact[]
   events                        CodexPetEvent[]
+  imageCalls                    CodexPetImageCall[]
 
   @@unique([projectId, idempotencyKey])
   @@index([projectId, createdAt])
@@ -385,6 +399,39 @@ model CodexPetRun {
   @@index([status, updatedAt])
   @@index([billingChargeStatus, billingChargeNextRetryAt])
   @@index([billingRefundStatus, billingRefundNextRetryAt])
+  @@index([billingMode, billingSettlementStatus])
+}
+
+model CodexPetImageCall {
+  id                String          @id @default(cuid())
+  projectId         String
+  runId             String
+  userId            String
+  jobKey            String
+  logicalAttempt    Int
+  callKind          String          @default("planned")
+  purpose           String
+  requestedModel    String
+  actualModel       String?
+  operationId       String          @unique
+  status            String          @default("prepared")
+  resourceKey       String?
+  units             Int             @default(1)
+  points            Int             @default(0)
+  upstreamRequestId String?
+  sentAt            DateTime?
+  completedAt       DateTime?
+  error             String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  project           CodexPetProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  run               CodexPetRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, jobKey, logicalAttempt])
+  @@index([projectId, createdAt])
+  @@index([runId, status, createdAt])
+  @@index([userId, createdAt])
 }
 
 model CodexPetJob {

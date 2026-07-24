@@ -10,7 +10,7 @@ const REQUIRED_CHECKPOINT_KEYS = [
   "identity-guide",
 ] as const;
 const BOARD_JOB_KINDS = new Set(["standard_row", "look_cardinals", "look_row"]);
-const TARGETED_BOARD_MAX_REAL_ATTEMPTS = 2;
+const TARGETED_BOARD_MAX_REAL_ATTEMPTS = 4;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -41,6 +41,8 @@ export interface CodexPetTargetedBoardRetryInput {
   readonly projectId: string;
   readonly userId: string;
   readonly sourceBoardArtifactId: string;
+  /** Optional deterministic guide derived from already-paid provider frames. */
+  readonly scaffoldArtifactId?: string;
   readonly reason: string;
 }
 
@@ -62,6 +64,7 @@ export async function initializeCodexPetTargetedBoardRetry(
   input: CodexPetTargetedBoardRetryInput,
 ): Promise<CodexPetTargetedBoardRetryResult> {
   const reason = input.reason.trim();
+  const requestedScaffoldArtifactId = input.scaffoldArtifactId?.trim() || null;
   if (!reason) throw new Error("定向动作续跑必须记录具体修复原因");
   if (!input.sourceBoardArtifactId.trim()) throw new Error("定向动作续跑缺少失败姿势板");
 
@@ -91,7 +94,7 @@ export async function initializeCodexPetTargetedBoardRetry(
     }
     if (!run.selectedBaseArtifactId) throw new Error("定向动作续跑缺少已确认主形象");
 
-    const [job, idleJob, sourceBoard] = await Promise.all([
+    const [job, idleJob, sourceBoard, recoveryScaffold] = await Promise.all([
       tx.codexPetJob.findFirst({
         where: { runId: run.id, projectId: run.projectId, userId: run.userId, key: "row-running-right" },
       }),
@@ -109,10 +112,22 @@ export async function initializeCodexPetTargetedBoardRetry(
           status: "ready",
         },
       }),
+      requestedScaffoldArtifactId ? tx.codexPetArtifact.findFirst({
+        where: {
+          id: requestedScaffoldArtifactId,
+          runId: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          kind: "pose_board_scaffold",
+          status: "ready",
+          mime: "image/png",
+        },
+      }) : null,
     ]);
     const idempotentPreparedJob = existing.schemaVersion === "codex-pet-targeted-board-retry-v1"
       && existing.state === "running-right"
       && existing.sourceBoardArtifactId === input.sourceBoardArtifactId
+      && (existing.scaffoldArtifactId ?? null) === requestedScaffoldArtifactId
       && job?.status === "queued";
     if (!job || (!["failed", "cancelled"].includes(job.status) && !idempotentPreparedJob)) {
       throw new Error("running-right 当前不是可定向续跑的失败动作");
@@ -122,7 +137,8 @@ export async function initializeCodexPetTargetedBoardRetry(
       : 0;
     if (existing.schemaVersion === "codex-pet-targeted-board-retry-v1") {
       if (existing.state !== "running-right") throw new Error("该运行已经绑定到其他定向动作续跑");
-      if (existing.sourceBoardArtifactId === input.sourceBoardArtifactId) {
+      if (existing.sourceBoardArtifactId === input.sourceBoardArtifactId
+        && (existing.scaffoldArtifactId ?? null) === requestedScaffoldArtifactId) {
         if (idleJob?.status === "completed" && run.status === "failed") {
           const sequence = run.lastEventSequence + 1;
           await tx.codexPetRun.update({
@@ -168,6 +184,15 @@ export async function initializeCodexPetTargetedBoardRetry(
     if (!sourceBoard || sourceBoard.jobId !== job.id) {
       throw new Error("定向续跑失败板不属于 running-right 动作");
     }
+    if (requestedScaffoldArtifactId && (!recoveryScaffold || recoveryScaffold.jobId !== job.id)) {
+      throw new Error("定向续跑脚手架不属于 running-right 动作");
+    }
+    if (recoveryScaffold
+      && (!recoveryScaffold.width
+        || !recoveryScaffold.height
+        || Math.abs(recoveryScaffold.width / 4 - recoveryScaffold.height / 2) > 1)) {
+      throw new Error("定向续跑脚手架必须使用与 4×2 目标一致的方形槽位画布");
+    }
     const sourceMetadata = record(sourceBoard.metadata);
     if (sourceMetadata.actualModel !== DOUBAO_IMAGE_MODEL
       && sourceMetadata.requestedModel !== DOUBAO_IMAGE_MODEL) {
@@ -182,6 +207,7 @@ export async function initializeCodexPetTargetedBoardRetry(
         state: "running-right",
         status: "prepared",
         sourceBoardArtifactId: sourceBoard.id,
+        scaffoldArtifactId: recoveryScaffold?.id ?? null,
         reason,
         preparedAt: now.toISOString(),
         sourceImageGenerationCallCount: run.imageGenerationCallCount,
@@ -200,6 +226,7 @@ export async function initializeCodexPetTargetedBoardRetry(
           targetedRetry: true,
           targetedRetryState: "running-right",
           targetedRetrySourceBoardArtifactId: sourceBoard.id,
+          targetedRetryScaffoldArtifactId: recoveryScaffold?.id ?? null,
         } as Prisma.InputJsonValue,
         outputArtifactIds: [],
         output: Prisma.DbNull,
@@ -246,6 +273,7 @@ export async function initializeCodexPetTargetedBoardRetry(
         payload: {
           state: "running-right",
           sourceBoardArtifactId: sourceBoard.id,
+          scaffoldArtifactId: recoveryScaffold?.id ?? null,
           preservedImageGenerationCallCount: run.imageGenerationCallCount,
           attempt: existingAttempt + 1,
           maxAttempts: TARGETED_BOARD_MAX_REAL_ATTEMPTS,
@@ -287,22 +315,21 @@ export async function initializeCodexPetFailedContinuation(
     const snapshot = record(run.inputSnapshot);
     const existingContinuation = record(snapshot.failedContinuation);
     if (existingContinuation.schemaVersion === CONTINUATION_SCHEMA_VERSION) {
-      if (existingContinuation.targetPromptVersion !== CODEX_PET_BOARD_PROMPT_VERSION) {
-        throw new Error("失败续跑已绑定到其他提示词版本");
+      if (existingContinuation.targetPromptVersion === CODEX_PET_BOARD_PROMPT_VERSION) {
+        if (["failed", "cancelled"].includes(run.status)) {
+          throw new Error("该失败运行已经使用过当前提示词版本的一次续跑机会");
+        }
+        return {
+          runId: run.id,
+          resumed: false,
+          targetPromptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+          preservedImageGenerationCallCount: run.imageGenerationCallCount,
+          reusableCheckpointKeys: [...REQUIRED_CHECKPOINT_KEYS],
+          resettableJobKeys: Array.isArray(existingContinuation.resettableJobKeys)
+            ? existingContinuation.resettableJobKeys.filter((value): value is string => typeof value === "string")
+            : [],
+        };
       }
-      if (["failed", "cancelled"].includes(run.status)) {
-        throw new Error("该失败运行已经使用过一次续跑机会");
-      }
-      return {
-        runId: run.id,
-        resumed: false,
-        targetPromptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
-        preservedImageGenerationCallCount: run.imageGenerationCallCount,
-        reusableCheckpointKeys: [...REQUIRED_CHECKPOINT_KEYS],
-        resettableJobKeys: Array.isArray(existingContinuation.resettableJobKeys)
-          ? existingContinuation.resettableJobKeys.filter((value): value is string => typeof value === "string")
-          : [],
-      };
     }
 
     if (run.status !== "failed"
@@ -362,6 +389,14 @@ export async function initializeCodexPetFailedContinuation(
     const resettableJobKeys = resettableJobs.map((job) => job.key);
     const sourcePromptVersions = [...new Set(resettableJobs.map((job) => record(job.input).promptVersion)
       .filter((value): value is string => typeof value === "string" && value.length > 0))];
+    const priorTargetPromptVersions = [...new Set([
+      ...(Array.isArray(existingContinuation.priorTargetPromptVersions)
+        ? existingContinuation.priorTargetPromptVersions.filter((value): value is string => typeof value === "string" && value.length > 0)
+        : []),
+      ...(typeof existingContinuation.targetPromptVersion === "string" && existingContinuation.targetPromptVersion.length > 0
+        ? [existingContinuation.targetPromptVersion]
+        : []),
+    ])];
     const nextSnapshot = {
       ...snapshot,
       failedContinuation: {
@@ -371,6 +406,7 @@ export async function initializeCodexPetFailedContinuation(
         sourceStatus: run.status,
         sourcePromptVersions,
         targetPromptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+        priorTargetPromptVersions,
         sourceImageGenerationCallCount: run.imageGenerationCallCount,
         maxBoardAttemptsPerJob: 1,
         reusableCheckpointKeys: [...REQUIRED_CHECKPOINT_KEYS],

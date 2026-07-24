@@ -57,8 +57,8 @@ describe("Codex pet prompts", () => {
     expect(prompt).toContain("never leave a chroma-key gap at a shoulder, wrist, hip or ankle");
     expect(prompt).toContain("detached sweat beads");
     expect(prompt).toContain("alternates two source gait phases A/B");
-    expect(prompt).toContain("contact, passing, airborne, opposite-contact");
-    expect(prompt).toContain("do not return only two repeated A/B drawings");
+    expect(prompt).toContain("At minimum alternate two clearly different contact/opposite-contact phases A/B");
+    expect(prompt).toContain("A clean A/B/A/B/A/B/A/B two-phase loop is valid");
   });
 
   it("locks both look rows to the approved cardinal quadrants and exact board cells", () => {
@@ -134,8 +134,14 @@ describe("Codex pet prompts", () => {
   it("keeps idle awake and limits blinking to one brief pose", () => {
     const idle = buildStandardRowPrompt(identity, "idle");
     expect(idle).toContain("frame 5 the single brief blink");
+    expect(idle).toContain("Treat frame 1 as the non-facial pixel master");
+    expect(idle).toContain("Lock the complete outer silhouette pixel-for-pixel across all six frames");
+    expect(idle).toContain("no head, helmet, torso, arm, hand, leg, foot or whole-character translation");
+    expect(idle).toContain("the shaft and its round terminal tip are one complete identity structure");
+    expect(idle).toContain("even after the board continues onto its second row");
+    expect(idle).toContain("relocate it below another character as a loose dot");
     expect(idle).toContain("Keep the single canonical antenna perfectly fixed and unchanged");
-    expect(idle).toContain("never bend it, duplicate it, echo it");
+    expect(idle).toContain("bend the shaft, duplicate it, echo it");
     expect(idle).toContain("A singular feature such as one antenna");
     expect(idle).toContain("Keep both arms lowered and attached in all six frames");
     expect(idle).toContain("Never wave, raise a hand, sleep");
@@ -144,14 +150,23 @@ describe("Codex pet prompts", () => {
 
   it("locks every directional run frame to one screen side and an explicit phase cycle", () => {
     const right = buildStandardRowPrompt(identity, "running-right");
-    expect(right).toContain("Frames 1-4 are right-facing contact, passing, airborne and opposite-contact phases");
-    expect(right).toContain("stay on the screen-right side in all eight frames");
-    expect(right).toContain("Never mirror or flip any frame toward screen-left");
-    expect(right).toContain("never repeat one frozen stride");
+    expect(right).toContain("rigid right-facing head, antenna and torso orientation");
+    expect(right).toContain("may never turn toward the viewer, screen-left or the back");
+    expect(right).toContain("A clean A/B/A/B/A/B/A/B two-phase loop is valid");
+    expect(right).toContain("Never yaw the head or torso toward front, back or the opposite side in frames 4, 5 or 8");
+    expect(right).toContain("Keep the canonical dark face panel fully filled as opaque foreground");
+    expect(right).toContain("leave the eyes and mouth floating separately");
+    expect(right).toContain("The chroma key #0000ff is reserved exclusively for exterior background");
+    expect(right).toContain("No exact or near-key pixel may appear anywhere inside a character's bounding box");
+    expect(right).toContain("redraw the eight slots in place");
+    expect(right).toContain("Never keep a scaffold pose and add a second head, body or character above or below it");
+    expect(right).toContain("exactly 8 total heads and exactly 8 total bodies");
+    expect(right).toContain("exactly 8 complete characters and no partial duplicates");
+    expect(right).toContain("Never repeat one frozen stride");
 
     const left = buildStandardRowPrompt(identity, "running-left");
-    expect(left).toContain("stay on the screen-left side in all eight frames");
-    expect(left).toContain("Never mirror or flip any frame toward screen-right");
+    expect(left).toContain("rigid left-facing head, antenna and torso orientation");
+    expect(left).toContain("may never turn toward the viewer, screen-right or the back");
   });
 
   it("keeps jumping vertical travel distinct from scale and locks failed silhouettes", () => {

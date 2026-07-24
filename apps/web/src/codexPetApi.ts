@@ -10,15 +10,12 @@ export const CODEX_PET_API_BASE = "/api/workflow/codex-pets";
  */
 export const CODEX_PET_IMAGE_MODEL = "gpt-image-2" as const;
 export const CODEX_PET_IMAGE_MODELS = [
-  "qwen-image-2.0-pro-2026-04-22",
   CODEX_PET_IMAGE_MODEL,
-  "doubao-seedream-4-5-251128",
 ] as const;
 export type CodexPetImageModel = typeof CODEX_PET_IMAGE_MODELS[number];
 export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol" as const;
-export const CODEX_PET_MODEL_CONTRACT_VERSION = "selectable-visual-v2" as const;
+export const CODEX_PET_MODEL_CONTRACT_VERSION = "gpt-only-quality-optional-v3" as const;
 export const CODEX_PET_IMAGE_ACTUAL_MODELS = [
-  "qwen-image-2.0-pro-2026-04-22",
   CODEX_PET_IMAGE_MODEL,
   "gpt-image-2-codex",
 ] as const;
@@ -41,6 +38,7 @@ export type CodexPetProjectStatus =
   | "base_generating"
   | "awaiting_base_review"
   | "awaiting_direction_review"
+  | "awaiting_regeneration_approval"
   | "standard_generating"
   | "direction_generating"
   | "validating"
@@ -50,6 +48,7 @@ export type CodexPetProjectStatus =
   | "ready"
   | "failed"
   | "cancelled"
+  | "legacy_read_only"
   /** Internal project-only tombstone used by soft-deleted project records. */
   | "deleting";
 
@@ -58,12 +57,12 @@ export type CodexPetRunStatus = Exclude<CodexPetProjectStatus, "draft" | "deleti
 export interface CodexPetPricing {
   readonly resourceKey: string;
   readonly displayName: string;
-  readonly pricingType: "PER_CALL";
+  readonly pricingType: "PER_UNIT";
   readonly rate: number;
   readonly perUnits: number;
   readonly enabled: boolean;
+  readonly plannedImageCallLimit?: number;
   readonly includedBaseCandidates?: number;
-  readonly includedRepairAttempts?: number;
 }
 
 export interface CodexPetProjectSummary {
@@ -83,8 +82,10 @@ export interface CodexPetProject extends CodexPetProjectSummary {
   readonly referenceAssetIds: readonly string[];
   readonly referenceAssets?: readonly CodexPetReferenceAsset[];
   readonly autoContinue: boolean;
-  readonly imageModel?: CodexPetImageModel;
+  /** Historical projects retain their original model provenance. New writes are GPT-only. */
+  readonly imageModel?: string;
   readonly visualQaModel?: string;
+  readonly qualityInspectionEnabled?: boolean;
 }
 
 export interface CodexPetModelOption {
@@ -120,6 +121,13 @@ export interface CodexPetRun {
   readonly autoContinue: boolean;
   readonly colorKey: string | null;
   readonly billingPoints: number;
+  readonly billingMode?: string;
+  readonly billingResourceKey?: string | null;
+  readonly billingReservedUnits?: number;
+  readonly billingSettledUnits?: number;
+  readonly billingReservedPoints?: number;
+  readonly billingSettledPoints?: number;
+  readonly billingSettlementStatus?: string;
   readonly billingChargeStatus?: string;
   readonly billingChargeAttemptCount?: number;
   readonly billingChargeError?: string | null;
@@ -136,7 +144,9 @@ export interface CodexPetRun {
   readonly previewArtifactId: string | null;
   readonly validationReport: unknown;
   readonly requestedModel: string;
+  readonly qualityInspectionEnabled?: boolean;
   readonly imageGenerationCallCount?: number;
+  readonly plannedImageCallLimit?: number;
   readonly imageGenerationApprovalBudget?: number;
   readonly pendingImageJobKey?: string | null;
   readonly modelContractVersion: string;
@@ -205,6 +215,22 @@ export interface CodexPetProjectDetail {
   readonly runs: readonly CodexPetRun[];
   readonly artifacts: readonly CodexPetArtifact[];
   readonly jobs: readonly CodexPetJob[];
+  readonly imageCalls?: readonly CodexPetImageCall[];
+}
+
+export interface CodexPetImageCall {
+  readonly id: string;
+  readonly jobKey: string;
+  readonly logicalAttempt: number;
+  readonly callKind: "planned" | "extra";
+  readonly purpose: string;
+  readonly requestedModel: string;
+  readonly actualModel: string | null;
+  readonly status: string;
+  readonly points: number;
+  readonly sentAt: string | null;
+  readonly completedAt: string | null;
+  readonly error: string | null;
 }
 
 export interface CodexPetCreatePayload {
@@ -217,6 +243,7 @@ export interface CodexPetCreatePayload {
   readonly autoContinue?: boolean;
   readonly imageModel?: CodexPetImageModel;
   readonly visualQaModel?: string;
+  readonly qualityInspectionEnabled?: boolean;
   readonly idempotencyKey?: string;
 }
 
@@ -332,6 +359,7 @@ export async function getCodexPetProject(token: string, projectId: string, signa
     runs: detail.runs ?? (detail.latestRun ? [detail.latestRun] : []),
     artifacts: detail.artifacts ?? [],
     jobs: detail.jobs ?? [],
+    imageCalls: detail.imageCalls ?? [],
   };
 }
 
@@ -398,11 +426,14 @@ export async function approveCodexPetNextImage(
   token: string,
   projectId: string,
   runId: string,
+  idempotencyKey: string,
 ): Promise<CodexPetRun> {
   const data = await requestCodexPet<CodexPetRun | { readonly run: CodexPetRun }>({
     token,
     path: `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/approve-next-image`,
     method: "POST",
+    body: { idempotencyKey },
+    idempotencyKey,
     fallback: "批准下一次真实生图失败",
   });
   return "run" in data ? data.run : data;

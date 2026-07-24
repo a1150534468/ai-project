@@ -76,7 +76,7 @@ export interface CodexPetStudioClient {
     runId: string,
     selection: CodexPetBaseSelection,
   ) => Promise<CodexPetRun>;
-  readonly approveNextImage: (token: string, projectId: string, runId: string) => Promise<CodexPetRun>;
+  readonly approveNextImage: (token: string, projectId: string, runId: string, idempotencyKey: string) => Promise<CodexPetRun>;
   readonly cancelRun: (token: string, projectId: string, runId: string) => Promise<CodexPetRun>;
   readonly listEvents: (
     token: string,
@@ -134,7 +134,7 @@ type BusyAction =
 
 type StreamState = "idle" | "connecting" | "live" | "reconnecting" | "polling" | "ended";
 
-const TERMINAL_RUN_STATUSES = new Set(["ready", "failed", "cancelled"]);
+const TERMINAL_RUN_STATUSES = new Set(["ready", "failed", "cancelled", "legacy_read_only"]);
 const DETAIL_REFRESH_EVENTS = new Set([
   "preview.ready",
   "base.review_required",
@@ -374,14 +374,7 @@ export function CodexPetStudio({
   const [pricing, setPricing] = useState<CodexPetPricing | null>(null);
   const [modelOptions, setModelOptions] = useState<CodexPetModelOptions>({
     visualModels: [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }],
-    imageModels: CODEX_PET_IMAGE_MODELS.map((model) => ({
-      model,
-      displayName: model === CODEX_PET_IMAGE_MODEL
-        ? "GPT Image 2"
-        : model === "doubao-seedream-4-5-251128"
-          ? "豆包 Seedream 4.5 文生图"
-          : "Qwen Image 2.0 Pro",
-    })),
+    imageModels: [{ model: CODEX_PET_IMAGE_MODEL, displayName: "GPT Image 2" }],
   });
   const [events, setEvents] = useState<readonly CodexPetEvent[]>([]);
   const [selectedBaseArtifactId, setSelectedBaseArtifactId] = useState<string | null>(null);
@@ -471,6 +464,11 @@ export function CodexPetStudio({
   );
   const progress = codexPetDisplayProgress(latestRun, lastEvent?.progress ?? 0);
   const projectStatus = detail?.project.status ?? "draft";
+  const historicalImageModel = detail?.project.imageModel
+    && detail.project.imageModel !== CODEX_PET_IMAGE_MODEL
+    ? detail.project.imageModel
+    : null;
+  const readOnlyArchive = projectStatus === "legacy_read_only";
   const runIsTerminal = latestRun ? TERMINAL_RUN_STATUSES.has(latestRun.status) : false;
   const runAllowsInputEdit = !latestRun || runIsTerminal || latestRun.status === "awaiting_base_review";
   // Keep the previous detail visible while a project switch is loading, but
@@ -482,12 +480,12 @@ export function CodexPetStudio({
     || detail?.project.id === selectedProjectId;
   const selectionIsPending = Boolean(loadingDetail && selectedProjectId && !detailMatchesSelection);
   const interactionLocked = busyAction !== null || bootstrapping || loadingDetail || selectionIsPending;
-  const canEdit = !interactionLocked && (
+  const canEdit = !historicalImageModel && !readOnlyArchive && !interactionLocked && (
     selectedProjectId === null
     || selectedProjectId === undefined
     || (detailMatchesSelection && canEditCodexPetProject(projectStatus) && runAllowsInputEdit)
   );
-  const canStart = !interactionLocked
+  const canStart = !historicalImageModel && !readOnlyArchive && !interactionLocked
     && (!selectedProjectId || (detailMatchesSelection && projectStatus === "draft" && (!latestRun || runIsTerminal)));
   const runIsCancellable = Boolean(latestRun && !runIsTerminal && !latestRun.cancelRequested);
 
@@ -947,10 +945,10 @@ export function CodexPetStudio({
   const handleApproveNextImage = () => {
     const project = detail?.project;
     const run = latestRun;
-    if (!project || !run || run.status !== "awaiting_direction_review" || interactionLocked) return;
+    if (!project || !run || !["awaiting_direction_review", "awaiting_regeneration_approval"].includes(run.status) || interactionLocked) return;
     clearFeedback();
     setBusyAction("approving-image");
-    void client.approveNextImage(token, project.id, run.id)
+    void client.approveNextImage(token, project.id, run.id, makeCodexPetIdempotencyKey("extra"))
       .then((nextRun) => {
         setDetail((current) => current ? { ...current, latestRun: nextRun } : current);
         setNotice(`已批准 ${run.pendingImageJobKey || "当前方向任务"} 的 1 次真实生图调用；失败后会立即停下`);
@@ -1041,10 +1039,10 @@ export function CodexPetStudio({
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <span className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-brand-ink">
-            生图 {draft.imageModel} · 视觉推理 / QA {draft.visualQaModel}
+            GPT Image 2 · Pixel · AI 质检{draft.qualityInspectionEnabled ? "已开启" : "关闭"}
           </span>
           <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
-            {pricing ? `${pricing.rate} 积分 / 完整 v2 套餐` : "套餐价格加载中"}
+            {pricing ? `最多 14 次计划内调用 · ${pricing.rate} 积分/次 · 预留 ${pricing.rate * 14}` : "调用价格加载中"}
           </span>
         </div>
       </div>
@@ -1227,37 +1225,39 @@ export function CodexPetStudio({
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2">
-                <label className="block">
+                <div>
                   <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">生图模型</span>
-                  <select
-                    aria-label="生图模型"
-                    value={draft.imageModel}
+                  <div className="rounded-[10px] border border-[#dfe1e6] bg-[#f7f7f9] px-3 py-2 text-sm text-[#424249]">
+                    {readOnlyArchive
+                      ? "历史项目，已归档为只读"
+                      : historicalImageModel ? `历史模型 ${historicalImageModel}，已停止新运行` : "GPT Image 2 · Pixel"}
+                  </div>
+                </div>
+                <label className="flex min-h-10 items-center justify-between gap-3 rounded-[10px] border border-[#dfe1e6] px-3 py-2 text-sm text-[#424249]">
+                  <span>AI 质检</span>
+                  <input
+                    aria-label="AI 质检"
+                    type="checkbox"
+                    checked={draft.qualityInspectionEnabled}
                     disabled={!canEdit || interactionLocked}
-                    onChange={(event) => updateDraft("imageModel", event.currentTarget.value as CodexPetDraft["imageModel"])}
-                    className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
-                  >
-                    {modelOptions.imageModels.map((option) => (
-                      <option key={option.model} value={option.model}>{option.displayName}</option>
-                    ))}
-                  </select>
+                    onChange={(event) => updateDraft("qualityInspectionEnabled", event.currentTarget.checked)}
+                    className="size-4 accent-brand"
+                  />
                 </label>
-                <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">视觉理解 / 质检模型</span>
-                  <select
-                    aria-label="视觉理解 / 质检模型"
-                    value={draft.visualQaModel}
-                    disabled={!canEdit || interactionLocked}
-                    onChange={(event) => updateDraft("visualQaModel", event.currentTarget.value)}
-                    className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
-                  >
-                    {!modelOptions.visualModels.some((option) => option.model === draft.visualQaModel) && (
-                      <option value={draft.visualQaModel}>{draft.visualQaModel}（已不可选）</option>
-                    )}
-                    {modelOptions.visualModels.map((option) => (
-                      <option key={option.model} value={option.model}>{option.displayName}</option>
-                    ))}
-                  </select>
-                </label>
+                {draft.qualityInspectionEnabled && (
+                  <label className="block sm:col-span-2">
+                    <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">视觉理解 / 质检模型</span>
+                    <select
+                      aria-label="视觉理解 / 质检模型"
+                      value={draft.visualQaModel}
+                      disabled={!canEdit || interactionLocked}
+                      onChange={(event) => updateDraft("visualQaModel", event.currentTarget.value)}
+                      className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                    >
+                      {modelOptions.visualModels.map((option) => <option key={option.model} value={option.model}>{option.displayName}</option>)}
+                    </select>
+                  </label>
+                )}
               </div>
 
               <fieldset disabled={!canEdit || interactionLocked}>
@@ -1308,7 +1308,7 @@ export function CodexPetStudio({
               </label>
 
               <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-[#6f7078]">
-                预计 13–14 个视觉任务（不对称角色会单独生成向左移动）；上传即表示你拥有参考图与角色的使用权。套餐包含完整生成、QA、最多两轮自动修复、知识库索引、Codex 安装和 ZIP，不另收归档费用。
+                正常路径最多 14 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准与计费。上传即表示你拥有参考图与角色的使用权。
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1325,7 +1325,7 @@ export function CodexPetStudio({
                   disabled={interactionLocked || !canStart || pricing?.enabled !== true}
                   onClick={handleStart}
                 >
-                  开始制作{pricing ? ` · ${pricing.rate}` : ""}
+                  开始制作{pricing ? ` · 预留 ${pricing.rate * 14}` : ""}
                 </PrimaryButton>
               </div>
 
@@ -1438,11 +1438,11 @@ export function CodexPetStudio({
                 <ImagePlaceholder text="正在并行生成 2 个主形象候选；完成后会实时出现在这里。" />
               )}
 
-              {latestRun?.status === "awaiting_direction_review" && (
+              {latestRun && ["awaiting_direction_review", "awaiting_regeneration_approval"].includes(latestRun.status) && (
                 <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-amber-900">下一张真实生图已暂停</p>
-                    <p className="mt-0.5 text-[10px] leading-4 text-amber-800">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，失败后不会自动重画。</p>
+                    <p className="text-xs font-semibold text-amber-900">{latestRun.status === "awaiting_regeneration_approval" ? "额外真实生图等待批准" : "下一张真实生图已暂停"}</p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-amber-800">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，额外调用单独计费，失败后不会自动重画。</p>
                   </div>
                   <PrimaryButton icon={busyAction === "approving-image" ? "mdi:loading" : "mdi:check-circle-outline"} disabled={interactionLocked} onClick={handleApproveNextImage}>
                     批准 1 次生图
@@ -1507,8 +1507,10 @@ export function CodexPetStudio({
                   <div className="flex items-start gap-2">
                     <Icon icon="mdi:check-decagram" className="mt-0.5 text-xl text-brand-ink" aria-hidden />
                     <div>
-                      <h3 className="text-sm font-semibold text-brand-ink">桌宠已孵化并归档</h3>
-                      <p className="mt-0.5 text-[11px] text-brand-ink">最终验证、ZIP 打包与「AI 产物」知识库 Document 均已完成。</p>
+                      <h3 className="text-sm font-semibold text-brand-ink">桌宠已生成，可安装</h3>
+                      <p className="mt-0.5 text-[11px] text-brand-ink">
+                        最终精灵图与 ZIP 兼容包已就绪。{latestRun.knowledgeDocumentId ? "AI 产物已完成归档。" : "AI 产物正在后台归档，不影响安装和下载。"}
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -1570,7 +1572,9 @@ export function CodexPetStudio({
                   <div className="flex flex-wrap gap-2">
                     <PrimaryButton icon="mdi:download-circle-outline" disabled={interactionLocked} onClick={handleInstall}>安装到 Codex</PrimaryButton>
                     <PrimaryButton kind="secondary" icon="mdi:folder-zip-outline" disabled={interactionLocked} onClick={handleDownload}>下载兼容包</PrimaryButton>
-                    <PrimaryButton kind="secondary" icon="mdi:database-eye-outline" disabled={interactionLocked} onClick={handleOpenKnowledge}>在 AI 产物中查看</PrimaryButton>
+                    {latestRun.knowledgeDocumentId && (
+                      <PrimaryButton kind="secondary" icon="mdi:database-eye-outline" disabled={interactionLocked} onClick={handleOpenKnowledge}>在 AI 产物中查看</PrimaryButton>
+                    )}
                     <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
                   </div>
                 </div>
@@ -1580,12 +1584,6 @@ export function CodexPetStudio({
                 <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2.5">
                   <p className="text-[10px] leading-4 text-[#6f7078]">本次运行已结束；保留原项目记录，复制输入后可用新的幂等键重新制作。</p>
                   <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
-                </div>
-              )}
-
-              {latestRun?.status === "ready" && !deliveryReady && (
-                <div role="alert" className="rounded-[12px] border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">
-                  后端返回了 ready，但知识库归档、最终产物或验证报告尚不完整。为避免安装不完整桌宠，工作台保持在 98% 并禁用交付操作。
                 </div>
               )}
             </div>
@@ -1637,7 +1635,7 @@ export function CodexPetStudio({
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">真实生图调用</span>
-                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.imageGenerationCallCount ?? 0}</span>
+                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? 14}</span>
                   </div>
                 </div>
               )}
@@ -1667,12 +1665,16 @@ export function CodexPetStudio({
             <CardTitle icon="mdi:database-check-outline" title="计费与归档" />
             <div className="space-y-2.5 p-4 text-[11px]">
               <div className="flex items-center justify-between">
-                <span className="text-[#777780]">套餐扣费</span>
-                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${latestRun.billingPoints} 积分` : pricing ? `${pricing.rate} 积分` : "—"}</span>
+                <span className="text-[#777780]">已预留积分</span>
+                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${latestRun.billingReservedPoints ?? 0} 积分` : pricing ? `${pricing.rate * 14} 积分` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#777780]">退款状态</span>
-                <span className="font-semibold text-[#3f3f45]">{refundStatusLabel(latestRun)}</span>
+                <span className="text-[#777780]">已结算积分</span>
+                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${latestRun.billingSettledPoints ?? 0} 积分` : "—"}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#777780]">预计退回</span>
+                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${Math.max(0, (latestRun.billingReservedPoints ?? 0) - (latestRun.billingSettledPoints ?? 0))} 积分` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">知识库</span>
@@ -1696,8 +1698,8 @@ export function CodexPetStudio({
                 <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#72727a]">
                   生图请求 {latestRun.requestedModel}<br />
                   生图实际 {latestRun.actualModels?.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}<br />
-                  视觉推理 / QA 请求 {latestRun.visualQaModel}<br />
-                  视觉实际 {latestRun.visualQaActualModels?.length > 0 ? latestRun.visualQaActualModels.join("、") : "等待最终模型来源汇总"}<br />
+                  AI 质检 {latestRun.qualityInspectionEnabled ? "已开启" : "关闭"}<br />
+                  视觉实际 {latestRun.qualityInspectionEnabled ? (latestRun.visualQaActualModels?.length > 0 ? latestRun.visualQaActualModels.join("、") : "等待最终模型来源汇总") : "无调用"}<br />
                   模型合同 {modelContractState === "valid"
                     ? "所选模型来源 · 已验证"
                     : modelContractState === "invalid"
@@ -1708,6 +1710,16 @@ export function CodexPetStudio({
                       接口返回的模型或路由与项目启动时冻结的选择不一致。
                     </span>
                   )}
+                </div>
+              )}
+              {detail?.imageCalls && detail.imageCalls.length > 0 && (
+                <div className="max-h-28 space-y-1 overflow-y-auto rounded-[9px] border border-[#eceef1] p-2 text-[10px] text-[#62626a]" aria-label="生图调用账本">
+                  {detail.imageCalls.map((call) => (
+                    <div key={call.id} className="flex items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">{call.jobKey} · {call.callKind}</span>
+                      <span className="shrink-0">{call.status}{call.actualModel ? ` · ${call.actualModel}` : ""}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

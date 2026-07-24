@@ -56,7 +56,7 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
           data: [{
             resourceKey: CODEX_PET_RESOURCE_KEY,
             displayName: "Codex 桌宠",
-            pricingType: "PER_CALL" as const,
+            pricingType: "PER_UNIT" as const,
             rate: 200,
             perUnits: 1,
             enabled: true,

@@ -9,9 +9,7 @@ import { getPrisma, getRedis } from "@ai-assistant/db";
 import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
 import { enqueueCodexPetRun } from "./codex-pet-queue.js";
 import {
-  DOUBAO_IMAGE_MODEL,
   GPT_IMAGE_MODEL,
-  IMAGE_GENERATION_MODELS,
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
   isVerifiedWorkflowImageObjectKeyForUser,
@@ -20,20 +18,18 @@ import { isCodexPetArtifactObjectKey, isCodexPetArtifactObjectKeyFor } from "./c
 import { CODEX_PET_STYLES } from "./codex-pet-prompts.js";
 import { sanitizeCodexPetDiagnosticText, sanitizeCodexPetEventPayload } from "./codex-pet-events.js";
 import {
-  CODEX_PET_KNOWLEDGE_SOURCE_MODULE,
-  CODEX_PET_KNOWLEDGE_SYSTEM_KEY,
-} from "./codex-pet-archive.js";
-import {
-  codexPetPendingBillingFields,
-  reconcileCodexPetRunBilling,
-} from "./codex-pet-billing.js";
-import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
-import {
   assertCodexPetImageRoute,
   CODEX_PET_BAILIAN_VISUAL_QA_MODEL,
+  CODEX_PET_IMAGE_MODELS,
   CODEX_PET_MODEL_CONTRACT_VERSION,
   CODEX_PET_VISUAL_QA_MODEL,
 } from "./codex-pet-model-contract.js";
+import {
+  CODEX_PET_PER_IMAGE_BILLING_MODE,
+  CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+  prepareCodexPetExtraImageCall,
+} from "./codex-pet-call-ledger.js";
+import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import {
   assertCodexPetVisualQaRoute,
 } from "./codex-pet-visual.js";
@@ -63,8 +59,8 @@ const SAFE_RASTER_IMAGE_MIMES = new Set([
 
 const DEFAULT_PRICE = {
   resourceKey: CODEX_PET_RESOURCE_KEY,
-  displayName: "Codex v2 桌宠制作套餐",
-  pricingType: "PER_CALL" as const,
+  displayName: "Codex v2 桌宠生图调用",
+  pricingType: "PER_UNIT" as const,
   rate: 200,
   perUnits: 1,
   enabled: true,
@@ -83,7 +79,11 @@ const ACTIVE_RUN_STATUSES = [
   "archiving",
 ] as const;
 
-const TERMINAL_RUN_STATUSES = ["ready", "failed", "cancelled"] as const;
+const TERMINAL_RUN_STATUSES = ["ready", "failed", "cancelled", CODEX_PET_LEGACY_READ_ONLY_STATUS] as const;
+// Final artifacts are independently verified when the package job commits.
+// Knowledge archival is useful discovery metadata, not a prerequisite for a
+// user to receive an already valid pet.
+const DELIVERABLE_RUN_STATUSES = ["archiving", "ready", "failed"] as const;
 const EDITABLE_PROJECT_STATUSES = ["draft", "awaiting_base_review"] as const;
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 
@@ -112,7 +112,8 @@ const projectFieldsSchema = z.object({
   styleNotes: z.string().trim().max(1_000).default(""),
   referenceAssetIds: z.array(idSchema).max(3).default([]),
   autoContinue: z.boolean().default(false),
-  imageModel: z.enum(IMAGE_GENERATION_MODELS).default(GPT_IMAGE_MODEL),
+  imageModel: z.literal(GPT_IMAGE_MODEL).default(GPT_IMAGE_MODEL),
+  qualityInspectionEnabled: z.boolean().default(false),
   visualQaModel: z.string().trim().min(1).max(128).default(CODEX_PET_VISUAL_QA_MODEL),
 });
 
@@ -136,6 +137,7 @@ const baseSelectionSchema = z.union([
   z.object({ autoSelect: z.literal(true) }).strict(),
   z.object({ regenerate: z.literal(true) }).strict(),
 ]);
+const extraImageApprovalSchema = z.object({ idempotencyKey: idempotencyKeySchema.optional() }).default({});
 
 type ResourcePrice = {
   readonly resourceKey: string;
@@ -153,6 +155,17 @@ export interface CodexPetBilling {
     readonly resourceKey: string;
     readonly units: number;
   }) => Promise<{ readonly charged: number }>;
+  readonly reserveResource?: (args: {
+    readonly operationId: string;
+    readonly userId: string;
+    readonly resourceKey: string;
+    readonly units: number;
+  }) => Promise<{ readonly reserved: number }>;
+  readonly settleResource?: (args: {
+    readonly operationId: string;
+    readonly resourceKey: string;
+    readonly units: number;
+  }) => Promise<{ readonly settled: number }>;
   readonly refundResource: (operationId: string) => Promise<{ readonly success: boolean }>;
   readonly listResourcePrices?: () => Promise<{ readonly data: readonly ResourcePrice[] }>;
   readonly listEnabledModels?: () => Promise<{
@@ -237,6 +250,7 @@ type ProjectShape = {
   readonly autoContinue: boolean;
   readonly imageModel: string;
   readonly visualQaModel: string;
+  readonly qualityInspectionEnabled: boolean;
   readonly status: string;
   readonly latestRunId: string | null;
   readonly createIdempotencyKey: string | null;
@@ -258,6 +272,13 @@ type RunShape = {
   readonly autoContinue: boolean;
   readonly colorKey: string | null;
   readonly billingOperationId: string | null;
+  readonly billingMode: string;
+  readonly billingResourceKey: string | null;
+  readonly billingReservedUnits: number;
+  readonly billingSettledUnits: number;
+  readonly billingReservedPoints: number;
+  readonly billingSettledPoints: number;
+  readonly billingSettlementStatus: string;
   readonly billingPoints: number;
   readonly billingChargeStatus: string;
   readonly billingChargeAttemptCount: number;
@@ -276,7 +297,9 @@ type RunShape = {
   readonly validationReport: unknown;
   readonly requestedModel: string;
   readonly visualQaModel: string;
+  readonly qualityInspectionEnabled: boolean;
   readonly imageGenerationCallCount: number;
+  readonly plannedImageCallLimit: number;
   readonly imageGenerationApprovalBudget: number;
   readonly pendingImageJobKey: string | null;
   readonly actualModels: readonly string[];
@@ -346,6 +369,7 @@ function serializeProject(project: ProjectShape) {
     autoContinue: project.autoContinue,
     imageModel: project.imageModel || GPT_IMAGE_MODEL,
     visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
+    qualityInspectionEnabled: project.qualityInspectionEnabled === true,
     status: project.status,
     latestRunId: project.latestRunId,
     createdAt: project.createdAt.toISOString(),
@@ -388,6 +412,13 @@ function serializeRun(run: RunShape) {
     autoContinue: run.autoContinue,
     colorKey: run.colorKey,
     billingPoints: run.billingPoints,
+    billingMode: run.billingMode,
+    billingResourceKey: run.billingResourceKey,
+    billingReservedUnits: run.billingReservedUnits,
+    billingSettledUnits: run.billingSettledUnits,
+    billingReservedPoints: run.billingReservedPoints,
+    billingSettledPoints: run.billingSettledPoints,
+    billingSettlementStatus: run.billingSettlementStatus,
     billingChargeStatus: run.billingChargeStatus,
     billingChargeAttemptCount: run.billingChargeAttemptCount,
     billingChargeError: run.billingChargeError,
@@ -404,7 +435,11 @@ function serializeRun(run: RunShape) {
     previewArtifactId: run.previewArtifactId,
     validationReport: run.validationReport,
     requestedModel: run.requestedModel,
+    qualityInspectionEnabled: typeof inputSnapshot.qualityInspectionEnabled === "boolean"
+      ? inputSnapshot.qualityInspectionEnabled
+      : run.qualityInspectionEnabled,
     imageGenerationCallCount: run.imageGenerationCallCount,
+    plannedImageCallLimit: run.plannedImageCallLimit,
     imageGenerationApprovalBudget: run.imageGenerationApprovalBudget,
     pendingImageJobKey: run.pendingImageJobKey,
     visualQaModel: typeof inputSnapshot.visualQaModel === "string"
@@ -610,6 +645,13 @@ function resolvePricing(rows: readonly ResourcePrice[]): ResourcePrice {
   return configured
     ? { ...DEFAULT_PRICE, ...configured, resourceKey: CODEX_PET_RESOURCE_KEY }
     : DEFAULT_PRICE;
+}
+
+function isCodexPetPerImagePrice(pricing: ResourcePrice): boolean {
+  return pricing.pricingType === "PER_UNIT"
+    && pricing.perUnits === 1
+    && Number.isFinite(pricing.rate)
+    && pricing.rate > 0;
 }
 
 function signingSecret(deps: CodexPetRouteDeps): string {
@@ -821,15 +863,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const fallbackVisual = [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }];
     return {
       visualModels: visualModels.length > 0 ? visualModels : fallbackVisual,
-      imageModels: IMAGE_GENERATION_MODELS
-        .map((model) => ({
-          model,
-          displayName: model === GPT_IMAGE_MODEL
-            ? "GPT Image 2"
-            : model === DOUBAO_IMAGE_MODEL
-              ? "豆包 Seedream 4.5 文生图"
-              : "Qwen Image 2.0 Pro",
-        })),
+      imageModels: CODEX_PET_IMAGE_MODELS.map((model) => ({ model, displayName: "GPT Image 2" })),
     } as const;
   }
 
@@ -856,7 +890,9 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', runId);
       const current = await tx.codexPetRun.findFirst({ where: { id: runId, projectId, userId } });
       if (!current) throw new Error("CODEX_PET_RUN_NOT_FOUND");
-      if (current.status === "ready" || current.status === "failed") throw new Error("CODEX_PET_RUN_TERMINAL");
+      if (current.status === "ready" || current.status === "failed" || current.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) {
+        throw new Error("CODEX_PET_RUN_TERMINAL");
+      }
       const definitelyUncharged = current.billingActivatedAt === null
         && (current.billingChargeStatus === "pending" || current.billingChargeStatus === "insufficient" || current.billingChargeStatus === "cancelled");
       const chargeConfirmed = current.billingChargeStatus === "charged";
@@ -987,6 +1023,52 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
   async function settleCancellationRefund(
     result: { readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean },
   ): Promise<{ readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean }> {
+    if (result.run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
+      if (result.run.status !== "cancelled"
+        || result.run.workerId !== null
+        || result.run.billingSettlementStatus === "settled"
+        || (result.run.billingSettlementStatus !== "reserved" && result.run.billingSettlementStatus !== "settle_failed")
+        || !result.run.billingOperationId
+        || !result.run.billingResourceKey
+        || !billing.settleResource) return result;
+      try {
+        const units = await prisma.codexPetImageCall.count({
+          where: {
+            runId: result.run.id,
+            projectId: result.run.projectId,
+            userId: result.run.userId,
+            callKind: "planned",
+            sentAt: { not: null },
+          },
+        });
+        const receipt = await billing.settleResource({
+          operationId: result.run.billingOperationId,
+          resourceKey: result.run.billingResourceKey,
+          units,
+        });
+        const settled = await prisma.codexPetRun.update({
+          where: { id: result.run.id },
+          data: {
+            billingSettledUnits: units,
+            billingSettledPoints: receipt.settled,
+            billingPoints: receipt.settled,
+            billingSettlementStatus: "settled",
+            billingSettledAt: now(),
+            billingChargeError: null,
+          },
+        });
+        return { ...result, run: settled as RunShape };
+      } catch (error) {
+        const deferred = await prisma.codexPetRun.update({
+          where: { id: result.run.id },
+          data: {
+            billingSettlementStatus: "settle_failed",
+            billingChargeError: safeDiagnostic(error),
+          },
+        }).catch(() => null);
+        return { ...result, run: (deferred as RunShape | null) ?? result.run };
+      }
+    }
     const operationId = result.run.billingOperationId;
     if (!result.refundPending
       || result.run.billingChargeStatus !== "charged"
@@ -1065,8 +1147,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         data: {
           pricing: {
             ...pricing,
+            plannedImageCallLimit: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
             includedBaseCandidates: 2,
-            includedRepairAttempts: 2,
           },
         },
       };
@@ -1129,6 +1211,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           autoContinue: parsed.data.autoContinue,
           imageModel: parsed.data.imageModel,
           visualQaModel: parsed.data.visualQaModel,
+          qualityInspectionEnabled: parsed.data.qualityInspectionEnabled,
           createIdempotencyKey: idempotencyKey,
           status: "draft",
         },
@@ -1175,6 +1258,14 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const jobs = latestRun
       ? await prisma.codexPetJob.findMany({ where: { runId: latestRun.id, projectId: project.id, userId }, orderBy: { createdAt: "asc" } })
       : [];
+    const ledgerDelegate = (prisma as unknown as {
+      codexPetImageCall?: {
+        findMany: (args: unknown) => Promise<Array<Record<string, unknown>>>;
+      };
+    }).codexPetImageCall;
+    const imageCalls = latestRun && ledgerDelegate
+      ? await ledgerDelegate.findMany({ where: { runId: latestRun.id, projectId: project.id, userId }, orderBy: { createdAt: "asc" } })
+      : [];
     const serializedArtifacts = await Promise.all(artifacts
       .filter((artifact) => artifact.status !== "superseded")
       .map((artifact) => serializeArtifact(
@@ -1201,6 +1292,20 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           runs: runs.map((run) => serializeRun(run as RunShape)),
           artifacts: serializedArtifacts,
           jobs: jobs.map(serializeJob),
+          imageCalls: imageCalls.map((call) => ({
+            id: String(call.id),
+            jobKey: String(call.jobKey),
+            logicalAttempt: Number(call.logicalAttempt),
+            callKind: String(call.callKind),
+            purpose: String(call.purpose),
+            requestedModel: String(call.requestedModel),
+            actualModel: typeof call.actualModel === "string" ? call.actualModel : null,
+            status: String(call.status),
+            points: Number(call.points ?? 0),
+            sentAt: call.sentAt instanceof Date ? call.sentAt.toISOString() : null,
+            completedAt: call.completedAt instanceof Date ? call.completedAt.toISOString() : null,
+            error: typeof call.error === "string" ? call.error : null,
+          })),
         },
       },
     };
@@ -1216,6 +1321,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
     const project = await ownedProject(userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (project.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能修改" });
     const blockingRun = await prisma.codexPetRun.findFirst({
       where: {
         projectId: project.id,
@@ -1267,6 +1373,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
         requestedModel: updatedProject.imageModel || GPT_IMAGE_MODEL,
         visualQaModel: updatedProject.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
+        qualityInspectionEnabled: updatedProject.qualityInspectionEnabled,
       };
       const supersededAt = now();
       await tx.codexPetArtifact.updateMany({
@@ -1308,6 +1415,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           autoContinue: updatedProject.autoContinue,
           requestedModel: updatedProject.imageModel || GPT_IMAGE_MODEL,
           visualQaModel: updatedProject.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
+          qualityInspectionEnabled: updatedProject.qualityInspectionEnabled,
           colorKey: null,
           selectedBaseArtifactId: null,
           status: "base_generating",
@@ -1366,6 +1474,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
     const project = await ownedProject(userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (project.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能删除" });
     const deletedAt = now();
     const marked = await prisma.$transaction(async (tx) => {
       // Serialize with /start for this user. The deleting status stops
@@ -1428,25 +1537,36 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
 
     const initialProject = await ownedProject(userId, params.data.projectId);
     if (!initialProject) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (initialProject.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) {
+      return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能创建新运行" });
+    }
     const selectedImageModel = initialProject.imageModel || GPT_IMAGE_MODEL;
     const selectedVisualQaModel = initialProject.visualQaModel || CODEX_PET_VISUAL_QA_MODEL;
+    const qualityInspectionEnabled = initialProject.qualityInspectionEnabled === true;
     if (initialProject.status === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能开始新制作" });
+    if (selectedImageModel !== GPT_IMAGE_MODEL) {
+      return reply.code(409).send({ error: "该旧项目使用的生图模型已停用，请迁移为 GPT Image 2 后新建运行" });
+    }
     if (!initialProject.prompt.trim() && initialProject.referenceAssetIds.length === 0) {
       return reply.code(400).send({ error: "请填写角色提示词或上传至少一张参考图" });
     }
     if (!await validateReferenceAssets(userId, initialProject.referenceAssetIds)) {
       return reply.code(400).send({ error: "项目参考图不存在、无权使用或已失效" });
     }
-    try {
-      if (!await selectedVisualModelIsAvailable(selectedVisualQaModel)) {
-        return reply.code(409).send({ error: "所选视觉理解/质检模型已不在模型广场，请重新选择" });
+    if (qualityInspectionEnabled) {
+      try {
+        if (!await selectedVisualModelIsAvailable(selectedVisualQaModel)) {
+          return reply.code(409).send({ error: "所选视觉理解/质检模型已不在模型广场，请重新选择" });
+        }
+      } catch (error) {
+        app.log.warn({ error: safeDiagnostic(error) }, "failed to verify Codex pet visual model selection");
+        return reply.code(503).send({ error: "模型目录暂不可用，请稍后重试" });
       }
-    } catch (error) {
-      app.log.warn({ error: safeDiagnostic(error) }, "failed to verify Codex pet visual model selection");
-      return reply.code(503).send({ error: "模型目录暂不可用，请稍后重试" });
     }
     try {
-      (deps.assertVisualQaReady ?? (() => { assertCodexPetVisualQaRoute(process.env, selectedVisualQaModel); }))();
+      if (qualityInspectionEnabled) {
+        (deps.assertVisualQaReady ?? (() => { assertCodexPetVisualQaRoute(process.env, selectedVisualQaModel); }))();
+      }
       (deps.assertImageReady ?? (() => { assertCodexPetImageRoute(process.env, selectedImageModel); }))();
     } catch (error) {
       app.log.error({ error: safeDiagnostic(error), status: "model_route_unavailable" }, "Codex pet model route preflight failed");
@@ -1460,115 +1580,68 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       return reply.code(502).send({ error: "桌宠套餐计费服务不可用" });
     }
     if (!pricing.enabled) return reply.code(409).send({ error: "Codex 桌宠套餐当前已停用" });
-    if (pricing.pricingType !== "PER_CALL") return reply.code(500).send({ error: "Codex 桌宠套餐计价配置错误" });
+    if (!isCodexPetPerImagePrice(pricing)) return reply.code(500).send({ error: "Codex 桌宠单次生图计价配置错误" });
 
-    let transactionResult: { readonly project: ProjectShape; readonly run: RunShape; readonly created: boolean };
+    // The GPT-only contract uses one reservation for the fourteen planned
+    // provider calls. The durable run commits before the external reservation,
+    // then becomes queue-eligible only after that idempotent reservation wins.
+    let prepared: { readonly project: ProjectShape; readonly run: RunShape; readonly created: boolean };
     try {
-      transactionResult = await prisma.$transaction(async (tx) => {
-        // The lock serializes both equal and different idempotency keys for this user.
+      prepared = await prisma.$transaction(async (tx) => {
         await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet:${userId}`);
         const project = await tx.codexPetProject.findFirst({ where: { id: params.data.projectId, userId } });
         if (!project) throw new Error("CODEX_PET_PROJECT_NOT_FOUND");
-        if (project.status === "deleting") throw new Error("CODEX_PET_PROJECT_DELETING");
-        const existing = await tx.codexPetRun.findFirst({
-          where: { projectId: project.id, userId, idempotencyKey: key.value },
-        });
+        if ((project.imageModel || GPT_IMAGE_MODEL) !== GPT_IMAGE_MODEL) throw new Error("CODEX_PET_LEGACY_MODEL");
+        const existing = await tx.codexPetRun.findFirst({ where: { projectId: project.id, userId, idempotencyKey: key.value } });
         if (existing) {
-          // An insufficient attempt is intentionally retryable with the same
-          // billing operation after a top-up.  It must not, however, be
-          // resurrected after another idempotency key has already started or
-          // completed a run.  Without this guard a stale browser retry could
-          // activate a second run and charge the fixed package twice.
-          if (existing.billingChargeStatus === "insufficient" && !existing.billingActivatedAt) {
-            if (project.status !== "draft") throw new Error("CODEX_PET_INSUFFICIENT_RETRY_CONFLICT");
-            const active = await tx.codexPetRun.findFirst({
-              where: {
-                id: { not: existing.id },
-                userId,
-                status: { in: [...ACTIVE_RUN_STATUSES] },
-              },
-              orderBy: { createdAt: "desc" },
-            });
-            if (active) throw new ActiveCodexPetRunError(active.id);
-            // No charge or visual task was ever activated, so edits made to
-            // the draft after an insufficient-balance response must become
-            // the authoritative input for the explicit same-key retry.  If we
-            // keep the original snapshot here, a user can top up, change the
-            // character/reference images, and still be charged for the stale
-            // first attempt's prompt.
-            const refreshed = await tx.codexPetRun.update({
-              where: { id: existing.id, projectId: project.id, userId },
-              data: {
-                inputSnapshot: {
-                  name: project.name,
-                  description: project.description,
-                  prompt: project.prompt,
-                  stylePreset: project.stylePreset,
-                  styleNotes: project.styleNotes,
-                  referenceAssetIds: project.referenceAssetIds,
-                  autoContinue: project.autoContinue,
-                  modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
-                  requestedModel: project.imageModel || GPT_IMAGE_MODEL,
-                  visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
-                },
-                autoContinue: project.autoContinue,
-                requestedModel: project.imageModel || GPT_IMAGE_MODEL,
-                visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
-                error: null,
-              },
-            });
-            return { project: project as ProjectShape, run: refreshed as RunShape, created: false };
-          }
+          if (existing.billingMode !== CODEX_PET_PER_IMAGE_BILLING_MODE) throw new Error("CODEX_PET_LEGACY_RUN");
           return { project: project as ProjectShape, run: existing as RunShape, created: false };
         }
-
-        // A completed/failed/cancelled project is immutable from the start
-        // endpoint.  Re-running is intentionally exposed through “复制为新
-        // 项目”; allowing a direct start here would replace latestRunId on a
-        // ready project and could charge the user for an unrelated second
-        // delivery.  Keep the idempotent replay branch above so a retried
-        // request for an already-created run remains safe.
         if (project.status !== "draft") throw new Error("CODEX_PET_PROJECT_NOT_DRAFT");
-
-        const active = await tx.codexPetRun.findFirst({
-          where: { userId, status: { in: [...ACTIVE_RUN_STATUSES] } },
-          orderBy: { createdAt: "desc" },
-        });
+        const active = await tx.codexPetRun.findFirst({ where: { userId, status: { in: [...ACTIVE_RUN_STATUSES] } }, orderBy: { createdAt: "desc" } });
         if (active) throw new ActiveCodexPetRunError(active.id);
-
         const runId = deriveCodexPetRunId(userId, project.id, key.value);
-        const operationId = `codex-pet:${runId}`;
-        const createdAt = now();
+        const operationId = `codex-pet:run:${runId}:planned-images`;
         const inputSnapshot = {
-          name: project.name,
-          description: project.description,
-          prompt: project.prompt,
-          stylePreset: project.stylePreset,
-          styleNotes: project.styleNotes,
-          referenceAssetIds: project.referenceAssetIds,
-          autoContinue: project.autoContinue,
-          modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
-          requestedModel: project.imageModel || GPT_IMAGE_MODEL,
-          visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
-        };
-        const created = await tx.codexPetRun.create({
-          data: {
-            id: runId,
-            projectId: project.id,
-            userId,
-            idempotencyKey: key.value,
-            inputSnapshot,
-            autoContinue: project.autoContinue,
-            requestedModel: project.imageModel || GPT_IMAGE_MODEL,
-            visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
-            ...codexPetPendingBillingFields(operationId),
-            createdAt,
-          },
-        });
-        // The durable intent must commit before any external billing call. The
-        // reconciler activates the run and writes run.queued in a later short
-        // transaction only after the idempotent charge is confirmed.
-        return { project: project as ProjectShape, run: created as RunShape, created: true };
+        name: project.name,
+        description: project.description,
+        prompt: project.prompt,
+        stylePreset: project.stylePreset,
+        styleNotes: project.styleNotes,
+        referenceAssetIds: project.referenceAssetIds,
+        autoContinue: project.autoContinue,
+        modelContractVersion: CODEX_PET_MODEL_CONTRACT_VERSION,
+        requestedModel: GPT_IMAGE_MODEL,
+        qualityInspectionEnabled: project.qualityInspectionEnabled === true,
+        visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
+        billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+        plannedImageCallLimit: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+        perImageCallPoints: Math.ceil(pricing.rate),
+      };
+        const run = await tx.codexPetRun.create({ data: {
+        id: runId,
+        projectId: project.id,
+        userId,
+        idempotencyKey: key.value,
+        inputSnapshot,
+        autoContinue: project.autoContinue,
+        requestedModel: GPT_IMAGE_MODEL,
+        visualQaModel: project.visualQaModel || CODEX_PET_VISUAL_QA_MODEL,
+        qualityInspectionEnabled: project.qualityInspectionEnabled === true,
+        billingOperationId: operationId,
+        billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+        billingResourceKey: pricing.resourceKey,
+        billingReservedUnits: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+        billingSettlementStatus: "reserving",
+        billingChargeStatus: "reserving",
+        plannedImageCallLimit: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+        status: "queued",
+        progressStage: "queued",
+        progressPercent: 0,
+        progressMessage: "正在预留最多 14 次 GPT Image 2 调用额度",
+        } });
+        await tx.codexPetProject.update({ where: { id: project.id }, data: { latestRunId: run.id, status: "queued" } });
+        return { project: project as ProjectShape, run: run as RunShape, created: true };
       });
     } catch (error) {
       if (error instanceof ActiveCodexPetRunError) {
@@ -1577,97 +1650,89 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       if (error instanceof Error && error.message === "CODEX_PET_PROJECT_NOT_FOUND") {
         return reply.code(404).send({ error: "桌宠项目不存在" });
       }
-      if (error instanceof Error && error.message === "CODEX_PET_PROJECT_DELETING") {
-        return reply.code(409).send({ error: "桌宠项目正在删除，不能开始新制作" });
+      if (error instanceof Error && error.message === "CODEX_PET_LEGACY_MODEL") {
+        return reply.code(409).send({ error: "该旧项目使用的生图模型已停用，请迁移为 GPT Image 2 后新建运行" });
+      }
+      if (error instanceof Error && error.message === "CODEX_PET_LEGACY_RUN") {
+        return reply.code(409).send({ error: "该历史运行使用旧计费合同，不能重新启动" });
       }
       if (error instanceof Error && error.message === "CODEX_PET_PROJECT_NOT_DRAFT") {
         return reply.code(409).send({ error: "只有草稿项目可以开始新的桌宠制作，请复制为新项目" });
-      }
-      if (error instanceof Error && error.message === "CODEX_PET_INSUFFICIENT_RETRY_CONFLICT") {
-        return reply.code(409).send({ error: "该未扣费运行已被后续项目状态取代，不能再次启动，请使用当前项目操作" });
       }
       app.log.error({ error: safeDiagnostic(error), status: "run_create_failed" }, "failed to create Codex pet run");
       return reply.code(502).send({ error: "启动桌宠制作失败，请稍后重试" });
     }
 
-    let billingResult: Awaited<ReturnType<typeof reconcileCodexPetRunBilling>>;
-    try {
-      billingResult = await reconcileCodexPetRunBilling({
-        prisma,
-        billing,
-        runId: transactionResult.run.id,
-        userId,
-        projectId: transactionResult.project.id,
-        // Retrying the same explicit idempotency key after a top-up reuses the
-        // original durable operation instead of creating another charge.
-        retryInsufficient: !transactionResult.created && transactionResult.run.billingChargeStatus === "insufficient",
-      });
-    } catch (error) {
-      app.log.error({ error: safeDiagnostic(error), runId: transactionResult.run.id }, "Codex pet billing reconciliation failed");
-      return reply.code(503).send({
-        error: "套餐扣费状态已安全记录，正在等待自动确认；请使用同一幂等键重试",
-        retryable: true,
-        runId: transactionResult.run.id,
-      });
-    }
-
-    const [currentProject, currentRun] = await Promise.all([
-      ownedProject(userId, params.data.projectId),
-      ownedRun(userId, params.data.projectId, transactionResult.run.id),
-    ]);
-    if (!currentProject || !currentRun) return reply.code(404).send({ error: "桌宠项目或运行不存在" });
-    transactionResult = {
-      ...transactionResult,
-      project: currentProject as ProjectShape,
-      run: currentRun as RunShape,
-    };
-
-    if (billingResult.outcome === "insufficient") {
-      return reply.code(402).send({
-        error: "积分不足，请充值后使用同一幂等键重试",
-        retryable: true,
-        runId: currentRun.id,
-      });
-    }
-    if (billingResult.outcome === "charging"
-      || billingResult.outcome === "retry_scheduled"
-      || billingResult.outcome === "uncertain") {
-      return reply.code(202).send({
-        success: true,
-        data: {
-          project: serializeProject(transactionResult.project),
-          run: serializeRun(transactionResult.run),
-          billingPending: true,
+    let activeRun = prepared.run;
+    if (activeRun.billingSettlementStatus !== "reserved" && activeRun.billingSettlementStatus !== "settled") {
+      const reservationLeaseUntil = new Date(now().getTime() + 60_000);
+      const reservationClaim = await prisma.codexPetRun.updateMany({
+        where: {
+          id: activeRun.id,
+          projectId: params.data.projectId,
+          userId,
+          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+          billingSettlementStatus: { in: ["reserving", "insufficient", "reserve_failed"] },
+          OR: [{ billingChargeLeaseUntil: null }, { billingChargeLeaseUntil: { lte: now() } }],
         },
-        error: "套餐扣费结果正在确认，任务尚未执行；系统会自动继续",
-        retryable: true,
-        runId: currentRun.id,
-        billingStatus: billingResult.chargeStatus,
-        retryAt: billingResult.retryAt?.toISOString() ?? null,
+        data: {
+          billingChargeStatus: "reserving",
+          billingChargeLeaseUntil: reservationLeaseUntil,
+          billingChargeError: null,
+        },
       });
+      if (reservationClaim.count !== 1) {
+        const currentProject = await ownedProject(userId, params.data.projectId);
+        if (!currentProject) return reply.code(404).send({ error: "桌宠项目不存在" });
+        return reply.code(202).send({
+          success: true,
+          data: { project: serializeProject(currentProject as ProjectShape), run: serializeRun(activeRun as RunShape), billingPending: true },
+          error: "调用额度预留正在确认，尚未入队",
+          retryable: true,
+          runId: activeRun.id,
+        });
+      }
+      try {
+        if (!billing.reserveResource) throw new Error("Codex pet billing reserve capability is unavailable");
+        const receipt = await billing.reserveResource({
+          operationId: activeRun.billingOperationId!,
+          userId,
+          resourceKey: activeRun.billingResourceKey || pricing.resourceKey,
+          units: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+        });
+        activeRun = await prisma.codexPetRun.update({ where: { id: activeRun.id }, data: {
+          billingReservedPoints: receipt.reserved,
+          billingChargeStatus: "reserved",
+          billingSettlementStatus: "reserved",
+          billingActivatedAt: now(),
+          billingChargeLeaseUntil: null,
+          progressMessage: "14 次 GPT Image 2 调用额度已预留，等待 Worker",
+        } });
+      } catch (error) {
+        const insufficient = error instanceof Error && error.name === "InsufficientBalanceError";
+        activeRun = await prisma.codexPetRun.update({ where: { id: activeRun.id }, data: {
+          billingChargeStatus: insufficient ? "insufficient" : "uncertain",
+          billingSettlementStatus: insufficient ? "insufficient" : "reserve_failed",
+          billingChargeError: safeDiagnostic(error),
+          billingChargeLeaseUntil: null,
+          progressMessage: insufficient ? "积分不足，未创建可执行生图任务" : "调用额度预留失败，未创建可执行生图任务",
+        } });
+        return reply.code(insufficient ? 402 : 503).send({ error: activeRun.progressMessage, runId: activeRun.id, retryable: !insufficient });
+      }
     }
-    if (billingResult.outcome === "cancelled" || billingResult.outcome === "refund_pending") {
-      return reply.code(409).send({ error: "运行已取消或项目正在删除，任务不会启动", runId: currentRun.id });
+    if (activeRun.status === "queued") {
+      try {
+        await enqueueRun(activeRun.id);
+      } catch (error) {
+        app.log.error({ error: safeDiagnostic(error), runId: activeRun.id }, "reserved Codex pet run enqueue failed");
+        return reply.code(503).send({ error: "调用额度已预留，但任务暂未入队；请使用同一幂等键重试", retryable: true, runId: activeRun.id });
+      }
     }
+    const currentProject = await ownedProject(userId, params.data.projectId);
+    if (!currentProject) return reply.code(404).send({ error: "桌宠项目不存在" });
+    await notifyEvent(app, deps, activeRun.id);
+    return reply.code(prepared.created ? 202 : 200).send({ success: true, data: { project: serializeProject(currentProject as ProjectShape), run: serializeRun(activeRun as RunShape) } });
 
-    try {
-      if (billingResult.shouldEnqueue) await enqueueRun(transactionResult.run.id);
-    } catch (error) {
-      app.log.error({ error: safeDiagnostic(error), runId: transactionResult.run.id }, "Codex pet run enqueue failed");
-      return reply.code(503).send({
-        error: "任务已记录且未重复扣费，但暂时未能入队；请使用同一幂等键重试",
-        retryable: true,
-        runId: transactionResult.run.id,
-      });
-    }
-    await notifyEvent(app, deps, transactionResult.run.id);
-    return reply.code(transactionResult.created ? 202 : 200).send({
-      success: true,
-      data: {
-        project: serializeProject(transactionResult.project),
-        run: serializeRun(transactionResult.run),
-      },
-    });
   });
 
   app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/base-selection", async (request, reply) => {
@@ -1680,9 +1745,15 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     if (!run) return reply.code(404).send({ error: "桌宠运行不存在" });
     const project = await ownedProject(userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (project.status === CODEX_PET_LEGACY_READ_ONLY_STATUS || run.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) {
+      return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能继续制作" });
+    }
     if (project.status === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能修改主形象" });
 
     if ("regenerate" in body.data) {
+      if (run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
+        return reply.code(409).send({ error: "主形象候选已属于计划内调用；额外生成必须等待失败后逐次批准并单独计费" });
+      }
       if (run.status !== "awaiting_base_review" && run.status !== "base_generating") {
         return reply.code(409).send({ error: "只有等待主形象确认时才能重生候选" });
       }
@@ -1993,10 +2064,101 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const userId = userIdOf(request);
     if (!userId) return reply.code(401).send({ error: "未登录" });
     const params = runParamsSchema.safeParse(request.params);
-    if (!params.success) return reply.code(400).send({ error: "生图批准参数不合法" });
+    const body = extraImageApprovalSchema.safeParse(request.body ?? {});
+    if (!params.success || !body.success) return reply.code(400).send({ error: "生图批准参数不合法" });
     const project = await ownedProject(userId, params.data.projectId);
     const run = await ownedRun(userId, params.data.projectId, params.data.runId);
     if (!project || !run || project.latestRunId !== run.id) return reply.code(404).send({ error: "桌宠运行不存在" });
+    if (project.status === CODEX_PET_LEGACY_READ_ONLY_STATUS || run.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) {
+      return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能批准额外调用" });
+    }
+
+    if (run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
+      const approvalKey = resolveIdempotencyKey(request.headers["idempotency-key"], body.data.idempotencyKey);
+      if (!approvalKey.success) return reply.code(400).send({ error: "额外生图批准必须提供一致且合法的幂等键" });
+      if (run.status !== "awaiting_regeneration_approval" || project.status !== "awaiting_regeneration_approval" || !run.pendingImageJobKey) {
+        return reply.code(409).send({ error: "当前没有等待单次额外授权的生图调用" });
+      }
+      const pricing = await price().catch(() => null);
+      if (!pricing || !pricing.enabled || !isCodexPetPerImagePrice(pricing)) {
+        return reply.code(503).send({ error: "额外生图计费服务不可用" });
+      }
+      const job = await prisma.codexPetJob.findFirst({ where: { runId: run.id, projectId: project.id, userId, key: run.pendingImageJobKey } });
+      if (!job) return reply.code(409).send({ error: "等待批准的动作不存在" });
+      const logicalAttempt = Math.max(1, job.attempt + 1);
+      let preparedExtra: { readonly operationId: string; readonly created: boolean } | undefined;
+      try {
+        preparedExtra = await prepareCodexPetExtraImageCall({
+          prisma,
+          runId: run.id,
+          projectId: project.id,
+          userId,
+          jobKey: job.key,
+          logicalAttempt,
+          requestedModel: run.requestedModel,
+          resourceKey: pricing.resourceKey,
+          points: pricing.rate,
+        });
+        if (!preparedExtra.created) {
+          return reply.code(202).send({
+            success: true,
+            data: { run: serializeRun(run as RunShape), approvalPending: true },
+            error: "该额外生图授权正在确认，未重复扣费或入队",
+            retryable: true,
+          });
+        }
+        await billing.chargeResource({ operationId: preparedExtra.operationId, userId, resourceKey: pricing.resourceKey, units: 1 });
+      } catch (error) {
+        if (preparedExtra?.created) {
+          await prisma.codexPetImageCall.updateMany({
+            where: { operationId: preparedExtra.operationId, status: "prepared" },
+            data: { status: "cancelled", error: safeDiagnostic(error), completedAt: now() },
+          }).catch(() => undefined);
+        }
+        const insufficient = error instanceof Error && error.name === "InsufficientBalanceError";
+        return reply.code(insufficient ? 402 : 503).send({ error: insufficient ? "积分不足，额外生图未获授权" : "额外生图扣费失败，未联系生图服务", retryable: !insufficient });
+      }
+      const updated = await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-extra:${run.id}:${approvalKey.value}`);
+        const current = await tx.codexPetRun.findFirst({ where: { id: run.id, projectId: project.id, userId, status: "awaiting_regeneration_approval" } });
+        if (!current || current.pendingImageJobKey !== job.key) return null;
+        await tx.codexPetJob.update({ where: { id: job.id }, data: { status: "queued", maxAttempts: logicalAttempt, workerId: null, completedAt: null, error: null } });
+        const next = await tx.codexPetRun.update({ where: { id: current.id }, data: {
+          status: "direction_generating",
+          progressStage: "direction_generating",
+          progressMessage: `已授权 ${job.key} 的 1 次额外 GPT Image 2 调用`,
+          pendingImageJobKey: null,
+          workerId: null,
+          heartbeatAt: null,
+          error: null,
+          completedAt: null,
+          lastEventSequence: { increment: 1 },
+        } });
+        await tx.codexPetProject.updateMany({ where: { id: project.id, userId, latestRunId: current.id }, data: { status: "direction_generating" } });
+        await tx.codexPetEvent.create({ data: {
+          projectId: project.id,
+          runId: current.id,
+          userId,
+          sequence: next.lastEventSequence,
+          type: "image.call.extra_approved",
+          stage: "direction_generating",
+          jobKey: job.key,
+          message: `用户已授权 ${job.key} 的 1 次额外生图调用`,
+          progress: next.progressPercent,
+          payload: { jobKey: job.key, logicalAttempt, operationId: preparedExtra!.operationId, callKind: "extra" },
+        } });
+        return next;
+      });
+      if (!updated) return reply.code(409).send({ error: "额外授权状态已变化，请刷新后重试" });
+      try {
+        await enqueueRun(updated.id);
+      } catch (error) {
+        app.log.error({ error: safeDiagnostic(error), runId: updated.id }, "approved extra Codex pet image call enqueue failed");
+        return reply.code(503).send({ error: "额外授权已保存，任务暂未入队；可使用同一幂等键重试", retryable: true });
+      }
+      await notifyEvent(app, deps, updated.id);
+      return reply.code(202).send({ success: true, data: { run: serializeRun(updated as RunShape) } });
+    }
 
     if (run.status === "direction_generating" && run.imageGenerationApprovalBudget === 1) {
       try {
@@ -2171,29 +2333,18 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       where: { id: runId, projectId: project.id, userId },
     });
     if (!run
-      || run.status !== "ready"
-      || !run.knowledgeDocumentId
+      || !DELIVERABLE_RUN_STATUSES.includes(run.status as (typeof DELIVERABLE_RUN_STATUSES)[number])
       || !run.spritesheetArtifactId
-      || !run.packageArtifactId
-      || !codexPetValidationPassed(run.validationReport)) return null;
-    const [spritesheet, packageArtifact, knowledgeDocument] = await Promise.all([
+      || !run.packageArtifactId) return null;
+    const [spritesheet, packageArtifact] = await Promise.all([
       prisma.codexPetArtifact.findFirst({
         where: { id: run.spritesheetArtifactId, runId: run.id, projectId: project.id, userId },
       }),
       prisma.codexPetArtifact.findFirst({
         where: { id: run.packageArtifactId, runId: run.id, projectId: project.id, userId },
       }),
-      prisma.document.findFirst({
-        where: {
-          id: run.knowledgeDocumentId,
-          sourceModule: CODEX_PET_KNOWLEDGE_SOURCE_MODULE,
-          sourceId: run.id,
-          kb: { userId, systemKey: CODEX_PET_KNOWLEDGE_SYSTEM_KEY },
-        },
-        select: { id: true },
-      }),
     ]);
-    if (!spritesheet || !packageArtifact || !knowledgeDocument) return null;
+    if (!spritesheet || !packageArtifact) return null;
     if (!assertFinalSpritesheet(spritesheet as CodexPetArtifactShape)
       || !assertPackageArtifact(packageArtifact as CodexPetArtifactShape)) return null;
     return {
@@ -2214,7 +2365,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const project = await ownedProject(userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
     const ready = await readyProjectAssets(userId, project.id, query.data.runId);
-    if (!ready) return reply.code(409).send({ error: "桌宠尚未完成验证、打包和知识库归档，暂不能安装" });
+    if (!ready) return reply.code(409).send({ error: "桌宠兼容包尚未生成，暂不能安装" });
     try {
       const secret = signingSecret(deps);
       const origin = publicBaseUrl(deps);
@@ -2252,7 +2403,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     const project = await ownedProject(userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
     const ready = await readyProjectAssets(userId, project.id, query.data.runId);
-    if (!ready) return reply.code(409).send({ error: "桌宠尚未完成验证、打包和知识库归档，暂不能下载" });
+    if (!ready) return reply.code(409).send({ error: "桌宠兼容包尚未生成，暂不能下载" });
     try {
       const bytes = await loadArtifact(ready.packageArtifact.objectKey);
       const filename = packageFilename(ready.project, ready.packageArtifact);
@@ -2313,27 +2464,12 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           id: shape.runId,
           projectId: shape.projectId,
           userId: shape.userId,
-          status: "ready",
           spritesheetArtifactId: shape.id,
         },
       });
-      if (!run || !run.knowledgeDocumentId || !codexPetValidationPassed(run.validationReport)) {
+      if (!run || !DELIVERABLE_RUN_STATUSES.includes(run.status as (typeof DELIVERABLE_RUN_STATUSES)[number])) {
         return reply.code(404).send({ error: "桌宠精灵图不存在" });
       }
-      // A knowledge document can be removed independently (the FK sets the
-      // run link to NULL). Re-check the ownership-scoped Document here so a
-      // previously issued install URL cannot continue delivering a pet after
-      // its archive has been intentionally deleted.
-      const document = await prisma.document.findFirst({
-        where: {
-          id: run.knowledgeDocumentId,
-          sourceModule: CODEX_PET_KNOWLEDGE_SOURCE_MODULE,
-          sourceId: run.id,
-          kb: { userId: run.userId, systemKey: CODEX_PET_KNOWLEDGE_SYSTEM_KEY },
-        },
-        select: { id: true },
-      });
-      if (!document) return reply.code(404).send({ error: "桌宠精灵图不存在" });
     }
     if (!shape) return reply.code(404).send({ error: "桌宠资源不存在" });
     try {

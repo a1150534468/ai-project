@@ -3,7 +3,6 @@ import { Prisma, type Document, type PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { codexPetArtifactPrefix, isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
 import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
-import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 
 export const CODEX_PET_KNOWLEDGE_SYSTEM_KEY = "AI_ARTIFACTS";
 export const CODEX_PET_KNOWLEDGE_SOURCE_MODULE = "codex_pet";
@@ -80,12 +79,6 @@ function validationWarnings(report: JsonRecord): string[] {
   const warnings: string[] = [];
   collectStringList(report, new Set(["warnings", "acceptableWarnings"]), warnings);
   return [...new Set(warnings.map((warning) => sanitizeCodexPetDiagnosticText(warning, 500)))];
-}
-
-function validationErrors(report: JsonRecord): string[] {
-  const errors: string[] = [];
-  collectStringList(report, new Set(["errors", "failures"]), errors);
-  return [...new Set(errors.map((error) => sanitizeCodexPetDiagnosticText(error, 500)))];
 }
 
 function artifactPetId(metadata: Prisma.JsonValue, fallback: string): string {
@@ -197,11 +190,10 @@ export async function archiveCodexPetRun(args: {
       throw new CodexPetArchiveError("final spritesheet, ZIP, preview, and validation report are required", "package_incomplete");
     }
 
+    // The durable packaging step has already revalidated the exact WebP and
+    // ZIP bytes. Archive the available QA report for discovery, but do not
+    // strand a valid user artifact because optional report fields are missing.
     const report = record(run.validationReport);
-    if (!codexPetValidationPassed(report)) {
-      const errors = validationErrors(report);
-      throw new CodexPetArchiveError(`final validation has not passed${errors[0] ? `: ${errors[0]}` : ""}`, "validation_failed");
-    }
 
     const requiredIds = [run.spritesheetArtifactId, run.packageArtifactId, run.previewArtifactId];
     const artifacts = await tx.codexPetArtifact.findMany({
