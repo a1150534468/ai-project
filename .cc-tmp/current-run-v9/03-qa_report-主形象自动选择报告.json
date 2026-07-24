@@ -1,0 +1,63 @@
+{
+  "selectedArtifactId": "df17ce1e-f574-4722-8f93-af26397789cd",
+  "verdicts": [
+    {
+      "pass": true,
+      "score": 93,
+      "mirrorSafe": true,
+      "identity": true,
+      "structure": true,
+      "semantics": true,
+      "continuity": true,
+      "warnings": [
+        "Soft gradients and slight edge antialiasing may require palette simplification for exact pixel-animation reproducibility."
+      ],
+      "failures": [],
+      "repairPrompt": "",
+      "repairRows": [],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    },
+    {
+      "pass": false,
+      "score": 67,
+      "mirrorSafe": false,
+      "identity": true,
+      "structure": true,
+      "semantics": false,
+      "continuity": false,
+      "warnings": [
+        "The soft mottled shading, glow, and irregular pixel-edge treatment will lose clarity at desktop-pet scale.",
+        "The strongly asymmetric hand treatment makes automatic horizontal mirroring unreliable."
+      ],
+      "failures": [
+        "The staggered legs and opposing arm positions read as a walking step rather than a calm neutral canonical pose.",
+        "The viewer-right hand is rendered as a dark, poorly separated claw while the opposite hand is bright and clearly fingered, creating an unstable detail that will be difficult to reproduce consistently across poses.",
+        "Airbrushed gradients and edge halos mixed with stepped pixel contours prevent a clean, consistently reproducible sprite treatment."
+      ],
+      "repairPrompt": "Redraw the character in a canonical idle stance with both feet planted, level, and clearly separated; let both arms hang naturally without implied swing. Preserve the large round helmet, antenna, dark face panel, two bright eyes, and small mouth. Make both hand silhouettes equally clear and consistently colored, with unambiguous wrist attachment. Replace mottled airbrushing and halos with a limited flat palette, stable highlight clusters, and crisp pixel-aligned edges suitable for small desktop-pet animation.",
+      "repairRows": [
+        "idle"
+      ],
+      "modelProvenance": {
+        "requestedModel": "gpt-5.6-sol",
+        "actualModel": "gpt-5.6-sol",
+        "route": "chatgpt_model_route"
+      }
+    }
+  ],
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [
+        "gpt-5.6-sol"
+      ],
+      "routes": [
+        "chatgpt_model_route"
+      ]
+    }
+  }
+}

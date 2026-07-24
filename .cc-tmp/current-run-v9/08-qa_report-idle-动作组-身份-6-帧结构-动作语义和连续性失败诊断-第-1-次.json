@@ -1,0 +1,256 @@
+{
+  "deterministic": {
+    "diagnostics": [
+      {
+        "index": 0,
+        "sourceBounds": {
+          "left": 228,
+          "top": 138,
+          "right": 458,
+          "bottom": 581,
+          "width": 231,
+          "height": 444
+        },
+        "opaquePixels": 59446,
+        "edgePixels": 0,
+        "componentCount": 2,
+        "internalTransparentPixels": 1,
+        "chromaCoverage": 0.85537353515625,
+        "normalizedBounds": {
+          "left": 49,
+          "top": 14,
+          "right": 142,
+          "bottom": 195,
+          "width": 94,
+          "height": 182
+        },
+        "errors": [
+          "multiple-foreground-components"
+        ],
+        "warnings": []
+      },
+      {
+        "index": 1,
+        "sourceBounds": {
+          "left": 199,
+          "top": 138,
+          "right": 432,
+          "bottom": 581,
+          "width": 234,
+          "height": 444
+        },
+        "opaquePixels": 59980,
+        "edgePixels": 0,
+        "componentCount": 2,
+        "internalTransparentPixels": 1,
+        "chromaCoverage": 0.854189453125,
+        "normalizedBounds": {
+          "left": 48,
+          "top": 14,
+          "right": 143,
+          "bottom": 195,
+          "width": 96,
+          "height": 182
+        },
+        "errors": [
+          "multiple-foreground-components"
+        ],
+        "warnings": []
+      },
+      {
+        "index": 2,
+        "sourceBounds": {
+          "left": 171,
+          "top": 137,
+          "right": 405,
+          "bottom": 581,
+          "width": 235,
+          "height": 445
+        },
+        "opaquePixels": 60129,
+        "edgePixels": 0,
+        "componentCount": 2,
+        "internalTransparentPixels": 10,
+        "chromaCoverage": 0.853818359375,
+        "normalizedBounds": {
+          "left": 48,
+          "top": 14,
+          "right": 143,
+          "bottom": 195,
+          "width": 96,
+          "height": 182
+        },
+        "errors": [
+          "multiple-foreground-components"
+        ],
+        "warnings": []
+      },
+      {
+        "index": 3,
+        "sourceBounds": {
+          "left": 228,
+          "top": 58,
+          "right": 458,
+          "bottom": 442,
+          "width": 231,
+          "height": 385
+        },
+        "opaquePixels": 60553,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 4,
+        "chromaCoverage": 0.8526220703125,
+        "normalizedBounds": {
+          "left": 49,
+          "top": 39,
+          "right": 142,
+          "bottom": 195,
+          "width": 94,
+          "height": 157
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 4,
+        "sourceBounds": {
+          "left": 199,
+          "top": 58,
+          "right": 432,
+          "bottom": 442,
+          "width": 234,
+          "height": 385
+        },
+        "opaquePixels": 61494,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 2,
+        "chromaCoverage": 0.85048583984375,
+        "normalizedBounds": {
+          "left": 48,
+          "top": 39,
+          "right": 143,
+          "bottom": 195,
+          "width": 96,
+          "height": 157
+        },
+        "errors": [],
+        "warnings": []
+      },
+      {
+        "index": 5,
+        "sourceBounds": {
+          "left": 171,
+          "top": 58,
+          "right": 405,
+          "bottom": 442,
+          "width": 235,
+          "height": 385
+        },
+        "opaquePixels": 61582,
+        "edgePixels": 0,
+        "componentCount": 1,
+        "internalTransparentPixels": 5,
+        "chromaCoverage": 0.850390625,
+        "normalizedBounds": {
+          "left": 48,
+          "top": 39,
+          "right": 143,
+          "bottom": 195,
+          "width": 96,
+          "height": 157
+        },
+        "errors": [],
+        "warnings": []
+      }
+    ],
+    "unusedSlotOpaquePixels": [],
+    "chroma": [
+      {
+        "removedPixels": 350141,
+        "softenedPixels": 220,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 349593,
+        "softenedPixels": 283,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 349446,
+        "softenedPixels": 278,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 349015,
+        "softenedPixels": 219,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 348086,
+        "softenedPixels": 273,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      },
+      {
+        "removedPixels": 347990,
+        "softenedPixels": 330,
+        "totalPixels": 409600,
+        "key": "#ff00ff",
+        "threshold": 86,
+        "feather": 24
+      }
+    ],
+    "sourceWidth": 1920,
+    "sourceHeight": 1280,
+    "sharedScale": 0.40898876404494383,
+    "geometry": {
+      "heightRatio": 1.1592356687898089,
+      "widthRatio": 1.0212765957446808,
+      "baselineSpreadPixels": 0,
+      "centerSpreadPixels": 0,
+      "warnings": []
+    },
+    "jumpingArc": null,
+    "ok": false,
+    "errors": [
+      "frame-0:multiple-foreground-components",
+      "frame-1:multiple-foreground-components",
+      "frame-2:multiple-foreground-components"
+    ],
+    "warnings": []
+  },
+  "visual": {
+    "pass": false,
+    "verdicts": [],
+    "score": 0,
+    "mirrorSafe": false,
+    "warnings": [],
+    "failures": [
+      "frame-0:multiple-foreground-components",
+      "frame-1:multiple-foreground-components",
+      "frame-2:multiple-foreground-components"
+    ]
+  },
+  "modelProvenance": {
+    "visualQa": {
+      "requestedModel": "gpt-5.6-sol",
+      "actualModels": [],
+      "routes": []
+    }
+  }
+}

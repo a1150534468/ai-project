@@ -1345,3 +1345,444 @@ Please check https://pkg.go.dev/github.com/gin-gonic/gin#readme-don-t-trust-all-
 [codex-pet-worker] received SIGTERM, shutting down
 c[codex-pet-worker] image route ready model=gpt-image-2
 [codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784773596101,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":59259},"msg":"incoming request"}
+{"level":30,"time":1784773596106,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-2","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":59260},"msg":"incoming request"}
+{"level":30,"time":1784773596125,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1","res":{"statusCode":200},"responseTime":23.211750030517578,"msg":"request completed"}
+[GIN] 2026/07/23 - 10:26:36 | 200 |    2.079292ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784773596134,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-2","res":{"statusCode":200},"responseTime":27.515541911125183,"msg":"request completed"}
+{"level":30,"time":1784774567102,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-3","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":54775},"msg":"incoming request"}
+{"level":30,"time":1784774567107,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-4","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":54776},"msg":"incoming request"}
+{"level":30,"time":1784774567113,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-3","res":{"statusCode":200},"responseTime":7.443542003631592,"msg":"request completed"}
+[GIN] 2026/07/23 - 10:42:47 | 200 |    4.156959ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784774567120,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-4","res":{"statusCode":200},"responseTime":12.090207934379578,"msg":"request completed"}
+{"level":30,"time":1784775233815,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-5","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58987},"msg":"incoming request"}
+{"level":30,"time":1784775233816,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-6","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58989},"msg":"incoming request"}
+{"level":30,"time":1784775233823,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-5","res":{"statusCode":200},"responseTime":7.444625020027161,"msg":"request completed"}
+[GIN] 2026/07/23 - 10:53:53 | 200 |    5.517166ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784775233827,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-6","res":{"statusCode":200},"responseTime":10.669790983200073,"msg":"request completed"}
+{"level":30,"time":1784775234911,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-7","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":59006},"msg":"incoming request"}
+{"level":30,"time":1784775234912,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-8","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":59008},"msg":"incoming request"}
+{"level":30,"time":1784775234913,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-7","res":{"statusCode":200},"responseTime":2.2111669778823853,"msg":"request completed"}
+[GIN] 2026/07/23 - 10:53:54 | 200 |    1.563166ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784775234918,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-8","res":{"statusCode":200},"responseTime":6.149833083152771,"msg":"request completed"}
+{"level":30,"time":1784775556871,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-9","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":51758},"msg":"incoming request"}
+{"level":30,"time":1784775556872,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-a","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":51759},"msg":"incoming request"}
+{"level":30,"time":1784775556876,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-9","res":{"statusCode":200},"responseTime":4.730790972709656,"msg":"request completed"}
+[GIN] 2026/07/23 - 10:59:16 | 200 |    4.662459ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784775556881,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-a","res":{"statusCode":200},"responseTime":8.718415975570679,"msg":"request completed"}
+{"level":30,"time":1784775620120,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-b","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":53697},"msg":"incoming request"}
+{"level":30,"time":1784775620121,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-c","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":53699},"msg":"incoming request"}
+{"level":30,"time":1784775620125,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-b","res":{"statusCode":200},"responseTime":4.550624966621399,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:00:20 | 200 |       4.461ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784775620128,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-c","res":{"statusCode":200},"responseTime":7.259541034698486,"msg":"request completed"}
+{"level":30,"time":1784775766426,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-d","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":62050},"msg":"incoming request"}
+{"level":30,"time":1784775766428,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-e","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":62051},"msg":"incoming request"}
+{"level":30,"time":1784775766431,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-d","res":{"statusCode":200},"responseTime":4.722290992736816,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:02:46 | 200 |    4.626709ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784775766438,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-e","res":{"statusCode":200},"responseTime":10.149500012397766,"msg":"request completed"}
+{"level":30,"time":1784777356313,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-f","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58137},"msg":"incoming request"}
+{"level":30,"time":1784777356315,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-g","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58139},"msg":"incoming request"}
+{"level":30,"time":1784777356318,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-f","res":{"statusCode":200},"responseTime":5.115709066390991,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:29:16 | 200 |    4.369042ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784777356327,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-g","res":{"statusCode":200},"responseTime":12.724708914756775,"msg":"request completed"}
+{"level":30,"time":1784777357458,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-h","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58174},"msg":"incoming request"}
+{"level":30,"time":1784777357462,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-i","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58187},"msg":"incoming request"}
+{"level":30,"time":1784777357464,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-h","res":{"statusCode":200},"responseTime":4.942249894142151,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:29:17 | 200 |    4.241375ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784777357472,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-i","res":{"statusCode":200},"responseTime":9.64833402633667,"msg":"request completed"}
+{"level":30,"time":1784777366404,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-j","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58589},"msg":"incoming request"}
+{"level":30,"time":1784777366404,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-k","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":58595},"msg":"incoming request"}
+{"level":30,"time":1784777366406,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-j","res":{"statusCode":200},"responseTime":2.2559159994125366,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:29:26 | 200 |    2.003333ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784777366410,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-k","res":{"statusCode":200},"responseTime":5.639999985694885,"msg":"request completed"}
+{"level":30,"time":1784777592039,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-l","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":49770},"msg":"incoming request"}
+{"level":30,"time":1784777592041,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-m","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":49772},"msg":"incoming request"}
+[GIN] 2026/07/23 - 11:33:12 | 200 |       6.227ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784777592062,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-l","res":{"statusCode":200},"responseTime":22.36066699028015,"msg":"request completed"}
+{"level":30,"time":1784777592071,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-m","res":{"statusCode":200},"responseTime":29.292374968528748,"msg":"request completed"}
+{"level":30,"time":1784778483407,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-n","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":63375},"msg":"incoming request"}
+{"level":30,"time":1784778483409,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-o","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":63377},"msg":"incoming request"}
+{"level":30,"time":1784778483417,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-n","res":{"statusCode":200},"responseTime":9.391000032424927,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:48:03 | 200 |    4.062959ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784778483426,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-o","res":{"statusCode":200},"responseTime":16.62849998474121,"msg":"request completed"}
+{"level":30,"time":1784778484027,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-p","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":63393},"msg":"incoming request"}
+{"level":30,"time":1784778484027,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-q","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":63394},"msg":"incoming request"}
+{"level":30,"time":1784778484029,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-p","res":{"statusCode":200},"responseTime":2.1874160766601562,"msg":"request completed"}
+[GIN] 2026/07/23 - 11:48:04 | 200 |       3.219ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784778484034,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-q","res":{"statusCode":200},"responseTime":6.981124997138977,"msg":"request completed"}
+{"level":30,"time":1784779437421,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-r","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":53640},"msg":"incoming request"}
+{"level":30,"time":1784779437423,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-s","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":53641},"msg":"incoming request"}
+{"level":30,"time":1784779437434,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-r","res":{"statusCode":200},"responseTime":12.520707964897156,"msg":"request completed"}
+[GIN] 2026/07/23 - 12:03:57 | 200 |    8.291333ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784779437441,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-s","res":{"statusCode":200},"responseTime":17.437749981880188,"msg":"request completed"}
+{"level":30,"time":1784779438445,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-t","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":53683},"msg":"incoming request"}
+{"level":30,"time":1784779438446,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-u","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":53685},"msg":"incoming request"}
+{"level":30,"time":1784779438447,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-t","res":{"statusCode":200},"responseTime":1.9272499084472656,"msg":"request completed"}
+[GIN] 2026/07/23 - 12:03:58 | 200 |    1.658459ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784779438450,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-u","res":{"statusCode":200},"responseTime":4.0356669425964355,"msg":"request completed"}
+{"level":30,"time":1784794160912,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-v","req":{"method":"GET","url":"/health","host":"127.0.0.1:8090","remoteAddress":"127.0.0.1","remotePort":52192},"msg":"incoming request"}
+{"level":30,"time":1784794160916,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-v","res":{"statusCode":200},"responseTime":2.826540946960449,"msg":"request completed"}
+[GIN] 2026/07/23 - 16:09:20 | 200 |     111.458µs |       127.0.0.1 | GET      "/health"
+{"level":30,"time":1784794888393,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-w","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55404},"msg":"incoming request"}
+{"level":30,"time":1784794888407,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-x","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55405},"msg":"incoming request"}
+{"level":30,"time":1784794888441,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-w","res":{"statusCode":200},"responseTime":45.93204200267792,"msg":"request completed"}
+{"level":30,"time":1784794888450,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-y","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55413},"msg":"incoming request"}
+{"level":30,"time":1784794888454,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-y","res":{"statusCode":200},"responseTime":4.0997079610824585,"msg":"request completed"}
+[GIN] 2026/07/23 - 16:21:28 | 200 |   37.270416ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784794888461,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-x","res":{"statusCode":200},"responseTime":52.63816595077515,"msg":"request completed"}
+{"level":30,"time":1784794888470,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-z","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55416},"msg":"incoming request"}
+[GIN] 2026/07/23 - 16:21:28 | 200 |    1.017417ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784794888474,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-z","res":{"statusCode":200},"responseTime":3.281125068664551,"msg":"request completed"}
+{"level":30,"time":1784794888900,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-10","req":{"method":"GET","url":"/api/models","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55460},"msg":"incoming request"}
+{"level":30,"time":1784794888903,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-11","req":{"method":"GET","url":"/api/sessions","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55461},"msg":"incoming request"}
+{"level":30,"time":1784794888906,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-12","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55463},"msg":"incoming request"}
+{"level":30,"time":1784794888906,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-13","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55464},"msg":"incoming request"}
+{"level":30,"time":1784794888906,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-14","req":{"method":"GET","url":"/api/agents","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55465},"msg":"incoming request"}
+[GIN] 2026/07/23 - 16:21:28 | 200 |    5.434708ms |             ::1 | GET      "/internal/models"
+{"level":30,"time":1784794888912,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-11","res":{"statusCode":200},"responseTime":9.362749934196472,"msg":"request completed"}
+{"level":30,"time":1784794888915,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-10","res":{"statusCode":200},"responseTime":14.708208918571472,"msg":"request completed"}
+[GIN] 2026/07/23 - 16:21:28 | 200 |    1.546208ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784794888918,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-12","res":{"statusCode":200},"responseTime":12.30716598033905,"msg":"request completed"}
+{"level":30,"time":1784794888922,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-14","res":{"statusCode":200},"responseTime":15.684875011444092,"msg":"request completed"}
+{"level":30,"time":1784794888926,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-13","res":{"statusCode":200},"responseTime":19.753417015075684,"msg":"request completed"}
+{"level":30,"time":1784794888957,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-15","req":{"method":"GET","url":"/api/kb","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":55469},"msg":"incoming request"}
+{"level":30,"time":1784794888965,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-15","res":{"statusCode":200},"responseTime":7.300333023071289,"msg":"request completed"}
+{"level":30,"time":1784794909750,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-16","req":{"method":"GET","url":"/api/workflow/codex-pets/pricing","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56794},"msg":"incoming request"}
+{"level":30,"time":1784794909753,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-17","req":{"method":"GET","url":"/api/workflow/codex-pets/models","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56796},"msg":"incoming request"}
+{"level":30,"time":1784794909755,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-18","req":{"method":"GET","url":"/api/workflow/images/state","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56797},"msg":"incoming request"}
+{"level":30,"time":1784794909758,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-19","req":{"method":"GET","url":"/api/workflow/images/pricing","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56799},"msg":"incoming request"}
+{"level":30,"time":1784794909759,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1a","req":{"method":"GET","url":"/api/workflow/codex-pets/projects","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56800},"msg":"incoming request"}
+[GIN] 2026/07/23 - 16:21:49 | 200 |       5.236ms |             ::1 | GET      "/internal/models"
+{"level":30,"time":1784794909766,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-17","res":{"statusCode":200},"responseTime":13.6183340549469,"msg":"request completed"}
+[GIN] 2026/07/23 - 16:21:49 | 200 |   17.812834ms |             ::1 | GET      "/internal/admin/resource-prices"
+{"level":30,"time":1784794909778,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-16","res":{"statusCode":200},"responseTime":27.79462492465973,"msg":"request completed"}
+{"level":30,"time":1784794909789,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1a","res":{"statusCode":200},"responseTime":29.839915990829468,"msg":"request completed"}
+[GIN] 2026/07/23 - 16:21:49 | 200 |    66.20625ms |             ::1 | GET      "/internal/admin/resource-prices"
+{"level":30,"time":1784794909848,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-18","res":{"statusCode":200},"responseTime":91.95129203796387,"msg":"request completed"}
+{"level":30,"time":1784794909849,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-19","res":{"statusCode":200},"responseTime":90.47608304023743,"msg":"request completed"}
+{"level":30,"time":1784794909885,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1b","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56810},"msg":"incoming request"}
+{"level":30,"time":1784794909894,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1b","res":{"statusCode":200},"responseTime":9.310333013534546,"msg":"request completed"}
+{"level":30,"time":1784794910012,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1c","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/e5ded5c9-094f-474a-9002-b83ff8d30fdf?exp=1784795809&sig=XkTNWdokqdEA1ldNmWGLCdrpfF6u6DZcXHbhxLbM_Gw&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56828},"msg":"incoming request"}
+{"level":30,"time":1784794910013,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1d","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/df17ce1e-f574-4722-8f93-af26397789cd?exp=1784795809&sig=gx7Dsj4SAPs5f0F_xlTKG7uR-0hatCqBufP0tgtGmPg&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56829},"msg":"incoming request"}
+{"level":30,"time":1784794910014,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1e","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/8c8149d7-3d3e-4168-b1df-757ef93222b7?exp=1784795809&sig=ZDx1j84hrmsW-W4kNc5Ad9c-V5t1OlUJjEIchXrh7Tk&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56830},"msg":"incoming request"}
+{"level":30,"time":1784794910030,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1f","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a/runs/cpr_0a170e4db01fe9294e8670a064e1d0f0/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56834},"msg":"incoming request"}
+{"level":30,"time":1784794910031,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1g","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56836},"msg":"incoming request"}
+[GIN] 2026/07/23 - 16:21:50 | 200 |    1.066625ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784794910034,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1g","res":{"statusCode":200},"responseTime":3.241208076477051,"msg":"request completed"}
+{"level":30,"time":1784794910037,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1f","res":{"statusCode":200},"responseTime":6.630291938781738,"msg":"request completed"}
+{"level":30,"time":1784794910058,"pid":67162,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784794910058,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1d","res":{"statusCode":200},"responseTime":44.935750007629395,"msg":"request completed"}
+{"level":30,"time":1784794910060,"pid":67162,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784794910060,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1e","res":{"statusCode":200},"responseTime":46.39704203605652,"msg":"request completed"}
+{"level":30,"time":1784794910068,"pid":67162,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784794910069,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1c","res":{"statusCode":200},"responseTime":56.64591705799103,"msg":"request completed"}
+{"level":30,"time":1784794910248,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1h","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56842},"msg":"incoming request"}
+{"level":30,"time":1784794910265,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1h","res":{"statusCode":200},"responseTime":16.14579200744629,"msg":"request completed"}
+{"level":30,"time":1784794910322,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1i","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/e5ded5c9-094f-474a-9002-b83ff8d30fdf?exp=1784795810&sig=DWb6FrtyXc2fF7BBlkHOBJ4RldKIod6A0E21PfxEYm4&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56828},"msg":"incoming request"}
+{"level":30,"time":1784794910323,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1j","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/df17ce1e-f574-4722-8f93-af26397789cd?exp=1784795810&sig=2-Jl9h9L7x6m31ZAcY5ps3l4sN918f2XXmaf2IHeBDA&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56830},"msg":"incoming request"}
+{"level":30,"time":1784794910324,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1k","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/8c8149d7-3d3e-4168-b1df-757ef93222b7?exp=1784795810&sig=CZ46Nr-e7_mBowAHwC8kA4vRI5ewHaJFJS6xS7p_nRk&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56829},"msg":"incoming request"}
+{"level":30,"time":1784794910367,"pid":67162,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784794910368,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1k","res":{"statusCode":200},"responseTime":44.38595795631409,"msg":"request completed"}
+{"level":30,"time":1784794910370,"pid":67162,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784794910371,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1j","res":{"statusCode":200},"responseTime":47.93391704559326,"msg":"request completed"}
+{"level":30,"time":1784794910373,"pid":67162,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784794910373,"pid":67162,"hostname":"ZMacBook-Pro.local","reqId":"req-1i","res":{"statusCode":200},"responseTime":51.12387490272522,"msg":"request completed"}
+4:23:03 PM [tsx] change in ./src/workflow/codex-pet-prompts.ts Restarting...
+4:23:03 PM [tsx] change in ./src/workflow/codex-pet-prompts.ts Restarting...
+{"level":30,"time":1784794983741,"pid":67162,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+[codex-pet-worker] received SIGTERM, shutting down
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784794985373,"pid":52995,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784794985373,"pid":52995,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784794985373,"pid":52995,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+[codex-pet-worker] failed run=cpr_0a170e4db01fe9294e8670a064e1d0f0: idle 动作组：身份、6 帧结构、动作语义和连续性经 1 次真实调用后仍未通过：frame-0:multiple-foreground-components；frame-1:multiple-foreground-components；frame-2:multiple-foreground-components；frame-0:multiple-foreground-components；frame-1:multiple-foreground-components；frame-2:multiple-foreground-components
+
+2026/07/23 16:33:04 [31;1m/Users/z/code/ai project/services/billing/internal/resource/charge.go:221 [35;1mrecord not found
+[0m[33m[0.825ms] [34;1m[rows:0][0m SELECT * FROM "usage_records" WHERE operation_id = 'codex-pet:test-14603f5f-9f04-4abd-9164-ab28dd0d3396' ORDER BY "usage_records"."operation_id" LIMIT 1 FOR UPDATE
+[GIN] 2026/07/23 - 16:33:04 | 200 |       3.352ms |             ::1 | POST     "/resource/refund"
+[codex-pet-worker] failed run=cmrx8nw1503a8c33zmt20vz7a: The specified key does not exist.
+4:35:04 PM [tsx] change in ./../../packages/codex-pet-pipeline/src/extraction.ts Restarting...
+4:35:04 PM [tsx] change in ./../../packages/codex-pet-pipeline/src/extraction.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+{"level":30,"time":1784795704723,"pid":52995,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784795706169,"pid":88810,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784795706169,"pid":88810,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784795706169,"pid":88810,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+4:38:59 PM [tsx] change in ./src/workflow/codex-pet-prompts.ts Restarting...
+4:38:59 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+{"level":30,"time":1784795939587,"pid":88810,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+[codex-pet-worker] received SIGTERM, shutting down
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784795941122,"pid":2556,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784795941123,"pid":2556,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784795941123,"pid":2556,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+[GIN] 2026/07/23 - 16:50:25 | 200 |        44.5µs |             ::1 | GET      "/health"
+{"level":30,"time":1784796625594,"pid":2556,"hostname":"ZMacBook-Pro.local","reqId":"req-1","req":{"method":"GET","url":"/health","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":59548},"msg":"incoming request"}
+{"level":30,"time":1784796625600,"pid":2556,"hostname":"ZMacBook-Pro.local","reqId":"req-1","res":{"statusCode":200},"responseTime":5.092707991600037,"msg":"request completed"}
+[codex-pet-worker] failed run=cpr_0a170e4db01fe9294e8670a064e1d0f0: running-right 动作组：身份、8 帧结构、动作语义和连续性经 1 次真实调用后仍未通过：frame-2:multiple-foreground-components；frame-2:possible-transparent-holes；frame-3:multiple-foreground-components；frame-3:possible-transparent-holes；frame-2:multiple-foreground-components；frame-2:possible-transparent-holes；frame-3:multiple-foreground-components；frame-3:possible-transparent-holes
+
+2026/07/23 17:00:00 [31;1m/Users/z/code/ai project/services/billing/internal/resource/charge.go:221 [35;1mrecord not found
+[0m[33m[0.814ms] [34;1m[rows:0][0m SELECT * FROM "usage_records" WHERE operation_id = 'codex-pet:test-938041eb-4f47-48cc-8de1-41b0cc170bc7' ORDER BY "usage_records"."operation_id" LIMIT 1 FOR UPDATE
+[GIN] 2026/07/23 - 17:00:00 | 200 |    2.878125ms |             ::1 | POST     "/resource/refund"
+[codex-pet-worker] failed run=cmrx9mbmf01b1c3npz183nck7: The specified key does not exist.
+5:07:02 PM [tsx] change in ./src/workflow/codex-pet-prompts.ts Restarting...
+{"level":30,"time":1784797622052,"pid":2556,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+5:07:02 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784797623553,"pid":77461,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784797623553,"pid":77461,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784797623553,"pid":77461,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+5:15:02 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+c[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+5:22:46 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+c[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+5:25:47 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+c[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+[codex-pet-worker] failed run=cpr_0a170e4db01fe9294e8670a064e1d0f0: running-right 动作组：身份、8 帧结构、动作语义和连续性经 1 次真实调用后仍未通过：frame-0:multiple-foreground-components；frame-1:multiple-foreground-components；frame-2:multiple-foreground-components；frame-3:multiple-foreground-components；frame-4:multiple-foreground-components；frame-5:multiple-foreground-components；frame-6:multiple-foreground-components；frame-7:multiple-foreground-components；frame-0:multiple-foreground-components；frame-1:multiple-foreground-components；frame-2:multiple-foreground-components；frame-3:multiple-foreground-components；frame-4:multiple-foreground-components；frame-5:multiple-foreground-components；frame-6:multiple-foreground-components；frame-7:multiple-foreground-components
+5:30:47 PM [tsx] change in ./../../packages/codex-pet-pipeline/src/extraction.ts Restarting...
+5:30:47 PM [tsx] change in ./../../packages/codex-pet-pipeline/src/extraction.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+{"level":30,"time":1784799047332,"pid":77461,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784799048875,"pid":42719,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784799048875,"pid":42719,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784799048875,"pid":42719,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+5:44:00 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+c[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+5:45:40 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+5:45:40 PM [tsx] change in ./src/workflow/codex-pet-prompts.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+{"level":30,"time":1784799940348,"pid":42719,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784799941767,"pid":85547,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784799941767,"pid":85547,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784799941767,"pid":85547,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+[codex-pet-worker] completed run=cmrxc822d001zc31jehn1m9gb state=awaiting_base_review
+[codex-pet-worker] failed run=cpr_0a170e4db01fe9294e8670a064e1d0f0: running-right 动作组：身份、8 帧结构、动作语义和连续性经 1 次真实调用后仍未通过：frame-2:multiple-foreground-components；frame-6:multiple-foreground-components；frame-7:possible-transparent-holes；frame-2:multiple-foreground-components；frame-6:multiple-foreground-components；frame-7:possible-transparent-holes
+6:08:44 PM [tsx] change in ./src/workflow/codex-pet-visual.ts Restarting...
+6:08:44 PM [tsx] change in ./src/workflow/codex-pet-visual.ts Restarting...
+{"level":30,"time":1784801324810,"pid":85547,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+[codex-pet-worker] received SIGTERM, shutting down
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784801326290,"pid":72386,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784801326290,"pid":72386,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784801326290,"pid":72386,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+{"level":30,"time":1784801380117,"pid":72386,"hostname":"ZMacBook-Pro.local","reqId":"req-1","req":{"method":"GET","url":"/health","host":"127.0.0.1:8090","remoteAddress":"127.0.0.1","remotePort":63830},"msg":"incoming request"}
+{"level":30,"time":1784801380126,"pid":72386,"hostname":"ZMacBook-Pro.local","reqId":"req-1","res":{"statusCode":200},"responseTime":7.8084999322891235,"msg":"request completed"}
+{"level":30,"time":1784801564583,"pid":72386,"hostname":"ZMacBook-Pro.local","reqId":"req-2","req":{"method":"GET","url":"/health","host":"127.0.0.1:8090","remoteAddress":"127.0.0.1","remotePort":51431},"msg":"incoming request"}
+{"level":30,"time":1784801564584,"pid":72386,"hostname":"ZMacBook-Pro.local","reqId":"req-2","res":{"statusCode":200},"responseTime":0.8535000085830688,"msg":"request completed"}
+[codex-pet-worker] failed run=cpr_0a170e4db01fe9294e8670a064e1d0f0: running-right 动作组：身份、8 帧结构、动作语义和连续性经 1 次真实调用后仍未通过：frame-7:possible-transparent-holes；frame-7:possible-transparent-holes
+6:17:55 PM [tsx] change in ./src/workflow/codex-pet-prompts.ts Restarting...
+6:17:55 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+{"level":30,"time":1784801875687,"pid":72386,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+[codex-pet-worker] received SIGTERM, shutting down
+cc[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784801877034,"pid":14671,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://127.0.0.1:8090"}
+{"level":30,"time":1784801877034,"pid":14671,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://172.20.10.5:8090"}
+{"level":30,"time":1784801877034,"pid":14671,"hostname":"ZMacBook-Pro.local","msg":"Server listening at http://28.0.0.1:8090"}
+{"level":30,"time":1784802006848,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61281},"msg":"incoming request"}
+{"level":30,"time":1784802006853,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-2","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61282},"msg":"incoming request"}
+{"level":30,"time":1784802006873,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1","res":{"statusCode":200},"responseTime":24.410374999046326,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:20:06 | 200 |    1.883833ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802006882,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-2","res":{"statusCode":200},"responseTime":28.56641697883606,"msg":"request completed"}
+{"level":30,"time":1784802007910,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-3","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61306},"msg":"incoming request"}
+{"level":30,"time":1784802007912,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-3","res":{"statusCode":200},"responseTime":2.449333906173706,"msg":"request completed"}
+{"level":30,"time":1784802007923,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-4","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61309},"msg":"incoming request"}
+[GIN] 2026/07/23 - 18:20:07 | 200 |    2.013333ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802007930,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-4","res":{"statusCode":200},"responseTime":6.742958068847656,"msg":"request completed"}
+{"level":30,"time":1784802009371,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-5","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61323},"msg":"incoming request"}
+{"level":30,"time":1784802009406,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-5","res":{"statusCode":200},"responseTime":35.19016695022583,"msg":"request completed"}
+{"level":30,"time":1784802009416,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-6","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/78a8bb1d-70a9-45fc-9c5e-4abace55a94e?exp=1784802909&sig=wM2inyRNVvZPlqoOCN7qIYHFhYSRBM-2KyhN5UnQjtA&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802009421,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-7","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/b7bf2249-1c3b-4f01-bf58-f5e7bc6ff83f?exp=1784802909&sig=vlY8q0zjR8jvpuQD7Erben_CX3v0oaNnTN4sBboQoMM&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802009422,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-8","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/fce491f9-eb3b-4b19-a875-90569e920572?exp=1784802909&sig=aw-vSWBmyTbXY0FC4Lmz_1IuIRzo_TPLaPKtvjpcF04&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802009423,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-9","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/23333d14-0d17-4dd0-92ec-d770b62ad5fb?exp=1784802909&sig=wML2V-vONjambpEEyDNJupI-ktUyRGieQVx4ZHTqQ6I&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61331},"msg":"incoming request"}
+{"level":30,"time":1784802009444,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-a","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e/runs/cpr_edae38a6d3162cbe2e1d16e8c32e2de4/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61336},"msg":"incoming request"}
+{"level":30,"time":1784802009445,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-b","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61338},"msg":"incoming request"}
+[GIN] 2026/07/23 - 18:20:09 | 200 |    1.184083ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802009453,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-b","res":{"statusCode":200},"responseTime":7.850542068481445,"msg":"request completed"}
+{"level":30,"time":1784802009457,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-a","res":{"statusCode":200},"responseTime":12.29620897769928,"msg":"request completed"}
+{"level":30,"time":1784802009461,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802009462,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-9","res":{"statusCode":200},"responseTime":38.312541007995605,"msg":"request completed"}
+{"level":30,"time":1784802009472,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802009473,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-8","res":{"statusCode":200},"responseTime":50.465332984924316,"msg":"request completed"}
+{"level":30,"time":1784802009482,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802009483,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-6","res":{"statusCode":200},"responseTime":66.9994580745697,"msg":"request completed"}
+{"level":30,"time":1784802009498,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802009498,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-7","res":{"statusCode":200},"responseTime":76.94887495040894,"msg":"request completed"}
+{"level":30,"time":1784802009625,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-c","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61348},"msg":"incoming request"}
+{"level":30,"time":1784802009637,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-c","res":{"statusCode":200},"responseTime":12.418124914169312,"msg":"request completed"}
+{"level":30,"time":1784802010914,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-d","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61360},"msg":"incoming request"}
+{"level":30,"time":1784802010927,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-d","res":{"statusCode":200},"responseTime":12.785416960716248,"msg":"request completed"}
+{"level":30,"time":1784802010936,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-e","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/e5ded5c9-094f-474a-9002-b83ff8d30fdf?exp=1784802910&sig=6ZL9eFiYGwZ2w3p-1grS62_XvUnOr06aEosuUxGWtMA&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802010936,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-f","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/df17ce1e-f574-4722-8f93-af26397789cd?exp=1784802910&sig=EqHat9jCjDDsLtL-9lWw5Vu7rEb_KWyr6TKnSwMxfsc&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802010937,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-g","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/f3ae6935-aaf9-4f70-b4e5-3aceeb36f729?exp=1784802910&sig=SwGKzQd1plUDrOfIpI4JAvqtQq9yY1CPfmxtWOr7vS8&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802010937,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-h","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/f93d039c-242a-40ba-9a28-cb83c2ef1bd9?exp=1784802910&sig=Wg88Bdb3tuJphaPorCpKgcy-j93PzIBZETjilihMXQE&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61331},"msg":"incoming request"}
+{"level":30,"time":1784802010946,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-i","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a/runs/cpr_0a170e4db01fe9294e8670a064e1d0f0/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61365},"msg":"incoming request"}
+{"level":30,"time":1784802010947,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-j","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61367},"msg":"incoming request"}
+{"level":30,"time":1784802010954,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802010954,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-h","res":{"statusCode":200},"responseTime":17.273915886878967,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:20:10 | 200 |    8.079375ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802010960,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-j","res":{"statusCode":200},"responseTime":12.633624911308289,"msg":"request completed"}
+{"level":30,"time":1784802010968,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802010968,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-g","res":{"statusCode":200},"responseTime":31.635959029197693,"msg":"request completed"}
+{"level":30,"time":1784802010973,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-i","res":{"statusCode":200},"responseTime":26.9927499294281,"msg":"request completed"}
+{"level":30,"time":1784802010973,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802010975,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-f","res":{"statusCode":200},"responseTime":38.119791984558105,"msg":"request completed"}
+{"level":30,"time":1784802010990,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802010990,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-e","res":{"statusCode":200},"responseTime":54.13912498950958,"msg":"request completed"}
+{"level":30,"time":1784802011138,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-k","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61373},"msg":"incoming request"}
+{"level":30,"time":1784802011151,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-k","res":{"statusCode":200},"responseTime":12.958083033561707,"msg":"request completed"}
+{"level":30,"time":1784802011164,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-l","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/e5ded5c9-094f-474a-9002-b83ff8d30fdf?exp=1784802911&sig=WHjRgsAq4kjY2M592E9sggQ3NArv9Kco818SVMDK-Gc&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802011165,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-m","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/df17ce1e-f574-4722-8f93-af26397789cd?exp=1784802911&sig=9h497UxZhPVyTp22PEyEBtTyVHM4r19KjAeLd8dMakQ&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802011165,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-n","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/f3ae6935-aaf9-4f70-b4e5-3aceeb36f729?exp=1784802911&sig=iAjJITJ5FzAoA7hsVYQF6QQAT4bAQo75Gh0_FJoesW0&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802011166,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-o","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/f93d039c-242a-40ba-9a28-cb83c2ef1bd9?exp=1784802911&sig=UHTVZuOyqJapEGQUO4LaHAqnxZL1E6ZPiPhbDTD1AHE&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61331},"msg":"incoming request"}
+{"level":30,"time":1784802011193,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011193,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-o","res":{"statusCode":200},"responseTime":27.023917078971863,"msg":"request completed"}
+{"level":30,"time":1784802011194,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011195,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-n","res":{"statusCode":200},"responseTime":29.251624941825867,"msg":"request completed"}
+{"level":30,"time":1784802011206,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011207,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-l","res":{"statusCode":200},"responseTime":42.75625002384186,"msg":"request completed"}
+{"level":30,"time":1784802011207,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011208,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-m","res":{"statusCode":200},"responseTime":42.511041045188904,"msg":"request completed"}
+{"level":30,"time":1784802011609,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-p","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61397},"msg":"incoming request"}
+{"level":30,"time":1784802011638,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-p","res":{"statusCode":200},"responseTime":29.524500012397766,"msg":"request completed"}
+{"level":30,"time":1784802011647,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-q","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/78a8bb1d-70a9-45fc-9c5e-4abace55a94e?exp=1784802911&sig=3QK10NFY7nfxHixTpqHgMp8rN35rCYgI-BSdzsfNcgM&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802011648,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-r","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/b7bf2249-1c3b-4f01-bf58-f5e7bc6ff83f?exp=1784802911&sig=BeonJKhftm8eHRiSjtdWzXQ3qpbYw4IlPh5FQjmWSF0&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802011648,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-s","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/fce491f9-eb3b-4b19-a875-90569e920572?exp=1784802911&sig=jEkJlvSWdA3HZ4nS8mpQXXAz-73NlMzNmI543wETuDg&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802011648,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-t","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/23333d14-0d17-4dd0-92ec-d770b62ad5fb?exp=1784802911&sig=xU-NBA0NCStAFH6xXYi0si2EqTCnNvL_CozqvwvBV58&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61331},"msg":"incoming request"}
+{"level":30,"time":1784802011657,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011657,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-t","res":{"statusCode":200},"responseTime":9.037874937057495,"msg":"request completed"}
+{"level":30,"time":1784802011663,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-u","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e/runs/cpr_edae38a6d3162cbe2e1d16e8c32e2de4/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61405},"msg":"incoming request"}
+{"level":30,"time":1784802011663,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-v","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61407},"msg":"incoming request"}
+{"level":30,"time":1784802011670,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011671,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-s","res":{"statusCode":200},"responseTime":22.874791026115417,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:20:11 | 200 |      9.1505ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802011675,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-v","res":{"statusCode":200},"responseTime":11.613249897956848,"msg":"request completed"}
+{"level":30,"time":1784802011678,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-u","res":{"statusCode":200},"responseTime":15.355958104133606,"msg":"request completed"}
+{"level":30,"time":1784802011679,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011680,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-r","res":{"statusCode":200},"responseTime":32.347041964530945,"msg":"request completed"}
+{"level":30,"time":1784802011684,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802011685,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-q","res":{"statusCode":200},"responseTime":37.34375,"msg":"request completed"}
+{"level":30,"time":1784802011846,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-w","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61410},"msg":"incoming request"}
+{"level":30,"time":1784802011863,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-w","res":{"statusCode":200},"responseTime":16.867082953453064,"msg":"request completed"}
+{"level":30,"time":1784802012502,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-x","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwalfpg0002c3sfzmogjpip","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61420},"msg":"incoming request"}
+{"level":30,"time":1784802012511,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-x","res":{"statusCode":200},"responseTime":8.261790990829468,"msg":"request completed"}
+{"level":30,"time":1784802012520,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-y","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/a6dac317-0849-4b28-b288-a5cd071d0153?exp=1784802912&sig=G-KXnpZKE49mXGmQIzwjs5IrDIaLFddJOX4E8n661hA&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802012521,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-z","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/26e41d12-581b-430f-8f01-7eac3b2edb43?exp=1784802912&sig=u_6IuuAcYH0FfX9D_Huhi2L1OpJL28X0aICZOP4Y2us&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802012521,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-10","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/b38e46b5-1bb7-4f7e-9942-20980ed6f58d?exp=1784802912&sig=Mu9zl02KP_7W5CoBdAPn0bBp1tUR1JcSasdfLp6_LhE&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802012534,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-11","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwalfpg0002c3sfzmogjpip/runs/cpr_890b1c6dbd4c6bba37f07d4b4f4bdfd6/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61424},"msg":"incoming request"}
+{"level":30,"time":1784802012535,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-12","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61426},"msg":"incoming request"}
+[GIN] 2026/07/23 - 18:20:12 | 200 |    4.818292ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802012547,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-12","res":{"statusCode":200},"responseTime":11.555790901184082,"msg":"request completed"}
+{"level":30,"time":1784802012551,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-11","res":{"statusCode":200},"responseTime":17.06166708469391,"msg":"request completed"}
+{"level":30,"time":1784802012552,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_890b1c6dbd4c6bba37f07d4b4f4bdfd6","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802012552,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-10","res":{"statusCode":200},"responseTime":31.06499993801117,"msg":"request completed"}
+{"level":30,"time":1784802012554,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_890b1c6dbd4c6bba37f07d4b4f4bdfd6","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802012555,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-y","res":{"statusCode":200},"responseTime":34.76099991798401,"msg":"request completed"}
+{"level":30,"time":1784802012561,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_890b1c6dbd4c6bba37f07d4b4f4bdfd6","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802012562,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-z","res":{"statusCode":200},"responseTime":40.74966597557068,"msg":"request completed"}
+{"level":30,"time":1784802012720,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-13","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwalfpg0002c3sfzmogjpip","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61432},"msg":"incoming request"}
+{"level":30,"time":1784802012749,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-13","res":{"statusCode":200},"responseTime":28.85783290863037,"msg":"request completed"}
+{"level":30,"time":1784802013376,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-14","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61443},"msg":"incoming request"}
+{"level":30,"time":1784802013387,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-14","res":{"statusCode":200},"responseTime":10.70229196548462,"msg":"request completed"}
+{"level":30,"time":1784802013396,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-15","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/78a8bb1d-70a9-45fc-9c5e-4abace55a94e?exp=1784802913&sig=gYDXFQQZXv9NaVjA5zUpWpNFJHkXLF7C1dqIq71KznI&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802013397,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-16","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/b7bf2249-1c3b-4f01-bf58-f5e7bc6ff83f?exp=1784802913&sig=fiVofUiQNgmS5fyy1x8O_9sVP25uT3Nb3xCRw9LrQ2k&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802013398,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-17","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/fce491f9-eb3b-4b19-a875-90569e920572?exp=1784802913&sig=vQmqVcoPOMepXApP29dmCtj7A1xrm9wYp0OtqbJhUbU&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802013398,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-18","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/23333d14-0d17-4dd0-92ec-d770b62ad5fb?exp=1784802913&sig=Emma6R-o9W864nsYrdPrtpVCcKayGfhTLDYdQ3Y5T-c&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61331},"msg":"incoming request"}
+{"level":30,"time":1784802013416,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-19","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e/runs/cpr_edae38a6d3162cbe2e1d16e8c32e2de4/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61447},"msg":"incoming request"}
+{"level":30,"time":1784802013417,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1a","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61450},"msg":"incoming request"}
+[GIN] 2026/07/23 - 18:20:13 | 200 |    9.852667ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802013431,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1a","res":{"statusCode":200},"responseTime":14.33095896244049,"msg":"request completed"}
+{"level":30,"time":1784802013433,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-19","res":{"statusCode":200},"responseTime":16.901875019073486,"msg":"request completed"}
+{"level":30,"time":1784802013435,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802013435,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-18","res":{"statusCode":200},"responseTime":37.043457984924316,"msg":"request completed"}
+{"level":30,"time":1784802013439,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802013439,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-17","res":{"statusCode":200},"responseTime":41.809666991233826,"msg":"request completed"}
+{"level":30,"time":1784802013442,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802013442,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-16","res":{"statusCode":200},"responseTime":44.9600830078125,"msg":"request completed"}
+{"level":30,"time":1784802013442,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_edae38a6d3162cbe2e1d16e8c32e2de4","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802013443,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-15","res":{"statusCode":200},"responseTime":46.6672500371933,"msg":"request completed"}
+{"level":30,"time":1784802013598,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1b","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwbnbpy0002c3l86vswem5e","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61457},"msg":"incoming request"}
+{"level":30,"time":1784802013621,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1b","res":{"statusCode":200},"responseTime":23.774875044822693,"msg":"request completed"}
+{"level":30,"time":1784802014721,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1c","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61477},"msg":"incoming request"}
+{"level":30,"time":1784802014734,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1c","res":{"statusCode":200},"responseTime":12.45691692829132,"msg":"request completed"}
+{"level":30,"time":1784802014744,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1d","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/e5ded5c9-094f-474a-9002-b83ff8d30fdf?exp=1784802914&sig=GrjLl8oc3nhq_D1_f7yhRsrjst-cr97TBSlb94jUJgA&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61329},"msg":"incoming request"}
+{"level":30,"time":1784802014745,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1e","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/df17ce1e-f574-4722-8f93-af26397789cd?exp=1784802914&sig=F3FqQ0ISD3FqNDpK-EtpcSCKP-CJMbZsb5IONZc-93s&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61327},"msg":"incoming request"}
+{"level":30,"time":1784802014746,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1f","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/f3ae6935-aaf9-4f70-b4e5-3aceeb36f729?exp=1784802914&sig=UcyZ7DIS-UwcD-2ohyIhow8LdSuZwaKPSn55aLbKRXc&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61330},"msg":"incoming request"}
+{"level":30,"time":1784802014746,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1g","req":{"method":"GET","url":"/api/public/codex-pets/artifacts/f93d039c-242a-40ba-9a28-cb83c2ef1bd9?exp=1784802914&sig=-3-s1Je-Ye9I3vdsh3Y8hCd9tfTZfefajI49N3oOCxs&purpose=preview","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61331},"msg":"incoming request"}
+{"level":30,"time":1784802014762,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1h","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a/runs/cpr_0a170e4db01fe9294e8670a064e1d0f0/events?after=0","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61481},"msg":"incoming request"}
+{"level":30,"time":1784802014763,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1i","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61483},"msg":"incoming request"}
+{"level":30,"time":1784802014773,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802014774,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1g","res":{"statusCode":200},"responseTime":27.738749980926514,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:20:14 | 200 |   10.984541ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802014777,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802014778,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1f","res":{"statusCode":200},"responseTime":32.248124957084656,"msg":"request completed"}
+{"level":30,"time":1784802014779,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1i","res":{"statusCode":200},"responseTime":16.20754098892212,"msg":"request completed"}
+{"level":30,"time":1784802014782,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1h","res":{"statusCode":200},"responseTime":20.211540937423706,"msg":"request completed"}
+{"level":30,"time":1784802014785,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802014785,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1e","res":{"statusCode":200},"responseTime":40.07125008106232,"msg":"request completed"}
+{"level":30,"time":1784802014788,"pid":14671,"hostname":"ZMacBook-Pro.local","runId":"cpr_0a170e4db01fe9294e8670a064e1d0f0","status":"preview_served","msg":"Codex pet signed artifact served"}
+{"level":30,"time":1784802014789,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1d","res":{"statusCode":200},"responseTime":44.72779095172882,"msg":"request completed"}
+{"level":30,"time":1784802014947,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1j","req":{"method":"GET","url":"/api/workflow/codex-pets/projects/cmrwmw47m0002c3gy7ov0si7a","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":61490},"msg":"incoming request"}
+{"level":30,"time":1784802014957,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1j","res":{"statusCode":200},"responseTime":9.63841700553894,"msg":"request completed"}
+{"level":30,"time":1784802060880,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1k","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":62871},"msg":"incoming request"}
+{"level":30,"time":1784802060881,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1l","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":62872},"msg":"incoming request"}
+{"level":30,"time":1784802060893,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1k","res":{"statusCode":200},"responseTime":12.536917090415955,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:21:00 | 200 |    3.265583ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802060897,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1l","res":{"statusCode":200},"responseTime":15.438958048820496,"msg":"request completed"}
+{"level":30,"time":1784802062432,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1m","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":62907},"msg":"incoming request"}
+{"level":30,"time":1784802062433,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1n","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":62910},"msg":"incoming request"}
+{"level":30,"time":1784802062434,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1m","res":{"statusCode":200},"responseTime":1.9355000257492065,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:21:02 | 200 |    1.814459ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802062438,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1n","res":{"statusCode":200},"responseTime":5.092917084693909,"msg":"request completed"}
+[codex-pet-worker] completed run=cmrxd4uiz001zc3ze8ja53cxd state=awaiting_base_review
+6:26:58 PM [tsx] change in ./src/workflow/codex-pet-runner.ts Restarting...
+[codex-pet-worker] received SIGTERM, shutting down
+c[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA route ready model=gpt-5.6-sol
+{"level":30,"time":1784802482398,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1o","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56136},"msg":"incoming request"}
+{"level":30,"time":1784802482399,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1p","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56138},"msg":"incoming request"}
+{"level":30,"time":1784802482403,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1o","res":{"statusCode":200},"responseTime":4.255874991416931,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:28:02 | 200 |    1.991333ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802482407,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1p","res":{"statusCode":200},"responseTime":6.827540993690491,"msg":"request completed"}
+[codex-pet-worker] completed run=cmrxdb0df001zc3corghf0exn state=awaiting_base_review
+{"level":30,"time":1784802495034,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1q","req":{"method":"GET","url":"/api/client-menu","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56341},"msg":"incoming request"}
+{"level":30,"time":1784802495035,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1r","req":{"method":"GET","url":"/api/billing/balance","host":"localhost:8090","remoteAddress":"127.0.0.1","remotePort":56342},"msg":"incoming request"}
+{"level":30,"time":1784802495045,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1q","res":{"statusCode":200},"responseTime":10.146709084510803,"msg":"request completed"}
+[GIN] 2026/07/23 - 18:28:15 | 200 |    1.982291ms |             ::1 | GET      "/balance/cmrg7sx3w0002c3lsyza7tqci"
+{"level":30,"time":1784802495051,"pid":14671,"hostname":"ZMacBook-Pro.local","reqId":"req-1r","res":{"statusCode":200},"responseTime":15.351083993911743,"msg":"request completed"}
+[codex-pet-worker] received SIGTERM, shutting down
+6:31:18 PM [tsx] Previous process hasn't exited yet. Force killing...
+./scripts/dev-local.sh: line 196: pid�: unbound variable
+正在停止本机服务...
+{"level":30,"time":1784802679218,"pid":14671,"hostname":"ZMacBook-Pro.local","msg":"收到 SIGTERM，优雅关闭中…"}
+[novel-worker] received SIGTERM, waiting for current steps
+6:31:19 PM [tsx] Previous process hasn't exited yet. Force killing...
+6:31:19 PM [tsx] Previous process hasn't exited yet. Force killing...
+/Users/z/code/ai project/apps/admin:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @ai-assistant/admin@0.0.0 dev: `vite`
+Command failed with signal "SIGTERM"
+/Users/z/code/ai project/apps/web:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @ai-assistant/web@0.0.0 dev: `vite`
+Command failed with signal "SIGTERM"
+./scripts/dev-local.sh: line 79: 67098 Terminated: 15          "$@"
+./scripts/dev-local.sh: line 79: 67102 Terminated: 15          "$@"
+./scripts/dev-local.sh: line 79: 67103 Terminated: 15          "$@"
