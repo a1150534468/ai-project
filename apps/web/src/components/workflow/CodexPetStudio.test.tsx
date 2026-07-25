@@ -828,6 +828,117 @@ describe("CodexPetStudio", () => {
     const contactImage = mounted.container.querySelector<HTMLImageElement>('[data-testid="codex-pet-final-contact-sheet"] img');
     expect(contactImage?.src).toBe("https://example.test/contact.png");
     expect(mounted.container.querySelector('img[src="https://example.test/old.webp"]')).toBeNull();
+    expect(mounted.container.querySelector('[data-testid="codex-pet-animation-progress"]')?.textContent).toContain("已完成 9/9");
+    // The grid is the only animation surface; there is no second unlabelled slot.
+    expect(mounted.container.querySelectorAll('img[alt="桌宠状态动画预览"]')).toHaveLength(0);
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("fills the nine labelled animation cells progressively mid-run and never shows a look-* row", async () => {
+    const run = makeRun({ status: "standard_generating", progressPercent: 40 });
+    const project = makeProject({ status: "standard_generating", latestRunId: run.id });
+    // `animation_preview` also covers the two look-* direction rows, which are
+    // produced after the standard rows and therefore win a newest-first pick.
+    const lookRow = artifact("animation-look-b", "animation_preview", {
+      runId: run.id,
+      metadata: { jobKey: "look-b" },
+      previewUrl: "https://example.test/look-b.webp",
+      createdAt: "2026-07-17T09:00:00.000Z",
+    });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [
+        artifact("animation-idle", "animation_preview", {
+          runId: run.id,
+          metadata: { jobKey: "row-idle" },
+          previewUrl: "https://example.test/idle.webp",
+          createdAt: "2026-07-17T08:03:00.000Z",
+        }),
+        artifact("animation-waving", "animation_preview", {
+          runId: run.id,
+          metadata: { jobKey: "row-waving" },
+          previewUrl: "https://example.test/waving.webp",
+          createdAt: "2026-07-17T08:04:00.000Z",
+        }),
+        lookRow,
+      ],
+      jobs: [],
+    };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    const grid = mounted.container.querySelector('[data-testid="codex-pet-standard-animations"]');
+    expect(grid?.querySelectorAll("figure")).toHaveLength(9);
+    expect(grid?.querySelector<HTMLImageElement>('[data-testid="codex-pet-animation-idle"] img')?.src)
+      .toBe("https://example.test/idle.webp");
+    expect(grid?.querySelector<HTMLImageElement>('[data-testid="codex-pet-animation-waving"] img')?.src)
+      .toBe("https://example.test/waving.webp");
+    expect(grid?.querySelector('[data-testid="codex-pet-animation-jumping"] img')).toBeNull();
+    expect(grid?.querySelector('[data-testid="codex-pet-animation-jumping"]')?.textContent).toContain("跳跃预览处理中");
+    expect(mounted.container.querySelector('[data-testid="codex-pet-animation-progress"]')?.textContent).toContain("已完成 2/9");
+    expect(mounted.container.querySelector('img[src="https://example.test/look-b.webp"]')).toBeNull();
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("keeps pose boards and direction QA sheets in the diagnostics panel instead of the workbench", async () => {
+    const run = makeRun({
+      status: "ready",
+      progressPercent: 100,
+      spritesheetArtifactId: "sheet-current",
+      previewArtifactId: "contact-current",
+      validationReport: { ok: true, spriteVersionNumber: 2, warnings: [] },
+    });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    // The blind QA sheet is written in the later validation stage, so a
+    // newest-first substring match used to surface it as "当前姿势板".
+    const blindQa = artifact("blind-qa-1", "direction_blind_qa", {
+      runId: run.id,
+      previewUrl: "https://example.test/blind-qa.png",
+      width: 408,
+      height: 3668,
+      createdAt: "2026-07-17T08:30:00.000Z",
+    });
+    const poseBoard = artifact("board-1", "pose_board", {
+      runId: run.id,
+      previewUrl: "https://example.test/board.png",
+      createdAt: "2026-07-17T08:05:00.000Z",
+    });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [blindQa, poseBoard],
+      jobs: [],
+    };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    expect(mounted.container.querySelector('img[alt="当前桌宠姿势板"]')).toBeNull();
+    const panel = mounted.container.querySelector('[data-testid="codex-pet-process-artifacts"]');
+    expect(panel?.textContent).toContain("过程产物（内部诊断 · 2 项）");
+    expect(panel?.querySelector<HTMLImageElement>('[data-testid="codex-pet-process-artifact-pose_board"] img')?.src)
+      .toBe("https://example.test/board.png");
+    expect(panel?.querySelector<HTMLImageElement>('[data-testid="codex-pet-process-artifact-direction_blind_qa"] img')?.src)
+      .toBe("https://example.test/blind-qa.png");
+    expect(panel?.textContent).toContain("方向盲测图");
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("reports an expired intermediate set as a normal empty diagnostics panel", async () => {
+    const run = makeRun({ status: "ready", progressPercent: 100, spritesheetArtifactId: "sheet-current" });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [artifact("sheet-current", "spritesheet", { runId: run.id, width: 1536, height: 2288 })],
+      jobs: [],
+    };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    const panel = mounted.container.querySelector('[data-testid="codex-pet-process-artifacts"]');
+    expect(panel?.textContent).toContain("过程产物（内部诊断 · 0 项）");
+    expect(panel?.textContent).toContain("本次运行没有仍在保留期内的过程产物。");
     await act(async () => { mounted.root.unmount(); });
   });
 });

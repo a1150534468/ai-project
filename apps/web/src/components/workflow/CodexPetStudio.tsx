@@ -51,10 +51,12 @@ import {
   codexPetPayloadFromDraft,
   codexPetStatusLabel,
   codexPetValidationPassed,
+  codexPetProcessArtifactLabel,
   isCodexPetAnimationPreview,
   isCodexPetBaseCandidate,
   isCodexPetDeliveryReady,
   isCodexPetFinalContactSheet,
+  isCodexPetProcessArtifact,
   makeCodexPetIdempotencyKey,
   mergeCodexPetEvents,
   validateCodexPetDraft,
@@ -417,14 +419,17 @@ export function CodexPetStudio({
     () => artifacts.filter(isCodexPetBaseCandidate).slice().sort((left, right) => artifactTime(left) - artifactTime(right)),
     [artifacts],
   );
-  const poseBoards = useMemo(
+  // Pose boards and direction QA sheets are pipeline intermediates with a 7-day
+  // TTL, not deliverables.  They stay reachable in the diagnostics panel below
+  // the workbench, where an expired/empty list reads as expected rather than as
+  // a broken deliverable slot.
+  const processArtifacts = useMemo(
     () => artifacts
-      .filter((artifact) => artifact.kind.includes("pose") || artifact.kind.includes("board") || artifact.kind.includes("direction"))
+      .filter(isCodexPetProcessArtifact)
       .slice()
       .sort((left, right) => artifactTime(right) - artifactTime(left)),
     [artifacts],
   );
-  const currentPoseBoard = poseBoards[0] ?? null;
   const animationPreviews = useMemo(
     () => artifacts
       .filter(isCodexPetAnimationPreview)
@@ -432,7 +437,6 @@ export function CodexPetStudio({
       .sort((left, right) => artifactTime(right) - artifactTime(left)),
     [artifacts],
   );
-  const animationPreview = animationPreviews[0] ?? null;
   const standardAnimationPreviews = useMemo(
     () => CODEX_PET_STANDARD_STATES.map((state) => ({
       state,
@@ -441,6 +445,8 @@ export function CodexPetStudio({
     })),
     [animationPreviews],
   );
+  const readyStandardAnimationCount = standardAnimationPreviews
+    .filter((entry) => entry.artifact !== null).length;
   const finalContactSheet = useMemo(() => {
     if (latestRun?.previewArtifactId) {
       const exact = artifacts.find((artifact) => (
@@ -1395,7 +1401,7 @@ export function CodexPetStudio({
             />
             <div className="space-y-4 p-4">
               {!latestRun && (
-                <ImagePlaceholder text="保存草稿后点击“开始制作”。这里会依次显示 2 个主形象候选、当前姿势板、动作预览和最终 v2 精灵图。" />
+                <ImagePlaceholder text="保存草稿后点击“开始制作”。这里会依次显示 2 个主形象候选、9 组标准动画和最终 v2 精灵图。" />
               )}
 
               {latestRun && baseCandidates.length > 0 && (
@@ -1486,25 +1492,43 @@ export function CodexPetStudio({
                 </div>
               )}
 
-              {latestRun && (currentPoseBoard || animationPreview) && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-[#34343a]">当前姿势板</h3>
-                      {currentPoseBoard && <span className="text-[10px] text-[#8b8b94]">{currentPoseBoard.width ?? "?"}×{currentPoseBoard.height ?? "?"}</span>}
+              {/* Rendered from `latestRun` rather than the delivery panel so the
+                  nine labelled cells fill in progressively during the run.  A
+                  single newest-first `animation_preview` slot used to live here,
+                  but `animation_preview` also covers the two look-* direction
+                  rows produced after the standard rows, so it showed an
+                  unlabelled direction animation on 294 of 324 recorded runs. */}
+              {latestRun && (
+                <div>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs font-semibold text-[#34343a]">9 组标准动画</h3>
+                      <p className="mt-0.5 text-[10px] text-[#898991]">透明背景 · 192×208 单格 · 生成过程中逐个亮起</p>
                     </div>
-                    {currentPoseBoard && codexPetArtifactUrl(currentPoseBoard) ? (
-                      <img src={codexPetArtifactUrl(currentPoseBoard)} alt="当前桌宠姿势板" className="aspect-[3/2] w-full rounded-[12px] border border-[#e2e4e9] bg-[#f4f4f6] object-contain" />
-                    ) : <ImagePlaceholder text="姿势板处理中" />}
+                    <span className="text-[10px] font-semibold text-[#8b8b94]" data-testid="codex-pet-animation-progress">
+                      已完成 {readyStandardAnimationCount}/{CODEX_PET_STANDARD_STATES.length}
+                    </span>
                   </div>
-                  <div>
-                    <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-xs font-semibold text-[#34343a]">状态动画预览</h3>
-                      <span className="text-[10px] text-[#8b8b94]">透明背景 · 192×208 单格</span>
-                    </div>
-                    {animationPreview && codexPetArtifactUrl(animationPreview) ? (
-                      <img src={codexPetArtifactUrl(animationPreview)} alt="桌宠状态动画预览" className="aspect-[3/2] w-full rounded-[12px] border border-[#e2e4e9] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:16px_16px] object-contain" />
-                    ) : <ImagePlaceholder text="动作预览生成后显示" />}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="codex-pet-standard-animations">
+                    {standardAnimationPreviews.map(({ state, artifact }) => {
+                      const url = artifact ? codexPetArtifactUrl(artifact) : "";
+                      return (
+                        <figure
+                          key={state.id}
+                          data-testid={`codex-pet-animation-${state.id}`}
+                          className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
+                        >
+                          <div className="aspect-[3/2] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:12px_12px]">
+                            {url ? (
+                              <img src={url} alt={`${state.label}动画预览`} className="size-full object-contain" />
+                            ) : (
+                              <span className="grid size-full place-items-center px-2 text-center text-[10px] text-[#9a9aa2]">{state.label}预览处理中</span>
+                            )}
+                          </div>
+                          <figcaption className="px-2 py-1.5 text-[10px] font-semibold text-[#55555d]">{state.label}</figcaption>
+                        </figure>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -1547,30 +1571,6 @@ export function CodexPetStudio({
                       <p className="mt-0.5 text-[11px] text-brand-ink">
                         最终精灵图与 ZIP 兼容包已就绪。{latestRun.knowledgeDocumentId ? "AI 产物已完成归档。" : "AI 产物正在后台归档，不影响安装和下载。"}
                       </p>
-                    </div>
-                  </div>
-                  <div>
-                    <h4 className="mb-1.5 text-[11px] font-semibold text-[#52525a]">9 组标准动画</h4>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="codex-pet-standard-animations">
-                      {standardAnimationPreviews.map(({ state, artifact }) => {
-                        const url = artifact ? codexPetArtifactUrl(artifact) : "";
-                        return (
-                          <figure
-                            key={state.id}
-                            data-testid={`codex-pet-animation-${state.id}`}
-                            className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
-                          >
-                            <div className="aspect-[3/2] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:12px_12px]">
-                              {url ? (
-                                <img src={url} alt={`${state.label}动画预览`} className="size-full object-contain" />
-                              ) : (
-                                <span className="grid size-full place-items-center px-2 text-center text-[10px] text-[#9a9aa2]">{state.label}预览处理中</span>
-                              )}
-                            </div>
-                            <figcaption className="px-2 py-1.5 text-[10px] font-semibold text-[#55555d]">{state.label}</figcaption>
-                          </figure>
-                        );
-                      })}
                     </div>
                   </div>
                   {finalContactSheet && (
@@ -1630,6 +1630,46 @@ export function CodexPetStudio({
                     <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
                   </div>
                 </div>
+              )}
+
+              {latestRun && (
+                <details
+                  className="rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2"
+                  data-testid="codex-pet-process-artifacts"
+                >
+                  <summary className="cursor-pointer text-[10px] font-semibold text-[#6f7078]">
+                    过程产物（内部诊断 · {processArtifacts.length} 项）
+                  </summary>
+                  <p className="mt-1.5 text-[9px] leading-4 text-[#8d8d95]">
+                    姿势板、方向盲测图等中间产物仅保留 7 天，用于排查与定向续跑，不是交付内容。过期后此处为空属正常。
+                  </p>
+                  {processArtifacts.length === 0 ? (
+                    <p className="mt-2 text-[10px] text-[#97979f]">本次运行没有仍在保留期内的过程产物。</p>
+                  ) : (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {processArtifacts.map((artifact) => {
+                        const url = codexPetArtifactUrl(artifact);
+                        return (
+                          <figure
+                            key={artifact.id}
+                            data-testid={`codex-pet-process-artifact-${artifact.kind}`}
+                            className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
+                          >
+                            {url ? (
+                              <img src={url} alt={codexPetProcessArtifactLabel(artifact)} className="max-h-40 w-full bg-[#f4f4f6] object-contain" />
+                            ) : (
+                              <span className="grid h-20 w-full place-items-center bg-[#f4f4f6] px-2 text-center text-[9px] text-[#9a9aa2]">无可预览图像</span>
+                            )}
+                            <figcaption className="flex items-center justify-between gap-2 px-2 py-1.5 text-[9px] text-[#6f7078]">
+                              <span className="min-w-0 truncate font-semibold text-[#55555d]">{codexPetProcessArtifactLabel(artifact)}</span>
+                              <span className="flex-none">{artifact.width ?? "?"}×{artifact.height ?? "?"}</span>
+                            </figcaption>
+                          </figure>
+                        );
+                      })}
+                    </div>
+                  )}
+                </details>
               )}
             </div>
           </Card>

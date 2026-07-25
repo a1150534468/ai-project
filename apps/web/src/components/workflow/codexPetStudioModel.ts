@@ -362,6 +362,34 @@ export function isCodexPetDirectionArtifact(artifact: CodexPetArtifact): boolean
   return artifact.kind.includes("direction") || artifact.kind.includes("look");
 }
 
+// Pose boards are the raw provider output the pipeline crops rows out of, and
+// they carry a 7-day TTL.  Matching them by substring (`kind.includes("board")`
+// / `"direction"`) reliably picks up `direction_blind_qa`, which is written in
+// the later validation stage and therefore always wins a newest-first sort.
+export function isCodexPetPoseBoard(artifact: CodexPetArtifact): boolean {
+  return artifact.kind === "pose_board" || artifact.kind === "pose_board_scaffold";
+}
+
+// Intermediates worth keeping reachable for diagnosis, but not deliverables:
+// every one of them expires, so an empty list is a normal state for an older
+// project rather than a failure.
+export function isCodexPetProcessArtifact(artifact: CodexPetArtifact): boolean {
+  return isCodexPetPoseBoard(artifact) || isCodexPetDirectionArtifact(artifact);
+}
+
+const CODEX_PET_PROCESS_ARTIFACT_LABELS: Readonly<Record<string, string>> = {
+  pose_board: "姿势板",
+  pose_board_scaffold: "姿势板脚手架",
+  direction_qa: "方向标注图",
+  direction_blind_qa: "方向盲测图",
+  registered_direction_row: "已登记方向行",
+  direction_registration_manifest: "方向登记清单",
+};
+
+export function codexPetProcessArtifactLabel(artifact: CodexPetArtifact): string {
+  return CODEX_PET_PROCESS_ARTIFACT_LABELS[artifact.kind] ?? artifact.kind;
+}
+
 export function makeCodexPetIdempotencyKey(prefix: "project" | "run" | "extra" | "continue"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `codex-pet-${prefix}-${crypto.randomUUID()}`;
   return `codex-pet-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
