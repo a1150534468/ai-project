@@ -406,6 +406,26 @@ export async function startCodexPetRun(
   return { project: data.project, run: data.run };
 }
 
+export async function continueFailedCodexPetRun(
+  token: string,
+  projectId: string,
+  runId: string,
+  idempotencyKey: string,
+): Promise<CodexPetStartResult> {
+  const data = await requestCodexPet<CodexPetStartResult | { readonly run: CodexPetRun; readonly project?: CodexPetProject }>({
+    token,
+    path: `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/continue-failed`,
+    method: "POST",
+    body: { idempotencyKey },
+    idempotencyKey,
+    fallback: "续跑失败的 GPT 桌宠项目失败",
+  });
+  if (!("project" in data) || !data.project) {
+    throw new Error("续跑已创建，但接口未返回项目状态");
+  }
+  return { project: data.project, run: data.run };
+}
+
 export async function selectCodexPetBase(
   token: string,
   projectId: string,

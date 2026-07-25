@@ -174,6 +174,16 @@ function makeClient(args: {
     updateProject: vi.fn().mockResolvedValue(project),
     deleteProject: vi.fn().mockResolvedValue(undefined),
     startRun: vi.fn().mockResolvedValue({ project: { ...project, status: "queued", latestRunId: "run-1" }, run: makeRun({ status: "queued" }) }),
+    continueFailedRun: vi.fn().mockResolvedValue({
+      project: { ...project, status: "awaiting_regeneration_approval", latestRunId: "run-continuation" },
+      run: makeRun({
+        id: "run-continuation",
+        status: "awaiting_regeneration_approval",
+        progressStage: "awaiting_regeneration_approval",
+        pendingImageJobKey: "base-candidate-2",
+        imageGenerationCallCount: 0,
+      }),
+    }),
     selectBase: vi.fn().mockResolvedValue(makeRun({ status: "standard_generating", selectedBaseArtifactId: "base-2" })),
     approveNextImage: vi.fn().mockResolvedValue(makeRun({ status: "direction_generating", imageGenerationApprovalBudget: 1, pendingImageJobKey: null })),
     cancelRun: vi.fn().mockResolvedValue(makeRun({ cancelRequested: true })),
@@ -512,6 +522,56 @@ describe("CodexPetStudio", () => {
     expect(buttonByText(mounted.container, "开始制作").disabled).toBe(false);
     const nameInput = mounted.container.querySelector<HTMLInputElement>('input[maxlength="30"]');
     expect(nameInput?.value).toBe("月薪喵 副本");
+    await act(async () => { mounted.root.unmount(); });
+  });
+
+  it("continues the eligible failed project while preserving candidate one", async () => {
+    const run = makeRun({
+      status: "failed",
+      progressStage: "failed",
+      error: "image relay 429 Concurrency limit exceeded",
+      billingMode: "per_image_call_v1",
+      billingSettlementStatus: "settled",
+      qualityInspectionEnabled: false,
+      hasSuccessfulImage: true,
+      selectedBaseArtifactId: null,
+      imageGenerationCallCount: 2,
+      plannedImageCallLimit: 14,
+    });
+    const project = makeProject({ status: "failed", latestRunId: run.id });
+    const detail: CodexPetProjectDetail = { project, latestRun: run, runs: [run], artifacts: [], jobs: [] };
+    const client = makeClient({ project, detail });
+    const mounted = await mountStudio({ token: "token", client });
+    const continuedRun = makeRun({
+      id: "run-continuation",
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
+      pendingImageJobKey: "base-candidate-2",
+      imageGenerationCallCount: 0,
+    });
+    const continuedProject = { ...project, status: "awaiting_regeneration_approval" as const, latestRunId: continuedRun.id };
+    vi.mocked(client.continueFailedRun).mockResolvedValue({ project: continuedProject, run: continuedRun });
+    vi.mocked(client.getProject).mockResolvedValue({
+      project: continuedProject,
+      latestRun: continuedRun,
+      runs: [continuedRun, run],
+      artifacts: [],
+      jobs: [],
+    });
+
+    const continuation = buttonByText(mounted.container, "复用候选 1，重试候选 2");
+    await act(async () => { continuation.click(); });
+    await flushEffects();
+
+    expect(client.continueFailedRun).toHaveBeenCalledWith(
+      "token",
+      project.id,
+      run.id,
+      expect.stringMatching(/^codex-pet-continue-/),
+    );
+    expect(mounted.container.textContent).toContain("候选 1 已保留");
+    expect(mounted.container.textContent).toContain("额外真实生图等待批准");
+    expect(buttonByText(mounted.container, "批准 1 次生图").disabled).toBe(false);
     await act(async () => { mounted.root.unmount(); });
   });
 

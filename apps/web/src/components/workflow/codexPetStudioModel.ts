@@ -362,7 +362,7 @@ export function isCodexPetDirectionArtifact(artifact: CodexPetArtifact): boolean
   return artifact.kind.includes("direction") || artifact.kind.includes("look");
 }
 
-export function makeCodexPetIdempotencyKey(prefix: "project" | "run" | "extra"): string {
+export function makeCodexPetIdempotencyKey(prefix: "project" | "run" | "extra" | "continue"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return `codex-pet-${prefix}-${crypto.randomUUID()}`;
   return `codex-pet-${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }

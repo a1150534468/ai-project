@@ -51,7 +51,8 @@ function createLedgerPrisma(limit = 14) {
         && call.projectId === where.projectId
         && call.userId === where.userId
         && call.callKind === where.callKind
-        && call.status === where.status
+        && (where.status === undefined || call.status === where.status)
+        && (where.sentAt === undefined || call.sentAt != null)
       )).length,
       create: async ({ data }: { data: CallRow }) => {
         const row = { id: `call-${nextId++}`, ...data };
@@ -126,6 +127,39 @@ describe("Codex pet image-call ledger", () => {
     expect(fetchFn).not.toHaveBeenCalled();
     expect(calls).toHaveLength(14);
     expect(run.imageGenerationCallCount).toBe(14);
+  });
+
+  it("keeps an approved extra call outside the planned-call limit", async () => {
+    const { prisma, calls, run } = createLedgerPrisma(2);
+    await prepareCodexPetExtraImageCall({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "base-candidate-2",
+      logicalAttempt: 1,
+      requestedModel: "gpt-image-2",
+      resourceKey: "codex_pet_v2_package",
+      points: 200,
+    });
+    await prepareCodexPetImageCallDispatch({ ...baseInput, prisma, runId: "run-1", jobKey: "base-candidate-2", logicalAttempt: 1 });
+    await markCodexPetImageCallSent({ ...baseInput, prisma, runId: "run-1", jobKey: "base-candidate-2", logicalAttempt: 1 });
+
+    for (const jobKey of ["row-idle", "row-waving"]) {
+      await prepareCodexPetImageCallDispatch({ ...baseInput, prisma, runId: "run-1", jobKey, logicalAttempt: 1 });
+      await markCodexPetImageCallSent({ ...baseInput, prisma, runId: "run-1", jobKey, logicalAttempt: 1 });
+    }
+    await expect(prepareCodexPetImageCallDispatch({
+      ...baseInput,
+      prisma,
+      runId: "run-1",
+      jobKey: "row-over-limit",
+      logicalAttempt: 1,
+    })).rejects.toBeInstanceOf(CodexPetImageCallLimitError);
+
+    expect(run.imageGenerationCallCount).toBe(3);
+    expect(calls.filter((call) => call.callKind === "planned" && call.sentAt)).toHaveLength(2);
+    expect(calls.filter((call) => call.callKind === "extra" && call.sentAt)).toHaveLength(1);
   });
 
   it("keeps one durable failed call after a request has been sent and never dispatches its duplicate", async () => {
@@ -247,5 +281,68 @@ describe("Codex pet image-call ledger", () => {
     expect(first.created).toBe(true);
     expect(duplicate).toEqual({ operationId: first.operationId, created: false });
     expect(calls).toMatchObject([{ callKind: "extra", status: "prepared", units: 1 }]);
+  });
+
+  it("allows another extra attempt only under a new logical attempt", async () => {
+    const { prisma, calls } = createLedgerPrisma();
+    const second = await prepareCodexPetExtraImageCall({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "row-running-right",
+      logicalAttempt: 2,
+      requestedModel: "gpt-image-2",
+      resourceKey: "codex_pet_v2_package",
+      points: 200,
+    });
+    const duplicate = await prepareCodexPetExtraImageCall({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "row-running-right",
+      logicalAttempt: 2,
+      requestedModel: "gpt-image-2",
+      resourceKey: "codex_pet_v2_package",
+      points: 200,
+    });
+    const third = await prepareCodexPetExtraImageCall({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "row-running-right",
+      logicalAttempt: 3,
+      requestedModel: "gpt-image-2",
+      resourceKey: "codex_pet_v2_package",
+      points: 200,
+    });
+
+    expect(second.created).toBe(true);
+    expect(duplicate).toEqual({ operationId: second.operationId, created: false });
+    expect(third.created).toBe(true);
+    expect(third.operationId).not.toBe(second.operationId);
+    expect(calls).toMatchObject([
+      { jobKey: "row-running-right", logicalAttempt: 2, callKind: "extra", status: "prepared" },
+      { jobKey: "row-running-right", logicalAttempt: 3, callKind: "extra", status: "prepared" },
+    ]);
+  });
+
+  it("persists a safe transport classification with a failed call", async () => {
+    const { prisma, calls } = createLedgerPrisma();
+    await prepareCodexPetImageCallDispatch({ ...baseInput, prisma, runId: "run-1", jobKey: "row-idle", logicalAttempt: 1 });
+    await markCodexPetImageCallSent({ ...baseInput, prisma, runId: "run-1", jobKey: "row-idle", logicalAttempt: 1 });
+    const failure = new TypeError("fetch failed", { cause: { code: "UND_ERR_SOCKET" } });
+
+    await completeCodexPetImageCall({
+      prisma,
+      runId: "run-1",
+      jobKey: "row-idle",
+      logicalAttempt: 1,
+      error: failure,
+    });
+
+    expect(calls).toMatchObject([{ status: "failed", error: "[network/UND_ERR_SOCKET] fetch failed" }]);
   });
 });

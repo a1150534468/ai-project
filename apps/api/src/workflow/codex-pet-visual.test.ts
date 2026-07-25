@@ -2,7 +2,7 @@ import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 import { extractPoseBoard } from "@ai-assistant/codex-pet-pipeline";
 import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "./image-service.js";
-import { adaptCodexPetPromptForModel, assertCodexPetVisualQaRoute, codexPetImageMaxAttempts, codexPetImageRetryDelayMs, codexPetVisualQaConsensusPasses, createSeedreamPoseBoardScaffold, generateCodexPetIdentityGuide, generateCodexPetVisual, normalizeSeedreamChromaMatte, resolveCodexPetVisualQaModel, runCodexPetVisualQa, runLabeledDirectionSemantics, selectSeedreamGaitScaffoldVariants, type PetVisualQaVerdict } from "./codex-pet-visual.js";
+import { adaptCodexPetPromptForModel, assertCodexPetVisualQaRoute, codexPetImageDispatchCooldownMs, codexPetImageMaxAttempts, codexPetImageRetryDelayMs, codexPetVisualQaConsensusPasses, createSeedreamPoseBoardScaffold, generateCodexPetIdentityGuide, generateCodexPetVisual, normalizeSeedreamChromaMatte, resolveCodexPetVisualQaModel, runCodexPetVisualQa, runLabeledDirectionSemantics, selectSeedreamGaitScaffoldVariants, type PetVisualQaVerdict } from "./codex-pet-visual.js";
 import { codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 
 async function reference(index: number): Promise<ImageBinaryInput> {
@@ -51,6 +51,37 @@ async function nearEdgePoseBoard(columns: number, rows: number): Promise<Buffer>
 }
 
 describe("Codex pet visual generation", () => {
+  it("paces distinct provider calls before dispatch when the relay needs a cooldown", async () => {
+    expect(codexPetImageDispatchCooldownMs({})).toBe(0);
+    expect(codexPetImageDispatchCooldownMs({ CODEX_PET_IMAGE_DISPATCH_COOLDOWN_MS: "45000" })).toBe(45_000);
+    expect(codexPetImageDispatchCooldownMs({ CODEX_PET_IMAGE_DISPATCH_COOLDOWN_MS: "999999" })).toBe(300_000);
+
+    const output = await sharp({
+      create: { width: 64, height: 64, channels: 4, background: "#ff00ff" },
+    }).png().toBuffer();
+    const dispatchTimes: number[] = [];
+    const fetchFn = vi.fn(async () => {
+      dispatchTimes.push(Date.now());
+      return new Response(JSON.stringify({
+        model: "gpt-image-2-codex",
+        data: [{ b64_json: output.toString("base64"), mime_type: "image/png" }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    });
+    const env = {
+      GPT_IMAGE_API_KEY: "test-key",
+      GPT_IMAGE_GENERATION_ENDPOINT: "https://images.example.test/v1/images/generations",
+      CODEX_PET_IMAGE_DISPATCH_COOLDOWN_MS: "40",
+    };
+
+    await Promise.all([
+      generateCodexPetVisual({ prompt: "candidate one", fetchFn: fetchFn as typeof fetch, env }),
+      generateCodexPetVisual({ prompt: "candidate two", fetchFn: fetchFn as typeof fetch, env }),
+    ]);
+
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(dispatchTimes[1]! - dispatchTimes[0]!).toBeGreaterThanOrEqual(30);
+  });
+
   it("removes literal chroma tokens from Seedream prompts without changing GPT prompts", async () => {
     const source = "one pet as a 4 columns × 2 rows pose board on #FF00FF; never gradient the #ff00ff background";
     expect(adaptCodexPetPromptForModel(source, "gpt-image-2")).toBe(source);

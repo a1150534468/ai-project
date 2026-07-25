@@ -19,6 +19,7 @@ import {
   type ImageBinaryInput,
   type ImageGenerationResult,
 } from "./image-service.js";
+import { createCodexPetUpstreamFetch } from "./codex-pet-network.js";
 
 const SEEDREAM_CHROMA_NAMES: Readonly<Record<string, string>> = {
   "#ff00ff": "a perfectly flat solid hot-magenta chroma-key background",
@@ -638,6 +639,38 @@ async function wait(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+let codexPetImageDispatchTail: Promise<void> = Promise.resolve();
+let codexPetImageDispatchReadyAt = 0;
+
+export function codexPetImageDispatchCooldownMs(env: NodeJS.ProcessEnv): number {
+  const configured = Number(env.CODEX_PET_IMAGE_DISPATCH_COOLDOWN_MS);
+  return Number.isFinite(configured) && configured > 0
+    ? Math.min(300_000, Math.floor(configured))
+    : 0;
+}
+
+async function withCodexPetImageDispatchCooldown<T>(input: {
+  readonly env: NodeJS.ProcessEnv;
+  readonly signal?: AbortSignal;
+  readonly dispatch: () => Promise<T>;
+}): Promise<T> {
+  const cooldownMs = codexPetImageDispatchCooldownMs(input.env);
+  if (cooldownMs === 0) return input.dispatch();
+
+  let release!: () => void;
+  const previous = codexPetImageDispatchTail;
+  codexPetImageDispatchTail = new Promise<void>((resolve) => { release = resolve; });
+  await previous;
+  try {
+    const remainingMs = codexPetImageDispatchReadyAt - Date.now();
+    if (remainingMs > 0) await wait(remainingMs, input.signal);
+    return await input.dispatch();
+  } finally {
+    codexPetImageDispatchReadyAt = Date.now() + cooldownMs;
+    release();
+  }
+}
+
 export function codexPetImageRetryDelayMs(attempt: number, env: NodeJS.ProcessEnv): number {
   const configuredBase = Number(env.CODEX_PET_IMAGE_RETRY_BASE_MS);
   const base = Number.isFinite(configuredBase) && configuredBase >= 0
@@ -673,9 +706,9 @@ export async function generateCodexPetVisual(input: {
   readonly onRetry?: (error: unknown, attempt: number) => Promise<void> | void;
 }): Promise<GeneratedPetVisual> {
   const env = input.env ?? process.env;
-  const fetchFn = input.fetchFn ?? fetch;
   const requestedModel = input.model?.trim() || GPT_IMAGE_MODEL;
   const config = loadImageGenerationConfigForModel(requestedModel, env);
+  const fetchFn = input.fetchFn ?? createCodexPetUpstreamFetch(config.endpoint, env);
   const prompt = adaptCodexPetPromptForModel(input.prompt, requestedModel);
   // A final real verification can cap provider attempts at one without
   // changing the normal production retry policy. Explicit per-job limits
@@ -694,32 +727,36 @@ export async function generateCodexPetVisual(input: {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
       await input.onAttempt?.(attempt);
-      const provider = references.length > 0
-        ? await callImageEditDetailed({
-            config,
-            prompt,
-            referenceImages: references,
-            size: input.size ?? "1536x1024",
-            quality: input.quality ?? "low",
-          outputFormat: "png",
-          fetchFn,
-          env,
-          signal: input.signal,
-          onRequestDispatching: () => input.onRequestDispatching?.(attempt),
-          onRequestSent: () => input.onRequestSent?.(attempt),
-          })
-        : await callImageGenerationDetailed({
-            config,
-            prompt,
-            size: input.size ?? "1024x1024",
-            quality: input.quality ?? "low",
-          outputFormat: "png",
-          fetchFn,
-          env,
-          signal: input.signal,
-          onRequestDispatching: () => input.onRequestDispatching?.(attempt),
-          onRequestSent: () => input.onRequestSent?.(attempt),
-          });
+      const provider = await withCodexPetImageDispatchCooldown({
+        env,
+        signal: input.signal,
+        dispatch: () => references.length > 0
+          ? callImageEditDetailed({
+              config,
+              prompt,
+              referenceImages: references,
+              size: input.size ?? "1536x1024",
+              quality: input.quality ?? "low",
+              outputFormat: "png",
+              fetchFn,
+              env,
+              signal: input.signal,
+              onRequestDispatching: () => input.onRequestDispatching?.(attempt),
+              onRequestSent: () => input.onRequestSent?.(attempt),
+            })
+          : callImageGenerationDetailed({
+              config,
+              prompt,
+              size: input.size ?? "1024x1024",
+              quality: input.quality ?? "low",
+              outputFormat: "png",
+              fetchFn,
+              env,
+              signal: input.signal,
+              onRequestDispatching: () => input.onRequestDispatching?.(attempt),
+              onRequestSent: () => input.onRequestSent?.(attempt),
+            }),
+      });
       assertCodexPetImageModel(provider, requestedModel);
       const binary = await generatedImageBuffer(provider, fetchFn, input.signal);
       const normalized = await normalizeSeedreamChromaMatte(binary.buffer, input.prompt, requestedModel);

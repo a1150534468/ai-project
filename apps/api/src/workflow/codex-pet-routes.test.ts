@@ -246,6 +246,7 @@ function createPrismaMock(seed: {
   let transactionDepth = 0;
   let projectCounter = projects.length;
   let eventCounter = events.length;
+  let jobCounter = jobs.length;
   let imageCallCounter = imageCalls.length;
 
   const prisma: Record<string, unknown> = {};
@@ -358,6 +359,28 @@ function createPrismaMock(seed: {
   const jobDelegate = {
     findMany: vi.fn(async ({ where = {} }: { where?: Record<string, unknown> } = {}) => jobs.filter((row) => matches(row, where))),
     findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => jobs.find((row) => matches(row, where)) ?? null),
+    create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      jobCounter += 1;
+      const row = {
+        id: `job-${jobCounter}`,
+        dependencyKeys: [],
+        attempt: 0,
+        maxAttempts: 1,
+        input: {},
+        output: null,
+        providerMetadata: null,
+        inputArtifactIds: [],
+        outputArtifactIds: [],
+        workerId: null,
+        startedAt: null,
+        completedAt: null,
+        createdAt: new Date(NOW),
+        updatedAt: new Date(NOW),
+        ...data,
+      };
+      jobs.push(row);
+      return row;
+    }),
     update: vi.fn(async ({ where, data }: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
       const row = jobs.find((candidate) => matches(candidate, where));
       if (!row) throw new Error("job not found");
@@ -990,8 +1013,9 @@ describe("Codex pet routes", () => {
     const serialized = detail.json().data.detail.artifacts as Array<{ id: string; previewUrl: string | null }>;
     const previewUrl = serialized.find((artifact) => artifact.id === "preview-owned")?.previewUrl;
     expect(previewUrl).toContain("purpose=preview");
+    expect(previewUrl).toMatch(/^\/api\/public\/codex-pets\/artifacts\/preview-owned\?/);
     expect(serialized.find((artifact) => artifact.id === "private-zip")?.previewUrl).toBeNull();
-    const parsed = new URL(previewUrl!);
+    const parsed = new URL(previewUrl!, "https://api.example.test");
     expect(Number(parsed.searchParams.get("exp")) - Math.floor(NOW.getTime() / 1_000)).toBe(15 * 60);
 
     const fetched = await app.inject({ method: "GET", url: `${parsed.pathname}${parsed.search}` });
@@ -1102,6 +1126,191 @@ describe("Codex pet routes", () => {
     expect(recovered.statusCode).toBe(200);
     expect(billing.chargeResource).not.toHaveBeenCalled();
     expect(billing.reserveResource).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("continues the same GPT project after a base-candidate 429 without rewriting the settled source run", async () => {
+    const project = projectRow({ status: "failed", latestRunId: "run-source" });
+    const source = runRow({
+      id: "run-source",
+      idempotencyKey: "source-start-key",
+      status: "failed",
+      progressStage: "failed",
+      progressPercent: 10,
+      progressMessage: "上游 429",
+      error: "上游 429",
+      billingOperationId: "codex-pet:run:run-source:planned-images",
+      billingMode: "per_image_call_v1",
+      billingResourceKey: CODEX_PET_RESOURCE_KEY,
+      billingReservedUnits: 14,
+      billingSettledUnits: 2,
+      billingReservedPoints: 2_800,
+      billingSettledPoints: 400,
+      billingSettlementStatus: "settled",
+      billingChargeStatus: "reserved",
+      qualityInspectionEnabled: false,
+      imageGenerationCallCount: 2,
+      plannedImageCallLimit: 14,
+      hasSuccessfulImage: true,
+      actualModels: ["gpt-image-2-codex"],
+      workerId: null,
+      completedAt: new Date(NOW),
+      inputSnapshot: {
+        requestedModel: "gpt-image-2",
+        qualityInspectionEnabled: false,
+        billingMode: "per_image_call_v1",
+        plannedImageCallLimit: 14,
+        perImageCallPoints: 200,
+      },
+    });
+    const baseArtifact = artifactRow({
+      id: "source-base-1",
+      runId: source.id,
+      jobId: "job-source-base-1",
+      mime: "image/png",
+      metadata: { actualModel: "gpt-image-2-codex" },
+    });
+    const jobs = [
+      {
+        id: "job-source-base-1",
+        projectId: project.id,
+        runId: source.id,
+        userId: "u1",
+        key: "base-candidate-1",
+        kind: "base_candidate",
+        status: "completed",
+        dependencyKeys: [],
+        attempt: 1,
+        maxAttempts: 1,
+        inputArtifactIds: [],
+        outputArtifactIds: [baseArtifact.id],
+        workerId: null,
+        completedAt: new Date(NOW),
+        error: null,
+        createdAt: new Date(NOW),
+        updatedAt: new Date(NOW),
+      },
+      {
+        id: "job-source-base-2",
+        projectId: project.id,
+        runId: source.id,
+        userId: "u1",
+        key: "base-candidate-2",
+        kind: "base_candidate",
+        status: "failed",
+        dependencyKeys: [],
+        attempt: 1,
+        maxAttempts: 1,
+        inputArtifactIds: [],
+        outputArtifactIds: [],
+        workerId: null,
+        completedAt: new Date(NOW),
+        error: "上游 429",
+        createdAt: new Date(NOW),
+        updatedAt: new Date(NOW),
+      },
+    ];
+    const imageCalls = [
+      {
+        id: "source-call-1",
+        projectId: project.id,
+        runId: source.id,
+        userId: "u1",
+        jobKey: "base-candidate-1",
+        logicalAttempt: 1,
+        callKind: "planned",
+        purpose: "base",
+        requestedModel: "gpt-image-2",
+        actualModel: "gpt-image-2-codex",
+        operationId: "source-call-op-1",
+        status: "succeeded",
+        points: 200,
+        sentAt: new Date(NOW),
+        completedAt: new Date(NOW),
+        error: null,
+        createdAt: new Date(NOW),
+      },
+      {
+        id: "source-call-2",
+        projectId: project.id,
+        runId: source.id,
+        userId: "u1",
+        jobKey: "base-candidate-2",
+        logicalAttempt: 1,
+        callKind: "planned",
+        purpose: "base",
+        requestedModel: "gpt-image-2",
+        actualModel: null,
+        operationId: "source-call-op-2",
+        status: "failed",
+        points: 200,
+        sentAt: new Date(NOW),
+        completedAt: new Date(NOW),
+        error: "image relay 429 Concurrency limit exceeded",
+        createdAt: new Date(NOW),
+      },
+    ];
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [source], jobs, artifacts: [baseArtifact], imageCalls });
+    const billing = createBilling({ reserveResource: vi.fn(async () => ({ reserved: 2_400 })) });
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, { billing, enqueueRun });
+    const request = {
+      method: "POST" as const,
+      url: `/api/workflow/codex-pets/projects/${project.id}/runs/${source.id}/continue-failed`,
+      headers: { ...auth, "idempotency-key": "continue-base-429-0001" },
+      payload: { idempotencyKey: "continue-base-429-0001" },
+    };
+
+    const first = await app.inject(request);
+    const duplicate = await app.inject(request);
+
+    expect(first.statusCode).toBe(202);
+    expect(duplicate.statusCode).toBe(200);
+    expect(state.runs).toHaveLength(2);
+    expect(state.runs[0]).toMatchObject({
+      id: source.id,
+      status: "failed",
+      billingSettlementStatus: "settled",
+      billingSettledUnits: 2,
+      billingSettledPoints: 400,
+      imageGenerationCallCount: 2,
+    });
+    const continuation = state.runs[1]!;
+    expect(continuation).toMatchObject({
+      status: "awaiting_regeneration_approval",
+      billingMode: "per_image_call_v1",
+      billingReservedUnits: 12,
+      billingReservedPoints: 2_400,
+      billingSettlementStatus: "reserved",
+      plannedImageCallLimit: 14,
+      pendingImageJobKey: "base-candidate-2",
+      imageGenerationCallCount: 0,
+      qualityInspectionEnabled: false,
+    });
+    expect(continuation.inputSnapshot).toMatchObject({
+      gptFailedContinuation: {
+        sourceRunId: source.id,
+        sourceBaseArtifactId: baseArtifact.id,
+        retryJobKey: "base-candidate-2",
+        sourcePlannedCallCount: 2,
+        plannedCallsRemaining: 12,
+      },
+    });
+    expect(state.jobs.find((job) => job.runId === continuation.id)).toMatchObject({
+      key: "base-candidate-2",
+      status: "awaiting_approval",
+      attempt: 0,
+      maxAttempts: 1,
+    });
+    expect(billing.reserveResource).toHaveBeenCalledTimes(1);
+    expect(billing.reserveResource).toHaveBeenCalledWith({
+      operationId: `codex-pet:run:${continuation.id}:planned-images`,
+      userId: "u1",
+      resourceKey: CODEX_PET_RESOURCE_KEY,
+      units: 12,
+    });
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(enqueueRun).not.toHaveBeenCalled();
     await app.close();
   });
 

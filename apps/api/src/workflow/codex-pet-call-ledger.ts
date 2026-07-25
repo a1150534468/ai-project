@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
+import { classifyImageGenerationError } from "./image-service.js";
 
 export const CODEX_PET_PLANNED_IMAGE_CALL_LIMIT = 14;
 export const CODEX_PET_PER_IMAGE_BILLING_MODE = "per_image_call_v1";
@@ -105,10 +106,15 @@ export async function prepareCodexPetImageCallDispatch(input: CodexPetImageCallD
       throw new CodexPetImageCallApprovalRequiredError(input.runId, input.jobKey, input.logicalAttempt);
     }
     if (callKind === "planned") {
-      const dispatching = await tx.codexPetImageCall.count({
-        where: { runId: input.runId, projectId: input.projectId, userId: input.userId, callKind: "planned", status: "dispatching" },
-      });
-      if (run.imageGenerationCallCount + dispatching >= run.plannedImageCallLimit) {
+      const [sentPlanned, dispatching] = await Promise.all([
+        tx.codexPetImageCall.count({
+          where: { runId: input.runId, projectId: input.projectId, userId: input.userId, callKind: "planned", sentAt: { not: null } },
+        }),
+        tx.codexPetImageCall.count({
+          where: { runId: input.runId, projectId: input.projectId, userId: input.userId, callKind: "planned", status: "dispatching" },
+        }),
+      ]);
+      if (sentPlanned + dispatching >= run.plannedImageCallLimit) {
         throw new CodexPetImageCallLimitError(input.runId, input.jobKey, run.plannedImageCallLimit);
       }
     }
@@ -180,8 +186,13 @@ export async function markCodexPetImageCallSent(input: CodexPetImageCallDispatch
       throw new CodexPetImageCallAlreadySentError(input.runId, input.jobKey, input.logicalAttempt);
     }
     const callKind = call.callKind === "extra" ? "extra" as const : "planned" as const;
-    if (callKind === "planned" && run.imageGenerationCallCount >= run.plannedImageCallLimit) {
-      throw new CodexPetImageCallLimitError(input.runId, input.jobKey, run.plannedImageCallLimit);
+    if (callKind === "planned") {
+      const sentPlanned = await tx.codexPetImageCall.count({
+        where: { runId: input.runId, projectId: input.projectId, userId: input.userId, callKind: "planned", sentAt: { not: null } },
+      });
+      if (sentPlanned >= run.plannedImageCallLimit) {
+        throw new CodexPetImageCallLimitError(input.runId, input.jobKey, run.plannedImageCallLimit);
+      }
     }
     const sentAt = new Date();
     await tx.codexPetImageCall.update({
@@ -206,10 +217,20 @@ export async function completeCodexPetImageCall(input: {
   readonly upstreamRequestId?: string | null;
   readonly error?: unknown;
 }): Promise<void> {
-  const error = input.error ? sanitizeCodexPetDiagnosticText(
-    input.error instanceof Error ? input.error.message : String(input.error),
-    500,
-  ) : null;
+  const error = input.error ? (() => {
+    const classification = classifyImageGenerationError(input.error);
+    const detail = sanitizeCodexPetDiagnosticText(
+      input.error instanceof Error ? input.error.message : String(input.error),
+      400,
+    );
+    const diagnostic = [classification.category, classification.transportCode]
+      .filter((value): value is string => Boolean(value))
+      .join("/");
+    return sanitizeCodexPetDiagnosticText(
+      diagnostic ? `[${diagnostic}] ${detail}` : detail,
+      500,
+    );
+  })() : null;
   await input.prisma.codexPetImageCall.updateMany({
     where: {
       runId: input.runId,
@@ -253,11 +274,6 @@ export async function prepareCodexPetExtraImageCall(input: {
       }
       return { operationId: existing.operationId, created: false };
     }
-    const earlierExtra = await tx.codexPetImageCall.findFirst({
-      where: { runId: input.runId, jobKey: input.jobKey, callKind: "extra" },
-      select: { id: true },
-    });
-    if (earlierExtra) throw new Error("Codex pet extra call was already used for this job");
     const operationId = codexPetImageCallOperationId({
       runId: input.runId,
       jobKey: input.jobKey,

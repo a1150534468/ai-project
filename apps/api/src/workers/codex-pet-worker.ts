@@ -26,6 +26,7 @@ import {
 } from "../workflow/codex-pet-runner.js";
 import { createCodexPetArtifactStore, deleteCodexPetArtifact } from "../workflow/codex-pet-storage.js";
 import { assertCodexPetImageRoute } from "../workflow/codex-pet-model-contract.js";
+import { installCodexPetUpstreamDnsOverride } from "../workflow/codex-pet-network.js";
 import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "../workflow/codex-pet-call-ledger.js";
 import {
   isVerifiedWorkflowImageObjectKeyForUser,
@@ -636,7 +637,11 @@ async function reconcileBillingIntents(prisma: PrismaClient, billing: CodexPetCh
 
 async function main() {
   const imageRoute = assertCodexPetImageRoute(process.env);
+  const dnsOverride = installCodexPetUpstreamDnsOverride(imageRoute.generationEndpoint, process.env);
   console.info(`[codex-pet-worker] image route ready model=${imageRoute.model}`);
+  if (dnsOverride) {
+    console.info(`[codex-pet-worker] upstream DNS override ready host=${dnsOverride.hostname} family=IPv${dnsOverride.family}`);
+  }
   const prisma = getPrisma();
   const qualityRun = await prisma.codexPetRun.findFirst({
     where: {

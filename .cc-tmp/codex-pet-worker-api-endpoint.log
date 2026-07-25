@@ -1,0 +1,2 @@
+[codex-pet-worker] image route ready model=gpt-image-2
+[codex-pet-worker] visual QA preflight skipped; no quality-enabled Codex pet run is active

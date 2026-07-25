@@ -65,6 +65,7 @@ import {
   markCodexPetImageCallSent,
   prepareCodexPetImageCallDispatch,
 } from "./codex-pet-call-ledger.js";
+import { codexPetGptFailedContinuationSnapshot } from "./codex-pet-gpt-continuation.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import { sanitizeCodexPetDiagnosticText, type CodexPetRunStage } from "./codex-pet-events.js";
 import {
@@ -668,13 +669,14 @@ async function completeImageGenerationAttempt(
   error?: unknown,
 ): Promise<void> {
   if (!ctx.perImageBilling) return;
+  const failure = error === undefined ? null : classifyImageGenerationError(error);
   await completeCodexPetImageCall({
     prisma: ctx.prisma,
     runId: ctx.runId,
     jobKey,
     logicalAttempt,
     actualModel: result?.actualModel,
-    upstreamRequestId: result?.upstreamRequestId,
+    upstreamRequestId: result?.upstreamRequestId ?? failure?.upstreamRequestId,
     error,
   });
 }
@@ -1147,6 +1149,83 @@ async function loadArtifactsInOrder(ctx: RunnerContext, ids: readonly string[]):
   return { artifacts, buffers: await Promise.all(artifacts.map((artifact) => ctx.artifacts.load(artifact))) };
 }
 
+async function reuseGptContinuationBaseCandidate(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+  candidateIndex: number,
+): Promise<{ artifact: CodexPetArtifact; buffer: Buffer } | null> {
+  if (candidateIndex !== 1 || job.attempt !== 0) return null;
+  const run = await currentRun(ctx);
+  const continuation = codexPetGptFailedContinuationSnapshot(run.inputSnapshot);
+  if (!continuation) return null;
+
+  const existing = await ctx.prisma.codexPetArtifact.findFirst({
+    where: {
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      jobId: job.id,
+      kind: "base_candidate",
+      status: "ready",
+    },
+  });
+  if (existing) {
+    const buffer = await ctx.artifacts.load(existing);
+    await ctx.prisma.codexPetJob.update({
+      where: { id: job.id },
+      data: { status: "completed", outputArtifactIds: [existing.id], completedAt: new Date(), workerId: null, error: null },
+    });
+    return { artifact: existing, buffer };
+  }
+
+  const source = await ctx.prisma.codexPetArtifact.findFirst({
+    where: {
+      id: continuation.sourceBaseArtifactId,
+      runId: continuation.sourceRunId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      kind: "base_candidate",
+      status: "ready",
+    },
+  });
+  if (!source) throw new Error("GPT failed continuation source base candidate is unavailable");
+  const buffer = await ctx.artifacts.load(source);
+  const artifact = await ctx.artifacts.put({
+    userId: ctx.project.userId,
+    projectId: ctx.project.id,
+    runId: ctx.runId,
+    jobId: job.id,
+    kind: "base_candidate",
+    name: "主形象候选 1（复用）",
+    buffer,
+    mime: source.mime,
+    metadata: {
+      ...asRecord(source.metadata),
+      reusedFrom: {
+        runId: continuation.sourceRunId,
+        artifactId: continuation.sourceBaseArtifactId,
+        providerCallReused: true,
+      },
+    },
+    expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+  });
+  await ctx.prisma.codexPetJob.update({
+    where: { id: job.id },
+    data: { status: "completed", outputArtifactIds: [artifact.id], completedAt: new Date(), workerId: null, error: null },
+  });
+  await emit(ctx, "preview.ready", "base_generating", 8, "主形象候选 1 已从失败运行复用", {
+    artifactId: artifact.id,
+    sourceRunId: continuation.sourceRunId,
+    providerCallReused: true,
+  }, job.key);
+  await emit(ctx, "job.completed", "base_generating", 8, "主形象候选 1 已复用，未产生模型调用", {
+    artifactId: artifact.id,
+    sourceRunId: continuation.sourceRunId,
+    providerCallReused: true,
+  }, job.key);
+  return { artifact, buffer };
+}
+
 async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number): Promise<{ artifact: CodexPetArtifact; buffer: Buffer }> {
   const key = `base-candidate-${candidateIndex}`;
   let job = await ensureJob(
@@ -1161,6 +1240,8 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
     const loaded = await loadArtifactsInOrder(ctx, job.outputArtifactIds);
     return { artifact: loaded.artifacts[0]!, buffer: loaded.buffers[0]! };
   }
+  const reused = await reuseGptContinuationBaseCandidate(ctx, job, candidateIndex);
+  if (reused) return reused;
   const attempt = Math.max(1, job.attempt + 1);
   job = await startJob(ctx, job, attempt, 6 + candidateIndex * 2, `生成主形象候选 ${candidateIndex}`);
   try {
@@ -1205,11 +1286,14 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
     return { artifact, buffer: generated.buffer };
   } catch (error) {
     await completeImageGenerationAttempt(ctx, key, attempt, undefined, error).catch(() => undefined);
-    // generateCodexPetVisual has already exhausted its bounded transport
-    // retries. This is a terminal infrastructure failure for the run, not a
-    // visual-repair attempt. Mark the originating job failed before sibling
-    // cancellation so its safe transport diagnosis remains recoverable.
+    const failure = classifyImageGenerationError(error);
     await failJobAttempt(ctx, job, attempt, safeError(error), 10, true, imageFailureMetadata(error));
+    if (ctx.perImageBilling && failure.category === "rate_limit") {
+      throw new CodexPetImageApprovalRequiredError(
+        key,
+        `上游并发额度暂不可用，${key} 已暂停；需要单次授权后重试`,
+      );
+    }
     throw error;
   }
 }
@@ -1822,9 +1906,18 @@ async function runBoardJob(ctx: RunnerContext, input: {
       ? value
       : sanitizeCodexPetDirectionRepairPrompt(value)
     : value.trim();
+  const persistedRegistrationFailure = input.qaKind === "directions" && job.attempt > 0
+    ? await ctx.prisma.codexPetJob.findUnique({
+        where: { runId_key: { runId: ctx.runId, key: `${input.key}-registration` } },
+        select: { error: true },
+      })
+    : null;
+  const persistedRegistrationRepair = persistedRegistrationFailure?.error?.trim()
+    ? `Keep every complete character inside its cell with at least 20% clear background on all four sides so neutral-frame registration cannot crop or touch an edge. Persisted registration diagnostics: ${persistedRegistrationFailure.error.slice(0, 1200)}`
+    : "";
   const initialRepairRequirement = input.repairHint?.trim()
     ? normalizeRepairRequirement(input.repairHint)
-    : "";
+    : normalizeRepairRequirement(persistedRegistrationRepair);
   const repairRequirements = initialRepairRequirement ? [initialRepairRequirement] : [];
   let previousFailedBoard: Buffer | null = null;
   let lastError = "";
@@ -1862,7 +1955,12 @@ async function runBoardJob(ctx: RunnerContext, input: {
             ? "\nRedraw the complete pose group from the approved canonical character and clean layout references only. The rejected board is deliberately not attached because its broken anatomy or grid must not be inherited. Preserve the exact requested columns, rows, row-major frame order, scale and baseline while satisfying every numbered repair requirement."
             : ""}`,
         references: repairReferences,
-        size: "1536x1024",
+        // Direction boards are normalized to 192x208 cells before assembly.
+        // A 1024x688 source still gives each 4x2 cell 256x344 pixels while
+        // reducing relay generation time enough to stay inside its one-minute
+        // first-response window. Standard action boards retain the larger
+        // canvas because their varied silhouettes benefit from the headroom.
+        size: input.qaKind === "row" ? "1536x1024" : "1024x688",
         quality: "low",
         env: ctx.env,
         signal: ctx.signal,
@@ -2183,7 +2281,9 @@ async function runBoardJob(ctx: RunnerContext, input: {
       if (error instanceof CodexPetCancelledError || ctx.signal?.aborted) throw new CodexPetCancelledError();
       lastError = safeError(error);
       const latest = await ctx.prisma.codexPetJob.findUnique({ where: { id: job.id } });
-      if (latest?.status !== "failed") await failJobAttempt(ctx, job, attempt, lastError, input.progress, true);
+      if (latest?.status !== "failed") {
+        await failJobAttempt(ctx, job, attempt, lastError, input.progress, true, imageFailureMetadata(error));
+      }
       if (requiresSingleCallApproval) {
         throw new CodexPetImageApprovalRequiredError(input.key, `${input.qaContext}调用失败，需要确认后才能再次生成`);
       }
@@ -4070,7 +4170,12 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     dependencies: ["look-mechanics", "standard-atlas"],
     inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id],
     prompt: buildCardinalPrompt(ctx.identity, mechanics),
-    references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "standard-contact.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
+    // The canonical character and deterministic 2x2 guide fully define this
+    // board. Uploading the large standard contact sheet as a third image adds
+    // no cardinal evidence and can push relay edits past its first-response
+    // window. Keep the contact artifact in job provenance/dependencies, but
+    // do not send it to the model for this request.
+    references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
     columns: 2,
     rows: 2,
     frameCount: 4,
@@ -4126,7 +4231,11 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   const firstLookRepairRequirements: string[] = [];
   while (!firstLookGate.pass) {
     if (lookA.job.attempt >= lookA.job.maxAttempts) {
-      throw new Error(`方向 000 到 157.5 未通过 row-10 前置门禁：${firstLookGate.failures.join("；") || "方向语义或连续性失败"}`);
+      const message = `方向 000 到 157.5 未通过 row-10 前置门禁：${firstLookGate.failures.join("；") || "方向语义或连续性失败"}`;
+      if (ctx.perImageBilling || ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0") {
+        throw new CodexPetImageApprovalRequiredError("look-a", `${message}，需要确认后才能重新生成`);
+      }
+      throw new Error(message);
     }
     await emit(ctx, "run.repairing", "repairing", 74, "正在修复第一组观察方向，第二组尚未启动", {
       attempt: lookA.job.attempt,
@@ -4227,7 +4336,11 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   const secondLookRepairRequirements: string[] = [];
   while (!secondLookGate.pass) {
     if (lookB.job.attempt >= lookB.job.maxAttempts) {
-      throw new Error(`方向 180 到 337.5 未通过 row-10 前置门禁：${secondLookGate.failures.join("；") || "方向语义或连续性失败"}`);
+      const message = `方向 180 到 337.5 未通过 row-10 前置门禁：${secondLookGate.failures.join("；") || "方向语义或连续性失败"}`;
+      if (ctx.perImageBilling || ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0") {
+        throw new CodexPetImageApprovalRequiredError("look-b", `${message}，需要确认后才能重新生成`);
+      }
+      throw new Error(message);
     }
     await emit(ctx, "run.repairing", "repairing", 78, "正在修复第二组观察方向，最终组装尚未启动", {
       attempt: lookB.job.attempt,
@@ -4554,7 +4667,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       // the cardinal anchors as well whenever standard action art changes.
       cardinals = await runBoardJob(ctx, {
         key: "look-cardinals", kind: "look_cardinals", dependencies: ["look-mechanics", "standard-atlas"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id],
-        prompt: buildCardinalPrompt(ctx.identity, mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(standard.contact, "image/png", "standard-contact.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
+        prompt: buildCardinalPrompt(ctx.identity, mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
         columns: 2, rows: 2, frameCount: 4, progress: 83, qaKind: "cardinals", qaContext: "修复后四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左", qaRepetitions: 3, workflowStage: "validating", force: true, repairHint,
       });
       cardinalAnchor = await createApprovedCardinalAnchor(ctx, cardinals, true);

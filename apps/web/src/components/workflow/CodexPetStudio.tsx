@@ -70,6 +70,7 @@ export interface CodexPetStudioClient {
   readonly updateProject: (token: string, projectId: string, payload: CodexPetUpdatePayload) => Promise<CodexPetProject>;
   readonly deleteProject: (token: string, projectId: string) => Promise<void>;
   readonly startRun: (token: string, projectId: string, idempotencyKey: string) => Promise<CodexPetStartResult>;
+  readonly continueFailedRun: (token: string, projectId: string, runId: string, idempotencyKey: string) => Promise<CodexPetStartResult>;
   readonly selectBase: (
     token: string,
     projectId: string,
@@ -100,6 +101,7 @@ const DEFAULT_CLIENT: CodexPetStudioClient = {
   updateProject: codexPetApi.updateCodexPetProject,
   deleteProject: codexPetApi.deleteCodexPetProject,
   startRun: codexPetApi.startCodexPetRun,
+  continueFailedRun: codexPetApi.continueFailedCodexPetRun,
   selectBase: codexPetApi.selectCodexPetBase,
   approveNextImage: codexPetApi.approveCodexPetNextImage,
   cancelRun: codexPetApi.cancelCodexPetRun,
@@ -122,6 +124,7 @@ export interface CodexPetStudioProps {
 type BusyAction =
   | "saving"
   | "starting"
+  | "continuing"
   | "uploading"
   | "deleting"
   | "cancelling"
@@ -152,6 +155,7 @@ const DETAIL_REFRESH_EVENTS = new Set([
 
 const EVENT_LABELS: Record<string, string> = {
   "run.queued": "任务已进入队列",
+  "run.continuation_prepared": "失败项目续跑已准备",
   "stage.started": "阶段开始",
   "stage.completed": "阶段完成",
   "job.started": "视觉任务开始",
@@ -393,6 +397,7 @@ export function CodexPetStudio({
   const detailRevisionRef = useRef(0);
   const createIdempotencyKeyRef = useRef(makeCodexPetIdempotencyKey("project"));
   const runIdempotencyKeyRef = useRef<{ readonly projectId: string; readonly key: string } | null>(null);
+  const continuationIdempotencyKeyRef = useRef<{ readonly runId: string; readonly key: string } | null>(null);
   const terminalBalanceRefreshRef = useRef<{ readonly runId: string; readonly status: string } | null>(null);
 
   selectedProjectIdRef.current = selectedProjectId;
@@ -488,6 +493,15 @@ export function CodexPetStudio({
   const canStart = !historicalImageModel && !readOnlyArchive && !interactionLocked
     && (!selectedProjectId || (detailMatchesSelection && projectStatus === "draft" && (!latestRun || runIsTerminal)));
   const runIsCancellable = Boolean(latestRun && !runIsTerminal && !latestRun.cancelRequested);
+  const canContinueFailedBase = Boolean(latestRun
+    && latestRun.status === "failed"
+    && latestRun.billingMode === "per_image_call_v1"
+    && latestRun.requestedModel === CODEX_PET_IMAGE_MODEL
+    && latestRun.qualityInspectionEnabled === false
+    && latestRun.hasSuccessfulImage
+    && !latestRun.selectedBaseArtifactId
+    && latestRun.imageGenerationCallCount === 2
+    && latestRun.plannedImageCallLimit === 14);
 
   const applyDetail = useCallback((next: CodexPetProjectDetail, hydrateDraft: boolean) => {
     detailRevisionRef.current += 1;
@@ -837,6 +851,28 @@ export function CodexPetStudio({
         setBusyAction(null);
       }
     })();
+  };
+
+  const handleContinueFailedRun = () => {
+    const project = detail?.project;
+    const run = latestRun;
+    if (!project || !run || !canContinueFailedBase || interactionLocked) return;
+    clearFeedback();
+    setBusyAction("continuing");
+    const currentKey = continuationIdempotencyKeyRef.current?.runId === run.id
+      ? continuationIdempotencyKeyRef.current.key
+      : makeCodexPetIdempotencyKey("continue");
+    continuationIdempotencyKeyRef.current = { runId: run.id, key: currentKey };
+    void client.continueFailedRun(token, project.id, run.id, currentKey)
+      .then((continued) => {
+        continuationIdempotencyKeyRef.current = null;
+        applyDetail({ project: continued.project, latestRun: continued.run, runs: [continued.run, run], artifacts: detail?.artifacts ?? [], jobs: [] }, false);
+        setNotice("候选 1 已保留；候选 2 的 429 重试等待单次额外调用授权");
+        onBalanceRefresh?.();
+        void refreshSelectedProject(true);
+      })
+      .catch((continuationError: unknown) => setError(errorMessage(continuationError, "续跑失败的 GPT 桌宠项目失败")))
+      .finally(() => setBusyAction(null));
   };
 
   const handleDeleteProject = (project: CodexPetProjectSummary) => {
@@ -1582,8 +1618,17 @@ export function CodexPetStudio({
 
               {latestRun && runIsTerminal && !deliveryReady && (
                 <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2.5">
-                  <p className="text-[10px] leading-4 text-[#6f7078]">本次运行已结束；保留原项目记录，复制输入后可用新的幂等键重新制作。</p>
-                  <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
+                  <p className="text-[10px] leading-4 text-[#6f7078]">
+                    {canContinueFailedBase ? "候选 1 已成功保存；可在本项目中只重试因 429 失败的候选 2。" : "本次运行已结束；保留原项目记录，复制输入后可用新的幂等键重新制作。"}
+                  </p>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {canContinueFailedBase && (
+                      <PrimaryButton icon={busyAction === "continuing" ? "mdi:loading" : "mdi:restart"} disabled={interactionLocked} onClick={handleContinueFailedRun}>
+                        复用候选 1，重试候选 2
+                      </PrimaryButton>
+                    )}
+                    <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
+                  </div>
                 </div>
               )}
             </div>
