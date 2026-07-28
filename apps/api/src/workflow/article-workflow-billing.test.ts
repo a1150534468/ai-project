@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { runReservedArticleTextTask } from "./article-workflow-billing.js";
+import { reapStaleArticleWorkflowProjects } from "./article-workflow-reaper.js";
 import {
   buildArticleWorkflowApp,
   buildArticleWorkflowHtml,
@@ -189,6 +190,63 @@ describe("article-workflow billing", () => {
       expect(refunded).toContain(operationId);
     }
     expect(prisma.__state.projects[0]?.status).toBe("failed");
+  });
+
+  it("reaper 抢先收割后，runner 迟到的 ready 终态不覆盖也不结算", async () => {
+    let scheduledTask: () => Promise<void> = async () => {
+      throw new Error("scheduled task missing");
+    };
+    const prisma = createArticleWorkflowPrismaMock();
+    const reaperBilling = { refundResource: vi.fn(async (_operationId: string) => ({ success: true })) };
+    let reaped = false;
+    // 在图片生成途中让真 reaper 介入，模拟「runner 卡住超阈值被收割后又活过来」
+    const fetchFn = vi.fn(async () => {
+      if (!reaped) {
+        reaped = true;
+        await reapStaleArticleWorkflowProjects({
+          prisma: prisma as never,
+          billing: reaperBilling,
+          staleMs: 0,
+        });
+      }
+      return new Response(JSON.stringify({
+        data: [{ b64_json: Buffer.from("png").toString("base64"), mime_type: "image/png" }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }) as unknown as typeof fetch;
+
+    const { app, billing } = await buildArticleWorkflowApp({
+      prisma,
+      fetchFn,
+      scheduleTask: (work) => {
+        scheduledTask = work;
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+      },
+    });
+    await scheduledTask();
+
+    const textOperationId = billing.reserveResource.mock.calls[0]![0].operationId;
+    expect(reaperBilling.refundResource).toHaveBeenCalledWith(textOperationId);
+    // 关键：终态未被覆盖，且 reserve 走退款而不是结算（否则就是双结算）
+    expect(billing.settleResource).not.toHaveBeenCalled();
+    expect(billing.refundResource).toHaveBeenCalledWith(textOperationId);
+    expect(prisma.__state.projects[0]?.status).toBe("failed");
+    expect(prisma.__state.projects[0]?.error).toContain("已自动终止");
+    // 成品不会交付，reaper 收割前已扣的图片费也要退
+    const imageOperationIds = billing.reserveResource.mock.calls
+      .map((call) => call[0].operationId)
+      .filter((operationId) => operationId !== textOperationId);
+    for (const operationId of imageOperationIds) {
+      expect(billing.refundResource).toHaveBeenCalledWith(operationId);
+    }
   });
 
   it("refunds image charges when image regeneration fails", async () => {

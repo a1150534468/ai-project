@@ -25,7 +25,10 @@ import {
 import { readArticleWorkflowProject } from "./article-workflow-serializer.js";
 import type { ArticleProjectRow, ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import { safeErrorMessage } from "./ecom-route-helpers.js";
-import { updateArticleWorkflowProjectState } from "./article-workflow-store.js";
+import {
+  finalizeArticleWorkflowProjectState,
+  updateArticleWorkflowProjectState,
+} from "./article-workflow-store.js";
 
 type RunnerDeps = Required<Pick<ArticleWorkflowRouteDeps, "billing" | "llm" | "fetchFn" | "env">> & {
   readonly prisma: PrismaClient;
@@ -76,6 +79,59 @@ function preservedBodyMarkdown(args: {
   });
 }
 
+interface MaterializedArticle {
+  readonly title: string;
+  readonly summary: string;
+  readonly bodyHtml: string;
+  readonly imageManifest: readonly ArticleWorkflowImageAsset[];
+}
+
+async function commitReadyArticleProject(
+  prisma: PrismaClient,
+  projectId: string,
+  args: {
+    readonly progressMessage: string;
+    readonly generationMode: ArticleWorkflowGenerationMode;
+    readonly result: MaterializedArticle;
+  },
+): Promise<boolean> {
+  const committed = await finalizeArticleWorkflowProjectState(prisma, projectId, {
+    status: "ready",
+    progressStage: "ready",
+    progressPercent: 100,
+    progressMessage: args.progressMessage,
+    error: null,
+    billingOperationId: null,
+    title: args.result.title,
+    summary: args.result.summary,
+    generationMode: args.generationMode,
+    bodyHtml: args.result.bodyHtml,
+    imageManifestJson: args.result.imageManifest,
+  });
+  if (!committed) {
+    console.warn(`[article-workflow] 终态写入被跳过（reaper 已收割）project=${projectId}`);
+  }
+  return committed;
+}
+
+async function finalizeFailedArticleProject(
+  prisma: PrismaClient,
+  projectId: string,
+  args: { readonly progressMessage: string; readonly error: unknown },
+): Promise<void> {
+  const committed = await finalizeArticleWorkflowProjectState(prisma, projectId, {
+    status: "failed",
+    progressStage: "failed",
+    progressPercent: 100,
+    progressMessage: args.progressMessage,
+    error: safeErrorMessage(args.error),
+    billingOperationId: null,
+  }).catch(() => false);
+  if (!committed) {
+    console.warn(`[article-workflow] 失败终态写入被跳过（reaper 已收割）project=${projectId}`);
+  }
+}
+
 async function materializeArticleWorkflow(args: RunnerDeps & {
   readonly userId: string;
   readonly projectId: string;
@@ -87,14 +143,25 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
   readonly instruction?: string;
   readonly regenerateImages: boolean;
   readonly model: string;
-}): Promise<{
-  readonly title: string;
-  readonly summary: string;
-  readonly bodyHtml: string;
-  readonly imageManifest: readonly ArticleWorkflowImageAsset[];
-}> {
+  /** 写 ready 终态；返回 false 表示已被 reaper 抢占，reserve 将退款而非结算 */
+  readonly commit: (result: MaterializedArticle) => Promise<boolean>;
+}): Promise<MaterializedArticle> {
+  // 已扣款的图片 operationId：整单没能交付（抛错或终态被 reaper 抢占）就逐个退回，
+  // 收集器放在 work 之外，图片批次自身抛错时也不丢清单
+  const chargedImageOperationIds: string[] = [];
+  const refundChargedImages = async (): Promise<void> => {
+    for (const operationId of chargedImageOperationIds) {
+      await args.billing.refundResource(operationId).catch(() => undefined);
+    }
+  };
   return runReservedArticleTextTask({
     billing: args.billing,
+    commitResult: async (result) => {
+      const committed = await args.commit(result);
+      // reaper 已把项目置 failed，成品不会交付给用户，图片费同样要退
+      if (!committed) await refundChargedImages();
+      return committed;
+    },
     userId: args.userId,
     projectId: args.projectId,
     units: estimateArticleWorkflowReserveUnits({
@@ -139,9 +206,6 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
         throw new Error("原始正文在保留模式下无法稳定还原");
       }
 
-      // 已扣款的图片 operationId：整单在图片之后任一步失败都要逐个退回，
-      // 收集器放在 populate 之外，图片批次自身抛错时也不丢清单
-      const chargedImageOperationIds: string[] = [];
       let imageManifest = plannedImageManifest(plan.images);
       if (args.currentImages && args.currentImages.length > 0 && !args.regenerateImages) {
         imageManifest = mergeArticleImageManifest(imageManifest, args.currentImages);
@@ -209,9 +273,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
         };
       } catch (error) {
         // 整单失败：已扣的图片费逐个退回（billing 按 operationId 幂等），再重抛给外层置 failed
-        for (const operationId of chargedImageOperationIds) {
-          await args.billing.refundResource(operationId).catch(() => undefined);
-        }
+        await refundChargedImages();
         throw error;
       }
     },
@@ -234,35 +296,23 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
       progressMessage: "AI 正在整理文章",
       error: null,
     });
-    const result = await materializeArticleWorkflow({
+    await materializeArticleWorkflow({
       ...args,
       currentHtml: "",
       currentImages: [],
       instruction: "",
       regenerateImages: true,
-    });
-    await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-      status: "ready",
-      progressStage: "ready",
-      progressPercent: 100,
-      progressMessage: "已生成完成",
-      error: null,
-      billingOperationId: null,
-      title: result.title,
-      summary: result.summary,
-      generationMode: args.generationMode,
-      bodyHtml: result.bodyHtml,
-      imageManifestJson: result.imageManifest,
+      commit: (result) => commitReadyArticleProject(args.prisma, args.projectId, {
+        progressMessage: "已生成完成",
+        generationMode: args.generationMode,
+        result,
+      }),
     });
   } catch (error) {
-    await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-      status: "failed",
-      progressStage: "failed",
-      progressPercent: 100,
+    await finalizeFailedArticleProject(args.prisma, args.projectId, {
       progressMessage: "生成失败",
-      error: safeErrorMessage(error),
-      billingOperationId: null,
-    }).catch(() => undefined);
+      error,
+    });
   }
 }
 
@@ -282,7 +332,7 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       progressMessage: "AI 正在改稿",
       error: null,
     });
-    const result = await materializeArticleWorkflow({
+    await materializeArticleWorkflow({
       ...args,
       userId: args.project.userId,
       projectId: args.project.id,
@@ -290,28 +340,16 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       sourceText: current.sourceText,
       currentHtml: current.bodyHtml,
       currentImages: current.imageManifest,
-    });
-    await updateArticleWorkflowProjectState(args.prisma, args.project.id, {
-      status: "ready",
-      progressStage: "ready",
-      progressPercent: 100,
-      progressMessage: "改稿完成",
-      error: null,
-      billingOperationId: null,
-      title: result.title,
-      summary: result.summary,
-      generationMode: args.generationMode,
-      bodyHtml: result.bodyHtml,
-      imageManifestJson: result.imageManifest,
+      commit: (result) => commitReadyArticleProject(args.prisma, args.project.id, {
+        progressMessage: "改稿完成",
+        generationMode: args.generationMode,
+        result,
+      }),
     });
   } catch (error) {
-    await updateArticleWorkflowProjectState(args.prisma, args.project.id, {
-      status: "failed",
-      progressStage: "failed",
-      progressPercent: 100,
+    await finalizeFailedArticleProject(args.prisma, args.project.id, {
       progressMessage: "改稿失败",
-      error: safeErrorMessage(error),
-      billingOperationId: null,
-    }).catch(() => undefined);
+      error,
+    });
   }
 }

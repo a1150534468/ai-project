@@ -111,13 +111,32 @@ export function createArticleWorkflowPrismaMock(seed?: {
         projects.push(row);
         return row;
       }),
-      findMany: vi.fn(async ({ where, take }: { where?: { userId?: string }; take?: number }) =>
+      findMany: vi.fn(async ({ where, take }: {
+        where?: { userId?: string; status?: { in: string[] }; updatedAt?: { lt?: Date } };
+        take?: number;
+      }) =>
         projects
           .filter((row) => !where?.userId || row.userId === where.userId)
+          .filter((row) => !where?.status || where.status.in.includes(row.status))
+          .filter((row) => !where?.updatedAt?.lt || row.updatedAt.getTime() < where.updatedAt.lt.getTime())
           .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
           .slice(0, take ?? projects.length)),
       findFirst: vi.fn(async ({ where }: { where: { id?: string; userId?: string } }) =>
         projects.find((row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId)) ?? null),
+      updateMany: vi.fn(async ({ where, data }: {
+        where: { id: string; status?: string | { in: string[] }; updatedAt?: { lt?: Date } };
+        data: Partial<ProjectRow>;
+      }) => {
+        const row = projects.find((item) => item.id === where.id);
+        if (!row) return { count: 0 };
+        // status 既可能是精确值（reaper 的乐观锁），也可能是 { in: [...] }（终态条件写）
+        if (typeof where.status === "string" && row.status !== where.status) return { count: 0 };
+        if (typeof where.status === "object" && !where.status.in.includes(row.status)) return { count: 0 };
+        if (where.updatedAt?.lt && row.updatedAt.getTime() >= where.updatedAt.lt.getTime()) return { count: 0 };
+        assignDefined(row, data);
+        row.updatedAt = new Date("2026-07-08T06:01:00.000Z");
+        return { count: 1 };
+      }),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<ProjectRow> }) => {
         const row = projects.find((item) => item.id === where.id);
         if (!row) throw new Error("project not found");
