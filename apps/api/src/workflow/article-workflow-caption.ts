@@ -14,7 +14,7 @@ function truncateAtBoundary(value: string, limit: number): string {
   return head.trimEnd();
 }
 
-function normalizeTags(tags: readonly string[], config: ArticleWorkflowPlatformConfig): readonly string[] {
+function normalizeTags(tags: readonly string[], config: ArticleWorkflowPlatformConfig): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const raw of tags) {
