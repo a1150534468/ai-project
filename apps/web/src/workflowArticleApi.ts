@@ -1,6 +1,8 @@
 import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
+  ArticleWorkflowOutputKind,
+  ArticleWorkflowPlatform,
   ArticleWorkflowProjectStatus,
   ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
@@ -11,6 +13,9 @@ export interface ArticleWorkflowProjectSummary {
   readonly title: string;
   readonly summary: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly platform: ArticleWorkflowPlatform;
+  /** 存量项目没有批次，为 null */
+  readonly batchId: string | null;
   readonly status: ArticleWorkflowProjectStatus;
   readonly progressStage: string;
   readonly progressPercent: number;
@@ -24,7 +29,15 @@ export interface ArticleWorkflowProject extends ArticleWorkflowProjectSummary {
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly bodyHtml: string;
+  /** caption 平台的正文文案；公众号为空串 */
+  readonly captionText: string;
+  readonly tags: readonly string[];
   readonly imageManifestJson: readonly ArticleWorkflowImageAsset[];
+}
+
+export interface ArticleWorkflowBatch {
+  readonly batchId: string;
+  readonly projects: readonly ArticleWorkflowProject[];
 }
 
 export interface ArticleWorkflowPricingRow {
@@ -36,10 +49,18 @@ export interface ArticleWorkflowPricingRow {
   readonly enabled: boolean;
 }
 
+export interface ArticleWorkflowPlatformPricing {
+  readonly platform: ArticleWorkflowPlatform;
+  readonly label: string;
+  readonly outputKind: ArticleWorkflowOutputKind;
+  readonly maxImages: number;
+}
+
 export interface ArticleWorkflowPricing {
   readonly text: ArticleWorkflowPricingRow;
   readonly image1k: ArticleWorkflowPricingRow;
   readonly maxImages: number;
+  readonly platforms: readonly ArticleWorkflowPlatformPricing[];
 }
 
 type WorkflowResponse<T> = { readonly data: T };
@@ -68,13 +89,27 @@ export function createArticleWorkflowProject(token: string, body: {
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
-}): Promise<{ projectId: string }> {
+  readonly platforms: readonly ArticleWorkflowPlatform[];
+}): Promise<{
+  readonly batchId: string;
+  readonly projects: readonly { readonly projectId: string; readonly platform: ArticleWorkflowPlatform }[];
+  readonly projectId: string;
+}> {
   return requestArticleWorkflow({
     token,
     path: "/api/workflow/article-workflow",
     method: "POST",
-    fallback: "创建公众号图文项目失败",
+    fallback: "创建图文项目失败",
     body,
+  });
+}
+
+export function getArticleWorkflowBatch(token: string, batchId: string): Promise<ArticleWorkflowBatch> {
+  return requestArticleWorkflow({
+    token,
+    path: `/api/workflow/article-workflow/batch/${encodeURIComponent(batchId)}`,
+    method: "GET",
+    fallback: "获取图文批次失败",
   });
 }
 
@@ -105,16 +140,26 @@ export function getArticleWorkflowProject(token: string, projectId: string): Pro
   });
 }
 
-export function updateArticleWorkflowProject(token: string, projectId: string, body: {
-  readonly title: string;
-  readonly summary: string;
-  readonly bodyHtml: string;
-}): Promise<ArticleWorkflowProject> {
+/** 保存请求的形状由项目平台的 outputKind 决定，后端按平台选校验分支 */
+export type UpdateArticleWorkflowProjectBody =
+  | { readonly title: string; readonly summary: string; readonly bodyHtml: string }
+  | {
+    readonly title: string;
+    readonly summary?: string;
+    readonly captionText: string;
+    readonly tags: readonly string[];
+  };
+
+export function updateArticleWorkflowProject(
+  token: string,
+  projectId: string,
+  body: UpdateArticleWorkflowProjectBody,
+): Promise<ArticleWorkflowProject> {
   return requestArticleWorkflow({
     token,
     path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}`,
     method: "PATCH",
-    fallback: "保存公众号图文项目失败",
+    fallback: "保存图文项目失败",
     body,
   });
 }

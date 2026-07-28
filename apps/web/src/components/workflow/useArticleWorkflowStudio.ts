@@ -257,6 +257,7 @@ export function useArticleWorkflowStudio({
           sourceFormat,
           sourceText: sourceText.trim(),
           generationMode,
+          platforms: ["wechat"],
         });
         const detail = await loadProject(created.projectId, true);
         await refreshHistory();

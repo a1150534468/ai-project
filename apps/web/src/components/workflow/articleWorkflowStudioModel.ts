@@ -1,30 +1,15 @@
-import type {
-  ArticleWorkflowGenerationMode,
-  ArticleWorkflowImageAsset,
-  ArticleWorkflowProjectStatus,
-} from "@ai-assistant/article-workflow";
+import type { ArticleWorkflowImageAsset } from "@ai-assistant/article-workflow";
 import type {
   ArticleWorkflowPricing,
   ArticleWorkflowPricingRow,
   ArticleWorkflowProject,
+  ArticleWorkflowProjectSummary,
 } from "../../workflowArticleApi";
 
 export interface ArticleWorkflowStudioProps {
   readonly token: string;
   readonly onBalanceRefresh?: () => void;
-  readonly initialHistory?: readonly {
-    id: string;
-    title: string;
-    summary: string;
-    generationMode: ArticleWorkflowGenerationMode;
-    status: ArticleWorkflowProjectStatus;
-    progressStage: string;
-    progressPercent: number;
-    progressMessage: string | null;
-    error: string | null;
-    createdAt: string;
-    updatedAt: string;
-  }[];
+  readonly initialHistory?: readonly ArticleWorkflowProjectSummary[];
   readonly initialProject?: ArticleWorkflowProject | null;
   readonly initialBootstrapping?: boolean;
 }
@@ -77,14 +62,19 @@ export function cloneImageManifest(imageManifest: readonly ArticleWorkflowImageA
   return JSON.parse(JSON.stringify(imageManifest)) as readonly ArticleWorkflowImageAsset[];
 }
 
+/** 自动保存的脏判定基准；caption 字段也要进来，否则改文案不会触发保存 */
 export function articleWorkflowDraftHash(args: {
   readonly title: string;
   readonly summary: string;
   readonly bodyHtml: string;
+  readonly captionText?: string;
+  readonly tags?: readonly string[];
 }): string {
   return JSON.stringify([
     args.title.trim(),
     args.summary.trim(),
     args.bodyHtml.trim(),
+    (args.captionText ?? "").trim(),
+    (args.tags ?? []).map((tag) => tag.trim()).filter(Boolean),
   ]);
 }
