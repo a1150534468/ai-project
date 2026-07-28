@@ -16,6 +16,8 @@ export const ARTICLE_COVER_IMAGE_SIZE = "1536x864";
 export const ARTICLE_INLINE_IMAGE_SIZE = "1024x768";
 export const ARTICLE_IMAGE_BATCH_SIZE = 2;
 export const ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY = "article_workflow_text_output";
+/** 卡死判定阈值：必须大于单张图片尝试上限（IMAGE_ATTEMPT_TIMEOUT_MS 默认 600s），否则会误杀在跑的项目 */
+export const ARTICLE_PROJECT_STALE_MS = 15 * 60_000;
 
 export type FetchLike = typeof fetch;
 export type ScheduleTask = (work: () => Promise<void>) => void;
