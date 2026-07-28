@@ -1,6 +1,8 @@
 import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
+  ArticleWorkflowPlatform,
+  ArticleWorkflowPlatformConfig,
   ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_SOURCE_PROMPT_BUDGET } from "./article-workflow-shared.js";
@@ -17,6 +19,10 @@ function generationModeHint(mode: ArticleWorkflowGenerationMode): string {
     : "你可以先润色和重写，再输出更适合公众号发布的 bodyMarkdown。";
 }
 
+/**
+ * html-fragment（公众号）链路的计划提示词。
+ * caption 平台走 buildArticleWorkflowCaptionSystemPrompt，不共用这一套。
+ */
 export function buildArticleWorkflowPlanSystemPrompt(mode: ArticleWorkflowGenerationMode): string {
   return [
     "你是资深微信公众号编辑与电商内容策划。",
@@ -47,6 +53,68 @@ export function buildArticleWorkflowPlanUserPrompt(args: {
     "素材内容：",
     args.sourceText.slice(0, ARTICLE_SOURCE_PROMPT_BUDGET),
     args.currentHtml ? `\n当前已生成的 HTML：\n${args.currentHtml.slice(0, ARTICLE_SOURCE_PROMPT_BUDGET)}` : "",
+    args.instruction ? `\n用户要求：\n${args.instruction}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+function platformToneHints(platform: ArticleWorkflowPlatform): readonly string[] {
+  if (platform === "xiaohongshu") {
+    return [
+      "用第一人称口语写，像真实用户分享亲身体验，不要写成新闻稿或广告稿。",
+      "适度用 emoji 分段，但每段最多一个，不要堆砌。",
+      "结尾用一句自然的话引导互动（提问、求推荐、欢迎评论都可以）。",
+      "不要浮夸承诺，不要“最”“第一”“绝对”这类极限词，不要医疗功效断言。",
+    ];
+  }
+  if (platform === "douyin") {
+    return [
+      "前两行必须先抓住注意力，把最有信息量或最反常识的一点放最前面。",
+      "句子要短，读起来像口播，避免长定语和书面语。",
+      "话题标签放在文案最后。",
+      "不要浮夸承诺，不要极限词。",
+    ];
+  }
+  return [];
+}
+
+/** caption 链路（小红书 / 抖音）的计划提示词。 */
+export function buildArticleWorkflowCaptionSystemPrompt(args: {
+  readonly platform: ArticleWorkflowPlatform;
+  readonly config: ArticleWorkflowPlatformConfig;
+}): string {
+  const { config } = args;
+  return [
+    `你是资深${config.label}内容运营，擅长把素材改写成高完成度的${config.label}笔记。`,
+    "你的任务是输出一份图文笔记生成计划。",
+    "只输出 JSON，不要输出解释，不要输出 Markdown 代码围栏。",
+    '输出结构固定为 {"title":"","captionText":"","tags":[],"images":[...]}。',
+    `title 不超过 ${config.titleMaxLength} 个字。`,
+    `captionText 是笔记正文，不超过 ${config.captionMaxLength} 个字，可以用换行分段。`,
+    `tags 给 ${config.minTags} 到 ${config.maxTags} 个话题标签，只写标签词本身，不要带 # 号。`,
+    `images 至少 1 张，最多 ${config.maxImages} 张；第一张必须是封面图。`,
+    "images[n].slot 只能按顺序使用：cover、inline-1、inline-2、inline-3、inline-4。",
+    'images[n].role 只能是 "cover" 或 "inline"。',
+    "每张图都要给出简洁准确的 alt、空 caption、以及具体的 prompt。",
+    "prompt 要描述真实画面，不要海报大字，不要文字水印，不要在画面里写字。",
+    "captionText 里不要包含 HTML 标签，也不要写 Markdown 标记。",
+    ...platformToneHints(args.platform),
+  ].join("\n");
+}
+
+export function buildArticleWorkflowCaptionUserPrompt(args: {
+  readonly sourceFormat: ArticleWorkflowSourceFormat;
+  readonly sourceText: string;
+  readonly currentCaption?: string;
+  readonly instruction?: string;
+  readonly config: ArticleWorkflowPlatformConfig;
+}): string {
+  return [
+    sourceFormatHint(args.sourceFormat),
+    `目标平台：${args.config.label}。`,
+    "",
+    "素材内容：",
+    args.sourceText.slice(0, ARTICLE_SOURCE_PROMPT_BUDGET),
+    args.currentCaption ? `\n当前已生成的文案：\n${args.currentCaption.slice(0, ARTICLE_SOURCE_PROMPT_BUDGET)}` : "",
     args.instruction ? `\n用户要求：\n${args.instruction}` : "",
   ].filter(Boolean).join("\n");
 }
