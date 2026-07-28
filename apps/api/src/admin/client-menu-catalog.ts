@@ -43,7 +43,8 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
   { key: "workflow.codex-pet", label: "Codex 桌宠工坊", group: "workflow", defaultVisible: false },
   { key: "workflow.report", label: "AI 智能报告", group: "workflow", defaultVisible: false },
   { key: "workflow.fanout", label: "文案裂变", group: "workflow", defaultVisible: false },
-  { key: "workflow.article-workflow", label: "公众号图文工作流", group: "workflow", defaultVisible: false },
+  // key 是客户端菜单可见性的存量标识，只改展示名，不能动 key
+  { key: "workflow.article-workflow", label: "多平台图文工作流", group: "workflow", defaultVisible: false },
   { key: "workflow.local-business-promo", label: "本地商家宣传剪辑", group: "workflow", defaultVisible: false },
   { key: "workflow.ai-comic", label: "AI 漫剧", group: "workflow", defaultVisible: false },
   { key: "workflow.scheduled-task", label: "定时任务", group: "workflow", defaultVisible: false },

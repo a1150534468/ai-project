@@ -248,7 +248,7 @@ describe("ArticleWorkflowPricingPanel", () => {
       );
     });
 
-    expect(container.textContent).toContain("公众号图文生成价格");
+    expect(container.textContent).toContain("多平台图文生成价格");
     await act(async () => {
       requireButtonByText("保存资源价格").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });

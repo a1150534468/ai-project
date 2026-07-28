@@ -127,7 +127,7 @@ export function getArticleWorkflowPricing(token: string): Promise<ArticleWorkflo
     token,
     path: "/api/workflow/article-workflow/pricing",
     method: "GET",
-    fallback: "获取公众号图文计价失败",
+    fallback: "获取图文计价失败",
   });
 }
 
@@ -136,7 +136,7 @@ export function getArticleWorkflowProject(token: string, projectId: string): Pro
     token,
     path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}`,
     method: "GET",
-    fallback: "获取公众号图文项目失败",
+    fallback: "获取图文项目失败",
   });
 }
 

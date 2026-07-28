@@ -88,6 +88,7 @@ const FORBIDDEN_VISIBLE_PHRASES = [
   "自动保存也只在内容真改动后触发",
   "这里看到的是最终要复制到公众号正文区的格式",
   "公众号图文工作流",
+  "多平台图文工作流",
 ];
 
 function validateStyle(styleText: string) {

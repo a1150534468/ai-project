@@ -49,7 +49,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       return { success: true, data: await resolveArticleWorkflowPricing(billing) };
     } catch (error) {
       app.log.error(error);
-      return reply.code(502).send({ error: "获取公众号图文计价失败" });
+      return reply.code(502).send({ error: "获取图文计价失败" });
     }
   });
 
