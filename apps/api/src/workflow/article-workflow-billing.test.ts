@@ -3,6 +3,7 @@ import { runReservedArticleTextTask } from "./article-workflow-billing.js";
 import {
   buildArticleWorkflowApp,
   buildArticleWorkflowHtml,
+  buildArticleWorkflowPlan,
   buildArticleWorkflowImageManifest,
   createArticleWorkflowPrismaMock,
 } from "./article-workflow-test-helpers.js";
@@ -153,6 +154,41 @@ describe("article-workflow billing", () => {
       .filter((value): value is string => typeof value === "string");
     expect(persisted).toContain(reserved.operationId);
     expect(prisma.__state.projects[0]?.billingOperationId).toBeNull();
+  });
+
+  it("整单失败时回滚已扣的图片费", async () => {
+    let scheduledTask: () => Promise<void> = async () => {
+      throw new Error("scheduled task missing");
+    };
+    // 只喂第一轮 plan 响应，排版阶段的第二次 LLM 调用会抛错 → 图片已扣款但整单失败
+    const { app, prisma, billing } = await buildArticleWorkflowApp({
+      llmResponses: [{
+        content: [{ type: "text", text: JSON.stringify(buildArticleWorkflowPlan()) }],
+        usage: { input_tokens: 120, output_tokens: 480 },
+      }],
+      scheduleTask: (work) => {
+        scheduledTask = work;
+      },
+    });
+
+    await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+      },
+    });
+    await scheduledTask();
+
+    const chargedImageOperationIds = billing.chargeResource.mock.calls.map((call) => call[0].operationId);
+    expect(chargedImageOperationIds).toHaveLength(2);
+    const refunded = billing.refundResource.mock.calls.map((call) => call[0]);
+    for (const operationId of chargedImageOperationIds) {
+      expect(refunded).toContain(operationId);
+    }
+    expect(prisma.__state.projects[0]?.status).toBe("failed");
   });
 
   it("refunds image charges when image regeneration fails", async () => {

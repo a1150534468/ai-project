@@ -32,6 +32,11 @@ export async function generateArticleWorkflowImageAsset(args: {
   readonly userId: string;
   readonly projectId: string;
   readonly image: ArticleWorkflowImageAsset;
+  /**
+   * 整图成功后上报扣款 operationId，供调用方在「整单后续步骤失败」时回滚。
+   * 失败路径下方已自行退款，不上报。
+   */
+  readonly onCharged?: (operationId: string) => void;
 }): Promise<ArticleWorkflowImageAsset> {
   const size = imageSize(args.image.slot);
   const operationId = `article-image:${args.projectId}:${args.image.slot}:${randomUUID()}`;
@@ -73,6 +78,7 @@ export async function generateArticleWorkflowImageAsset(args: {
         mime: stored.mime,
       },
     });
+    args.onCharged?.(operationId);
     return {
       ...args.image,
       assetId: asset.id,
@@ -96,6 +102,8 @@ export async function populateArticleWorkflowImages(args: {
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
   readonly force?: boolean;
   readonly onProgress?: (completed: number, total: number) => Promise<void>;
+  /** 逐张上报已扣款 operationId；用回调而非返回值，本函数中途抛错时调用方才拿得到已扣款清单 */
+  readonly onCharged?: (operationId: string) => void;
 }): Promise<readonly ArticleWorkflowImageAsset[]> {
   const targets = args.force
     ? args.imageManifest
@@ -114,6 +122,7 @@ export async function populateArticleWorkflowImages(args: {
         userId: args.userId,
         projectId: args.projectId,
         image,
+        onCharged: args.onCharged,
       })
     ));
     for (const image of generated) {

@@ -139,6 +139,9 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
         throw new Error("原始正文在保留模式下无法稳定还原");
       }
 
+      // 已扣款的图片 operationId：整单在图片之后任一步失败都要逐个退回，
+      // 收集器放在 populate 之外，图片批次自身抛错时也不丢清单
+      const chargedImageOperationIds: string[] = [];
       let imageManifest = plannedImageManifest(plan.images);
       if (args.currentImages && args.currentImages.length > 0 && !args.regenerateImages) {
         imageManifest = mergeArticleImageManifest(imageManifest, args.currentImages);
@@ -154,54 +157,63 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
         progressMessage: "AI 正在生成配图",
       });
 
-      imageManifest = await populateArticleWorkflowImages({
-        prisma: args.prisma,
-        billing: args.billing,
-        fetchFn: args.fetchFn,
-        env: args.env,
-        userId: args.userId,
-        projectId: args.projectId,
-        imageManifest,
-        force: args.regenerateImages,
-        onProgress: async (completed, total) => {
-          await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-            title: plan.title,
-            summary: plan.summary,
-            generationMode: args.generationMode,
-            imageManifestJson: imageManifest,
-            progressStage: "illustrating",
-            progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 35),
-            progressMessage: `正在生成配图（${completed}/${total}）`,
-          });
-        },
-      });
+      try {
+        imageManifest = await populateArticleWorkflowImages({
+          prisma: args.prisma,
+          billing: args.billing,
+          fetchFn: args.fetchFn,
+          env: args.env,
+          userId: args.userId,
+          projectId: args.projectId,
+          imageManifest,
+          force: args.regenerateImages,
+          onCharged: (operationId) => chargedImageOperationIds.push(operationId),
+          onProgress: async (completed, total) => {
+            await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+              title: plan.title,
+              summary: plan.summary,
+              generationMode: args.generationMode,
+              imageManifestJson: imageManifest,
+              progressStage: "illustrating",
+              progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 35),
+              progressMessage: `正在生成配图（${completed}/${total}）`,
+            });
+          },
+        });
 
-      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-        progressStage: "layout",
-        progressPercent: 80,
-        progressMessage: "AI 正在排版正文",
-        imageManifestJson: imageManifest,
-      });
+        await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+          progressStage: "layout",
+          progressPercent: 80,
+          progressMessage: "AI 正在排版正文",
+          imageManifestJson: imageManifest,
+        });
 
-      const rawHtml = await renderArticleWorkflowBodyHtml({
-        llm: args.llm,
-        model: args.model,
-        bodyMarkdown,
-        imageManifest,
-      });
-      const guardedHtml = assertArticleWorkflowHtmlFragment({
-        html: rawHtml,
-        expectedVisibleText: bodyVisibleText,
-        requiredImageSlots: imageManifest.map((item) => item.slot),
-      });
-      const bodyHtml = applyArticleImageManifestToHtml(guardedHtml, imageManifest);
+        const rawHtml = await renderArticleWorkflowBodyHtml({
+          llm: args.llm,
+          model: args.model,
+          bodyMarkdown,
+          imageManifest,
+        });
+        const guardedHtml = assertArticleWorkflowHtmlFragment({
+          html: rawHtml,
+          expectedVisibleText: bodyVisibleText,
+          requiredImageSlots: imageManifest.map((item) => item.slot),
+        });
+        const bodyHtml = applyArticleImageManifestToHtml(guardedHtml, imageManifest);
 
-      return {
-        title: plan.title,
-        summary: plan.summary,
-        bodyHtml,
-        imageManifest,
-      };
+        return {
+          title: plan.title,
+          summary: plan.summary,
+          bodyHtml,
+          imageManifest,
+        };
+      } catch (error) {
+        // 整单失败：已扣的图片费逐个退回（billing 按 operationId 幂等），再重抛给外层置 failed
+        for (const operationId of chargedImageOperationIds) {
+          await args.billing.refundResource(operationId).catch(() => undefined);
+        }
+        throw error;
+      }
     },
   });
 }
