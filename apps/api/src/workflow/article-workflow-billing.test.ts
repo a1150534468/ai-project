@@ -89,6 +89,11 @@ describe("article-workflow billing", () => {
     expect(response.json().data.text.rate).toBe(3);
     expect(response.json().data.image1k.rate).toBe(12);
     expect(response.json().data.maxImages).toBe(5);
+    expect(response.json().data.platforms).toEqual([
+      { platform: "wechat", label: "微信公众号", outputKind: "html-fragment", maxImages: 5 },
+      { platform: "xiaohongshu", label: "小红书", outputKind: "caption", maxImages: 5 },
+      { platform: "douyin", label: "抖音", outputKind: "caption", maxImages: 5 },
+    ]);
   });
 
   it("charges text and image resources during a successful generation run", async () => {
