@@ -2,7 +2,12 @@ import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type { FastifyInstance } from "fastify";
-import { articleWorkflowPlatformConfig } from "@ai-assistant/article-workflow";
+import { randomUUID } from "node:crypto";
+import {
+  articleWorkflowPlatformConfig,
+  resolveArticleWorkflowMode,
+  type ArticleWorkflowPlatform,
+} from "@ai-assistant/article-workflow";
 import { canRecoverArticleProject, DEFAULT_ARTICLE_MODEL, scheduledRunner, ARTICLE_HISTORY_LIMIT, type ArticleWorkflowBilling, type ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import {
   articleWorkflowImageParamsSchema,
@@ -51,40 +56,55 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const parsed = createArticleWorkflowProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
-    const project = await prisma.articleWorkflowProject.create({
-      data: {
+    // 一次导入 = 一个批次 = 每平台一行，每行独立生成、独立扣费、独立失败
+    const batchId = randomUUID();
+    const created: { projectId: string; platform: ArticleWorkflowPlatform }[] = [];
+    for (const platform of parsed.data.platforms) {
+      const generationMode = resolveArticleWorkflowMode(platform, parsed.data.generationMode);
+      const project = await prisma.articleWorkflowProject.create({
+        data: {
+          userId,
+          platform,
+          batchId,
+          sourceFormat: parsed.data.sourceFormat,
+          sourceText: parsed.data.sourceText,
+          generationMode,
+          title: "",
+          summary: "",
+          bodyHtml: "",
+          captionText: "",
+          tagsJson: jsonValue([]),
+          imageManifestJson: jsonValue([]),
+          status: "generating",
+          progressStage: "queued",
+          progressPercent: 0,
+          progressMessage: "排队生成中",
+          error: null,
+        },
+      });
+      created.push({ projectId: project.id, platform });
+
+      scheduleTask(() => runInitialArticleWorkflowGeneration({
+        prisma,
+        billing,
+        llm,
+        fetchFn,
+        env,
         userId,
+        projectId: project.id,
         sourceFormat: parsed.data.sourceFormat,
         sourceText: parsed.data.sourceText,
-        generationMode: parsed.data.generationMode,
-        title: "",
-        summary: "",
-        bodyHtml: "",
-        imageManifestJson: jsonValue([]),
-        status: "generating",
-        progressStage: "queued",
-        progressPercent: 0,
-        progressMessage: "排队生成中",
-        error: null,
-      },
+        generationMode,
+        platform,
+        model,
+      }));
+    }
+
+    // projectId 保留首行，旧前端与既有用例不受影响
+    return reply.code(201).send({
+      success: true,
+      data: { batchId, projects: created, projectId: created[0]!.projectId },
     });
-
-    scheduleTask(() => runInitialArticleWorkflowGeneration({
-      prisma,
-      billing,
-      llm,
-      fetchFn,
-      env,
-      userId,
-      projectId: project.id,
-      sourceFormat: parsed.data.sourceFormat,
-      sourceText: parsed.data.sourceText,
-      generationMode: parsed.data.generationMode,
-      platform: "wechat",
-      model,
-    }));
-
-    return reply.code(201).send({ success: true, data: { projectId: project.id } });
   });
 
   app.get("/api/workflow/article-workflow/history", async (req, reply) => {

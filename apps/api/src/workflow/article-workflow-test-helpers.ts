@@ -58,6 +58,18 @@ export function buildArticleWorkflowPlan() {
   };
 }
 
+export function buildArticleWorkflowCaptionPlan() {
+  return {
+    title: "夏天必囤的咖啡机",
+    captionText: "第一次用就回不去了。\n\n出杯快，清洗也简单。",
+    tags: ["#咖啡机", "居家好物", "夏日饮品"],
+    images: [
+      { slot: "cover" as const, role: "cover" as const, alt: "封面", caption: "", prompt: "cover prompt" },
+      { slot: "inline-1" as const, role: "inline" as const, alt: "细节", caption: "", prompt: "detail prompt" },
+    ],
+  };
+}
+
 export function buildArticleWorkflowHtml(): string {
   return [
     '<section style="width:100%;max-width:667px;margin:0 auto;box-sizing:border-box;">',
@@ -211,7 +223,7 @@ type BillingCallArgs = {
   units: number;
 };
 
-function createLlmResponse(text: string) {
+export function createArticleWorkflowLlmResponse(text: string) {
   return {
     content: [{ type: "text", text }],
     usage: { input_tokens: 120, output_tokens: 480 },
@@ -234,8 +246,8 @@ export async function buildArticleWorkflowApp(args?: {
 }) {
   const prisma = args?.prisma ?? createArticleWorkflowPrismaMock();
   const llmResponses = [...(args?.llmResponses ?? [
-    createLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
-    createLlmResponse(buildArticleWorkflowHtml()),
+    createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
+    createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
   ])];
   const billing = {
     reserveResource: vi.fn(async (_args: BillingCallArgs) => ({ reserved: 1 })),

@@ -58,7 +58,17 @@ export const articleWorkflowCaptionPlanSchema = z.object({
 export const createArticleWorkflowProjectSchema = z.object({
   sourceFormat: sourceFormatSchema,
   sourceText: z.string().trim().min(1).max(ARTICLE_MAX_SOURCE_LENGTH),
+  /** 期望模式；caption 平台会被 resolveArticleWorkflowMode 降级为 polish-text */
   generationMode: generationModeSchema.optional().default("preserve-text"),
+  /** 缺省 ["wechat"] 兼容旧客户端；重复平台按首次出现顺序去重 */
+  platforms: z
+    .array(articleWorkflowPlatformSchema)
+    .min(1)
+    // 长度上限只为挡住畸形入参；去重后天然不超过平台总数，重复传同一平台不该报错
+    .max(ARTICLE_WORKFLOW_PLATFORMS.length * 4)
+    .optional()
+    .default(["wechat"])
+    .transform((platforms) => [...new Set(platforms)]),
 });
 
 export const articleWorkflowProjectParamsSchema = z.object({

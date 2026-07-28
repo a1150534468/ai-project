@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildArticleWorkflowApp,
+  buildArticleWorkflowCaptionPlan,
   buildArticleWorkflowHtml,
   buildArticleWorkflowImageManifest,
   buildArticleWorkflowPlan,
+  createArticleWorkflowLlmResponse,
   createArticleWorkflowPrismaMock,
 } from "./article-workflow-test-helpers.js";
 
@@ -30,6 +32,50 @@ describe("article-workflow routes", () => {
     await scheduledTask!();
     expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
     expect(prisma.__state.projects[0]?.generationMode).toBe("preserve-text");
+  });
+
+  it("fans out one row per platform under a shared batch id", async () => {
+    const scheduled: (() => Promise<void>)[] = [];
+    const { app, prisma } = await buildArticleWorkflowApp({
+      llmResponses: [
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
+        createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
+      ],
+      scheduleTask: (work) => {
+        scheduled.push(work);
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+        platforms: ["wechat", "xiaohongshu", "douyin", "xiaohongshu"],
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const data = response.json().data;
+    expect(data.projects.map((item: { platform: string }) => item.platform))
+      .toEqual(["wechat", "xiaohongshu", "douyin"]);
+    expect(data.projectId).toBe(data.projects[0].projectId);
+    expect(new Set(prisma.__state.projects.map((row) => row.batchId))).toEqual(new Set([data.batchId]));
+    // caption 平台不支持保留原文，落库时已被降级
+    expect(prisma.__state.projects.map((row) => row.generationMode))
+      .toEqual(["preserve-text", "polish-text", "polish-text"]);
+
+    for (const work of scheduled) await work();
+    expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
+    expect(prisma.__state.projects[1]?.bodyHtml).toBe("");
+    expect(prisma.__state.projects[1]?.captionText).toContain("第一次用就回不去了");
+    // 标签前导 # 在归一化时去掉
+    expect(prisma.__state.projects[1]?.tagsJson).toEqual(["咖啡机", "居家好物", "夏日饮品"]);
+    expect(prisma.__state.projects.map((row) => row.status)).toEqual(["ready", "ready", "ready"]);
   });
 
   it("falls back to preserved source body when preserve-text planning rewrites the正文", async () => {
