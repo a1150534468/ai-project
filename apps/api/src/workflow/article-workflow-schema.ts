@@ -40,6 +40,21 @@ export const articleWorkflowPlanSchema = z.object({
   })).min(1).max(5),
 });
 
+/**
+ * caption 计划：字数上限收得比平台硬限制宽，让 LLM 的轻微超标先落地，
+ * 再由 normalizeArticleWorkflowCaptionPlan 按平台裁剪——超字数重跑的钱不该由用户出。
+ */
+export const articleWorkflowCaptionPlanSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  captionText: z.string().trim().min(1).max(20_000),
+  tags: articleWorkflowTagsSchema,
+  images: z.array(articleWorkflowImageManifestItemSchema.omit({
+    assetId: true,
+    imageUrl: true,
+    thumbnailUrl: true,
+  })).min(1).max(5),
+});
+
 export const createArticleWorkflowProjectSchema = z.object({
   sourceFormat: sourceFormatSchema,
   sourceText: z.string().trim().min(1).max(ARTICLE_MAX_SOURCE_LENGTH),
@@ -71,6 +86,7 @@ export const regenerateArticleWorkflowImageSchema = z.object({
 });
 
 export type ArticleWorkflowPlan = z.infer<typeof articleWorkflowPlanSchema>;
+export type ArticleWorkflowCaptionPlan = z.infer<typeof articleWorkflowCaptionPlanSchema>;
 export type CreateArticleWorkflowProjectInput = z.infer<typeof createArticleWorkflowProjectSchema>;
 export type ArticleWorkflowProjectParams = z.infer<typeof articleWorkflowProjectParamsSchema>;
 export type ArticleWorkflowImageParams = z.infer<typeof articleWorkflowImageParamsSchema>;
