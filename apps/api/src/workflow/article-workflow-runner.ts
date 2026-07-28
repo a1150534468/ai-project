@@ -24,6 +24,7 @@ import {
   generateArticleWorkflowPlan,
   renderArticleWorkflowBodyHtml,
 } from "./article-workflow-llm.js";
+import { materializeCaptionArticle } from "./article-workflow-runner-caption.js";
 import { readArticleWorkflowProject } from "./article-workflow-serializer.js";
 import type { ArticleProjectRow, ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import { safeErrorMessage } from "./ecom-route-helpers.js";
@@ -81,12 +82,27 @@ function preservedBodyMarkdown(args: {
   });
 }
 
-interface MaterializedArticle {
+export interface MaterializedArticle {
   readonly title: string;
   readonly summary: string;
   readonly bodyHtml: string;
+  /** caption 平台的正文文案；公众号为空串 */
+  readonly captionText: string;
+  /** caption 平台的话题标签；公众号为空数组 */
+  readonly tags: readonly string[];
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
 }
+
+/**
+ * 两条产物链路共用的配图填充器。
+ *
+ * 由 materializeArticleWorkflow 注入，内部已绑好 onCharged 收集器与平台配置——
+ * 图片费回滚清单必须只有一份，caption 链路不允许自己再调一次 populateArticleWorkflowImages。
+ */
+export type PopulateArticleImages = (args: {
+  readonly imageManifest: readonly ArticleWorkflowImageAsset[];
+  readonly onProgress: (completed: number, total: number) => Promise<void>;
+}) => Promise<readonly ArticleWorkflowImageAsset[]>;
 
 async function commitReadyArticleProject(
   prisma: PrismaClient,
@@ -108,6 +124,8 @@ async function commitReadyArticleProject(
     summary: args.result.summary,
     generationMode: args.generationMode,
     bodyHtml: args.result.bodyHtml,
+    captionText: args.result.captionText,
+    tags: args.result.tags,
     imageManifestJson: args.result.imageManifest,
   });
   if (!committed) {
@@ -142,6 +160,8 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly platform: ArticleWorkflowPlatform;
   readonly currentHtml?: string;
+  /** caption 平台改稿时的现有文案，等价于公众号链路的 currentHtml */
+  readonly currentCaption?: string;
   readonly currentImages?: readonly ArticleWorkflowImageAsset[];
   readonly instruction?: string;
   readonly regenerateImages: boolean;
@@ -171,6 +191,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
     units: estimateArticleWorkflowReserveUnits({
       sourceText: args.sourceText,
       currentHtml: args.currentHtml,
+      currentCaption: args.currentCaption,
       instruction: args.instruction,
     }),
     // 落库供 reaper 在进程崩溃后退款；终态写入时清空
@@ -180,53 +201,8 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
       });
     },
     work: async () => {
-      const plan = await generateArticleWorkflowPlan({
-        llm: args.llm,
-        model: args.model,
-        sourceFormat: args.sourceFormat,
-        sourceText: args.sourceText,
-        generationMode: args.generationMode,
-        currentHtml: args.currentHtml,
-        instruction: args.instruction,
-      });
-      const bodyMarkdown = args.generationMode === "preserve-text"
-        ? preservedBodyMarkdown({
-          sourceFormat: args.sourceFormat,
-          sourceText: args.sourceText,
-          currentHtml: args.currentHtml,
-          title: plan.title,
-        })
-        : plan.bodyMarkdown;
-      const bodyVisibleText = articleWorkflowVisibleTextFromMarkdown(bodyMarkdown);
-      const expectedVisibleText = args.generationMode === "preserve-text"
-        ? expectedPreservedVisibleText({
-          sourceFormat: args.sourceFormat,
-          sourceText: args.sourceText,
-          currentHtml: args.currentHtml,
-          title: plan.title,
-        })
-        : "";
-      if (args.generationMode === "preserve-text" && bodyVisibleText !== expectedVisibleText) {
-        throw new Error("原始正文在保留模式下无法稳定还原");
-      }
-
-      let imageManifest = plannedImageManifest(plan.images);
-      if (args.currentImages && args.currentImages.length > 0 && !args.regenerateImages) {
-        imageManifest = mergeArticleImageManifest(imageManifest, args.currentImages);
-      }
-
-      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-        title: plan.title,
-        summary: plan.summary,
-        generationMode: args.generationMode,
-        imageManifestJson: imageManifest,
-        progressStage: "illustrating",
-        progressPercent: 35,
-        progressMessage: "AI 正在生成配图",
-      });
-
-      try {
-        imageManifest = await populateArticleWorkflowImages({
+      const populateImages: PopulateArticleImages = ({ imageManifest, onProgress }) =>
+        populateArticleWorkflowImages({
           prisma: args.prisma,
           billing: args.billing,
           fetchFn: args.fetchFn,
@@ -237,45 +213,28 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
           platformConfig,
           force: args.regenerateImages,
           onCharged: (operationId) => chargedImageOperationIds.push(operationId),
-          onProgress: async (completed, total) => {
-            await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-              title: plan.title,
-              summary: plan.summary,
-              generationMode: args.generationMode,
-              imageManifestJson: imageManifest,
-              progressStage: "illustrating",
-              progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 35),
-              progressMessage: `正在生成配图（${completed}/${total}）`,
-            });
-          },
+          onProgress,
         });
 
-        await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-          progressStage: "layout",
-          progressPercent: 80,
-          progressMessage: "AI 正在排版正文",
-          imageManifestJson: imageManifest,
-        });
-
-        const rawHtml = await renderArticleWorkflowBodyHtml({
-          llm: args.llm,
-          model: args.model,
-          bodyMarkdown,
-          imageManifest,
-        });
-        const guardedHtml = assertArticleWorkflowHtmlFragment({
-          html: rawHtml,
-          expectedVisibleText: bodyVisibleText,
-          requiredImageSlots: imageManifest.map((item) => item.slot),
-        });
-        const bodyHtml = applyArticleImageManifestToHtml(guardedHtml, imageManifest);
-
-        return {
-          title: plan.title,
-          summary: plan.summary,
-          bodyHtml,
-          imageManifest,
-        };
+      try {
+        if (platformConfig.outputKind === "caption") {
+          return await materializeCaptionArticle({
+            prisma: args.prisma,
+            llm: args.llm,
+            model: args.model,
+            projectId: args.projectId,
+            platform: args.platform,
+            platformConfig,
+            sourceFormat: args.sourceFormat,
+            sourceText: args.sourceText,
+            currentCaption: args.currentCaption,
+            currentImages: args.currentImages,
+            regenerateImages: args.regenerateImages,
+            instruction: args.instruction,
+            populateImages,
+          });
+        }
+        return await materializeHtmlFragmentArticle({ ...args, populateImages });
       } catch (error) {
         // 整单失败：已扣的图片费逐个退回（billing 按 operationId 幂等），再重抛给外层置 failed
         await refundChargedImages();
@@ -283,6 +242,109 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
       }
     },
   });
+}
+
+async function materializeHtmlFragmentArticle(args: RunnerDeps & {
+  readonly userId: string;
+  readonly projectId: string;
+  readonly sourceFormat: ArticleWorkflowSourceFormat;
+  readonly sourceText: string;
+  readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly currentHtml?: string;
+  readonly currentImages?: readonly ArticleWorkflowImageAsset[];
+  readonly instruction?: string;
+  readonly regenerateImages: boolean;
+  readonly model: string;
+  readonly populateImages: PopulateArticleImages;
+}): Promise<MaterializedArticle> {
+  const plan = await generateArticleWorkflowPlan({
+    llm: args.llm,
+    model: args.model,
+    sourceFormat: args.sourceFormat,
+    sourceText: args.sourceText,
+    generationMode: args.generationMode,
+    currentHtml: args.currentHtml,
+    instruction: args.instruction,
+  });
+  const bodyMarkdown = args.generationMode === "preserve-text"
+    ? preservedBodyMarkdown({
+      sourceFormat: args.sourceFormat,
+      sourceText: args.sourceText,
+      currentHtml: args.currentHtml,
+      title: plan.title,
+    })
+    : plan.bodyMarkdown;
+  const bodyVisibleText = articleWorkflowVisibleTextFromMarkdown(bodyMarkdown);
+  const expectedVisibleText = args.generationMode === "preserve-text"
+    ? expectedPreservedVisibleText({
+      sourceFormat: args.sourceFormat,
+      sourceText: args.sourceText,
+      currentHtml: args.currentHtml,
+      title: plan.title,
+    })
+    : "";
+  if (args.generationMode === "preserve-text" && bodyVisibleText !== expectedVisibleText) {
+    throw new Error("原始正文在保留模式下无法稳定还原");
+  }
+
+  let imageManifest = plannedImageManifest(plan.images);
+  if (args.currentImages && args.currentImages.length > 0 && !args.regenerateImages) {
+    imageManifest = mergeArticleImageManifest(imageManifest, args.currentImages);
+  }
+
+  await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+    title: plan.title,
+    summary: plan.summary,
+    generationMode: args.generationMode,
+    imageManifestJson: imageManifest,
+    progressStage: "illustrating",
+    progressPercent: 35,
+    progressMessage: "AI 正在生成配图",
+  });
+
+  imageManifest = await args.populateImages({
+    imageManifest,
+    onProgress: async (completed, total) => {
+      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+        title: plan.title,
+        summary: plan.summary,
+        generationMode: args.generationMode,
+        imageManifestJson: imageManifest,
+        progressStage: "illustrating",
+        progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 35),
+        progressMessage: `正在生成配图（${completed}/${total}）`,
+      });
+    },
+  });
+
+  await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+    progressStage: "layout",
+    progressPercent: 80,
+    progressMessage: "AI 正在排版正文",
+    imageManifestJson: imageManifest,
+  });
+
+  const rawHtml = await renderArticleWorkflowBodyHtml({
+    llm: args.llm,
+    model: args.model,
+    bodyMarkdown,
+    imageManifest,
+  });
+  const guardedHtml = assertArticleWorkflowHtmlFragment({
+    html: rawHtml,
+    expectedVisibleText: bodyVisibleText,
+    requiredImageSlots: imageManifest.map((item) => item.slot),
+  });
+  const bodyHtml = applyArticleImageManifestToHtml(guardedHtml, imageManifest);
+
+  return {
+    title: plan.title,
+    summary: plan.summary,
+    bodyHtml,
+    captionText: "",
+    tags: [],
+    imageManifest,
+  };
 }
 
 export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
@@ -306,11 +368,12 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
     await materializeArticleWorkflow({
       ...args,
       currentHtml: "",
+      currentCaption: "",
       currentImages: [],
       instruction: "",
       regenerateImages: true,
       commit: (result) => commitReadyArticleProject(args.prisma, args.projectId, {
-        progressMessage: "已生成完成",
+        progressMessage: captionPlatform ? "文案已生成" : "已生成完成",
         generationMode: args.generationMode,
         result,
       }),
@@ -350,9 +413,10 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       sourceText: current.sourceText,
       platform,
       currentHtml: current.bodyHtml,
+      currentCaption: current.captionText,
       currentImages: current.imageManifest,
       commit: (result) => commitReadyArticleProject(args.prisma, args.project.id, {
-        progressMessage: "改稿完成",
+        progressMessage: captionPlatform ? "文案已更新" : "改稿完成",
         generationMode: args.generationMode,
         result,
       }),
