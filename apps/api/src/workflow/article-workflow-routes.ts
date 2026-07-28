@@ -2,6 +2,7 @@ import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type { FastifyInstance } from "fastify";
+import { articleWorkflowPlatformConfig } from "@ai-assistant/article-workflow";
 import { canRecoverArticleProject, DEFAULT_ARTICLE_MODEL, scheduledRunner, ARTICLE_HISTORY_LIMIT, type ArticleWorkflowBilling, type ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import {
   articleWorkflowImageParamsSchema,
@@ -79,6 +80,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       sourceFormat: parsed.data.sourceFormat,
       sourceText: parsed.data.sourceText,
       generationMode: parsed.data.generationMode,
+      platform: "wechat",
       model,
     }));
 
@@ -213,6 +215,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
           ...target,
           prompt: parsed.data.promptOverride?.trim() || target.prompt,
         },
+        platformConfig: articleWorkflowPlatformConfig(current.platform),
       });
       const nextManifest = current.imageManifest.map((image) => image.slot === target.slot ? nextImage : image);
       const nextHtml = applyArticleImageManifestToHtml(current.bodyHtml, nextManifest);

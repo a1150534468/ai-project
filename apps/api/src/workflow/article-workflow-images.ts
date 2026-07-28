@@ -3,13 +3,12 @@ import type { PrismaClient } from "@prisma/client";
 import type {
   ArticleWorkflowImageAsset,
   ArticleWorkflowImageSlot,
+  ArticleWorkflowPlatformConfig,
 } from "@ai-assistant/article-workflow";
 import { callImageGeneration, loadImageGenerationConfig, storeWorkflowImage } from "./image-service.js";
 import { imageGenerationResourceKey, imageResolutionFromSize } from "./image-upstream-options.js";
 import {
-  ARTICLE_COVER_IMAGE_SIZE,
   ARTICLE_IMAGE_BATCH_SIZE,
-  ARTICLE_INLINE_IMAGE_SIZE,
   type ArticleWorkflowBilling,
   type FetchLike,
 } from "./article-workflow-shared.js";
@@ -20,8 +19,13 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return groups;
 }
 
-function imageSize(slot: ArticleWorkflowImageSlot): string {
-  return slot === "cover" ? ARTICLE_COVER_IMAGE_SIZE : ARTICLE_INLINE_IMAGE_SIZE;
+function imageSize(slot: ArticleWorkflowImageSlot, platformConfig: ArticleWorkflowPlatformConfig): string {
+  return slot === "cover" ? platformConfig.coverSize : platformConfig.inlineSize;
+}
+
+function fallbackAlt(slot: ArticleWorkflowImageSlot, platformConfig: ArticleWorkflowPlatformConfig): string {
+  if (platformConfig.outputKind === "caption") return slot === "cover" ? "封面图" : "配图";
+  return slot === "cover" ? "公众号头图" : "正文配图";
 }
 
 export async function generateArticleWorkflowImageAsset(args: {
@@ -32,13 +36,15 @@ export async function generateArticleWorkflowImageAsset(args: {
   readonly userId: string;
   readonly projectId: string;
   readonly image: ArticleWorkflowImageAsset;
+  /** 平台配置，决定封面/内页尺寸与 alt 兜底文案。 */
+  readonly platformConfig: ArticleWorkflowPlatformConfig;
   /**
    * 整图成功后上报扣款 operationId，供调用方在「整单后续步骤失败」时回滚。
    * 失败路径下方已自行退款，不上报。
    */
   readonly onCharged?: (operationId: string) => void;
 }): Promise<ArticleWorkflowImageAsset> {
-  const size = imageSize(args.image.slot);
+  const size = imageSize(args.image.slot, args.platformConfig);
   const operationId = `article-image:${args.projectId}:${args.image.slot}:${randomUUID()}`;
   const requestId = `article:${args.projectId}:${args.image.slot}:${randomUUID()}`;
   await args.billing.chargeResource({
@@ -84,7 +90,7 @@ export async function generateArticleWorkflowImageAsset(args: {
       assetId: asset.id,
       imageUrl: stored.originalUrl,
       thumbnailUrl: stored.thumbnailUrl,
-      alt: args.image.alt.trim() || (args.image.slot === "cover" ? "公众号头图" : "正文配图"),
+      alt: args.image.alt.trim() || fallbackAlt(args.image.slot, args.platformConfig),
     };
   } catch (error) {
     await args.billing.refundResource(operationId).catch(() => undefined);
@@ -100,6 +106,7 @@ export async function populateArticleWorkflowImages(args: {
   readonly userId: string;
   readonly projectId: string;
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
+  readonly platformConfig: ArticleWorkflowPlatformConfig;
   readonly force?: boolean;
   readonly onProgress?: (completed: number, total: number) => Promise<void>;
   /** 逐张上报已扣款 operationId；用回调而非返回值，本函数中途抛错时调用方才拿得到已扣款清单 */
@@ -122,6 +129,7 @@ export async function populateArticleWorkflowImages(args: {
         userId: args.userId,
         projectId: args.projectId,
         image,
+        platformConfig: args.platformConfig,
         onCharged: args.onCharged,
       })
     ));

@@ -1,10 +1,12 @@
 import {
   articleWorkflowMarkdownFromVisibleText,
+  articleWorkflowPlatformConfig,
   articleWorkflowPreservedBodyMarkdown,
   articleWorkflowVisibleTextFromMarkdown,
   articleWorkflowVisibleTextFromSource,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
+  type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import type { PrismaClient } from "@prisma/client";
@@ -138,6 +140,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly platform: ArticleWorkflowPlatform;
   readonly currentHtml?: string;
   readonly currentImages?: readonly ArticleWorkflowImageAsset[];
   readonly instruction?: string;
@@ -146,6 +149,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
   /** 写 ready 终态；返回 false 表示已被 reaper 抢占，reserve 将退款而非结算 */
   readonly commit: (result: MaterializedArticle) => Promise<boolean>;
 }): Promise<MaterializedArticle> {
+  const platformConfig = articleWorkflowPlatformConfig(args.platform);
   // 已扣款的图片 operationId：整单没能交付（抛错或终态被 reaper 抢占）就逐个退回，
   // 收集器放在 work 之外，图片批次自身抛错时也不丢清单
   const chargedImageOperationIds: string[] = [];
@@ -230,6 +234,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
           userId: args.userId,
           projectId: args.projectId,
           imageManifest,
+          platformConfig,
           force: args.regenerateImages,
           onCharged: (operationId) => chargedImageOperationIds.push(operationId),
           onProgress: async (completed, total) => {
@@ -286,14 +291,16 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly platform: ArticleWorkflowPlatform;
   readonly model: string;
 }): Promise<void> {
+  const captionPlatform = articleWorkflowPlatformConfig(args.platform).outputKind === "caption";
   try {
     await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
       status: "generating",
       progressStage: "drafting",
       progressPercent: 12,
-      progressMessage: "AI 正在整理文章",
+      progressMessage: captionPlatform ? "AI 正在写文案" : "AI 正在整理文章",
       error: null,
     });
     await materializeArticleWorkflow({
@@ -324,12 +331,15 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
   readonly model: string;
 }): Promise<void> {
   const current = readArticleWorkflowProject(args.project);
+  // 平台由项目行决定，改稿请求不能换平台
+  const platform = current.platform;
+  const captionPlatform = articleWorkflowPlatformConfig(platform).outputKind === "caption";
   try {
     await updateArticleWorkflowProjectState(args.prisma, args.project.id, {
       status: "revising",
       progressStage: "drafting",
       progressPercent: 15,
-      progressMessage: "AI 正在改稿",
+      progressMessage: captionPlatform ? "AI 正在改文案" : "AI 正在改稿",
       error: null,
     });
     await materializeArticleWorkflow({
@@ -338,6 +348,7 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       projectId: args.project.id,
       sourceFormat: current.sourceFormat,
       sourceText: current.sourceText,
+      platform,
       currentHtml: current.bodyHtml,
       currentImages: current.imageManifest,
       commit: (result) => commitReadyArticleProject(args.prisma, args.project.id, {

@@ -1,10 +1,11 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
-import type {
-  ArticleWorkflowGenerationMode,
-  ArticleWorkflowImageAsset,
-  ArticleWorkflowPlatform,
+import {
+  ARTICLE_WORKFLOW_PLATFORM_CONFIGS,
+  type ArticleWorkflowGenerationMode,
+  type ArticleWorkflowImageAsset,
+  type ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
@@ -13,8 +14,9 @@ export const ARTICLE_SOURCE_PROMPT_BUDGET = 60_000;
 export const ARTICLE_MAX_OUTPUT_TOKENS = 8192;
 export const ARTICLE_TIMEOUT_MS = 120_000;
 export const ARTICLE_HISTORY_LIMIT = 20;
-export const ARTICLE_COVER_IMAGE_SIZE = "1536x864";
-export const ARTICLE_INLINE_IMAGE_SIZE = "1024x768";
+/** 公众号尺寸的兼容别名，真实取值以平台配置为准 */
+export const ARTICLE_COVER_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.coverSize;
+export const ARTICLE_INLINE_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.inlineSize;
 export const ARTICLE_IMAGE_BATCH_SIZE = 2;
 export const ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY = "article_workflow_text_output";
 /** 卡死判定阈值：必须大于单张图片尝试上限（IMAGE_ATTEMPT_TIMEOUT_MS 默认 600s），否则会误杀在跑的项目 */
