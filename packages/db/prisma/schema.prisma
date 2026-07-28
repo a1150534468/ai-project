@@ -887,9 +887,16 @@ model ArticleWorkflowProject {
   sourceFormat      String
   sourceText        String
   generationMode    String   @default("preserve-text")
+  // 产物平台：wechat 出排版 HTML，xiaohongshu / douyin 出文案 + 竖版配图
+  platform          String   @default("wechat")
+  // 一次导入 = 同 batchId 的 N 行；存量行为 null，视为单平台独立批次
+  batchId           String?
   title             String   @default("")
   summary           String   @default("")
   bodyHtml          String   @default("")
+  // caption 平台的正文文案与话题标签；公众号项目保持空值
+  captionText       String   @default("")
+  tagsJson          Json     @default("[]")
   imageManifestJson Json     @default("[]")
   status            String   @default("draft")
   progressStage     String   @default("draft")
@@ -904,6 +911,7 @@ model ArticleWorkflowProject {
 
   @@index([userId, updatedAt])
   @@index([userId, status])
+  @@index([userId, batchId])
 }
 
 model EcomMainImageJob {
