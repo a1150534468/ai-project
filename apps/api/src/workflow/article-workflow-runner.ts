@@ -102,6 +102,12 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
       currentHtml: args.currentHtml,
       instruction: args.instruction,
     }),
+    // 落库供 reaper 在进程崩溃后退款；终态写入时清空
+    onReserved: async (operationId) => {
+      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+        billingOperationId: operationId,
+      });
+    },
     work: async () => {
       const plan = await generateArticleWorkflowPlan({
         llm: args.llm,
@@ -229,6 +235,7 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
       progressPercent: 100,
       progressMessage: "已生成完成",
       error: null,
+      billingOperationId: null,
       title: result.title,
       summary: result.summary,
       generationMode: args.generationMode,
@@ -242,6 +249,7 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
       progressPercent: 100,
       progressMessage: "生成失败",
       error: safeErrorMessage(error),
+      billingOperationId: null,
     }).catch(() => undefined);
   }
 }
@@ -277,6 +285,7 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       progressPercent: 100,
       progressMessage: "改稿完成",
       error: null,
+      billingOperationId: null,
       title: result.title,
       summary: result.summary,
       generationMode: args.generationMode,
@@ -290,6 +299,7 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       progressPercent: 100,
       progressMessage: "改稿失败",
       error: safeErrorMessage(error),
+      billingOperationId: null,
     }).catch(() => undefined);
   }
 }

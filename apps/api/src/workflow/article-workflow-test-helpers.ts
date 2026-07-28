@@ -18,6 +18,7 @@ export type ProjectRow = {
   progressPercent: number;
   progressMessage: string | null;
   error: string | null;
+  billingOperationId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -89,6 +90,13 @@ export function buildArticleWorkflowImageManifest(): readonly ArticleWorkflowIma
   ];
 }
 
+/** Prisma 的 undefined 表示「不改这一列」，桩要保持同样语义，否则稀疏写会把别的列擦成 undefined */
+function assignDefined(row: ProjectRow, data: Partial<ProjectRow>): void {
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) (row as Record<string, unknown>)[key] = value;
+  }
+}
+
 export function createArticleWorkflowPrismaMock(seed?: {
   projects?: ProjectRow[];
   imageAssets?: ImageAssetRow[];
@@ -113,7 +121,8 @@ export function createArticleWorkflowPrismaMock(seed?: {
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<ProjectRow> }) => {
         const row = projects.find((item) => item.id === where.id);
         if (!row) throw new Error("project not found");
-        Object.assign(row, data, { updatedAt: new Date("2026-07-08T06:01:00.000Z") });
+        assignDefined(row, data);
+        row.updatedAt = new Date("2026-07-08T06:01:00.000Z");
         return row;
       }),
     },
@@ -131,6 +140,13 @@ export function createArticleWorkflowPrismaMock(seed?: {
     __state: { projects, imageAssets },
   };
 }
+
+type BillingCallArgs = {
+  operationId: string;
+  userId: string;
+  resourceKey: string;
+  units: number;
+};
 
 function createLlmResponse(text: string) {
   return {
@@ -159,10 +175,10 @@ export async function buildArticleWorkflowApp(args?: {
     createLlmResponse(buildArticleWorkflowHtml()),
   ])];
   const billing = {
-    reserveResource: vi.fn(async () => ({ reserved: 1 })),
-    settleResource: vi.fn(async () => ({ settled: 1 })),
-    chargeResource: vi.fn(async () => ({ charged: 1 })),
-    refundResource: vi.fn(async () => ({ success: true })),
+    reserveResource: vi.fn(async (_args: BillingCallArgs) => ({ reserved: 1 })),
+    settleResource: vi.fn(async (_args: Omit<BillingCallArgs, "userId">) => ({ settled: 1 })),
+    chargeResource: vi.fn(async (_args: BillingCallArgs) => ({ charged: 1 })),
+    refundResource: vi.fn(async (_operationId: string) => ({ success: true })),
     listResourcePrices: vi.fn(async () => ({ data: [...(args?.priceRows ?? [])] })),
   };
   const llm = {

@@ -10,6 +10,11 @@ export async function runReservedArticleTextTask<T>(args: {
   readonly projectId: string;
   readonly units: number;
   readonly work: (operationId: string) => Promise<T>;
+  /**
+   * reserve 成功后立即回调，用于把 operationId 落库。
+   * 落库失败也要走退款路径，所以放在 try 内。
+   */
+  readonly onReserved?: (operationId: string) => Promise<void>;
 }): Promise<T> {
   const operationId = `article-text:${args.projectId}:${randomUUID()}`;
   await args.billing.reserveResource({
@@ -19,6 +24,7 @@ export async function runReservedArticleTextTask<T>(args: {
     units: args.units,
   });
   try {
+    await args.onReserved?.(operationId);
     const result = await args.work(operationId);
     await args.billing.settleResource({
       operationId,

@@ -28,6 +28,7 @@ export async function updateArticleWorkflowProjectState(
     progressPercent: number;
     progressMessage: string | null;
     error: string | null;
+    billingOperationId: string | null;
   }>,
 ) {
   return prisma.articleWorkflowProject.update({
@@ -43,6 +44,7 @@ export async function updateArticleWorkflowProjectState(
       progressPercent: data.progressPercent,
       progressMessage: data.progressMessage,
       error: data.error,
+      billingOperationId: data.billingOperationId,
     },
   });
 }
