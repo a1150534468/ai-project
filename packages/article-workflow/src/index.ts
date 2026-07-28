@@ -1,6 +1,8 @@
 export {
   ARTICLE_WORKFLOW_GENERATION_MODES,
   ARTICLE_WORKFLOW_IMAGE_SLOTS,
+  ARTICLE_WORKFLOW_OUTPUT_KINDS,
+  ARTICLE_WORKFLOW_PLATFORMS,
   ARTICLE_WORKFLOW_PROJECT_STATUSES,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
   type ArticleWorkflowDocument,
@@ -8,9 +10,19 @@ export {
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowImageRole,
   type ArticleWorkflowImageSlot,
+  type ArticleWorkflowOutputKind,
+  type ArticleWorkflowPlatform,
   type ArticleWorkflowProjectStatus,
   type ArticleWorkflowSourceFormat,
 } from "./types.js";
+
+export {
+  ARTICLE_WORKFLOW_PLATFORM_CONFIGS,
+  articleWorkflowPlatformConfig,
+  isCaptionPlatform,
+  resolveArticleWorkflowMode,
+  type ArticleWorkflowPlatformConfig,
+} from "./platforms.js";
 
 export {
   articleWorkflowMarkdownFromVisibleText,
