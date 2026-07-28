@@ -1,14 +1,24 @@
 import { Icon } from "@iconify/react";
-import type { ArticleWorkflowProjectSummary } from "../../workflowArticleApi";
-import { formatArticleWorkflowStatus, formatArticleWorkflowTime } from "./articleWorkflowStudioModel";
+import {
+  shortPlatformLabel,
+  type ArticleWorkflowBatchEntry,
+  type ArticleWorkflowBatchStatus,
+} from "./articleWorkflowBatchModel";
+import { formatArticleWorkflowTime } from "./articleWorkflowStudioModel";
 
 interface ArticleWorkflowHistorySidebarProps {
-  readonly history: readonly ArticleWorkflowProjectSummary[];
-  readonly selectedProjectId: string | null;
+  readonly batches: readonly ArticleWorkflowBatchEntry[];
+  readonly selectedBatchKey: string | null;
   readonly bootstrapping: boolean;
   readonly onNewProject: () => void;
-  readonly onSelectProject: (projectId: string) => void;
+  readonly onSelectBatch: (entry: ArticleWorkflowBatchEntry) => void;
 }
+
+const BATCH_STATUS_TEXT: Record<ArticleWorkflowBatchStatus, string> = {
+  busy: "生成中",
+  ready: "已完成",
+  failed: "失败",
+};
 
 export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySidebarProps) {
   return (
@@ -16,7 +26,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
       <div className="mb-3 flex items-center justify-between gap-3 px-1">
         <div>
           <h2 className="text-sm font-semibold text-[#14151a]">最近项目</h2>
-          <p className="text-xs text-[#8a8f98]">最近 20 条</p>
+          <p className="text-xs text-[#8a8f98]">按导入批次分组</p>
         </div>
         <button
           type="button"
@@ -34,19 +44,19 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
           </div>
         )}
 
-        {!props.bootstrapping && props.history.length === 0 && (
+        {!props.bootstrapping && props.batches.length === 0 && (
           <div className="rounded-[14px] border border-dashed border-[#dbe1ea] bg-[#fafbfe] px-3 py-5 text-sm text-[#667085]">
             还没有生成过图文。
           </div>
         )}
 
-        {props.history.map((item) => {
-          const selected = item.id === props.selectedProjectId;
+        {props.batches.map((item) => {
+          const selected = item.key === props.selectedBatchKey;
           return (
             <button
-              key={item.id}
+              key={item.key}
               type="button"
-              onClick={() => props.onSelectProject(item.id)}
+              onClick={() => props.onSelectBatch(item)}
               className={`rounded-[14px] border px-3 py-3 text-left transition ${
                 selected
                   ? "border-brand bg-[#eef8f5]"
@@ -60,8 +70,18 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
                 </div>
                 <Icon icon="mdi:chevron-right" className="mt-0.5 shrink-0 text-[#98a2b3]" aria-hidden />
               </div>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {item.platforms.map((platform) => (
+                  <span
+                    key={platform}
+                    className="rounded-full bg-[#f2f4f8] px-2 py-0.5 text-[11px] text-[#475467]"
+                  >
+                    {shortPlatformLabel(platform)}
+                  </span>
+                ))}
+              </div>
               <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[#8a8f98]">
-                <span>{formatArticleWorkflowStatus(item.status)}</span>
+                <span>{BATCH_STATUS_TEXT[item.status]}</span>
                 <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
               </div>
             </button>

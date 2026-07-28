@@ -1,9 +1,15 @@
 import { Icon } from "@iconify/react";
-import type { ArticleWorkflowGenerationMode } from "@ai-assistant/article-workflow";
+import type {
+  ArticleWorkflowGenerationMode,
+  ArticleWorkflowPlatform,
+  ArticleWorkflowPlatformConfig,
+} from "@ai-assistant/article-workflow";
 import { useState, type RefObject } from "react";
 import { RippleButton } from "../../motion";
 import type { ArticleWorkflowPricing, ArticleWorkflowProject } from "../../workflowArticleApi";
+import { ArticleWorkflowCaptionEditor } from "./ArticleWorkflowCaptionEditor";
 import { ArticleWorkflowImageAssetPanel } from "./ArticleWorkflowImageAssetPanel";
+import { ArticleWorkflowPlatformTabs } from "./ArticleWorkflowPlatformTabs";
 import { ArticleWorkflowPreview } from "./ArticleWorkflowPreview";
 import { ArticleWorkflowRichEditor } from "./ArticleWorkflowRichEditor";
 import {
@@ -14,9 +20,14 @@ import {
 
 interface ArticleWorkflowEditorProps {
   readonly project: ArticleWorkflowProject;
+  readonly batchProjects: readonly ArticleWorkflowProject[];
+  readonly platformConfig: ArticleWorkflowPlatformConfig;
+  readonly dirtyPlatforms: readonly ArticleWorkflowPlatform[];
   readonly titleDraft: string;
   readonly summaryDraft: string;
   readonly bodyHtmlDraft: string;
+  readonly captionDraft: string;
+  readonly tagsDraft: readonly string[];
   readonly editorSyncKey: string;
   readonly rewriteInstruction: string;
   readonly rewriteGenerationMode: ArticleWorkflowGenerationMode;
@@ -29,14 +40,19 @@ interface ArticleWorkflowEditorProps {
   readonly canSave: boolean;
   readonly canRewrite: boolean;
   readonly previewBodyRef: RefObject<HTMLDivElement | null>;
+  readonly onSelectPlatform: (platform: ArticleWorkflowPlatform) => void;
   readonly onTitleChange: (value: string) => void;
   readonly onSummaryChange: (value: string) => void;
   readonly onBodyHtmlChange: (value: string) => void;
   readonly onBodyBlur: (value: string) => void;
+  readonly onCaptionChange: (value: string) => void;
+  readonly onTagsChange: (value: readonly string[]) => void;
   readonly onSave: () => void;
   readonly onCopyBody: () => void;
   readonly onCopyTitle: () => void;
   readonly onCopySummary: () => void;
+  readonly onCopyCaption: () => void;
+  readonly onCopyTags: () => void;
   readonly onRewriteInstructionChange: (value: string) => void;
   readonly onRewriteGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
   readonly onRewriteRegenerateImagesChange: (value: boolean) => void;
@@ -48,13 +64,21 @@ type CanvasMode = "edit" | "preview";
 
 export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   const [canvasMode, setCanvasMode] = useState<CanvasMode>("edit");
+  const captionPlatform = props.platformConfig.outputKind === "caption";
 
   return (
     <section className="grid gap-4">
+      <ArticleWorkflowPlatformTabs
+        projects={props.batchProjects}
+        activePlatform={props.project.platform}
+        dirtyPlatforms={props.dirtyPlatforms}
+        onSelectPlatform={props.onSelectPlatform}
+      />
+
       <div className="flex flex-col gap-3 rounded-[16px] border border-[#e7e9f0] bg-white px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.05)] xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#eef8f5] px-2.5 py-1 text-[11px] font-semibold text-brand-ink">公众号图文</span>
+            <span className="rounded-full bg-[#eef8f5] px-2.5 py-1 text-[11px] font-semibold text-brand-ink">{props.platformConfig.label}</span>
             <span className="rounded-full bg-[#f5f6fa] px-2.5 py-1 text-[11px] font-semibold text-[#667085]">
               {formatArticleWorkflowStatus(props.project.status)}
             </span>
@@ -74,58 +98,86 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             <Icon icon={props.saving ? "mdi:loading" : "mdi:content-save-outline"} className={props.saving ? "animate-spin" : ""} aria-hidden />
             {props.saving ? "保存中" : "保存修改"}
           </RippleButton>
-          <button type="button" onClick={props.onCopyBody} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-            一键复制到公众号
-          </button>
+          {captionPlatform ? (
+            <>
+              <button type="button" onClick={props.onCopyCaption} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
+                复制文案
+              </button>
+              <button type="button" onClick={props.onCopyTags} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
+                复制标签
+              </button>
+            </>
+          ) : (
+            <button type="button" onClick={props.onCopyBody} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
+              一键复制到公众号
+            </button>
+          )}
           <button type="button" onClick={props.onCopyTitle} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
             复制标题
           </button>
-          <button type="button" onClick={props.onCopySummary} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-            复制摘要
-          </button>
+          {!captionPlatform && (
+            <button type="button" onClick={props.onCopySummary} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
+              复制摘要
+            </button>
+          )}
         </div>
       </div>
 
       <section className="overflow-hidden rounded-[20px] border border-[#e7e9f0] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
         <div className="border-b border-[#edf0f5] px-5 py-4 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="inline-flex rounded-full bg-[#f5f6fa] p-1">
-              {[
-                { key: "edit", label: "编辑" },
-                { key: "preview", label: "预览" },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setCanvasMode(item.key as CanvasMode)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-                    canvasMode === item.key ? "bg-white text-[#14151a] shadow-sm" : "text-[#667085]"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
+          {/* caption 平台没有富文本正文，编辑/预览切换没有意义 */}
+          {!captionPlatform && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="inline-flex rounded-full bg-[#f5f6fa] p-1">
+                {[
+                  { key: "edit", label: "编辑" },
+                  { key: "preview", label: "预览" },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setCanvasMode(item.key as CanvasMode)}
+                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
+                      canvasMode === item.key ? "bg-white text-[#14151a] shadow-sm" : "text-[#667085]"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          <div className="mt-4 grid gap-4">
+          <div className={`grid gap-4 ${captionPlatform ? "" : "mt-4"}`}>
             <input
               value={props.titleDraft}
               onChange={(event) => props.onTitleChange(event.target.value)}
               className="w-full border-0 p-0 text-[28px] font-semibold leading-[1.35] text-[#14151a] outline-none placeholder:text-[#b2b7c2]"
               placeholder="输入标题"
             />
-            <textarea
-              value={props.summaryDraft}
-              onChange={(event) => props.onSummaryChange(event.target.value)}
-              rows={2}
-              className="w-full rounded-[14px] border border-[#e3e7ee] bg-[#fbfcff] px-4 py-3 text-sm leading-6 text-[#344054] outline-none"
-              placeholder="输入摘要"
-            />
+            {!captionPlatform && (
+              <textarea
+                value={props.summaryDraft}
+                onChange={(event) => props.onSummaryChange(event.target.value)}
+                rows={2}
+                className="w-full rounded-[14px] border border-[#e3e7ee] bg-[#fbfcff] px-4 py-3 text-sm leading-6 text-[#344054] outline-none"
+                placeholder="输入摘要"
+              />
+            )}
           </div>
         </div>
 
-        {canvasMode === "edit" ? (
+        {captionPlatform && (
+          <ArticleWorkflowCaptionEditor
+            captionDraft={props.captionDraft}
+            tagsDraft={props.tagsDraft}
+            syncKey={props.editorSyncKey}
+            onCaptionChange={props.onCaptionChange}
+            onTagsChange={props.onTagsChange}
+          />
+        )}
+
+        {!captionPlatform && (canvasMode === "edit" ? (
           <ArticleWorkflowRichEditor
             value={props.bodyHtmlDraft}
             syncKey={props.editorSyncKey}
@@ -138,7 +190,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             previewHtml={props.bodyHtmlDraft}
             previewBodyRef={props.previewBodyRef}
           />
-        )}
+        ))}
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
@@ -160,25 +212,28 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             </label>
           </div>
 
-          <div className="mt-3 flex flex-wrap gap-2">
-            {[
-              { key: "preserve-text", label: "保持原文排版" },
-              { key: "polish-text", label: "AI 润色后排版" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => props.onRewriteGenerationModeChange(item.key as ArticleWorkflowGenerationMode)}
-                className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                  props.rewriteGenerationMode === item.key
-                    ? "bg-brand text-white"
-                    : "bg-[#f5f6fa] text-[#475467]"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+          {/* caption 平台固定重写文案，没有「保持原文」这一档 */}
+          {!captionPlatform && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                { key: "preserve-text", label: "保持原文排版" },
+                { key: "polish-text", label: "AI 润色后排版" },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => props.onRewriteGenerationModeChange(item.key as ArticleWorkflowGenerationMode)}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
+                    props.rewriteGenerationMode === item.key
+                      ? "bg-brand text-white"
+                      : "bg-[#f5f6fa] text-[#475467]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <textarea
             value={props.rewriteInstruction}
@@ -208,6 +263,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
 
         <ArticleWorkflowImageAssetPanel
           imageManifest={props.project.imageManifestJson}
+          platform={props.project.platform}
           regeneratingSlot={props.regeneratingSlot}
           onRegenerateImage={props.onRegenerateImage}
         />

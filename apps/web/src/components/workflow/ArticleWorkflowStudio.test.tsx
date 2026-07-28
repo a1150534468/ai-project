@@ -3,6 +3,20 @@ import { describe, expect, it } from "vitest";
 import { ToastProvider } from "../../motion/Toast";
 import { ArticleWorkflowStudio } from "./ArticleWorkflowStudio";
 
+function buildCaptionProject() {
+  return {
+    ...buildProject(),
+    id: "article-2",
+    platform: "xiaohongshu" as const,
+    generationMode: "polish-text" as const,
+    title: "夏天必囤的咖啡机",
+    summary: "",
+    bodyHtml: "",
+    captionText: "第一次用就回不去了。\n\n出杯快，清洗也简单。",
+    tags: ["咖啡机", "居家好物", "夏日饮品"] as readonly string[],
+  };
+}
+
 function buildProject() {
   return {
     id: "article-1",
@@ -54,10 +68,15 @@ describe("ArticleWorkflowStudio", () => {
       </ToastProvider>,
     );
 
-    expect(html).toContain("公众号图文工作流");
+    expect(html).toContain("多平台图文工作流");
     expect(html).toContain("纯文本");
     expect(html).toContain("Markdown");
-    expect(html).toContain("生成图文");
+    // 三个平台默认全选，按钮上带数量
+    expect(html).toContain("生成 3 个平台图文");
+    expect(html).toContain("微信公众号");
+    expect(html).toContain("小红书");
+    expect(html).toContain("抖音");
+    expect(html).toContain("公众号生成方式");
   });
 
   it("renders the editor state with preview and rewrite controls", () => {
@@ -92,5 +111,33 @@ describe("ArticleWorkflowStudio", () => {
     expect(html).toContain("AI 重新生成");
     expect(html).toContain("配图素材");
     expect(html).toContain("预览");
+    // 公众号封面 1536x864 约到 16:9
+    expect(html).toContain("16:9");
+    expect(html).toContain("下载");
+  });
+
+  it("renders the caption editor for xiaohongshu without html body controls", () => {
+    const project = buildCaptionProject();
+    const html = renderToStaticMarkup(
+      <ToastProvider>
+        <ArticleWorkflowStudio
+          token="token"
+          initialHistory={[]}
+          initialProject={project}
+          initialBootstrapping={false}
+        />
+      </ToastProvider>,
+    );
+
+    expect(html).toContain("小红书");
+    expect(html).toContain("正文文案");
+    expect(html).toContain("第一次用就回不去了。");
+    expect(html).toContain("复制文案");
+    expect(html).toContain("复制标签");
+    expect(html).toContain("#咖啡机");
+    // caption 平台不给 HTML 正文相关入口
+    expect(html).not.toContain("一键复制到公众号");
+    expect(html).not.toContain("复制摘要");
+    expect(html).not.toContain("保持原文排版");
   });
 });

@@ -62,11 +62,22 @@ function plainTextFromHtml(html: string): string {
   return normalizePlainText(parts.join(""));
 }
 
+/** 小红书/抖音的标签按平台习惯拼成 `#标签` 空格分隔 */
+export function articleWorkflowTagsText(tags: readonly string[]): string {
+  return tags
+    .map((tag) => tag.trim().replace(/^#+/, "").trim())
+    .filter(Boolean)
+    .map((tag) => `#${tag}`)
+    .join(" ");
+}
+
 export function createArticleWorkflowCopyActions(args: {
   readonly previewBodyRef: RefObject<HTMLDivElement | null>;
   readonly titleDraft: string;
   readonly summaryDraft: string;
   readonly bodyHtmlDraft: string;
+  readonly captionDraft?: string;
+  readonly tagsDraft?: readonly string[];
   readonly toast: { show: (kind: "ok" | "err", text: string) => void };
   readonly setError: (value: string) => void;
   readonly setNotice: (value: string) => void;
@@ -114,5 +125,30 @@ export function createArticleWorkflowCopyActions(args: {
     }
   };
 
-  return { handleCopyBody, handleCopyTitle, handleCopySummary };
+  const copyPlain = async (value: string, okText: string, failText: string) => {
+    try {
+      await copyArticleWorkflowPlainText(value);
+      args.setError("");
+      args.setNotice(okText);
+      args.toast.show("ok", okText);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : failText;
+      args.setError(message);
+      args.toast.show("err", message);
+    }
+  };
+
+  const handleCopyCaption = () => copyPlain(
+    (args.captionDraft ?? "").trim(),
+    "已复制文案",
+    "复制文案失败",
+  );
+
+  const handleCopyTags = () => copyPlain(
+    articleWorkflowTagsText(args.tagsDraft ?? []),
+    "已复制标签",
+    "复制标签失败",
+  );
+
+  return { handleCopyBody, handleCopyTitle, handleCopySummary, handleCopyCaption, handleCopyTags };
 }
