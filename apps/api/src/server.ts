@@ -34,6 +34,7 @@ import { dubRoutes } from "./workflow/dub-routes.js";
 import { adminDubRoutes } from "./admin/dub-routes.js";
 import { startDubReaper } from "./workflow/dub-reaper.js";
 import { startLocalBusinessPromoRefundReaper } from "./workflow/local-business-promo-refund.js";
+import { startArticleWorkflowReaper } from "./workflow/article-workflow-reaper.js";
 import { loadSkyhumanConfig } from "./workflow/dub-skyhuman-client.js";
 import { finalizeProjectVideo } from "./workflow/dub-project-service.js";
 import { buildAudioPublicUrl } from "./workflow/dub-audio-store.js";
@@ -202,6 +203,12 @@ export async function buildServer() {
     redis: getRedis(),
     billing: createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! }),
   });
+  // 图文项目 reaper：崩溃/重启后把卡在 generating|revising 的项目置 failed 并退文本 reserve
+  const articleWorkflowReaperTimer = startArticleWorkflowReaper({
+    prisma: getPrisma(),
+    redis: getRedis(),
+    billing: createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! }),
+  });
 
   const schedLlm = createLlmClient(loadLlmConfig());
   const schedBilling = createBillingClient({
@@ -271,6 +278,7 @@ export async function buildServer() {
     clearInterval(analyticsTimer);
     if (schedTimer) clearInterval(schedTimer);
     clearInterval(localBusinessPromoRefundReaperTimer);
+    clearInterval(articleWorkflowReaperTimer);
     kbReaper?.stop();
   });
 
