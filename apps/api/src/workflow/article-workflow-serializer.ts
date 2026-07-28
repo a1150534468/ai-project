@@ -1,16 +1,25 @@
 import { Prisma } from "@prisma/client";
-import type {
-  ArticleWorkflowGenerationMode,
-  ArticleWorkflowImageAsset,
-  ArticleWorkflowProjectStatus,
-  ArticleWorkflowSourceFormat,
+import {
+  articleWorkflowPlatformConfig,
+  type ArticleWorkflowGenerationMode,
+  type ArticleWorkflowImageAsset,
+  type ArticleWorkflowProjectStatus,
+  type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
-import { articleWorkflowImageManifestItemSchema } from "./article-workflow-schema.js";
+import {
+  articleWorkflowImageManifestItemSchema,
+  articleWorkflowTagsSchema,
+} from "./article-workflow-schema.js";
 import type { ArticleProjectRow, ArticleWorkflowPersistedProject } from "./article-workflow-shared.js";
 
 function fallbackTitle(value: string): string {
   const trimmed = value.trim();
   return trimmed || "未命名图文";
+}
+
+export function parseArticleWorkflowTagsJson(value: unknown): readonly string[] {
+  const parsed = articleWorkflowTagsSchema.safeParse(value);
+  return parsed.success ? parsed.data : [];
 }
 
 export function jsonValue(value: unknown): Prisma.InputJsonValue {
@@ -32,9 +41,13 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
     sourceFormat: row.sourceFormat as ArticleWorkflowSourceFormat,
     sourceText: row.sourceText,
     generationMode: row.generationMode as ArticleWorkflowGenerationMode,
+    platform: articleWorkflowPlatformConfig(row.platform).platform,
+    batchId: row.batchId,
     title: fallbackTitle(row.title),
     summary: row.summary.trim(),
     bodyHtml: row.bodyHtml.trim(),
+    captionText: row.captionText.trim(),
+    tags: parseArticleWorkflowTagsJson(row.tagsJson),
     imageManifest: parseArticleWorkflowImageManifestJson(row.imageManifestJson),
     status: row.status,
     progressStage: row.progressStage,
@@ -51,6 +64,8 @@ export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
     title: project.title,
     summary: project.summary,
     generationMode: project.generationMode,
+    platform: project.platform,
+    batchId: project.batchId,
     status: project.status as ArticleWorkflowProjectStatus,
     progressStage: project.progressStage,
     progressPercent: project.progressPercent,
@@ -68,6 +83,8 @@ export function serializeArticleWorkflowProject(row: ArticleProjectRow) {
     sourceFormat: project.sourceFormat,
     sourceText: project.sourceText,
     bodyHtml: project.bodyHtml,
+    captionText: project.captionText,
+    tags: project.tags,
     imageManifestJson: project.imageManifest,
   };
 }

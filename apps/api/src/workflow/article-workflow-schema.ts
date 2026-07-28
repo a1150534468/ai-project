@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ARTICLE_WORKFLOW_GENERATION_MODES,
   ARTICLE_WORKFLOW_IMAGE_SLOTS,
+  ARTICLE_WORKFLOW_PLATFORMS,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_MAX_SOURCE_LENGTH } from "./article-workflow-shared.js";
@@ -9,6 +10,13 @@ import { ARTICLE_MAX_SOURCE_LENGTH } from "./article-workflow-shared.js";
 const sourceFormatSchema = z.enum(ARTICLE_WORKFLOW_SOURCE_FORMATS);
 const generationModeSchema = z.enum(ARTICLE_WORKFLOW_GENERATION_MODES);
 const imageSlotSchema = z.enum(ARTICLE_WORKFLOW_IMAGE_SLOTS);
+export const articleWorkflowPlatformSchema = z.enum(ARTICLE_WORKFLOW_PLATFORMS);
+
+/** 话题标签：统一去掉前导 #，长度与数量取三平台里最宽的上限，具体裁剪交给平台归一化。 */
+export const articleWorkflowTagsSchema = z
+  .array(z.string().trim().min(1).max(40))
+  .max(8)
+  .default([]);
 
 export const articleWorkflowImageManifestItemSchema = z.object({
   slot: imageSlotSchema,

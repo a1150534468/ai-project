@@ -9,9 +9,13 @@ export type ProjectRow = {
   sourceFormat: string;
   sourceText: string;
   generationMode: string;
+  platform: string;
+  batchId: string | null;
   title: string;
   summary: string;
   bodyHtml: string;
+  captionText: string;
+  tagsJson: unknown;
   imageManifestJson: unknown;
   status: string;
   progressStage: string;
@@ -97,30 +101,70 @@ function assignDefined(row: ProjectRow, data: Partial<ProjectRow>): void {
   }
 }
 
+/** 列默认值的唯一来源，对齐 schema.prisma；create 与 seed 都过它。 */
+const PROJECT_ROW_DEFAULTS = {
+  generationMode: "preserve-text",
+  platform: "wechat",
+  batchId: null,
+  title: "",
+  summary: "",
+  bodyHtml: "",
+  captionText: "",
+  tagsJson: [] as unknown,
+  imageManifestJson: [] as unknown,
+  status: "draft",
+  progressStage: "draft",
+  progressPercent: 0,
+  progressMessage: null,
+  error: null,
+} satisfies Partial<ProjectRow>;
+
+export type ArticleProjectRowSeed =
+  Partial<ProjectRow> & Pick<ProjectRow, "id" | "userId" | "sourceFormat" | "sourceText" | "createdAt" | "updatedAt">;
+
+export function articleProjectRow(seed: ArticleProjectRowSeed): ProjectRow {
+  return { ...PROJECT_ROW_DEFAULTS, ...seed };
+}
+
 export function createArticleWorkflowPrismaMock(seed?: {
-  projects?: ProjectRow[];
+  projects?: readonly ArticleProjectRowSeed[];
   imageAssets?: ImageAssetRow[];
 }) {
-  const projects = [...(seed?.projects ?? [])];
+  const projects = (seed?.projects ?? []).map((row) => articleProjectRow(row));
   const imageAssets = [...(seed?.imageAssets ?? [])];
   const now = new Date("2026-07-08T06:00:00.000Z");
   return {
     articleWorkflowProject: {
-      create: vi.fn(async ({ data }: { data: Omit<ProjectRow, "id" | "createdAt" | "updatedAt"> }) => {
-        const row: ProjectRow = { ...data, id: `article-${projects.length + 1}`, createdAt: now, updatedAt: now };
+      create: vi.fn(async ({ data }: {
+        data: Partial<ProjectRow> & Pick<ProjectRow, "userId" | "sourceFormat" | "sourceText">;
+      }) => {
+        // 路由不传的列由库补默认，mock 也得补，否则序列化时 row.captionText.trim() 会炸。
+        const row = articleProjectRow({
+          ...data,
+          id: `article-${projects.length + 1}`,
+          createdAt: now,
+          updatedAt: now,
+        });
         projects.push(row);
         return row;
       }),
-      findMany: vi.fn(async ({ where, take }: {
-        where?: { userId?: string; status?: { in: string[] }; updatedAt?: { lt?: Date } };
+      findMany: vi.fn(async ({ where, take, orderBy }: {
+        where?: { userId?: string; batchId?: string; status?: { in: string[] }; updatedAt?: { lt?: Date } };
         take?: number;
-      }) =>
-        projects
+        orderBy?: { createdAt?: "asc" | "desc"; updatedAt?: "asc" | "desc" };
+      }) => {
+        const rows = projects
           .filter((row) => !where?.userId || row.userId === where.userId)
+          .filter((row) => where?.batchId === undefined || row.batchId === where.batchId)
           .filter((row) => !where?.status || where.status.in.includes(row.status))
-          .filter((row) => !where?.updatedAt?.lt || row.updatedAt.getTime() < where.updatedAt.lt.getTime())
-          .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
-          .slice(0, take ?? projects.length)),
+          .filter((row) => !where?.updatedAt?.lt || row.updatedAt.getTime() < where.updatedAt.lt.getTime());
+        const ascending = orderBy?.createdAt === "asc" || orderBy?.updatedAt === "asc";
+        const key = orderBy?.createdAt ? "createdAt" : "updatedAt";
+        rows.sort((left, right) => ascending
+          ? left[key].getTime() - right[key].getTime()
+          : right[key].getTime() - left[key].getTime());
+        return rows.slice(0, take ?? rows.length);
+      }),
       findFirst: vi.fn(async ({ where }: { where: { id?: string; userId?: string } }) =>
         projects.find((row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId)) ?? null),
       updateMany: vi.fn(async ({ where, data }: {

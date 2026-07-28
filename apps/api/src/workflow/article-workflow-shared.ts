@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import type {
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
+  ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
@@ -81,9 +82,13 @@ export interface ArticleWorkflowPersistedProject {
   readonly sourceFormat: "plain-text" | "markdown";
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly platform: ArticleWorkflowPlatform;
+  readonly batchId: string | null;
   readonly title: string;
   readonly summary: string;
   readonly bodyHtml: string;
+  readonly captionText: string;
+  readonly tags: readonly string[];
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
   readonly status: string;
   readonly progressStage: string;

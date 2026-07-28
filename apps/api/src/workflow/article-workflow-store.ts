@@ -19,6 +19,8 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   summary: string;
   generationMode: ArticleWorkflowGenerationMode;
   bodyHtml: string;
+  captionText: string;
+  tags: readonly string[];
   imageManifestJson: readonly ArticleWorkflowImageAsset[];
   status: ArticleWorkflowProjectStatus;
   progressStage: string;
@@ -27,6 +29,28 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   error: string | null;
   billingOperationId: string | null;
 }>;
+
+/**
+ * patch → Prisma data 的唯一转换点。
+ * undefined 一律保持 undefined（Prisma 语义 = 不动该列），不要在这里补默认值。
+ */
+function articleWorkflowStateData(data: ArticleWorkflowProjectStatePatch) {
+  return {
+    title: data.title,
+    summary: data.summary,
+    generationMode: data.generationMode,
+    bodyHtml: data.bodyHtml,
+    captionText: data.captionText,
+    tagsJson: data.tags ? jsonValue(data.tags) : undefined,
+    imageManifestJson: data.imageManifestJson ? jsonValue(data.imageManifestJson) : undefined,
+    status: data.status,
+    progressStage: data.progressStage,
+    progressPercent: data.progressPercent,
+    progressMessage: data.progressMessage,
+    error: data.error,
+    billingOperationId: data.billingOperationId,
+  };
+}
 
 /**
  * 终态写入的受保护变体：只在项目仍处于 generating|revising 时生效。
@@ -40,19 +64,7 @@ export async function finalizeArticleWorkflowProjectState(
 ): Promise<boolean> {
   const result = await prisma.articleWorkflowProject.updateMany({
     where: { id: projectId, status: { in: ["generating", "revising"] } },
-    data: {
-      title: data.title,
-      summary: data.summary,
-      generationMode: data.generationMode,
-      bodyHtml: data.bodyHtml,
-      imageManifestJson: data.imageManifestJson ? jsonValue(data.imageManifestJson) : undefined,
-      status: data.status,
-      progressStage: data.progressStage,
-      progressPercent: data.progressPercent,
-      progressMessage: data.progressMessage,
-      error: data.error,
-      billingOperationId: data.billingOperationId,
-    },
+    data: articleWorkflowStateData(data),
   });
   return result.count === 1;
 }
@@ -60,34 +72,10 @@ export async function finalizeArticleWorkflowProjectState(
 export async function updateArticleWorkflowProjectState(
   prisma: PrismaClient,
   projectId: string,
-  data: Partial<{
-    title: string;
-    summary: string;
-    generationMode: ArticleWorkflowGenerationMode;
-    bodyHtml: string;
-    imageManifestJson: readonly ArticleWorkflowImageAsset[];
-    status: ArticleWorkflowProjectStatus;
-    progressStage: string;
-    progressPercent: number;
-    progressMessage: string | null;
-    error: string | null;
-    billingOperationId: string | null;
-  }>,
+  data: ArticleWorkflowProjectStatePatch,
 ) {
   return prisma.articleWorkflowProject.update({
     where: { id: projectId },
-    data: {
-      title: data.title,
-      summary: data.summary,
-      generationMode: data.generationMode,
-      bodyHtml: data.bodyHtml,
-      imageManifestJson: data.imageManifestJson ? jsonValue(data.imageManifestJson) : undefined,
-      status: data.status,
-      progressStage: data.progressStage,
-      progressPercent: data.progressPercent,
-      progressMessage: data.progressMessage,
-      error: data.error,
-      billingOperationId: data.billingOperationId,
-    },
+    data: articleWorkflowStateData(data),
   });
 }
