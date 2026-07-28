@@ -1,4 +1,5 @@
 import { requestWorkflowEcom } from "./workflowEcomApi";
+import type { ImageModel } from "./workflowState";
 
 export type EcomMainRatio = "1:1" | "3:4" | "4:5" | "16:9" | "9:16";
 export type EcomMainResolution = "1K" | "2K" | "4K";
@@ -22,6 +23,7 @@ export type EcomMainJob = {
   readonly language: string;
   readonly ratio: EcomMainRatio;
   readonly resolution: EcomMainResolution;
+  readonly model: string | null;
   readonly style: EcomMainStyleId;
   readonly customStyle: string;
   readonly withText: boolean;
@@ -44,6 +46,7 @@ export type CreateEcomMainPayload = {
   readonly platformId: string;
   readonly ratio: EcomMainRatio;
   readonly resolution: EcomMainResolution;
+  readonly model?: ImageModel;
   readonly style: EcomMainStyleId;
   readonly customStyle: string;
   readonly withText: boolean;
@@ -52,8 +55,9 @@ export type CreateEcomMainPayload = {
   readonly referenceAssetIds: readonly string[];
 };
 
-export function getEcomMainPricing(token: string): Promise<EcomMainPricing> {
-  return requestWorkflowEcom<EcomMainPricing>({ token, path: "/api/workflow/ecom/main/pricing", method: "GET", fallback: "获取电商主图计价失败" });
+export function getEcomMainPricing(token: string, model?: ImageModel): Promise<EcomMainPricing> {
+  const path = model ? `/api/workflow/ecom/main/pricing?model=${encodeURIComponent(model)}` : "/api/workflow/ecom/main/pricing";
+  return requestWorkflowEcom<EcomMainPricing>({ token, path, method: "GET", fallback: "获取电商主图计价失败" });
 }
 
 export function getCurrentEcomMainJob(token: string): Promise<{ readonly job: EcomMainJob | null }> {

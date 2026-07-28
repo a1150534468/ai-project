@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "../api.js";
 import { useToast, errMsg, Field, Modal, useConfirm, Pill } from "../ui.js";
 import { can, loadSession } from "../auth.js";
@@ -8,7 +8,13 @@ export function UsersPage() {
   const session = loadSession();
   const [rows, setRows] = useState<api.AdminUser[]>([]);
   const [q, setQ] = useState("");
+  // 翻页/刷新用已提交的搜索词，避免输入框未提交的内容悄悄改变查询
+  const [committedQ, setCommittedQ] = useState("");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize] = useState(20);
   const [loading, setLoading] = useState(false);
+  const loadSeqRef = useRef(0);
   const [adjusting, setAdjusting] = useState(false);
   const { show, node: toastNode } = useToast();
   const { confirm, node: confirmNode } = useConfirm();
@@ -26,13 +32,26 @@ export function UsersPage() {
   const canViewFullDetail = can(session, "USER_DETAIL_VIEW");
   const canViewBillingLog = can(session, "USER_BILLING_LOG_VIEW") || canViewFullDetail;
 
-  const load = async () => {
+  const load = async (targetPage = page, term = committedQ) => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
-    try { setRows(await api.listUsers(q || undefined)); }
-    catch (e) { show(errMsg(e), "err"); }
-    finally { setLoading(false); }
+    try {
+      let r = await api.listUsers(term || undefined, targetPage, pageSize);
+      // 页码越界（如数据被删导致总数缩水）时回退到最后一页
+      if (r.rows.length === 0 && r.total > 0 && r.page > 1) {
+        r = await api.listUsers(term || undefined, Math.max(1, Math.ceil(r.total / pageSize)), pageSize);
+      }
+      if (seq !== loadSeqRef.current) return; // 期间发起了更新的请求，丢弃过期结果
+      setRows(r.rows);
+      setTotal(r.total);
+      setPage(r.page);
+      setCommittedQ(term);
+    }
+    catch (e) { if (seq === loadSeqRef.current) show(errMsg(e), "err"); }
+    finally { if (seq === loadSeqRef.current) setLoading(false); }
   };
   useEffect(() => { void load(); /* eslint-disable-next-line */ }, []);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   const ban = async (u: api.AdminUser, banned: boolean) => {
     const action = banned ? "解封" : "封禁";
@@ -90,8 +109,8 @@ export function UsersPage() {
       {toastNode}
       {confirmNode}
       <div className="row">
-        <input placeholder="按 UID / 用户名搜索" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load()} />
-        <button className="btn" onClick={load} disabled={loading}>{loading ? "加载中…" : "搜索"}</button>
+        <input placeholder="按 UID / 用户名搜索" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => e.key === "Enter" && load(1, q)} />
+        <button className="btn" onClick={() => load(1, q)} disabled={loading}>{loading ? "加载中…" : "搜索"}</button>
         <CreateUser onDone={() => { show("已创建"); void load(); }} onErr={(m) => show(m, "err")} />
       </div>
       <table>
@@ -118,6 +137,11 @@ export function UsersPage() {
           {rows.length === 0 && <tr><td colSpan={6} className="muted">无数据</td></tr>}
         </tbody>
       </table>
+      <div className="row" style={{ alignItems: "center", gap: 8 }}>
+        <button className="btn ghost sm" onClick={() => load(page - 1)} disabled={loading || page <= 1}>上一页</button>
+        <span className="muted">第 {page} / {totalPages} 页 · 共 {total} 人</span>
+        <button className="btn ghost sm" onClick={() => load(page + 1)} disabled={loading || page >= totalPages}>下一页</button>
+      </div>
 
       <Modal open={!!adjustModal} title={adjustModal ? `调整余额 - ${adjustModal.username}` : ""} onClose={() => setAdjustModal(null)}
         footer={

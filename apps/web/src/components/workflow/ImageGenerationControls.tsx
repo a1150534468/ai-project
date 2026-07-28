@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { Icon } from "@iconify/react";
-import { RippleButton } from "../../motion";
 import { InAppSelect } from "../agent-teams/InAppSelect";
+import { SubmitCostBar } from "./SubmitCostBar";
 import type { WorkflowImageAsset } from "../../api";
 import {
   IMAGE_ASPECT_RATIO_OPTIONS,
@@ -221,23 +221,12 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
         {props.notice && !props.error && <p className="mt-4 rounded-lg bg-brand-soft px-3 py-2 text-sm text-brand-ink">{props.notice}</p>}
       </div>
 
-      <div className="sticky bottom-0 z-10 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
-        <div className="mb-2 flex min-h-5 items-center justify-between gap-3 text-xs font-semibold text-[#6e6e73]">
-          <span>预计消耗</span>
-          <span className="inline-flex items-center gap-1 text-[#1d1d1f]">
-            <Icon icon="mdi:diamond-stone" className="text-sm text-brand-ink" aria-hidden />
-            {props.estimatedPointCost === null ? "--" : `${props.estimatedPointCost} 算力点`}
-          </span>
-        </div>
-        <RippleButton
-          type="button"
-          onClick={props.onSubmit}
-          className="h-11 w-full rounded-lg bg-brand text-sm font-semibold text-white"
-        >
-          <Icon icon={props.isEditing ? "mdi:source-branch" : "mdi:image-plus-outline"} className="mr-2 text-lg" aria-hidden />
-          {props.isEditing ? "生成新版本" : "生成图片"}
-        </RippleButton>
-      </div>
+      <SubmitCostBar
+        estimatedPointCost={props.estimatedPointCost}
+        submitLabel={props.isEditing ? "生成新版本" : "生成图片"}
+        submitIcon={props.isEditing ? "mdi:source-branch" : "mdi:image-plus-outline"}
+        onSubmit={props.onSubmit}
+      />
     </aside>
   );
 }

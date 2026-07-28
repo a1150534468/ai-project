@@ -17,6 +17,8 @@ interface ImageRow {
   thumbnailUrl: string;
   objectKey: string | null;
   mime: string;
+  width?: number | null;
+  height?: number | null;
   createdAt: Date;
 }
 
@@ -34,6 +36,11 @@ interface ImageTaskRow {
   status: string;
   completedCount: number;
   error: string | null;
+  billingMode?: string;
+  billingResourceKey?: string | null;
+  billingReservedUnits?: number;
+  billingSettledUnits?: number | null;
+  billingStatus?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -114,16 +121,39 @@ function createPrismaMock(rows: ImageRow[] = [], tasks: ImageTaskRow[] = []) {
         Object.assign(row, args.data, { updatedAt: new Date("2026-06-30T08:01:00.000Z") });
         return row;
       }),
-      updateMany: vi.fn(async (args: { where: { id?: string; userId?: string; requestId?: string; status?: string; updatedAt?: Date }; data: Partial<ImageTaskRow> }) => {
+      updateMany: vi.fn(async (args: {
+        where: {
+          id?: string;
+          userId?: string;
+          requestId?: string;
+          status?: string;
+          billingStatus?: string | { in?: readonly string[] };
+          updatedAt?: Date | { lt?: Date };
+        };
+        data: Partial<ImageTaskRow>;
+      }) => {
+        const matchesBillingStatus = (row: ImageTaskRow) => {
+          const filter = args.where.billingStatus;
+          if (filter === undefined) return true;
+          if (typeof filter === "string") return row.billingStatus === filter;
+          return Boolean(filter.in?.includes(row.billingStatus ?? ""));
+        };
+        const matchesUpdatedAt = (row: ImageTaskRow) => {
+          const filter = args.where.updatedAt;
+          if (filter === undefined) return true;
+          if (filter instanceof Date) return row.updatedAt.getTime() === filter.getTime();
+          return filter.lt ? row.updatedAt.getTime() < filter.lt.getTime() : true;
+        };
         const row = tasks.find((item) =>
           (!args.where.id || item.id === args.where.id) &&
           (!args.where.userId || item.userId === args.where.userId) &&
           (!args.where.requestId || item.requestId === args.where.requestId) &&
           (!args.where.status || item.status === args.where.status) &&
-          (!args.where.updatedAt || item.updatedAt.getTime() === args.where.updatedAt.getTime())
+          matchesBillingStatus(item) &&
+          matchesUpdatedAt(item)
         );
         if (!row) return { count: 0 };
-        Object.assign(row, args.data, { updatedAt: new Date("2026-06-30T08:02:00.000Z") });
+        Object.assign(row, args.data, { updatedAt: new Date() });
         return { count: 1 };
       }),
     },
@@ -131,15 +161,18 @@ function createPrismaMock(rows: ImageRow[] = [], tasks: ImageTaskRow[] = []) {
 }
 
 type BillingMock = {
-  chargeResource: ReturnType<typeof vi.fn>;
+  reserveResource: ReturnType<typeof vi.fn>;
+  settleResource: ReturnType<typeof vi.fn>;
   refundResource: ReturnType<typeof vi.fn>;
   reserve: ReturnType<typeof vi.fn>;
   settle: ReturnType<typeof vi.fn>;
+  listResourcePrices?: ReturnType<typeof vi.fn>;
 };
 
 function createBillingMock(overrides: Partial<BillingMock> = {}): BillingMock {
   return {
-    chargeResource: vi.fn(async () => ({ charged: 10 })),
+    reserveResource: vi.fn(async () => ({ reserved: 10 })),
+    settleResource: vi.fn(async () => ({ settled: 10 })),
     refundResource: vi.fn(async () => ({ success: true })),
     reserve: vi.fn(async () => ({ reserved: 1 })),
     settle: vi.fn(async () => ({ settled: 1 })),
@@ -293,9 +326,9 @@ describe("image workflow routes", () => {
     await app.close();
   });
 
-  it("starts a persistent image task and completes it in the background", async () => {
+  it("starts a persistent image task, reserves points, and settles on completion", async () => {
     const prisma = createPrismaMock();
-    const billing = createBillingMock({ chargeResource: vi.fn(async () => ({ charged: 20 })) });
+    const billing = createBillingMock();
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })) as typeof fetch;
     const scheduled: Promise<void>[] = [];
     const app = await createApp({ prisma, billing, fetchFn, scheduled });
@@ -309,13 +342,19 @@ describe("image workflow routes", () => {
     expect(response.statusCode).toBe(202);
     expect(response.json().data.task.status).toBe("running");
     expect(scheduled).toHaveLength(1);
-    expect(billing.chargeResource).toHaveBeenCalledWith({
+    expect(billing.reserveResource).toHaveBeenCalledWith({
       operationId: "image:req-12345678",
       userId: "u1",
       resourceKey: "image_generation_1k",
       units: 2,
     });
     await scheduled[0];
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-12345678",
+      resourceKey: "image_generation_1k",
+      units: 2,
+    });
+    expect(billing.refundResource).not.toHaveBeenCalled();
     const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
     expect(tasksResponse.json().data[0]).toMatchObject({
       requestId: "req-12345678",
@@ -367,6 +406,9 @@ describe("image workflow routes", () => {
       size: "2048x1152",
       quality: "auto",
       output_format: "png",
+      // 中继 60s 读超时下必须流式保活，否则长耗时出图会被掐断
+      stream: true,
+      partial_images: 1,
     });
     await app.close();
   });
@@ -424,7 +466,7 @@ describe("image workflow routes", () => {
     expect(form.get("prompt")).toBe("编辑参考图");
     expect(form.get("size")).toBe("1024x1024");
     expect(form.getAll("image[]")).toHaveLength(1);
-    expect(billing.chargeResource).toHaveBeenCalledOnce();
+    expect(billing.reserveResource).toHaveBeenCalledOnce();
     const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
     expect(tasksResponse.json().data[0]).toMatchObject({ status: "completed", completedCount: 1 });
     await app.close();
@@ -508,7 +550,7 @@ describe("image workflow routes", () => {
     });
     expect(foreign.statusCode).toBe(400);
     expect(foreign.json().error).toContain("无权使用");
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -585,7 +627,7 @@ describe("image workflow routes", () => {
     };
     expect(requestBody.parameters?.size).toBe("2048*1152");
     expect(response.json().data.task.size).toBe("2048x1152");
-    expect(billing.chargeResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k" }));
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k" }));
     await app.close();
   });
 
@@ -632,7 +674,7 @@ describe("image workflow routes", () => {
       completedCount: 1,
     });
     expect(response.json().data.recent).toHaveLength(1);
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -742,8 +784,11 @@ describe("image workflow routes", () => {
 
     expect(response.statusCode).toBe(200);
     expect(scheduled).toHaveLength(1);
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     await scheduled[0];
+    // 旧任务（charge 模式）完成时不结算也不退款
+    expect(billing.settleResource).not.toHaveBeenCalled();
+    expect(billing.refundResource).not.toHaveBeenCalled();
     const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
     expect(tasksResponse.json().data[0]).toMatchObject({
       requestId: "req-stale",
@@ -784,7 +829,7 @@ describe("image workflow routes", () => {
     const body = JSON.parse(String((fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]?.body));
     expect(body).toMatchObject({ model: "gpt-image-2", prompt: "极简产品摄影" });
     expect(body).not.toHaveProperty("input");
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -969,7 +1014,7 @@ describe("image workflow routes", () => {
 
   it("rejects more than 8 concurrent images", async () => {
     const prisma = createPrismaMock();
-    const billing = createBillingMock({ chargeResource: vi.fn(async () => ({ charged: 90 })) });
+    const billing = createBillingMock();
     const fetchFn = vi.fn() as unknown as typeof fetch;
     const app = await createApp({ prisma, billing, fetchFn });
 
@@ -980,7 +1025,7 @@ describe("image workflow routes", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -998,15 +1043,15 @@ describe("image workflow routes", () => {
 
     expect(response.statusCode).toBe(400);
     expect(response.json().error).toContain("最高支持 2K");
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     expect(fetchFn).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("returns 402 when resource charge reports insufficient balance", async () => {
+  it("returns 402 when the point reservation reports insufficient balance", async () => {
     const prisma = createPrismaMock();
     const billing = createBillingMock({
-      chargeResource: vi.fn(async () => {
+      reserveResource: vi.fn(async () => {
         throw new InsufficientBalanceError();
       }),
     });
@@ -1020,7 +1065,677 @@ describe("image workflow routes", () => {
     });
 
     expect(response.statusCode).toBe(402);
+    expect(response.json().error).toBe("积分不足，请充值");
     expect(fetchFn).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("settles only the stored images when a reserve task fails partway", async () => {
+    const prisma = createPrismaMock([{
+      id: "img-partial-0",
+      userId: "u1",
+      requestId: "req-partial-fail",
+      requestIndex: 0,
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: "https://img.test/partial-0.png",
+      thumbnailUrl: "https://img.test/partial-0.png",
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T07:00:00.000Z"),
+    }]);
+    const billing = createBillingMock();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      error: { code: "moderation_blocked", type: "image_generation_error", message: "request blocked by moderation" },
+    }), { status: 400 })) as unknown as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-partial-fail", prompt: "陶瓷餐盘", size: "1024x1024", count: 2 },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ units: 2 }));
+    await expect(scheduled[0]).rejects.toThrow("request blocked by moderation");
+    // 已入库 1 张：按 1 张结算，而不是整单退款白送图片
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-partial-fail",
+      resourceKey: "image_generation_1k",
+      units: 1,
+    });
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
+    expect(tasksResponse.json().data[0]).toMatchObject({ status: "failed" });
+    await app.close();
+  });
+
+  it("settles delivered images when cancelling a partially completed reserve task", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-cancel-partial",
+      userId: "u1",
+      requestId: "req-cancel-partial",
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 3,
+      status: "running",
+      completedCount: 1,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_1k",
+      billingReservedUnits: 3,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:01:00.000Z"),
+    }];
+    const prisma = createPrismaMock([{
+      id: "img-cancel-0",
+      userId: "u1",
+      requestId: "req-cancel-partial",
+      requestIndex: 0,
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: "https://img.test/cancel-0.png",
+      thumbnailUrl: "https://img.test/cancel-0.png",
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T08:00:30.000Z"),
+    }], tasks);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({ method: "POST", url: "/api/workflow/images/tasks/req-cancel-partial/cancel" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.task).toMatchObject({ status: "cancelled" });
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-cancel-partial",
+      resourceKey: "image_generation_1k",
+      units: 1,
+    });
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    expect(tasks[0]).toMatchObject({ billingStatus: "settled", billingSettledUnits: 1 });
+    await app.close();
+  });
+
+  it("settles at the delivered tier when a 2K request comes back at 1K pixels", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-shrunk",
+      userId: "u1",
+      requestId: "req-shrunk",
+      prompt: "陶瓷餐盘",
+      model: "gpt-image-2",
+      size: "2048x2048",
+      count: 1,
+      status: "running",
+      completedCount: 1,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_2k",
+      billingReservedUnits: 1,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:01:00.000Z"),
+    }];
+    // 中转只认宽高比：请求 2048x2048 实际回 1024x1024，按请求档收就是多收一倍。
+    const prisma = createPrismaMock([{
+      id: "img-shrunk-0",
+      userId: "u1",
+      requestId: "req-shrunk",
+      requestIndex: 0,
+      prompt: "陶瓷餐盘",
+      model: "gpt-image-2",
+      size: "2048x2048",
+      originalUrl: "https://img.test/shrunk-0.png",
+      thumbnailUrl: "https://img.test/shrunk-0.png",
+      objectKey: null,
+      mime: "image/png",
+      width: 1024,
+      height: 1024,
+      createdAt: new Date("2026-06-30T08:00:30.000Z"),
+    }], tasks);
+    const billing = createBillingMock({ listResourcePrices: vi.fn(async () => ({ data: [] })) });
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({ method: "POST", url: "/api/workflow/images/tasks/req-shrunk/cancel" });
+
+    expect(response.statusCode).toBe(200);
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-shrunk",
+      resourceKey: "image_generation_1k",
+      units: 1,
+    });
+    expect(tasks[0]).toMatchObject({ billingStatus: "settled", billingResourceKey: "image_generation_1k" });
+    await app.close();
+  });
+
+  it("keeps the 2K key when the delivered pixels honour the request", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-honoured",
+      userId: "u1",
+      requestId: "req-honoured",
+      prompt: "陶瓷餐盘",
+      model: "gpt-image-2",
+      size: "2048x2048",
+      count: 1,
+      status: "running",
+      completedCount: 1,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_2k",
+      billingReservedUnits: 1,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:01:00.000Z"),
+    }];
+    const prisma = createPrismaMock([{
+      id: "img-honoured-0",
+      userId: "u1",
+      requestId: "req-honoured",
+      requestIndex: 0,
+      prompt: "陶瓷餐盘",
+      model: "gpt-image-2",
+      size: "2048x2048",
+      originalUrl: "https://img.test/honoured-0.png",
+      thumbnailUrl: "https://img.test/honoured-0.png",
+      objectKey: null,
+      mime: "image/png",
+      width: 2048,
+      height: 2048,
+      createdAt: new Date("2026-06-30T08:00:30.000Z"),
+    }], tasks);
+    const billing = createBillingMock({ listResourcePrices: vi.fn(async () => ({ data: [] })) });
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({ method: "POST", url: "/api/workflow/images/tasks/req-honoured/cancel" });
+
+    expect(response.statusCode).toBe(200);
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-honoured",
+      resourceKey: "image_generation_2k",
+      units: 1,
+    });
+    await app.close();
+  });
+
+  it("falls back to the requested key when delivered pixels are unknown (legacy rows)", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-legacy-size",
+      userId: "u1",
+      requestId: "req-legacy-size",
+      prompt: "陶瓷餐盘",
+      model: "gpt-image-2",
+      size: "2048x2048",
+      count: 1,
+      status: "running",
+      completedCount: 1,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_2k",
+      billingReservedUnits: 1,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:01:00.000Z"),
+    }];
+    // 迁移前入库的老数据没有 width/height，不能因此白送或误降档。
+    const prisma = createPrismaMock([{
+      id: "img-legacy-0",
+      userId: "u1",
+      requestId: "req-legacy-size",
+      requestIndex: 0,
+      prompt: "陶瓷餐盘",
+      model: "gpt-image-2",
+      size: "2048x2048",
+      originalUrl: "https://img.test/legacy-0.png",
+      thumbnailUrl: "https://img.test/legacy-0.png",
+      objectKey: null,
+      mime: "image/png",
+      width: null,
+      height: null,
+      createdAt: new Date("2026-06-30T08:00:30.000Z"),
+    }], tasks);
+    const billing = createBillingMock({ listResourcePrices: vi.fn(async () => ({ data: [] })) });
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({ method: "POST", url: "/api/workflow/images/tasks/req-legacy-size/cancel" });
+
+    expect(response.statusCode).toBe(200);
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-legacy-size",
+      resourceKey: "image_generation_2k",
+      units: 1,
+    });
+    await app.close();
+  });
+
+  it("refunds a reserve task cancelled before any image is stored", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-cancel-empty",
+      userId: "u1",
+      requestId: "req-cancel-empty",
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 2,
+      status: "running",
+      completedCount: 0,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_1k",
+      billingReservedUnits: 2,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:01:00.000Z"),
+    }];
+    const prisma = createPrismaMock([], tasks);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({ method: "POST", url: "/api/workflow/images/tasks/req-cancel-empty/cancel" });
+
+    expect(response.statusCode).toBe(200);
+    expect(billing.refundResource).toHaveBeenCalledWith("image:req-cancel-empty");
+    expect(billing.settleResource).not.toHaveBeenCalled();
+    expect(tasks[0]).toMatchObject({ billingStatus: "refunded", billingSettledUnits: 0 });
+    await app.close();
+  });
+
+  it("keeps the legacy full refund for charge-mode tasks that fail with partial output", async () => {
+    const prisma = createPrismaMock([{
+      id: "img-legacy-0",
+      userId: "u1",
+      requestId: "req-legacy-fail",
+      requestIndex: 0,
+      prompt: "商业美食摄影",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: "https://img.test/legacy-0.png",
+      thumbnailUrl: "https://img.test/legacy-0.png",
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-29T07:00:00.000Z"),
+    }], [{
+      id: "task-legacy-fail",
+      userId: "u1",
+      requestId: "req-legacy-fail",
+      prompt: "商业美食摄影",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 2,
+      status: "running",
+      completedCount: 1,
+      error: null,
+      billingMode: "charge",
+      createdAt: new Date("2026-06-29T07:00:00.000Z"),
+      updatedAt: new Date("2026-06-29T07:00:00.000Z"),
+    }]);
+    const billing = createBillingMock();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({
+      error: { code: "moderation_blocked", type: "image_generation_error", message: "request blocked by moderation" },
+    }), { status: 400 })) as unknown as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled, staleTaskMs: 1 });
+
+    expect((await app.inject({ method: "GET", url: "/api/workflow/images/state" })).statusCode).toBe(200);
+    expect(scheduled).toHaveLength(1);
+    await expect(scheduled[0]).rejects.toThrow("request blocked by moderation");
+    // 旧扣费模式保持原语义：失败整单退款，不做部分结算
+    expect(billing.refundResource).toHaveBeenCalledWith("image:req-legacy-fail");
+    expect(billing.settleResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("reserves and settles with the admin-configured model resource key when present", async () => {
+    const modelRow = {
+      resourceKey: "image_generation_qwen_image_2_0_pro_2026_04_22_1k",
+      displayName: "Qwen 生图 1K",
+      pricingType: "PER_UNIT",
+      rate: 15,
+      perUnits: 1,
+      enabled: true,
+    };
+    const prisma = createPrismaMock();
+    const billing = createBillingMock({ listResourcePrices: vi.fn(async () => ({ data: [modelRow] })) });
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })) as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-model-key", prompt: "陶瓷餐盘", size: "1024x1024", count: 1 },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({
+      resourceKey: "image_generation_qwen_image_2_0_pro_2026_04_22_1k",
+    }));
+    await scheduled[0];
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-model-key",
+      resourceKey: "image_generation_qwen_image_2_0_pro_2026_04_22_1k",
+      units: 1,
+    });
+    await app.close();
+  });
+
+  it("resolves pricing for a specific model through the pricing endpoint", async () => {
+    const billing = createBillingMock({
+      listResourcePrices: vi.fn(async () => ({
+        data: [{
+          resourceKey: "image_generation_gpt_image_2_1k",
+          displayName: "GPT Image 生图 1K",
+          pricingType: "PER_UNIT",
+          rate: 33,
+          perUnits: 1,
+          enabled: true,
+        }],
+      })),
+    });
+    const app = await createApp({ prisma: createPrismaMock(), billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const withModel = await app.inject({ method: "GET", url: "/api/workflow/images/pricing?model=gpt-image-2" });
+    expect(withModel.statusCode).toBe(200);
+    expect(withModel.json().data["1K"]).toMatchObject({
+      resourceKey: "image_generation_gpt_image_2_1k",
+      rate: 33,
+    });
+
+    const withoutModel = await app.inject({ method: "GET", url: "/api/workflow/images/pricing" });
+    expect(withoutModel.statusCode).toBe(200);
+    expect(withoutModel.json().data["1K"]).toMatchObject({ resourceKey: "image_generation_1k" });
+    await app.close();
+  });
+
+  it("settles a reservation exactly once when two settlement paths race", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-race",
+      userId: "u1",
+      requestId: "req-settle-race",
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 2,
+      status: "completed",
+      completedCount: 1,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_1k",
+      billingReservedUnits: 2,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:01:00.000Z"),
+    }];
+    const prisma = createPrismaMock([{
+      id: "img-race-0",
+      userId: "u1",
+      requestId: "req-settle-race",
+      requestIndex: 0,
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: "https://img.test/race-0.png",
+      thumbnailUrl: "https://img.test/race-0.png",
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T08:00:30.000Z"),
+    }], tasks);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const [first, second] = await Promise.all([
+      app.inject({ method: "GET", url: "/api/workflow/images/state" }),
+      app.inject({ method: "GET", url: "/api/workflow/images/state" }),
+    ]);
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(billing.settleResource).toHaveBeenCalledTimes(1);
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-settle-race",
+      resourceKey: "image_generation_1k",
+      units: 1,
+    });
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    expect(tasks[0]).toMatchObject({ billingStatus: "settled", billingSettledUnits: 1 });
+    await app.close();
+  });
+
+  it("waits for sibling branches to quiesce before settling a failed reserve task", async () => {
+    const prisma = createPrismaMock();
+    const billing = createBillingMock();
+    let call = 0;
+    const fetchFn = vi.fn(async () => {
+      call += 1;
+      if (call === 1) {
+        // 慢分支：在另一分支已失败之后才完成入库
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        error: { code: "moderation_blocked", type: "image_generation_error", message: "request blocked by moderation" },
+      }), { status: 400 });
+    }) as unknown as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-quiesce", prompt: "陶瓷餐盘", size: "1024x1024", count: 2 },
+    });
+
+    expect(response.statusCode).toBe(202);
+    await expect(scheduled[0]).rejects.toThrow("request blocked by moderation");
+    // 慢分支已入库的那张必须被计入结算，否则等于白送
+    expect(prisma.imageAsset.upsert).toHaveBeenCalledTimes(1);
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-quiesce",
+      resourceKey: "image_generation_1k",
+      units: 1,
+    });
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("retries a settle_failed reservation during state recovery", async () => {
+    const tasks: ImageTaskRow[] = [{
+      id: "task-settle-failed",
+      userId: "u1",
+      requestId: "req-settle-failed",
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 2,
+      status: "completed",
+      completedCount: 2,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_1k",
+      billingReservedUnits: 2,
+      billingStatus: "settle_failed",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:05:00.000Z"),
+    }];
+    const prisma = createPrismaMock([0, 1].map((index) => ({
+      id: `img-settle-failed-${index}`,
+      userId: "u1",
+      requestId: "req-settle-failed",
+      requestIndex: index,
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: `https://img.test/sf-${index}.png`,
+      thumbnailUrl: `https://img.test/sf-${index}.png`,
+      objectKey: null,
+      mime: "image/png",
+      createdAt: new Date("2026-06-30T08:01:00.000Z"),
+    })), tasks);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({ method: "GET", url: "/api/workflow/images/state" });
+
+    expect(response.statusCode).toBe(200);
+    expect(billing.settleResource).toHaveBeenCalledWith({
+      operationId: "image:req-settle-failed",
+      resourceKey: "image_generation_1k",
+      units: 2,
+    });
+    expect(tasks[0]).toMatchObject({ billingStatus: "settled", billingSettledUnits: 2 });
+    await app.close();
+  });
+
+  it("recovers a reservation left in settling by a crash, but leaves fresh settling alone", async () => {
+    const staleTask: ImageTaskRow = {
+      id: "task-stuck-settling",
+      userId: "u1",
+      requestId: "req-stuck-settling",
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 1,
+      status: "failed",
+      completedCount: 0,
+      error: "生成失败",
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_1k",
+      billingReservedUnits: 1,
+      billingStatus: "settling",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:00:30.000Z"),
+    };
+    const prisma = createPrismaMock([], [staleTask]);
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    expect((await app.inject({ method: "GET", url: "/api/workflow/images/state" })).statusCode).toBe(200);
+    expect(billing.refundResource).toHaveBeenCalledWith("image:req-stuck-settling");
+    expect(staleTask).toMatchObject({ billingStatus: "refunded", billingSettledUnits: 0 });
+    await app.close();
+
+    const freshTask: ImageTaskRow = {
+      ...staleTask,
+      id: "task-fresh-settling",
+      requestId: "req-fresh-settling",
+      billingStatus: "settling",
+      billingSettledUnits: null,
+      updatedAt: new Date(),
+    };
+    const freshBilling = createBillingMock();
+    const freshApp = await createApp({
+      prisma: createPrismaMock([], [freshTask]),
+      billing: freshBilling,
+      fetchFn: vi.fn() as unknown as typeof fetch,
+    });
+
+    expect((await freshApp.inject({ method: "GET", url: "/api/workflow/images/state" })).statusCode).toBe(200);
+    // 仍在结算中的预留不能被抢走
+    expect(freshBilling.refundResource).not.toHaveBeenCalled();
+    expect(freshBilling.settleResource).not.toHaveBeenCalled();
+    expect(freshTask.billingStatus).toBe("settling");
+    await freshApp.close();
+  });
+
+  it("returns the winning task without refunding when a duplicate submit hits the requestId unique key", async () => {
+    const tasks: ImageTaskRow[] = [];
+    const prisma = createPrismaMock([], tasks);
+    const winner: ImageTaskRow = {
+      id: "task-winner",
+      userId: "u1",
+      requestId: "req-duplicate-submit",
+      prompt: "陶瓷餐盘",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 2,
+      status: "running",
+      completedCount: 0,
+      error: null,
+      billingMode: "reserve",
+      billingResourceKey: "image_generation_1k",
+      billingReservedUnits: 2,
+      billingStatus: "reserved",
+      createdAt: new Date("2026-06-30T08:00:00.000Z"),
+      updatedAt: new Date("2026-06-30T08:00:00.000Z"),
+    };
+    prisma.imageGenerationTask.create.mockImplementationOnce(async () => {
+      // 赢家在本次 create 之前已建单：唯一键冲突
+      tasks.push(winner);
+      throw Object.assign(new Error("Unique constraint failed on the fields: (`requestId`)"), { code: "P2002" });
+    });
+    const billing = createBillingMock();
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-duplicate-submit", prompt: "陶瓷餐盘", size: "1024x1024", count: 2 },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data.task).toMatchObject({ requestId: "req-duplicate-submit", status: "running" });
+    // 绝不能退掉赢家仍在生效的预留
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    expect(winner.billingStatus).toBe("reserved");
+    expect(scheduled).toHaveLength(0);
+    await app.close();
+  });
+
+  it("keeps a cancelled task cancelled and settles once when the upstream fetch aborts mid-flight", async () => {
+    const prisma = createPrismaMock();
+    const billing = createBillingMock();
+    const fetchFn = vi.fn((_url: string, init?: { signal?: AbortSignal }) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      const fail = () => reject(Object.assign(new Error("The operation was aborted"), { name: "AbortError" }));
+      if (signal?.aborted) fail();
+      else signal?.addEventListener("abort", fail, { once: true });
+    })) as unknown as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing, fetchFn, scheduled });
+
+    const generated = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-abort-midflight", prompt: "陶瓷餐盘", size: "1024x1024", count: 1 },
+    });
+    expect(generated.statusCode).toBe(202);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    const cancelled = await app.inject({ method: "POST", url: "/api/workflow/images/tasks/req-abort-midflight/cancel" });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json().data.task).toMatchObject({ status: "cancelled" });
+    await scheduled[0];
+
+    const tasksResponse = await app.inject({ method: "GET", url: "/api/workflow/images/tasks" });
+    // runner 的 AbortError 不得把已取消改写成 failed，也不得二次结算
+    expect(tasksResponse.json().data[0]).toMatchObject({ status: "cancelled", error: "用户已取消" });
+    expect(billing.refundResource).toHaveBeenCalledTimes(1);
+    expect(billing.settleResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("refunds the reservation when task creation fails for a non-conflict reason", async () => {
+    const prisma = createPrismaMock();
+    prisma.imageGenerationTask.create.mockImplementationOnce(async () => {
+      throw new Error("connection reset");
+    });
+    const billing = createBillingMock();
+    const app = await createApp({ prisma, billing, fetchFn: vi.fn() as unknown as typeof fetch });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-create-broken", prompt: "陶瓷餐盘", size: "1024x1024", count: 1 },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(billing.refundResource).toHaveBeenCalledWith("image:req-create-broken");
     await app.close();
   });
 });

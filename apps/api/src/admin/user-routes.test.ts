@@ -96,6 +96,61 @@ describe("admin 用户管理", () => {
     expect(r.json().data.length).toBeGreaterThan(0);
   });
 
+  it("搜索不区分大小写", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?q=BYADM_",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.length).toBeGreaterThan(0);
+  });
+
+  it("列表分页返回 total/page/pageSize", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?page=1&pageSize=1",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.data.length).toBeLessThanOrEqual(1);
+    expect(body.total).toBeGreaterThan(0);
+    expect(body.page).toBe(1);
+    expect(body.pageSize).toBe(1);
+
+    // 第二页与第一页内容不同（库里至少有两个用户）
+    if (body.total > 1) {
+      const r2 = await app.inject({
+        method: "GET",
+        url: "/api/admin/users?page=2&pageSize=1",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(r2.statusCode).toBe(200);
+      expect(r2.json().data[0]?.id).not.toBe(body.data[0]?.id);
+    }
+
+    // 非法分页参数回退默认值
+    const r3 = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?page=-1&pageSize=9999",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(r3.statusCode).toBe(200);
+    expect(r3.json().page).toBe(1);
+    expect(r3.json().pageSize).toBe(100);
+
+    // 超大 page 数字串不会因 skip 溢出 Int64 而 500
+    const r4 = await app.inject({
+      method: "GET",
+      url: "/api/admin/users?page=99999999999999999999999&pageSize=50",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(r4.statusCode).toBe(200);
+    expect(r4.json().page).toBe(1_000_000);
+    expect(r4.json().data).toEqual([]);
+  });
+
   it("封禁/解封", async () => {
     const ban = await app.inject({
       method: "POST",

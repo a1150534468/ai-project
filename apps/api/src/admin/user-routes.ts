@@ -26,27 +26,37 @@ export async function adminUserRoutes(app: FastifyInstance) {
     "/api/admin/users",
     { preHandler: requireAdmin("USER_MANAGE") },
     async (req) => {
-      const q = (req.query as { q?: string }).q?.trim();
+      const query = req.query as { q?: string; page?: string; pageSize?: string };
+      const q = query.q?.trim();
+      // page 需夹上界：超大数字串会让 skip 溢出 Prisma 的 Int64 直接 500
+      const rawPage = Number.parseInt(query.page ?? "", 10);
+      const page = Number.isNaN(rawPage) ? 1 : Math.min(1_000_000, Math.max(1, rawPage));
+      const pageSize = Math.min(100, Math.max(1, Number.parseInt(query.pageSize ?? "", 10) || 20));
       const where = q
         ? {
             OR: [
-              { uid: { contains: q } },
-              { username: { contains: q } },
+              { uid: { contains: q, mode: "insensitive" as const } },
+              { username: { contains: q, mode: "insensitive" as const } },
             ],
           }
         : {};
-      const data = await prisma.user.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        select: {
-          id: true,
-          uid: true,
-          username: true,
-          bannedAt: true,
-          createdAt: true,
-        },
-      });
+      const [total, data] = await Promise.all([
+        prisma.user.count({ where }),
+        prisma.user.findMany({
+          where,
+          // id 兜底排序：批量导入的用户 createdAt 相同，无 tiebreaker 会跨页重复/丢失
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+          select: {
+            id: true,
+            uid: true,
+            username: true,
+            bannedAt: true,
+            createdAt: true,
+          },
+        }),
+      ]);
       // 合并 billing 余额（批量，单次调用；billing 故障降级为 balance=null 不阻塞）
       let balances: Record<string, number> = {};
       try {
@@ -58,6 +68,9 @@ export async function adminUserRoutes(app: FastifyInstance) {
       return {
         success: true,
         data: data.map((u) => ({ ...u, balance: balances[u.id] ?? null })),
+        total,
+        page,
+        pageSize,
       };
     },
   );

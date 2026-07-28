@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { RippleButton } from "../../motion";
 import { InAppSelect } from "../agent-teams/InAppSelect";
+import { DownloadLinkDialog, type DownloadDialogState } from "../ui/DownloadLinkDialog";
+import { DownloadOverlayButton } from "./DownloadOverlayButton";
 import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { WorkflowHistoryStrip } from "./ImageHistoryStrip";
+import { SubmitCostBar } from "./SubmitCostBar";
 import {
   cancelPortraitTask,
   createPortraitTask,
@@ -13,6 +15,7 @@ import {
   getPortraitState,
   uploadPortraitReference,
   type PortraitAspectRatio,
+  type PortraitModel,
   type PortraitOptions,
   type PortraitPreset,
   type PortraitPresetId,
@@ -25,17 +28,39 @@ import {
 
 const MAX_REFERENCE_COUNT = 3;
 const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
-const POLL_MS = 2500;
+const POLL_MS = 3000;
 const URL_REFRESH_MS = 10 * 60 * 1000;
 const DEFAULT_CONSENT_VERSION = "portrait-consent-v1";
+const DEFAULT_MODEL = "doubao-seedream-5-0-260128";
+const FALLBACK_MODELS: readonly PortraitModel[] = [
+  { value: "doubao-seedream-5-0-260128", label: "豆包 Seedream 5.0", supports4K: true, supports1K: false },
+  { value: "gpt-image-2", label: "GPT Image 2", supports4K: false, supports1K: true },
+];
 const FALLBACK_PRESETS: readonly PortraitPreset[] = [
-  { id: "business", name: "商务头像", description: "专业、克制的职业形象" },
-  { id: "social", name: "社交头像", description: "自然亲和的个人头像" },
-  { id: "lifestyle", name: "生活写真", description: "松弛自然的生活场景" },
-  { id: "traditional", name: "传统服饰", description: "传统审美与服饰表达" },
-  { id: "poster", name: "个人海报", description: "具有主题感的视觉海报" },
+  { id: "business-elite", name: "商务精英", description: "西装+办公室" },
+  { id: "linkedin", name: "LinkedIn 头像", description: "半身证件照风" },
+  { id: "id-photo", name: "证件照", description: "简历/证件标准" },
+  { id: "guofeng", name: "中国古风", description: "汉唐宋明" },
+  { id: "sunny-casual", name: "阳光休闲", description: "咖啡馆/街拍" },
+  { id: "poster", name: "海报形象", description: "中文大字+签名+品牌" },
+  { id: "wedding", name: "婚纱写真", description: "中西式" },
+  { id: "student-id", name: "学生证件", description: "校园/学位服" },
+  { id: "founder-ip", name: "创业 IP", description: "杂志封面风" },
+  { id: "hk-retro", name: "复古港风", description: "90 年代港风/王家卫" },
+  { id: "oil-painting", name: "油画肖像", description: "文艺复兴/印象派" },
+  { id: "ink-gongbi", name: "国风工笔", description: "水墨/工笔画" },
+  { id: "magazine", name: "杂志大片", description: "Vogue/Bazaar 时尚" },
+  { id: "cyberpunk", name: "赛博朋克", description: "霓虹未来感" },
+  { id: "fairytale", name: "童话漫画", description: "二次元/Disney 风" },
   { id: "custom", name: "自定义", description: "按你的描述创作" },
 ];
+// 旧版模板 id 仅用于历史任务标题展示；服务端 /options 未返回 legacyPresetNames 时的兜底
+const LEGACY_PRESET_NAMES: Readonly<Record<string, string>> = {
+  business: "商务头像",
+  social: "社交头像",
+  lifestyle: "生活写真",
+  traditional: "传统服饰",
+};
 const ASPECT_OPTIONS = [
   { value: "1:1", label: "1:1 · 方形" },
   { value: "3:4", label: "3:4 · 竖版" },
@@ -44,6 +69,7 @@ const ASPECT_OPTIONS = [
   { value: "16:9", label: "16:9 · 宽屏" },
 ] as const;
 const RESOLUTION_OPTIONS = [
+  { value: "1K", label: "1K · 快速" },
   { value: "2K", label: "2K · 标准" },
   { value: "4K", label: "4K · 高清" },
 ] as const;
@@ -87,7 +113,7 @@ function formattedDate(value: string): string {
 
 function ChoiceField({ label, value, options, onChange }: { readonly label: string; readonly value: string; readonly options: readonly string[]; readonly onChange: (value: string) => void }) {
   return (
-    <div className="grid gap-1.5 text-xs font-semibold text-[#424245]">
+    <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
       <p>{label}</p>
       <InAppSelect
         icon="mdi:tune-variant"
@@ -107,9 +133,11 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   const [tasks, setTasks] = useState<readonly PortraitTask[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedOutputIndex, setSelectedOutputIndex] = useState(0);
-  const [presetId, setPresetId] = useState<PortraitPresetId>("business");
+  const [presetId, setPresetId] = useState<PortraitPresetId>("business-elite");
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [aspectRatio, setAspectRatio] = useState<PortraitAspectRatio>("3:4");
   const [resolution, setResolution] = useState<PortraitResolution>("2K");
+  const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState | null>(null);
   const [count, setCount] = useState(1);
   const [promptOptions, setPromptOptions] = useState<PortraitPromptOptions>({
     scene: "明亮影棚",
@@ -128,6 +156,13 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   const [deletingReferenceId, setDeletingReferenceId] = useState<string | null>(null);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
   const [error, setError] = useState("");
+  const errorRef = useRef<HTMLParagraphElement | null>(null);
+
+  // 报错渲染在可滚动表单里，从吸底栏提交时可能在视口外，出现报错就滚到最近位置。
+  useEffect(() => {
+    if (!error) return;
+    errorRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [error]);
 
   const refreshState = useCallback(async () => {
     const state = await getPortraitState(token);
@@ -173,10 +208,36 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   }, [refreshState]);
 
   const presets = options?.presets.length ? options.presets : FALLBACK_PRESETS;
+  const models = options?.models?.length ? options.models : FALLBACK_MODELS;
+  const selectedModel = models.find((item) => item.value === model) ?? models[0];
+  const modelSupports4K = selectedModel?.supports4K ?? true;
+  // 老服务端不返回 supports1K：此时按「不支持」处理，避免前端提交出 400。
+  const modelSupports1K = selectedModel?.supports1K ?? false;
+  const resolutionOptions = RESOLUTION_OPTIONS.filter((option) => (
+    option.value === "4K" ? modelSupports4K : option.value === "1K" ? modelSupports1K : true
+  ));
+  const legacyPresetNames = options?.legacyPresetNames;
+  // 名称解析链：当前模板 → 服务端旧版模板名 → 本地兜底表 → 原始 id
+  const presetName = useCallback((id: string) => {
+    const current = presets.find((preset) => preset.id === id)?.name;
+    if (current) return current;
+    const fromServer = typeof legacyPresetNames?.[id] === "string" ? legacyPresetNames[id].trim() : "";
+    if (fromServer) return fromServer;
+    return LEGACY_PRESET_NAMES[id] ?? id;
+  }, [presets, legacyPresetNames]);
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null, [tasks, selectedTaskId]);
   const selectedOutput = selectedTask?.outputs[selectedOutputIndex] ?? selectedTask?.outputs[0] ?? null;
-  const pointCost = options?.pricing[resolution]?.rate == null ? null : options.pricing[resolution].rate * count;
+  const pointRate = options?.pricingByModel?.[model]?.[resolution] ?? options?.pricing[resolution]?.rate ?? null;
+  const pointCost = pointRate == null ? null : pointRate * count;
   const canSubmit = references.length > 0 && authorizationAccepted && !isSubmitting && !isUploading && !hasActiveTask;
+
+  const handleModelChange = (value: string) => {
+    setModel(value);
+    const next = models.find((item) => item.value === value);
+    if (!next) return;
+    if (!next.supports4K && resolution === "4K") setResolution("2K");
+    if (!(next.supports1K ?? false) && resolution === "1K") setResolution("2K");
+  };
 
   useEffect(() => { setSelectedOutputIndex(0); }, [selectedTaskId]);
 
@@ -237,6 +298,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         const response = await createPortraitTask(token, {
           requestId: requestId(),
           presetId,
+          model,
           aspectRatio,
           resolution,
           count,
@@ -291,28 +353,28 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
     <section data-testid="portrait-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-white xl:h-full">
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
       <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
-        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#6e6e73]">生成配置</p><h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">创作设置</h2><p className="mt-0.5 text-xs text-[#86868b]">豆包 Seedream 5.0 Lite</p></div><Icon icon="mdi:tune-variant" className="text-xl text-[#86868b]" aria-hidden /></div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#6e6e73]">生成配置</p><h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">创作设置</h2></div><Icon icon="mdi:tune-variant" className="text-xl text-[#86868b]" aria-hidden /></div>
 
         <div className="mt-5">
-          <p className="mb-2 text-xs font-semibold text-[#424245]">参考人物 ({references.length}/{MAX_REFERENCE_COUNT})</p>
+          <p className="mb-2 text-sm font-semibold text-[#1d1d1f]">参考人物 ({references.length}/{MAX_REFERENCE_COUNT})</p>
           <div className="grid grid-cols-3 gap-2">
             {references.map((reference, index) => (
-              <div key={reference.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-[#e1e1e6] bg-[#f2f2f5]">
+              <div key={reference.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f5f5f7]">
                 <img src={reference.previewUrl} alt={`人物参考照 ${index + 1}`} className="h-full w-full object-cover" />
                 <button type="button" title="删除参考照" aria-label={`删除参考照 ${index + 1}`} onClick={() => handleDeleteReference(reference)} disabled={deletingReferenceId === reference.id || hasActiveTask} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-100 transition disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100"><Icon icon={deletingReferenceId === reference.id ? "mdi:loading" : "mdi:close"} className={deletingReferenceId === reference.id ? "animate-spin" : ""} aria-hidden /></button>
               </div>
             ))}
-            {references.length < MAX_REFERENCE_COUNT && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-[#b8b8bf] bg-[#fafafa] text-[#6e6e73] disabled:opacity-50" aria-label="上传人物参考照"><Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={`text-2xl ${isUploading ? "animate-spin" : ""}`} aria-hidden /><span className="mt-1 text-[11px]">{isUploading ? "上传中" : "添加"}</span></button>}
+            {references.length < MAX_REFERENCE_COUNT && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#fafafa] text-[#6e6e73] disabled:opacity-50" aria-label="上传人物参考照"><Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={`text-2xl ${isUploading ? "animate-spin" : ""}`} aria-hidden /><span className="mt-1 text-[11px]">{isUploading ? "上传中" : "添加"}</span></button>}
           </div>
           <input ref={fileInputRef} data-testid="portrait-file-input" type="file" multiple accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif" className="hidden" onChange={(event) => handleFiles(event.target.files)} />
           <p className="mt-2 flex items-center gap-1 text-[11px] text-[#86868b]"><Icon icon="mdi:shield-lock-outline" aria-hidden />私有存储，任务结束 24 小时后自动清理</p>
         </div>
 
-        <div className="mt-5 border-t border-[#eeeeF2] pt-4">
-          <p className="mb-2 text-xs font-semibold text-[#424245]">形象模板</p>
+        <div className="mt-5 border-t border-[#e8e8ed] pt-4">
+          <p className="mb-2 text-sm font-semibold text-[#1d1d1f]">形象模板</p>
           <div className="grid grid-cols-2 gap-2">
-            {presets.map((preset) => <button key={preset.id} type="button" onClick={() => setPresetId(preset.id)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left ${presetId === preset.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e1e1e6] text-[#424245]"}`}><span className="block text-sm font-semibold">{preset.name}</span><span className="mt-0.5 block text-[10px] leading-4 opacity-70">{preset.description}</span></button>)}
+            {presets.map((preset) => <button key={preset.id} type="button" onClick={() => setPresetId(preset.id)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left ${presetId === preset.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e5e7eb] text-[#424245]"}`}><span className="block text-sm font-semibold">{preset.name}</span><span className="mt-0.5 block text-[10px] leading-4 opacity-70">{preset.description}</span></button>)}
           </div>
         </div>
 
@@ -321,41 +383,53 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           <ChoiceField label="服装" value={promptOptions.outfit} options={OUTFIT_OPTIONS} onChange={(value) => updatePromptOption("outfit", value)} />
           <ChoiceField label="构图" value={promptOptions.composition} options={COMPOSITION_OPTIONS} onChange={(value) => updatePromptOption("composition", value)} />
           <ChoiceField label="表情" value={promptOptions.expression} options={EXPRESSION_OPTIONS} onChange={(value) => updatePromptOption("expression", value)} />
-          <label className="grid gap-1.5 text-xs font-semibold text-[#424245]">发型<input value={promptOptions.hair} onChange={(event) => updatePromptOption("hair", event.target.value)} placeholder="保持参考或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#424245]">妆容<input value={promptOptions.makeup} onChange={(event) => updatePromptOption("makeup", event.target.value)} placeholder="自然或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
+          <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">发型<input value={promptOptions.hair} onChange={(event) => updatePromptOption("hair", event.target.value)} placeholder="保持参考或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
+          <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">妆容<input value={promptOptions.makeup} onChange={(event) => updatePromptOption("makeup", event.target.value)} placeholder="自然或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
         </div>
-        <label className="mt-3 grid gap-1.5 text-xs font-semibold text-[#424245]">补充提示词<textarea aria-label="补充提示词" value={promptOptions.extraPrompt} onChange={(event) => updatePromptOption("extraPrompt", event.target.value)} maxLength={1200} placeholder="光线、氛围、背景细节等" className="min-h-[76px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" /></label>
+        <label className="mt-3 grid gap-2 text-sm font-semibold text-[#1d1d1f]">补充提示词<textarea aria-label="补充提示词" value={promptOptions.extraPrompt} onChange={(event) => updatePromptOption("extraPrompt", event.target.value)} maxLength={1200} placeholder="光线、氛围、背景细节等" className="min-h-[76px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" /></label>
 
+        <div className="mt-4 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <p>模型</p>
+          <InAppSelect icon="mdi:creation-outline" label="模型" value={model} options={models.map((item) => ({ value: item.value, label: item.label }))} onChange={handleModelChange} />
+        </div>
         <div className="mt-4 grid grid-cols-2 gap-2">
-          <div><p className="mb-1.5 text-xs font-semibold text-[#424245]">画面比例</p><InAppSelect icon="mdi:aspect-ratio" label="画面比例" value={aspectRatio} options={ASPECT_OPTIONS} onChange={(value) => setAspectRatio(value as PortraitAspectRatio)} /></div>
-          <div><p className="mb-1.5 text-xs font-semibold text-[#424245]">清晰度</p><InAppSelect icon="mdi:image-size-select-large" label="清晰度" value={resolution} options={RESOLUTION_OPTIONS} onChange={(value) => setResolution(value as PortraitResolution)} /></div>
+          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]"><p>画面比例</p><InAppSelect icon="mdi:aspect-ratio" label="画面比例" value={aspectRatio} options={ASPECT_OPTIONS} onChange={(value) => setAspectRatio(value as PortraitAspectRatio)} /></div>
+          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]"><p>清晰度</p><InAppSelect icon="mdi:image-size-select-large" label="清晰度" value={resolution} options={resolutionOptions} onChange={(value) => setResolution(value as PortraitResolution)} /></div>
         </div>
-        <div className="mt-3"><p className="mb-1.5 text-xs font-semibold text-[#424245]">生成张数</p><div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7]">{[1, 2, 3, 4].map((value) => <button key={value} type="button" onClick={() => setCount(value)} className={`h-9 border-r border-[#e1e1e6] text-sm font-semibold last:border-r-0 ${count === value ? "bg-brand text-white" : "bg-white text-[#6e6e73]"}`}>{value}</button>)}</div></div>
+        <div className="mt-3"><p className="mb-2 text-sm font-semibold text-[#1d1d1f]">生成张数</p><div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7]">{[1, 2, 3, 4].map((value) => <button key={value} type="button" onClick={() => setCount(value)} className={`h-9 border-r border-[#e5e7eb] text-sm font-semibold last:border-r-0 ${count === value ? "bg-brand-soft text-brand-ink" : "bg-white text-[#6e6e73]"}`}>{value}</button>)}</div></div>
 
-        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e1e1e6] bg-[#f8f8fa] p-3 text-xs leading-5 text-[#424245]"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-[#424245]"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
+        {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         <p className="mt-3 text-[10px] leading-4 text-[#86868b]">AI 生成内容仅作预览，请勿用于证件、身份核验或未经授权的公开传播。</p>
         </div>
-        <div className="sticky bottom-0 z-10 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
-          {error && <p role="alert" className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-700">{error}</p>}
-          <div className="mb-2 flex items-center justify-between text-xs font-semibold text-[#6e6e73]"><span>预计消耗</span><span className="text-[#1d1d1f]">{pointCost == null ? "--" : `${pointCost} 算力点`}</span></div>
-          <RippleButton type="button" onClick={handleSubmit} disabled={!canSubmit} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-[#c7c7cc]"><Icon icon={isSubmitting ? "mdi:loading" : "mdi:creation"} className={`text-lg ${isSubmitting ? "animate-spin" : ""}`} aria-hidden />{isSubmitting ? "提交中" : "生成形象照"}</RippleButton>
-        </div>
+        <SubmitCostBar
+          estimatedPointCost={pointCost}
+          submitLabel="生成形象照"
+          submitIcon="mdi:creation"
+          submitDisabled={!canSubmit}
+          busy={isSubmitting}
+          busyLabel="生成中"
+          onSubmit={handleSubmit}
+        />
       </aside>
 
       <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-[#f7f8fa] xl:h-full">
-        <header className="flex h-14 flex-none items-center justify-between border-b border-[#dedee3] bg-white px-4">
+        <header className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>
             <div><h2 className="text-sm font-semibold text-[#1d1d1f]">AI 形象照</h2><p className="text-[11px] text-[#86868b]">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">
-            {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f2f2f5] text-[#6e6e73]"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
+            {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-[#6e6e73]"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
             <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-[#1d1d1f]"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
           </div>
         </header>
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5 lg:p-8">
           {selectedOutput ? (
-            <img data-testid="portrait-preview" src={selectedOutput.originalUrl} alt="AI 生成形象照预览" className="max-h-full max-w-full rounded-[8px] object-contain shadow-[0_22px_70px_rgba(0,0,0,0.18)]" />
+            <>
+              <img data-testid="portrait-preview" src={selectedOutput.originalUrl} alt="AI 生成形象照预览" className="max-h-full max-w-full rounded-[8px] object-contain shadow-[0_22px_70px_rgba(0,0,0,0.18)]" />
+              <DownloadOverlayButton positionClassName="right-4 top-4" onClick={() => setDownloadDialog({ title: "原图下载链接", links: [selectedOutput.originalUrl] })} />
+            </>
           ) : selectedTask && isActive(selectedTask) ? (
             <div className="grid max-w-sm place-items-center text-center">
               <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"><Icon icon="mdi:creation-outline" className="text-4xl text-brand-ink" aria-hidden /><span className="absolute inset-0 animate-ping rounded-full border border-brand/30" /></span>
@@ -373,11 +447,10 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           {selectedTask?.error && !isActive(selectedTask) && <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-white/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">{selectedTask.error}</div>}
         </div>
         {selectedTask && selectedTask.outputs.length > 0 && (
-          <footer className="flex flex-none items-center gap-3 border-t border-[#dedee3] bg-white px-4 py-3">
+          <footer className="flex flex-none items-center gap-3 border-t border-[#e5e7eb] bg-white px-4 py-3">
             <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
               {selectedTask.outputs.map((output, index) => <button key={output.id} type="button" onClick={() => setSelectedOutputIndex(index)} className={`h-12 w-10 flex-none overflow-hidden rounded-[6px] border-2 ${selectedOutput?.id === output.id ? "border-brand" : "border-transparent"}`}><img src={output.originalUrl} alt={`结果 ${index + 1}`} className="h-full w-full object-cover" /></button>)}
             </div>
-            {selectedOutput && <a href={selectedOutput.originalUrl} download={`portrait-${selectedOutput.index + 1}.png`} className="flex h-9 flex-none items-center gap-1.5 rounded-[8px] bg-[#1d1d1f] px-3 text-sm font-semibold text-white" title="下载原图"><Icon icon="mdi:download" className="text-lg" aria-hidden />下载</a>}
           </footer>
         )}
         <WorkflowHistoryStrip
@@ -386,7 +459,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           emptyText="暂无生成记录"
           groups={tasks.map((task) => ({
             id: task.id,
-            title: presets.find((preset) => preset.id === task.presetId)?.name ?? "形象照",
+            title: presetName(task.presetId),
             meta: `${STATUS_LABEL[task.status]} · ${formattedDate(task.createdAt)}`,
             items: task.outputs.length > 0
               ? task.outputs.map((output, index) => ({
@@ -416,7 +489,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-[#8a8a8f]">暂无任务</p> : tasks.map((task) => (
                 <article key={task.id} className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-[#e5e7eb]"}`}>
-                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-[#1d1d1f]">{presets.find((preset) => preset.id === task.presetId)?.name ?? "形象照"}</span><span className="flex-none text-xs text-[#6e6e73]">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-[#8a8a8f]">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
+                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-[#1d1d1f]">{presetName(task.presetId)}</span><span className="flex-none text-xs text-[#6e6e73]">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-[#8a8a8f]">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
                   <div className="flex gap-2 px-3 pb-3">
                     {isActive(task) ? <button type="button" onClick={() => handleCancel(task)} disabled={busyTaskId === task.id} className="h-7 rounded-lg border border-red-200 px-2 text-xs font-semibold text-red-600 disabled:opacity-50">取消任务</button> : <button type="button" onClick={() => handleDeleteTask(task)} disabled={busyTaskId === task.id} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-[#6e6e73] disabled:opacity-50"><Icon icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"} className={busyTaskId === task.id ? "animate-spin" : ""} aria-hidden />删除</button>}
                   </div>
@@ -426,6 +499,8 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           </aside>
         </div>
       )}
+
+      {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}
     </section>
   );
 }

@@ -1,9 +1,12 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
 import { InAppSelect } from "../agent-teams/InAppSelect";
 import * as api from "../../workflowEcomMainApi";
 import type { EcomMainJob, EcomMainRatio, EcomMainResolution, EcomMainStyleId } from "../../workflowEcomMainApi";
+import { IMAGE_MODEL_OPTIONS, isImageModel, type ImageModel } from "../../workflowState";
+import { DownloadOverlayButton } from "./DownloadOverlayButton";
+import { SubmitCostBar } from "./SubmitCostBar";
 import {
   ECOM_MAIN_COUNT_OPTIONS,
   ECOM_MAIN_RATIO_OPTIONS,
@@ -11,8 +14,10 @@ import {
   ECOM_MAIN_STYLE_OPTIONS,
   ECOM_MAIN_TEXT_OPTIONS,
   buildCreateMainPayload,
+  coerceEcomMainResolution,
   estimateMainPointCost,
   formatEcomMainError,
+  isEcomMainResolutionBlocked,
   isMainJobGenerating,
 } from "./ecomMainImageModel";
 
@@ -42,6 +47,7 @@ const DEFAULT_CLIENT = api;
 export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloadImage, loadJob, onActivity, controlsHeader, historyFooter, client = DEFAULT_CLIENT }: EcomMainImageStudioProps) {
   const [ratio, setRatio] = useState<EcomMainRatio>("1:1");
   const [resolution, setResolution] = useState<EcomMainResolution>("1K");
+  const [model, setModel] = useState<ImageModel>(IMAGE_MODEL_OPTIONS[0].value);
   const [style, setStyle] = useState<EcomMainStyleId>("amazon_clean");
   const [customStyle, setCustomStyle] = useState("");
   const [withText, setWithText] = useState(true);
@@ -52,11 +58,24 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   const [notice, setNotice] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [redrawingIndexes, setRedrawingIndexes] = useState<readonly number[]>([]);
+  const pricingRequestSeq = useRef(0);
 
   useEffect(() => {
+    // 带上模型查询计价，预估与实际扣费保持同一条价格解析链路；
+    // 请求计数器丢弃乱序返回的旧响应，避免连续切模型后显示上一次的价格。
+    const seq = pricingRequestSeq.current + 1;
+    pricingRequestSeq.current = seq;
     void (async () => {
-      try { setPricing(await client.getEcomMainPricing(token)); } catch { setPricing(null); }
+      try {
+        const next = await client.getEcomMainPricing(token, model);
+        if (seq === pricingRequestSeq.current) setPricing(next);
+      } catch {
+        if (seq === pricingRequestSeq.current) setPricing(null);
+      }
     })();
+  }, [client, token, model]);
+
+  useEffect(() => {
     void (async () => {
       try { setJob((await client.getCurrentEcomMainJob(token)).job); } catch { /* 忽略：无历史任务 */ }
     })();
@@ -82,7 +101,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
     void (async () => {
       try {
         const payload = buildCreateMainPayload({
-          platformId: shared.platformId, ratio, resolution, style, customStyle, withText,
+          platformId: shared.platformId, ratio, resolution, model, style, customStyle, withText,
           productName: shared.productName, category: shared.category, sellingPointsInput: shared.sellingPointsInput,
           extra: shared.extra, referenceAssetIds: shared.referenceAssetIds, count,
         });
@@ -124,8 +143,8 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
 
   return (
     <section className="grid min-h-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-18.75rem)] min-h-[460px] max-h-[664px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
           {controlsHeader}
           <div className="pt-5">
             <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
@@ -133,12 +152,26 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           </div>
           <div className="mt-4 grid gap-3">
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+            模型
+            <InAppSelect icon="mdi:creation-outline" label="模型" value={model} options={IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} onChange={(v) => {
+              if (!isImageModel(v)) return;
+              setModel(v);
+              setResolution((current) => coerceEcomMainResolution(v, current, ratio));
+              clearFeedback();
+            }} />
+          </div>
+          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
             图片比例
-            <InAppSelect icon="mdi:crop" label="图片比例" value={ratio} options={ECOM_MAIN_RATIO_OPTIONS} onChange={(v) => { setRatio(v as EcomMainRatio); clearFeedback(); }} />
+            <InAppSelect icon="mdi:crop" label="图片比例" value={ratio} options={ECOM_MAIN_RATIO_OPTIONS} onChange={(v) => {
+              const nextRatio = v as EcomMainRatio;
+              setRatio(nextRatio);
+              setResolution((current) => coerceEcomMainResolution(model, current, nextRatio));
+              clearFeedback();
+            }} />
           </div>
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
             清晰度
-            <InAppSelect icon="mdi:high-definition" label="清晰度" value={resolution} options={ECOM_MAIN_RESOLUTION_OPTIONS} onChange={(v) => { setResolution(v as EcomMainResolution); clearFeedback(); }} />
+            <InAppSelect icon="mdi:high-definition" label="清晰度" value={resolution} options={ECOM_MAIN_RESOLUTION_OPTIONS.filter((option) => !isEcomMainResolutionBlocked(model, option.value, ratio))} onChange={(v) => { setResolution(v as EcomMainResolution); clearFeedback(); }} />
           </div>
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
             做图风格
@@ -147,7 +180,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           {style === "custom" && (
             <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
               自定义风格描述
-              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
+              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-lg border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
             </label>
           )}
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
@@ -163,15 +196,15 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
           )}
         </div>
-        <div className="sticky bottom-0 z-10 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
-          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold text-[#6e6e73]">
-            <span>预计消耗</span>
-            <span className="text-[#1d1d1f]">{estimated === null ? "--" : `${estimated} 算力点`}</span>
-          </div>
-          <RippleButton type="button" onClick={handleGenerate} disabled={busy} className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
-            {isSubmitting ? <><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成 {count} 张...</> : "生成主图"}
-          </RippleButton>
-        </div>
+        <SubmitCostBar
+          estimatedPointCost={estimated}
+          submitLabel="生成主图"
+          submitIcon="mdi:image-plus-outline"
+          submitDisabled={busy}
+          busy={isSubmitting}
+          busyLabel={`正在生成 ${count} 张...`}
+          onSubmit={handleGenerate}
+        />
       </aside>
 
       <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
@@ -181,7 +214,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           {isSubmitting && <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink"><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成</span>}
         </div>
         {isSubmitting && (
-          <div className="mt-3 flex items-center gap-2 rounded-[10px] bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
+          <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
             <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
             正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
           </div>
@@ -191,14 +224,14 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           {isSubmitting
             ? Array.from({ length: count }).map((_, skeletonIndex) => (
                 <article key={`skeleton-${skeletonIndex}`} className="overflow-hidden rounded-[12px] border border-[#e8e8ed]">
-                  <div className="relative grid aspect-square place-items-center overflow-hidden bg-[#eef1f3]">
-                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#eef1f3] via-[#f7f9fa] to-[#eef1f3]" />
+                  <div className="relative grid aspect-square place-items-center overflow-hidden bg-[#f5f5f7]">
+                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#f5f5f7] via-[#f7f8fa] to-[#f5f5f7]" />
                     <Icon icon="mdi:image-outline" className="relative animate-pulse text-3xl text-[#c4ccd1]" aria-hidden />
                   </div>
                   <div className="grid gap-2 p-3">
-                    <div className="h-3 w-1/3 animate-pulse rounded bg-[#eef1f3]" />
-                    <div className="h-3 w-full animate-pulse rounded bg-[#eef1f3]" />
-                    <div className="h-3 w-2/3 animate-pulse rounded bg-[#eef1f3]" />
+                    <div className="h-3 w-1/3 animate-pulse rounded bg-[#f5f5f7]" />
+                    <div className="h-3 w-full animate-pulse rounded bg-[#f5f5f7]" />
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-[#f5f5f7]" />
                   </div>
                 </article>
               ))
@@ -209,10 +242,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                       ? <img src={image.thumbnailUrl || image.originalUrl} alt={`主图 ${image.index + 1}`} className="h-full w-full object-cover" />
                       : <span className="text-xs text-[#8a8a8f]">{image.status === "failed" ? "生成失败" : "待生成"}</span>}
                     {image.originalUrl && onDownloadImage && (
-                      <button type="button" onClick={() => onDownloadImage(image.originalUrl!)}
-                        className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-100 transition ">
-                        <Icon icon="mdi:download" aria-hidden />下载原图
-                      </button>
+                      <DownloadOverlayButton onClick={() => onDownloadImage(image.originalUrl!)} />
                     )}
                     {redrawingIndexes.includes(image.index) && (
                       <div className="absolute inset-0 grid place-items-center bg-white/70">

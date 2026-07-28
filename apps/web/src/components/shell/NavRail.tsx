@@ -5,7 +5,7 @@ import { AnimatedNumber, BrandLogo, SpendBurst, spring, computeSpendBurst } from
 import { WORKFLOW_MODULES, type WorkflowModuleId } from "../../workflowState";
 import { HoverPopover } from "./HoverPopover";
 import { WorkflowFlyout } from "./WorkflowFlyout";
-import { isClientMenuVisible, type ClientMenuVisibility } from "../../clientMenu";
+import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { ThemeToggle } from "../ThemeToggle";
 
 export type ViewType = "chat" | "models" | "kb" | "tool-market" | "workflow" | "video" | "digital-human" | "report" | "agent-teams" | "billing" | "memory" | "settings" | "wechat";
@@ -113,7 +113,7 @@ export function NavRail({
     isClientMenuVisible(menuVisibility, `nav.${item.id}`),
   );
   const visibleWorkflowSubItems = WORKFLOW_SUB_ITEMS.filter((sub) =>
-    isClientMenuVisible(menuVisibility, `workflow.${sub.id}`),
+    isWorkflowSubVisible(menuVisibility, sub.id),
   );
 
   // SpendBurst state

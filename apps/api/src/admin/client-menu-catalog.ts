@@ -5,6 +5,10 @@ export interface ClientMenuDefinition {
   readonly label: string;
   readonly group: ClientMenuGroup;
   readonly defaultVisible: boolean;
+  /** 三级菜单（模块内 tab）所属的二级菜单 key；一级/二级菜单为空。 */
+  readonly parentKey?: string;
+  /** 菜单合并前使用的旧 key，用于沿用后台已保存的开关，不再接受写入。 */
+  readonly legacyKey?: string;
 }
 
 /**
@@ -23,8 +27,19 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
   { key: "nav.memory", label: "记忆", group: "main", defaultVisible: true },
   { key: "nav.settings", label: "设置", group: "main", defaultVisible: true },
   { key: "workflow.image", label: "生图模块", group: "workflow", defaultVisible: true },
+  // 生图模块已把通用生图 / 电商生图 / 形象照合并成同一页面的三个 tab，
+  // 因此电商图不再是独立二级菜单，改为生图模块下的三级菜单；旧 key 的开关沿用到电商生图。
+  { key: "workflow.image.general", label: "通用生图", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
+  {
+    key: "workflow.image.ecom",
+    label: "电商生图",
+    group: "workflow",
+    defaultVisible: true,
+    parentKey: "workflow.image",
+    legacyKey: "workflow.commerce-long-image",
+  },
+  { key: "workflow.image.portrait", label: "形象照", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.novel", label: "小说模块", group: "workflow", defaultVisible: true },
-  { key: "workflow.commerce-long-image", label: "AI 电商图", group: "workflow", defaultVisible: true },
   { key: "workflow.codex-pet", label: "Codex 桌宠工坊", group: "workflow", defaultVisible: false },
   { key: "workflow.report", label: "AI 智能报告", group: "workflow", defaultVisible: false },
   { key: "workflow.fanout", label: "文案裂变", group: "workflow", defaultVisible: false },
@@ -47,6 +62,9 @@ export function resolveClientMenuItems(
   const saved = new Map(rows.map((row) => [row.key, row.visible]));
   return CLIENT_MENU_CATALOG.map((item) => ({
     ...item,
-    visible: saved.get(item.key) ?? item.defaultVisible,
+    visible:
+      saved.get(item.key)
+      ?? (item.legacyKey === undefined ? undefined : saved.get(item.legacyKey))
+      ?? item.defaultVisible,
   }));
 }

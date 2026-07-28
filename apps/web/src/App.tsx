@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
+  ApiError,
   getBalance,
+  getMe,
   listSessions,
   getSessionMessages,
   deleteSession,
@@ -8,6 +10,7 @@ import {
   listAgents,
   type AgentOption,
   type ChatAttachmentPayload,
+  type MeResponse,
   type Session,
 } from "./api";
 import Shell, { type ViewType, type WorkflowSubId } from "./components/shell/Shell";
@@ -40,6 +43,7 @@ import {
   firstVisibleClientView,
   getClientMenuVisibility,
   isClientMenuVisible,
+  isWorkflowSubVisible,
   type ClientMenuVisibility,
 } from "./clientMenu";
 
@@ -62,6 +66,7 @@ function sessionAgentOption(session?: Session): AgentOption | null {
 
 export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem("ai_assistant_token") ?? "");
+  const [me, setMe] = useState<MeResponse | null>(null);
   const [authView, setAuthView] = useState<"login" | "register">("login");
   const [view, setView] = useState<ViewType>(() => novelProjectIdFromHash(window.location.hash) ? "workflow" : "chat");
   const [workflowModule, setWorkflowModule] = useState<WorkflowModuleId>(() => novelProjectIdFromHash(window.location.hash) ? "novel" : "image");
@@ -97,6 +102,27 @@ export default function App() {
   useEffect(() => {
     if (token) localStorage.setItem("ai_assistant_token", token);
     else localStorage.removeItem("ai_assistant_token");
+  }, [token]);
+
+  // 拉取当前账号信息（设置页展示 uid/用户名）；token 失效时清除登录态
+  useEffect(() => {
+    if (!token) {
+      setMe(null);
+      return;
+    }
+    let cancelled = false;
+    getMe(token)
+      .then((profile) => {
+        if (!cancelled) setMe(profile);
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setMe(null);
+        if (err instanceof ApiError && (err.status === 401 || err.status === 403)) setToken("");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   // 加载会话（须在任何条件 return 之前调用，保证 hook 顺序稳定）
@@ -193,7 +219,7 @@ export default function App() {
     const subVisible = view === "report"
       ? isClientMenuVisible(menuVisibility, "workflow.report")
       : view === "workflow"
-        ? isClientMenuVisible(menuVisibility, `workflow.${workflowModule}`)
+        ? isWorkflowSubVisible(menuVisibility, workflowModule)
         : true;
     if (!mainVisible || ((view === "workflow" || view === "report") && (!workflowVisible || !subVisible))) {
       setView(firstVisibleClientView(menuVisibility));
@@ -549,7 +575,8 @@ export default function App() {
       return (
         <Settings
           token={token}
-          userName="用户"
+          uid={me?.uid}
+          userName={me?.username}
           preferredModel={preferredModel}
           onPreferredModelChange={handlePreferredModelChange}
           onLogout={() => setToken("")}
@@ -590,6 +617,7 @@ export default function App() {
         <Workflow
           token={token}
           activeModuleId={workflowModule}
+          menuVisibility={menuVisibility}
           onBalanceRefresh={refreshBalance}
           initialCodexPetProjectId={codexPetProjectTarget}
           onOpenKnowledgeDocument={(documentId) => {

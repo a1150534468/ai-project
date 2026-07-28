@@ -27,6 +27,7 @@ import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio"
 import { CodexPetStudio } from "../components/workflow/CodexPetStudio";
 import type { EcomMainJob } from "../workflowEcomMainApi";
 import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
+import { visibleImageHubTabs, type ClientMenuVisibility, type ImageHubTabId } from "../clientMenu";
 import {
   WORKFLOW_MODULES,
   advanceImageTaskStatus,
@@ -79,6 +80,7 @@ interface WorkflowProps {
   readonly onBalanceRefresh?: () => void;
   readonly initialCodexPetProjectId?: string | null;
   readonly onOpenKnowledgeDocument?: (documentId: string) => void;
+  readonly menuVisibility?: ClientMenuVisibility;
 }
 
 function createRequestId(): string {
@@ -127,7 +129,7 @@ function remainingImageCount(tasks: readonly ImageTask[]): number {
 
 const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerce-long-image", "codex-pet"]);
 
-export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument }: WorkflowProps) {
+export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument, menuVisibility }: WorkflowProps) {
   const toast = useToast();
   const [imageDraft, setImageDraft] = useState<ImageDraft>(DEFAULT_IMAGE_DRAFT);
   const [preEditDraft, setPreEditDraft] = useState<ImageDraft | null>(null);
@@ -143,6 +145,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   const [imageGenerationIntent, setImageGenerationIntent] = useState<ImageGenerationIntent>("new");
   const [pendingVersionRequestId, setPendingVersionRequestId] = useState<string | null>(null);
   const hasInitializedImageState = useRef(false);
+  const pricingRequestSeq = useRef(0);
+  const retryingRequestIds = useRef<Set<string>>(new Set());
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [isUploadingReference, setIsUploadingReference] = useState(false);
   const [cancellingTaskIds, setCancellingTaskIds] = useState<readonly string[]>([]);
@@ -168,14 +172,21 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
       : "min-w-0 h-full";
 
   // 生图模块与 AI 电商图、形象照合并为同一个全屏工作区（Hub）：顶部 tab 切换。
-  // 三套 studio 同时常驻 DOM，用 hidden 切换，表单内容零丢失。
+  // 各 studio 常驻 DOM，用 hidden 切换，表单内容零丢失；tab 集合由后台菜单开关决定。
   const isImageHub = activeModuleId === "image" || activeModuleId === "commerce-long-image";
-  const [imageSubMode, setImageSubMode] = useState<"general" | "ecom" | "portrait">(
+  const imageTabs = useMemo(() => visibleImageHubTabs(menuVisibility), [menuVisibility]);
+  const [requestedSubMode, setRequestedSubMode] = useState<ImageHubTabId>(
     activeModuleId === "commerce-long-image" ? "ecom" : "general",
   );
   useEffect(() => {
-    setImageSubMode(activeModuleId === "commerce-long-image" ? "ecom" : "general");
+    setRequestedSubMode(activeModuleId === "commerce-long-image" ? "ecom" : "general");
   }, [activeModuleId]);
+  // 后台关掉当前 tab 时回落到第一个仍开启的 tab，不用副作用，避免多渲染一帧空白。
+  const imageSubMode: ImageHubTabId | null = imageTabs.some((tab) => tab.id === requestedSubMode)
+    ? requestedSubMode
+    : imageTabs[0]?.id ?? null;
+  const setImageSubMode = setRequestedSubMode;
+  const hasImageTab = (tabId: ImageHubTabId) => imageTabs.some((tab) => tab.id === tabId);
   const { prompt, model: imageModel, aspectRatio, resolution, countInput, referenceImages } = imageDraft;
   const parsedQuickCount = Number.parseInt(countInput, 10);
   const selectedQuickCount = [1, 2, 4, 8].includes(parsedQuickCount) ? parsedQuickCount : 0;
@@ -236,11 +247,15 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
     }
   }, [token]);
 
-  const refreshImagePricing = useCallback(async () => {
+  // 模型切换会重新拉取 model 感知价格；请求计数器丢弃乱序返回的旧响应。
+  const refreshImagePricing = useCallback(async (pricingModel: ImageModel) => {
+    const seq = pricingRequestSeq.current + 1;
+    pricingRequestSeq.current = seq;
     try {
-      setImagePricing(await getImageWorkflowPricing(token));
+      const next = await getImageWorkflowPricing(token, pricingModel);
+      if (seq === pricingRequestSeq.current) setImagePricing(next);
     } catch {
-      setImagePricing(null);
+      if (seq === pricingRequestSeq.current) setImagePricing(null);
     }
   }, [token]);
 
@@ -249,8 +264,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   }, [refreshImageState]);
 
   useEffect(() => {
-    void refreshImagePricing();
-  }, [refreshImagePricing]);
+    void refreshImagePricing(imageModel);
+  }, [refreshImagePricing, imageModel]);
 
   useEffect(() => {
     if (!tasks.some(isActiveTask)) return undefined;
@@ -564,12 +579,63 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
     setNotice("");
   };
 
+  // 失败重试严格按原任务参数重建请求，不读取当前表单草稿，也不改动表单状态。
+  // 同一个原任务的重试在飞行中直接忽略，避免连点重复预扣费。
   const handleRetryTask = (task: ImageTask) => {
-    submitImageDraft(
-      imageDraft,
-      task.generationIntent ?? "new",
-      task.sourceImageAssetId ?? null,
-    );
+    if (retryingRequestIds.current.has(task.id)) return;
+    retryingRequestIds.current.add(task.id);
+    const requestId = createRequestId();
+    const intent = task.generationIntent ?? "new";
+    const model = task.model && isImageModel(task.model) ? task.model : DEFAULT_IMAGE_MODEL;
+    const retryTask: ImageTask = {
+      ...task,
+      id: requestId,
+      status: "running",
+      completedCount: 0,
+      error: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setError("");
+    setNotice("");
+    setSelectedRequestId(requestId);
+    setSelectedImageId(null);
+    setTasks((prev) => mergeTask(prev, retryTask));
+    if (intent === "new") {
+      setWorkspaceMode("result");
+      setCompareImageIds(null);
+    } else {
+      setPendingVersionRequestId(requestId);
+    }
+
+    void (async () => {
+      try {
+        const result = await generateWorkflowImages(token, {
+          requestId,
+          model,
+          prompt: task.prompt,
+          size: task.size,
+          resolution: resolveImageSizeSelection(task.size)?.resolution,
+          referenceAssetIds: [...(task.referenceAssetIds ?? [])],
+          sourceImageAssetId: task.sourceImageAssetId ?? undefined,
+          generationIntent: intent,
+          count: task.count,
+        });
+        setImages(result.recent);
+        setTasks((prev) => mergeTask(prev, toImageTask(result.task)));
+        toast.show("ok", "已按原参数重新提交");
+        onBalanceRefresh?.();
+      } catch (err) {
+        const message = err instanceof ApiError && err.status === 402 ? "积分不足，请充值" : errorMessage(err, "创建生图任务失败");
+        setError(message);
+        toast.show("err", message);
+        setTasks((prev) => prev.map((item) => (item.id === requestId
+          ? { ...item, status: "failed", error: message, updatedAt: new Date().toISOString() }
+          : item)));
+      } finally {
+        retryingRequestIds.current.delete(task.id);
+      }
+    })();
   };
 
   const handleSetCurrentVersion = (image: WorkflowImageAsset) => {
@@ -598,30 +664,19 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
               <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
             </header>
           )}
-          {isImageHub && (
+          {isImageHub && imageTabs.length > 1 && (
             <div className="flex-none px-4 pt-3 lg:px-6">
               <div className="inline-flex rounded-[10px] bg-[#ececf0] p-1">
-                <button
-                  type="button"
-                  onClick={() => setImageSubMode("general")}
-                  className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === "general" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
-                >
-                  通用生图
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageSubMode("ecom")}
-                  className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === "ecom" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
-                >
-                  电商生图
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setImageSubMode("portrait")}
-                  className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === "portrait" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
-                >
-                  形象照
-                </button>
+                {imageTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setImageSubMode(tab.id)}
+                    className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
           )}
@@ -629,6 +684,13 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
 
           {isImageHub ? (
             <>
+              {imageTabs.length === 0 && (
+                <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-[#6e6e73]">
+                  <Icon icon="mdi:image-off-outline" className="mx-auto mb-3 text-3xl text-[#8a8a8f]" aria-hidden />
+                  <p className="text-sm font-semibold">生图模块暂未开放</p>
+                </section>
+              )}
+              {hasImageTab("general") && (
               <div className={imageSubMode === "general" ? "min-h-0 xl:h-full" : "hidden"}>
           <ImageWorkflowStudio
             prompt={prompt}
@@ -693,6 +755,8 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             onRemoveReference={handleRemoveReference}
           />
               </div>
+              )}
+              {hasImageTab("ecom") && (
               <div className={imageSubMode === "ecom" ? "min-h-0 xl:h-full" : "hidden"}>
           <CommerceImageStudio
             token={token}
@@ -713,9 +777,12 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             }}
           />
               </div>
+              )}
+              {hasImageTab("portrait") && (
               <div className={imageSubMode === "portrait" ? "min-h-0 xl:h-full" : "hidden"}>
                 <PortraitWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
               </div>
+              )}
             </>
         ) : activeModuleId === "novel" ? (
           <NovelWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />

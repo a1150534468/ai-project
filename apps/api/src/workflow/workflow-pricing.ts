@@ -1,5 +1,5 @@
 import { ECOM_RESOURCE_KEYS } from "./ecom-route-helpers.js";
-import { imageGenerationResourceKey, type ImageResolutionLabel } from "./image-upstream-options.js";
+import { imageGenerationResourceKey, imageModelResourceKey, type ImageResolutionLabel } from "./image-upstream-options.js";
 
 export interface WorkflowResourcePriceRow {
   readonly resourceKey: string;
@@ -103,6 +103,56 @@ export async function resolveEcomPricing(billing: ResourcePriceLister): Promise<
     stitch: resolveResourcePrice(rows, ECOM_STITCH_PRICE_FALLBACK),
   };
 }
+
+/**
+ * 选择实际用于扣费/展示的价格行，优先级：
+ *   1. 模块专属 key（dedicatedKey，如 ecom_main_image_generation_2k）——管理台已配置且启用时生效；
+ *   2. 模型专属 key（image_generation_{model}_{res}）——同上；
+ *   3. 通用分辨率 key（image_generation_{res}）——合并管理台费率与内置默认。
+ * 专属 key 只有在管理台真实配置后才会命中，因此计费服务缺价不会导致扣费失败。
+ */
+export function resolveImageChargeRow(
+  rows: readonly WorkflowResourcePriceRow[],
+  args: {
+    readonly resolution: ImageResolutionLabel;
+    readonly model?: string;
+    readonly dedicatedKey?: string;
+    readonly fallback?: (resolution: ImageResolutionLabel) => WorkflowResourcePriceRow;
+  },
+): WorkflowResourcePriceRow {
+  const candidates = [
+    args.dedicatedKey,
+    args.model ? imageModelResourceKey(args.model, args.resolution) : undefined,
+  ].filter((key): key is string => Boolean(key));
+  for (const key of candidates) {
+    const found = rows.find((row) => row.resourceKey === key && row.enabled);
+    if (found) return found;
+  }
+  return resolveResourcePrice(rows, (args.fallback ?? imagePriceFallback)(args.resolution));
+}
+
+/** 三档清晰度的模型/模块感知价格矩阵；billing 缺失时回落内置默认。 */
+export async function resolveImagePricingMatrix(
+  billing: ResourcePriceLister,
+  args?: {
+    readonly model?: string;
+    readonly dedicatedKeyFor?: (resolution: ImageResolutionLabel) => string;
+    readonly fallback?: (resolution: ImageResolutionLabel) => WorkflowResourcePriceRow;
+  },
+): Promise<ImagePricing> {
+  const rows = billing.listResourcePrices ? (await billing.listResourcePrices()).data ?? [] : [];
+  return IMAGE_RESOLUTION_LABELS.reduce((acc, resolution) => {
+    acc[resolution] = resolveImageChargeRow(rows, {
+      resolution,
+      model: args?.model,
+      dedicatedKey: args?.dedicatedKeyFor?.(resolution),
+      fallback: args?.fallback,
+    });
+    return acc;
+  }, {} as Record<ImageResolutionLabel, WorkflowResourcePriceRow>);
+}
+
+export { imagePriceFallback, ecomMasterPriceFallback, ecomSegmentPriceFallback, ecomMainImagePriceFallback };
 
 const ECOM_MAIN_IMAGE_DEFAULT_RATE: Readonly<Record<ImageResolutionLabel, number>> = { "1K": 10, "2K": 20, "4K": 40 };
 

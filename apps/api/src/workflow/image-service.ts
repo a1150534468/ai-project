@@ -4,6 +4,8 @@ import sharp from "sharp";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js";
 import { imageResolutionFromSize } from "./image-upstream-options.js";
+import { IMAGE_STREAM_PARTIAL_IMAGES, readImageStream } from "./image-stream.js";
+import { withImageStreamDispatcher } from "./image-stream-dispatcher.js";
 
 export const QWEN_IMAGE_MODEL = "qwen-image-2.0-pro-2026-04-22";
 export const GPT_IMAGE_MODEL = "gpt-image-2";
@@ -134,7 +136,15 @@ export class ImageGenerationTimeoutError extends Error {
   }
 }
 
-export interface StoredImage { readonly originalUrl: string; readonly thumbnailUrl: string; readonly mime: string; readonly objectKey: string | null; }
+export interface StoredImage {
+  readonly originalUrl: string;
+  readonly thumbnailUrl: string;
+  readonly mime: string;
+  readonly objectKey: string | null;
+  /** 实际交付像素；上游只给 url 且没配对象存储时拿不到，为 null。 */
+  readonly width?: number | null;
+  readonly height?: number | null;
+}
 
 export interface RetryOptions {
   readonly retryDelayMs: number;
@@ -509,7 +519,7 @@ async function fetchWithTimeout(
     if (controller.signal.aborted) throw new DOMException("This operation was aborted", "AbortError");
     // Calling fetch is the only durable boundary we can observe locally. A
     // later socket failure is still an attempted provider request.
-    const response = fetchFn(url, { ...init, signal: controller.signal });
+    const response = fetchFn(url, withImageStreamDispatcher(url, { ...init, signal: controller.signal }));
     try {
       await onRequestSent?.();
     } catch (error) {
@@ -751,6 +761,20 @@ export function loadGptImageEditEndpoint(
   }
 }
 
+export function imageStreamEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.IMAGE_UPSTREAM_STREAM?.trim() !== "0";
+}
+
+/**
+ * 按实际 content-type 分派：中继若忽略 stream 参数直接回 JSON，这里照旧解析，
+ * 因此开启流式不会让「不支持流式的上游」失效。
+ */
+export async function readImagePayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/event-stream")) return await response.json();
+  return (await readImageStream(response)).payload;
+}
+
 export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_ATTEMPT_TIMEOUT_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_ATTEMPT_TIMEOUT_MS;
@@ -803,6 +827,7 @@ export async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryO
 export async function callImageGenerationDetailed(args: CallImageGenerationArgs): Promise<ImageGenerationResult> {
   const requestedQuality = args.quality ?? "auto";
   const requestedFormat = args.outputFormat ?? "png";
+  const streamOpenAi = args.config.protocol === "openai" && imageStreamEnabled(args.env);
   const body = args.config.protocol === "openai"
     ? {
         model: args.config.model,
@@ -811,6 +836,8 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
         size: gptImageSize(args.size),
         quality: requestedQuality,
         output_format: requestedFormat,
+        // 流式保活，绕开中继 60s 读超时；详见 image-stream.ts。
+        ...(streamOpenAi ? { stream: true, partial_images: IMAGE_STREAM_PARTIAL_IMAGES } : {}),
       }
     : args.config.protocol === "volcengine"
       ? {
@@ -835,7 +862,7 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
     body: JSON.stringify(body),
   }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
   if (!response.ok) throw await upstreamError(response);
-  const payload = await response.json();
+  const payload = await readImagePayload(response);
   return await detailedResult(
     payload,
     { model: args.config.model, size: args.size, quality: requestedQuality },
@@ -892,6 +919,11 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
     form.set("size", requestedSize);
     form.set("quality", requestedQuality);
     form.set("output_format", outputFormat);
+    if (imageStreamEnabled(env)) {
+      // 流式保活，绕开中继 60s 读超时；详见 image-stream.ts。
+      form.set("stream", "true");
+      form.set("partial_images", String(IMAGE_STREAM_PARTIAL_IMAGES));
+    }
     const referenceParts = await Promise.all(args.referenceImages.map((image, index) => (
       openAiEditImagePart(image, `reference image ${index + 1}`, `reference-${index + 1}.png`)
     )));
@@ -909,7 +941,7 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       body: form,
     }, loadImageAttemptTimeoutMs(env), args.signal, args.onRequestSent);
     if (!response.ok) throw await upstreamError(response);
-    const payload = await response.json();
+    const payload = await readImagePayload(response);
     return await detailedResult(
       payload,
       { model: args.config.model, size: requestedSize, quality: requestedQuality },
@@ -947,6 +979,16 @@ export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedI
   return (await callImageEditDetailed(args)).image;
 }
 
+/** 量一下真实宽高，量不出来就当没有——上游返回损坏数据不该拦住入库。 */
+async function measureBinary(buffer: Buffer): Promise<{ width: number | null; height: number | null }> {
+  try {
+    const metadata = await sharp(buffer, { limitInputPixels: GPT_IMAGE_MAX_PIXELS }).metadata();
+    return { width: metadata.width ?? null, height: metadata.height ?? null };
+  } catch {
+    return { width: null, height: null };
+  }
+}
+
 export async function storeWorkflowImage(args: StoreWorkflowImageArgs): Promise<StoredImage> {
   const env = args.env ?? process.env;
   const loaded = tryLoadS3(env);
@@ -959,9 +1001,10 @@ export async function storeWorkflowImage(args: StoreWorkflowImageArgs): Promise<
   const binary = args.image.kind === "b64"
     ? { buffer: Buffer.from(args.image.b64, "base64"), mime: args.image.mime }
     : await fetchRemoteImage(args.image.url, args.fetchFn, env, args.signal);
+  const measured = await measureBinary(binary.buffer);
   if (!loaded) {
     const dataUrl = dataUrlForBinary(binary);
-    return { originalUrl: dataUrl, thumbnailUrl: dataUrl, mime: binary.mime, objectKey: null };
+    return { originalUrl: dataUrl, thumbnailUrl: dataUrl, mime: binary.mime, objectKey: null, ...measured };
   }
   const extension = binary.mime.includes("webp")
     ? "webp"
@@ -979,5 +1022,5 @@ export async function storeWorkflowImage(args: StoreWorkflowImageArgs): Promise<
     : shouldInlineStoredImageForLocalEndpoint(loaded.cfg, env)
     ? dataUrlForBinary(binary)
     : publicObjectUrl(loaded.cfg, key, env);
-  return { originalUrl: url, thumbnailUrl: url, mime: binary.mime, objectKey: key };
+  return { originalUrl: url, thumbnailUrl: url, mime: binary.mime, objectKey: key, ...measured };
 }

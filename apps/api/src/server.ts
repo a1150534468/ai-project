@@ -100,6 +100,26 @@ export async function buildServer() {
     bodyLimit: Number(process.env.API_BODY_LIMIT_BYTES) || 30 * 1024 * 1024,
   });
 
+  // 全局错误处理：Fastify 默认处理器会把 error.message（含 Prisma 的绝对路径、
+  // 查询结构等内部信息）原样写进 500 响应体，这里统一收敛为通用文案，详情只进日志。
+  app.setErrorHandler((err: unknown, req, reply) => {
+    const e = err as Partial<{ statusCode: number; message: string }>;
+    const status =
+      typeof e.statusCode === "number" && e.statusCode >= 400 && e.statusCode < 500
+        ? e.statusCode
+        : 500;
+    if (status >= 500) req.log.error({ err }, "unhandled error");
+    else req.log.warn({ err }, "request error");
+    // SSE 等流式响应出错时响应头已发出，再 send 会二次写头，只能断开连接。
+    if (reply.raw.headersSent) {
+      reply.raw.end();
+      return reply;
+    }
+    return reply
+      .code(status)
+      .send({ error: status >= 500 ? "服务器内部错误" : (typeof e.message === "string" ? e.message : "请求失败") });
+  });
+
   const docsEnabled = apiDocsEnabled();
   // Swagger 必须先于业务路由注册，才能完整收集 Fastify 路由。
   if (docsEnabled) await registerOpenApi(app);

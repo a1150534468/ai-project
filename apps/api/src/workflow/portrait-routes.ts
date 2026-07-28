@@ -19,19 +19,27 @@ import {
   type ImageGenerationConfig,
   type StoredImage,
 } from "./image-service.js";
-import { imageGenerationResourceKey } from "./image-upstream-options.js";
 import {
   buildPortraitPrompt,
+  LEGACY_PORTRAIT_PRESET_NAMES,
   PORTRAIT_CONSENT_VERSION,
   PORTRAIT_MODEL,
+  PORTRAIT_MODELS,
+  PORTRAIT_PRESET_IDS,
   PORTRAIT_PRESETS,
   portraitOutputSize,
   type PortraitAspectRatio,
+  type PortraitModelValue,
   type PortraitPresetId,
   type PortraitPromptOptions,
   type PortraitResolution,
 } from "./portrait-prompts.js";
-import { resolveImagePricing, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
+import {
+  resolveImageChargeRow,
+  type WorkflowResourcePriceRow,
+} from "./workflow-pricing.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
+import type { ImageResolutionLabel } from "./image-upstream-options.js";
 
 const PORTRAIT_MAX_REFERENCE_COUNT = 3;
 const PORTRAIT_MAX_COUNT = 4;
@@ -50,11 +58,13 @@ const portraitReferenceSchema = z.object({
     mime: z.string().trim().regex(/^image\/[A-Za-z0-9.+-]+$/).optional(),
   }),
 });
+const PORTRAIT_MODEL_VALUES = PORTRAIT_MODELS.map((item) => item.value) as [PortraitModelValue, ...PortraitModelValue[]];
 const portraitRequestSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
-  presetId: z.enum(["business", "social", "lifestyle", "traditional", "poster", "custom"]),
+  presetId: z.enum(PORTRAIT_PRESET_IDS),
+  model: z.enum(PORTRAIT_MODEL_VALUES).default(PORTRAIT_MODEL),
   aspectRatio: z.enum(["1:1", "3:4", "4:3", "9:16", "16:9"]),
-  resolution: z.enum(["2K", "4K"]).default("2K"),
+  resolution: z.enum(["1K", "2K", "4K"]).default("2K"),
   count: z.number().int().min(1).max(PORTRAIT_MAX_COUNT).default(1),
   referenceAssetIds: z.array(z.string().trim().min(1).max(128)).min(1).max(PORTRAIT_MAX_REFERENCE_COUNT)
     .refine((ids) => new Set(ids).size === ids.length, "参考图不能重复"),
@@ -300,6 +310,46 @@ async function markReferencesForCleanup(prisma: PrismaClient, ids: readonly stri
   });
 }
 
+function normalizePortraitResolution(value: string): ImageResolutionLabel {
+  const normalized = value.trim().toUpperCase();
+  return normalized === "1K" || normalized === "2K" || normalized === "4K" ? normalized : "2K";
+}
+
+/**
+ * 结算用的 resourceKey：按实际交付像素反查档位，而不是照用户请求的档位收钱。
+ * 上游会忽略我们请求的绝对像素、只按宽高比给固定预算（实测请求 2K 也只交付 ~1.57MP），
+ * 照请求档位结算等于让用户为 1K 的像素付 2K 的价。结算档位永不高于请求档位。
+ * 任何一步算不出来都回落到预留时那个 key，宁可保持原样也不要把结算搞挂。
+ */
+async function resolvePortraitSettleKey(args: {
+  readonly prisma: PrismaClient;
+  readonly billing: PortraitBilling;
+  readonly task: PortraitTaskRow;
+}): Promise<{ readonly resourceKey: string; readonly settledResolution: string }> {
+  const fallback = { resourceKey: args.task.billingResourceKey, settledResolution: args.task.resolution };
+  try {
+    const outputs = await args.prisma.portraitOutput.findMany({
+      where: { taskId: args.task.id },
+      select: { width: true, height: true },
+    });
+    const deliveredPixels = minDeliveredPixels(outputs.map((output) => `${output.width}x${output.height}`));
+    const requested = normalizePortraitResolution(args.task.resolution);
+    const settled = deliveredImageResolution({
+      requested,
+      deliveredPixels,
+      pixelsForResolution: (resolution) => pixelsFromSize(
+        portraitOutputSize(resolution as PortraitResolution, args.task.aspectRatio as PortraitAspectRatio),
+      ),
+    });
+    if (settled === requested) return fallback;
+    const rows = args.billing.listResourcePrices ? (await args.billing.listResourcePrices()).data ?? [] : [];
+    const row = resolveImageChargeRow(rows, { resolution: settled, model: args.task.model });
+    return { resourceKey: row.resourceKey, settledResolution: settled };
+  } catch {
+    return fallback;
+  }
+}
+
 async function settlePortraitBilling(args: {
   readonly prisma: PrismaClient;
   readonly billing: PortraitBilling;
@@ -309,8 +359,13 @@ async function settlePortraitBilling(args: {
   const current = await args.prisma.portraitTask.findUnique({ where: { id: args.task.id } }) as unknown as PortraitTaskRow | null;
   if (!current || current.billingStatus === "settled" || current.billingStatus === "refunded") return;
   if (args.units > 0) {
-    await args.billing.settleResource({ operationId: current.billingOperationId, resourceKey: current.billingResourceKey, units: args.units });
-    await args.prisma.portraitTask.update({ where: { id: current.id }, data: { billingStatus: "settled", billingSettledUnits: args.units } });
+    const settle = await resolvePortraitSettleKey({ prisma: args.prisma, billing: args.billing, task: current });
+    await args.billing.settleResource({ operationId: current.billingOperationId, resourceKey: settle.resourceKey, units: args.units });
+    // 落库成真正扣掉的那个 key；预留时那个 key 仍在计费服务的 UsageRecord 里，对账两头都查得到。
+    await args.prisma.portraitTask.update({
+      where: { id: current.id },
+      data: { billingStatus: "settled", billingSettledUnits: args.units, billingResourceKey: settle.resourceKey },
+    });
   } else {
     await args.billing.refundResource(current.billingOperationId);
     await args.prisma.portraitTask.update({ where: { id: current.id }, data: { billingStatus: "refunded", billingSettledUnits: 0 } });
@@ -436,6 +491,16 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   const retryDelayMs = deps.retryDelayMs ?? (Number(process.env.PORTRAIT_RETRY_DELAY_MS) || PORTRAIT_RETRY_DELAY_MS);
   const maxAttempts = deps.maxAttempts ?? (Number(process.env.PORTRAIT_MAX_ATTEMPTS) || PORTRAIT_DEFAULT_MAX_ATTEMPTS);
   const activeTasks = new Map<string, AbortController>();
+  // 管理台费率只拉一次；失败时回落通用 key 但必须留痕。
+  const listPriceRows = async (): Promise<readonly WorkflowResourcePriceRow[]> => {
+    if (!billing.listResourcePrices) return [];
+    try {
+      return (await billing.listResourcePrices()).data ?? [];
+    } catch (error) {
+      app.log.warn({ error: safeErrorMessage(error) }, "portrait listResourcePrices failed, falling back to generic image pricing keys");
+      return [];
+    }
+  };
 
   const schedule = (task: PortraitTaskRow) => {
     if (activeTasks.has(task.requestId) || PORTRAIT_TERMINAL_STATUSES.has(task.status)) return;
@@ -493,16 +558,27 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   app.get("/api/workflow/portraits/options", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
-    const pricing = await resolveImagePricing(billing);
+    const priceRows = await listPriceRows();
+    const resolutions: readonly PortraitResolution[] = ["1K", "2K", "4K"];
+    const pricingByModel: Record<string, Partial<Record<PortraitResolution, number>>> = {};
+    for (const model of PORTRAIT_MODELS) {
+      // 模型不支持的档位（gpt-image-2 无 4K、豆包无 1K）不下发价格，避免前端展示无法下单的档位。
+      pricingByModel[model.value] = Object.fromEntries(resolutions
+        .filter((resolution) => (resolution === "4K" ? model.supports4K : resolution === "1K" ? model.supports1K : true))
+        .map((resolution) => [resolution, resolveImageChargeRow(priceRows, { resolution, model: model.value }).rate]));
+    }
     return {
       success: true,
       data: {
         model: PORTRAIT_MODEL,
+        models: PORTRAIT_MODELS,
         consentVersion: PORTRAIT_CONSENT_VERSION,
-        presets: PORTRAIT_PRESETS,
+        presets: PORTRAIT_PRESETS.map((preset) => ({ id: preset.id, name: preset.name, description: preset.description, finish: preset.finish })),
+        legacyPresetNames: LEGACY_PORTRAIT_PRESET_NAMES,
         aspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
-        resolutions: ["2K", "4K"],
-        pricing: { "2K": pricing["2K"], "4K": pricing["4K"] },
+        resolutions,
+        pricing: Object.fromEntries(resolutions.map((resolution) => [resolution, resolveImageChargeRow(priceRows, { resolution })])),
+        pricingByModel,
       },
     };
   });
@@ -617,6 +693,9 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     if (!userId) return reply.code(401).send({ error: "未登录" });
     const parsed = portraitRequestSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "人像生成参数不完整，且必须确认你拥有参考人物的授权" });
+    const model = PORTRAIT_MODELS.find((item) => item.value === parsed.data.model) ?? PORTRAIT_MODELS[0];
+    if (parsed.data.resolution === "4K" && !model.supports4K) return reply.code(400).send({ error: `${model.label} 暂不支持 4K，请选择 2K` });
+    if (parsed.data.resolution === "1K" && !model.supports1K) return reply.code(400).send({ error: `${model.label} 暂不支持 1K，请选择 2K` });
     const existing = await listTaskWithOutputs(prisma, userId, parsed.data.requestId);
     if (existing) return reply.code(existing.status === "completed" || existing.status === "partial" ? 200 : 202).send({ success: true, data: { task: serializeTask(existing) } });
     const crossUser = await prisma.portraitTask.findUnique({ where: { requestId: parsed.data.requestId }, select: { id: true } });
@@ -624,7 +703,9 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     const references = await loadOwnedReferences(prisma, userId, parsed.data.referenceAssetIds).catch(() => null);
     if (!references) return reply.code(404).send({ error: "参考图不存在或无权访问" });
     const effectivePrompt = buildPortraitPrompt({ presetId: parsed.data.presetId as PortraitPresetId, aspectRatio: parsed.data.aspectRatio as PortraitAspectRatio, options: parsed.data.options as PortraitPromptOptions });
-    const resourceKey = imageGenerationResourceKey(parsed.data.resolution);
+    // 管理台可为「模型专属/通用分辨率」key 配价，实际扣费必须使用命中的 resourceKey。
+    const chargeRow = resolveImageChargeRow(await listPriceRows(), { resolution: parsed.data.resolution, model: model.value });
+    const resourceKey = chargeRow.resourceKey;
     const billingOperationId = `portrait:${parsed.data.requestId}`;
     let task: PortraitTaskRow | null = null;
     let reserved = false;
@@ -633,7 +714,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
         data: {
           userId,
           requestId: parsed.data.requestId,
-          model: PORTRAIT_MODEL,
+          model: model.value,
           presetId: parsed.data.presetId,
           aspectRatio: parsed.data.aspectRatio,
           resolution: parsed.data.resolution,

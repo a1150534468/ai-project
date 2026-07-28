@@ -4,6 +4,8 @@ import {
   clientMenuKeyForView,
   firstVisibleClientView,
   isClientMenuVisible,
+  isWorkflowSubVisible,
+  visibleImageHubTabs,
 } from "./clientMenu";
 
 describe("clientMenu", () => {
@@ -24,5 +26,28 @@ describe("clientMenu", () => {
 
   it("当前入口隐藏后选择仍显示的主菜单作为落点", () => {
     expect(firstVisibleClientView({ "nav.chat": false, "nav.models": true })).toBe("models");
+  });
+
+  it("生图模块页内 tab 按后台开关过滤", () => {
+    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual(["general", "ecom", "portrait"]);
+    expect(visibleImageHubTabs({ "workflow.image.ecom": false }).map((tab) => tab.id)).toEqual([
+      "general",
+      "portrait",
+    ]);
+  });
+
+  it("生图模块三个 tab 全关时二级入口一并隐藏", () => {
+    const allTabsOff = {
+      "workflow.image.general": false,
+      "workflow.image.ecom": false,
+      "workflow.image.portrait": false,
+    };
+    expect(isWorkflowSubVisible(allTabsOff, "image")).toBe(false);
+    expect(isWorkflowSubVisible({ "workflow.image.ecom": false }, "image")).toBe(true);
+    expect(isWorkflowSubVisible({ "workflow.image": false }, "image")).toBe(false);
+    expect(isWorkflowSubVisible(undefined, "novel")).toBe(true);
+    expect(isWorkflowSubVisible(undefined, "codex-pet")).toBe(false);
+    // 旧的电商图模块 id 落到生图模块的开关上
+    expect(isWorkflowSubVisible({ "workflow.image": false }, "commerce-long-image")).toBe(false);
   });
 });

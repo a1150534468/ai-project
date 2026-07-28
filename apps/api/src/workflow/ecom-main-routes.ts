@@ -1,11 +1,12 @@
-import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
-import { ecomMainImageSize, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
-import { imageGenerationResourceKey } from "./image-upstream-options.js";
+import { ecomMainImageResourceKey, ecomMainImageSize, normalizeEcomMainResolution, ECOM_MAIN_RESOLUTIONS, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
+import { ecomModelSizeError } from "./ecom-resolution.js";
+import { deliveredImageResolution, pixelsFromSize } from "./image-delivered-tier.js";
 import {
+  appendBillingOperationId,
   authUserId,
   loadOwnedReferenceImages,
   readBillingClientEnv,
@@ -15,11 +16,13 @@ import {
 } from "./ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { mainImageParamsSchema, mainImageRequestSchema } from "./ecom-main-route-types.js";
-import { resolveEcomMainImagePricing } from "./workflow-pricing.js";
+import { parsePricingModelQuery } from "./ecom-route-types.js";
+import { ecomMainImagePriceFallback, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,
   loadImageGenerationConfig as loadImageGenerationConfigService,
+  loadImageGenerationConfigForModel as loadImageGenerationConfigForModelService,
   retryUntilSuccess as retryUntilSuccessService,
   storeWorkflowImage as storeWorkflowImageService,
   type GeneratedImage,
@@ -79,6 +82,7 @@ export type EcomMainRouteDeps = {
     env?: NodeJS.ProcessEnv;
   }) => Promise<StoredImage>;
   readonly loadImageGenerationConfig?: (env?: NodeJS.ProcessEnv) => ImageGenerationConfig;
+  readonly loadImageGenerationConfigForModel?: (model: string, env?: NodeJS.ProcessEnv) => ImageGenerationConfig;
   readonly retryDelayMs?: number;
   readonly maxAttempts?: number;
 };
@@ -97,6 +101,7 @@ function serializeJob(job: MainJobRow) {
     language: job.language,
     ratio: job.ratio,
     resolution: job.resolution,
+    model: job.model ?? null,
     style: job.style,
     customStyle: job.customStyle,
     withText: job.withText,
@@ -117,9 +122,54 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
   const retryUntilSuccess = deps.retryUntilSuccess ?? retryUntilSuccessService;
   const storeWorkflowImage = deps.storeWorkflowImage ?? storeWorkflowImageService;
   const loadImageGenerationConfig = deps.loadImageGenerationConfig ?? loadImageGenerationConfigService;
+  const loadImageGenerationConfigForModel = deps.loadImageGenerationConfigForModel ?? loadImageGenerationConfigForModelService;
+  // 任务落库了 model 后，整组主图（含重绘）都锁定在同一模型上。
+  const loadConfigForJob = (model: string | null | undefined) =>
+    model ? loadImageGenerationConfigForModel(model) : loadImageGenerationConfig();
+  // 拉不到管理台费率时回落通用 key，但必须留痕，否则扣费 key 悄悄降级无从排查。
+  const listPriceRows = async (): Promise<readonly WorkflowResourcePriceRow[]> => {
+    if (!billing.listResourcePrices) return [];
+    try {
+      return (await billing.listResourcePrices()).data ?? [];
+    } catch (error) {
+      app.log.warn({ error: safeErrorMessage(error) }, "ecom main listResourcePrices failed, falling back to generic image pricing keys");
+      return [];
+    }
+  };
   const locker = createRedisWorkflowMutationLocker(deps.redis ?? getRedis());
   const retryDelayMs = deps.retryDelayMs ?? 1_000;
   const maxAttempts = deps.maxAttempts ?? 2;
+
+  /**
+   * 按实际交付像素定结算档位；只会往下降，请求 1K 上游多给不会反过来多收。
+   * 交付像素测不出来（url 直存等）时按请求档结算。
+   */
+  const settleKeyForDelivered = (args: {
+    readonly job: MainJobRow;
+    readonly stored: { readonly width?: number | null; readonly height?: number | null };
+    readonly priceRows: readonly WorkflowResourcePriceRow[];
+    readonly requestedKey: string;
+  }): string => {
+    const requested = normalizeEcomMainResolution(args.job.resolution);
+    const ratio = args.job.ratio as EcomMainRatio;
+    const settled = deliveredImageResolution({
+      requested,
+      deliveredPixels: pixelsFromSize(`${args.stored.width ?? 0}x${args.stored.height ?? 0}`),
+      pixelsForResolution: (resolution) => pixelsFromSize(ecomMainImageSize(ratio, resolution as EcomMainResolution)),
+    });
+    if (settled === requested) return args.requestedKey;
+    const row = resolveImageChargeRow(args.priceRows, {
+      resolution: settled,
+      model: args.job.model ?? undefined,
+      dedicatedKey: ecomMainImageResourceKey(settled),
+      fallback: ecomMainImagePriceFallback,
+    });
+    app.log.info(
+      { jobId: args.job.id, requested, settled, resourceKey: row.resourceKey },
+      "ecom main settling at delivered resolution tier",
+    );
+    return row.resourceKey;
+  };
 
   const replyBillingFailure = (reply: FastifyReply, error: unknown, fallback: string) =>
     error instanceof InsufficientBalanceError
@@ -133,7 +183,14 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
     readonly operationId: string;
     readonly index: number;
     readonly record: Pick<MainImageRecord, "index" | "theme" | "sceneRequirement" | "copyRequirement">;
-    readonly stored: { originalUrl: string; thumbnailUrl: string; objectKey: string | null; mime: string };
+    readonly stored: {
+      originalUrl: string;
+      thumbnailUrl: string;
+      objectKey: string | null;
+      mime: string;
+      width?: number | null;
+      height?: number | null;
+    };
     readonly prompt: string;
     readonly size: string;
     readonly model: string;
@@ -151,6 +208,8 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
           thumbnailUrl: args.stored.thumbnailUrl,
           objectKey: args.stored.objectKey,
           mime: args.stored.mime,
+          width: args.stored.width ?? null,
+          height: args.stored.height ?? null,
         },
       });
       const images = parseImages(args.job.images).map((image) =>
@@ -160,7 +219,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
       );
       const updated = await tx.ecomMainImageJob.updateMany({
         where: { id: args.job.id, userId: args.job.userId, updatedAt: args.job.updatedAt },
-        data: { images, billingOperationIds: [...args.job.billingOperationIds, args.operationId], error: null },
+        data: { images, error: null },
       });
       if (updated.count !== 1) throw new WorkflowMutationConflictError();
       const next = await tx.ecomMainImageJob.findFirst({ where: { id: args.job.id, userId: args.job.userId } });
@@ -169,7 +228,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
     });
   }
 
-  async function generateOneImage(job: MainJobRow, index: number): Promise<MainJobRow> {
+  async function generateOneImage(job: MainJobRow, index: number, priceRows: readonly WorkflowResourcePriceRow[]): Promise<MainJobRow> {
     const product = job.product as MainProduct;
     const built = buildEcomMainImagePrompt({
       platformId: job.platform,
@@ -182,16 +241,33 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
       index,
     });
     const size = ecomMainImageSize(job.ratio as EcomMainRatio, job.resolution as never);
-    const operationId = `ecom-main:${job.id}:${index}:${randomUUID()}`;
-    await billing.chargeResource({
+    // 确定性 operationId（第 N 次尝试为 a{N-1}）：以 updatedAt 做 CAS push 原子落库后才扣费，避免并发派生同一个 N。
+    const { operationId, row: chargedJob } = await appendBillingOperationId<MainJobRow>({
+      row: job,
+      prefix: `ecom-main:${job.id}:${index}:a`,
+      updateMany: ({ updatedAt, operationId: id }) => prisma.ecomMainImageJob.updateMany({
+        where: { id: job.id, userId: job.userId, updatedAt },
+        data: { billingOperationIds: { push: id } },
+      }),
+      reload: () => prisma.ecomMainImageJob.findFirst({ where: { id: job.id, userId: job.userId } }) as Promise<MainJobRow | null>,
+    });
+    const chargeRow = resolveImageChargeRow(priceRows, {
+      resolution: normalizeEcomMainResolution(chargedJob.resolution),
+      model: chargedJob.model ?? undefined,
+      dedicatedKey: ecomMainImageResourceKey(chargedJob.resolution),
+      fallback: ecomMainImagePriceFallback,
+    });
+    // 请求档预留、交付档结算：中转上游常只认宽高比、忽略绝对像素，
+    // 请求 2K 实际只交付 1K 时按请求档收就是多收一倍，差额由计费服务在 settle 时退回。
+    await billing.reserveResource({
       operationId,
-      userId: job.userId,
-      resourceKey: imageGenerationResourceKey(job.resolution as EcomMainResolution),
+      userId: chargedJob.userId,
+      resourceKey: chargeRow.resourceKey,
       units: 1,
     });
     try {
-      const referenceImages = job.referenceAssetIds.length > 0 ? await loadOwnedReferenceImages(prisma, job.userId, job.referenceAssetIds, fetchFn) : null;
-      const config = loadImageGenerationConfig();
+      const referenceImages = chargedJob.referenceAssetIds.length > 0 ? await loadOwnedReferenceImages(prisma, chargedJob.userId, chargedJob.referenceAssetIds, fetchFn) : null;
+      const config = loadConfigForJob(chargedJob.model);
       const image = await retryUntilSuccess(
         () =>
           referenceImages
@@ -199,9 +275,9 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
             : callImageGeneration({ config, prompt: built.prompt, size, fetchFn }),
         { retryDelayMs, maxAttempts },
       );
-      const stored = await storeWorkflowImage({ image, userId: job.userId, requestId: operationId, requestIndex: 0, fetchFn });
-      return await commitMainImage({
-        job,
+      const stored = await storeWorkflowImage({ image, userId: chargedJob.userId, requestId: operationId, requestIndex: 0, fetchFn });
+      const committed = await commitMainImage({
+        job: chargedJob,
         operationId,
         index,
         size,
@@ -210,6 +286,20 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
         record: { index, theme: built.theme, sceneRequirement: built.sceneRequirement, copyRequirement: built.copyRequirement },
         stored,
       });
+      // 图已交付，结算失败不能退款白送——留痕交对账兜底。
+      try {
+        await billing.settleResource({
+          operationId,
+          resourceKey: settleKeyForDelivered({ job: chargedJob, stored, priceRows, requestedKey: chargeRow.resourceKey }),
+          units: 1,
+        });
+      } catch (settleError) {
+        app.log.error(
+          { error: safeErrorMessage(settleError), operationId },
+          "ecom main settleResource failed; reservation left for reconciliation",
+        );
+      }
+      return committed;
     } catch (error) {
       try {
         await billing.refundResource(operationId);
@@ -223,8 +313,12 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
   app.get("/api/workflow/ecom/main/pricing", async (req, reply) => {
     const userId = authUserId(req as { userId?: string }, reply);
     if (!userId) return;
+    const model = parsePricingModelQuery(req.query);
     try {
-      return { success: true, data: await resolveEcomMainImagePricing(billing) };
+      return {
+        success: true,
+        data: await resolveImagePricingMatrix(billing, { model, dedicatedKeyFor: ecomMainImageResourceKey, fallback: ecomMainImagePriceFallback }),
+      };
     } catch (error) {
       app.log.error(error);
       return reply.code(502).send({ error: "获取电商主图计价失败" });
@@ -252,11 +346,20 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
     if (!parsed.success || !getEcomPlatform(parsed.data.platformId))
       return reply.code(400).send({ error: "参数不合法" });
     if (parsed.data.style === "custom" && parsed.data.customStyle.trim().length === 0) return reply.code(400).send({ error: "请填写自定义风格描述" });
+    const requestedSize = ecomMainImageSize(parsed.data.ratio, parsed.data.resolution);
+    const supportedResolutions = ECOM_MAIN_RESOLUTIONS.filter((res) => !ecomModelSizeError(parsed.data.model, ecomMainImageSize(parsed.data.ratio, res)));
+    const sizeError = ecomModelSizeError(
+      parsed.data.model,
+      requestedSize,
+      supportedResolutions.length > 0 ? `该比例可选清晰度：${supportedResolutions.join("/")}` : undefined,
+    );
+    if (sizeError) return reply.code(400).send({ error: sizeError });
     const referenceAssets = parsed.data.referenceAssetIds.length > 0
       ? await prisma.imageAsset.findMany({ where: { userId, id: { in: parsed.data.referenceAssetIds } } })
       : [];
     if (referenceAssets.length !== parsed.data.referenceAssetIds.length) return reply.code(400).send({ error: "引用图不存在" });
     try {
+      const priceRows = await listPriceRows();
       return await locker.withLock(mainCreateLockKey(userId), async () => {
         const language = resolveLanguage(parsed.data.platformId);
         const pendingImages: MainImageRecord[] = Array.from({ length: parsed.data.count }, (_, index) => {
@@ -288,6 +391,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
             language,
             ratio: parsed.data.ratio,
             resolution: parsed.data.resolution,
+            model: parsed.data.model ?? null,
             style: parsed.data.style,
             customStyle: parsed.data.customStyle,
             withText: parsed.data.withText,
@@ -303,12 +407,14 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
         let anyFailed = false;
         for (let index = 0; index < parsed.data.count; index += 1) {
           try {
-            job = await generateOneImage(job, index);
+            job = await generateOneImage(job, index, priceRows);
           } catch (error) {
-            const fatalBillingError = error instanceof InsufficientBalanceError || error instanceof RefundCompensationError;
+            const fatalError = error instanceof InsufficientBalanceError
+              || error instanceof RefundCompensationError
+              || error instanceof WorkflowMutationConflictError;
             anyFailed = true;
             const images = parseImages(job.images).map((image) =>
-              image.index === index || (fatalBillingError && image.status === "pending")
+              image.index === index || (fatalError && image.status === "pending")
                 ? { ...image, status: "failed" as const }
                 : image,
             );
@@ -318,14 +424,11 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
               data: {
                 images,
                 error: safeErrorMessage(error),
-                ...(fatalBillingError ? { stage: hasReadyImage ? "partial" : "failed" } : {}),
-                ...(error instanceof RefundCompensationError
-                  ? { billingOperationIds: [...job.billingOperationIds, error.operationId] }
-                  : {}),
+                ...(fatalError ? { stage: hasReadyImage ? "partial" : "failed" } : {}),
               },
             });
             job = updated as MainJobRow;
-            if (fatalBillingError) throw error;
+            if (fatalError) throw error;
           }
         }
         const finalStage = anyFailed ? "partial" : "ready";
@@ -348,10 +451,11 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
     if (!job) return reply.code(404).send({ error: "主图任务不存在" });
     if (params.data.index >= job.count) return reply.code(400).send({ error: "序号越界" });
     try {
+      const priceRows = await listPriceRows();
       const updated = await locker.withLock(mainJobLockKey(job.id), async () => {
         const runningData = await prisma.ecomMainImageJob.update({ where: { id: job.id }, data: { stage: "running", error: null } });
         const running = runningData as MainJobRow;
-        const next = await generateOneImage(running, params.data.index);
+        const next = await generateOneImage(running, params.data.index, priceRows);
         const stillFailed = parseImages(next.images).some((image) => image.status === "failed");
         const finalData = await prisma.ecomMainImageJob.update({ where: { id: next.id }, data: { stage: stillFailed ? "partial" : "ready" } });
         return finalData as MainJobRow;

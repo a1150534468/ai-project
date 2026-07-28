@@ -49,7 +49,7 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: "ecom_master_generation_1k",
     title: "电商长图母版 1K 价格",
-    description: "母版生成按清晰度独立计费，不复用普通图片价格。",
+    description: "启用后母版按此价独立计费；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商长图母版 1K",
     pricingType: "PER_UNIT",
     defaultRate: 10,
@@ -58,7 +58,7 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: "ecom_master_generation_2k",
     title: "电商长图母版 2K 价格",
-    description: "母版生成按清晰度独立计费，不复用普通图片价格。",
+    description: "启用后母版按此价独立计费；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商长图母版 2K",
     pricingType: "PER_UNIT",
     defaultRate: 20,
@@ -67,7 +67,7 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: "ecom_master_generation_4k",
     title: "电商长图母版 4K 价格",
-    description: "母版生成按清晰度独立计费，不复用普通图片价格。",
+    description: "启用后母版按此价独立计费；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商长图母版 4K",
     pricingType: "PER_UNIT",
     defaultRate: 40,
@@ -76,7 +76,7 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: "ecom_segment_generation_1k",
     title: "电商长图分段 1K 价格",
-    description: "三段长图生成按清晰度独立计费，可单独调整每段成本。",
+    description: "启用后分段按此价独立计费；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商长图分段 1K",
     pricingType: "PER_UNIT",
     defaultRate: 10,
@@ -85,7 +85,7 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: "ecom_segment_generation_2k",
     title: "电商长图分段 2K 价格",
-    description: "三段长图生成按清晰度独立计费，可单独调整每段成本。",
+    description: "启用后分段按此价独立计费；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商长图分段 2K",
     pricingType: "PER_UNIT",
     defaultRate: 20,
@@ -94,7 +94,7 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: "ecom_segment_generation_4k",
     title: "电商长图分段 4K 价格",
-    description: "三段长图生成按清晰度独立计费，可单独调整每段成本。",
+    description: "启用后分段按此价独立计费；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商长图分段 4K",
     pricingType: "PER_UNIT",
     defaultRate: 40,
@@ -103,10 +103,10 @@ export const ECOM_RESOURCE_PRICING_CONFIGS: readonly EcomResourcePricingConfig[]
   {
     resourceKey: ECOM_STITCH_RESOURCE_KEY,
     title: "电商长图拼接价格",
-    description: "浏览器拼接并保存成品后按次扣点。",
+    description: "拼接保存已免费（纯浏览器合成，无 AI 调用），此配置不再参与扣费，仅保留历史记录。",
     displayName: "电商长图拼接",
     pricingType: "PER_CALL",
-    defaultRate: 1,
+    defaultRate: 0,
     rateLabel: "每次拼接扣点",
   },
 ];
@@ -176,7 +176,7 @@ export const ECOM_MAIN_IMAGE_PRICING_CONFIGS: readonly EcomResourcePricingConfig
   {
     resourceKey: "ecom_main_image_generation_1k",
     title: "电商主图 1K 价格",
-    description: "电商主图按清晰度独立计费，按张扣点。",
+    description: "启用后主图按此价独立计费（按张）；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商主图 1K",
     pricingType: "PER_UNIT",
     defaultRate: 10,
@@ -185,7 +185,7 @@ export const ECOM_MAIN_IMAGE_PRICING_CONFIGS: readonly EcomResourcePricingConfig
   {
     resourceKey: "ecom_main_image_generation_2k",
     title: "电商主图 2K 价格",
-    description: "电商主图按清晰度独立计费，按张扣点。",
+    description: "启用后主图按此价独立计费（按张）；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商主图 2K",
     pricingType: "PER_UNIT",
     defaultRate: 20,
@@ -194,7 +194,7 @@ export const ECOM_MAIN_IMAGE_PRICING_CONFIGS: readonly EcomResourcePricingConfig
   {
     resourceKey: "ecom_main_image_generation_4k",
     title: "电商主图 4K 价格",
-    description: "电商主图按清晰度独立计费，按张扣点。",
+    description: "启用后主图按此价独立计费（按张）；未配置或停用时回落「图片生成」对应清晰度价格。",
     displayName: "电商主图 4K",
     pricingType: "PER_UNIT",
     defaultRate: 40,
@@ -236,13 +236,28 @@ export const CODEX_PET_PRICING_CONFIGS: readonly EcomResourcePricingConfig[] = [
   {
     resourceKey: "codex_pet_v2_package",
     title: "Codex 桌宠 v2 套餐价格",
-    description: "完整桌宠生成、自动修复、质量检查、知识库归档和兼容包按次统一扣点。",
+    description: "按规划图片调用逐次计费：启动预扣 14 次规划调用，按实际发出的调用数结算。注意：启动接口要求 PER_UNIT 且计费单位为 1，配置为其他值会导致启动失败。",
     displayName: "Codex 桌宠 v2 套餐",
-    pricingType: "PER_CALL",
+    pricingType: "PER_UNIT",
     defaultRate: 200,
-    rateLabel: "每次完整制作扣点",
+    rateLabel: "每次规划调用扣点",
   },
 ];
+
+// 与 apps/api/src/workflow/image-upstream-options.ts imageModelResourceKey 的 slug 规则保持一致。
+export const IMAGE_MODEL_PRICING_CONFIGS = [
+  { model: "Qwen Image 2.0 Pro", slug: "qwen_image_2_0_pro_2026_04_22" },
+  { model: "GPT Image 2", slug: "gpt_image_2" },
+  { model: "豆包 Seedream 4.5", slug: "doubao_seedream_4_5_251128" },
+  { model: "豆包 Seedream 5.0（形象照）", slug: "doubao_seedream_5_0_260128" },
+].flatMap((entry) =>
+  (["1k", "2k", "4k"] as const).map((resolution) => ({
+    resourceKey: `image_generation_${entry.slug}_${resolution}`,
+    model: entry.model,
+    resolution: resolution.toUpperCase(),
+    displayName: `图片生成 ${entry.model} ${resolution.toUpperCase()}`,
+  })),
+);
 
 const DEFAULT_IMAGE_PRICE: api.ResourcePriceRow = {
   resourceKey: "image_generation_1k",
@@ -415,6 +430,97 @@ export function ImageGenerationPricingPanel({ rows = [], onDone, onErr }: ImageG
       <div className="row" style={{ marginTop: 12 }}>
         <button className="btn" onClick={save}>
           保存图片分辨率价格
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function imageModelPriceDraft(config: typeof IMAGE_MODEL_PRICING_CONFIGS[number], row?: api.ResourcePriceRow): api.ResourcePriceRow {
+  return {
+    resourceKey: config.resourceKey,
+    displayName: row?.displayName?.trim() || config.displayName,
+    pricingType: "PER_UNIT",
+    rate: row?.rate ?? 0,
+    perUnits: 1,
+    enabled: row?.enabled ?? false,
+  };
+}
+
+export function ImageModelPricingPanel({ rows = [], onDone, onErr }: ImageGenerationPricingPanelProps) {
+  const [drafts, setDrafts] = useState<api.ResourcePriceRow[]>(() =>
+    IMAGE_MODEL_PRICING_CONFIGS.map((config) => imageModelPriceDraft(config, rows.find((row) => row.resourceKey === config.resourceKey))),
+  );
+  useEffect(() => {
+    setDrafts(IMAGE_MODEL_PRICING_CONFIGS.map((config) => imageModelPriceDraft(config, rows.find((row) => row.resourceKey === config.resourceKey))));
+  }, [rows]);
+
+  const updateDraft = (resourceKey: string, patch: Partial<api.ResourcePriceRow>) => {
+    setDrafts((current) => current.map((draft) => (draft.resourceKey === resourceKey ? { ...draft, ...patch } : draft)));
+  };
+
+  const save = async () => {
+    if (drafts.some((draft) => !Number.isFinite(draft.rate) || draft.rate < 0)) {
+      onErr("模型价格不能为负数");
+      return;
+    }
+    // 未启用且从未配置过的行不落库，避免批量生成无效价格行。
+    const toSave = drafts.filter((draft) => draft.enabled || rows.some((row) => row.resourceKey === draft.resourceKey));
+    try {
+      await Promise.all(toSave.map((draft) => api.upsertResourcePrice(draft)));
+      onDone();
+    } catch (e) {
+      onErr(errMsg(e));
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h3 style={{ margin: 0 }}>图片生成模型差异化价格（可选）</h3>
+          <p className="muted" style={{ margin: "4px 0 0" }}>
+            启用后对应模型按此价扣费；未启用时回落上方「图片生成分辨率价格」。通用生图、形象照、电商生图共用此回落规则（电商专属价优先级更高）。
+          </p>
+        </div>
+      </div>
+      <table className="tbl">
+        <thead>
+          <tr>
+            <th>模型</th>
+            <th>清晰度</th>
+            <th>每张扣点</th>
+            <th>启用</th>
+          </tr>
+        </thead>
+        <tbody>
+          {drafts.map((draft) => {
+            const config = IMAGE_MODEL_PRICING_CONFIGS.find((item) => item.resourceKey === draft.resourceKey);
+            return (
+              <tr key={draft.resourceKey}>
+                <td>{config?.model ?? draft.resourceKey}</td>
+                <td>{config?.resolution ?? "-"}</td>
+                <td>
+                  <input
+                    aria-label={`${draft.displayName} 每张扣点`}
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={draft.rate}
+                    onChange={(e) => updateDraft(draft.resourceKey, { rate: Number(e.target.value) })}
+                  />
+                </td>
+                <td>
+                  <input type="checkbox" checked={draft.enabled} onChange={(e) => updateDraft(draft.resourceKey, { enabled: e.target.checked })} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="row" style={{ marginTop: 12 }}>
+        <button className="btn" onClick={save}>
+          保存模型差异化价格
         </button>
       </div>
     </div>

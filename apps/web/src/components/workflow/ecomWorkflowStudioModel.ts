@@ -1,5 +1,6 @@
 import { ApiError } from "../../apiError";
 import * as workflowEcomApi from "../../workflowEcomApi";
+import { isImageModel, type ImageModel } from "../../workflowState";
 import type {
   WorkflowEcomMasterPayload,
   WorkflowEcomPlatform,
@@ -56,6 +57,8 @@ export type EcomMasterDraft = {
   readonly platformId: WorkflowEcomPlatformId;
   readonly templateId: WorkflowEcomTemplateId;
   readonly resolution: WorkflowEcomResolution;
+  /** null = 跟随服务端默认模型（历史工作流也可能没有存过模型） */
+  readonly model: ImageModel | null;
   readonly productName: string;
   readonly category: string;
   readonly sellingPointsInput: string;
@@ -100,6 +103,21 @@ export const ECOM_RESOLUTION_OPTIONS: readonly { readonly value: WorkflowEcomRes
 
 /** 与现有 Qwen Image 编辑链路保持一致，避免第 4 张起稳定生成失败。 */
 export const ECOM_MAX_REFERENCE_COUNT = 3;
+
+/** 空值代表「默认模型」，下拉里用它当 option value。 */
+export const ECOM_DEFAULT_MODEL_OPTION_VALUE = "";
+export const ECOM_DEFAULT_MODEL_LABEL = "默认模型";
+
+/**
+ * 历史工作流 model 为 null 时不覆盖用户当前选择，也不把某个具体模型显示成已选中；
+ * 只有工作流里存了合法模型才回填下拉。
+ */
+export function seedEcomModelSelection(
+  current: ImageModel | null,
+  workflowModel: string | null | undefined,
+): ImageModel | null {
+  return workflowModel && isImageModel(workflowModel) ? workflowModel : current;
+}
 
 function parseSellingPoints(input: string): readonly string[] {
   return input
@@ -166,6 +184,7 @@ export function createEcomMasterPayload(input: EcomMasterDraft): WorkflowEcomMas
     platformId: input.platformId,
     templateId: input.templateId,
     resolution: input.resolution,
+    model: input.model ?? undefined,
     product: {
       name: input.productName.trim(),
       category: input.category.trim(),

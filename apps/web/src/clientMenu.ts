@@ -7,6 +7,15 @@ export interface ClientMenuItem {
 
 export type ClientMenuVisibility = Readonly<Record<string, boolean>>;
 
+/** 生图模块页内 tab：后台按 workflow.image.* 单独开关。 */
+export type ImageHubTabId = "general" | "ecom" | "portrait";
+
+export const IMAGE_HUB_TABS: readonly { readonly id: ImageHubTabId; readonly label: string; readonly menuKey: string }[] = [
+  { id: "general", label: "通用生图", menuKey: "workflow.image.general" },
+  { id: "ecom", label: "电商生图", menuKey: "workflow.image.ecom" },
+  { id: "portrait", label: "形象照", menuKey: "workflow.image.portrait" },
+] as const;
+
 const DEFAULT_HIDDEN_KEYS = [
   "workflow.codex-pet",
   "workflow.report",
@@ -28,6 +37,25 @@ export function isClientMenuVisible(
   key: string,
 ): boolean {
   return visibility?.[key] ?? DEFAULT_CLIENT_MENU_VISIBILITY[key] ?? true;
+}
+
+export function visibleImageHubTabs(
+  visibility: ClientMenuVisibility | undefined,
+): readonly { readonly id: ImageHubTabId; readonly label: string; readonly menuKey: string }[] {
+  return IMAGE_HUB_TABS.filter((tab) => isClientMenuVisible(visibility, tab.menuKey));
+}
+
+/**
+ * 工作流二级菜单是否显示。生图模块把三个 tab 合并进同一页面，
+ * 三个 tab 全被后台关掉时整个入口也没有内容可展示，一并隐藏。
+ */
+export function isWorkflowSubVisible(
+  visibility: ClientMenuVisibility | undefined,
+  subId: string,
+): boolean {
+  const key = subId === "commerce-long-image" ? "workflow.image" : `workflow.${subId}`;
+  if (!isClientMenuVisible(visibility, key)) return false;
+  return key !== "workflow.image" || visibleImageHubTabs(visibility).length > 0;
 }
 
 export function clientMenuKeyForView(view: ViewType): string | null {

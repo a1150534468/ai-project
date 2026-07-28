@@ -1,4 +1,5 @@
 import { ApiError, readErrorMessage } from "./apiError";
+import type { ImageModel } from "./workflowState";
 
 export type WorkflowEcomPlatformId = "taobao" | "tmall" | "jd" | "pdd" | "xianyu" | "amazon" | "ebay" | "etsy" | "shopee" | "lazada" | "shopify";
 export type WorkflowEcomTemplateId = "general" | "premium" | "digital" | "beauty" | "food" | "gift" | "apparel" | "home";
@@ -58,6 +59,7 @@ export type WorkflowEcomWorkflow = {
   readonly language: string;
   readonly template: WorkflowEcomTemplateId;
   readonly resolution: WorkflowEcomResolution;
+  readonly model: string | null;
   readonly product: WorkflowEcomProductInput;
   readonly referenceAssetIds: readonly string[];
   readonly masterAssetId: string | null;
@@ -77,6 +79,7 @@ export type WorkflowEcomMasterPayload = {
   readonly platformId: WorkflowEcomPlatformId;
   readonly templateId: WorkflowEcomTemplateId;
   readonly resolution: WorkflowEcomResolution;
+  readonly model?: ImageModel;
   readonly product: WorkflowEcomProductInput;
   readonly referenceAssetIds?: readonly string[];
   readonly segmentCount: number;
@@ -119,8 +122,9 @@ export type WorkflowEcomPricing = {
   readonly stitch: WorkflowEcomResourcePrice;
 };
 
-export async function getWorkflowEcomPricing(token: string): Promise<WorkflowEcomPricing> {
-  return requestWorkflowEcom<WorkflowEcomPricing>({ token, path: "/api/workflow/ecom/pricing", method: "GET", fallback: "获取电商长图计价失败" });
+export async function getWorkflowEcomPricing(token: string, model?: ImageModel): Promise<WorkflowEcomPricing> {
+  const path = model ? `/api/workflow/ecom/pricing?model=${encodeURIComponent(model)}` : "/api/workflow/ecom/pricing";
+  return requestWorkflowEcom<WorkflowEcomPricing>({ token, path, method: "GET", fallback: "获取电商长图计价失败" });
 }
 
 export async function getWorkflowEcomOptions(token: string): Promise<{

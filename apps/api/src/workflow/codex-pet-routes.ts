@@ -1640,8 +1640,22 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         progressStage: "queued",
         progressPercent: 0,
         progressMessage: "正在预留最多 14 次 GPT Image 2 调用额度",
+        lastEventSequence: 1,
         } });
         await tx.codexPetProject.update({ where: { id: project.id }, data: { latestRunId: run.id, status: "queued" } });
+        // 时间线的第一条：预留流程不再走 reconciler，run.queued 必须在这里落库，
+        // 否则前端时间线要等 Worker 首个事件才有内容。
+        await tx.codexPetEvent.create({ data: {
+          projectId: project.id,
+          runId: run.id,
+          userId,
+          sequence: 1,
+          type: "run.queued",
+          stage: "queued",
+          message: "桌宠制作任务已进入队列",
+          progress: 0,
+          payload: { resourceKey: pricing.resourceKey, reservedUnits: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT },
+        } });
         return { project: project as ProjectShape, run: run as RunShape, created: true };
       });
     } catch (error) {

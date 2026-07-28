@@ -19,7 +19,8 @@ describe("portrait api", () => {
     vi.stubGlobal("fetch", fetchMock);
     const payload = {
       requestId: "portrait-request-1",
-      presetId: "business" as const,
+      presetId: "business-elite" as const,
+      model: "doubao-seedream-5-0-260128",
       aspectRatio: "3:4" as const,
       resolution: "2K" as const,
       count: 1,

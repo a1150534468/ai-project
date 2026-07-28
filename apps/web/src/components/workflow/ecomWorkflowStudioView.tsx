@@ -1,8 +1,8 @@
 import { useRef, type ReactNode } from "react";
-import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
 import { RippleButton, Stagger, StaggerItem, spring } from "../../motion";
 import { InAppSelect } from "../agent-teams/InAppSelect";
+import { IMAGE_MODEL_OPTIONS, isImageModel, type ImageModel } from "../../workflowState";
 import type {
   WorkflowEcomImageAsset,
   WorkflowEcomPlatform,
@@ -12,9 +12,10 @@ import type {
   WorkflowEcomSegmentIndex,
   WorkflowEcomTemplate,
   WorkflowEcomTemplateId,
-  WorkflowEcomWorkflow,
 } from "../../workflowEcomApi";
-import { ECOM_MAX_REFERENCE_COUNT } from "./ecomWorkflowStudioModel";
+import { ECOM_DEFAULT_MODEL_LABEL, ECOM_DEFAULT_MODEL_OPTION_VALUE, ECOM_MAX_REFERENCE_COUNT } from "./ecomWorkflowStudioModel";
+import { DownloadOverlayButton } from "./DownloadOverlayButton";
+import { SubmitCostBar } from "./SubmitCostBar";
 
 export type EcomWorkflowStudioViewSegment = {
   readonly index: number;
@@ -27,6 +28,8 @@ export type EcomWorkflowStudioViewProps = {
   readonly selectedPlatformId: WorkflowEcomPlatformId;
   readonly selectedTemplateId: WorkflowEcomTemplateId;
   readonly selectedResolution: WorkflowEcomResolution;
+  /** null = 跟随服务端默认模型，下拉显示「默认模型」 */
+  readonly selectedModel: ImageModel | null;
   readonly resolutionOptions: readonly { readonly value: WorkflowEcomResolution; readonly label: string; readonly size: string }[];
   readonly selectedSegmentCount: number;
   readonly segmentCountOptions: readonly { readonly value: string; readonly label: string }[];
@@ -69,6 +72,7 @@ export type EcomWorkflowStudioViewProps = {
   readonly onDownloadImage?: (url: string) => void;
   readonly onPlatformChange: (value: WorkflowEcomPlatformId) => void;
   readonly onTemplateChange: (value: WorkflowEcomTemplateId) => void;
+  readonly onModelChange: (value: ImageModel | null) => void;
   readonly onResolutionChange: (value: WorkflowEcomResolution) => void;
   readonly onSegmentCountChange: (value: string) => void;
   readonly onProductNameChange: (value: string) => void;
@@ -85,10 +89,6 @@ export type EcomWorkflowStudioViewProps = {
   readonly onSelectMainImage?: (assetId: string) => void;
   readonly onAdoptMaster?: () => void;
 };
-
-function costSuffix(cost: number | null): string {
-  return cost != null ? ` · 约${cost}点` : "";
-}
 
 function formatStageLabel(stage: string, isServerGenerating: boolean): string {
   if (isServerGenerating) return "生成中";
@@ -119,16 +119,23 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
   const handleSegmentCountChange = (value: string) => {
     props.onSegmentCountChange(value);
   };
+  // 拼接免费：预估只含母版 + 分段
+  const totalPointCost = props.masterPointCost === null && props.segmentPointCost === null
+    ? null
+    : (props.masterPointCost ?? 0) + (props.segmentPointCost ?? 0);
+  const costDetail = totalPointCost === null
+    ? "拼接免费"
+    : `母版 ${props.masterPointCost ?? 0} + 分段 ${props.segmentPointCost ?? 0} · 拼接免费`;
 
   return (
     <section className="grid min-h-0 min-w-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-18.75rem)] min-h-[460px] max-h-[664px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-24 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         {props.controlsHeader}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">电商工作台</p>
-            <h2 className="mt-2 text-[18px] font-semibold text-[#1d1d1f]">电商长图工作台</h2>
+            <p className="text-xs font-semibold text-[#6e6e73]">电商工作台</p>
+            <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">电商长图工作台</h2>
             <p className="mt-2 text-sm leading-6 text-[#6e6e73]">上传参考图、生成母版、确认分段并在浏览器完成白底纵向拼接。</p>
           </div>
           {props.isForeignPlatform && <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">海外平台文案</span>}
@@ -158,6 +165,22 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
             />
           </div>
           <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f] sm:col-span-2">
+            模型
+            <InAppSelect
+              icon="mdi:creation-outline"
+              label="模型"
+              value={props.selectedModel ?? ECOM_DEFAULT_MODEL_OPTION_VALUE}
+              options={[
+                { value: ECOM_DEFAULT_MODEL_OPTION_VALUE, label: ECOM_DEFAULT_MODEL_LABEL },
+                ...IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+              ]}
+              onChange={(value) => {
+                if (value === ECOM_DEFAULT_MODEL_OPTION_VALUE) props.onModelChange(null);
+                else if (isImageModel(value)) props.onModelChange(value);
+              }}
+            />
+          </div>
+          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f] sm:col-span-2">
             清晰度
             <InAppSelect
               icon="mdi:high-definition"
@@ -183,28 +206,28 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           <div className="mt-4 grid gap-3">
             <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
               商品名称
-              <input value={props.productName} onChange={(event) => props.onProductNameChange(event.target.value)} className="h-11 rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f]" />
+              <input value={props.productName} onChange={(event) => props.onProductNameChange(event.target.value)} className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f]" />
             </label>
             <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
               商品类目
-              <input value={props.category} onChange={(event) => props.onCategoryChange(event.target.value)} className="h-11 rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f]" />
+              <input value={props.category} onChange={(event) => props.onCategoryChange(event.target.value)} className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f]" />
             </label>
             <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
               卖点文案
-              <textarea value={props.sellingPointsInput} onChange={(event) => props.onSellingPointsChange(event.target.value)} className="min-h-[108px] rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
+              <textarea value={props.sellingPointsInput} onChange={(event) => props.onSellingPointsChange(event.target.value)} className="min-h-[108px] rounded-lg border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
             </label>
             <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
               额外说明
-              <textarea value={props.extra} onChange={(event) => props.onExtraChange(event.target.value)} className="min-h-[88px] rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
+              <textarea value={props.extra} onChange={(event) => props.onExtraChange(event.target.value)} className="min-h-[88px] rounded-lg border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
             </label>
           </div>
         )}
 
         {!props.hideProductForm && (
-          <div className="mt-4 rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
+          <div className="mt-4 rounded-lg border border-[#e8e8ed] bg-[#f7faf9] p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({props.referenceAssets.length + props.remoteReferenceCount}/{ECOM_MAX_REFERENCE_COUNT})</p>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
                 {props.isUploadingReference ? "上传中" : "上传参考图"}
               </button>
             </div>
@@ -215,16 +238,16 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
             }} />
             <div className="mt-3 flex flex-wrap gap-2">
               {props.referenceAssets.map((asset) => (
-                <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-[8px] border border-[#d2d2d7] object-cover" />
+                <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-lg border border-[#d2d2d7] object-cover" />
               ))}
-              {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-[8px] border border-dashed border-[#d2d2d7] px-3 text-center text-xs text-[#6e6e73]">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
-              {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-[8px] border border-dashed border-[#d2d2d7] px-3 py-4 text-xs text-[#8a8a8f]">上传后会展示本地缩略图。</div>}
+              {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-lg border border-dashed border-[#d2d2d7] px-3 text-center text-xs text-[#6e6e73]">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
+              {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-4 text-xs text-[#8a8a8f]">上传后会展示本地缩略图。</div>}
             </div>
           </div>
         )}
 
         {(props.error || props.notice || props.workflowError) && (
-          <p className={`mt-4 rounded-[10px] px-3 py-2 text-sm ${props.error || props.workflowError ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>
+          <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${props.error || props.workflowError ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>
             {props.error || props.workflowError || props.notice}
           </p>
         )}
@@ -232,7 +255,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         <div className="mt-4 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
           从主图选母版
           {(props.mainImages?.length ?? 0) === 0 ? (
-            <p className="rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-xs font-normal text-[#8a8a8f]">先在「商品主图」生成主图，即可选一张作为母版（省一次母版出图）。</p>
+            <p className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-3 text-xs font-normal text-[#8a8a8f]">先在「商品主图」生成主图，即可选一张作为母版（省一次母版出图）。</p>
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
@@ -241,7 +264,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                     key={img.assetId}
                     type="button"
                     onClick={() => props.onSelectMainImage?.(img.assetId)}
-                    className={`h-16 w-16 overflow-hidden rounded-[8px] border-2 transition-colors ${props.selectedMasterAssetId === img.assetId ? "border-brand" : "border-transparent"}`}
+                    className={`h-16 w-16 overflow-hidden rounded-lg border-2 transition-colors ${props.selectedMasterAssetId === img.assetId ? "border-brand" : "border-transparent"}`}
                   >
                     <img src={img.thumbnailUrl} alt="主图缩略图" className="h-full w-full object-cover" />
                   </button>
@@ -251,7 +274,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                 type="button"
                 onClick={() => props.onAdoptMaster?.()}
                 disabled={!props.selectedMasterAssetId || props.isWorkflowMutating}
-                className="h-10 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40"
+                className="h-10 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40"
               >
                 用所选主图作为母版
               </RippleButton>
@@ -260,20 +283,27 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         </div>
         </div>
 
-        <div className="z-10 grid flex-none grid-cols-2 gap-2 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
-          <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
-            {props.isSubmittingMaster ? "生成中" : `生成母版${costSuffix(props.masterPointCost)}`}
-          </RippleButton>
-          <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
-            {props.isRetryingMaster ? "重试中" : "重试主图"}
-          </RippleButton>
-          <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
-            {props.isConfirmingSegments ? "确认中" : `确认分段${costSuffix(props.segmentPointCost)}`}
-          </RippleButton>
-          <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-[10px] border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
-            {props.isStitchingPreview ? "拼接中" : "浏览器拼接长图"}
-          </RippleButton>
-        </div>
+        <SubmitCostBar
+          estimatedPointCost={totalPointCost}
+          costDetail={costDetail}
+          submitLabel="生成母版"
+          actions={
+            <div className="grid grid-cols-2 gap-2">
+              <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
+                {props.isSubmittingMaster ? "生成中" : "生成母版"}
+              </RippleButton>
+              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
+                {props.isRetryingMaster ? "重试中" : "重试主图"}
+              </RippleButton>
+              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
+                {props.isConfirmingSegments ? "确认中" : "确认分段"}
+              </RippleButton>
+              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
+                {props.isStitchingPreview ? "拼接中" : "浏览器拼接长图"}
+              </RippleButton>
+            </div>
+          }
+        />
       </aside>
 
       <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
@@ -281,8 +311,8 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">任务阶段</p>
-              <h3 className="mt-2 flex items-center gap-2 text-[18px] font-semibold text-[#1d1d1f]">
+              <p className="text-xs font-semibold text-[#6e6e73]">任务阶段</p>
+              <h3 className="mt-1 flex items-center gap-2 text-base font-semibold text-[#1d1d1f]">
                 母版与分段状态
                 {props.isServerGenerating && <span aria-label="生成中" className="h-4 w-4 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />}
               </h3>
@@ -292,27 +322,24 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           </div>
           {props.masterAsset && (
             <div className="group relative mt-4 grid gap-3">
-              <img src={props.masterAsset.thumbnailUrl || props.masterAsset.originalUrl} alt="母版预览" className="max-h-[360px] w-full rounded-[10px] border border-[#d2d2d7] object-contain" />
+              <img src={props.masterAsset.thumbnailUrl || props.masterAsset.originalUrl} alt="母版预览" className="max-h-[360px] w-full rounded-lg border border-[#d2d2d7] object-contain" />
               {props.masterAsset.originalUrl && props.onDownloadImage && (
-                <button type="button" onClick={() => props.onDownloadImage?.(props.masterAsset!.originalUrl)}
-                  className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-100 transition ">
-                  <Icon icon="mdi:download" aria-hidden />下载原图
-                </button>
+                <DownloadOverlayButton onClick={() => props.onDownloadImage?.(props.masterAsset!.originalUrl)} />
               )}
             </div>
           )}
         </section>
 
         <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
-          <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">分段</p>
-          <h3 className="mt-2 text-[18px] font-semibold text-[#1d1d1f]">分段预览</h3>
+          <p className="text-xs font-semibold text-[#6e6e73]">分段</p>
+          <h3 className="mt-1 text-base font-semibold text-[#1d1d1f]">分段预览</h3>
           <Stagger className="mt-4 grid gap-4 lg:grid-cols-3">
             <AnimatePresence mode="popLayout">
               {props.segmentCards.map(({ index, segment }) => (
                 <StaggerItem key={index}>
                   <motion.article
                     layout
-                    className="rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-3"
+                    className="rounded-lg border border-[#e8e8ed] bg-[#f7faf9] p-3"
                     whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                     transition={spring.smooth}
                   >
@@ -325,18 +352,15 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                     {segment ? (
                       <div className="mt-3 grid gap-3">
                         <div className="group relative">
-                          <img src={segment.thumbnailUrl || segment.originalUrl} alt={`第 ${index + 1} 段预览`} className="aspect-[3/4] w-full rounded-[8px] border border-[#d2d2d7] object-cover" />
+                          <img src={segment.thumbnailUrl || segment.originalUrl} alt={`第 ${index + 1} 段预览`} className="aspect-[3/4] w-full rounded-lg border border-[#d2d2d7] object-cover" />
                           {segment.originalUrl && props.onDownloadImage && (
-                            <button type="button" onClick={() => props.onDownloadImage?.(segment.originalUrl)}
-                              className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-100 transition ">
-                              <Icon icon="mdi:download" aria-hidden />下载原图
-                            </button>
+                            <DownloadOverlayButton onClick={() => props.onDownloadImage?.(segment.originalUrl)} />
                           )}
                         </div>
                         <p className="line-clamp-3 text-xs leading-5 text-[#6e6e73]">{segment.prompt}</p>
                       </div>
                     ) : (
-                      <div className="mt-3 grid min-h-48 place-items-center rounded-[8px] border border-dashed border-[#d2d2d7] bg-white text-center text-xs text-[#8a8a8f]">
+                      <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-white text-center text-xs text-[#8a8a8f]">
                         {props.stageLabel === "segments_running" ? (
                           <span className="grid place-items-center gap-2">
                             <span className="h-5 w-5 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
@@ -355,12 +379,12 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         <section className="bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] font-semibold tracking-[0.06em] text-[#6e6e73]">浏览器拼接</p>
-              <h3 className="mt-2 text-[18px] font-semibold text-[#1d1d1f]">浏览器白底拼接</h3>
-              <p className="mt-2 text-sm leading-6 text-[#6e6e73]">分段原图齐全后，在浏览器中纵向拼接，再保存回工作流。</p>
+              <p className="text-xs font-semibold text-[#6e6e73]">浏览器拼接</p>
+              <h3 className="mt-1 text-base font-semibold text-[#1d1d1f]">浏览器白底拼接</h3>
+              <p className="mt-2 text-sm leading-6 text-[#6e6e73]">分段原图齐全后，在浏览器中纵向拼接，再保存回工作流。拼接不消耗算力点。</p>
             </div>
-            <RippleButton type="button" aria-label="保存拼接长图" onClick={props.onSaveStitched} disabled={!props.canSave || props.isWorkflowMutating} className="h-11 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
-              {props.isSavingStitched ? "保存中" : `保存拼接长图${costSuffix(props.stitchPointCost)}`}
+            <RippleButton type="button" aria-label="保存拼接长图" onClick={props.onSaveStitched} disabled={!props.canSave || props.isWorkflowMutating} className="h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
+              {props.isSavingStitched ? "保存中" : "保存拼接长图"}
             </RippleButton>
           </div>
           {props.stitchedPreviewDataUrl || props.stitchedAsset ? (
@@ -368,40 +392,34 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               {props.stitchedPreviewDataUrl && (
                 <div className="grid gap-3">
                   <div className="group relative">
-                    <img src={props.stitchedPreviewDataUrl} alt="本地拼接长图预览" className="max-h-[720px] w-full rounded-[10px] border border-[#d2d2d7] object-contain" />
+                    <img src={props.stitchedPreviewDataUrl} alt="本地拼接长图预览" className="max-h-[720px] w-full rounded-lg border border-[#d2d2d7] object-contain" />
                     {props.onDownloadImage && (
-                      <button type="button" onClick={() => props.onDownloadImage?.(props.stitchedPreviewDataUrl!)}
-                        className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-100 transition ">
-                        <Icon icon="mdi:download" aria-hidden />下载原图
-                      </button>
+                      <DownloadOverlayButton onClick={() => props.onDownloadImage?.(props.stitchedPreviewDataUrl!)} />
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <a href={props.stitchedPreviewDataUrl} download="workflow-ecom-stitched.png" className="inline-flex h-10 items-center rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">下载本地预览</a>
-                    <a href={props.stitchedPreviewDataUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">打开本地预览</a>
+                    <a href={props.stitchedPreviewDataUrl} download="workflow-ecom-stitched.png" className="inline-flex h-10 items-center rounded-lg border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">下载本地预览</a>
+                    <a href={props.stitchedPreviewDataUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-lg border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">打开本地预览</a>
                   </div>
                 </div>
               )}
               {props.stitchedAsset && (
-                <div className="grid gap-3 rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
+                <div className="grid gap-3 rounded-lg border border-[#e8e8ed] bg-[#f7faf9] p-3">
                   <div className="group relative">
-                    <img src={props.stitchedAsset.thumbnailUrl || props.stitchedAsset.originalUrl} alt="已保存长图预览" className="max-h-[480px] w-full rounded-[10px] border border-[#d2d2d7] object-contain" />
+                    <img src={props.stitchedAsset.thumbnailUrl || props.stitchedAsset.originalUrl} alt="已保存长图预览" className="max-h-[480px] w-full rounded-lg border border-[#d2d2d7] object-contain" />
                     {props.stitchedAsset.originalUrl && props.onDownloadImage && (
-                      <button type="button" onClick={() => props.onDownloadImage?.(props.stitchedAsset!.originalUrl)}
-                        className="absolute right-2 top-2 flex items-center gap-1 rounded-[8px] bg-black/55 px-2 py-1 text-xs font-semibold text-white opacity-100 transition ">
-                        <Icon icon="mdi:download" aria-hidden />下载原图
-                      </button>
+                      <DownloadOverlayButton onClick={() => props.onDownloadImage?.(props.stitchedAsset!.originalUrl)} />
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <a href={props.stitchedAsset.originalUrl} download="workflow-ecom-saved.png" className="inline-flex h-10 items-center rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">下载已保存长图</a>
-                    <a href={props.stitchedAsset.originalUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">打开已保存长图</a>
+                    <a href={props.stitchedAsset.originalUrl} download="workflow-ecom-saved.png" className="inline-flex h-10 items-center rounded-lg border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">下载已保存长图</a>
+                    <a href={props.stitchedAsset.originalUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-lg border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f]">打开已保存长图</a>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="mt-4 rounded-[10px] border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-4 py-6 text-sm text-[#8a8a8f]">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
+            <div className="mt-4 rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-4 py-6 text-sm text-[#8a8a8f]">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
           )}
         </section>
 

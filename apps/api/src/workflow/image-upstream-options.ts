@@ -62,3 +62,30 @@ export function imageResolutionFromSize(size: string, explicitResolution?: strin
 export function imageGenerationResourceKey(resolution: ImageResolutionLabel): string {
   return IMAGE_RESOURCE_KEY_BY_RESOLUTION[resolution];
 }
+
+/**
+ * 同一宽高比下换一个分辨率档对应的预设尺寸，用于按实际交付像素结算。
+ * 传进来的 size 不在预设表里（比如 auto）就返回 null，调用方保守按请求档处理。
+ */
+export function imageSizeForResolution(size: string, resolution: ImageResolutionLabel): string | null {
+  const preset = IMAGE_UPSTREAM_PRESETS[size.trim()];
+  if (!preset) return null;
+  const target = resolution.toLowerCase();
+  const found = Object.entries(IMAGE_UPSTREAM_PRESETS)
+    .find(([, value]) => value.ratio === preset.ratio && value.resolution === target);
+  return found?.[0] ?? null;
+}
+
+/**
+ * 模型专属计费 key（如 image_generation_gpt_image_2_2k）。
+ * 仅当管理台显式配置了该 key 时参与计价，未配置时回落通用分辨率 key，
+ * 因此新增模型无需预先在计费服务种价。
+ */
+export function imageModelResourceKey(model: string, resolution: ImageResolutionLabel): string {
+  const slug = model
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return `image_generation_${slug}_${resolution.toLowerCase()}`;
+}

@@ -266,7 +266,7 @@ describe("ArticleWorkflowPricingPanel", () => {
 });
 
 describe("CodexPetPricingPanel", () => {
-  it("defaults to a 200-point per-call package and saves admin overrides", async () => {
+  it("defaults to a 200-point per-unit package and saves admin overrides", async () => {
     const onDone = vi.fn();
     const onErr = vi.fn();
     await act(async () => {
@@ -286,10 +286,12 @@ describe("CodexPetPricingPanel", () => {
       requireButtonByText("保存资源价格").dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
+    // 桌宠启动接口要求 PER_UNIT + perUnits=1（见 isCodexPetPerImagePrice），
+    // 存成 PER_CALL 会让启动校验失败。
     expect(api.upsertResourcePrice).toHaveBeenCalledWith({
       resourceKey: "codex_pet_v2_package",
       displayName: "Codex 桌宠 v2 套餐",
-      pricingType: "PER_CALL",
+      pricingType: "PER_UNIT",
       rate: 200,
       perUnits: 1,
       enabled: true,

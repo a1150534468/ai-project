@@ -1,19 +1,41 @@
 import { ApiError, readErrorMessage } from "./apiError";
 
-export type PortraitPresetId = "business" | "social" | "lifestyle" | "traditional" | "poster" | "custom";
+export type PortraitPresetId =
+  | "business-elite"
+  | "linkedin"
+  | "id-photo"
+  | "guofeng"
+  | "sunny-casual"
+  | "poster"
+  | "wedding"
+  | "student-id"
+  | "founder-ip"
+  | "hk-retro"
+  | "oil-painting"
+  | "ink-gongbi"
+  | "magazine"
+  | "cyberpunk"
+  | "fairytale"
+  | "custom";
+export type PortraitPresetFinish = "photo" | "art";
 export type PortraitAspectRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
-export type PortraitResolution = "2K" | "4K";
+export type PortraitResolution = "1K" | "2K" | "4K";
 export type PortraitTaskStatus = "pending" | "running" | "completed" | "partial" | "failed" | "cancelled";
 
-export type PortraitPreset = { readonly id: PortraitPresetId; readonly name: string; readonly description: string };
+export type PortraitPreset = { readonly id: PortraitPresetId; readonly name: string; readonly description: string; readonly finish?: PortraitPresetFinish };
+export type PortraitModel = { readonly value: string; readonly label: string; readonly supports4K: boolean; readonly supports1K?: boolean };
 export type PortraitPrice = { readonly resourceKey: string; readonly displayName: string; readonly rate: number; readonly enabled: boolean };
 export type PortraitOptions = {
   readonly model: string;
+  readonly models?: readonly PortraitModel[];
   readonly consentVersion: string;
   readonly presets: readonly PortraitPreset[];
   readonly aspectRatios: readonly PortraitAspectRatio[];
   readonly resolutions: readonly PortraitResolution[];
   readonly pricing: Record<PortraitResolution, PortraitPrice>;
+  readonly pricingByModel?: Readonly<Record<string, Readonly<Partial<Record<PortraitResolution, number>>>>>;
+  /** 旧版模板 id → 可读名称，仅历史任务展示用；老服务端不返回该字段 */
+  readonly legacyPresetNames?: Readonly<Record<string, string>>;
 };
 export type PortraitReference = {
   readonly id: string;
@@ -38,7 +60,8 @@ export type PortraitTask = {
   readonly id: string;
   readonly requestId: string;
   readonly model: string;
-  readonly presetId: PortraitPresetId;
+  /** 历史任务可能保存旧版模板 id，因此不限定为当前 PortraitPresetId */
+  readonly presetId: string;
   readonly aspectRatio: PortraitAspectRatio;
   readonly resolution: PortraitResolution;
   readonly count: number;
@@ -66,6 +89,7 @@ export type PortraitPromptOptions = {
 export type CreatePortraitPayload = {
   readonly requestId: string;
   readonly presetId: PortraitPresetId;
+  readonly model: string;
   readonly aspectRatio: PortraitAspectRatio;
   readonly resolution: PortraitResolution;
   readonly count: number;

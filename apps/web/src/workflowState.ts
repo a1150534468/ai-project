@@ -43,7 +43,7 @@ export interface ImageModelOption {
 
 const IMAGE_ASPECT_RATIO_VALUES = ["1:1", "4:3", "3:4", "3:2", "2:3", "16:9", "9:16", "21:9"] as const;
 const IMAGE_RESOLUTION_VALUES = ["1K", "2K"] as const;
-const IMAGE_MODEL_VALUES = ["qwen-image-2.0-pro-2026-04-22", "gpt-image-2"] as const;
+const IMAGE_MODEL_VALUES = ["qwen-image-2.0-pro-2026-04-22", "gpt-image-2", "doubao-seedream-4-5-251128"] as const;
 
 export type ImageAspectRatio = typeof IMAGE_ASPECT_RATIO_VALUES[number];
 export type ImageResolution = typeof IMAGE_RESOLUTION_VALUES[number];
@@ -113,6 +113,7 @@ export const IMAGE_RESOLUTION_OPTIONS: readonly ImageResolutionOption[] = [
 export const IMAGE_MODEL_OPTIONS: readonly ImageModelOption[] = [
   { value: "qwen-image-2.0-pro-2026-04-22", label: "Qwen Image 2.0 Pro", supportsReferenceImages: true },
   { value: "gpt-image-2", label: "GPT Image 2", supportsReferenceImages: true },
+  { value: "doubao-seedream-4-5-251128", label: "豆包 Seedream 4.5", supportsReferenceImages: true },
 ] as const;
 
 const IMAGE_SIZE_BY_RATIO_AND_RESOLUTION = {

@@ -82,7 +82,6 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
   const modifyImage = props.onModifyImage ?? (() => undefined);
   const variation = props.onVariation ?? (() => undefined);
   const editImage = props.onEditImage ?? (() => undefined);
-  const queuedCount = countTasks(props.tasks, "queued");
   const runningCount = countTasks(props.tasks, "running");
 
   return (
@@ -130,9 +129,9 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
             className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-[#1d1d1f]"
           >
             <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
-            队列中 {queuedCount} · 生成中 {runningCount}
+            任务列表{runningCount > 0 ? ` · 生成中 ${runningCount}` : ""}
           </button>
-          <span className="sr-only" role="status" aria-live="polite">队列中 {queuedCount}，生成中 {runningCount}</span>
+          <span className="sr-only" role="status" aria-live="polite">生成中 {runningCount}</span>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto">

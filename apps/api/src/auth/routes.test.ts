@@ -84,6 +84,22 @@ describe("auth 身份重构", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().data.memoryEnabled).toBe(true);
   });
+  it("/me 返回当前用户资料", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.uid).toBe(uid);
+    expect(body.username).toBe(uname);
+    expect(body.userId).toBeTruthy();
+  });
+  it("/me 未带 token 401", async () => {
+    const r = await app.inject({ method: "GET", url: "/api/auth/me" });
+    expect(r.statusCode).toBe(401);
+  });
   it("用 uid 登录成功", async () => {
     const r = await app.inject({
       method: "POST",
@@ -106,6 +122,14 @@ describe("auth 身份重构", () => {
       method: "POST",
       url: "/api/auth/login",
       payload: { identifier: uname, password: "password123" },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+  it("封禁后 /me 403", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/api/auth/me",
+      headers: { authorization: `Bearer ${token}` },
     });
     expect(r.statusCode).toBe(403);
   });

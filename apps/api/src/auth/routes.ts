@@ -64,4 +64,16 @@ export async function authRoutes(app: FastifyInstance) {
     }
     return { token: signToken(user.id, secret), userId: user.id, uid: user.uid };
   });
+
+  app.get("/api/auth/me", async (req, reply) => {
+    const userId = req.userId;
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, uid: true, username: true, bannedAt: true },
+    });
+    if (!user) return reply.code(401).send({ error: "用户不存在" });
+    if (user.bannedAt) return reply.code(403).send({ error: "账号已被封禁" });
+    return { userId: user.id, uid: user.uid, username: user.username };
+  });
 }

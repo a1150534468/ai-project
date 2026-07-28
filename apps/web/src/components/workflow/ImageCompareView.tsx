@@ -18,7 +18,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
         {image && <span className="truncate text-xs text-[#8a8a8f]">{image.size}</span>}
       </div>
       {image ? (
-        <div className="grid min-h-[300px] place-items-center overflow-hidden rounded-lg bg-[#eef1f4]">
+        <div className="grid min-h-[300px] place-items-center overflow-hidden rounded-lg bg-[#f5f5f7]">
           <img src={image.originalUrl} alt={`${label} ${image.prompt}`} className="max-h-[56vh] w-full object-contain" />
         </div>
       ) : (

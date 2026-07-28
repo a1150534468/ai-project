@@ -18,10 +18,23 @@ export const inlineImageSchema = z.object({
   mime: z.string().trim().regex(/^image\/[A-Za-z0-9.+-]+$/).optional(),
 });
 
+/** 两条电商生图管线可选的生成模型；缺省（undefined/null）表示跟随服务端环境默认模型。 */
+export const ECOM_IMAGE_MODELS = ["qwen-image-2.0-pro-2026-04-22", "gpt-image-2", "doubao-seedream-4-5-251128"] as const;
+export const ecomImageModelSchema = z.enum(ECOM_IMAGE_MODELS);
+export type EcomImageModel = z.infer<typeof ecomImageModelSchema>;
+
+/** 计价接口的可选 ?model= 查询参数；非法值当作未传，回落通用价。 */
+export function parsePricingModelQuery(query: unknown): EcomImageModel | undefined {
+  const raw = typeof query === "object" && query !== null && "model" in query ? (query as { model?: unknown }).model : undefined;
+  const parsed = typeof raw === "string" ? ecomImageModelSchema.safeParse(raw.trim()) : null;
+  return parsed?.success ? parsed.data : undefined;
+}
+
 export const masterRequestSchema = z.object({
   platformId: z.string().trim().min(1).max(64),
   templateId: z.string().trim().min(1).max(64),
   resolution: z.enum(["1K", "2K", "4K"]).default("1K"),
+  model: ecomImageModelSchema.optional(),
   segmentCount: z.coerce.number().int().min(ECOM_MIN_SEGMENTS).max(ECOM_MAX_SEGMENTS).default(3),
   product: productSchema,
   referenceAssetIds: z.array(z.string().trim().min(1).max(128)).max(IMAGE_MAX_REFERENCE_COUNT).default([]),
@@ -63,6 +76,9 @@ export type SegmentRecord = z.infer<typeof segmentRecordSchema>;
 
 export type BillingForEcom = {
   readonly chargeResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ charged: number }>;
+  /** 预留 + 结算：请求档预留，交付档结算，中转缩水时差额自动退回。 */
+  readonly reserveResource?: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
+  readonly settleResource?: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   readonly refundResource: (operationId: string) => Promise<{ success: boolean }>;
   readonly listResourcePrices?: () => Promise<{ data: WorkflowResourcePriceRow[] }>;
 };
@@ -104,6 +120,7 @@ export type EcomRouteDeps = {
     env?: NodeJS.ProcessEnv;
   }) => Promise<StoredImage>;
   readonly loadImageGenerationConfig?: (env?: NodeJS.ProcessEnv) => ImageGenerationConfig;
+  readonly loadImageGenerationConfigForModel?: (model: string, env?: NodeJS.ProcessEnv) => ImageGenerationConfig;
   readonly workflowMutationLocker?: WorkflowMutationLocker;
   readonly retryDelayMs?: number;
   readonly maxAttempts?: number;

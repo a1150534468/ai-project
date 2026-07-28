@@ -6,6 +6,7 @@ import {
   generateNovelSetup,
   getNovelProject,
   getNovelWorkbench,
+  getImageWorkflowPricing,
   getTopupOrder,
   rewriteNovelChapterSelection,
   saveNovelChapter,
@@ -189,6 +190,12 @@ describe("novel workflow API", () => {
   });
 });
 
+const imagePricingPayload = {
+  "1K": { resourceKey: "image_generation_gpt_image_2_1k", displayName: "1K", pricingType: "PER_CALL", rate: 30, perUnits: 1, enabled: true },
+  "2K": { resourceKey: "image_generation_gpt_image_2_2k", displayName: "2K", pricingType: "PER_CALL", rate: 60, perUnits: 1, enabled: true },
+  "4K": { resourceKey: "image_generation_gpt_image_2_4k", displayName: "4K", pricingType: "PER_CALL", rate: 120, perUnits: 1, enabled: true },
+};
+
 describe("web api billing helpers", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -232,6 +239,36 @@ describe("web api billing helpers", () => {
     expect(order.status).toBe("success");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/billing/topup/ai123",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("getImageWorkflowPricing 带上模型查询价格，让预估和实际扣费走同一条解析链", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: imagePricingPayload }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const pricing = await getImageWorkflowPricing("token", "gpt-image-2");
+    expect(pricing["1K"].resourceKey).toBe("image_generation_gpt_image_2_1k");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/workflow/images/pricing?model=gpt-image-2",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("getImageWorkflowPricing 不传模型时不带 query，模型名做 URL 编码", async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: imagePricingPayload }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getImageWorkflowPricing("token");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/workflow/images/pricing",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    await getImageWorkflowPricing("token", "model/with space");
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/workflow/images/pricing?model=model%2Fwith%20space",
       expect.objectContaining({ method: "GET" }),
     );
   });

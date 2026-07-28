@@ -1,5 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import { ImageResultCanvas } from "./ImageResultCanvas";
 import { ImageWorkflowStudio } from "./ImageWorkflowStudio";
 import type { WorkflowImageAsset } from "../../api";
 import type { ImageAspectRatio, ImageResolution, ImageTask } from "../../workflowState";
@@ -121,6 +122,26 @@ function renderStudio({
 }
 
 describe("ImageWorkflowStudio", () => {
+  it("keeps a single preview within the flexible result area", () => {
+    const html = renderToStaticMarkup(
+      <ImageResultCanvas
+        images={[currentImage]}
+        selectedImageId={currentImage.id}
+        isGenerating={false}
+        generatingCount={0}
+        onSelectImage={vi.fn()}
+        onModify={vi.fn()}
+        onVariation={vi.fn()}
+        onEdit={vi.fn()}
+        onDownload={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('class="h-full"');
+    expect(html).not.toContain("h-[min(62vh,620px)]");
+    expect(html).not.toContain('class="h-full min-h-[340px]"');
+  });
+
   it("keeps the generate button enabled while another task is already running", () => {
     const html = renderStudio({ isTaskDrawerOpen: true });
 

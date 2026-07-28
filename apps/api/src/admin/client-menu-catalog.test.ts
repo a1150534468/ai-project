@@ -27,4 +27,29 @@ describe("resolveClientMenuItems", () => {
     expect(items.find((item) => item.key === "workflow.report")?.visible).toBe(true);
     expect(items.find((item) => item.key === "nav.models")?.visible).toBe(false);
   });
+
+  it("生图模块的三个页内 tab 作为三级菜单默认开启，旧电商图二级菜单已下线", () => {
+    const items = resolveClientMenuItems([]);
+    const tabs = items.filter((item) => item.parentKey === "workflow.image");
+    expect(tabs.map((tab) => tab.key)).toEqual([
+      "workflow.image.general",
+      "workflow.image.ecom",
+      "workflow.image.portrait",
+    ]);
+    expect(tabs.every((tab) => tab.visible)).toBe(true);
+    expect(items.some((item) => item.key === "workflow.commerce-long-image")).toBe(false);
+  });
+
+  it("旧 AI 电商图开关沿用到电商生图 tab，新 key 优先", () => {
+    const legacyOnly = resolveClientMenuItems([
+      { key: "workflow.commerce-long-image", visible: false },
+    ]);
+    expect(legacyOnly.find((item) => item.key === "workflow.image.ecom")?.visible).toBe(false);
+
+    const bothKeys = resolveClientMenuItems([
+      { key: "workflow.commerce-long-image", visible: false },
+      { key: "workflow.image.ecom", visible: true },
+    ]);
+    expect(bothKeys.find((item) => item.key === "workflow.image.ecom")?.visible).toBe(true);
+  });
 });

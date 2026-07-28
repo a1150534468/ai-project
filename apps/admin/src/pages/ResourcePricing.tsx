@@ -9,6 +9,7 @@ import {
   ECOM_RESOURCE_PRICING_CONFIGS,
   EcomResourcePricingPanel,
   ImageGenerationPricingPanel,
+  ImageModelPricingPanel,
   LOCAL_BUSINESS_PROMO_PRICING_CONFIGS,
   NOVEL_COVER_RESOURCE_KEY,
   NovelCoverPricingPanel,
@@ -92,6 +93,14 @@ export function ResourcePricingPage() {
         rows={rows}
         onDone={() => {
           show("已保存图片生成价格");
+          void load();
+        }}
+        onErr={(m) => show(m, "err")}
+      />
+      <ImageModelPricingPanel
+        rows={rows}
+        onDone={() => {
+          show("已保存模型差异化价格");
           void load();
         }}
         onErr={(m) => show(m, "err")}

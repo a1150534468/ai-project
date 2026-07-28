@@ -561,6 +561,10 @@ model ImageAsset {
   thumbnailUrl            String
   objectKey               String?
   mime                    String               @default("image/png")
+  // size 是"请求"的尺寸；这两列是上游"实际交付"的像素，用于按真实交付档位结算。
+  // 历史数据与拿不到二进制的 url 直存场景为 null。
+  width                   Int?
+  height                  Int?
   createdAt               DateTime             @default(now())
   user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   comicWorkflowAssets     ComicWorkflowAsset[]
@@ -584,6 +588,11 @@ model ImageGenerationTask {
   status            String   @default("running")
   completedCount    Int      @default(0)
   error             String?
+  billingMode          String  @default("charge")
+  billingResourceKey   String?
+  billingReservedUnits Int     @default(0)
+  billingSettledUnits  Int?
+  billingStatus        String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -786,6 +795,7 @@ model EcomWorkflow {
   language            String
   template            String
   resolution          String   @default("1K")
+  model               String?
   segmentCount        Int      @default(3)
   product             Json
   referenceAssetIds   String[] @default([])
@@ -901,6 +911,7 @@ model EcomMainImageJob {
   language            String
   ratio               String
   resolution          String   @default("1K")
+  model               String?
   style               String
   customStyle         String   @default("")
   withText            Boolean  @default(true)

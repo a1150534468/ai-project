@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import type { FastifyReply } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
 import { segmentRecordSchema, type InlineImageInput, type ProductInput } from "./ecom-route-types.js";
+import { WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { getEcomPlatform } from "./ecom-prompts.js";
 
 const DATA_URL_PATTERN = /^data:(image\/[A-Za-z0-9.+-]+);base64,(.+)$/;
@@ -13,6 +14,7 @@ type WorkflowShape = {
   readonly language: string;
   readonly template: string;
   readonly resolution: string;
+  readonly model?: string | null;
   readonly segmentCount: number;
   readonly product: unknown;
   readonly referenceAssetIds: readonly string[];
@@ -133,6 +135,7 @@ export function serializeWorkflowWithAssets(
     language: workflow.language,
     template: workflow.template,
     resolution: workflow.resolution,
+    model: workflow.model ?? null,
     segmentCount: workflow.segmentCount,
     product: parseWorkflowProduct(workflow.product),
     referenceAssetIds: [...workflow.referenceAssetIds],
@@ -220,6 +223,38 @@ export async function loadOwnedReferenceImages(
     if (!asset) throw new Error("reference asset missing");
     return loadReferenceImage(asset, fetchFn);
   }));
+}
+
+export const BILLING_OPERATION_APPEND_MAX_ATTEMPTS = 5;
+
+type BillingOperationRow = { readonly updatedAt: Date; readonly billingOperationIds: readonly string[] };
+
+/**
+ * 确定性 operationId（{prefix}{N}）的原子落库：读行 → 派生 N → 以 updatedAt 做 CAS push。
+ * create-lock 与 workflow-lock 不互斥，只靠「读后写」会让并发请求派生出同一个 N 并重复扣费，
+ * 因此必须 CAS 成功（count===1）后才允许 chargeResource；冲突则重新取行重派，超限报 409。
+ */
+export async function appendBillingOperationId<T extends BillingOperationRow>(args: {
+  readonly row: T;
+  readonly prefix: string;
+  readonly updateMany: (args: { readonly updatedAt: Date; readonly operationId: string }) => Promise<{ readonly count: number }>;
+  readonly reload: () => Promise<T | null>;
+  readonly maxAttempts?: number;
+}): Promise<{ readonly operationId: string; readonly row: T }> {
+  let current = args.row;
+  for (let attempt = 0; attempt < (args.maxAttempts ?? BILLING_OPERATION_APPEND_MAX_ATTEMPTS); attempt += 1) {
+    const operationId = `${args.prefix}${current.billingOperationIds.filter((id) => id.startsWith(args.prefix)).length}`;
+    const appended = await args.updateMany({ updatedAt: current.updatedAt, operationId });
+    if (appended.count === 1) {
+      const reloaded = await args.reload();
+      if (!reloaded) throw new WorkflowMutationConflictError();
+      return { operationId, row: reloaded };
+    }
+    const next = await args.reload();
+    if (!next) throw new WorkflowMutationConflictError();
+    current = next;
+  }
+  throw new WorkflowMutationConflictError();
 }
 
 export function buildSegmentRecord(args: {

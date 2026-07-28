@@ -36,9 +36,20 @@ export interface AdminUser {
   createdAt: string;
   balance: number | null;
 }
-export async function listUsers(q?: string): Promise<AdminUser[]> {
-  const qs = q ? `?q=${encodeURIComponent(q)}` : "";
-  return (await req<{ data: AdminUser[] }>("GET", `/api/admin/users${qs}`)).data;
+export interface AdminUserPage {
+  rows: AdminUser[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+export async function listUsers(q?: string, page = 1, pageSize = 20): Promise<AdminUserPage> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (q) params.set("q", q);
+  const r = await req<{ data: AdminUser[]; total: number; page: number; pageSize: number }>(
+    "GET",
+    `/api/admin/users?${params}`
+  );
+  return { rows: r.data, total: r.total, page: r.page, pageSize: r.pageSize };
 }
 export async function createUser(username: string, password: string): Promise<void> {
   await req("POST", "/api/admin/users", { username, password });
@@ -257,6 +268,8 @@ export interface ClientMenuItem {
   group: "main" | "workflow";
   defaultVisible: boolean;
   visible: boolean;
+  /** 三级菜单（模块内 tab）所属二级菜单 key */
+  parentKey?: string;
 }
 export async function listClientMenus(): Promise<ClientMenuItem[]> {
   return (await req<{ data: ClientMenuItem[] }>("GET", "/api/admin/client-menu")).data;

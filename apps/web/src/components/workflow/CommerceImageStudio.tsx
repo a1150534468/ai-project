@@ -203,7 +203,7 @@ export function CommerceImageStudio({
       <div className="mt-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-[#b8bdc6] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
             <Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={isUploading ? "animate-spin" : ""} aria-hidden />
             {isUploading ? "上传中" : "上传"}
           </button>
@@ -221,7 +221,7 @@ export function CommerceImageStudio({
   return (
     <section className="relative flex min-h-0 flex-col bg-white xl:h-full xl:overflow-hidden">
       <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
-        <div className="inline-flex rounded-lg bg-[#ececf0] p-1" aria-label="电商图类型">
+        <div className="inline-flex rounded-lg bg-[#f5f5f7] p-1" aria-label="电商图类型">
           <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}>商品主图</RippleButton>
           <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}>商品详情图</RippleButton>
         </div>

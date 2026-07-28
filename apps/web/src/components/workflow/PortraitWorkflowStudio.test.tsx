@@ -25,11 +25,22 @@ vi.mock("../../portraitApi", () => ({
 function options() {
   return {
     model: "doubao-seedream-5-0-260128",
+    models: [
+      { value: "doubao-seedream-5-0-260128", label: "豆包 Seedream 5.0", supports4K: true },
+      { value: "gpt-image-2", label: "GPT Image 2", supports4K: false },
+    ],
     consentVersion: "portrait-consent-v1",
-    presets: [{ id: "business", name: "商务头像", description: "专业" }, { id: "custom", name: "自定义", description: "自定义" }],
+    presets: [
+      { id: "business-elite", name: "商务精英", description: "西装+办公室", finish: "photo" },
+      { id: "custom", name: "自定义", description: "按你的描述创作", finish: "photo" },
+    ],
     aspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
     resolutions: ["2K", "4K"],
     pricing: { "2K": { resourceKey: "image_generation_2k", displayName: "2K", rate: 20, enabled: true }, "4K": { resourceKey: "image_generation_4k", displayName: "4K", rate: 40, enabled: true } },
+    pricingByModel: {
+      "doubao-seedream-5-0-260128": { "2K": 20, "4K": 40 },
+      "gpt-image-2": { "2K": 25, "4K": 40 },
+    },
   };
 }
 
@@ -38,7 +49,7 @@ function reference(id = "ref-1") {
 }
 
 function task(overrides: Record<string, unknown> = {}) {
-  return { id: "task-1", requestId: "portrait-task-1", model: "doubao-seedream-5-0-260128", presetId: "business", aspectRatio: "3:4", resolution: "2K", count: 1, prompt: "", referenceAssetIds: ["ref-1"], status: "completed", completedCount: 1, error: null, billingStatus: "settled", outputs: [{ id: "out-1", index: 0, mime: "image/png", width: 1728, height: 2304, sizeBytes: 2000, originalUrl: "https://example.test/out.png", createdAt: "2026-07-22T08:01:00Z" }], createdAt: "2026-07-22T08:00:00Z", updatedAt: "2026-07-22T08:01:00Z", completedAt: "2026-07-22T08:01:00Z", ...overrides };
+  return { id: "task-1", requestId: "portrait-task-1", model: "doubao-seedream-5-0-260128", presetId: "business-elite", aspectRatio: "3:4", resolution: "2K", count: 1, prompt: "", referenceAssetIds: ["ref-1"], status: "completed", completedCount: 1, error: null, billingStatus: "settled", outputs: [{ id: "out-1", index: 0, mime: "image/png", width: 1728, height: 2304, sizeBytes: 2000, originalUrl: "https://example.test/out.png", createdAt: "2026-07-22T08:01:00Z" }], createdAt: "2026-07-22T08:00:00Z", updatedAt: "2026-07-22T08:01:00Z", completedAt: "2026-07-22T08:01:00Z", ...overrides };
 }
 
 async function flush() {
@@ -98,10 +109,10 @@ describe("PortraitWorkflowStudio", () => {
     act(() => { consent.click(); });
     expect(submit.disabled).toBe(false);
     await act(async () => { submit.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect(mocks.create).toHaveBeenCalledWith("token", expect.objectContaining({ referenceAssetIds: ["ref-1", "ref-2", "ref-3"], authorizationAccepted: true, consentVersion: "portrait-consent-v1" }));
+    expect(mocks.create).toHaveBeenCalledWith("token", expect.objectContaining({ presetId: "business-elite", model: "doubao-seedream-5-0-260128", referenceAssetIds: ["ref-1", "ref-2", "ref-3"], authorizationAccepted: true, consentVersion: "portrait-consent-v1" }));
   });
 
-  it("renders a completed result with a download action and history", async () => {
+  it("renders a completed result with a download-link dialog and history", async () => {
     mocks.refs.push(reference());
     mocks.tasks.push(task());
     container = document.createElement("div");
@@ -110,9 +121,17 @@ describe("PortraitWorkflowStudio", () => {
     act(() => root?.render(<PortraitWorkflowStudio token="token" />));
     await flush();
     expect(container.querySelector('[data-testid="portrait-preview"]')?.getAttribute("src")).toBe("https://example.test/out.png");
-    const download = container.querySelector<HTMLAnchorElement>('a[download="portrait-1.png"]');
-    expect(download?.getAttribute("href")).toBe("https://example.test/out.png");
-    expect(container.textContent).toContain("商务头像");
+    expect(container.querySelector("a[download]")).toBeNull();
+    const download = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("下载原图"));
+    expect(download).toBeTruthy();
+    act(() => { download?.click(); });
+    expect(container.textContent).toContain("原图下载链接");
+    const linkInput = container.querySelector<HTMLInputElement>("input[readonly]");
+    expect(linkInput?.value).toBe("https://example.test/out.png");
+    const close = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "关闭");
+    act(() => { close?.click(); });
+    expect(container.textContent).not.toContain("原图下载链接");
+    expect(container.textContent).toContain("商务精英");
     expect(container.textContent).toContain("已完成");
     expect(container.querySelector('[aria-label="形象照生成历史"]')).toBeTruthy();
     expect(container.querySelector('[aria-label="形象照任务队列"]')).toBeNull();
@@ -121,5 +140,100 @@ describe("PortraitWorkflowStudio", () => {
     expect(taskButton?.getAttribute("aria-expanded")).toBe("false");
     act(() => { taskButton?.click(); });
     expect(container.querySelector('[aria-label="形象照任务队列"]')).toBeTruthy();
+  });
+
+  it("switches models, re-prices the estimate, and downgrades 4K for unsupported models", async () => {
+    mocks.refs.push(reference());
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<PortraitWorkflowStudio token="token" />));
+    await flush();
+    const findButton = (text: string) => Array.from(container!.querySelectorAll("button")).find((button) => button.textContent?.includes(text));
+
+    expect(container.textContent).toContain("20 算力点");
+    act(() => { findButton("2K · 标准")?.click(); });
+    act(() => { findButton("4K · 高清")?.click(); });
+    expect(container.textContent).toContain("40 算力点");
+
+    act(() => { findButton("豆包 Seedream 5.0")?.click(); });
+    act(() => { findButton("GPT Image 2")?.click(); });
+    expect(container.textContent).toContain("25 算力点");
+    expect(findButton("2K · 标准")).toBeTruthy();
+
+    act(() => { findButton("2K · 标准")?.click(); });
+    expect(findButton("4K · 高清")).toBeUndefined();
+    act(() => { findButton("2K · 标准")?.click(); });
+
+    const consent = container.querySelector<HTMLInputElement>('input[aria-label="人物授权确认"]');
+    if (!consent) throw new Error("consent checkbox missing");
+    act(() => { consent.click(); });
+    const submit = findButton("生成形象照");
+    if (!submit) throw new Error("submit button missing");
+    await act(async () => { submit.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+    expect(mocks.create).toHaveBeenCalledWith("token", expect.objectContaining({ model: "gpt-image-2", resolution: "2K" }));
+  });
+
+  it("历史任务的旧版模板 id 用服务端 legacyPresetNames 显示可读名称", async () => {
+    mocks.getOptions.mockResolvedValue({ ...options(), legacyPresetNames: { business: "服务端商务头像" } });
+    mocks.refs.push(reference());
+    mocks.tasks.push(task({ id: "task-legacy", presetId: "business" }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<PortraitWorkflowStudio token="token" />));
+    await flush();
+
+    expect(container.textContent).toContain("服务端商务头像");
+    expect(container.textContent).not.toContain("presetId");
+  });
+
+  it("服务端未返回 legacyPresetNames 时回落到本地表，未知 id 显示原值", async () => {
+    mocks.refs.push(reference());
+    mocks.tasks.push(task({ id: "task-legacy", presetId: "lifestyle" }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<PortraitWorkflowStudio token="token" />));
+    await flush();
+
+    expect(container.textContent).toContain("生活写真");
+
+    act(() => root?.unmount());
+    container.remove();
+    mocks.tasks.splice(0, mocks.tasks.length, task({ id: "task-unknown", presetId: "gone-preset" }));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<PortraitWorkflowStudio token="token" />));
+    await flush();
+
+    expect(container.textContent).toContain("gone-preset");
+  });
+
+  it("提交报错时把报错元素滚进视口，避免从吸底栏提交后看不到原因", async () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    mocks.refs.push(reference());
+    mocks.create.mockRejectedValue(new Error("上游超时，请稍后重试"));
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<PortraitWorkflowStudio token="token" />));
+    await flush();
+    scrollIntoView.mockClear();
+
+    const consent = container.querySelector<HTMLInputElement>('input[aria-label="人物授权确认"]');
+    if (!consent) throw new Error("consent checkbox missing");
+    act(() => { consent.click(); });
+    const submit = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("生成形象照"));
+    if (!submit) throw new Error("submit button missing");
+    expect(scrollIntoView).not.toHaveBeenCalled();
+
+    await act(async () => { submit.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("上游超时，请稍后重试");
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   });
 });

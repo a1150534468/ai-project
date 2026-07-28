@@ -81,3 +81,53 @@ describe("resolveEcomMainImagePricing", () => {
     expect(pricing["2K"].resourceKey).toBe("image_generation_2k");
   });
 });
+
+describe("resolveImageChargeRow / resolveImagePricingMatrix", () => {
+  const rows = [
+    overrideRow("ecom_main_image_generation_2k", 66),
+    overrideRow("image_generation_gpt_image_2_2k", 30),
+    overrideRow("image_generation_2k", 20),
+  ];
+
+  it("模块专属 key 优先于模型专属与通用 key", async () => {
+    const { resolveImageChargeRow } = await import("./workflow-pricing.js");
+    const row = resolveImageChargeRow(rows, {
+      resolution: "2K",
+      model: "gpt-image-2",
+      dedicatedKey: "ecom_main_image_generation_2k",
+    });
+    expect(row.resourceKey).toBe("ecom_main_image_generation_2k");
+    expect(row.rate).toBe(66);
+  });
+
+  it("无模块专属配置时命中模型专属 key", async () => {
+    const { resolveImageChargeRow } = await import("./workflow-pricing.js");
+    const row = resolveImageChargeRow(rows, { resolution: "2K", model: "gpt-image-2" });
+    expect(row.resourceKey).toBe("image_generation_gpt_image_2_2k");
+    expect(row.rate).toBe(30);
+  });
+
+  it("专属 key 未配置或停用时回落通用分辨率 key", async () => {
+    const { resolveImageChargeRow } = await import("./workflow-pricing.js");
+    const disabled = { ...overrideRow("image_generation_gpt_image_2_1k", 5), enabled: false };
+    const row = resolveImageChargeRow([disabled, overrideRow("image_generation_1k", 10)], {
+      resolution: "1K",
+      model: "gpt-image-2",
+      dedicatedKey: "ecom_main_image_generation_1k",
+    });
+    expect(row.resourceKey).toBe("image_generation_1k");
+    expect(row.rate).toBe(10);
+  });
+
+  it("矩阵按模型与模块逐档解析,缺省回落默认价", async () => {
+    const { resolveImagePricingMatrix } = await import("./workflow-pricing.js");
+    const listResourcePrices = vi.fn(async () => ({ data: rows }));
+    const pricing = await resolveImagePricingMatrix({ listResourcePrices }, {
+      model: "gpt-image-2",
+      dedicatedKeyFor: (resolution) => `ecom_main_image_generation_${resolution.toLowerCase()}`,
+    });
+    expect(pricing["2K"].rate).toBe(66);
+    expect(pricing["1K"].rate).toBe(10);
+    expect(pricing["4K"].rate).toBe(40);
+  });
+});

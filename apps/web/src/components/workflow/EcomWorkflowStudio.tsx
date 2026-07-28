@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import * as workflowEcomApi from "../../workflowEcomApi";
+import type { ImageModel } from "../../workflowState";
 import type {
   WorkflowEcomImageAsset,
   WorkflowEcomPlatform,
@@ -26,6 +27,7 @@ import {
   hasAllSegmentUrls,
   isEcomWorkflowMutating,
   readFileAsInlineImage,
+  seedEcomModelSelection,
   segmentByIndex,
   segmentOrder,
   type EcomMasterDraft,
@@ -75,6 +77,8 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   const [selectedPlatformId, setSelectedPlatformId] = useState<WorkflowEcomPlatformId>("taobao");
   const [selectedTemplateId, setSelectedTemplateId] = useState<WorkflowEcomTemplateId>("general");
   const [selectedResolution, setSelectedResolution] = useState<WorkflowEcomResolution>("1K");
+  // null = 「默认模型」（跟随服务端默认），历史工作流没存模型时保持这一档而不是显示某个具体模型
+  const [selectedModel, setSelectedModel] = useState<ImageModel | null>(null);
   const [productName, setProductName] = useState("");
   const [category, setCategory] = useState("");
   const [sellingPointsInput, setSellingPointsInput] = useState("");
@@ -100,6 +104,7 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
     setWorkflow(nextWorkflow);
     setSelectedTemplateId(nextWorkflow.template);
     setSelectedResolution(nextWorkflow.resolution);
+    setSelectedModel((current) => seedEcomModelSelection(current, nextWorkflow.model));
     setSelectedSegmentCount(nextWorkflow.segmentCount);
     if (!shared) {
       setSelectedPlatformId(nextWorkflow.platform);
@@ -136,14 +141,15 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   }, [loadWorkflow, applyWorkflow]);
 
   useEffect(() => {
+    // 带上模型查询计价，预估与实际扣费保持同一条价格解析链路
     void (async () => {
       try {
-        setPricing(await client.getWorkflowEcomPricing(token));
+        setPricing(await client.getWorkflowEcomPricing(token, selectedModel ?? undefined));
       } catch {
         setPricing(null);
       }
     })();
-  }, [client, token]);
+  }, [client, token, selectedModel]);
 
   const refreshCurrentWorkflow = useCallback(async () => {
     try {
@@ -202,7 +208,7 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
 
   const refreshWorkflow = (nextWorkflow: WorkflowEcomWorkflow, successNotice: string) => { applyWorkflow(nextWorkflow); setNotice(successNotice); setError(""); onActivity?.(); onBalanceRefresh?.(); };
 
-  const buildDraft = (): EcomMasterDraft => ({ platformId: effPlatformId, templateId: selectedTemplateId, resolution: selectedResolution, productName: effProductName, category: effCategory, sellingPointsInput: effSellingPoints, extra: effExtra, referenceAssetIds: effReferenceAssets.map((asset) => asset.id), segmentCount: selectedSegmentCount });
+  const buildDraft = (): EcomMasterDraft => ({ platformId: effPlatformId, templateId: selectedTemplateId, resolution: selectedResolution, model: selectedModel, productName: effProductName, category: effCategory, sellingPointsInput: effSellingPoints, extra: effExtra, referenceAssetIds: effReferenceAssets.map((asset) => asset.id), segmentCount: selectedSegmentCount });
   const runWorkflowMutation = (args: {
     readonly start: () => void;
     readonly finish: () => void;
@@ -232,6 +238,7 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       selectedPlatformId={effPlatformId}
       selectedTemplateId={selectedTemplateId}
       selectedResolution={selectedResolution}
+      selectedModel={selectedModel}
       resolutionOptions={ECOM_RESOLUTION_OPTIONS}
       selectedSegmentCount={selectedSegmentCount}
       segmentCountOptions={ECOM_SEGMENT_COUNT_OPTIONS}
@@ -271,6 +278,7 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       historyFooter={historyFooter}
       onPlatformChange={(value) => { setSelectedPlatformId(value); clearFeedback(); }}
       onTemplateChange={(value) => { setSelectedTemplateId(value); clearFeedback(); }}
+      onModelChange={(value) => { setSelectedModel(value); clearFeedback(); }}
       onResolutionChange={(value) => { setSelectedResolution(value); clearFeedback(); setStitchedPreview(null); }}
       onSegmentCountChange={(value) => { setSelectedSegmentCount(Number(value)); clearFeedback(); setStitchedPreview(null); }}
       onProductNameChange={(value) => { setProductName(value); clearFeedback(); }}

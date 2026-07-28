@@ -8,7 +8,7 @@ import type { WorkflowModuleId } from "../../workflowState";
 import { Icon } from "@iconify/react";
 import { loadNavCollapsed, saveNavCollapsed } from "../../shellState";
 import { spring } from "../../motion";
-import { isClientMenuVisible, type ClientMenuVisibility } from "../../clientMenu";
+import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { ThemeToggle } from "../ThemeToggle";
 
 export type { ViewType, WorkflowSubId } from "./NavRail";
@@ -63,7 +63,7 @@ export default function Shell({
     isClientMenuVisible(menuVisibility, `nav.${item.id}`),
   );
   const visibleWorkflowSubItems = WORKFLOW_SUB_ITEMS.filter((sub) =>
-    isClientMenuVisible(menuVisibility, `workflow.${sub.id}`),
+    isWorkflowSubVisible(menuVisibility, sub.id),
   );
 
   const toggleCollapsed = () => {

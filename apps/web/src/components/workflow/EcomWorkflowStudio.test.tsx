@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import { EcomWorkflowStudioView, createEcomMasterPayload, createEcomWorkflowActions } from "./EcomWorkflowStudio";
 import { stitchEcomSegments } from "./ecomWorkflowStitch";
-import { ECOM_MAX_REFERENCE_COUNT, ECOM_RESOLUTION_OPTIONS, canSaveEcomStitchedPreview, hasAllSegmentUrls, isEcomWorkflowMutating } from "./ecomWorkflowStudioModel";
+import { ECOM_DEFAULT_MODEL_LABEL, ECOM_MAX_REFERENCE_COUNT, ECOM_RESOLUTION_OPTIONS, canSaveEcomStitchedPreview, hasAllSegmentUrls, isEcomWorkflowMutating, seedEcomModelSelection } from "./ecomWorkflowStudioModel";
 import type { WorkflowEcomImageAsset, WorkflowEcomPlatform, WorkflowEcomSegment, WorkflowEcomTemplate, WorkflowEcomWorkflow } from "../../workflowEcomApi";
 
 const platforms: readonly WorkflowEcomPlatform[] = [{ id: "taobao", name: "淘宝", market: "domestic" }, { id: "amazon", name: "Amazon", market: "foreign" }];
@@ -30,6 +30,7 @@ function makeWorkflow(overrides: Partial<WorkflowEcomWorkflow> = {}): WorkflowEc
     language: "zh-CN",
     template: "general",
     resolution: "1K",
+    model: null,
     product: {
       name: "山茶花面霜",
       category: "护肤",
@@ -64,6 +65,7 @@ function renderView(workflow: WorkflowEcomWorkflow | null, overrides: Partial<Pa
       selectedPlatformId="taobao"
       selectedTemplateId="general"
       selectedResolution="1K"
+      selectedModel="qwen-image-2.0-pro-2026-04-22"
       resolutionOptions={ECOM_RESOLUTION_OPTIONS}
       selectedSegmentCount={3}
       segmentCountOptions={[{ value: "2", label: "2 段" }, { value: "3", label: "3 段" }, { value: "4", label: "4 段" }, { value: "5", label: "5 段" }, { value: "6", label: "6 段" }, { value: "7", label: "7 段" }, { value: "8", label: "8 段" }]}
@@ -100,6 +102,7 @@ function renderView(workflow: WorkflowEcomWorkflow | null, overrides: Partial<Pa
       canSave={Boolean(canStitch)}
       onPlatformChange={vi.fn()}
       onTemplateChange={vi.fn()}
+      onModelChange={vi.fn()}
       onResolutionChange={vi.fn()}
       onSegmentCountChange={vi.fn()}
       onProductNameChange={vi.fn()}
@@ -146,6 +149,29 @@ describe("EcomWorkflowStudioView", () => {
     expect(html).toContain("确认分段");
     expect(html).toContain("重绘第 1 段");
     expect(html).toContain("浏览器拼接长图");
+  });
+
+  it("renders the model select with the selected model label", () => {
+    const html = renderView(makeWorkflow());
+
+    expect(html).toContain("模型");
+    expect(html).toContain("Qwen Image 2.0 Pro");
+  });
+
+  it("历史工作流没存模型时显示「默认模型」，不把具体模型显示成已选中", () => {
+    const html = renderView(makeWorkflow({ model: null }), { selectedModel: null });
+
+    expect(html).toContain(ECOM_DEFAULT_MODEL_LABEL);
+    expect(html).not.toContain("Qwen Image 2.0 Pro");
+    expect(html).not.toContain("GPT Image 2");
+  });
+
+  it("shows the free-stitch cost row with the combined master + segment estimate in 算力点", () => {
+    const html = renderView(makeWorkflow(), { masterPointCost: 20, segmentPointCost: 60 });
+
+    expect(html).toContain("80 算力点");
+    expect(html).toContain("母版 20 + 分段 60 · 拼接免费");
+    expect(html).not.toContain("约80点");
   });
 
   it("shows server generation progress and keeps stitch copy user-facing Chinese", () => {
@@ -206,11 +232,12 @@ describe("createEcomMasterPayload", () => {
     expect(ECOM_MAX_REFERENCE_COUNT).toBe(3);
   });
 
-  it("keeps the selected foreign platform in submitted payload", () => {
+  it("keeps the selected foreign platform and model in submitted payload", () => {
     expect(createEcomMasterPayload({
       platformId: "amazon",
       templateId: "general",
       resolution: "4K",
+      model: "gpt-image-2",
       productName: "  Lamp  ",
       category: "  Home  ",
       sellingPointsInput: "soft light\nfast shipping\n\n",
@@ -221,6 +248,7 @@ describe("createEcomMasterPayload", () => {
       platformId: "amazon",
       templateId: "general",
       resolution: "4K",
+      model: "gpt-image-2",
       product: {
         name: "Lamp",
         category: "Home",
@@ -230,6 +258,39 @@ describe("createEcomMasterPayload", () => {
       referenceAssetIds: ["ref-1"],
       segmentCount: 3,
     });
+  });
+
+  it("model 为 null 时不下发 model 字段，交给服务端默认模型", () => {
+    const payload = createEcomMasterPayload({
+      platformId: "taobao",
+      templateId: "general",
+      resolution: "1K",
+      model: null,
+      productName: "面霜",
+      category: "护肤",
+      sellingPointsInput: "修护",
+      extra: "",
+      referenceAssetIds: [],
+      segmentCount: 3,
+    });
+
+    expect(payload.model).toBeUndefined();
+  });
+});
+
+describe("seedEcomModelSelection", () => {
+  it("历史工作流 model 为空时保留用户当前选择", () => {
+    expect(seedEcomModelSelection(null, null)).toBeNull();
+    expect(seedEcomModelSelection(null, undefined)).toBeNull();
+    expect(seedEcomModelSelection(null, "")).toBeNull();
+    expect(seedEcomModelSelection("gpt-image-2", null)).toBe("gpt-image-2");
+  });
+
+  it("只有工作流存了合法模型才回填下拉，未知模型不回填", () => {
+    expect(seedEcomModelSelection(null, "gpt-image-2")).toBe("gpt-image-2");
+    expect(seedEcomModelSelection("gpt-image-2", "qwen-image-2.0-pro-2026-04-22")).toBe("qwen-image-2.0-pro-2026-04-22");
+    expect(seedEcomModelSelection(null, "some-removed-model")).toBeNull();
+    expect(seedEcomModelSelection("gpt-image-2", "some-removed-model")).toBe("gpt-image-2");
   });
 });
 
@@ -247,13 +308,13 @@ describe("createEcomWorkflowActions", () => {
     };
 
     const actions = createEcomWorkflowActions(client, "token-1");
-    await actions.createMaster({ platformId: "amazon", templateId: "general", resolution: "2K", productName: "Lamp", category: "Home", sellingPointsInput: "soft light", extra: "", referenceAssetIds: [], segmentCount: 3 });
+    await actions.createMaster({ platformId: "amazon", templateId: "general", resolution: "2K", model: "doubao-seedream-4-5-251128", productName: "Lamp", category: "Home", sellingPointsInput: "soft light", extra: "", referenceAssetIds: [], segmentCount: 3 });
     await actions.retryMaster("wf-1");
     await actions.confirmSegments("wf-1");
     await actions.redrawSegment("wf-1", 2);
     await actions.saveStitched("wf-1", "stitched-b64");
 
-    expect(client.createWorkflowEcomMaster).toHaveBeenCalledWith("token-1", expect.objectContaining({ platformId: "amazon" }));
+    expect(client.createWorkflowEcomMaster).toHaveBeenCalledWith("token-1", expect.objectContaining({ platformId: "amazon", model: "doubao-seedream-4-5-251128" }));
     expect(client.retryWorkflowEcomMaster).toHaveBeenCalledWith("token-1", "wf-1");
     expect(client.confirmWorkflowEcomSegments).toHaveBeenCalledWith("token-1", "wf-1");
     expect(client.redrawWorkflowEcomSegment).toHaveBeenCalledWith("token-1", "wf-1", 2);

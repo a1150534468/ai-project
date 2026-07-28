@@ -160,7 +160,43 @@ describe("image service", () => {
       size: "2048x1152",
       quality: "auto",
       output_format: "png",
+      // 中继 60s 读超时下必须流式保活，否则长耗时出图会被掐断
+      stream: true,
+      partial_images: 1,
     });
+  });
+
+  it("omits stream fields when IMAGE_UPSTREAM_STREAM=0", async () => {
+    const config = loadImageGenerationConfigForModel("gpt-image-2", {
+      GPT_IMAGE_API_KEY: "gpt-image-key",
+      GPT_IMAGE_GENERATION_ENDPOINT: "https://pixel.test/v1/images/generations",
+    });
+    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
+      data: [{ b64_json: PNG_B64 }],
+    }), { status: 200 }));
+    await callImageGeneration({ config, prompt: "p", size: "2048x1152", fetchFn, env: { IMAGE_UPSTREAM_STREAM: "0" } });
+    const body = JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body));
+    expect(body.stream).toBeUndefined();
+    expect(body.partial_images).toBeUndefined();
+  });
+
+  it("parses an event-stream generation response into the image", async () => {
+    const config = loadImageGenerationConfigForModel("gpt-image-2", {
+      GPT_IMAGE_API_KEY: "gpt-image-key",
+      GPT_IMAGE_GENERATION_ENDPOINT: "https://pixel.test/v1/images/generations",
+    });
+    const sse = [
+      `data: {"type":"image_generation.partial_image","b64_json":"cGFydGlhbA=="}`,
+      `data: {"type":"image_generation.completed","b64_json":"${PNG_B64}"}`,
+      "data: [DONE]",
+      "",
+    ].join("\n");
+    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(sse, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }));
+    await expect(callImageGeneration({ config, prompt: "p", size: "2048x1152", fetchFn }))
+      .resolves.toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
   });
 
   it("loads the portrait-only Seedream 5.0 Lite model through Ark", () => {
@@ -677,12 +713,29 @@ describe("image service", () => {
       env: {},
     });
 
+    // PNG_B64 不是真图片，量不出宽高只能留 null，但不该拦住入库。
     expect(stored).toEqual({
       originalUrl: `data:image/png;base64,${PNG_B64}`,
       thumbnailUrl: `data:image/png;base64,${PNG_B64}`,
       mime: "image/png",
       objectKey: null,
+      width: null,
+      height: null,
     });
+  });
+
+  it("measures the delivered pixels of a real image so billing can settle by tier", async () => {
+    const png = await sharp({ create: { width: 1086, height: 1448, channels: 3, background: "#406080" } }).png().toBuffer();
+    const stored = await storeWorkflowImage({
+      image: { kind: "b64", b64: png.toString("base64"), mime: "image/png" },
+      userId: "u1",
+      requestId: "req-measured",
+      requestIndex: 0,
+      fetchFn: async () => new Response(null, { status: 500 }),
+      env: {},
+    });
+
+    expect(stored).toMatchObject({ width: 1086, height: 1448 });
   });
 
   it("keeps object storage but returns a data url for localhost s3 without public base", async () => {

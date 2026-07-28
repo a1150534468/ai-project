@@ -44,6 +44,20 @@ export async function login(identifier: string, password: string): Promise<strin
   return (await r.json()).token as string;
 }
 
+export interface MeResponse {
+  userId: string;
+  uid: string;
+  username: string;
+}
+
+export async function getMe(token: string): Promise<MeResponse> {
+  const r = await fetch("/api/auth/me", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取账号信息失败"), r.status);
+  return (await r.json()) as MeResponse;
+}
+
 export async function streamChat(
   token: string,
   message: string,
@@ -458,7 +472,7 @@ export type ImageGenerationIntent = "new" | "variation" | "edit";
 
 export interface GenerateWorkflowImagesPayload {
   requestId: string;
-  model: "qwen-image-2.0-pro-2026-04-22" | "gpt-image-2";
+  model: "qwen-image-2.0-pro-2026-04-22" | "gpt-image-2" | "doubao-seedream-4-5-251128";
   prompt: string;
   size: string;
   resolution?: "1K" | "2K";
@@ -577,8 +591,12 @@ export interface WorkflowResourcePrice {
 
 export type ImageWorkflowPricing = Record<ImageResolutionKey, WorkflowResourcePrice>;
 
-export async function getImageWorkflowPricing(token: string): Promise<ImageWorkflowPricing> {
-  const r = await fetch("/api/workflow/images/pricing", {
+/** 带上模型查询计价，预估与实际扣费保持同一条 model 感知价格解析链路 */
+export async function getImageWorkflowPricing(token: string, model?: string): Promise<ImageWorkflowPricing> {
+  const path = model
+    ? `/api/workflow/images/pricing?model=${encodeURIComponent(model)}`
+    : "/api/workflow/images/pricing";
+  const r = await fetch(path, {
     method: "GET",
     headers: { authorization: `Bearer ${token}` },
   });

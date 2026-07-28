@@ -41,7 +41,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
     return (
       <div
         key={image.id}
-        className={`group relative min-w-0 overflow-hidden rounded-lg border-2 bg-[#eef1f4] text-left ${
+        className={`group relative min-w-0 overflow-hidden rounded-lg border-2 bg-[#f5f5f7] text-left ${
           selected ? "border-brand" : "border-transparent"
         } ${single ? "mx-auto flex h-full max-h-[620px] w-full max-w-[860px] items-center justify-center" : "aspect-square"}`}
       >
@@ -117,7 +117,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
             </div>
           </div>
         ) : displayImages.length === 1 && loadingCount === 0 ? (
-          <div className="h-[min(62vh,620px)] min-h-[340px]">{imageTile(displayImages[0], true)}</div>
+          <div className="h-full">{imageTile(displayImages[0], true)}</div>
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
             {displayImages.map((image) => imageTile(image, false))}

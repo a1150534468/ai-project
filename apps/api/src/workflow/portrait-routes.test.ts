@@ -4,7 +4,11 @@ import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { portraitWorkflowRoutes } from "./portrait-routes.js";
-import { PORTRAIT_CONSENT_VERSION } from "./portrait-prompts.js";
+import { LEGACY_PORTRAIT_PRESET_NAMES, PORTRAIT_CONSENT_VERSION } from "./portrait-prompts.js";
+
+function priceRow(resourceKey: string, rate: number) {
+  return { resourceKey, displayName: resourceKey, pricingType: "PER_UNIT" as const, rate, perUnits: 1, enabled: true };
+}
 
 type ReferenceRow = {
   id: string; userId: string; objectKey: string; mime: string; width: number; height: number; sizeBytes: number;
@@ -126,6 +130,7 @@ function createPrismaMock(seed?: { references?: ReferenceRow[]; tasks?: TaskRow[
     },
     portraitOutput: {
       findUnique: vi.fn(async (args: { where: { id: string } }) => outputs.find((row) => row.id === args.where.id) ?? null),
+      findMany: vi.fn(async (args: { where: { taskId: string } }) => outputs.filter((row) => row.taskId === args.where.taskId)),
       upsert: vi.fn(async (args: { where: { taskId_requestIndex: { taskId: string; requestIndex: number } }; create: Omit<OutputRow, "id" | "createdAt"> }) => {
         const existing = outputs.find((row) => row.taskId === args.where.taskId_requestIndex.taskId && row.requestIndex === args.where.taskId_requestIndex.requestIndex);
         if (existing) return existing;
@@ -161,7 +166,7 @@ function pendingTaskRow(): TaskRow {
     userId: "u1",
     requestId: "portrait-pending-1",
     model: "doubao-seedream-5-0-260128",
-    presetId: "business",
+    presetId: "business-elite",
     aspectRatio: "3:4",
     resolution: "2K",
     count: 1,
@@ -188,7 +193,7 @@ function pendingTaskRow(): TaskRow {
 
 const validPayload = {
   requestId: "portrait-request-1",
-  presetId: "business",
+  presetId: "business-elite",
   aspectRatio: "3:4",
   resolution: "2K",
   count: 1,
@@ -198,11 +203,26 @@ const validPayload = {
   consentVersion: PORTRAIT_CONSENT_VERSION,
 };
 
+const outputBytesCache = new Map<string, Buffer>();
+
+/** 纯色大图编码不便宜，按尺寸缓存一份复用。 */
+async function renderOutputBytes(size: { width: number; height: number }): Promise<Buffer> {
+  const key = `${size.width}x${size.height}`;
+  const cached = outputBytesCache.get(key);
+  if (cached) return cached;
+  const bytes = await sharp({ create: { ...size, channels: 3, background: "#406080" } }).png().toBuffer();
+  outputBytesCache.set(key, bytes);
+  return bytes;
+}
+
 async function createApp(args: {
   db: ReturnType<typeof createPrismaMock>;
   authenticated?: boolean;
   callImageEdit?: (args: any) => Promise<any>;
   scheduled?: Promise<void>[];
+  prices?: readonly Record<string, unknown>[];
+  /** 落库的成品尺寸，默认按 2K 3:4 足额交付；传小尺寸可模拟上游缩水。 */
+  outputSize?: { width: number; height: number };
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
@@ -210,12 +230,12 @@ async function createApp(args: {
   const objects = new Map<string, Buffer>();
   const refBytes = await sharp({ create: { width: 40, height: 50, channels: 3, background: "#807060" } }).jpeg().toBuffer();
   args.db.references.forEach((row) => objects.set(row.objectKey, refBytes));
-  const outputBytes = await sharp({ create: { width: 48, height: 64, channels: 3, background: "#406080" } }).png().toBuffer();
+  const outputBytes = await renderOutputBytes(args.outputSize ?? { width: 1728, height: 2304 });
   const billing = {
     reserveResource: vi.fn(async () => ({ reserved: 20 })),
     settleResource: vi.fn(async () => ({ settled: 20 })),
     refundResource: vi.fn(async () => ({ success: true })),
-    listResourcePrices: vi.fn(async () => ({ data: [] })),
+    listResourcePrices: vi.fn(async () => ({ data: [...(args.prices ?? [])] })),
   };
   const storeImage = vi.fn(async (storeArgs: any) => {
     const kind = storeArgs.namespace.endsWith("references") ? "references" : "outputs";
@@ -248,6 +268,7 @@ async function createApp(args: {
 beforeEach(() => {
   process.env.SESSION_SECRET = "portrait-test-secret-123456789";
   process.env.ARK_API_KEY = "ark-test-key";
+  process.env.GPT_IMAGE_API_KEY = "gpt-image-test-key";
 });
 
 describe("portrait workflow routes", () => {
@@ -332,6 +353,163 @@ describe("portrait workflow routes", () => {
     await Promise.all(scheduled);
     expect(db.tasks[0]).toMatchObject({ status: "cancelled", cancelRequested: true, billingStatus: "refunded" });
     expect(billing.refundResource).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it("returns selectable models, per-model pricing, and prompt-free presets from options", async () => {
+    const db = createPrismaMock();
+    const { app, billing } = await createApp({ db });
+    const response = await app.inject({ method: "GET", url: "/api/workflow/portraits/options" });
+    expect(response.statusCode).toBe(200);
+    const data = response.json().data;
+    expect(data.models.map((model: { value: string }) => model.value)).toEqual(["doubao-seedream-5-0-260128", "gpt-image-2"]);
+    expect(data.models.find((model: { value: string }) => model.value === "gpt-image-2")?.supports4K).toBe(false);
+    expect(data.models.find((model: { value: string }) => model.value === "gpt-image-2")?.supports1K).toBe(true);
+    expect(data.resolutions).toEqual(["1K", "2K", "4K"]);
+    expect(data.pricingByModel["doubao-seedream-5-0-260128"]).toEqual({ "2K": 20, "4K": 40 });
+    // 模型不支持的档位不下发价格，前端无从展示无法下单的档位
+    expect(data.pricingByModel["gpt-image-2"]).toEqual({ "1K": 10, "2K": 20 });
+    expect(data.pricing["2K"]).toMatchObject({ resourceKey: "image_generation_2k", rate: 20 });
+    expect(data.legacyPresetNames).toEqual(LEGACY_PORTRAIT_PRESET_NAMES);
+    // 费率只拉一次，不再按分辨率重复请求
+    expect(billing.listResourcePrices).toHaveBeenCalledTimes(1);
+    expect(data.presets).toHaveLength(16);
+    for (const preset of data.presets) {
+      expect(preset).not.toHaveProperty("prompt");
+      expect(["photo", "art"]).toContain(preset.finish);
+    }
+    await app.close();
+  });
+
+  it("resolves per-model admin pricing rows for options", async () => {
+    const db = createPrismaMock();
+    const { app } = await createApp({
+      db,
+      prices: [
+        priceRow("image_generation_doubao_seedream_5_0_260128_4k", 88),
+        priceRow("image_generation_2k", 33),
+      ],
+    });
+    const response = await app.inject({ method: "GET", url: "/api/workflow/portraits/options" });
+    expect(response.statusCode).toBe(200);
+    const data = response.json().data;
+    expect(data.pricingByModel["doubao-seedream-5-0-260128"]).toEqual({ "2K": 33, "4K": 88 });
+    expect(data.pricingByModel["gpt-image-2"]).toEqual({ "1K": 10, "2K": 33 });
+    await app.close();
+  });
+
+  it("warns and falls back to generic pricing when listResourcePrices fails", async () => {
+    const db = createPrismaMock();
+    const { app, billing } = await createApp({ db });
+    billing.listResourcePrices.mockRejectedValueOnce(new Error("pricing service down"));
+    const warn = vi.spyOn(app.log, "warn");
+    const response = await app.inject({ method: "GET", url: "/api/workflow/portraits/options" });
+    expect(response.statusCode).toBe(200);
+    const data = response.json().data;
+    expect(data.pricing["2K"]).toMatchObject({ resourceKey: "image_generation_2k", rate: 20 });
+    expect(data.pricingByModel["gpt-image-2"]).toEqual({ "1K": 10, "2K": 20 });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ error: "pricing service down" }),
+      expect.stringContaining("listResourcePrices failed"),
+    );
+    await app.close();
+  });
+
+  it("applies the default model when the request omits one", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, scheduled } = await createApp({ db });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: validPayload });
+    expect(response.statusCode).toBe(202);
+    expect(response.json().data.task.model).toBe("doubao-seedream-5-0-260128");
+    await Promise.all(scheduled);
+    expect(db.tasks[0]).toMatchObject({ model: "doubao-seedream-5-0-260128", billingResourceKey: "image_generation_2k" });
+    await app.close();
+  });
+
+  it("persists an explicit gpt-image-2 model and keeps the generic billing key without admin rows", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, billing, scheduled } = await createApp({ db });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: { ...validPayload, model: "gpt-image-2" } });
+    expect(response.statusCode).toBe(202);
+    await Promise.all(scheduled);
+    expect(db.tasks[0]).toMatchObject({ model: "gpt-image-2", billingResourceKey: "image_generation_2k", billingStatus: "settled" });
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k" }));
+    expect(billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k" }));
+    await app.close();
+  });
+
+  it("charges through an admin-configured model-specific resource key", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const prices = [{ resourceKey: "image_generation_gpt_image_2_2k", displayName: "GPT 形象照 2K", pricingType: "PER_UNIT", rate: 30, perUnits: 1, enabled: true }];
+    const { app, billing, scheduled } = await createApp({ db, prices });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: { ...validPayload, model: "gpt-image-2" } });
+    expect(response.statusCode).toBe(202);
+    await Promise.all(scheduled);
+    expect(db.tasks[0]).toMatchObject({ billingResourceKey: "image_generation_gpt_image_2_2k", billingStatus: "settled" });
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_gpt_image_2_2k" }));
+    expect(billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_gpt_image_2_2k" }));
+    await app.close();
+  });
+
+  it("settles at the delivered tier when upstream shrinks a 2K request to 1K pixels", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    // 中转实测：gpt-image-2 只认宽高比，2K/1K 都回 ~1.57MP，按请求档收就是多收一倍。
+    const { app, billing, scheduled } = await createApp({ db, outputSize: { width: 1086, height: 1448 } });
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/portraits/generate",
+      payload: { ...validPayload, model: "gpt-image-2", count: 2 },
+    });
+    expect(response.statusCode).toBe(202);
+    await Promise.all(scheduled);
+
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k", units: 2 }));
+    expect(billing.settleResource).toHaveBeenCalledWith({ operationId: "portrait:portrait-request-1", resourceKey: "image_generation_1k", units: 2 });
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    expect(db.tasks[0]).toMatchObject({ billingStatus: "settled", billingSettledUnits: 2, billingResourceKey: "image_generation_1k" });
+    await app.close();
+  });
+
+  it("keeps the requested tier when the delivered pixels honour it", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, billing, scheduled } = await createApp({ db, outputSize: { width: 1728, height: 2304 } });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: { ...validPayload, model: "gpt-image-2" } });
+    expect(response.statusCode).toBe(202);
+    await Promise.all(scheduled);
+    expect(billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_2k", units: 1 }));
+    await app.close();
+  });
+
+  it("rejects gpt-image-2 at 4K before reserving any points", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, billing } = await createApp({ db });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: { ...validPayload, model: "gpt-image-2", resolution: "4K" } });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe("GPT Image 2 暂不支持 4K，请选择 2K");
+    expect(billing.reserveResource).not.toHaveBeenCalled();
+    expect(db.tasks).toHaveLength(0);
+    await app.close();
+  });
+
+  it("rejects Seedream at 1K before reserving any points", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, billing } = await createApp({ db });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: { ...validPayload, resolution: "1K" } });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toBe("豆包 Seedream 5.0 暂不支持 1K，请选择 2K");
+    expect(billing.reserveResource).not.toHaveBeenCalled();
+    expect(db.tasks).toHaveLength(0);
+    await app.close();
+  });
+
+  it("charges the 1K tier when gpt-image-2 generates at 1K", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, billing, scheduled } = await createApp({ db });
+    const response = await app.inject({ method: "POST", url: "/api/workflow/portraits/generate", payload: { ...validPayload, model: "gpt-image-2", resolution: "1K" } });
+    expect(response.statusCode).toBe(202);
+    await Promise.all(scheduled);
+    expect(db.tasks[0]).toMatchObject({ model: "gpt-image-2", resolution: "1K", billingResourceKey: "image_generation_1k", billingStatus: "settled" });
+    expect(billing.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_1k" }));
     await app.close();
   });
 

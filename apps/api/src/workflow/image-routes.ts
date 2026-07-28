@@ -9,7 +9,18 @@ import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/bil
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type Anthropic from "@anthropic-ai/sdk";
 import { deleteObject, getObject, loadS3Config, makeS3, type S3Config } from "../storage/s3.js";
-import { imageGenerationResourceKey, imageResolutionFromSize, normalizeImageSize } from "./image-upstream-options.js";
+import {
+  imageGenerationResourceKey,
+  imageResolutionFromSize,
+  imageSizeForResolution,
+  normalizeImageSize,
+} from "./image-upstream-options.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
+import {
+  resolveImageChargeRow,
+  resolveImagePricingMatrix,
+  type WorkflowResourcePriceRow,
+} from "./workflow-pricing.js";
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,
@@ -26,7 +37,6 @@ import {
   type ImageGenerationConfig,
 } from "./image-service.js";
 import { loadOwnedReferenceImages } from "./ecom-route-helpers.js";
-import { resolveImagePricing, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
 
 const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";
 const IMAGE_KEEP_LIMIT = 50;
@@ -36,6 +46,8 @@ const DEFAULT_RETRY_DELAY_MS = 3000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const DEFAULT_STALE_TASK_MS = DEFAULT_ATTEMPT_TIMEOUT_MS + DEFAULT_RETRY_DELAY_MS + 30_000;
+// 进程崩在 settling 的预留：超过该时长视为无人认领，可重置回 reserved 再结算
+const SETTLING_STALE_MS = 10 * 60_000;
 const IMAGE_BLOB_URL_TTL_MS = 15 * 60_000;
 const ECOM_IMAGE_REQUEST_PREFIX = "ecom-";
 const IMAGE_TASK_STATUS = {
@@ -86,8 +98,13 @@ const imageTaskParamsSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
 });
 
+const imagePricingQuerySchema = z.object({
+  model: z.string().trim().min(1).max(128).optional(),
+});
+
 interface BillingForImages {
-  chargeResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ charged: number }>;
+  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
+  settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
   reserve: (args: { operationId: string; userId: string; type: string; model: string; inputTokens: number; maxOutputTokens: number }) => Promise<{ reserved: number }>;
   settle: (args: { operationId: string; userId: string; model: string; inputTokens: number; outputTokens: number; cacheInputTokens?: number; cacheOutputTokens?: number }) => Promise<{ settled: number }>;
@@ -137,6 +154,12 @@ interface ImageGenerationTaskRow {
   readonly status: string;
   readonly completedCount: number;
   readonly error: string | null;
+  // 旧任务（升级前创建）没有这些列的值：billingMode 缺省视为 "charge"。
+  readonly billingMode?: string;
+  readonly billingResourceKey?: string | null;
+  readonly billingReservedUnits?: number;
+  readonly billingSettledUnits?: number | null;
+  readonly billingStatus?: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -462,10 +485,161 @@ function safeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : "生成失败";
 }
 
+function isUniqueConstraintError(error: unknown): boolean {
+  return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "P2002";
+}
+
 async function assertImageTaskRunning(prisma: PrismaClient, taskId: string): Promise<void> {
   const current = await prisma.imageGenerationTask.findUnique({ where: { id: taskId } });
   if (!current) throw new Error("image task not found");
   if (current.status !== IMAGE_TASK_STATUS.running) throw new ImageTaskStoppedError(current.status);
+}
+
+type ImageTaskTerminalReason = "completed" | "failed" | "cancelled";
+
+/**
+ * 任务终态统一结算（完成 / 失败 / 取消共用）：
+ * - reserve 任务：先原子认领（reserved/settle_failed → settling），并发调用只有 count===1 的一方真正结算；
+ *   按实际入库张数结算；0 张则整单退款；计费接口出错记 settle_failed，由对账重试。
+ * - legacy charge 任务（升级前创建、已先扣费）：完全保留旧语义——失败全额退款，取消仅在 0 张时退款。
+ */
+/**
+ * 按实际交付像素定结算档位：中转上游常常只认宽高比、忽略绝对像素，
+ * 请求 2K 却回 1K 尺寸时若按请求档收就是多收一倍。取一批图里最小的那张，宁可少收。
+ */
+async function resolveImageSettleKey(args: {
+  readonly prisma: PrismaClient;
+  readonly billing: BillingForImages;
+  readonly task: ImageGenerationTaskRow;
+  readonly outputs: readonly { readonly width: number | null; readonly height: number | null }[];
+  readonly requestedKey: string;
+}): Promise<{ readonly resourceKey: string }> {
+  const fallback = { resourceKey: args.requestedKey };
+  try {
+    const requested = imageResolutionFromSize(args.task.size);
+    const settled = deliveredImageResolution({
+      requested,
+      deliveredPixels: minDeliveredPixels(args.outputs.map((output) => `${output.width ?? 0}x${output.height ?? 0}`)),
+      pixelsForResolution: (resolution) => pixelsFromSize(imageSizeForResolution(args.task.size, resolution)),
+    });
+    if (settled === requested) return fallback;
+    const rows = args.billing.listResourcePrices ? (await args.billing.listResourcePrices()).data ?? [] : [];
+    const row = resolveImageChargeRow(rows, { resolution: settled, model: args.task.model });
+    return { resourceKey: row.resourceKey };
+  } catch {
+    return fallback;
+  }
+}
+
+async function settleImageTaskBilling(args: {
+  readonly prisma: PrismaClient;
+  readonly billing: BillingForImages;
+  readonly taskId: string;
+  readonly reason: ImageTaskTerminalReason;
+  readonly onBillingError?: (error: unknown, operationId: string) => void;
+}): Promise<void> {
+  const { prisma, billing } = args;
+  const current = await prisma.imageGenerationTask.findUnique({ where: { id: args.taskId } }) as unknown as ImageGenerationTaskRow | null;
+  if (!current) return;
+  const operationId = `image:${current.requestId}`;
+  if (current.billingMode !== "reserve") {
+    const legacyStored = await prisma.imageAsset.findMany({
+      where: { userId: current.userId, requestId: current.requestId },
+      select: { id: true },
+    });
+    if (args.reason === "failed" || (args.reason === "cancelled" && legacyStored.length === 0)) {
+      await billing.refundResource(operationId).catch((error) => args.onBillingError?.(error, operationId));
+    }
+    return;
+  }
+  const claimed = await prisma.imageGenerationTask.updateMany({
+    where: { id: current.id, billingStatus: { in: ["reserved", "settle_failed"] } },
+    data: { billingStatus: "settling" },
+  });
+  if (claimed.count !== 1) return;
+  try {
+    // 以真实入库的图片数为准，不信任内存里的 completedCount
+    const storedImages = await prisma.imageAsset.findMany({
+      where: { userId: current.userId, requestId: current.requestId },
+      select: { id: true, width: true, height: true },
+    });
+    const completedCount = storedImages.length;
+    if (completedCount > 0) {
+      const requestedKey = current.billingResourceKey
+        ?? imageGenerationResourceKey(imageResolutionFromSize(current.size));
+      const settle = await resolveImageSettleKey({ prisma, billing, task: current, outputs: storedImages, requestedKey });
+      await billing.settleResource({ operationId, resourceKey: settle.resourceKey, units: completedCount });
+      await prisma.imageGenerationTask.update({
+        where: { id: current.id },
+        data: { billingStatus: "settled", billingSettledUnits: completedCount, billingResourceKey: settle.resourceKey },
+      });
+    } else {
+      await billing.refundResource(operationId);
+      await prisma.imageGenerationTask.update({
+        where: { id: current.id },
+        data: { billingStatus: "refunded", billingSettledUnits: 0 },
+      });
+    }
+  } catch (error) {
+    args.onBillingError?.(error, operationId);
+    await prisma.imageGenerationTask.update({
+      where: { id: current.id },
+      data: { billingStatus: "settle_failed" },
+    }).catch(() => undefined);
+  }
+}
+
+function terminalReasonOf(status: string): ImageTaskTerminalReason | null {
+  if (status === IMAGE_TASK_STATUS.completed) return "completed";
+  if (status === IMAGE_TASK_STATUS.failed) return "failed";
+  if (status === IMAGE_TASK_STATUS.cancelled) return "cancelled";
+  return null;
+}
+
+/**
+ * 对账：终态但预留未落地的任务（settle_failed / 崩在 settling / 状态已写但结算前进程挂掉留下的 reserved）
+ * 重跑一次统一结算。operationId 由 requestId 决定，重放对计费侧是幂等的。
+ */
+async function reconcilePendingImageBilling(args: {
+  readonly prisma: PrismaClient;
+  readonly billing: BillingForImages;
+  readonly tasks: readonly ImageGenerationTaskRow[];
+  readonly nowMs?: number;
+  readonly onReconcile?: (task: ImageGenerationTaskRow) => void;
+  readonly onBillingError?: (task: ImageGenerationTaskRow, error: unknown, operationId: string) => void;
+}): Promise<number> {
+  const nowMs = args.nowMs ?? Date.now();
+  const pending = args.tasks.filter((task) => {
+    if (task.billingMode !== "reserve") return false;
+    if (!terminalReasonOf(task.status)) return false;
+    if (task.billingStatus === "reserved" || task.billingStatus === "settle_failed") return true;
+    return task.billingStatus === "settling" && nowMs - task.updatedAt.getTime() >= SETTLING_STALE_MS;
+  });
+  if (pending.length === 0) return 0;
+  const reconciled = await Promise.all(pending.map(async (task) => {
+    if (task.billingStatus === "settling") {
+      // 只有确实卡住的 settling 才回退，避免抢走仍在结算的调用方
+      const released = await args.prisma.imageGenerationTask.updateMany({
+        where: {
+          id: task.id,
+          billingStatus: "settling",
+          updatedAt: { lt: new Date(nowMs - SETTLING_STALE_MS) },
+        },
+        data: { billingStatus: "reserved" },
+      });
+      if (released.count !== 1) return 0;
+    }
+    args.onReconcile?.(task);
+    await settleImageTaskBilling({
+      prisma: args.prisma,
+      billing: args.billing,
+      taskId: task.id,
+      reason: terminalReasonOf(task.status) ?? "failed",
+      onBillingError: (error, operationId) => args.onBillingError?.(task, error, operationId),
+    }).catch(() => undefined);
+    return 1;
+  }));
+  return reconciled.reduce<number>((sum, value) => sum + value, 0);
 }
 
 async function runImageGenerationTask(args: {
@@ -478,9 +652,9 @@ async function runImageGenerationTask(args: {
   readonly maxAttempts?: number;
   readonly signal: AbortSignal;
   readonly onAttemptFailure?: (error: unknown, attempt: number) => void;
+  readonly onBillingError?: (error: unknown, operationId: string) => void;
 }): Promise<void> {
   const { prisma, billing, fetchFn, cfg, task } = args;
-  const chargedOperationId = `image:${task.requestId}`;
   try {
     await assertImageTaskRunning(prisma, task.id);
     const existing = await prisma.imageAsset.findMany({
@@ -496,7 +670,8 @@ async function runImageGenerationTask(args: {
     let completedCount = existing.length;
     await updateTask(prisma, task.id, { status: IMAGE_TASK_STATUS.running, completedCount, error: null });
 
-    await Promise.all(missingIndexes.map(async (requestIndex) => {
+    // allSettled：任何分支失败也要等其余分支完全静止（含入库）再进入终态结算，避免少算已入库图片
+    const branchResults = await Promise.allSettled(missingIndexes.map(async (requestIndex) => {
       const stored = await retryUntilSuccess(async () => {
         await assertImageTaskRunning(prisma, task.id);
         const generated = referenceImages
@@ -548,11 +723,18 @@ async function runImageGenerationTask(args: {
           thumbnailUrl: stored.thumbnailUrl,
           objectKey: stored.objectKey,
           mime: stored.mime,
+          width: stored.width ?? null,
+          height: stored.height ?? null,
         },
       });
       completedCount += 1;
       await updateTask(prisma, task.id, { completedCount, error: null });
     }));
+    const branchFailures = branchResults.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    if (branchFailures.length > 0) {
+      const stopped = branchFailures.find((failure) => failure.reason instanceof ImageTaskStoppedError);
+      throw stopped ? stopped.reason : branchFailures[0].reason;
+    }
 
     await assertImageTaskRunning(prisma, task.id);
     await pruneImages(prisma, task.userId);
@@ -565,8 +747,16 @@ async function runImageGenerationTask(args: {
       completedCount: generated.length,
       error: null,
     });
+    await settleImageTaskBilling({
+      prisma,
+      billing,
+      taskId: task.id,
+      reason: "completed",
+      onBillingError: args.onBillingError,
+    });
   } catch (error) {
     if (error instanceof ImageTaskStoppedError) {
+      // 取消由 cancel 路由负责结算，这里只兜底刷新状态
       if (error.status === IMAGE_TASK_STATUS.cancelled) {
         await updateTask(prisma, task.id, {
           status: IMAGE_TASK_STATUS.cancelled,
@@ -575,10 +765,19 @@ async function runImageGenerationTask(args: {
       }
       return;
     }
-    await billing.refundResource(chargedOperationId).catch(() => undefined);
+    // 取消触发的 AbortError 会以普通错误抛出：任务已是 cancelled 时不得改写为 failed，也不结算（取消路由负责）
+    const latest = await prisma.imageGenerationTask.findUnique({ where: { id: task.id } }).catch(() => null);
+    if (latest?.status === IMAGE_TASK_STATUS.cancelled) return;
     await updateTask(prisma, task.id, {
       status: IMAGE_TASK_STATUS.failed,
       error: safeErrorMessage(error),
+    }).catch(() => undefined);
+    await settleImageTaskBilling({
+      prisma,
+      billing,
+      taskId: task.id,
+      reason: "failed",
+      onBillingError: args.onBillingError,
     }).catch(() => undefined);
     throw error;
   }
@@ -627,6 +826,7 @@ async function resumeStaleTasks(args: {
   readonly staleTaskMs: number;
   readonly onResume: (task: ImageGenerationTaskRow) => void;
   readonly onAttemptFailure: (task: ImageGenerationTaskRow, error: unknown, attempt: number) => void;
+  readonly onBillingError?: (task: ImageGenerationTaskRow, error: unknown, operationId: string) => void;
 }): Promise<number> {
   const staleTasks = args.tasks.filter((task) =>
     !activeGenerationTasks.has(task.requestId) && isStaleRunningTask(task, args.staleTaskMs)
@@ -648,6 +848,7 @@ async function resumeStaleTasks(args: {
         maxAttempts: args.maxAttempts,
         signal,
         onAttemptFailure: (error, attempt) => args.onAttemptFailure(claimed, error, attempt),
+        onBillingError: (error, operationId) => args.onBillingError?.(claimed, error, operationId),
       });
     }, claimed.requestId);
     return 1;
@@ -675,7 +876,21 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
   const staleTaskMs = deps.staleTaskMs ?? loadStaleTaskMs();
 
   async function resumeTasksIfNeeded(tasks: readonly ImageGenerationTaskRow[]): Promise<number> {
-    return resumeStaleTasks({
+    const reconciled = await reconcilePendingImageBilling({
+      prisma,
+      billing,
+      tasks,
+      onReconcile: (task) => {
+        app.log.warn({
+          requestId: task.requestId,
+          billingStatus: task.billingStatus,
+        }, "retrying pending image task billing settlement");
+      },
+      onBillingError: (task, error, operationId) => {
+        app.log.error({ requestId: task.requestId, operationId, err: error }, "image task billing reconciliation failed");
+      },
+    });
+    const resumed = await resumeStaleTasks({
       prisma,
       billing,
       fetchFn,
@@ -694,7 +909,11 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
           error: safeErrorMessage(error),
         }, "image generation attempt failed; retrying");
       },
+      onBillingError: (task, error, operationId) => {
+        app.log.error({ requestId: task.requestId, operationId, err: error }, "image task billing settlement failed");
+      },
     });
+    return reconciled + resumed;
   }
 
   app.get("/api/workflow/images/:imageId/blob", async (req, reply) => {
@@ -766,6 +985,8 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
           thumbnailUrl: stored.thumbnailUrl,
           objectKey: stored.objectKey,
           mime: stored.mime,
+          width: stored.width ?? null,
+          height: stored.height ?? null,
         },
       });
       return { success: true, data: { asset: serializeImageRow(row) } };
@@ -778,8 +999,10 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
   app.get("/api/workflow/images/pricing", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
+    const query = imagePricingQuerySchema.safeParse(req.query);
+    const model = query.success ? query.data.model : undefined;
     try {
-      return { success: true, data: await resolveImagePricing(billing) };
+      return { success: true, data: await resolveImagePricingMatrix(billing, { model }) };
     } catch (error) {
       app.log.error(error);
       return reply.code(502).send({ error: "获取生图计价失败" });
@@ -894,17 +1117,20 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
       },
     });
     activeGenerationTasks.get(requestId)?.abort();
-    const updated = await prisma.imageGenerationTask.findUnique({ where: { id: task.id } });
-    if (!updated) return reply.code(404).send({ error: "任务不存在" });
-    const existingImages = await prisma.imageAsset.findMany({
-      where: { userId, requestId },
-      orderBy: { requestIndex: "asc" },
-    });
-    if (cancelled.count === 1 && Math.max(task.completedCount, existingImages.length) === 0) {
-      await billing.refundResource(`image:${requestId}`).catch((error) => {
-        app.log.warn({ requestId, error: safeErrorMessage(error) }, "image task cancellation refund failed");
+    if (cancelled.count === 1) {
+      // 取消也走统一结算：已生成几张就结算几张，0 张才整单退款
+      await settleImageTaskBilling({
+        prisma,
+        billing,
+        taskId: task.id,
+        reason: "cancelled",
+        onBillingError: (error, operationId) => {
+          app.log.warn({ requestId, operationId, error: safeErrorMessage(error) }, "image task cancellation settlement failed");
+        },
       });
     }
+    const updated = await prisma.imageGenerationTask.findUnique({ where: { id: task.id } });
+    if (!updated) return reply.code(404).send({ error: "任务不存在" });
     return { success: true, data: { task: serializeTask(updated) } };
   });
 
@@ -984,11 +1210,15 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
       };
     }
 
+    // 预留（而非直接扣费），任务终态时按实际产出结算；扣费行优先命中管理台配置的模型专属 key
+    let chargeRow: WorkflowResourcePriceRow;
     try {
-      await billing.chargeResource({
+      const priceRows = billing.listResourcePrices ? (await billing.listResourcePrices()).data ?? [] : [];
+      chargeRow = resolveImageChargeRow(priceRows, { resolution: request.resolution, model: requestedModel });
+      await billing.reserveResource({
         operationId: chargedOperationId,
         userId,
-        resourceKey: imageGenerationResourceKey(request.resolution),
+        resourceKey: chargeRow.resourceKey,
         units: request.count,
       });
     } catch (error) {
@@ -1012,9 +1242,31 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
           status: IMAGE_TASK_STATUS.running,
           completedCount: existing.length,
           error: null,
+          billingMode: "reserve",
+          billingResourceKey: chargeRow.resourceKey,
+          billingReservedUnits: request.count,
+          billingStatus: "reserved",
         },
       });
     } catch (error) {
+      // 并发重复提交：requestId 唯一键冲突说明另一次请求已建单，预留归赢家所有，绝不能退款
+      if (isUniqueConstraintError(error)) {
+        const winner = await prisma.imageGenerationTask.findFirst({
+          where: { userId, requestId: request.requestId },
+        }) as unknown as ImageGenerationTaskRow | null;
+        if (winner) {
+          const recent = await listRecentImages(prisma, userId);
+          return reply.code(200).send({
+            success: true,
+            data: {
+              task: serializeTask(winner),
+              recent: recent.map(serializeImageRow),
+            },
+          });
+        }
+        app.log.error({ err: error, requestId: request.requestId }, "image task requestId conflicts with another owner");
+        return reply.code(409).send({ error: "该请求编号已被占用，请重试" });
+      }
       await billing.refundResource(chargedOperationId).catch(() => undefined);
       app.log.error(error);
       return reply.code(500).send({ error: "创建生图任务失败" });
@@ -1036,6 +1288,9 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
             attempt,
             error: safeErrorMessage(error),
           }, "image generation attempt failed; retrying");
+        },
+        onBillingError: (error, operationId) => {
+          app.log.error({ requestId: task.requestId, operationId, err: error }, "image task billing settlement failed");
         },
       });
     }, task.requestId);
