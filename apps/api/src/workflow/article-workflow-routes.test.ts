@@ -178,6 +178,56 @@ describe("article-workflow routes", () => {
     expect(response.json().data[0].id).toBe("p-1");
   });
 
+  it("returns a batch's projects ordered by creation and scoped to the owner", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [
+        {
+          id: "p-3", userId: "u1", platform: "douyin", batchId: "b-1", captionText: "抖音文案",
+          sourceFormat: "plain-text", sourceText: "one", status: "ready", progressStage: "ready",
+          progressPercent: 100,
+          createdAt: new Date("2026-07-08T05:00:02.000Z"), updatedAt: new Date("2026-07-08T05:00:02.000Z"),
+        },
+        {
+          id: "p-1", userId: "u1", platform: "wechat", batchId: "b-1",
+          bodyHtml: buildArticleWorkflowHtml(), imageManifestJson: buildArticleWorkflowImageManifest(),
+          sourceFormat: "plain-text", sourceText: "one", status: "ready", progressStage: "ready",
+          progressPercent: 100,
+          createdAt: new Date("2026-07-08T05:00:00.000Z"), updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+        },
+        {
+          id: "p-2", userId: "u1", platform: "xiaohongshu", batchId: "b-1", captionText: "小红书文案",
+          tagsJson: ["咖啡机"],
+          sourceFormat: "plain-text", sourceText: "one", status: "ready", progressStage: "ready",
+          progressPercent: 100,
+          createdAt: new Date("2026-07-08T05:00:01.000Z"), updatedAt: new Date("2026-07-08T05:00:01.000Z"),
+        },
+        {
+          id: "p-9", userId: "u2", platform: "wechat", batchId: "b-2",
+          sourceFormat: "plain-text", sourceText: "other", status: "ready", progressStage: "ready",
+          progressPercent: 100,
+          createdAt: new Date("2026-07-08T05:00:00.000Z"), updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+        },
+      ],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({ method: "GET", url: "/api/workflow/article-workflow/batch/b-1" });
+    expect(response.statusCode).toBe(200);
+    const data = response.json().data;
+    expect(data.batchId).toBe("b-1");
+    expect(data.projects.map((item: { platform: string }) => item.platform))
+      .toEqual(["wechat", "xiaohongshu", "douyin"]);
+    expect(data.projects[1].captionText).toBe("小红书文案");
+    expect(data.projects[1].tags).toEqual(["咖啡机"]);
+
+    // 别人的批次一律 404，不泄露存在性
+    const foreign = await app.inject({ method: "GET", url: "/api/workflow/article-workflow/batch/b-2" });
+    expect(foreign.statusCode).toBe(404);
+    // batch 前缀不被 /:id 抢走：同名项目 id 不存在时也走批次路由
+    const missing = await app.inject({ method: "GET", url: "/api/workflow/article-workflow/batch/b-404" });
+    expect(missing.json().error).toBe("批次不存在");
+  });
+
   it("saves edited html via PATCH without charging", async () => {
     const prisma = createArticleWorkflowPrismaMock({
       projects: [{

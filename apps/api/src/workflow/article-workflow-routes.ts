@@ -10,6 +10,7 @@ import {
 } from "@ai-assistant/article-workflow";
 import { canRecoverArticleProject, DEFAULT_ARTICLE_MODEL, scheduledRunner, ARTICLE_HISTORY_LIMIT, type ArticleWorkflowBilling, type ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import {
+  articleWorkflowBatchParamsSchema,
   articleWorkflowImageParamsSchema,
   articleWorkflowProjectParamsSchema,
   createArticleWorkflowProjectSchema,
@@ -116,6 +117,23 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       take: ARTICLE_HISTORY_LIMIT,
     });
     return { success: true, data: rows.map(serializeArticleWorkflowProjectSummary) };
+  });
+
+  // 必须注册在 GET /:id 之前，否则 batch 会被当成项目 id
+  app.get("/api/workflow/article-workflow/batch/:batchId", async (req, reply) => {
+    const userId = authUserId(req as { userId?: string }, reply);
+    if (!userId) return;
+    const params = articleWorkflowBatchParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const rows = await prisma.articleWorkflowProject.findMany({
+      where: { userId, batchId: params.data.batchId },
+      orderBy: { createdAt: "asc" },
+    });
+    if (rows.length === 0) return reply.code(404).send({ error: "批次不存在" });
+    return {
+      success: true,
+      data: { batchId: params.data.batchId, projects: rows.map(serializeArticleWorkflowProject) },
+    };
   });
 
   app.get("/api/workflow/article-workflow/:id", async (req, reply) => {

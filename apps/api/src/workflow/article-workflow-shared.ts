@@ -13,7 +13,8 @@ export const ARTICLE_MAX_SOURCE_LENGTH = 200_000;
 export const ARTICLE_SOURCE_PROMPT_BUDGET = 60_000;
 export const ARTICLE_MAX_OUTPUT_TOKENS = 8192;
 export const ARTICLE_TIMEOUT_MS = 120_000;
-export const ARTICLE_HISTORY_LIMIT = 20;
+/** 一批最多 3 行（三平台），60 行保证历史里仍有 ≥20 个批次 */
+export const ARTICLE_HISTORY_LIMIT = 60;
 /** 公众号尺寸的兼容别名，真实取值以平台配置为准 */
 export const ARTICLE_COVER_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.coverSize;
 export const ARTICLE_INLINE_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.inlineSize;

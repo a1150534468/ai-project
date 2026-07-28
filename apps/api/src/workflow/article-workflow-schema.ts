@@ -75,6 +75,10 @@ export const articleWorkflowProjectParamsSchema = z.object({
   id: z.string().trim().min(1).max(160),
 });
 
+export const articleWorkflowBatchParamsSchema = z.object({
+  batchId: z.string().trim().min(1).max(160),
+});
+
 export const articleWorkflowImageParamsSchema = articleWorkflowProjectParamsSchema.extend({
   slot: imageSlotSchema,
 });
