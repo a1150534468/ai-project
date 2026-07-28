@@ -78,6 +78,45 @@ describe("article-workflow routes", () => {
     expect(prisma.__state.projects.map((row) => row.status)).toEqual(["ready", "ready", "ready"]);
   });
 
+  it("keeps the other platforms running when one row's reserve fails on balance", async () => {
+    const scheduled: (() => Promise<void>)[] = [];
+    const { app, prisma, billing } = await buildArticleWorkflowApp({
+      llmResponses: [
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
+      ],
+      scheduleTask: (work) => {
+        scheduled.push(work);
+      },
+    });
+    // 扣费发生在异步 runner 里，不在 create 请求里：余额不足只能让那一行 failed
+    billing.reserveResource.mockRejectedValueOnce(new Error("余额不足"));
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        platforms: ["wechat", "xiaohongshu", "douyin"],
+      },
+    });
+
+    // create 一定是 201：三行都已落库，不存在只建一半的批次
+    expect(response.statusCode).toBe(201);
+    expect(response.json().data.projects).toHaveLength(3);
+    expect(prisma.__state.projects.map((row) => row.status)).toEqual(["generating", "generating", "generating"]);
+
+    for (const work of scheduled) await work();
+
+    expect(prisma.__state.projects.map((row) => row.status)).toEqual(["failed", "ready", "ready"]);
+    expect(prisma.__state.projects[0]?.error).toContain("余额不足");
+    // 没 reserve 成功就没有可退的单，也不该留悬空 operationId
+    expect(billing.refundResource).not.toHaveBeenCalled();
+    expect(prisma.__state.projects[0]?.billingOperationId ?? null).toBeNull();
+    expect(prisma.__state.projects[1]?.captionText).toContain("第一次用就回不去了");
+  });
+
   it("falls back to preserved source body when preserve-text planning rewrites the正文", async () => {
     let scheduledTask: (() => Promise<void>) | null = null;
     const { app, prisma } = await buildArticleWorkflowApp({
