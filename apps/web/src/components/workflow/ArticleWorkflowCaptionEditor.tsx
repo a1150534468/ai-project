@@ -1,3 +1,4 @@
+import type { ArticleWorkflowPlatformConfig } from "@ai-assistant/article-workflow";
 import { useState } from "react";
 import { articleWorkflowTagsText } from "./articleWorkflowCopyActions";
 
@@ -5,6 +6,7 @@ interface ArticleWorkflowCaptionEditorProps {
   readonly captionDraft: string;
   readonly tagsDraft: readonly string[];
   readonly syncKey: string;
+  readonly platformConfig: ArticleWorkflowPlatformConfig;
   readonly onCaptionChange: (value: string) => void;
   readonly onTagsChange: (value: readonly string[]) => void;
 }
@@ -27,13 +29,20 @@ export function ArticleWorkflowCaptionEditor(props: ArticleWorkflowCaptionEditor
   }
 
   const captionLength = props.captionDraft.trim().length;
+  const captionMax = props.platformConfig.captionMaxLength;
+  // 超限只标红提示，不拦保存：平台上限是软约束，用户自己删更合适
+  const captionOver = captionMax > 0 && captionLength > captionMax;
+  const tagsOver = props.tagsDraft.length > props.platformConfig.maxTags;
+  const tagsShort = props.tagsDraft.length < props.platformConfig.minTags;
 
   return (
     <div className="grid gap-4 px-5 py-5 sm:px-6">
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="article-caption-text" className="text-sm font-semibold text-[#14151a]">正文文案</label>
-          <span className="text-xs text-[#8a8f98]">{captionLength} 字</span>
+          <span className={`text-xs ${captionOver ? "font-semibold text-red-600" : "text-[#8a8f98]"}`}>
+            {captionLength}{captionMax > 0 ? ` / ${captionMax}` : ""} 字
+          </span>
         </div>
         <textarea
           id="article-caption-text"
@@ -46,7 +55,12 @@ export function ArticleWorkflowCaptionEditor(props: ArticleWorkflowCaptionEditor
       </div>
 
       <div className="grid gap-2">
-        <label htmlFor="article-caption-tags" className="text-sm font-semibold text-[#14151a]">标签</label>
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="article-caption-tags" className="text-sm font-semibold text-[#14151a]">标签</label>
+          <span className={`text-xs ${tagsOver || tagsShort ? "font-semibold text-red-600" : "text-[#8a8f98]"}`}>
+            {props.tagsDraft.length} / {props.platformConfig.minTags}-{props.platformConfig.maxTags} 个
+          </span>
+        </div>
         <input
           id="article-caption-tags"
           value={tagsText}

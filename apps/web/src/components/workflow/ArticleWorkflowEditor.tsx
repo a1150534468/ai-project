@@ -65,6 +65,8 @@ type CanvasMode = "edit" | "preview";
 export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   const [canvasMode, setCanvasMode] = useState<CanvasMode>("edit");
   const captionPlatform = props.platformConfig.outputKind === "caption";
+  // 小红书标题只有 20 字，超了只标红不拦保存
+  const titleOver = props.titleDraft.trim().length > props.platformConfig.titleMaxLength;
 
   return (
     <section className="grid gap-4">
@@ -149,12 +151,17 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
           )}
 
           <div className={`grid gap-4 ${captionPlatform ? "" : "mt-4"}`}>
-            <input
-              value={props.titleDraft}
-              onChange={(event) => props.onTitleChange(event.target.value)}
-              className="w-full border-0 p-0 text-[28px] font-semibold leading-[1.35] text-[#14151a] outline-none placeholder:text-[#b2b7c2]"
-              placeholder="输入标题"
-            />
+            <div className="grid gap-1">
+              <input
+                value={props.titleDraft}
+                onChange={(event) => props.onTitleChange(event.target.value)}
+                className="w-full border-0 p-0 text-[28px] font-semibold leading-[1.35] text-[#14151a] outline-none placeholder:text-[#b2b7c2]"
+                placeholder="输入标题"
+              />
+              <span className={`text-xs ${titleOver ? "font-semibold text-red-600" : "text-[#8a8f98]"}`}>
+                标题 {props.titleDraft.trim().length} / {props.platformConfig.titleMaxLength} 字
+              </span>
+            </div>
             {!captionPlatform && (
               <textarea
                 value={props.summaryDraft}
@@ -172,6 +179,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             captionDraft={props.captionDraft}
             tagsDraft={props.tagsDraft}
             syncKey={props.editorSyncKey}
+            platformConfig={props.platformConfig}
             onCaptionChange={props.onCaptionChange}
             onTagsChange={props.onTagsChange}
           />

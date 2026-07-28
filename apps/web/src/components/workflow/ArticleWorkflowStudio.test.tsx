@@ -131,6 +131,10 @@ describe("ArticleWorkflowStudio", () => {
 
     expect(html).toContain("小红书");
     expect(html).toContain("正文文案");
+    // 小红书硬限制：标题 20 字、正文 1000 字、标签 3-6 个
+    expect(html).toContain("/ 20 字");
+    expect(html).toContain("/ 1000 字");
+    expect(html).toContain("3-6 个");
     expect(html).toContain("第一次用就回不去了。");
     expect(html).toContain("复制文案");
     expect(html).toContain("复制标签");
