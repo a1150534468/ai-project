@@ -89,6 +89,14 @@ export const updateArticleWorkflowProjectSchema = z.object({
   bodyHtml: z.string().trim().min(1).max(500_000),
 });
 
+/** caption 平台的手工保存：标题上限取三平台最宽，具体裁剪由前端按平台提示，后端只兜底长度 */
+export const updateArticleWorkflowCaptionProjectSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  summary: z.string().trim().max(300).optional(),
+  captionText: z.string().trim().min(1).max(20_000),
+  tags: articleWorkflowTagsSchema,
+});
+
 export const rewriteArticleWorkflowProjectSchema = z.object({
   instruction: z.string().trim().min(1).max(3000),
   generationMode: generationModeSchema.optional(),
@@ -105,5 +113,7 @@ export type CreateArticleWorkflowProjectInput = z.infer<typeof createArticleWork
 export type ArticleWorkflowProjectParams = z.infer<typeof articleWorkflowProjectParamsSchema>;
 export type ArticleWorkflowImageParams = z.infer<typeof articleWorkflowImageParamsSchema>;
 export type UpdateArticleWorkflowProjectInput = z.infer<typeof updateArticleWorkflowProjectSchema>;
+export type UpdateArticleWorkflowCaptionProjectInput =
+  z.infer<typeof updateArticleWorkflowCaptionProjectSchema>;
 export type RewriteArticleWorkflowProjectInput = z.infer<typeof rewriteArticleWorkflowProjectSchema>;
 export type RegenerateArticleWorkflowImageInput = z.infer<typeof regenerateArticleWorkflowImageSchema>;

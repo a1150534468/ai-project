@@ -274,6 +274,97 @@ describe("article-workflow routes", () => {
     expect(billing.chargeResource).not.toHaveBeenCalled();
   });
 
+  it("saves a caption project without touching the html guard", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1", userId: "u1", platform: "xiaohongshu", batchId: "b-1",
+        captionText: "旧文案", tagsJson: ["旧标签"],
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        sourceFormat: "plain-text", sourceText: "原文内容", status: "ready", progressStage: "ready",
+        progressPercent: 100,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"), updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app, billing } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1",
+      payload: {
+        title: "新标题",
+        captionText: "新文案第一行\n第二行",
+        tags: ["咖啡机", "居家"],
+        // caption 项目不吃 bodyHtml，传了也被忽略
+        bodyHtml: "<div>随便写的非法片段",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const data = response.json().data;
+    expect(data.captionText).toBe("新文案第一行\n第二行");
+    expect(data.tags).toEqual(["咖啡机", "居家"]);
+    expect(data.bodyHtml).toBe("");
+    expect(data.summary).toBe("新文案第一行");
+    expect(billing.reserveResource).not.toHaveBeenCalled();
+  });
+
+  it("downgrades preserve-text rewrite to polish-text on caption platforms", async () => {
+    let scheduledTask: (() => Promise<void>) | null = null;
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1", userId: "u1", platform: "xiaohongshu", batchId: "b-1", captionText: "旧文案",
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        sourceFormat: "plain-text", sourceText: "原文内容", status: "ready", progressStage: "ready",
+        progressPercent: 100,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"), updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({
+      prisma,
+      llmResponses: [createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan()))],
+      scheduleTask: (work) => {
+        scheduledTask = work;
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/rewrite",
+      payload: { instruction: "更口语一点", generationMode: "preserve-text", regenerateImages: false },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prisma.__state.projects[0]?.generationMode).toBe("polish-text");
+    await scheduledTask!();
+    // 改稿只花一次 LLM 调用：没有排版轮，也就不需要第二个响应
+    expect(prisma.__state.projects[0]?.status).toBe("ready");
+    expect(prisma.__state.projects[0]?.captionText).toContain("第一次用就回不去了");
+    expect(prisma.__state.projects[0]?.bodyHtml).toBe("");
+  });
+
+  it("regenerates a caption project image at the platform size", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1", userId: "u1", platform: "xiaohongshu", batchId: "b-1", captionText: "文案",
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        sourceFormat: "plain-text", sourceText: "原文内容", status: "ready", progressStage: "ready",
+        progressPercent: 100,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"), updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/images/cover/regenerate",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(prisma.__state.imageAssets[0]?.size).toBe("768x1024");
+    expect(prisma.__state.projects[0]?.bodyHtml).toBe("");
+  });
+
   it("submits rewrite with generation mode and regenerateImages flag", async () => {
     let scheduledTask: (() => Promise<void>) | null = null;
     const prisma = createArticleWorkflowPrismaMock({

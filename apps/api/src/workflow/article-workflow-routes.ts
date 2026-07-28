@@ -16,8 +16,10 @@ import {
   createArticleWorkflowProjectSchema,
   regenerateArticleWorkflowImageSchema,
   rewriteArticleWorkflowProjectSchema,
+  updateArticleWorkflowCaptionProjectSchema,
   updateArticleWorkflowProjectSchema,
 } from "./article-workflow-schema.js";
+import { articleWorkflowCaptionSummary } from "./article-workflow-caption.js";
 import { resolveArticleWorkflowPricing } from "./article-workflow-pricing.js";
 import { findOwnedArticleWorkflowProject, updateArticleWorkflowProjectState } from "./article-workflow-store.js";
 import { applyArticleImageManifestToHtml, findArticleImageBySlot } from "./article-workflow-image-manifest.js";
@@ -150,12 +152,35 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const userId = authUserId(req as { userId?: string }, reply);
     if (!userId) return;
     const params = articleWorkflowProjectParamsSchema.safeParse(req.params);
-    const parsed = updateArticleWorkflowProjectSchema.safeParse(req.body);
-    if (!params.success || !parsed.success) return reply.code(400).send({ error: "参数不合法" });
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
 
     const current = readArticleWorkflowProject(project);
+    // 校验形状由项目所属平台决定，caption 项目不接受 bodyHtml
+    if (articleWorkflowPlatformConfig(current.platform).outputKind === "caption") {
+      const parsedCaption = updateArticleWorkflowCaptionProjectSchema.safeParse(req.body);
+      if (!parsedCaption.success) return reply.code(400).send({ error: "参数不合法" });
+      const updated = await prisma.articleWorkflowProject.update({
+        where: { id: project.id },
+        data: {
+          title: parsedCaption.data.title,
+          summary: parsedCaption.data.summary?.trim()
+            ?? articleWorkflowCaptionSummary(parsedCaption.data.captionText),
+          captionText: parsedCaption.data.captionText,
+          tagsJson: jsonValue(parsedCaption.data.tags),
+          status: "ready",
+          progressStage: "ready",
+          progressPercent: 100,
+          progressMessage: "已保存修改",
+          error: null,
+        },
+      });
+      return { success: true, data: serializeArticleWorkflowProject(updated) };
+    }
+
+    const parsed = updateArticleWorkflowProjectSchema.safeParse(req.body);
+    if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const guardedHtml = assertArticleWorkflowHtmlFragment({
       html: parsed.data.bodyHtml,
       expectedVisibleText: articleWorkflowVisibleTextFromHtml(parsed.data.bodyHtml),
@@ -187,7 +212,11 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好改稿" });
 
-    const generationMode = parsed.data.generationMode ?? (project.generationMode as "preserve-text" | "polish-text");
+    // 平台不支持的模式在落库前裁定，避免库里存着 runner 不会执行的模式
+    const generationMode = resolveArticleWorkflowMode(
+      project.platform as ArticleWorkflowPlatform,
+      parsed.data.generationMode ?? (project.generationMode as "preserve-text" | "polish-text"),
+    );
     await prisma.articleWorkflowProject.update({
       where: { id: project.id },
       data: {
@@ -230,6 +259,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好重生图片" });
 
     const current = readArticleWorkflowProject(project);
+    const platformConfig = articleWorkflowPlatformConfig(current.platform);
     const target = findArticleImageBySlot(current.imageManifest, params.data.slot);
     if (!target) return reply.code(400).send({ error: "图片槽位不存在" });
 
@@ -253,10 +283,13 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
           ...target,
           prompt: parsed.data.promptOverride?.trim() || target.prompt,
         },
-        platformConfig: articleWorkflowPlatformConfig(current.platform),
+        platformConfig,
       });
       const nextManifest = current.imageManifest.map((image) => image.slot === target.slot ? nextImage : image);
-      const nextHtml = applyArticleImageManifestToHtml(current.bodyHtml, nextManifest);
+      // caption 平台没有正文 HTML，只更新 manifest
+      const nextHtml = platformConfig.outputKind === "caption"
+        ? undefined
+        : applyArticleImageManifestToHtml(current.bodyHtml, nextManifest);
       const updated = await prisma.articleWorkflowProject.update({
         where: { id: project.id },
         data: {
