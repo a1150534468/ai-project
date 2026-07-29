@@ -12,6 +12,8 @@ import {
   type ArticleWorkflowBilling,
   type FetchLike,
 } from "./article-workflow-shared.js";
+import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, withArticleWorkflowRetry } from "./article-workflow-retry.js";
+import { articleWorkflowStorableImageUrl } from "./article-workflow-image-url.js";
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
   const groups: T[][] = [];
@@ -55,20 +57,28 @@ export async function generateArticleWorkflowImageAsset(args: {
   });
   try {
     const config = loadImageGenerationConfig(args.env);
-    const generated = await callImageGeneration({
-      config,
-      prompt: args.image.prompt,
-      size,
-      fetchFn: args.fetchFn,
+    // 扣费在重试之外：一次扣费覆盖多次尝试，抖动重试不重复计费。
+    // 代价是网关中途断连时上游可能白跑一次，所以这里的上限比文本低一档。
+    const stored = await withArticleWorkflowRetry({
       env: args.env,
-    });
-    const stored = await storeWorkflowImage({
-      image: generated,
-      userId: args.userId,
-      requestId,
-      requestIndex: 0,
-      fetchFn: args.fetchFn,
-      env: args.env,
+      maxAttempts: ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS,
+      work: async () => {
+        const generated = await callImageGeneration({
+          config,
+          prompt: args.image.prompt,
+          size,
+          fetchFn: args.fetchFn,
+          env: args.env,
+        });
+        return await storeWorkflowImage({
+          image: generated,
+          userId: args.userId,
+          requestId,
+          requestIndex: 0,
+          fetchFn: args.fetchFn,
+          env: args.env,
+        });
+      },
     });
     const asset = await args.prisma.imageAsset.create({
       data: {
@@ -88,8 +98,17 @@ export async function generateArticleWorkflowImageAsset(args: {
     return {
       ...args.image,
       assetId: asset.id,
-      imageUrl: stored.originalUrl,
-      thumbnailUrl: stored.thumbnailUrl,
+      // 字节已进对象存储时改用代理地址：图文的地址会被写进正文，正文里不能放图片字节。
+      imageUrl: articleWorkflowStorableImageUrl({
+        url: stored.originalUrl,
+        assetId: asset.id,
+        objectKey: stored.objectKey,
+      }),
+      thumbnailUrl: articleWorkflowStorableImageUrl({
+        url: stored.thumbnailUrl,
+        assetId: asset.id,
+        objectKey: stored.objectKey,
+      }),
       alt: args.image.alt.trim() || fallbackAlt(args.image.slot, args.platformConfig),
     };
   } catch (error) {

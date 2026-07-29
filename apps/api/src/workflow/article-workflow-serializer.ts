@@ -10,6 +10,10 @@ import {
   articleWorkflowImageManifestItemSchema,
   articleWorkflowTagsSchema,
 } from "./article-workflow-schema.js";
+import {
+  articleWorkflowResponseBodyHtml,
+  articleWorkflowResponseImageUrl,
+} from "./article-workflow-image-url.js";
 import type { ArticleProjectRow, ArticleWorkflowPersistedProject } from "./article-workflow-shared.js";
 
 function fallbackTitle(value: string): string {
@@ -76,15 +80,28 @@ export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
   };
 }
 
-export function serializeArticleWorkflowProject(row: ArticleProjectRow) {
+/**
+ * 出参：库里存的是稳定代理地址，这里现签一份短期地址给页面用。
+ *
+ * 为什么放在序列化层：正文里的 `<img>` 是浏览器直接发的请求，带不上 `Authorization`
+ * 头，而 web 端的登录态只在 localStorage 里。签名地址是让页面显示出图的唯一办法，
+ * 又不能落库（会过期）——所以只能每次读的时候现加。
+ *
+ * `env` 缺省取 `process.env`：签名密钥就是 `SESSION_SECRET`。
+ */
+export function serializeArticleWorkflowProject(row: ArticleProjectRow, env: NodeJS.ProcessEnv = process.env) {
   const project = readArticleWorkflowProject(row);
   return {
     ...serializeArticleWorkflowProjectSummary(row),
     sourceFormat: project.sourceFormat,
     sourceText: project.sourceText,
-    bodyHtml: project.bodyHtml,
+    bodyHtml: articleWorkflowResponseBodyHtml({ html: project.bodyHtml, env }),
     captionText: project.captionText,
     tags: project.tags,
-    imageManifestJson: project.imageManifest,
+    imageManifestJson: project.imageManifest.map((image) => ({
+      ...image,
+      imageUrl: articleWorkflowResponseImageUrl({ url: image.imageUrl, env }),
+      thumbnailUrl: articleWorkflowResponseImageUrl({ url: image.thumbnailUrl, env }),
+    })),
   };
 }

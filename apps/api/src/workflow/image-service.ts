@@ -498,6 +498,77 @@ async function upstreamError(response: Response): Promise<ImageGenerationUpstrea
   );
 }
 
+async function fetchWithSignal(
+  fetchFn: FetchLike,
+  url: string,
+  init: RequestInit,
+  signal: AbortSignal,
+  onRequestSent?: () => Promise<void> | void,
+): Promise<Response> {
+  if (signal.aborted) throw new DOMException("This operation was aborted", "AbortError");
+  // Calling fetch is the only durable boundary we can observe locally. A
+  // later socket failure is still an attempted provider request.
+  const response = fetchFn(url, withImageStreamDispatcher(url, { ...init, signal }));
+  try {
+    await onRequestSent?.();
+  } catch (error) {
+    // The request may already be in flight. Keep its rejection observed if
+    // persisting the sent transition itself fails.
+    void response.catch(() => undefined);
+    throw error;
+  }
+  return await response;
+}
+
+/**
+ * 单次尝试的截止时间，覆盖**整段** work——包括响应体的读取。
+ *
+ * 早先的实现只守到 Response 就绪就 clearTimeout，而 undici 的 headers/bodyTimeout
+ * 已被 image-stream-dispatcher 置 0，于是流式读取阶段完全没有上限：实测出现过
+ * 单张图卡到 226s 才因中继断连报 `terminated`，远超 IMAGE_ATTEMPT_TIMEOUT_MS=180s。
+ * 图文工作流按批出图，一批卡住就会把整行拖过 reaper 的 15 分钟阈值被误判为超时中断。
+ *
+ * 因此把 deadline 上提到「拿响应 + 读完 body」这一整段，让 IMAGE_ATTEMPT_TIMEOUT_MS
+ * 真正成为单次尝试的唯一上限。超时统一抛 ImageGenerationTimeoutError（可重试），
+ * 调用方主动取消（外部 signal）仍照原样抛 AbortError。
+ */
+async function withImageAttemptDeadline<T>(
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
+  work: (deadlineSignal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  let timedOut = false;
+  let fire: (() => void) | null = null;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+    fire?.();
+  }, timeoutMs);
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  // 抢跑而不是只等 work 自己失败：abort 只是「请求上游停下」，
+  // 卡死的连接不保证及时把 abort 变成 reject。截止时间到了就必须交还控制权，
+  // 否则这一层的上限又变成一句空话。
+  const expired = new Promise<never>((_, reject) => {
+    fire = () => reject(new ImageGenerationTimeoutError(timeoutMs));
+  });
+  try {
+    return await Promise.race([
+      work(controller.signal).catch((error) => {
+        if (timedOut && !signal?.aborted) throw new ImageGenerationTimeoutError(timeoutMs);
+        throw error;
+      }),
+      expired,
+    ]);
+  } finally {
+    signal?.removeEventListener("abort", abort);
+    clearTimeout(timer);
+    fire = null;
+  }
+}
+
 async function fetchWithTimeout(
   fetchFn: FetchLike,
   url: string,
@@ -506,36 +577,9 @@ async function fetchWithTimeout(
   signal?: AbortSignal,
   onRequestSent?: () => Promise<void> | void,
 ): Promise<Response> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, timeoutMs);
-  if (signal?.aborted) controller.abort();
-  else signal?.addEventListener("abort", abort, { once: true });
-  try {
-    if (controller.signal.aborted) throw new DOMException("This operation was aborted", "AbortError");
-    // Calling fetch is the only durable boundary we can observe locally. A
-    // later socket failure is still an attempted provider request.
-    const response = fetchFn(url, withImageStreamDispatcher(url, { ...init, signal: controller.signal }));
-    try {
-      await onRequestSent?.();
-    } catch (error) {
-      // The request may already be in flight. Keep its rejection observed if
-      // persisting the sent transition itself fails.
-      void response.catch(() => undefined);
-      throw error;
-    }
-    return await response;
-  } catch (error) {
-    if (timedOut && !signal?.aborted) throw new ImageGenerationTimeoutError(timeoutMs);
-    throw error;
-  } finally {
-    signal?.removeEventListener("abort", abort);
-    clearTimeout(timer);
-  }
+  return await withImageAttemptDeadline(timeoutMs, signal, async (deadlineSignal) => (
+    await fetchWithSignal(fetchFn, url, init, deadlineSignal, onRequestSent)
+  ));
 }
 
 function validatedImageInput(image: ImageBinaryInput, label: string): { readonly bytes: Buffer; readonly mime: string } {
@@ -675,13 +719,16 @@ async function fetchRemoteImage(
   env: NodeJS.ProcessEnv,
   signal?: AbortSignal,
 ): Promise<{ readonly buffer: Buffer; readonly mime: string }> {
-  const response = await fetchWithTimeout(fetchFn, url, { method: "GET" }, 60_000, signal);
-  if (!response.ok) throw new Error(`image download ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const maxBytes = Number(env.IMAGE_MAX_BYTES) || DEFAULT_IMAGE_MAX_BYTES;
-  if (buffer.byteLength > maxBytes) throw new Error("image too large");
-  const contentType = response.headers.get("content-type") ?? "image/png";
-  return { buffer, mime: contentType.startsWith("image/") ? contentType : "image/png" };
+  // 下载同样把 body 读取纳入 deadline：卡在下行的连接不该无上限地占着批次。
+  return await withImageAttemptDeadline(60_000, signal, async (deadlineSignal) => {
+    const response = await fetchWithSignal(fetchFn, url, { method: "GET" }, deadlineSignal);
+    if (!response.ok) throw new Error(`image download ${response.status}`);
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const maxBytes = Number(env.IMAGE_MAX_BYTES) || DEFAULT_IMAGE_MAX_BYTES;
+    if (buffer.byteLength > maxBytes) throw new Error("image too large");
+    const contentType = response.headers.get("content-type") ?? "image/png";
+    return { buffer, mime: contentType.startsWith("image/") ? contentType : "image/png" };
+  });
 }
 
 export function loadImageGenerationConfig(env: NodeJS.ProcessEnv = process.env): ImageGenerationConfig {
@@ -856,19 +903,22 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
           parameters: qwenImageParameters(args.size),
         };
   await args.onRequestDispatching?.();
-  const response = await fetchWithTimeout(args.fetchFn, args.config.endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
-    body: JSON.stringify(body),
-  }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
-  if (!response.ok) throw await upstreamError(response);
-  const payload = await readImagePayload(response);
-  return await detailedResult(
-    payload,
-    { model: args.config.model, size: args.size, quality: requestedQuality },
-    imageUpstreamRequestIdFromHeaders(response.headers),
-    usesRequestBoundNativeQwenModel(args.config),
-  );
+  // deadline 包住「取响应 + 读 body」：流式出图的 body 阶段才是耗时主体。
+  return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
+    const response = await fetchWithSignal(args.fetchFn, args.config.endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+      body: JSON.stringify(body),
+    }, deadlineSignal, args.onRequestSent);
+    if (!response.ok) throw await upstreamError(response);
+    const payload = await readImagePayload(response);
+    return await detailedResult(
+      payload,
+      { model: args.config.model, size: args.size, quality: requestedQuality },
+      imageUpstreamRequestIdFromHeaders(response.headers),
+      usesRequestBoundNativeQwenModel(args.config),
+    );
+  });
 }
 
 export async function callImageGeneration(args: CallImageGenerationArgs): Promise<GeneratedImage> {
@@ -893,18 +943,20 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       watermark: false,
     };
     await args.onRequestDispatching?.();
-    const response = await fetchWithTimeout(args.fetchFn, args.endpoint ?? args.config.endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
-      body: JSON.stringify(body),
-    }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
-    if (!response.ok) throw await upstreamError(response);
-    const payload = await response.json();
-    return await detailedResult(
-      payload,
-      { model: args.config.model, size: requestedSize, quality: args.quality },
-      imageUpstreamRequestIdFromHeaders(response.headers),
-    );
+    return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
+      const response = await fetchWithSignal(args.fetchFn, args.endpoint ?? args.config.endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+        body: JSON.stringify(body),
+      }, deadlineSignal, args.onRequestSent);
+      if (!response.ok) throw await upstreamError(response);
+      const payload = await response.json();
+      return await detailedResult(
+        payload,
+        { model: args.config.model, size: requestedSize, quality: args.quality },
+        imageUpstreamRequestIdFromHeaders(response.headers),
+      );
+    });
   }
   if (args.config.protocol === "openai") {
     const env = args.env ?? process.env;
@@ -935,18 +987,20 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       form.set("mask", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
     }
     await args.onRequestDispatching?.();
-    const response = await fetchWithTimeout(args.fetchFn, endpoint, {
-      method: "POST",
-      headers: { authorization: `Bearer ${apiKey}` },
-      body: form,
-    }, loadImageAttemptTimeoutMs(env), args.signal, args.onRequestSent);
-    if (!response.ok) throw await upstreamError(response);
-    const payload = await readImagePayload(response);
-    return await detailedResult(
-      payload,
-      { model: args.config.model, size: requestedSize, quality: requestedQuality },
-      imageUpstreamRequestIdFromHeaders(response.headers),
-    );
+    return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(env), args.signal, async (deadlineSignal) => {
+      const response = await fetchWithSignal(args.fetchFn, endpoint, {
+        method: "POST",
+        headers: { authorization: `Bearer ${apiKey}` },
+        body: form,
+      }, deadlineSignal, args.onRequestSent);
+      if (!response.ok) throw await upstreamError(response);
+      const payload = await readImagePayload(response);
+      return await detailedResult(
+        payload,
+        { model: args.config.model, size: requestedSize, quality: requestedQuality },
+        imageUpstreamRequestIdFromHeaders(response.headers),
+      );
+    });
   }
   if (args.mask) throw new Error("Qwen image editing does not support a separate mask input");
   const content = args.referenceImages.map((image) => ({ image: dataUrlForImageInput(image) }));
@@ -960,19 +1014,21 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
   const configuredEditEndpoint = args.env?.IMAGE_EDIT_ENDPOINT?.trim();
   const endpoint = args.endpoint ?? configuredEditEndpoint ?? args.config.endpoint;
   await args.onRequestDispatching?.();
-  const response = await fetchWithTimeout(args.fetchFn, endpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
-    body: JSON.stringify(body),
-  }, loadImageAttemptTimeoutMs(args.env), args.signal, args.onRequestSent);
-  if (!response.ok) throw await upstreamError(response);
-  const payload = await response.json();
-  return await detailedResult(
-    payload,
-    { model: args.config.model, size: args.size, quality: args.quality },
-    imageUpstreamRequestIdFromHeaders(response.headers),
-    usesRequestBoundNativeQwenModel(args.config),
-  );
+  return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
+    const response = await fetchWithSignal(args.fetchFn, endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+      body: JSON.stringify(body),
+    }, deadlineSignal, args.onRequestSent);
+    if (!response.ok) throw await upstreamError(response);
+    const payload = await response.json();
+    return await detailedResult(
+      payload,
+      { model: args.config.model, size: args.size, quality: args.quality },
+      imageUpstreamRequestIdFromHeaders(response.headers),
+      usesRequestBoundNativeQwenModel(args.config),
+    );
+  });
 }
 
 export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedImage> {

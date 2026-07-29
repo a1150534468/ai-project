@@ -136,4 +136,22 @@ describe("articleWorkflowBatchModel", () => {
     expect(articleWorkflowDraftHash({ ...base, captionText: " 文案 ", tags: [" 咖啡 "] }))
       .toBe(withCaption);
   });
+
+  it("配图地址上的短期签名不算内容改动", () => {
+    const bodyOf = (query: string) => '<h1>标题</h1><section data-ai-assistant-image-slot="hero">'
+      + `<img src="/api/workflow/article-workflow/images/a1/blob${query}" alt="封面" />`
+      + "</section><p>正文</p>";
+    const base = { title: "标题", summary: "摘要" };
+
+    const stable = articleWorkflowDraftHash({ ...base, bodyHtml: bodyOf("") });
+    // 服务端每次出参都换一份签名，编辑器不能因此认为用户改了东西
+    expect(articleWorkflowDraftHash({ ...base, bodyHtml: bodyOf("?exp=1&sig=aaa") })).toBe(stable);
+    expect(articleWorkflowDraftHash({ ...base, bodyHtml: bodyOf("?exp=2&sig=bbb") })).toBe(stable);
+    expect(articleWorkflowDraftHash({ ...base, bodyHtml: bodyOf("?exp=1&amp;sig=aaa") })).toBe(stable);
+    // 换了 assetId 就是真改动
+    expect(articleWorkflowDraftHash({
+      ...base,
+      bodyHtml: bodyOf("").replace("/a1/", "/a2/"),
+    })).not.toBe(stable);
+  });
 });

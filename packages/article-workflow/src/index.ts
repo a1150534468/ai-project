@@ -25,6 +25,13 @@ export {
 } from "./platforms.js";
 
 export {
+  ARTICLE_WORKFLOW_HTML_ATTRS,
+  ARTICLE_WORKFLOW_HTML_BLOCKED_TAGS,
+  ARTICLE_WORKFLOW_HTML_TAGS,
+  ARTICLE_WORKFLOW_IMAGE_SLOT_ATTR,
+} from "./html-vocabulary.js";
+
+export {
   articleWorkflowMarkdownFromVisibleText,
   articleWorkflowPreservedBodyMarkdown,
   articleWorkflowVisibleTextFromMarkdown,

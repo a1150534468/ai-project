@@ -36,6 +36,7 @@ interface ArticleWorkflowEditorProps {
   readonly dirty: boolean;
   readonly saving: boolean;
   readonly rewriting: boolean;
+  readonly retryingProjectId: string | null;
   readonly regeneratingSlot: string | null;
   readonly canSave: boolean;
   readonly canRewrite: boolean;
@@ -57,6 +58,7 @@ interface ArticleWorkflowEditorProps {
   readonly onRewriteGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
   readonly onRewriteRegenerateImagesChange: (value: boolean) => void;
   readonly onRewrite: () => void;
+  readonly onRetry: (projectId: string) => void;
   readonly onRegenerateImage: (slot: string) => void;
 }
 
@@ -67,6 +69,8 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   const captionPlatform = props.platformConfig.outputKind === "caption";
   // 小红书标题只有 20 字，超了只标红不拦保存
   const titleOver = props.titleDraft.trim().length > props.platformConfig.titleMaxLength;
+  const failed = props.project.status === "failed";
+  const retrying = props.retryingProjectId === props.project.id;
 
   return (
     <section className="grid gap-4">
@@ -74,8 +78,36 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         projects={props.batchProjects}
         activePlatform={props.project.platform}
         dirtyPlatforms={props.dirtyPlatforms}
+        retryingProjectId={props.retryingProjectId}
         onSelectPlatform={props.onSelectPlatform}
+        onRetry={props.onRetry}
       />
+
+      {/* 失败原因原样展示：额度不足 / 权限这类不会自动重试，得让用户看见再决定 */}
+      {failed && (
+        <div
+          role="alert"
+          className="flex flex-col gap-3 rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-red-700">
+              {props.platformConfig.label}生成失败
+            </p>
+            <p className="mt-1 break-words text-xs leading-5 text-red-600">
+              {props.project.error || "未知原因"}
+            </p>
+          </div>
+          <RippleButton
+            type="button"
+            onClick={() => props.onRetry(props.project.id)}
+            disabled={retrying}
+            className="flex h-9 shrink-0 items-center gap-2 rounded-[10px] bg-red-600 px-3.5 text-sm font-semibold text-white disabled:bg-red-300"
+          >
+            <Icon icon={retrying ? "mdi:loading" : "mdi:refresh"} className={retrying ? "animate-spin" : ""} aria-hidden />
+            {retrying ? "提交中" : "重新生成"}
+          </RippleButton>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 rounded-[16px] border border-[#e7e9f0] bg-white px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.05)] xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">

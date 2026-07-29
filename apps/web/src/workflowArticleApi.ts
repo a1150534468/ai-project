@@ -164,6 +164,19 @@ export function updateArticleWorkflowProject(
   });
 }
 
+/**
+ * 用户点重试：只对 failed 行有效，后端拿库里存的 sourceText 重跑首轮生成，无请求体。
+ * 与 rewrite 分开——rewrite 要求已有成品可改，重试面对的是没有成品的那一行。
+ */
+export function retryArticleWorkflowProject(token: string, projectId: string): Promise<{ projectId: string }> {
+  return requestArticleWorkflow({
+    token,
+    path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}/retry`,
+    method: "POST",
+    fallback: "重新生成失败",
+  });
+}
+
 export function rewriteArticleWorkflowProject(token: string, projectId: string, body: {
   readonly instruction: string;
   readonly generationMode?: ArticleWorkflowGenerationMode;

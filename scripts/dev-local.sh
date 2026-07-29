@@ -12,21 +12,38 @@ for command_name in docker pnpm go; do
   fi
 done
 
-ENV_FILE=""
-if [[ -f .env.local ]]; then
-  ENV_FILE=".env.local"
-elif [[ -f .env ]]; then
-  ENV_FILE=".env"
-else
+if [[ ! -f .env && ! -f .env.local ]]; then
   cp .env.example .env.local
-  ENV_FILE=".env.local"
   echo "已从 .env.example 创建 .env.local；LLM 等可选能力需要补充真实密钥。"
 fi
 
+# Both files are layered in the same order as apps/api/src/env.ts: .env carries
+# the full base config and .env.local overrides only the keys it names. Sourcing
+# just one file meant a partial .env.local (e.g. a single QA override) hid every
+# required key in .env, and Billing then exited on a missing BILLING_DATABASE_URL.
+env_files=()
+if [[ -f .env ]]; then
+  env_files+=(".env")
+fi
+if [[ -f .env.local ]]; then
+  env_files+=(".env.local")
+fi
+
+# bash 3.2 treats "${empty[@]}" as an unbound variable under `set -u`, so the
+# emptiness is reported here rather than as a cryptic expansion error.
+if (( ${#env_files[@]} == 0 )); then
+  echo "未找到 .env 或 .env.local，且无法从 .env.example 创建。" >&2
+  exit 1
+fi
+
 set -a
-# shellcheck disable=SC1090
-source "$ENV_FILE"
+for env_file in "${env_files[@]}"; do
+  # shellcheck disable=SC1090
+  source "$env_file"
+done
 set +a
+
+echo "已加载环境变量文件（后者覆盖前者）：${env_files[*]}"
 
 export NODE_ENV="development"
 export PORT="${PORT:-8090}"
@@ -193,7 +210,11 @@ while true; do
       wait "$pid"
       status=$?
       set -e
-      echo "${process_names[$index]} 已退出（PID $pid，状态 $status），正在停止其余服务。" >&2
+      # The braces are required: under a UTF-8 locale, bash 3.2 (macOS /bin/bash)
+      # folds the leading byte of a following multibyte character into an
+      # unbraced name, so "$pid，" expanded as the unset variable "pid<0xef>"
+      # and `set -u` aborted the loop instead of reporting the real failure.
+      echo "${process_names[$index]} 已退出（PID ${pid}，状态 ${status}），正在停止其余服务。" >&2
       exit "$status"
     fi
 

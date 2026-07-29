@@ -8,7 +8,6 @@ describe("resolveClientMenuItems", () => {
     expect(hidden).toEqual([
       "workflow.codex-pet",
       "workflow.report",
-      "workflow.fanout",
       "workflow.article-workflow",
       "workflow.local-business-promo",
       "workflow.ai-comic",

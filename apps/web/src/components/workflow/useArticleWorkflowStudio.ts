@@ -6,6 +6,7 @@ import {
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
+import { ApiError } from "../../apiError";
 import { useToast } from "../../motion";
 import {
   createArticleWorkflowProject,
@@ -14,6 +15,7 @@ import {
   getArticleWorkflowProject,
   listArticleWorkflowHistory,
   regenerateArticleWorkflowImage,
+  retryArticleWorkflowProject,
   rewriteArticleWorkflowProject,
   type ArticleWorkflowPricing,
   type ArticleWorkflowProject,
@@ -30,6 +32,7 @@ import { createArticleWorkflowCopyActions } from "./articleWorkflowCopyActions";
 import type { ArticleWorkflowStudioProps } from "./articleWorkflowStudioModel";
 import {
   articleWorkflowDraftHash,
+  canSaveArticleWorkflowStatus,
   cloneImageManifest,
   isBusyArticleWorkflowStatus,
 } from "./articleWorkflowStudioModel";
@@ -106,6 +109,8 @@ export function useArticleWorkflowStudio({
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rewriting, setRewriting] = useState(false);
+  /** 正在重试的行 id，用来禁用按钮防重复点击 */
+  const [retryingProjectId, setRetryingProjectId] = useState<string | null>(null);
   const [regeneratingSlot, setRegeneratingSlot] = useState<string | null>(null);
   const [rewriteInstruction, setRewriteInstruction] = useState("");
   const [rewriteGenerationMode, setRewriteGenerationMode] = useState<ArticleWorkflowGenerationMode>(initialProject?.generationMode ?? "preserve-text");
@@ -129,6 +134,8 @@ export function useArticleWorkflowStudio({
     : null;
   const dirty = dirtyPlatforms.includes(platform);
   const anyDirty = dirtyPlatforms.length > 0;
+  /** 只有成品行能存；failed / 生成中的行连脏标记都不打，自动保存自然不会启动 */
+  const savable = canSaveArticleWorkflowStatus(project?.status);
 
   const titleDraft = titleDrafts[platform] ?? "";
   const summaryDraft = summaryDrafts[platform] ?? "";
@@ -140,11 +147,48 @@ export function useArticleWorkflowStudio({
   const batchProgress = useMemo(() => articleWorkflowBatchProgress(batchProjects), [batchProjects]);
   const batchBusy = batchProjects.some((item) => isBusyArticleWorkflowStatus(item.status));
 
-  const markDirty = useCallback((target: ArticleWorkflowPlatform, next: boolean) => {
+  const markDirtyRaw = useCallback((target: ArticleWorkflowPlatform, next: boolean) => {
     setDirtyPlatforms((current) => (next
       ? (current.includes(target) ? current : [...current, target])
       : current.filter((item) => item !== target)));
   }, []);
+
+  /** 打脏标记要看这行存不存得下去：failed / 生成中的行不打，免得挂着「待保存」又永远存不进 */
+  const markDirty = useCallback((target: ArticleWorkflowPlatform, next: boolean) => {
+    if (next && !canSaveArticleWorkflowStatus(batchProjects.find((item) => item.platform === target)?.status)) return;
+    markDirtyRaw(target, next);
+  }, [batchProjects, markDirtyRaw]);
+
+  /**
+   * 按内容决定脏标记，而不是按「有没有触发过 onChange」。
+   *
+   * 早先每次 onChange 都无条件打脏，1.5s 后自动保存就发车。于是编辑器载入时对
+   * HTML 做的规范化（它不认识的标签被拍平）也被当成用户编辑存回库里，成品被冲掉。
+   * 现在拿完整草稿的 hash 跟「上次保存的 hash」比：一致就撤脏标记，自动保存不发车；
+   * 用户把内容改回原样也会自动退出待保存状态。
+   *
+   * 注意这只挡住「内容没变」的那一类。编辑器把内容真改了（规范化就属于这种）
+   * hash 一定不同，仍然会存——那一层要靠编辑器自己只在用户真操作时才 onChange。
+   */
+  const syncDirtyByContent = useCallback((
+    target: ArticleWorkflowPlatform,
+    override: {
+      readonly title?: string;
+      readonly summary?: string;
+      readonly bodyHtml?: string;
+      readonly captionText?: string;
+      readonly tags?: readonly string[];
+    },
+  ) => {
+    const nextHash = articleWorkflowDraftHash({
+      title: override.title ?? titleDrafts[target] ?? "",
+      summary: override.summary ?? summaryDrafts[target] ?? "",
+      bodyHtml: override.bodyHtml ?? bodyHtmlDrafts[target] ?? "",
+      captionText: override.captionText ?? captionDrafts[target] ?? "",
+      tags: override.tags ?? tagsDrafts[target] ?? [],
+    });
+    markDirty(target, nextHash !== lastSavedHashRef.current.get(target));
+  }, [bodyHtmlDrafts, captionDrafts, markDirty, summaryDrafts, tagsDrafts, titleDrafts]);
 
   /**
    * 把批次的服务端状态写回草稿。
@@ -291,7 +335,7 @@ export function useArticleWorkflowStudio({
   }, [batchBusy, loadBatch, onBalanceRefresh, pollBatchId, pollProjectId, refreshHistory]);
 
   const canGenerate = sourceText.trim().length > 0 && selectedPlatforms.length > 0 && !creating;
-  const canSave = Boolean(project && dirty && !isBusyArticleWorkflowStatus(project.status) && !saving);
+  const canSave = Boolean(project && dirty && savable && !saving);
   const canRewrite = Boolean(project && rewriteInstruction.trim() && !rewriting && !saving && !isBusyArticleWorkflowStatus(project.status));
 
   const {
@@ -315,6 +359,11 @@ export function useArticleWorkflowStudio({
   const saveProject = useCallback(async (mode: "manual" | "auto" = "manual"): Promise<boolean> => {
     if (!project) return false;
     const target = project.platform;
+    // 兜底：后端对非 ready 行一律 409，这里先拦住，别让失败行被自动保存反复撞
+    if (!canSaveArticleWorkflowStatus(project.status)) {
+      markDirty(target, false);
+      return false;
+    }
     const nextHash = articleWorkflowDraftHash({
       title: titleDraft,
       summary: summaryDraft,
@@ -351,6 +400,15 @@ export function useArticleWorkflowStudio({
       await refreshHistory();
       return true;
     } catch (err) {
+      // 竞态：提交途中这行在服务端变成了 failed / 生成中。不当报错弹，静默刷一次这行状态
+      if (err instanceof ApiError && err.status === 409) {
+        markDirty(target, false);
+        const latest = await getArticleWorkflowProject(token, project.id).catch(() => null);
+        if (latest) {
+          setBatchProjects((current) => current.map((item) => (item.id === latest.id ? withClonedManifest(latest) : item)));
+        }
+        return false;
+      }
       const message = err instanceof Error ? err.message : "保存失败";
       setError(message);
       toast.show("err", message);
@@ -360,8 +418,9 @@ export function useArticleWorkflowStudio({
     }
   }, [bodyHtmlDraft, captionDraft, markDirty, project, refreshHistory, summaryDraft, tagsDraft, titleDraft, toast, token]);
 
+  // 只有 ready 行自动保存：failed 行放开的话，编辑器一打开就每 1.5s 撞一次 409
   useEffect(() => {
-    if (!project || !dirty || saving || rewriting || isBusyArticleWorkflowStatus(project.status)) return undefined;
+    if (!project || !dirty || saving || rewriting || !canSaveArticleWorkflowStatus(project.status)) return undefined;
     const timer = window.setTimeout(() => {
       void saveProject("auto");
     }, AUTOSAVE_DELAY_MS);
@@ -497,6 +556,35 @@ export function useArticleWorkflowStudio({
     })();
   };
 
+  /** 失败行重试：走 retry 端点重跑首轮生成，之后交给现有轮询跟到终态 */
+  const handleRetry = (projectId: string) => {
+    const target = batchProjects.find((item) => item.id === projectId);
+    if (!target || target.status !== "failed" || retryingProjectId) return;
+    setRetryingProjectId(projectId);
+    resetMessages();
+    void (async () => {
+      try {
+        await retryArticleWorkflowProject(token, projectId);
+        // force=false：别把其他平台正在编辑的草稿冲掉；重试行本身是生成中，会被服务端值覆盖
+        await loadBatch({
+          batchId: target.batchId,
+          projectId,
+          force: false,
+          focusPlatform: project?.platform ?? target.platform,
+        });
+        await refreshHistory();
+        setNotice("已重新开始生成");
+        toast.show("ok", "已重新开始生成");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "重新生成失败";
+        setError(message);
+        toast.show("err", message);
+      } finally {
+        setRetryingProjectId(null);
+      }
+    })();
+  };
+
   const handleRegenerateImage = (slot: string) => {
     if (!project) return;
     const current = project;
@@ -553,6 +641,7 @@ export function useArticleWorkflowStudio({
     creating,
     saving,
     rewriting,
+    retryingProjectId,
     regeneratingSlot,
     rewriteInstruction,
     rewriteGenerationMode,
@@ -585,36 +674,45 @@ export function useArticleWorkflowStudio({
     handleCopyCaption,
     handleCopyTags,
     handleRewrite,
+    handleRetry,
     handleRegenerateImage,
     markTitleDirty: (value: string) => {
       setTitleDrafts((current) => ({ ...current, [platform]: value }));
-      markDirty(platform, true);
+      syncDirtyByContent(platform, { title: value });
       resetMessages();
     },
     markSummaryDirty: (value: string) => {
       setSummaryDrafts((current) => ({ ...current, [platform]: value }));
-      markDirty(platform, true);
+      syncDirtyByContent(platform, { summary: value });
       resetMessages();
     },
     markBodyHtmlDirty: (value: string) => {
       setBodyHtmlDrafts((current) => ({ ...current, [platform]: value }));
-      markDirty(platform, true);
+      syncDirtyByContent(platform, { bodyHtml: value });
       resetMessages();
     },
     markCaptionDirty: (value: string) => {
       setCaptionDrafts((current) => ({ ...current, [platform]: value }));
-      markDirty(platform, true);
+      syncDirtyByContent(platform, { captionText: value });
       resetMessages();
     },
     markTagsDirty: (value: readonly string[]) => {
       setTagsDrafts((current) => ({ ...current, [platform]: value }));
-      markDirty(platform, true);
+      syncDirtyByContent(platform, { tags: value });
       resetMessages();
     },
     handleBodyBlur: (value: string) => {
       setBodyHtmlDrafts((current) => ({ ...current, [platform]: value }));
-      markDirty(platform, true);
-      if (project && !isBusyArticleWorkflowStatus(project.status)) {
+      syncDirtyByContent(platform, { bodyHtml: value });
+      // 失焦提交也要过内容判定：编辑器打开就会失焦一次，那一发不该写库
+      const changed = articleWorkflowDraftHash({
+        title: titleDraft,
+        summary: summaryDraft,
+        bodyHtml: value,
+        captionText: captionDraft,
+        tags: tagsDraft,
+      }) !== lastSavedHashRef.current.get(platform);
+      if (savable && changed) {
         void saveProject("auto");
       }
     },

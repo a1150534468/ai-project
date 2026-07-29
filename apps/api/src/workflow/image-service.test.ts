@@ -199,6 +199,59 @@ describe("image service", () => {
       .resolves.toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
   });
 
+  it("times out a stream that stalls mid-body instead of hanging past the attempt deadline", async () => {
+    // 回归：deadline 早先只守到 Response 就绪，之后 SSE 读取阶段无上限，
+    // 实测卡到 226s 才因中继断连报错，把整批出图拖过 reaper 阈值。
+    const config = loadImageGenerationConfigForModel("gpt-image-2", {
+      GPT_IMAGE_API_KEY: "gpt-image-key",
+      GPT_IMAGE_GENERATION_ENDPOINT: "https://pixel.test/v1/images/generations",
+    });
+    let upstreamAborted = false;
+    const stalling = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // 头到了、第一个 partial 也到了，然后上游沉默——正是实测的卡死形状。
+        controller.enqueue(new TextEncoder().encode(`data: {"type":"image_generation.partial_image","b64_json":"cGFydGlhbA=="}\n`));
+      },
+    });
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+      init?.signal?.addEventListener("abort", () => { upstreamAborted = true; }, { once: true });
+      return new Response(stalling, { status: 200, headers: { "content-type": "text/event-stream" } });
+    });
+
+    await expect(callImageGeneration({
+      config,
+      prompt: "p",
+      size: "2048x1152",
+      fetchFn,
+      env: { IMAGE_ATTEMPT_TIMEOUT_MS: "30" },
+    })).rejects.toBeInstanceOf(ImageGenerationTimeoutError);
+    // 超时同时要真的把 abort 传给上游连接，别只是本地放手、让请求继续挂着。
+    expect(upstreamAborted).toBe(true);
+  });
+
+  it("keeps caller cancellation distinct from the attempt deadline", async () => {
+    const config = loadImageGenerationConfigForModel("gpt-image-2", {
+      GPT_IMAGE_API_KEY: "gpt-image-key",
+      GPT_IMAGE_GENERATION_ENDPOINT: "https://pixel.test/v1/images/generations",
+    });
+    const controller = new AbortController();
+    const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
+      controller.abort();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      if (init?.signal?.aborted) throw new DOMException("This operation was aborted", "AbortError");
+      return new Response(JSON.stringify({ data: [{ b64_json: PNG_B64 }] }), { status: 200 });
+    });
+    // 用户主动取消照旧抛 AbortError，不能被伪装成可重试的超时。
+    await expect(callImageGeneration({
+      config,
+      prompt: "p",
+      size: "2048x1152",
+      fetchFn,
+      signal: controller.signal,
+      env: { IMAGE_ATTEMPT_TIMEOUT_MS: "60000" },
+    })).rejects.not.toBeInstanceOf(ImageGenerationTimeoutError);
+  });
+
   it("loads the portrait-only Seedream 5.0 Lite model through Ark", () => {
     expect(loadImageGenerationConfigForModel("doubao-seedream-5-0-260128", {
       ARK_API_KEY: "ark-key",

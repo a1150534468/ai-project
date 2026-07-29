@@ -426,7 +426,6 @@ function tagForPath(url: string): string {
   if (url.startsWith("/api/workflow/comics")) return "工作流 · 漫剧";
   if (url.startsWith("/api/workflow/article-workflow")) return "工作流 · 文章";
   if (url.startsWith("/api/workflow/report")) return "工作流 · 报告";
-  if (url.startsWith("/api/workflow/fanout")) return "工作流 · 批量生成";
   if (url === "/api/announcements") return "公告";
   if (url.startsWith("/api/reseller")) return "渠道商";
   if (url.startsWith("/api/admin/analytics") || url.startsWith("/api/admin/audit")) return "管理 · 数据分析";

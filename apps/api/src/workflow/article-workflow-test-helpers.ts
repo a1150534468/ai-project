@@ -202,6 +202,10 @@ export function createArticleWorkflowPrismaMock(seed?: {
       }),
     },
     imageAsset: {
+      findFirst: vi.fn(async ({ where }: { where: { id?: string; userId?: string } }) =>
+        imageAssets.find((row) =>
+          (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId)
+        ) ?? null),
       create: vi.fn(async ({ data }: { data: Omit<ImageAssetRow, "id" | "createdAt"> }) => {
         const row: ImageAssetRow = {
           ...data,
@@ -235,6 +239,11 @@ export async function buildArticleWorkflowApp(args?: {
   llmResponses?: unknown[];
   scheduleTask?: (work: () => Promise<void>) => void;
   fetchFn?: typeof fetch;
+  loadImageBlob?: (objectKey: string) => Promise<Buffer>;
+  /** 追加到默认 env 上，用来打开依赖环境变量的分支（如配图签名要 SESSION_SECRET） */
+  envPatch?: Record<string, string>;
+  /** 关掉默认注入的登录态，验「不带会话」的路径 */
+  anonymous?: boolean;
   priceRows?: readonly {
     resourceKey: string;
     displayName: string;
@@ -266,9 +275,11 @@ export async function buildArticleWorkflowApp(args?: {
     },
   };
   const app = Fastify();
-  app.addHook("preHandler", async (req) => {
-    (req as { userId?: string }).userId = "u1";
-  });
+  if (!args?.anonymous) {
+    app.addHook("preHandler", async (req) => {
+      (req as { userId?: string }).userId = "u1";
+    });
+  }
   await app.register((instance) => articleWorkflowRoutes(instance, {
     prisma: prisma as never,
     billing: billing as never,
@@ -280,10 +291,14 @@ export async function buildArticleWorkflowApp(args?: {
       headers: { "content-type": "application/json" },
     })) as unknown as typeof fetch),
     scheduleTask: args?.scheduleTask,
+    loadImageBlob: args?.loadImageBlob,
     env: {
       IMAGE_API_KEY: "image-key",
       IMAGE_BASE_URL: "https://image.test",
       LLM_DEFAULT_MODEL: "MiniMax-M3",
+      // 系统兜底重试的退避在测试里归零：只验重试次数与终态，不真等 2s + 4s
+      ARTICLE_WORKFLOW_RETRY_BASE_MS: "0",
+      ...args?.envPatch,
     },
   }));
   return { app, prisma, billing, llm };

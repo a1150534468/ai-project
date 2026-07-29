@@ -7,11 +7,15 @@ import {
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
+  type ArticleWorkflowPlatformConfig,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import type { PrismaClient } from "@prisma/client";
 import { runReservedArticleTextTask } from "./article-workflow-billing.js";
-import { assertArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";
+import {
+  assertArticleWorkflowHtmlFragment,
+  repairArticleWorkflowHtmlFragment,
+} from "./article-workflow-html-guard.js";
 import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
 import {
   applyArticleImageManifestToHtml,
@@ -24,6 +28,7 @@ import {
   generateArticleWorkflowPlan,
   renderArticleWorkflowBodyHtml,
 } from "./article-workflow-llm.js";
+import { normalizeArticleWorkflowPlan } from "./article-workflow-plan.js";
 import { materializeCaptionArticle } from "./article-workflow-runner-caption.js";
 import { readArticleWorkflowProject } from "./article-workflow-serializer.js";
 import type { ArticleProjectRow, ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
@@ -234,7 +239,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
             populateImages,
           });
         }
-        return await materializeHtmlFragmentArticle({ ...args, populateImages });
+        return await materializeHtmlFragmentArticle({ ...args, platformConfig, populateImages });
       } catch (error) {
         // 整单失败：已扣的图片费逐个退回（billing 按 operationId 幂等），再重抛给外层置 failed
         await refundChargedImages();
@@ -255,9 +260,10 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
   readonly instruction?: string;
   readonly regenerateImages: boolean;
   readonly model: string;
+  readonly platformConfig: ArticleWorkflowPlatformConfig;
   readonly populateImages: PopulateArticleImages;
 }): Promise<MaterializedArticle> {
-  const plan = await generateArticleWorkflowPlan({
+  const rawPlan = await generateArticleWorkflowPlan({
     llm: args.llm,
     model: args.model,
     sourceFormat: args.sourceFormat,
@@ -266,12 +272,16 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
     currentHtml: args.currentHtml,
     instruction: args.instruction,
   });
+  const plan = normalizeArticleWorkflowPlan({ plan: rawPlan, config: args.platformConfig });
+  // 正文里要剥掉的标题只认「模型确实在素材里找到的那个」（rawPlan.title）。
+  // 兜底推导出来的标题不参与剥离：它取自正文首行，一旦拿去做精确匹配，
+  // 单段素材会把唯一一段正文当标题剥空。展示用 plan.title，剥离用 rawPlan.title。
   const bodyMarkdown = args.generationMode === "preserve-text"
     ? preservedBodyMarkdown({
       sourceFormat: args.sourceFormat,
       sourceText: args.sourceText,
       currentHtml: args.currentHtml,
-      title: plan.title,
+      title: rawPlan.title,
     })
     : plan.bodyMarkdown;
   const bodyVisibleText = articleWorkflowVisibleTextFromMarkdown(bodyMarkdown);
@@ -280,7 +290,7 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
       sourceFormat: args.sourceFormat,
       sourceText: args.sourceText,
       currentHtml: args.currentHtml,
-      title: plan.title,
+      title: rawPlan.title,
     })
     : "";
   if (args.generationMode === "preserve-text" && bodyVisibleText !== expectedVisibleText) {
@@ -330,8 +340,10 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
     bodyMarkdown,
     imageManifest,
   });
+  // 先修到词汇表以内再硬校验：排版是最后一步，配图钱已经花了，
+  // 不该因为模型多写一个 <h2> 就让整行 failed。修的都是不动可见文字的操作。
   const guardedHtml = assertArticleWorkflowHtmlFragment({
-    html: rawHtml,
+    html: repairArticleWorkflowHtmlFragment(rawHtml),
     expectedVisibleText: bodyVisibleText,
     requiredImageSlots: imageManifest.map((item) => item.slot),
   });

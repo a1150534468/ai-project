@@ -313,6 +313,84 @@ describe("article-workflow routes", () => {
     expect(billing.chargeResource).not.toHaveBeenCalled();
   });
 
+  it("拒绝把正文整体清空的保存，库里内容不变", async () => {
+    // 回归：编辑器把它不认识的 section 规范化成一串空段落，自动保存写回库里，成品被冲掉。
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+        title: "旧标题",
+        summary: "旧摘要",
+        bodyHtml: buildArticleWorkflowHtml(),
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1",
+      payload: {
+        title: "旧标题",
+        summary: "旧摘要",
+        bodyHtml: "<p><br/></p><p><br/></p><p><br/></p>",
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error).toContain("正文文字会被整体清空");
+    expect(prisma.articleWorkflowProject.update).not.toHaveBeenCalled();
+  });
+
+  it("拒绝把图片槽位全部拍平的保存", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+        title: "旧标题",
+        summary: "旧摘要",
+        bodyHtml: buildArticleWorkflowHtml(),
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1",
+      payload: {
+        title: "旧标题",
+        summary: "旧摘要",
+        // 文字都在，但 section 和 data-* 被拍平，槽位锚点没了
+        bodyHtml: "<p>开头第一段。第二段继续说明。</p>",
+      },
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error).toContain("图片位置会全部丢失");
+    expect(prisma.articleWorkflowProject.update).not.toHaveBeenCalled();
+  });
+
   it("saves a caption project without touching the html guard", async () => {
     const prisma = createArticleWorkflowPrismaMock({
       projects: [{
@@ -470,6 +548,127 @@ describe("article-workflow routes", () => {
     await scheduledTask!();
     expect(prisma.__state.projects[0]?.generationMode).toBe("polish-text");
     expect(prisma.__state.projects[0]?.bodyHtml).toContain("重写后的正文");
+  });
+
+  it("refuses to save a failed project so autosave can't erase the failure reason", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "wechat",
+        sourceFormat: "plain-text",
+        sourceText: "原文内容",
+        generationMode: "preserve-text",
+        title: "",
+        summary: "",
+        bodyHtml: "",
+        imageManifestJson: [],
+        status: "failed",
+        progressStage: "failed",
+        progressPercent: 0,
+        progressMessage: "生成失败",
+        error: "403 Access to model denied",
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    // 前端富文本编辑器打开失败行时会自动保存一次空正文，这一路必须被挡住
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1",
+      payload: { title: "未命名图文", bodyHtml: "<p><br/></p>" },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(prisma.__state.projects[0]?.status).toBe("failed");
+    expect(prisma.__state.projects[0]?.error).toContain("403");
+    expect(prisma.__state.projects[0]?.bodyHtml).toBe("");
+  });
+
+  it("retries a failed project from its stored source text", async () => {
+    let scheduledTask: (() => Promise<void>) | null = null;
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "xiaohongshu",
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "polish-text",
+        title: "",
+        summary: "",
+        bodyHtml: "",
+        captionText: "",
+        tagsJson: [],
+        imageManifestJson: [],
+        status: "failed",
+        progressStage: "failed",
+        progressPercent: 0,
+        progressMessage: "生成失败",
+        error: "403 Access to model denied",
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({
+      prisma,
+      llmResponses: [createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan()))],
+      scheduleTask: (work) => {
+        scheduledTask = work;
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/retry",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    // 重试一按下就得清掉上一次的失败痕迹，否则界面仍旧显示旧原因
+    expect(prisma.__state.projects[0]?.status).toBe("generating");
+    expect(prisma.__state.projects[0]?.error).toBeNull();
+
+    await scheduledTask!();
+    expect(prisma.__state.projects[0]?.status).toBe("ready");
+    expect(prisma.__state.projects[0]?.captionText).toContain("第一次用就回不去了");
+  });
+
+  it("rejects retry for a project that never failed", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "wechat",
+        sourceFormat: "plain-text",
+        sourceText: "原文内容",
+        generationMode: "preserve-text",
+        title: "标题",
+        summary: "",
+        bodyHtml: buildArticleWorkflowHtml(),
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/retry",
+      payload: {},
+    });
+
+    // 成品行要改稿走 rewrite，不该借重试白跑一次扣费
+    expect(response.statusCode).toBe(409);
+    expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
   });
 
   it("rejects regenerate-image for a missing slot", async () => {

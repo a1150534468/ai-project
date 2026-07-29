@@ -3,52 +3,75 @@
 }
 
 .article-workflow-rich-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px 12px;
   border-bottom: 1px solid #edf0f5;
   background: #fbfcff;
 }
 
-.article-workflow-rich-editor__toolbar .w-e-toolbar {
-  border: 0;
-  background: transparent;
-  padding: 8px 12px;
-}
-
-.article-workflow-rich-editor__toolbar .w-e-bar-item {
-  margin-right: 2px;
-}
-
-.article-workflow-rich-editor__body .w-e-text-container {
-  min-height: 560px;
-  border: 0 !important;
+.article-workflow-rich-editor__button {
+  min-width: 32px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #e3e8f0;
+  border-radius: 6px;
   background: #ffffff;
+  color: #33415c;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
 }
 
-.article-workflow-rich-editor__body .w-e-text-container .w-e-scroll {
-  padding: 28px 32px;
+.article-workflow-rich-editor__button:hover:not(:disabled) {
+  border-color: #c7d2e4;
+  background: #f4f7fd;
 }
 
-.article-workflow-rich-editor__body .w-e-text-container .w-e-text {
+.article-workflow-rich-editor__button:disabled {
+  color: #a9b2c3;
+  cursor: not-allowed;
+}
+
+.article-workflow-rich-editor__body {
+  position: relative;
+}
+
+.article-workflow-rich-editor__placeholder {
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  color: #98a2b3;
+  font-size: 16px;
+  line-height: 1.9;
+  pointer-events: none;
+}
+
+.article-workflow-rich-editor__surface {
   min-height: 560px;
+  padding: 28px 32px;
+  outline: none;
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 16px;
   line-height: 1.9;
   color: #17212f;
+  overflow-wrap: break-word;
 }
 
-.article-workflow-rich-editor__body .w-e-text-container p,
-.article-workflow-rich-editor__body .w-e-text-container li,
-.article-workflow-rich-editor__body .w-e-text-container blockquote {
+.article-workflow-rich-editor__surface:focus-visible {
+  outline: none;
+}
+
+.article-workflow-rich-editor__surface p,
+.article-workflow-rich-editor__surface li,
+.article-workflow-rich-editor__surface blockquote {
   margin: 0 0 1em;
 }
 
-.article-workflow-rich-editor__body .w-e-text-container img {
+.article-workflow-rich-editor__surface img {
   display: block;
   max-width: 100%;
   height: auto;
   border-radius: 12px;
-}
-
-.article-workflow-rich-editor__body .w-e-text-placeholder {
-  color: #98a2b3;
-  font-style: normal;
 }

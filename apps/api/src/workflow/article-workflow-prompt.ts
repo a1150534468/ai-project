@@ -1,9 +1,11 @@
-import type {
-  ArticleWorkflowGenerationMode,
-  ArticleWorkflowImageAsset,
-  ArticleWorkflowPlatform,
-  ArticleWorkflowPlatformConfig,
-  ArticleWorkflowSourceFormat,
+import {
+  ARTICLE_WORKFLOW_HTML_ATTRS,
+  ARTICLE_WORKFLOW_HTML_TAGS,
+  type ArticleWorkflowGenerationMode,
+  type ArticleWorkflowImageAsset,
+  type ArticleWorkflowPlatform,
+  type ArticleWorkflowPlatformConfig,
+  type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_SOURCE_PROMPT_BUDGET } from "./article-workflow-shared.js";
 
@@ -15,7 +17,14 @@ function sourceFormatHint(sourceFormat: ArticleWorkflowSourceFormat): string {
 
 function generationModeHint(mode: ArticleWorkflowGenerationMode): string {
   return mode === "preserve-text"
-    ? "你只能识别标题、摘要、正文与配图需求。正文可见文字必须保持原样，不能改写、增删、总结或重排；如果素材里有标题，请单独放进 title，不要再放进 bodyMarkdown。"
+    ? [
+        "你只能识别标题、摘要、正文与配图需求。正文可见文字必须保持原样，不能改写、增删、总结或重排。",
+        // title 是元数据而不是正文可见文字，所以「保持原样」不适用于它。
+        // 早先这句写成「如果素材里有标题…」，遇到无独立标题的纯正文素材，
+        // 模型会守着「不增删」交回空 title，整单卡在 schema 校验上（默认就是这个模式）。
+        "title 是文章元数据，不属于正文可见文字：素材自带标题就原样取用；没有标题时，从正文里提炼一个，不要编造素材里没有的事实。",
+        "提炼出的标题不要再重复放进 bodyMarkdown。",
+      ].join("\n")
     : "你可以先润色和重写，再输出更适合公众号发布的 bodyMarkdown。";
 }
 
@@ -29,8 +38,9 @@ export function buildArticleWorkflowPlanSystemPrompt(mode: ArticleWorkflowGenera
     "你的任务是把素材整理成一份图文生成计划。",
     "只输出 JSON，不要输出解释，不要输出 Markdown 代码围栏。",
     generationModeHint(mode),
-    '输出结构固定为 {"title":"","summary":"","bodyMarkdown":"","images":[...]}。',
-    "title 和 summary 要单独输出，不要把标题再塞回 bodyMarkdown 的正文里。",
+    // 结构示例里的空串曾被原样抄回（title:"" summary:""），改成占位说明。
+    '输出结构固定为 {"title":"<标题>","summary":"<一句话摘要>","bodyMarkdown":"<正文>","images":[...]}。',
+    "title 必须非空。summary 与 title 要单独输出，不要把标题再塞回 bodyMarkdown 的正文里。",
     "images 至少 1 张，最多 5 张；第一张必须是封面图。",
     'images[n].slot 只能按顺序使用：cover、inline-1、inline-2、inline-3、inline-4。',
     'images[n].role 只能是 "cover" 或 "inline"。',
@@ -127,7 +137,11 @@ export function buildArticleWorkflowLayoutSystemPrompt(): string {
     "Do not rewrite, summarize, expand, compress, reorder, or add visible content.",
     "Output fragment HTML only. Never output html/head/body/meta/title/link/style/script/comments.",
     "Use strict inline CSS only. Never depend on classes or external stylesheets.",
-    "Allowed tags are WeChat-safe article tags only. Avoid risky layout techniques such as position, float, z-index, transform, filter, negative margins, or fixed heights.",
+    // 这份清单必须逐个列出来。早先只写「WeChat-safe article tags only」，模型给了完全合理的
+    // <h2>，服务端 guard 直接判整单失败——配图钱都花完了才失败。约束要可执行，不能靠模型猜。
+    `The ONLY tags you may output are: ${ARTICLE_WORKFLOW_HTML_TAGS.join(", ")}. Any other tag will be rejected.`,
+    `The ONLY attributes you may output are: ${ARTICLE_WORKFLOW_HTML_ATTRS.join(", ")}.`,
+    "Avoid risky layout techniques such as position, float, z-index, transform, filter, negative margins, or fixed heights.",
     "Do not add any new visible text, labels, badges, chapter counters, CTA copy, helper copy, footer slogans, or editor artifacts.",
     "The layout must be safe for direct paste into the WeChat official account editor.",
     "Prefer section containers, paragraph rhythm, modest borders/backgrounds, and mobile-friendly spacing.",

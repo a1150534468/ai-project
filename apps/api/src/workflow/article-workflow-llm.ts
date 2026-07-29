@@ -7,6 +7,7 @@ import type {
   ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import { jsonrepair } from "jsonrepair";
+import type { ZodType, ZodTypeDef } from "zod";
 import type { ArticleWorkflowCaptionPlan, ArticleWorkflowPlan } from "./article-workflow-schema.js";
 import { articleWorkflowCaptionPlanSchema, articleWorkflowPlanSchema } from "./article-workflow-schema.js";
 import {
@@ -14,6 +15,7 @@ import {
   ARTICLE_TIMEOUT_MS,
   type LlmClientLike,
 } from "./article-workflow-shared.js";
+import { withArticleWorkflowRetry } from "./article-workflow-retry.js";
 import {
   buildArticleWorkflowCaptionSystemPrompt,
   buildArticleWorkflowCaptionUserPrompt,
@@ -66,9 +68,30 @@ function stripCodeFence(text: string): string {
     .trim();
 }
 
+/**
+ * 模型输出的解析失败要给人话。
+ * ZodError.message 本身是一整段 JSON（`[{"code":"too_small",...}]`），
+ * 它会一路写进 project.error 并原样显示在失败面板上——运营看不懂，也没法据此操作。
+ */
+// Input 显式给 unknown：ZodType<T> 会把输入类型也绑成 T，
+// 而这些 schema 带 default，输入形状（字段可选）与输出形状并不相同。
+function parseModelJson<T>(text: string, schema: ZodType<T, ZodTypeDef, unknown>): T {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonrepair(stripCodeFence(text))) as unknown;
+  } catch {
+    throw new Error("模型返回结构无法解析，请重试");
+  }
+  const result = schema.safeParse(parsed);
+  if (result.success) return result.data;
+  // 字段名留在日志里便于定位，用户只看到「请重试」那句。
+  const fields = result.error.issues.map((issue) => issue.path.join(".")).filter(Boolean).join("、");
+  console.warn(`[article-workflow] 模型输出不符合 schema: ${fields || "(根对象)"}`);
+  throw new Error("模型返回结构不符合要求，请重试");
+}
+
 function parsePlanText(text: string): ArticleWorkflowPlan {
-  const parsed = JSON.parse(jsonrepair(stripCodeFence(text))) as unknown;
-  return articleWorkflowPlanSchema.parse(parsed);
+  return parseModelJson(text, articleWorkflowPlanSchema);
 }
 
 async function callLlmText(args: {
@@ -77,13 +100,16 @@ async function callLlmText(args: {
   readonly system: string;
   readonly user: string;
 }): Promise<string> {
-  const response = await args.llm.messages.create({
-    model: args.model,
-    max_tokens: ARTICLE_MAX_OUTPUT_TOKENS,
-    system: args.system,
-    messages: [{ role: "user", content: args.user }],
-  }, {
-    timeout: ARTICLE_TIMEOUT_MS,
+  // 抖动型失败（超时/限流/5xx）在这里就地重试，三条 LLM 调用共用这一个落点
+  const response = await withArticleWorkflowRetry({
+    work: () => args.llm.messages.create({
+      model: args.model,
+      max_tokens: ARTICLE_MAX_OUTPUT_TOKENS,
+      system: args.system,
+      messages: [{ role: "user", content: args.user }],
+    }, {
+      timeout: ARTICLE_TIMEOUT_MS,
+    }),
   });
   return textFromMessage(response);
 }
@@ -149,8 +175,7 @@ export async function generateArticleWorkflowCaptionPlan(args: {
       config: args.config,
     }),
   });
-  const parsed = JSON.parse(jsonrepair(stripCodeFence(text))) as unknown;
-  return articleWorkflowCaptionPlanSchema.parse(parsed);
+  return parseModelJson(text, articleWorkflowCaptionPlanSchema);
 }
 
 export async function renderArticleWorkflowBodyHtml(args: {

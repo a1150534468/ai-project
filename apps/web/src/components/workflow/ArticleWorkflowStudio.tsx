@@ -68,6 +68,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               dirty={state.dirty}
               saving={state.saving}
               rewriting={state.rewriting}
+              retryingProjectId={state.retryingProjectId}
               regeneratingSlot={state.regeneratingSlot}
               canSave={state.canSave}
               canRewrite={state.canRewrite}
@@ -101,6 +102,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               onRewriteGenerationModeChange={state.setRewriteGenerationMode}
               onRewriteRegenerateImagesChange={state.setRewriteRegenerateImages}
               onRewrite={state.handleRewrite}
+              onRetry={state.handleRetry}
               onRegenerateImage={state.handleRegenerateImage}
             />
           )}

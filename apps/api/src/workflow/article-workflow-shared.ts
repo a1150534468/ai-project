@@ -7,6 +7,8 @@ import {
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
+import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, articleWorkflowRetryDelayMs } from "./article-workflow-retry.js";
+import { loadImageAttemptTimeoutMs } from "./image-service.js";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
 export const ARTICLE_MAX_SOURCE_LENGTH = 200_000;
@@ -20,8 +22,28 @@ export const ARTICLE_COVER_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat
 export const ARTICLE_INLINE_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.inlineSize;
 export const ARTICLE_IMAGE_BATCH_SIZE = 2;
 export const ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY = "article_workflow_text_output";
-/** 卡死判定阈值：必须大于单张图片尝试上限（IMAGE_ATTEMPT_TIMEOUT_MS 默认 600s），否则会误杀在跑的项目 */
+/**
+ * 卡死判定的兜底阈值，仅在算不出真实上限时使用。
+ * 真实阈值走 {@link articleProjectStaleMs}——它按当前的出图超时与重试预算推导。
+ */
 export const ARTICLE_PROJECT_STALE_MS = 15 * 60_000;
+
+/**
+ * 心跳是 `updatedAt`：runner 每写一次进度就刷新。所以阈值要盖住的不是「整行耗时」，
+ * 而是**两次进度写入之间的最长间隔**——即出图的一个批次（ARTICLE_IMAGE_BATCH_SIZE 张并发，
+ * onProgress 按批回调）。
+ *
+ * 一个批次的上限 = 单次尝试超时 × 系统兜底重试次数 + 退避。曾经这里写死 15 分钟、
+ * 注释只提「单张尝试上限」，加入重试后实测被 reaper 误判为超时中断（两行卡在 35% 被收尸），
+ * 因此改成从同一批常量推导，避免超时或重试预算调整时这里悄悄失配。
+ */
+export function articleProjectStaleMs(env: NodeJS.ProcessEnv = process.env): number {
+  const attemptMs = loadImageAttemptTimeoutMs(env);
+  const backoffMs = ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS * articleWorkflowRetryDelayMs(ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, env);
+  // 1.5 倍余量留给下载、入库、S3 上传等批次内的非上游耗时。
+  const worstChunkMs = Math.round((attemptMs * ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS + backoffMs) * 1.5);
+  return Math.max(ARTICLE_PROJECT_STALE_MS, worstChunkMs);
+}
 
 export type FetchLike = typeof fetch;
 export type ScheduleTask = (work: () => Promise<void>) => void;
@@ -73,6 +95,8 @@ export interface ArticleWorkflowRouteDeps {
   readonly fetchFn?: FetchLike;
   readonly scheduleTask?: ScheduleTask;
   readonly env?: NodeJS.ProcessEnv;
+  /** 配图取图时从对象存储读字节，测试里替换掉即可脱开 S3 */
+  readonly loadImageBlob?: (objectKey: string) => Promise<Buffer>;
 }
 
 export type ArticleProjectRow = NonNullable<
@@ -112,4 +136,13 @@ export function isBusyArticleProjectStatus(status: string | null | undefined): b
 
 export function canRecoverArticleProject(status: string | null | undefined): boolean {
   return status === "ready" || status === "failed";
+}
+
+/**
+ * 保存只允许发生在已有成品的行上。
+ * failed 行不能被 PATCH 救活：前端自动保存会把空编辑器写进去，
+ * 顺带把 status 抹成 ready、清掉 error，失败现场就没了。
+ */
+export function canSaveArticleProject(status: string | null | undefined): boolean {
+  return status === "ready";
 }

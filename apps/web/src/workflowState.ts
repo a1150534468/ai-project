@@ -4,7 +4,6 @@ export type WorkflowModuleId =
   | "commerce-long-image"
   | "codex-pet"
   | "local-business-promo"
-  | "fanout"
   | "article-workflow"
   | "ai-comic"
   | "scheduled-task"
@@ -211,13 +210,6 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
     title: "Codex 桌宠工坊",
     description: "参考图或文字生成，可直接安装到 Codex",
     icon: "mdi:egg-easter",
-    status: "available",
-  },
-  {
-    id: "fanout",
-    title: "文案裂变",
-    description: "一份原文，批量裂变多平台/人群/风格/情绪版本",
-    icon: "mdi:call-split",
     status: "available",
   },
   {

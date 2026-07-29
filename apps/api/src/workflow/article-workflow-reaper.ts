@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
-import { ARTICLE_PROJECT_STALE_MS } from "./article-workflow-shared.js";
+import { articleProjectStaleMs } from "./article-workflow-shared.js";
 
 export const ARTICLE_REAPER_LOCK_KEY = "ai-assistant:article-workflow:reaper:lock";
 const ARTICLE_REAPER_INTERVAL_MS = 60_000;
@@ -20,9 +20,10 @@ export async function reapStaleArticleWorkflowProjects(args: {
   readonly prisma: PrismaClient;
   readonly billing: ArticleReaperBilling;
   readonly staleMs?: number;
+  readonly env?: NodeJS.ProcessEnv;
   readonly now?: () => number;
 }): Promise<number> {
-  const threshold = new Date((args.now?.() ?? Date.now()) - (args.staleMs ?? ARTICLE_PROJECT_STALE_MS));
+  const threshold = new Date((args.now?.() ?? Date.now()) - (args.staleMs ?? articleProjectStaleMs(args.env)));
   const stuck = await args.prisma.articleWorkflowProject.findMany({
     where: { status: { in: ["generating", "revising"] }, updatedAt: { lt: threshold } },
     select: { id: true, status: true, billingOperationId: true },
@@ -53,6 +54,7 @@ export function startArticleWorkflowReaper(args: {
   readonly prisma: PrismaClient;
   readonly redis: Redis;
   readonly billing: ArticleReaperBilling;
+  readonly env?: NodeJS.ProcessEnv;
 }): NodeJS.Timeout {
   const tick = async () => {
     const got = await args.redis.set(ARTICLE_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);

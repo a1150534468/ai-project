@@ -29,8 +29,15 @@ export const articleWorkflowImageManifestItemSchema = z.object({
   prompt: z.string().trim().min(1).max(4000),
 });
 
+/**
+ * html-fragment 计划。
+ *
+ * title 允许为空串，由 normalizeArticleWorkflowPlan 从正文兜出一个——
+ * 正文与配图都齐了却因为缺个标题整单失败，用户要白付一次文本费再重跑，
+ * 这与 caption 链路「一律归一化，不抛错」的取舍保持一致。
+ */
 export const articleWorkflowPlanSchema = z.object({
-  title: z.string().trim().min(1).max(120),
+  title: z.string().trim().max(120).default(""),
   summary: z.string().trim().max(300).default(""),
   bodyMarkdown: z.string().trim().min(1).max(500_000),
   images: z.array(articleWorkflowImageManifestItemSchema.omit({
@@ -81,6 +88,16 @@ export const articleWorkflowBatchParamsSchema = z.object({
 
 export const articleWorkflowImageParamsSchema = articleWorkflowProjectParamsSchema.extend({
   slot: imageSlotSchema,
+});
+
+export const articleWorkflowImageBlobParamsSchema = z.object({
+  assetId: z.string().trim().min(1).max(160),
+});
+
+/** 取图地址上的短期签名。缺省即视为「没带签名」，回落到会话鉴权。 */
+export const articleWorkflowImageBlobQuerySchema = z.object({
+  exp: z.string().trim().regex(/^\d{1,15}$/).optional(),
+  sig: z.string().trim().min(1).max(256).optional(),
 });
 
 export const updateArticleWorkflowProjectSchema = z.object({

@@ -19,7 +19,6 @@ export const IMAGE_HUB_TABS: readonly { readonly id: ImageHubTabId; readonly lab
 const DEFAULT_HIDDEN_KEYS = [
   "workflow.codex-pet",
   "workflow.report",
-  "workflow.fanout",
   "workflow.article-workflow",
   "workflow.local-business-promo",
   "workflow.ai-comic",

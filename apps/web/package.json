@@ -10,11 +10,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@iconify/react": "^6.0.2",
-    "@wangeditor/editor": "^5.1.23",
-    "@wangeditor/editor-for-react": "^1.0.6",
     "@ai-assistant/article-workflow": "workspace:*",
     "@ai-assistant/novel-workflow": "workspace:*",
+    "@iconify/react": "^6.0.2",
     "motion": "^12.42.2",
     "qrcode.react": "^4.2.0",
     "react": "^19.0.0",
@@ -22,7 +20,8 @@
     "react-markdown": "^10.1.0",
     "react-use-measure": "^2.1.7",
     "rehype-sanitize": "^6.0.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "squire-rte": "2.4.8"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

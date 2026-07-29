@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { reapStaleArticleWorkflowProjects } from "./article-workflow-reaper.js";
+import { ARTICLE_PROJECT_STALE_MS, articleProjectStaleMs } from "./article-workflow-shared.js";
+import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS } from "./article-workflow-retry.js";
 
 type StuckRow = { id: string; status: string; billingOperationId: string | null };
 
@@ -80,5 +82,27 @@ describe("reapStaleArticleWorkflowProjects", () => {
     expect(reaped).toBe(2);
     expect(articleWorkflowProject.updateMany).toHaveBeenCalledTimes(2);
     expect(billing.refundResource).toHaveBeenCalledTimes(2);
+  });
+
+  it("默认阈值盖住一个出图批次的最坏耗时，不误杀在跑的项目", async () => {
+    // 回归：阈值曾写死 15 分钟，而出图批次含系统兜底重试后最坏可达 20 分钟，
+    // 两行卡在 35% 被 reaper 判成「服务重启或任务超时」。
+    const env = { IMAGE_ATTEMPT_TIMEOUT_MS: "600000", ARTICLE_WORKFLOW_RETRY_BASE_MS: "2000" };
+    const worstChunkMs = ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS * 600_000;
+    expect(articleProjectStaleMs(env)).toBeGreaterThan(worstChunkMs);
+
+    const { prisma, articleWorkflowProject } = fakePrisma([]);
+    const billing = fakeBilling();
+    await reapStaleArticleWorkflowProjects({ prisma, billing, env, now: () => 10_000_000 });
+    const where = articleWorkflowProject.findMany.mock.calls[0]![0].where as { updatedAt: { lt: Date } };
+    expect(where.updatedAt.lt).toEqual(new Date(10_000_000 - articleProjectStaleMs(env)));
+  });
+
+  it("出图超时调小时阈值跟着收紧，卡死的行不必白等", () => {
+    const tight = articleProjectStaleMs({ IMAGE_ATTEMPT_TIMEOUT_MS: "60000" });
+    const loose = articleProjectStaleMs({ IMAGE_ATTEMPT_TIMEOUT_MS: "600000" });
+    expect(tight).toBeLessThan(loose);
+    // 但不低于兜底下限，避免把正常的单批出图判成卡死。
+    expect(tight).toBe(ARTICLE_PROJECT_STALE_MS);
   });
 });

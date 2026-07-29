@@ -16,7 +16,6 @@ import {
 import { DownloadLinkDialog, type DownloadDialogState } from "../components/ui/DownloadLinkDialog";
 import { CommerceImageStudio } from "../components/workflow/CommerceImageStudio";
 import { ComicWorkflowStudio } from "../components/workflow/ComicWorkflowStudio";
-import { FanoutStudio } from "../components/workflow/FanoutStudio";
 import { ArticleWorkflowStudio } from "../components/workflow/ArticleWorkflowStudio";
 import { ScheduledTaskStudio } from "../components/workflow/ScheduledTaskStudio";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
@@ -797,8 +796,6 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
           <LocalBusinessPromoWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
         ) : activeModuleId === "ai-comic" ? (
           <ComicWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
-        ) : activeModuleId === "fanout" ? (
-          <FanoutStudio token={token} onBalanceRefresh={onBalanceRefresh} />
         ) : activeModuleId === "article-workflow" ? (
           <ArticleWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
         ) : activeModuleId === "scheduled-task" ? (

@@ -45,7 +45,6 @@ describe("client menu routes", () => {
     const response = await app.inject({ method: "GET", url: "/api/client-menu" });
     expect(response.statusCode).toBe(200);
     expect(response.json().data.find((item: { key: string }) => item.key === "workflow.report").visible).toBe(true);
-    expect(response.json().data.find((item: { key: string }) => item.key === "workflow.fanout").visible).toBe(false);
     expect(requireAdminCalls).toEqual(["ADMIN_MANAGE", "ADMIN_MANAGE"]);
     await app.close();
   });
