@@ -11,6 +11,12 @@
   - GPT Image 2（OpenAI 兼容）→ `GPT_IMAGE_API_KEY`
   - 读 key 位置：`apps/api/src/workflow/image-service.ts` `loadImageGenerationConfigForModel`
 
+## 项目多套命名（改名只动了部分层，易混）
+- 旧名 `yunclaude` 仍残留于：**kind 集群名**（`kind create cluster --name yunclaude`，容器名焊死，不可原地改）、**运行中的 k8s namespace**（18 天前旧部署，Pod 仍在 `yunclaude` 下）、**数据库名**（`postgresql://yunclaude:yunclaude@.../yunclaude`）、**Redis key 前缀**（`yunclaude:` 在 dub 工作流代码硬编码）。
+- 新 manifest 已用 `ai-assistant`：`00-namespace.yaml`、`10-configmap.yaml` 的 name/namespace。
+- `aiproject` 只用于：生产镜像仓库路径（`overlays/prod/kustomization.yaml` → `registry.example.com/aiproject/*`）和 S3 桶名（`aiproject-assets`）。
+- 结论：三个名字并存（yunclaude / ai-assistant / aiproject）。统一前需先决定收敛到哪个（aiproject 还是 ai-assistant），再列全量改名清单（manifest+DB+Redis+kind集群+连接串），避免改一半漏一半。
+
 ## 模型广场数据链路
 - 广场列表 `billing` 的 `registry.ListMarketplace()` 只按 `enabled AND show_in_marketplace` 过滤（**不含** `output_price>0`）；零价格生图模型可进广场。`ListEnabled()` 才带 `output_price>0`，仅用于 chat 选择器。
 - 生图模型需在 `services/billing/internal/registry/registry.go` 的 `SeedDefault` 里 seed `PriceRule`（视觉模型 分类 + `image-gen,vision` 标签 + `ShowInMarketplace:true`），重启 billing 生效（幂等）。

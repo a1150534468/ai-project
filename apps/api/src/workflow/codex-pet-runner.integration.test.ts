@@ -1365,6 +1365,117 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(deps.billing.settleResource).not.toHaveBeenCalled();
   }, 30_000);
 
+  it("refunds an approved extra call that fails at the provider instead of keeping its points", async () => {
+    const seeded = await seed(false);
+    const store = memoryArtifactStore();
+    const deps = runnerDeps(store);
+    Object.assign(deps.env, { CODEX_PET_VISUAL_CONCURRENCY: "1" });
+    const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
+    await prisma.$transaction([
+      prisma.codexPetProject.update({
+        where: { id: seeded.project.id },
+        data: { qualityInspectionEnabled: false },
+      }),
+      prisma.codexPetRun.update({
+        where: { id: seeded.run.id },
+        data: {
+          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false, perImageCallPoints: 200 } as Prisma.InputJsonObject,
+          qualityInspectionEnabled: false,
+          billingMode: "per_image_call_v1",
+          billingResourceKey: "codex_pet_v2_package",
+          billingReservedUnits: 14,
+          billingReservedPoints: 2800,
+          billingSettlementStatus: "reserved",
+          billingChargeStatus: "reserved",
+          plannedImageCallLimit: 14,
+          imageGenerationApprovalBudget: 0,
+        },
+      }),
+    ]);
+    deps.visual.generate = vi.fn(async (input: {
+      onRequestDispatching?: (attempt: number) => Promise<void> | void;
+      onRequestSent?: (attempt: number) => Promise<void> | void;
+    }) => {
+      await input.onRequestDispatching?.(1);
+      await input.onRequestSent?.(1);
+      throw new ImageGenerationUpstreamError(
+        429,
+        "Concurrency limit exceeded for account",
+        "rate_limit_exceeded",
+        "rate_limit",
+        "req-extra-refund-1",
+      );
+    }) as never;
+
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .resolves.toEqual({ status: "awaiting_regeneration_approval", runId: seeded.run.id });
+    const pausedJob = await prisma.codexPetJob.findUniqueOrThrow({
+      where: { runId_key: { runId: seeded.run.id, key: "base-candidate-1" } },
+    });
+
+    // Mirror the approve-next-image route: the extra unit is charged up front,
+    // so its ledger row exists before the provider is ever called again.
+    const extraOperationId = `codex-pet:run:${seeded.run.id}:image:base-candidate-1:2:extra`;
+    await prisma.$transaction([
+      prisma.codexPetImageCall.create({ data: {
+        projectId: seeded.project.id,
+        runId: seeded.run.id,
+        userId: seeded.user.id,
+        jobKey: "base-candidate-1",
+        logicalAttempt: 2,
+        callKind: "extra",
+        purpose: "repair",
+        requestedModel: GPT_IMAGE_MODEL,
+        operationId: extraOperationId,
+        status: "prepared",
+        resourceKey: "codex_pet_v2_package",
+        points: 200,
+      } }),
+      prisma.codexPetRun.update({
+        where: { id: seeded.run.id },
+        data: {
+          status: "base_generating",
+          progressStage: "base_generating",
+          pendingImageJobKey: null,
+          workerId: null,
+          heartbeatAt: null,
+        },
+      }),
+      prisma.codexPetJob.update({
+        where: { id: pausedJob.id },
+        data: { status: "queued", maxAttempts: 2, workerId: null, completedAt: null, error: null },
+      }),
+    ]);
+
+    await executeCodexPetRun({ runId: seeded.run.id, deps: { ...deps, workerId: "approved-extra-refund" } });
+
+    const [run, extraCall, plannedCall] = await Promise.all([
+      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
+      prisma.codexPetImageCall.findUniqueOrThrow({
+        where: { runId_jobKey_logicalAttempt: { runId: seeded.run.id, jobKey: "base-candidate-1", logicalAttempt: 2 } },
+      }),
+      prisma.codexPetImageCall.findUniqueOrThrow({
+        where: { runId_jobKey_logicalAttempt: { runId: seeded.run.id, jobKey: "base-candidate-1", logicalAttempt: 1 } },
+      }),
+    ]);
+    expect(extraCall).toMatchObject({
+      callKind: "extra",
+      status: "failed",
+      refundStatus: "refunded",
+      refundError: null,
+      upstreamRequestId: "req-extra-refund-1",
+    });
+    expect(extraCall.refundedAt).toBeInstanceOf(Date);
+    expect(deps.billing.refundResource).toHaveBeenCalledWith(extraOperationId);
+    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+    // The planned call failed at the provider too, so it is neither settled by
+    // the runner (a resumable failure defers settlement) nor silently billed.
+    expect(plannedCall).toMatchObject({ callKind: "planned", status: "failed", refundStatus: "none" });
+    expect(run.billingSettledUnits).toBe(0);
+    expect(run.billingSettledPoints).toBe(0);
+    expect(deps.billing.settleResource).not.toHaveBeenCalled();
+  }, 30_000);
+
   it("keeps a zero-charge recovery at packaging until final-package bytes are recoverable", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();

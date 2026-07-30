@@ -403,11 +403,12 @@ describe("Codex pet stale-run recovery", () => {
     }]);
     const count = vi.fn(async () => 7);
     const updateMany = vi.fn(async () => ({ count: 1 }));
+    const findFirst = vi.fn(async () => ({ id: "run-terminal" }));
     const settleResource = vi.fn(async () => ({ settled: 1400 }));
 
     await expect(reconcilePerImageBillingSettlements({
       prisma: {
-        codexPetRun: { findMany, updateMany },
+        codexPetRun: { findMany, updateMany, findFirst },
         codexPetImageCall: { count },
       } as unknown as PrismaClient,
       billing: { settleResource },
@@ -418,15 +419,28 @@ describe("Codex pet stale-run recovery", () => {
       where: expect.objectContaining({
         billingMode: "per_image_call_v1",
         billingSettlementStatus: { in: ["reserved", "settle_failed"] },
+        OR: expect.arrayContaining([{ status: { in: ["ready", "cancelled"] } }]),
+      }),
+    }));
+    // The irreversible settle must be preceded by a fresh eligibility read, so a
+    // run resumed inside its grace window is never settled out from under itself.
+    expect(findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: "run-terminal",
+        billingSettlementStatus: { in: ["reserved", "settle_failed"] },
         status: { in: ["ready", "failed", "cancelled"] },
       }),
     }));
+    // A planned call that failed at the provider delivered no image, so it must
+    // not be settled: the pre-fix rule billed 9 such calls at 1800 points on a
+    // completed run. Same predicate as the runner and the cancellation path.
     expect(count).toHaveBeenCalledWith({ where: {
       runId: "run-terminal",
       projectId: "project-1",
       userId: "user-1",
       callKind: "planned",
       sentAt: { not: null },
+      status: { not: "failed" },
     } });
     expect(settleResource).toHaveBeenCalledOnce();
     expect(settleResource).toHaveBeenCalledWith({
@@ -442,6 +456,85 @@ describe("Codex pet stale-run recovery", () => {
     }) }));
   });
 
+  it("holds a failed run's reservation until its grace window expires", async () => {
+    const at = new Date("2026-07-18T00:00:00.000Z");
+    const findMany = vi.fn(async (_args: { readonly where: Record<string, unknown> }) => []);
+    const settleResource = vi.fn(async () => ({ settled: 0 }));
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: { findMany, updateMany: vi.fn(), findFirst: vi.fn() },
+        codexPetImageCall: { count: vi.fn() },
+      } as unknown as PrismaClient,
+      billing: { settleResource },
+      now: () => at,
+      failedGraceMs: 24 * 60 * 60_000,
+    })).resolves.toBe(0);
+
+    // Settling closes every resume path, so a failed run is only a candidate
+    // once it has sat untouched for the whole window. ready/cancelled are
+    // user-owned terminals and stay eligible immediately.
+    const where = findMany.mock.calls[0]![0]!.where as { readonly OR: readonly Record<string, unknown>[] };
+    expect(where.OR).toEqual([
+      { status: { in: ["ready", "cancelled"] } },
+      { status: "failed", completedAt: null },
+      { status: "failed", completedAt: { lte: new Date("2026-07-17T00:00:00.000Z") } },
+    ]);
+    expect(settleResource).not.toHaveBeenCalled();
+  });
+
+  it("skips the settle when a candidate was resumed between the scan and the call", async () => {
+    const findMany = vi.fn(async () => [{
+      id: "run-resumed",
+      projectId: "project-1",
+      userId: "user-1",
+      billingOperationId: "codex-pet:run:run-resumed:planned-images",
+      billingResourceKey: "image_generation_2k",
+    }]);
+    const findFirst = vi.fn(async () => null);
+    const count = vi.fn(async () => 7);
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const settleResource = vi.fn(async () => ({ settled: 1400 }));
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: { findMany, updateMany, findFirst },
+        codexPetImageCall: { count },
+      } as unknown as PrismaClient,
+      billing: { settleResource },
+    })).resolves.toBe(0);
+
+    expect(settleResource).not.toHaveBeenCalled();
+    expect(count).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("records a settlement receipt even if the run left the terminal set mid-call", async () => {
+    const findMany = vi.fn(async () => [{
+      id: "run-raced",
+      projectId: "project-1",
+      userId: "user-1",
+      billingOperationId: "codex-pet:run:run-raced:planned-images",
+      billingResourceKey: "image_generation_2k",
+    }]);
+    const findFirst = vi.fn(async () => ({ id: "run-raced" }));
+    const updateMany = vi.fn(async (_args: { readonly where: Record<string, unknown> }) => ({ count: 1 }));
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: { findMany, updateMany, findFirst },
+        codexPetImageCall: { count: vi.fn(async () => 7) },
+      } as unknown as PrismaClient,
+      billing: { settleResource: vi.fn(async () => ({ settled: 1400 })) },
+    })).resolves.toBe(1);
+
+    // A lost receipt risks a double settle and cannot be recovered, so the write
+    // must not be gated on the run still being terminal.
+    const where = updateMany.mock.calls[0]![0]!.where as Record<string, unknown>;
+    expect(where).not.toHaveProperty("status");
+    expect(where.billingSettlementStatus).toEqual({ in: ["reserved", "settle_failed"] });
+  });
+
   it("records a failed settlement without queueing or contacting an image provider", async () => {
     const findMany = vi.fn(async () => [{
       id: "run-failed-settlement",
@@ -452,11 +545,12 @@ describe("Codex pet stale-run recovery", () => {
     }]);
     const count = vi.fn(async () => 2);
     const updateMany = vi.fn(async () => ({ count: 1 }));
+    const findFirst = vi.fn(async () => ({ id: "run-failed-settlement" }));
     const settleResource = vi.fn(async () => { throw new Error("billing unavailable"); });
 
     await expect(reconcilePerImageBillingSettlements({
       prisma: {
-        codexPetRun: { findMany, updateMany },
+        codexPetRun: { findMany, updateMany, findFirst },
         codexPetImageCall: { count },
       } as unknown as PrismaClient,
       billing: { settleResource },

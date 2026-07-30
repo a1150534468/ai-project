@@ -1,4 +1,5 @@
 import { Icon } from "@iconify/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   shortPlatformLabel,
   type ArticleWorkflowBatchEntry,
@@ -6,12 +7,17 @@ import {
 } from "./articleWorkflowBatchModel";
 import { formatArticleWorkflowTime } from "./articleWorkflowStudioModel";
 
-interface ArticleWorkflowHistorySidebarProps {
+interface ArticleWorkflowHistoryProps {
   readonly batches: readonly ArticleWorkflowBatchEntry[];
   readonly selectedBatchKey: string | null;
   readonly bootstrapping: boolean;
   readonly onNewProject: () => void;
   readonly onSelectBatch: (entry: ArticleWorkflowBatchEntry) => void;
+}
+
+interface ArticleWorkflowHistorySidebarProps extends ArticleWorkflowHistoryProps {
+  readonly open: boolean;
+  readonly onClose: () => void;
 }
 
 const BATCH_STATUS_TEXT: Record<ArticleWorkflowBatchStatus, string> = {
@@ -20,74 +26,124 @@ const BATCH_STATUS_TEXT: Record<ArticleWorkflowBatchStatus, string> = {
   failed: "失败",
 };
 
+function HistoryList(props: ArticleWorkflowHistoryProps) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-width:thin]">
+      {props.bootstrapping && (
+        <div className="px-3 py-5 text-center text-xs text-[#6e6e73]">正在加载项目...</div>
+      )}
+
+      {!props.bootstrapping && props.batches.length === 0 && (
+        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-4 text-center text-xs leading-5 text-[#8a8a8f]">
+          还没有生成过图文
+        </div>
+      )}
+
+      {props.batches.map((item) => {
+        const selected = item.key === props.selectedBatchKey;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => props.onSelectBatch(item)}
+            className={`mb-1.5 block w-full rounded-lg border px-2.5 py-2.5 text-left transition ${
+              selected
+                ? "border-brand/40 bg-brand-soft"
+                : "border-transparent bg-white hover:border-[#e5e7eb] hover:bg-[#f7f8fa]"
+            }`}
+          >
+            <span className="flex items-start gap-2">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-xs font-semibold text-[#1d1d1f]">{item.title || "未命名图文"}</span>
+                <span className="mt-1 block truncate text-[10px] text-[#6e6e73]">
+                  {item.platforms.map(shortPlatformLabel).join(" · ")}
+                </span>
+              </span>
+              <Icon icon="mdi:chevron-right" className="mt-0.5 shrink-0 text-sm text-[#8a8a8f]" aria-hidden />
+            </span>
+            <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[#8a8a8f]">
+              <span className={item.status === "failed" ? "font-semibold text-red-600" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
+              <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function NewProjectButton({ onClick, ariaLabel }: { readonly onClick: () => void; readonly ariaLabel: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      title={ariaLabel}
+      className="grid h-8 w-8 place-items-center rounded-lg text-brand-ink hover:bg-brand-soft"
+    >
+      <Icon icon="mdi:plus" className="text-lg" aria-hidden />
+    </button>
+  );
+}
+
+export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) {
+  return (
+    <section className="flex min-h-0 min-w-0 flex-col bg-white" aria-label="图文项目历史">
+      <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[#1d1d1f]">项目历史</h2>
+          <p className="mt-0.5 text-[10px] text-[#8a8a8f]">{props.batches.length} 个生成批次</p>
+        </div>
+        <NewProjectButton onClick={props.onNewProject} ariaLabel="新建项目" />
+      </div>
+      <HistoryList {...props} />
+    </section>
+  );
+}
+
 export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySidebarProps) {
   return (
-    <aside className="rounded-[18px] border border-[#e7e9f0] bg-white p-3 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
-      <div className="mb-3 flex items-center justify-between gap-3 px-1">
-        <div>
-          <h2 className="text-sm font-semibold text-[#14151a]">最近项目</h2>
-          <p className="text-xs text-[#8a8f98]">按导入批次分组</p>
-        </div>
-        <button
-          type="button"
-          onClick={props.onNewProject}
-          className="rounded-[10px] border border-[#d8dde6] px-3 py-1.5 text-xs font-semibold text-[#1d2433]"
+    <AnimatePresence>
+      {props.open && (
+        <motion.div
+          className="fixed inset-0 z-50 bg-black/20 xl:hidden"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={props.onClose}
         >
-          新建
-        </button>
-      </div>
-
-      <div className="grid gap-2">
-        {props.bootstrapping && (
-          <div className="rounded-[14px] border border-[#edf0f5] bg-[#fafbfe] px-3 py-4 text-sm text-[#667085]">
-            加载中...
-          </div>
-        )}
-
-        {!props.bootstrapping && props.batches.length === 0 && (
-          <div className="rounded-[14px] border border-dashed border-[#dbe1ea] bg-[#fafbfe] px-3 py-5 text-sm text-[#667085]">
-            还没有生成过图文。
-          </div>
-        )}
-
-        {props.batches.map((item) => {
-          const selected = item.key === props.selectedBatchKey;
-          return (
-            <button
-              key={item.key}
-              type="button"
-              onClick={() => props.onSelectBatch(item)}
-              className={`rounded-[14px] border px-3 py-3 text-left transition ${
-                selected
-                  ? "border-brand bg-[#eef8f5]"
-                  : "border-[#edf0f5] bg-white "
-              }`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-[#14151a]">{item.title || "未命名图文"}</div>
-                  <div className="mt-1 line-clamp-2 text-xs leading-5 text-[#667085]">{item.summary || "暂无摘要"}</div>
-                </div>
-                <Icon icon="mdi:chevron-right" className="mt-0.5 shrink-0 text-[#98a2b3]" aria-hidden />
+          <motion.aside
+            role="dialog"
+            aria-modal="true"
+            aria-label="图文项目记录"
+            initial={{ x: "100%" }}
+            animate={{ x: 0 }}
+            exit={{ x: "100%" }}
+            transition={{ type: "spring", stiffness: 340, damping: 34 }}
+            onClick={(event) => event.stopPropagation()}
+            className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[360px]"
+          >
+            <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-4">
+              <div>
+                <h2 className="text-sm font-semibold text-[#1d1d1f]">项目历史</h2>
+                <p className="mt-0.5 text-[10px] text-[#8a8a8f]">{props.batches.length} 个生成批次</p>
               </div>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {item.platforms.map((platform) => (
-                  <span
-                    key={platform}
-                    className="rounded-full bg-[#f2f4f8] px-2 py-0.5 text-[11px] text-[#475467]"
-                  >
-                    {shortPlatformLabel(platform)}
-                  </span>
-                ))}
+              <div className="flex items-center gap-1">
+                <NewProjectButton onClick={props.onNewProject} ariaLabel="新建图文" />
+                <button
+                  type="button"
+                  onClick={props.onClose}
+                  aria-label="关闭项目记录"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                >
+                  <Icon icon="mdi:close" className="text-lg" aria-hidden />
+                </button>
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-[#8a8f98]">
-                <span>{BATCH_STATUS_TEXT[item.status]}</span>
-                <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </aside>
+            </div>
+            <HistoryList {...props} />
+          </motion.aside>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }

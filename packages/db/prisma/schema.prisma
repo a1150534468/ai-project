@@ -422,6 +422,9 @@ model CodexPetImageCall {
   sentAt            DateTime?
   completedAt       DateTime?
   error             String?
+  refundStatus      String          @default("none")
+  refundedAt        DateTime?
+  refundError       String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
   project           CodexPetProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -432,6 +435,7 @@ model CodexPetImageCall {
   @@index([projectId, createdAt])
   @@index([runId, status, createdAt])
   @@index([userId, createdAt])
+  @@index([refundStatus, createdAt])
 }
 
 model CodexPetJob {

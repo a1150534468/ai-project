@@ -16,77 +16,142 @@ interface ArticleWorkflowImageAssetPanelProps {
   readonly platform: ArticleWorkflowPlatform;
   readonly regeneratingSlot: string | null;
   readonly onRegenerateImage: (slot: string) => void;
+  readonly variant?: "compact" | "gallery";
+}
+
+interface ImageActionsProps {
+  readonly image: ArticleWorkflowImageAsset;
+  readonly downloadUrl: string;
+  readonly platform: ArticleWorkflowPlatform;
+  readonly regeneratingSlot: string | null;
+  readonly onRegenerateImage: (slot: string) => void;
+}
+
+function ImageActions(props: ImageActionsProps) {
+  return (
+    <div className="flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        title="下载配图"
+        aria-label={`下载${props.image.alt || props.image.slot}`}
+        disabled={!props.downloadUrl}
+        onClick={() => {
+          void downloadArticleWorkflowImage({
+            url: props.downloadUrl,
+            fileName: articleWorkflowImageFileName({
+              platform: props.platform,
+              slot: props.image.slot,
+              url: props.downloadUrl,
+            }),
+          });
+        }}
+        className="grid h-8 w-8 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] disabled:opacity-40"
+      >
+        <Icon icon="mdi:download-outline" className="text-base" aria-hidden />
+      </button>
+      <button
+        type="button"
+        title="重新生成配图"
+        aria-label={`重新生成${props.image.alt || props.image.slot}`}
+        onClick={() => props.onRegenerateImage(props.image.slot)}
+        className="grid h-8 w-8 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7]"
+      >
+        <Icon
+          icon={props.regeneratingSlot === props.image.slot ? "mdi:loading" : "mdi:refresh"}
+          className={`text-base ${props.regeneratingSlot === props.image.slot ? "animate-spin" : ""}`}
+          aria-hidden
+        />
+      </button>
+    </div>
+  );
 }
 
 export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetPanelProps) {
   const config = articleWorkflowPlatformConfig(props.platform);
   const sizeOf = (role: ArticleWorkflowImageRole) => (role === "cover" ? config.coverSize : config.inlineSize);
+  const gallery = props.variant === "gallery";
   return (
-    <section className="rounded-[16px] border border-[#e7e9f0] bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
-      <div className="mb-3">
-        <h3 className="text-sm font-semibold text-[#14151a]">配图素材</h3>
+    <section>
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-[#1d1d1f]">配图素材</h3>
+        <span className="text-xs text-[#8a8a8f]">{props.imageManifest.length} 张</span>
       </div>
 
-      <div className="grid gap-3">
+      <div className={gallery ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-2"}>
         {props.imageManifest.length === 0 && (
-          <div className="rounded-[14px] border border-dashed border-[#d8dde6] bg-[#fafbfe] px-3 py-5 text-sm text-[#667085]">
-            暂无配图。
+          <div className="rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-3 py-5 text-center text-sm text-[#8a8a8f]">
+            暂无配图
           </div>
         )}
 
         {props.imageManifest.map((image) => {
           const downloadUrl = image.imageUrl || image.thumbnailUrl || "";
-          const ratio = articleWorkflowImageRatioLabel(sizeOf(image.role));
+          const size = sizeOf(image.role);
+          const ratio = articleWorkflowImageRatioLabel(size);
+          const [width, height] = size.split("x");
+          if (gallery) {
+            return (
+              <article key={image.slot} className="min-w-0 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+                <div
+                  className="flex max-h-[520px] items-center justify-center bg-[#f5f5f7]"
+                  style={{ aspectRatio: `${width} / ${height}` }}
+                >
+                  {image.thumbnailUrl || image.imageUrl ? (
+                    <img
+                      src={image.imageUrl || image.thumbnailUrl}
+                      alt={image.alt || "文章配图"}
+                      className="h-full w-full object-contain"
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center text-sm text-[#8a8a8f]">待生成</div>
+                  )}
+                </div>
+                <div className="flex min-w-0 items-center gap-3 border-t border-[#e5e7eb] px-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-semibold text-[#1d1d1f]">{image.alt || "未设置描述"}</div>
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[#8a8a8f]">
+                      <span className="truncate">{image.slot}</span>
+                      {ratio && <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5">{ratio}</span>}
+                    </div>
+                  </div>
+                  <ImageActions
+                    image={image}
+                    downloadUrl={downloadUrl}
+                    platform={props.platform}
+                    regeneratingSlot={props.regeneratingSlot}
+                    onRegenerateImage={props.onRegenerateImage}
+                  />
+                </div>
+              </article>
+            );
+          }
           return (
-            <div key={image.slot} className="rounded-[14px] border border-[#edf0f5] bg-[#fafbfe] p-3">
-              <div className="overflow-hidden rounded-[12px] bg-white">
+            <div key={image.slot} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white p-2">
+              <div className="h-14 w-[72px] shrink-0 overflow-hidden rounded-md bg-[#f5f5f7]">
                 {image.thumbnailUrl || image.imageUrl ? (
                   <img
                     src={image.thumbnailUrl || image.imageUrl}
                     alt={image.alt || "文章配图"}
-                    className="block aspect-[4/3] w-full object-cover"
+                    className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="grid aspect-[4/3] place-items-center text-sm text-[#8a8f98]">待生成</div>
+                  <div className="grid h-full place-items-center text-xs text-[#8a8a8f]">待生成</div>
                 )}
               </div>
-              <div className="mt-2 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.08em] text-[#8a8f98]">
-                    <span className="truncate">{image.slot}</span>
-                    {ratio && <span className="rounded-full bg-white px-1.5 py-0.5 normal-case tracking-normal">{ratio}</span>}
-                  </div>
-                  <div className="truncate text-sm text-[#14151a]">{image.alt || "未设置描述"}</div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 text-[11px] text-[#8a8a8f]">
+                  <span className="truncate">{image.slot}</span>
+                  {ratio && <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5">{ratio}</span>}
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <button
-                    type="button"
-                    disabled={!downloadUrl}
-                    onClick={() => {
-                      void downloadArticleWorkflowImage({
-                        url: downloadUrl,
-                        fileName: articleWorkflowImageFileName({
-                          platform: props.platform,
-                          slot: image.slot,
-                          url: downloadUrl,
-                        }),
-                      });
-                    }}
-                    className="flex h-9 items-center gap-1.5 rounded-[10px] border border-[#d5dae3] px-3 text-xs font-semibold text-[#1d2433] disabled:opacity-40"
-                  >
-                    <Icon icon="mdi:download-outline" aria-hidden />
-                    下载
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => props.onRegenerateImage(image.slot)}
-                    className="flex h-9 items-center gap-1.5 rounded-[10px] border border-[#d5dae3] px-3 text-xs font-semibold text-[#1d2433]"
-                  >
-                    <Icon icon={props.regeneratingSlot === image.slot ? "mdi:loading" : "mdi:refresh"} className={props.regeneratingSlot === image.slot ? "animate-spin" : ""} aria-hidden />
-                    重生
-                  </button>
-                </div>
+                <div className="mt-1 truncate text-xs font-semibold text-[#1d1d1f]">{image.alt || "未设置描述"}</div>
               </div>
+              <ImageActions
+                image={image}
+                downloadUrl={downloadUrl}
+                platform={props.platform}
+                regeneratingSlot={props.regeneratingSlot}
+                onRegenerateImage={props.onRegenerateImage}
+              />
             </div>
           );
         })}

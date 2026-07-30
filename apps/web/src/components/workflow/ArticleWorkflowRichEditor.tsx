@@ -1,5 +1,6 @@
 import type { FocusEventHandler } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "@iconify/react";
 import type Squire from "squire-rte";
 import { articleWorkflowSanitizeToFragment } from "./articleWorkflowHtmlSanitizer";
 import "./articleWorkflowRichEditor.css";
@@ -193,21 +194,21 @@ function ArticleWorkflowRichEditorToolbar({ editorRef, disabled }: ToolbarProps)
     editor.makeLink(url.trim(), { target: "_blank", rel: "noopener noreferrer" });
   });
 
-  const buttons: readonly { readonly label: string; readonly title: string; readonly onClick: () => void }[] = [
+  const buttons: readonly { readonly label?: string; readonly icon?: string; readonly title: string; readonly onClick: () => void }[] = [
     { label: "B", title: "加粗", onClick: toggle("b", (e) => e.bold(), (e) => e.removeBold()) },
     { label: "I", title: "斜体", onClick: toggle("i", (e) => e.italic(), (e) => e.removeItalic()) },
     { label: "U", title: "下划线", onClick: toggle("u", (e) => e.underline(), (e) => e.removeUnderline()) },
-    { label: "链接", title: "插入或移除链接", onClick: handleLink },
-    { label: "清格式", title: "清除所选文字的格式", onClick: run((e) => e.removeAllFormatting()) },
-    { label: "撤销", title: "撤销", onClick: run((e) => e.undo()) },
-    { label: "重做", title: "重做", onClick: run((e) => e.redo()) },
+    { icon: "mdi:link-variant", title: "插入或移除链接", onClick: handleLink },
+    { icon: "mdi:format-clear", title: "清除所选文字的格式", onClick: run((e) => e.removeAllFormatting()) },
+    { icon: "mdi:undo", title: "撤销", onClick: run((e) => e.undo()) },
+    { icon: "mdi:redo", title: "重做", onClick: run((e) => e.redo()) },
   ];
 
   return (
     <div className="article-workflow-rich-editor__toolbar" role="toolbar" aria-label="正文格式">
       {buttons.map((button) => (
         <button
-          key={button.label}
+          key={button.title}
           type="button"
           title={button.title}
           aria-label={button.title}
@@ -217,7 +218,7 @@ function ArticleWorkflowRichEditorToolbar({ editorRef, disabled }: ToolbarProps)
           onClick={button.onClick}
           className="article-workflow-rich-editor__button"
         >
-          {button.label}
+          {button.icon ? <Icon icon={button.icon} className="text-base" aria-hidden /> : button.label}
         </button>
       ))}
     </div>

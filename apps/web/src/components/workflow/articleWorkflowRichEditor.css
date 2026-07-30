@@ -7,30 +7,30 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px 12px;
-  border-bottom: 1px solid #edf0f5;
-  background: #fbfcff;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f7f8fa;
 }
 
 .article-workflow-rich-editor__button {
   min-width: 32px;
   height: 30px;
-  padding: 0 10px;
-  border: 1px solid #e3e8f0;
+  padding: 0 8px;
+  border: 1px solid #d2d2d7;
   border-radius: 6px;
   background: #ffffff;
-  color: #33415c;
+  color: #1d1d1f;
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
 
 .article-workflow-rich-editor__button:hover:not(:disabled) {
-  border-color: #c7d2e4;
-  background: #f4f7fd;
+  border-color: #b8b8bd;
+  background: #f0f0f2;
 }
 
 .article-workflow-rich-editor__button:disabled {
-  color: #a9b2c3;
+  color: #8a8a8f;
   cursor: not-allowed;
 }
 
@@ -42,7 +42,7 @@
   position: absolute;
   top: 28px;
   left: 32px;
-  color: #98a2b3;
+  color: #8a8a8f;
   font-size: 16px;
   line-height: 1.9;
   pointer-events: none;
@@ -55,7 +55,7 @@
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-size: 16px;
   line-height: 1.9;
-  color: #17212f;
+  color: #1d1d1f;
   overflow-wrap: break-word;
 }
 
@@ -73,5 +73,5 @@
   display: block;
   max-width: 100%;
   height: auto;
-  border-radius: 12px;
+  border-radius: 8px;
 }

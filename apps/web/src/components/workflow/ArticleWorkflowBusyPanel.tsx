@@ -18,48 +18,59 @@ function rowStatusText(project: ArticleWorkflowProject): string {
   return project.progressMessage || "排队中";
 }
 
-export function ArticleWorkflowBusyPanel(props: ArticleWorkflowBusyPanelProps) {
-  const { project, batchProjects, batchProgress } = props;
-  const multi = batchProjects.length > 1;
+function progressValue(props: ArticleWorkflowBusyPanelProps): number {
+  const multi = props.batchProjects.length > 1;
+  return Math.min(100, Math.max(8, multi ? props.batchProgress.percent : props.project.progressPercent));
+}
 
+function PlatformProgressList(props: ArticleWorkflowBusyPanelProps) {
   return (
-    <section className="rounded-[18px] border border-[#e7e9f0] bg-white p-8 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
-      <div className="mx-auto max-w-[560px] text-center">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-[#eef8f5] text-brand">
-          <Icon icon="mdi:loading" className="text-[28px] animate-spin" aria-hidden />
+    <ul className="grid gap-2 text-left">
+      {props.batchProjects.map((row) => {
+        const busy = isBusyArticleWorkflowStatus(row.status);
+        return (
+          <li key={row.id} className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5">
+            <Icon
+              icon={row.status === "failed" ? "mdi:alert-circle-outline" : busy ? "mdi:loading" : "mdi:check-circle"}
+              className={`shrink-0 text-lg ${row.status === "failed" ? "text-red-500" : busy ? "animate-spin text-brand" : "text-brand"}`}
+              aria-hidden
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold text-[#1d1d1f]">{shortPlatformLabel(row.platform)}</span>
+              <span className={`mt-0.5 block truncate text-xs ${row.status === "failed" ? "text-red-600" : "text-[#6e6e73]"}`}>
+                {rowStatusText(row)}
+              </span>
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function ArticleWorkflowBusyPanel(props: ArticleWorkflowBusyPanelProps) {
+  const multi = props.batchProjects.length > 1;
+  return (
+    <section className="grid h-full min-h-[480px] place-items-center bg-white px-6 py-10">
+      <div className="w-full max-w-[560px] text-center">
+        <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-brand-soft text-brand">
+          <Icon icon="mdi:loading" className="animate-spin text-[28px]" aria-hidden />
         </div>
-        <h2 className="mt-4 text-xl font-semibold text-[#14151a]">
-          {project.status === "revising" ? "AI 正在重新整理文章" : "AI 正在生成多平台图文"}
+        <h2 className="mt-4 text-xl font-semibold text-[#1d1d1f]">
+          {props.project.status === "revising" ? "AI 正在重新整理文章" : "AI 正在生成多平台图文"}
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#667085]">{project.progressMessage || "请稍候..."}</p>
+        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">{props.project.progressMessage || "请稍候..."}</p>
         {multi && (
-          <p className="mt-1 text-xs text-[#8a8f98]">
-            已完成 {batchProgress.completed} / {batchProgress.total} 个平台
+          <p className="mt-1 text-xs text-[#8a8a8f]">
+            已完成 {props.batchProgress.completed} / {props.batchProgress.total} 个平台
           </p>
         )}
-
-        <div className="mt-6 rounded-full bg-[#eef1f5] p-1">
-          <div
-            className="h-2 rounded-full bg-brand transition-all"
-            style={{ width: `${Math.min(100, Math.max(8, multi ? batchProgress.percent : project.progressPercent))}%` }}
-          />
+        <div className="mx-auto mt-6 h-2 max-w-[420px] overflow-hidden rounded-full bg-[#e8e8ed]">
+          <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${progressValue(props)}%` }} />
         </div>
-
-        {multi && (
-          <ul className="mt-6 grid gap-2 text-left">
-            {batchProjects.map((row) => (
-              <li
-                key={row.id}
-                className="flex items-center justify-between gap-3 rounded-[12px] border border-[#edf0f5] bg-[#fafbfe] px-3 py-2"
-              >
-                <span className="text-sm font-semibold text-[#1d2433]">{shortPlatformLabel(row.platform)}</span>
-                <span className={`truncate text-xs ${row.status === "failed" ? "text-red-600" : "text-[#667085]"}`}>
-                  {rowStatusText(row)}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="mx-auto mt-6 max-w-[480px]">
+          <PlatformProgressList {...props} />
+        </div>
       </div>
     </section>
   );

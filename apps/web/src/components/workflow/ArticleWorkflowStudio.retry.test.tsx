@@ -64,6 +64,10 @@ async function renderStudio(project: ReturnType<typeof captionProject>) {
   return result;
 }
 
+function enterEditMode() {
+  fireEvent.click(screen.getByRole("button", { name: "编辑" }));
+}
+
 beforeEach(() => {
   api.getArticleWorkflowPricing.mockResolvedValue(null);
   api.listArticleWorkflowHistory.mockResolvedValue([]);
@@ -75,6 +79,17 @@ afterEach(() => {
 });
 
 describe("ArticleWorkflowStudio 失败行处理", () => {
+  it("从工作台顶栏打开项目记录，并可回到新建态", async () => {
+    await renderStudio(captionProject());
+
+    fireEvent.click(screen.getByRole("button", { name: "项目历史" }));
+    expect(screen.getByRole("dialog", { name: "图文项目记录" })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "新建图文" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图文项目记录" })).toBeNull());
+    expect(screen.getByLabelText("文章原文")).toBeTruthy();
+  });
+
   it("failed 行改文案不触发自动保存，并原样显示失败原因", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await renderStudio(captionProject());
@@ -82,6 +97,7 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
     // 后端存的 error 要能直接看到，不然「哪一行扣费失败、为什么」全靠猜
     expect(screen.getByRole("alert").textContent).toContain("403 Access to model denied");
 
+    enterEditMode();
     fireEvent.change(screen.getByLabelText("正文文案"), { target: { value: "手改一段文案" } });
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
 
@@ -104,6 +120,7 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
     api.updateArticleWorkflowProject.mockResolvedValue({ ...ready, captionText: "手改一段文案" });
     await renderStudio(ready);
 
+    enterEditMode();
     fireEvent.change(screen.getByLabelText("正文文案"), { target: { value: "手改一段文案" } });
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
 
@@ -131,7 +148,7 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
 
     await waitFor(() => expect(api.retryArticleWorkflowProject).toHaveBeenCalledWith("token", "article-1"));
     // 进入生成中后由现有轮询接管，界面切到进度态
-    await waitFor(() => expect(screen.getByText("排队重试中")).toBeTruthy());
+    await waitFor(() => expect(screen.getAllByText("排队重试中").length).toBeGreaterThan(0));
     // 通知栏与 toast 各出现一次
     expect(screen.getAllByText("已重新开始生成").length).toBeGreaterThan(0);
     expect(api.updateArticleWorkflowProject).not.toHaveBeenCalled();
@@ -160,6 +177,22 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
     release();
     await waitFor(() => expect(api.getArticleWorkflowBatch).toHaveBeenCalled());
   });
+
+  it("caption 完成态直接展示底部配图，并可展开 AI 重写", async () => {
+    await renderStudio(captionProject({
+      status: "ready" as const,
+      progressStage: "ready",
+      progressMessage: "已生成完成",
+      error: null,
+      title: "夏天必囤的咖啡机",
+    }));
+
+    expect(screen.getByRole("heading", { name: "配图素材" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "配图素材 0" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "AI 重写" }));
+    expect(screen.getByLabelText("重新生成要求")).toBeTruthy();
+  });
 });
 
 describe("自动保存只在内容真的变了才发车", () => {
@@ -182,6 +215,7 @@ describe("自动保存只在内容真的变了才发车", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await renderStudio(readyProject());
 
+    enterEditMode();
     const input = screen.getByLabelText("正文文案");
     fireEvent.change(input, { target: { value: "改一版" } });
     fireEvent.change(input, { target: { value: "第一次用就回不去了。" } });
@@ -196,6 +230,7 @@ describe("自动保存只在内容真的变了才发车", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await renderStudio(readyProject());
 
+    enterEditMode();
     fireEvent.change(screen.getByLabelText("正文文案"), { target: { value: "第一次用就回不去了。" } });
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
 
@@ -208,6 +243,7 @@ describe("自动保存只在内容真的变了才发车", () => {
     api.updateArticleWorkflowProject.mockResolvedValue({ ...ready, captionText: "确实改过了" });
     await renderStudio(ready);
 
+    enterEditMode();
     fireEvent.change(screen.getByLabelText("正文文案"), { target: { value: "确实改过了" } });
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
 

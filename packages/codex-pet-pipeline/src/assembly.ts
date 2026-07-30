@@ -17,6 +17,17 @@ import { inspectFrame, mirrorFramesPreservingOrder, type FrameInspectionOptions 
 
 export type PetFramesByState = Partial<Record<PetRowSpec["state"], readonly Buffer[]>>;
 
+/**
+ * Re-label the per-cell findings `inspectFrame` graded, keeping the atlas's own
+ * wording for edge contact. Severity is decided once, inside the extractor, so
+ * the atlas gate and the board gate cannot drift apart.
+ */
+function cellFindingCodes(codes: readonly string[]): readonly string[] {
+  return codes
+    .filter((code) => code !== "empty-frame")
+    .map((code) => code === "touches-cell-edge" ? "foreground-touches-cell-edge" : code);
+}
+
 export interface AtlasCellValidation {
   readonly row: number;
   readonly column: number;
@@ -435,12 +446,9 @@ export async function validatePetAtlas(
         const cellWarnings: string[] = [];
         if (expectedUsed && diagnostics.opaquePixels === 0) cellErrors.push("used-cell-empty");
         if (!expectedUsed && diagnostics.opaquePixels > 0) cellErrors.push("unused-cell-not-transparent");
-        if (expectedUsed && diagnostics.edgePixels > 0) cellErrors.push("foreground-touches-cell-edge");
-        if (expectedUsed && diagnostics.componentCount > 1) {
-          (inspectionOptions.allowMultipleForegroundComponents ? cellWarnings : cellErrors).push("multiple-foreground-components");
-        }
-        if (expectedUsed && diagnostics.internalTransparentPixels > Math.max(16, diagnostics.opaquePixels * 0.02)) {
-          (inspectionOptions.allowTransparentHoles ? cellWarnings : cellErrors).push("possible-transparent-holes");
+        if (expectedUsed) {
+          cellErrors.push(...cellFindingCodes(diagnostics.errors));
+          cellWarnings.push(...cellFindingCodes(diagnostics.warnings));
         }
         errors.push(...cellErrors.map((error) => `${spec.state}[${column}]:${error}`));
         warnings.push(...cellWarnings.map((warning) => `${spec.state}[${column}]:${warning}`));
@@ -502,12 +510,9 @@ export async function validateStandardPetAtlas(
         const cellWarnings: string[] = [];
         if (expectedUsed && diagnostics.opaquePixels === 0) cellErrors.push("used-cell-empty");
         if (!expectedUsed && diagnostics.opaquePixels > 0) cellErrors.push("unused-cell-not-transparent");
-        if (expectedUsed && diagnostics.edgePixels > 0) cellErrors.push("foreground-touches-cell-edge");
-        if (expectedUsed && diagnostics.componentCount > 1) {
-          (inspectionOptions.allowMultipleForegroundComponents ? cellWarnings : cellErrors).push("multiple-foreground-components");
-        }
-        if (expectedUsed && diagnostics.internalTransparentPixels > Math.max(16, diagnostics.opaquePixels * 0.02)) {
-          (inspectionOptions.allowTransparentHoles ? cellWarnings : cellErrors).push("possible-transparent-holes");
+        if (expectedUsed) {
+          cellErrors.push(...cellFindingCodes(diagnostics.errors));
+          cellWarnings.push(...cellFindingCodes(diagnostics.warnings));
         }
         errors.push(...cellErrors.map((error) => `${spec.state}[${column}]:${error}`));
         warnings.push(...cellWarnings.map((warning) => `${spec.state}[${column}]:${warning}`));

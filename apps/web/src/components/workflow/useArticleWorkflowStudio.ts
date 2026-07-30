@@ -100,12 +100,12 @@ export function useArticleWorkflowStudio({
   const [tagsDrafts, setTagsDrafts] = useState<TagsRecord>(
     initialProject ? { [initialProject.platform]: initialProject.tags } : {},
   );
-  const [sourceFormat, setSourceFormat] = useState<ArticleWorkflowSourceFormat>("plain-text");
-  const [generationMode, setGenerationMode] = useState<ArticleWorkflowGenerationMode>("preserve-text");
+  const [sourceFormat, setSourceFormat] = useState<ArticleWorkflowSourceFormat>(initialProject?.sourceFormat ?? "plain-text");
+  const [generationMode, setGenerationMode] = useState<ArticleWorkflowGenerationMode>(initialProject?.generationMode ?? "preserve-text");
   const [selectedPlatforms, setSelectedPlatforms] = useState<readonly ArticleWorkflowPlatform[]>(
-    ARTICLE_WORKFLOW_PLATFORMS,
+    initialProject ? [initialProject.platform] : ARTICLE_WORKFLOW_PLATFORMS,
   );
-  const [sourceText, setSourceText] = useState("");
+  const [sourceText, setSourceText] = useState(initialProject?.sourceText ?? "");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rewriting, setRewriting] = useState(false);
@@ -200,6 +200,16 @@ export function useArticleWorkflowStudio({
   ) => {
     const force = args?.force ?? true;
     setBatchProjects(details.map(withClonedManifest));
+
+    const sourceProject = details[0];
+    if (force && sourceProject) {
+      setSourceFormat(sourceProject.sourceFormat);
+      setSourceText(sourceProject.sourceText);
+      setGenerationMode(sourceProject.generationMode);
+      setSelectedPlatforms(
+        ARTICLE_WORKFLOW_PLATFORMS.filter((item) => details.some((detail) => detail.platform === item)),
+      );
+    }
 
     const nextTitles: DraftRecord = {};
     const nextSummaries: DraftRecord = {};

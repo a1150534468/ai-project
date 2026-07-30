@@ -509,22 +509,45 @@ type CodexPetSettlementClient = {
  * A worker can finish the artifact work yet lose connectivity while settling
  * its reservation. This maintenance path only reconciles durable accounting
  * for terminal per-image runs; it never enqueues work or contacts Pixel.
+ *
+ * Settlement is irreversible: every resume path requires
+ * billingSettlementStatus="reserved", so settling condemns the run forever.
+ * `ready`/`cancelled` are genuine user-owned terminals and settle at once, but
+ * a failure is frequently just a fixable bug sitting on top of intact paid
+ * artifacts, so failed runs keep their reservation for a grace window and are
+ * only settled once nobody has resumed them. Units are recounted from the call
+ * ledger at settle time, so settling late is strictly more accurate.
  */
+export const CODEX_PET_FAILED_SETTLEMENT_GRACE_MS = positiveNumber(
+  "CODEX_PET_FAILED_SETTLEMENT_GRACE_MS",
+  24 * 60 * 60_000,
+);
+
 export async function reconcilePerImageBillingSettlements(input: {
   readonly prisma: PrismaClient;
   readonly billing: CodexPetSettlementClient;
   readonly now?: () => Date;
   readonly limit?: number;
+  readonly failedGraceMs?: number;
 }): Promise<number> {
   const now = input.now ?? (() => new Date());
   const terminalStatuses = ["ready", "failed", "cancelled"];
+  const graceMs = Math.max(0, input.failedGraceMs ?? CODEX_PET_FAILED_SETTLEMENT_GRACE_MS);
+  const failedSettleBefore = new Date(now().getTime() - graceMs);
   const candidates = await input.prisma.codexPetRun.findMany({
     where: {
       billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
       billingSettlementStatus: { in: ["reserved", "settle_failed"] },
       billingOperationId: { not: null },
       billingResourceKey: { not: null },
-      status: { in: terminalStatuses },
+      OR: [
+        { status: { in: ["ready", "cancelled"] } },
+        // A failed run whose completedAt is missing cannot have its window
+        // measured; treat it as expired rather than holding the reservation
+        // open forever.
+        { status: "failed", completedAt: null },
+        { status: "failed", completedAt: { lte: failedSettleBefore } },
+      ],
     },
     select: { id: true, projectId: true, userId: true, billingOperationId: true, billingResourceKey: true },
     take: Math.min(500, Math.max(1, input.limit ?? 50)),
@@ -532,21 +555,10 @@ export async function reconcilePerImageBillingSettlements(input: {
   let settled = 0;
   for (const run of candidates) {
     try {
-      const units = await input.prisma.codexPetImageCall.count({
-        where: {
-          runId: run.id,
-          projectId: run.projectId,
-          userId: run.userId,
-          callKind: "planned",
-          sentAt: { not: null },
-        },
-      });
-      const receipt = await input.billing.settleResource({
-        operationId: run.billingOperationId!,
-        resourceKey: run.billingResourceKey!,
-        units,
-      });
-      const changed = await input.prisma.codexPetRun.updateMany({
+      // A failed run stays resumable during its grace window, so it can leave
+      // the terminal set between the scan and this settle. Re-read immediately
+      // before the irreversible external call to narrow that race.
+      const fresh = await input.prisma.codexPetRun.findFirst({
         where: {
           id: run.id,
           projectId: run.projectId,
@@ -554,6 +566,38 @@ export async function reconcilePerImageBillingSettlements(input: {
           billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
           billingSettlementStatus: { in: ["reserved", "settle_failed"] },
           status: { in: terminalStatuses },
+        },
+        select: { id: true },
+      });
+      if (!fresh) continue;
+      // Must match the runner and the cancellation path exactly: a planned call
+      // that failed at the provider delivered no image and is not settled.
+      const units = await input.prisma.codexPetImageCall.count({
+        where: {
+          runId: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          callKind: "planned",
+          sentAt: { not: null },
+          status: { not: "failed" },
+        },
+      });
+      const receipt = await input.billing.settleResource({
+        operationId: run.billingOperationId!,
+        resourceKey: run.billingResourceKey!,
+        units,
+      });
+      // Deliberately not guarded on terminal status: once the external settle
+      // succeeded the accounting must be recorded even if the run was resumed
+      // in the meantime. A lost settlement receipt risks a double settle and is
+      // unrecoverable; a wrongly condemned run is recoverable by an operator.
+      const changed = await input.prisma.codexPetRun.updateMany({
+        where: {
+          id: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+          billingSettlementStatus: { in: ["reserved", "settle_failed"] },
         },
         data: {
           billingSettledUnits: units,

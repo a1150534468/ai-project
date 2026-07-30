@@ -1,13 +1,17 @@
 import type { PrismaClient } from "@prisma/client";
 import { describe, expect, it, vi } from "vitest";
 import {
+  CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT,
+  CODEX_PET_EXTRA_IMAGE_CALLS_PER_RUN_LIMIT,
   CODEX_PET_PER_IMAGE_BILLING_MODE,
   CodexPetImageCallAlreadySentError,
   CodexPetImageCallLimitError,
+  codexPetExtraCallBudget,
   completeCodexPetImageCall,
   markCodexPetImageCallSent,
   prepareCodexPetImageCallDispatch,
   prepareCodexPetExtraImageCall,
+  refundCodexPetFailedExtraCall,
 } from "./codex-pet-call-ledger.js";
 import { callImageGenerationDetailed } from "./image-service.js";
 
@@ -46,14 +50,25 @@ function createLedgerPrisma(limit = 14) {
       findFirst: async ({ where }: { where: Record<string, unknown> }) => calls.find((call) => (
         call.runId === where.runId && call.jobKey === where.jobKey && call.callKind === where.callKind
       )) ?? null,
-      count: async ({ where }: { where: Record<string, unknown> }) => calls.filter((call) => (
-        call.runId === where.runId
-        && call.projectId === where.projectId
-        && call.userId === where.userId
-        && call.callKind === where.callKind
-        && (where.status === undefined || call.status === where.status)
-        && (where.sentAt === undefined || call.sentAt != null)
-      )).length,
+      count: async ({ where }: { where: Record<string, unknown> }) => calls.filter((call) => {
+        const statusFilter = where.status as string | { in?: readonly string[]; not?: string } | undefined;
+        const statusMatches = statusFilter === undefined
+          ? true
+          : typeof statusFilter === "string"
+            ? call.status === statusFilter
+            : statusFilter.in
+              ? statusFilter.in.includes(String(call.status))
+              : statusFilter.not !== undefined
+                ? call.status !== statusFilter.not
+                : true;
+        return call.runId === where.runId
+          && call.projectId === where.projectId
+          && call.userId === where.userId
+          && call.callKind === where.callKind
+          && (where.jobKey === undefined || call.jobKey === where.jobKey)
+          && statusMatches
+          && (where.sentAt === undefined || call.sentAt != null);
+      }).length,
       create: async ({ data }: { data: CallRow }) => {
         const row = { id: `call-${nextId++}`, ...data };
         calls.push(row);
@@ -66,9 +81,12 @@ function createLedgerPrisma(limit = 14) {
         return row;
       },
       updateMany: async ({ where, data }: { where: Record<string, unknown>; data: CallRow }) => {
-        const matched = calls.filter((call) => call.runId === where.runId
-          && call.jobKey === where.jobKey
-          && call.logicalAttempt === where.logicalAttempt);
+        const refundFilter = where.refundStatus as { not?: string } | undefined;
+        const matched = calls.filter((call) => (where.id === undefined || call.id === where.id)
+          && (where.runId === undefined || call.runId === where.runId)
+          && (where.jobKey === undefined || call.jobKey === where.jobKey)
+          && (where.logicalAttempt === undefined || call.logicalAttempt === where.logicalAttempt)
+          && (refundFilter?.not === undefined || (call.refundStatus ?? "none") !== refundFilter.not));
         matched.forEach((call) => Object.assign(call, data));
         return { count: matched.length };
       },
@@ -344,5 +362,242 @@ describe("Codex pet image-call ledger", () => {
     });
 
     expect(calls).toMatchObject([{ status: "failed", error: "[network/UND_ERR_SOCKET] fetch failed" }]);
+  });
+});
+
+/** One extra call already charged, at the given final status. */
+async function seedExtraCall(
+  prisma: PrismaClient,
+  jobKey: string,
+  logicalAttempt: number,
+  status: string,
+): Promise<void> {
+  await prepareCodexPetExtraImageCall({
+    prisma,
+    runId: "run-1",
+    projectId: "project-1",
+    userId: "user-1",
+    jobKey,
+    logicalAttempt,
+    requestedModel: "gpt-image-2",
+    resourceKey: "codex_pet_v2_package",
+    points: 200,
+  });
+  await prisma.codexPetImageCall.updateMany({
+    where: { runId: "run-1", jobKey, logicalAttempt },
+    data: { status, sentAt: status === "prepared" ? null : new Date() },
+  });
+}
+
+describe("Codex pet extra-call budget", () => {
+  it("stops approving repairs for one action once the per-job ceiling is reached", async () => {
+    const { prisma } = createLedgerPrisma();
+    for (let attempt = 2; attempt <= CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT + 1; attempt += 1) {
+      await seedExtraCall(prisma, "row-running-right", attempt, "succeeded");
+    }
+
+    const budget = await codexPetExtraCallBudget({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "row-running-right",
+    });
+
+    expect(budget.jobUsed).toBe(CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT);
+    expect(budget.exhausted).toBe("job");
+  });
+
+  /**
+   * The `老鼠猫` run spent 10 extra calls on a single row because each approval
+   * only raised that job's own maxAttempts. A budget that only counted the run
+   * total would still have allowed it.
+   */
+  it("would have refused the tenth repair of a single row", async () => {
+    const { prisma } = createLedgerPrisma();
+    let refusedAt: number | null = null;
+    for (let attempt = 2; attempt <= 11; attempt += 1) {
+      const budget = await codexPetExtraCallBudget({
+        prisma,
+        runId: "run-1",
+        projectId: "project-1",
+        userId: "user-1",
+        jobKey: "row-running-right",
+      });
+      if (budget.exhausted) { refusedAt = attempt; break; }
+      await seedExtraCall(prisma, "row-running-right", attempt, "succeeded");
+    }
+
+    expect(refusedAt).toBe(CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT + 2);
+  });
+
+  it("stops a defect that walks across actions at the per-run ceiling", async () => {
+    const { prisma } = createLedgerPrisma();
+    // Spread across enough distinct jobs that no single job hits its own cap.
+    let seeded = 0;
+    for (let job = 0; seeded < CODEX_PET_EXTRA_IMAGE_CALLS_PER_RUN_LIMIT; job += 1) {
+      for (let attempt = 2; attempt <= 3 && seeded < CODEX_PET_EXTRA_IMAGE_CALLS_PER_RUN_LIMIT; attempt += 1) {
+        await seedExtraCall(prisma, `row-${job}`, attempt, "succeeded");
+        seeded += 1;
+      }
+    }
+
+    const budget = await codexPetExtraCallBudget({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "row-fresh",
+    });
+
+    expect(budget.jobUsed).toBe(0);
+    expect(budget.runUsed).toBe(CODEX_PET_EXTRA_IMAGE_CALLS_PER_RUN_LIMIT);
+    expect(budget.exhausted).toBe("run");
+  });
+
+  /**
+   * A completed run needed 6 consecutive extras on `look-cardinals`, every one a
+   * socket failure. Those are refunded, so charging them against the repair
+   * budget would refuse legitimate repairs during a provider outage.
+   */
+  it("does not spend the budget on provider failures", async () => {
+    const { prisma } = createLedgerPrisma();
+    for (let attempt = 2; attempt <= 7; attempt += 1) {
+      await seedExtraCall(prisma, "look-cardinals", attempt, "failed");
+    }
+
+    const budget = await codexPetExtraCallBudget({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "look-cardinals",
+    });
+
+    expect(budget.jobUsed).toBe(0);
+    expect(budget.exhausted).toBeNull();
+  });
+
+  it("counts an in-flight extra call so a double approval cannot slip past the cap", async () => {
+    const { prisma } = createLedgerPrisma();
+    await seedExtraCall(prisma, "row-idle", 2, "dispatching");
+
+    const budget = await codexPetExtraCallBudget({
+      prisma,
+      runId: "run-1",
+      projectId: "project-1",
+      userId: "user-1",
+      jobKey: "row-idle",
+    });
+
+    expect(budget.jobUsed).toBe(1);
+  });
+});
+
+describe("Codex pet failed extra-call refund", () => {
+  it("refunds a charged extra call that failed at the provider", async () => {
+    const { prisma, calls } = createLedgerPrisma();
+    await seedExtraCall(prisma, "row-idle", 2, "failed");
+    const refundResource = vi.fn(async () => ({ success: true }));
+
+    const refunded = await refundCodexPetFailedExtraCall({
+      prisma,
+      billing: { refundResource },
+      runId: "run-1",
+      jobKey: "row-idle",
+      logicalAttempt: 2,
+    });
+
+    expect(refunded).toBe(true);
+    expect(refundResource).toHaveBeenCalledWith("codex-pet:run:run-1:image:row-idle:2:extra");
+    expect(calls).toMatchObject([{ refundStatus: "refunded" }]);
+  });
+
+  it("never refunds a call that produced an image", async () => {
+    const { prisma } = createLedgerPrisma();
+    await seedExtraCall(prisma, "row-idle", 2, "succeeded");
+    const refundResource = vi.fn(async () => ({ success: true }));
+
+    const refunded = await refundCodexPetFailedExtraCall({
+      prisma,
+      billing: { refundResource },
+      runId: "run-1",
+      jobKey: "row-idle",
+      logicalAttempt: 2,
+    });
+
+    expect(refunded).toBe(false);
+    expect(refundResource).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Planned calls are covered by the run reservation and drop out of the settled
+   * units, so refunding them here would return points twice.
+   */
+  it("leaves a failed planned call to the settlement path", async () => {
+    const { prisma } = createLedgerPrisma();
+    await prepareCodexPetImageCallDispatch({ ...baseInput, prisma, runId: "run-1", jobKey: "row-idle", logicalAttempt: 1 });
+    await markCodexPetImageCallSent({ ...baseInput, prisma, runId: "run-1", jobKey: "row-idle", logicalAttempt: 1 });
+    await completeCodexPetImageCall({ prisma, runId: "run-1", jobKey: "row-idle", logicalAttempt: 1, error: new Error("boom") });
+    const refundResource = vi.fn(async () => ({ success: true }));
+
+    const refunded = await refundCodexPetFailedExtraCall({
+      prisma,
+      billing: { refundResource },
+      runId: "run-1",
+      jobKey: "row-idle",
+      logicalAttempt: 1,
+    });
+
+    expect(refunded).toBe(false);
+    expect(refundResource).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent so a retry cannot refund twice", async () => {
+    const { prisma } = createLedgerPrisma();
+    await seedExtraCall(prisma, "row-idle", 2, "failed");
+    const refundResource = vi.fn(async () => ({ success: true }));
+    const args = { prisma, billing: { refundResource }, runId: "run-1", jobKey: "row-idle", logicalAttempt: 2 } as const;
+
+    await refundCodexPetFailedExtraCall(args);
+    const second = await refundCodexPetFailedExtraCall(args);
+
+    expect(second).toBe(true);
+    expect(refundResource).toHaveBeenCalledTimes(1);
+  });
+
+  it("records a retryable receipt when the refund call fails", async () => {
+    const { prisma, calls } = createLedgerPrisma();
+    await seedExtraCall(prisma, "row-idle", 2, "failed");
+    const refundResource = vi.fn(async () => { throw new Error("billing down"); });
+
+    const refunded = await refundCodexPetFailedExtraCall({
+      prisma,
+      billing: { refundResource },
+      runId: "run-1",
+      jobKey: "row-idle",
+      logicalAttempt: 2,
+    });
+
+    expect(refunded).toBe(false);
+    expect(calls[0]).toMatchObject({ refundStatus: "pending" });
+    expect(String(calls[0]!.refundError)).toContain("billing down");
+  });
+
+  it("treats a rejected refund as unfinished rather than done", async () => {
+    const { prisma, calls } = createLedgerPrisma();
+    await seedExtraCall(prisma, "row-idle", 2, "failed");
+    const refundResource = vi.fn(async () => ({ success: false }));
+
+    const refunded = await refundCodexPetFailedExtraCall({
+      prisma,
+      billing: { refundResource },
+      runId: "run-1",
+      jobKey: "row-idle",
+      logicalAttempt: 2,
+    });
+
+    expect(refunded).toBe(false);
+    expect(calls[0]).toMatchObject({ refundStatus: "pending" });
   });
 });

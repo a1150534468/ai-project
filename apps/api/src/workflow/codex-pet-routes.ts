@@ -27,6 +27,7 @@ import {
 import {
   CODEX_PET_PER_IMAGE_BILLING_MODE,
   CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+  codexPetExtraCallBudget,
   prepareCodexPetExtraImageCall,
 } from "./codex-pet-call-ledger.js";
 import { CODEX_PET_GPT_FAILED_CONTINUATION_SCHEMA_VERSION } from "./codex-pet-gpt-continuation.js";
@@ -1033,6 +1034,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         || !result.run.billingResourceKey
         || !billing.settleResource) return result;
       try {
+        // Must match the runner and the sweeper exactly: a planned call that
+        // failed at the provider delivered no image and is not settled.
         const units = await prisma.codexPetImageCall.count({
           where: {
             runId: result.run.id,
@@ -1040,6 +1043,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
             userId: result.run.userId,
             callKind: "planned",
             sentAt: { not: null },
+            status: { not: "failed" },
           },
         });
         const receipt = await billing.settleResource({
@@ -2357,6 +2361,25 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       }
       const job = await prisma.codexPetJob.findFirst({ where: { runId: run.id, projectId: project.id, userId, key: run.pendingImageJobKey } });
       if (!job) return reply.code(409).send({ error: "等待批准的动作不存在" });
+      // Each approval used to raise only this job's own maxAttempts, so a row
+      // that kept failing could be re-approved without bound. Refused before
+      // charging, and counted from paid ledger rows so refunded transport
+      // failures do not consume the budget.
+      const budget = await codexPetExtraCallBudget({
+        prisma,
+        runId: run.id,
+        projectId: project.id,
+        userId,
+        jobKey: job.key,
+      });
+      if (budget.exhausted) {
+        return reply.code(409).send({
+          error: budget.exhausted === "job"
+            ? `该动作的额外生图次数已达上限（${budget.jobLimit} 次），请改用失败续跑或复制为新工作`
+            : `本次运行的额外生图次数已达上限（${budget.runLimit} 次），请改用失败续跑或复制为新工作`,
+          data: { extraCallBudget: budget },
+        });
+      }
       const logicalAttempt = Math.max(1, job.attempt + 1);
       let preparedExtra: { readonly operationId: string; readonly created: boolean } | undefined;
       try {

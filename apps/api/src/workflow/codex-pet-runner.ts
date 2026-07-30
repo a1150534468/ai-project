@@ -64,6 +64,7 @@ import {
   completeCodexPetImageCall,
   markCodexPetImageCallSent,
   prepareCodexPetImageCallDispatch,
+  refundCodexPetFailedExtraCall,
 } from "./codex-pet-call-ledger.js";
 import { codexPetGptFailedContinuationSnapshot } from "./codex-pet-gpt-continuation.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
@@ -679,6 +680,30 @@ async function completeImageGenerationAttempt(
     upstreamRequestId: result?.upstreamRequestId ?? failure?.upstreamRequestId,
     error,
   });
+  if (!failure) return;
+  // Extra calls are charged independently at approval time, so a provider
+  // failure has already taken the user's points for an image they never got.
+  // Best-effort on purpose: the refund receipt lives on the ledger row, so a
+  // billing outage here leaves a retryable record instead of failing the run.
+  const refunded = await refundCodexPetFailedExtraCall({
+    prisma: ctx.prisma,
+    billing: ctx.billing,
+    runId: ctx.runId,
+    jobKey,
+    logicalAttempt,
+  }).catch(() => false);
+  if (!refunded) return;
+  const run = await currentRun(ctx);
+  await ctx.appendEvent({
+    prisma: ctx.prisma,
+    runId: ctx.runId,
+    type: "image.call.refunded",
+    stage: run.progressStage,
+    progress: run.progressPercent,
+    message: `第 ${logicalAttempt} 次额外生图调用失败，已退回 ${ctx.perImageCallPoints} 积分`,
+    payload: { jobKey, logicalAttempt, points: ctx.perImageCallPoints },
+    jobKey,
+  }).catch(() => undefined);
 }
 
 async function consumeImageGenerationApproval(ctx: RunnerContext, jobKey: string): Promise<void> {
@@ -3347,6 +3372,10 @@ async function settlePerImageRunBilling(input: {
     throw new Error("Codex pet per-image billing settlement is unavailable");
   }
   if (run.billingSettlementStatus !== "reserved" && run.billingSettlementStatus !== "settle_failed") return;
+  // A call that failed at the provider delivered no image, so it is not settled:
+  // the completed `老鼠猫`-era run settled 12 units of which 9 had failed, billing
+  // the user 1800 points for nothing. `sentAt` still gates the count, so a call
+  // that never reached fetch stays free either way.
   const units = await input.prisma.codexPetImageCall.count({
     where: {
       runId: input.runId,
@@ -3354,6 +3383,7 @@ async function settlePerImageRunBilling(input: {
       userId: input.userId,
       callKind: "planned",
       sentAt: { not: null },
+      status: { not: "failed" },
     },
   });
   const receipt = await input.billing.settleResource({
@@ -3391,6 +3421,33 @@ async function settlePerImageBilling(ctx: RunnerContext, requireLease = true): P
     userId: ctx.project.userId,
     ...(requireLease ? { workerId: ctx.workerId } : {}),
   });
+}
+
+/**
+ * Settling is irreversible: every resume path (worker eligibility, extra-call
+ * approval, failed continuation) requires billingSettlementStatus="reserved",
+ * so settling a failed run condemns it permanently even when its paid artifacts
+ * are intact and the only defect was a fixable bug. A failure therefore must
+ * not settle; the worker maintenance sweeper closes the reservation after a
+ * grace window if nobody resumed the run.
+ *
+ * The one exception is a failure that never sent a paid call: there is nothing
+ * to resume and nothing was spent, so releasing the hold at once is strictly
+ * better for the user than freezing their points for the whole window.
+ */
+async function settlePerImageBillingOnFailure(ctx: RunnerContext): Promise<"settled" | "deferred"> {
+  const sentPlannedCalls = await ctx.prisma.codexPetImageCall.count({
+    where: {
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      callKind: "planned",
+      sentAt: { not: null },
+    },
+  });
+  if (sentPlannedCalls > 0) return "deferred";
+  await settlePerImageBilling(ctx, false);
+  return "settled";
 }
 
 async function recordPerImageSettlementFailure(ctx: RunnerContext, error: unknown): Promise<void> {
@@ -3457,6 +3514,18 @@ async function finalizeClaimedSetupFailure(input: {
   await input.appendEvent({ prisma: input.prisma, runId: input.runId, type: "run.failed", stage: "failed", progress: outcome.run?.progressPercent ?? 0, message, payload: { retryable: false } }).catch(() => undefined);
   if (outcome.run?.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
     try {
+      // Same rule as settlePerImageBillingOnFailure: only a failure that spent
+      // nothing may settle here, because settling closes every resume path.
+      const sentPlannedCalls = await input.prisma.codexPetImageCall.count({
+        where: {
+          runId: input.runId,
+          projectId: input.project.id,
+          userId: input.project.userId,
+          callKind: "planned",
+          sentAt: { not: null },
+        },
+      });
+      if (sentPlannedCalls > 0) return;
       await settlePerImageRunBilling({
         prisma: input.prisma,
         billing: input.billing,
@@ -3554,7 +3623,13 @@ async function finalizeFailure(ctx: RunnerContext, error: unknown): Promise<void
   }).catch(() => undefined);
   if (ctx.perImageBilling) {
     try {
-      await settlePerImageBilling(ctx, false);
+      const settlementOutcome = await settlePerImageBillingOnFailure(ctx);
+      if (settlementOutcome === "deferred") {
+        await emit(ctx, "billing.settlement_deferred", "failed", outcome.run?.progressPercent ?? 0,
+          "本次失败未结清调用额度，已付费素材仍可在续跑窗口期内复用", {
+            reason: "failure_is_resumable",
+          }).catch(() => undefined);
+      }
     } catch (billingError) {
       await recordPerImageSettlementFailure(ctx, billingError);
     }

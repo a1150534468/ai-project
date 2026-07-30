@@ -4,163 +4,139 @@ import {
   articleWorkflowPlatformConfig,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowPlatform,
-  type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
-import { RippleButton } from "../../motion";
 import type { ArticleWorkflowPricing } from "../../workflowArticleApi";
 import { articleWorkflowPricingText } from "./articleWorkflowStudioModel";
+import { SubmitCostBar } from "./SubmitCostBar";
 
 interface ArticleWorkflowInputPanelProps {
-  readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly selectedPlatforms: readonly ArticleWorkflowPlatform[];
-  readonly sourceText: string;
   readonly pricing: ArticleWorkflowPricing | null;
   readonly creating: boolean;
   readonly canGenerate: boolean;
-  readonly onSourceFormatChange: (value: ArticleWorkflowSourceFormat) => void;
   readonly onGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
   readonly onTogglePlatform: (value: ArticleWorkflowPlatform) => void;
-  readonly onSourceTextChange: (value: string) => void;
   readonly onGenerate: () => void;
+  readonly onClose?: () => void;
 }
 
-const SOURCE_OPTIONS: readonly { key: ArticleWorkflowSourceFormat; label: string }[] = [
-  { key: "plain-text", label: "纯文本" },
-  { key: "markdown", label: "Markdown" },
-];
-
-const MODE_OPTIONS: readonly { key: ArticleWorkflowGenerationMode; label: string; description: string }[] = [
-  { key: "preserve-text", label: "保持原文排版", description: "只做排版和配图，不改正文可见文字。" },
-  { key: "polish-text", label: "AI 润色后排版", description: "允许先润色再排版，适合重写语气和结构。" },
+const MODE_OPTIONS: readonly { key: ArticleWorkflowGenerationMode; label: string }[] = [
+  { key: "preserve-text", label: "保持原文" },
+  { key: "polish-text", label: "AI 润色" },
 ];
 
 const PLATFORM_HINTS: Record<ArticleWorkflowPlatform, string> = {
-  wechat: "排版正文 + 配图，复制到公众号后台",
-  xiaohongshu: "标题 + 文案 + 标签，竖版配图",
-  douyin: "口播式文案 + 标签，9:16 配图",
+  wechat: "公众号正文与配图",
+  xiaohongshu: "标题、文案、标签与竖版配图",
+  douyin: "口播文案、标签与 9:16 配图",
 };
 
 export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps) {
   return (
-    <section className="grid gap-4">
-      <div className="rounded-[18px] border border-[#e7e9f0] bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.05)] sm:p-6">
-        <div className="flex flex-col gap-4">
-          <div className="space-y-1">
-            <h2 className="text-[28px] font-semibold leading-[1.3] text-[#14151a]">多平台图文工作流</h2>
-            <p className="text-sm leading-6 text-[#667085]">导入一篇文章，AI 自动配图、排版，一次生成公众号 / 小红书 / 抖音三个版本，生成后可继续编辑并一键复制。</p>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-[1fr_260px]">
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {SOURCE_OPTIONS.map((option) => (
-                  <button
-                    key={option.key}
-                    type="button"
-                    onClick={() => props.onSourceFormatChange(option.key)}
-                    className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${
-                      props.sourceFormat === option.key
-                        ? "bg-brand text-white"
-                        : "bg-[#f5f6fa] text-[#475467]"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-
-              <textarea
-                value={props.sourceText}
-                onChange={(event) => props.onSourceTextChange(event.target.value)}
-                rows={18}
-                className="min-h-[360px] w-full rounded-[16px] border border-[#d7dce5] bg-[#fbfcff] px-4 py-3 text-sm leading-7 text-[#1f2937] outline-none transition focus:border-brand"
-                placeholder={props.sourceFormat === "markdown" ? "粘贴 Markdown 内容" : "粘贴文章正文"}
-              />
-            </div>
-
-            <aside className="grid gap-4 rounded-[16px] border border-[#edf0f5] bg-[#f8f9fc] p-4">
-              <div className="space-y-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#14151a]">发布平台</h3>
-                  <p className="mt-1 text-xs text-[#8a8f98]">可多选，每个平台单独计费</p>
-                </div>
-                {ARTICLE_WORKFLOW_PLATFORMS.map((platform) => {
-                  const checked = props.selectedPlatforms.includes(platform);
-                  const config = articleWorkflowPlatformConfig(platform);
-                  return (
-                    <button
-                      key={platform}
-                      type="button"
-                      role="checkbox"
-                      aria-checked={checked}
-                      onClick={() => props.onTogglePlatform(platform)}
-                      className={`flex w-full items-start gap-3 rounded-[14px] border px-4 py-3 text-left transition ${
-                        checked ? "border-brand bg-white shadow-sm" : "border-[#dde3ec] bg-white/70"
-                      }`}
-                    >
-                      <Icon
-                        icon={checked ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}
-                        className={`mt-0.5 shrink-0 text-lg ${checked ? "text-brand" : "text-[#98a2b3]"}`}
-                        aria-hidden
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-[#1d2433]">{config.label}</span>
-                        <span className="mt-1 block text-xs leading-5 text-[#667085]">{PLATFORM_HINTS[platform]}</span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* 生成方式只对公众号有效：小红书/抖音本来就是重写文案 */}
-              {props.selectedPlatforms.includes("wechat") && (
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-[#14151a]">公众号生成方式</h3>
-                  {MODE_OPTIONS.map((option) => (
-                    <button
-                      key={option.key}
-                      type="button"
-                      onClick={() => props.onGenerationModeChange(option.key)}
-                      className={`w-full rounded-[14px] border px-4 py-3 text-left transition ${
-                        props.generationMode === option.key
-                          ? "border-brand bg-white shadow-sm"
-                          : "border-[#dde3ec] bg-white/70"
-                      }`}
-                    >
-                      <div className="text-sm font-semibold text-[#1d2433]">{option.label}</div>
-                      <div className="mt-1 text-xs leading-5 text-[#667085]">{option.description}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="rounded-[14px] border border-[#e5e8ef] bg-white p-4">
-                <div className="text-sm font-semibold text-[#14151a]">计费说明</div>
-                <div className="mt-2 text-xs leading-6 text-[#667085]">
-                  文本生成：{articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}
-                  <br />
-                  配图生成：{articleWorkflowPricingText(props.pricing?.image1k, "1K 生图价格")}
-                  <br />
-                  已选 {props.selectedPlatforms.length} 个平台，按平台分别扣费。
-                  <br />
-                  生成失败自动退费。
-                </div>
-              </div>
-
-              <RippleButton
-                type="button"
-                onClick={props.onGenerate}
-                disabled={!props.canGenerate}
-                className="flex h-11 items-center justify-center gap-2 rounded-[12px] bg-brand px-4 text-sm font-semibold text-white disabled:bg-brand/40"
-              >
-                <Icon icon={props.creating ? "mdi:loading" : "mdi:auto-fix"} className={props.creating ? "animate-spin" : ""} aria-hidden />
-                {props.creating ? "提交中" : `生成 ${props.selectedPlatforms.length} 个平台图文`}
-              </RippleButton>
-            </aside>
+    <section className="flex h-full min-h-0 flex-col bg-white" aria-label="图文生成配置">
+      <div className="flex h-14 flex-none items-center justify-between gap-2 border-b border-[#e5e7eb] px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand-ink">
+            <Icon icon="mdi:tune-variant" className="text-lg" aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="truncate text-sm font-semibold text-[#1d1d1f]">生成配置</h2>
+            <p className="mt-0.5 truncate text-[10px] text-[#8a8a8f]">创建平台图文</p>
           </div>
         </div>
+        {props.onClose && (
+          <button
+            type="button"
+            onClick={props.onClose}
+            aria-label="关闭生成配置"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7]"
+          >
+            <Icon icon="mdi:close" className="text-lg" aria-hidden />
+          </button>
+        )}
       </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin]">
+        <fieldset>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <legend className="text-xs font-semibold text-[#1d1d1f]">发布平台</legend>
+            <span className="text-[10px] text-[#8a8a8f]">可多选</span>
+          </div>
+          <div className="overflow-hidden rounded-lg border border-[#d2d2d7] bg-white">
+            {ARTICLE_WORKFLOW_PLATFORMS.map((platform) => {
+              const checked = props.selectedPlatforms.includes(platform);
+              const config = articleWorkflowPlatformConfig(platform);
+              return (
+                <button
+                  key={platform}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={checked}
+                  title={PLATFORM_HINTS[platform]}
+                  onClick={() => props.onTogglePlatform(platform)}
+                  className={`flex h-10 w-full items-center gap-2.5 border-b border-[#e8e8ed] px-3 text-left transition last:border-b-0 ${
+                    checked ? "bg-brand-soft" : "bg-white hover:bg-[#f7f8fa]"
+                  }`}
+                >
+                  <Icon
+                    icon={checked ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}
+                    className={`shrink-0 text-lg ${checked ? "text-brand" : "text-[#8a8a8f]"}`}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1d1d1f]">{config.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </fieldset>
+
+        {props.selectedPlatforms.includes("wechat") && (
+          <fieldset className="mt-4">
+            <legend className="mb-2 text-xs font-semibold text-[#1d1d1f]">公众号生成方式</legend>
+            <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">
+              {MODE_OPTIONS.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={props.generationMode === option.key}
+                  onClick={() => props.onGenerationModeChange(option.key)}
+                  className={`h-9 rounded-md px-2 text-xs font-semibold transition ${
+                    props.generationMode === option.key
+                      ? "bg-white text-[#1d1d1f] shadow-sm"
+                      : "text-[#6e6e73]"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        <details className="group mt-4 border-t border-[#e5e7eb] pt-3">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-[#6e6e73] marker:content-none">
+            <span>计费规则</span>
+            <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
+          </summary>
+          <p className="mt-2 text-[11px] leading-5 text-[#8a8a8f]">
+            文本 {articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}；配图 {articleWorkflowPricingText(props.pricing?.image1k, "按 1K 生图价格")}。失败任务自动退费。
+          </p>
+        </details>
+      </div>
+
+      <SubmitCostBar
+        estimatedPointCost={null}
+        costLabel="计费方式"
+        costValue={`${props.selectedPlatforms.length} 个平台分别计费`}
+        submitLabel={`生成 ${props.selectedPlatforms.length} 个平台图文`}
+        submitIcon="mdi:auto-fix"
+        submitDisabled={!props.canGenerate}
+        busy={props.creating}
+        busyLabel="提交中"
+        onSubmit={props.onGenerate}
+      />
     </section>
   );
 }

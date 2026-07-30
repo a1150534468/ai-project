@@ -12,6 +12,33 @@ export interface PixelBounds {
   readonly bottom: number;
 }
 
+/** Longest uninterrupted foreground run along each slot border, in pixels. */
+export interface BorderContactRuns {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/** One enclosed transparent region fully surrounded by retained foreground. */
+export interface EnclosedRegionDiagnostics {
+  readonly pixels: number;
+  /**
+   * Centroid distance to the nearest silhouette bounding-box side, as a fraction
+   * of the smaller bounding-box dimension. Reported for offline triage only: it
+   * was evaluated as a way to tell a normal gap from a slice through the body and
+   * does not separate them (both land at 0.20-0.29 on real boards), so no rule
+   * reads it.
+   */
+  readonly insetRatio: number;
+}
+
+export interface ForegroundComponentDiagnostics {
+  readonly pixels: number;
+  readonly bounds: PixelBounds;
+  readonly edgePixels: number;
+}
+
 export interface FrameDiagnostics {
   readonly index: number;
   readonly sourceBounds: PixelBounds | null;
@@ -22,6 +49,11 @@ export interface FrameDiagnostics {
   /** Fraction of the source slot removed (or softened) as the requested chroma key. */
   readonly chromaCoverage: number | null;
   readonly normalizedBounds: PixelBounds | null;
+  /** Per-border contact detail. `edgePixels` alone cannot separate a real
+   * clipped pose from a few pixels of neighbouring-slot bleed. */
+  readonly borderContactRuns: BorderContactRuns;
+  readonly enclosedRegions: readonly EnclosedRegionDiagnostics[];
+  readonly foregroundComponents: readonly ForegroundComponentDiagnostics[];
   readonly errors: readonly string[];
   readonly warnings: readonly string[];
 }
@@ -55,11 +87,65 @@ export interface ExtractPoseBoardOptions {
   readonly allowMultipleForegroundComponents?: boolean;
   /** Deliberate opt-in for designs with intentional enclosed negative space, such as a ring body. */
   readonly allowTransparentHoles?: boolean;
+  /**
+   * How aggressively per-frame cosmetic findings fail the whole board.
+   *
+   * A board verdict is the conjunction of every frame, so an 8-frame board only
+   * passes when all 8 pass. A rule with a 3% per-frame false-positive rate
+   * therefore fails ~22% of boards it should have accepted, and each rejection
+   * costs a full paid regeneration of all 8 poses. `tolerant` keeps hard errors
+   * for defects that provably break the atlas (empty frame, clipped pose, bad
+   * chroma, unusable geometry) and reports cosmetic residue as warnings.
+   */
+  readonly frameStrictness?: FrameStrictness;
 }
+
+/**
+ * `strict` fails a frame on any border contact, any extra opaque island and any
+ * enclosed transparent area over 2% of the sprite. Useful for regression tests
+ * and for re-auditing a board offline, but too brittle to gate paid generation.
+ */
+export type FrameStrictness = "strict" | "tolerant";
+
+export const DEFAULT_FRAME_STRICTNESS: FrameStrictness = "tolerant";
+
+/**
+ * Tolerant-mode thresholds. Calibrated against 84 real frames from the
+ * `老鼠猫` incident, where 44 frames touched a slot border with a median of
+ * 0.065% of the sprite's own pixel count and no visible defect, while a
+ * genuinely clipped pose contacts a border along tens of percent of its length.
+ */
+export const FRAME_TOLERANCE = {
+  /**
+   * Border contact fails only past this fraction of that border's length.
+   * Measured: benign contact (a paw resting on the baseline) peaks at 12.1% of
+   * the border, while a deliberately clipped pose runs 50-61%. 30% sits in the
+   * empty band between the two.
+   */
+  maxBorderRunFraction: 0.3,
+  /** ...or past this fraction of the sprite's own pixel count, whichever hits first. */
+  maxBorderContactFraction: 0.006,
+  /** An extra island this small relative to the sprite may be neighbour bleed... */
+  maxBleedComponentFraction: 0.03,
+  /** ...if it also stays within this fraction of the slot, measured inward from
+   * the border it touches. Slot boundaries are pure arithmetic divisions with no
+   * printed gutter, so an adjacent pose routinely spills a few pixels across. */
+  maxBleedComponentDepthFraction: 0.08,
+  /**
+   * Total enclosed transparent area above this fraction of the sprite is a hard
+   * error. Measured: anatomically normal gaps in a running quadruped (the arch
+   * under an extended stride, the loop of a curled tail) reach 4.1% of the
+   * sprite, while a sliced-open body leaves 19%. Region inset was tried as a
+   * second discriminator and dropped: normal gaps and suspicious ones both sit
+   * at 0.20-0.29, so it separates nothing.
+   */
+  maxTotalEnclosedFraction: 0.08,
+} as const;
 
 export interface FrameInspectionOptions {
   readonly allowMultipleForegroundComponents?: boolean;
   readonly allowTransparentHoles?: boolean;
+  readonly frameStrictness?: FrameStrictness;
 }
 
 export interface PoseBoardGeometryDiagnostics {
@@ -109,8 +195,65 @@ interface AlphaAnalysis {
   readonly edgePixels: number;
   readonly componentCount: number;
   readonly internalTransparentPixels: number;
+  readonly borderContactRuns: BorderContactRuns;
+  readonly enclosedRegions: readonly EnclosedRegionDiagnostics[];
+  readonly components: readonly ForegroundComponentDiagnostics[];
+  /**
+   * Neighbour-bleed slivers erased under `dropNeighbourBleed`. They are gone
+   * from every other field, so the caller reports the finding from this count.
+   */
+  readonly removedBleedComponentCount: number;
   /** Source image with only proven detached generation residue removed. */
   readonly cleanedImage: Buffer | null;
+}
+
+const NO_BORDER_CONTACT: BorderContactRuns = { left: 0, right: 0, top: 0, bottom: 0 };
+
+function emptyAlphaAnalysis(): AlphaAnalysis {
+  return {
+    bounds: null,
+    opaquePixels: 0,
+    edgePixels: 0,
+    componentCount: 0,
+    internalTransparentPixels: 0,
+    borderContactRuns: NO_BORDER_CONTACT,
+    enclosedRegions: [],
+    components: [],
+    removedBleedComponentCount: 0,
+    cleanedImage: null,
+  };
+}
+
+/** Longest run of set mask values along one border walk. */
+function longestRun(length: number, isSet: (offset: number) => boolean): number {
+  let longest = 0;
+  let current = 0;
+  for (let offset = 0; offset < length; offset += 1) {
+    current = isSet(offset) ? current + 1 : 0;
+    if (current > longest) longest = current;
+  }
+  return longest;
+}
+
+/**
+ * Longest border contact run of the primary subject. Measured per label rather
+ * than on the merged mask: a neighbour-bleed sliver sitting on a border would
+ * otherwise report a long run and re-raise the edge error that the component
+ * rule just demoted, failing the frame for pixels nobody objects to.
+ */
+function measureBorderContactRuns(
+  labels: Int32Array,
+  primaryLabel: number,
+  width: number,
+  height: number,
+): BorderContactRuns {
+  const belongs = (index: number) => labels[index] === primaryLabel;
+  return {
+    left: longestRun(height, (y) => belongs(indexOf(0, y, width))),
+    right: longestRun(height, (y) => belongs(indexOf(width - 1, y, width))),
+    top: longestRun(width, (x) => belongs(indexOf(x, 0, width))),
+    bottom: longestRun(width, (x) => belongs(indexOf(x, height - 1, width))),
+  };
 }
 
 interface AlphaComponent {
@@ -283,7 +426,22 @@ function detachedDuplicateFragmentLabels(
   return new Set();
 }
 
-async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis> {
+interface AnalyzeAlphaOptions {
+  readonly minAlpha?: number;
+  /**
+   * Erase shallow neighbour-bleed slivers instead of merely retaining them.
+   *
+   * Only meaningful for a raw board slot, where the slot border is an arithmetic
+   * division shared with the adjacent pose. A retained sliver would otherwise
+   * widen `bounds`, skew the row's shared scale and survive into the atlas cell,
+   * where — now sitting away from the cell border — it no longer matches the
+   * bleed signature and re-raises as a hard error on the assembled sheet.
+   */
+  readonly dropNeighbourBleed?: boolean;
+}
+
+async function analyzeAlpha(input: Buffer, options: AnalyzeAlphaOptions = {}): Promise<AlphaAnalysis> {
+  const minAlpha = options.minAlpha ?? 24;
   const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const width = info.width;
   const height = info.height;
@@ -297,9 +455,7 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
       rawOpaquePixels += 1;
     }
   }
-  if (rawOpaquePixels === 0) {
-    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0, cleanedImage: null };
-  }
+  if (rawOpaquePixels === 0) return emptyAlphaAnalysis();
 
   const visited = new Uint8Array(mask.length);
   const labels = new Int32Array(mask.length);
@@ -368,7 +524,7 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
   const duplicateFragmentLabels = primary
     ? detachedDuplicateFragmentLabels(eligibleComponents, primary, width)
     : new Set<number>();
-  const retainedComponents = primary
+  const survivingComponents = primary
     ? eligibleComponents.filter((component) => (
         !isDetachedLineResidue(component, primary, width, height)
         && !isDetachedSpeckResidue(component, primary, width, height)
@@ -377,6 +533,15 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
         && !duplicateFragmentLabels.has(component.label)
       ))
     : [];
+  const bleedComponents = options.dropNeighbourBleed && primary
+    ? survivingComponents.filter((component) => (
+        component.label !== primary.label
+        && looksLikeNeighbourBleed(component, primary, width, height)
+      ))
+    : [];
+  const bleedLabels = new Set(bleedComponents.map((component) => component.label));
+  const retainedComponents = survivingComponents.filter((component) => !bleedLabels.has(component.label));
+  const removedBleedComponentCount = bleedComponents.length;
   const retainedLabels = new Set(retainedComponents.map((component) => component.label));
   let left = width;
   let right = -1;
@@ -405,9 +570,7 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
     data[offset + 2] = 0;
     data[offset + 3] = 0;
   }
-  if (opaquePixels === 0) {
-    return { bounds: null, opaquePixels: 0, edgePixels: 0, componentCount: 0, internalTransparentPixels: 0, cleanedImage: null };
-  }
+  if (opaquePixels === 0) return emptyAlphaAnalysis();
 
   // Flood transparent pixels from the foreground bounding-box edge; remaining transparent pixels are holes.
   const transparentVisited = new Uint8Array(mask.length);
@@ -443,23 +606,179 @@ async function analyzeAlpha(input: Buffer, minAlpha = 24): Promise<AlphaAnalysis
       queue[tail++] = neighbor;
     }
   }
+  // Group the enclosed transparent pixels into regions. The total alone cannot
+  // tell one wide slice through a filled body from several small anatomical
+  // gaps, and those two cases deserve opposite verdicts.
+  const boundsWidth = right - left + 1;
+  const boundsHeight = bottom - top + 1;
+  const shorterBoundsSide = Math.max(1, Math.min(boundsWidth, boundsHeight));
+  const regionVisited = new Uint8Array(mask.length);
+  const enclosedRegions: EnclosedRegionDiagnostics[] = [];
   let internalTransparentPixels = 0;
+  const isEnclosed = (index: number): boolean => !retainedMask[index] && !transparentVisited[index];
   for (let y = top; y <= bottom; y += 1) {
     for (let x = left; x <= right; x += 1) {
-      const index = indexOf(x, y, width);
-      if (!retainedMask[index] && !transparentVisited[index]) internalTransparentPixels += 1;
+      const seed = indexOf(x, y, width);
+      if (!isEnclosed(seed) || regionVisited[seed]) continue;
+      let head = 0;
+      let tail = 0;
+      let sumX = 0;
+      let sumY = 0;
+      queue[tail++] = seed;
+      regionVisited[seed] = 1;
+      while (head < tail) {
+        const current = queue[head++]!;
+        const cx = current % width;
+        const cy = Math.floor(current / width);
+        sumX += cx;
+        sumY += cy;
+        const neighbors = [
+          cx > left ? current - 1 : -1,
+          cx < right ? current + 1 : -1,
+          cy > top ? current - width : -1,
+          cy < bottom ? current + width : -1,
+        ];
+        for (const neighbor of neighbors) {
+          if (neighbor < 0 || regionVisited[neighbor] || !isEnclosed(neighbor)) continue;
+          regionVisited[neighbor] = 1;
+          queue[tail++] = neighbor;
+        }
+      }
+      internalTransparentPixels += tail;
+      const centroidX = sumX / tail;
+      const centroidY = sumY / tail;
+      const insetPixels = Math.min(centroidX - left, right - centroidX, centroidY - top, bottom - centroidY);
+      enclosedRegions.push({ pixels: tail, insetRatio: insetPixels / shorterBoundsSide });
     }
   }
+  enclosedRegions.sort((a, b) => b.pixels - a.pixels);
   return {
-    bounds: { left, top, right, bottom, width: right - left + 1, height: bottom - top + 1 },
+    bounds: { left, top, right, bottom, width: boundsWidth, height: boundsHeight },
     opaquePixels,
     edgePixels,
     componentCount,
     internalTransparentPixels,
+    borderContactRuns: measureBorderContactRuns(
+      labels,
+      retainedComponents.reduce((best, component) => (
+        !best || component.pixels > best.pixels ? component : best
+      ), null as AlphaComponent | null)?.label ?? -1,
+      width,
+      height,
+    ),
+    enclosedRegions,
+    components: retainedComponents.map((component) => ({
+      pixels: component.pixels,
+      bounds: component.bounds,
+      edgePixels: component.edgePixels,
+    })),
+    removedBleedComponentCount,
     cleanedImage: removedComponentPixels > 0
       ? await sharp(data, { raw: { width, height, channels: info.channels } }).png().toBuffer()
       : null,
   };
+}
+
+interface FrameFinding {
+  readonly code: string;
+  readonly severity: "error" | "warning";
+}
+
+/**
+ * Does this extra island look like a neighbouring pose bleeding over the slot
+ * boundary rather than a defect in this pose?
+ *
+ * Slot boundaries are arithmetic divisions of the source board with no printed
+ * gutter, so a wide adjacent pose commonly leaves a shallow sliver against the
+ * shared border. A genuine second subject, a severed limb or a stray effect
+ * either sits away from the border or is far too large to qualify.
+ *
+ * A match is erased from the slot (see `dropNeighbourBleed`), not just demoted:
+ * carrying it forward widens the crop and hands the assembled atlas a second
+ * component that no longer looks like bleed, which fails the whole sheet.
+ */
+function looksLikeNeighbourBleed(
+  component: ForegroundComponentDiagnostics,
+  primary: ForegroundComponentDiagnostics,
+  slotWidth: number,
+  slotHeight: number,
+): boolean {
+  if (component === primary || component.edgePixels === 0 || primary.pixels === 0) return false;
+  if (component.pixels > primary.pixels * FRAME_TOLERANCE.maxBleedComponentFraction) return false;
+  const depths: number[] = [];
+  if (component.bounds.left === 0) depths.push(component.bounds.right + 1);
+  if (component.bounds.right === slotWidth - 1) depths.push(slotWidth - component.bounds.left);
+  if (component.bounds.top === 0) depths.push(component.bounds.bottom + 1);
+  if (component.bounds.bottom === slotHeight - 1) depths.push(slotHeight - component.bounds.top);
+  if (depths.length === 0) return false;
+  const horizontalLimit = slotWidth * FRAME_TOLERANCE.maxBleedComponentDepthFraction;
+  const verticalLimit = slotHeight * FRAME_TOLERANCE.maxBleedComponentDepthFraction;
+  return Math.min(...depths) <= Math.max(horizontalLimit, verticalLimit);
+}
+
+/**
+ * Grade the three cosmetic findings that historically failed whole boards.
+ *
+ * `strict` reproduces the original zero-tolerance behaviour. `tolerant` keeps
+ * the same detectors but demands evidence proportional to the cost of a false
+ * positive: one rejected frame discards seven good ones and bills another full
+ * board.
+ */
+function classifyFrameFindings(
+  analysis: Pick<AlphaAnalysis, "opaquePixels" | "edgePixels" | "componentCount" | "internalTransparentPixels" | "borderContactRuns" | "enclosedRegions" | "components" | "removedBleedComponentCount">,
+  slotWidth: number,
+  slotHeight: number,
+  options: {
+    readonly strictness: FrameStrictness;
+    readonly allowMultipleForegroundComponents?: boolean;
+    readonly allowTransparentHoles?: boolean;
+    readonly edgeContactCode: string;
+  },
+): readonly FrameFinding[] {
+  const findings: FrameFinding[] = [];
+  const strict = options.strictness === "strict";
+
+  if (analysis.edgePixels > 0) {
+    const runs = analysis.borderContactRuns;
+    const longestVerticalRun = Math.max(runs.left, runs.right);
+    const longestHorizontalRun = Math.max(runs.top, runs.bottom);
+    const clipped = longestVerticalRun > slotHeight * FRAME_TOLERANCE.maxBorderRunFraction
+      || longestHorizontalRun > slotWidth * FRAME_TOLERANCE.maxBorderRunFraction
+      || analysis.edgePixels > analysis.opaquePixels * FRAME_TOLERANCE.maxBorderContactFraction;
+    findings.push({ code: options.edgeContactCode, severity: strict || clipped ? "error" : "warning" });
+  }
+
+  if (analysis.componentCount > 1) {
+    const primary = analysis.components.reduce<ForegroundComponentDiagnostics | null>(
+      (largest, component) => !largest || component.pixels > largest.pixels ? component : largest,
+      null,
+    );
+    const onlyNeighbourBleed = !strict
+      && Boolean(primary)
+      && analysis.components.every((component) => (
+        component === primary || looksLikeNeighbourBleed(component, primary!, slotWidth, slotHeight)
+      ));
+    findings.push({
+      code: "multiple-foreground-components",
+      severity: options.allowMultipleForegroundComponents || onlyNeighbourBleed ? "warning" : "error",
+    });
+  } else if (analysis.removedBleedComponentCount > 0) {
+    // The sliver is already erased, so nothing downstream can see it. Report it
+    // anyway: silently dropping pixels is exactly the failure mode that made
+    // this pipeline hard to debug.
+    findings.push({ code: "multiple-foreground-components", severity: "warning" });
+  }
+
+  if (analysis.internalTransparentPixels > Math.max(16, analysis.opaquePixels * 0.02)) {
+    const slicedBody = analysis.internalTransparentPixels
+      > analysis.opaquePixels * FRAME_TOLERANCE.maxTotalEnclosedFraction;
+    findings.push({
+      code: "possible-transparent-holes",
+      severity: options.allowTransparentHoles ? "warning" : strict || slicedBody ? "error" : "warning",
+    });
+  }
+
+  return findings;
 }
 
 async function transparentCanvas(width: number, height: number): Promise<Buffer> {
@@ -502,6 +821,7 @@ export async function extractPoseBoard(
     || minChromaCoverage < 0 || maxChromaCoverage > 1 || minChromaCoverage >= maxChromaCoverage) {
     throw new Error("Chroma coverage thresholds must satisfy 0 <= min < max <= 1");
   }
+  const strictness = options.frameStrictness ?? DEFAULT_FRAME_STRICTNESS;
   const maxHeightRatio = options.maxHeightRatio ?? 1.45;
   const maxWidthRatio = options.maxWidthRatio ?? 1.8;
   const maxBaselineSpreadPixels = options.maxBaselineSpreadPixels ?? 18;
@@ -529,7 +849,10 @@ export async function extractPoseBoard(
       threshold: options.chromaThreshold,
       feather: options.chromaFeather,
     });
-    const analysis = await analyzeAlpha(result.image);
+    // Bleed removal is a slot-only concern: the slot border is shared with the
+    // adjacent pose, whereas a normalized cell keeps padding on every side, so
+    // anything touching its border is a real overflow the safe-margin check owns.
+    const analysis = await analyzeAlpha(result.image, { dropNeighbourBleed: strictness !== "strict" });
     cleanedSlots.push(analysis.cleanedImage ?? result.image);
     slotWidths.push(right - left);
     slotHeights.push(bottom - top);
@@ -613,12 +936,13 @@ export async function extractPoseBoard(
       frameErrors.push("empty-frame");
       frames.push(await transparentCanvas(cellWidth, cellHeight));
     } else {
-      if (analysis.edgePixels > 0) frameErrors.push("source-touches-slot-edge");
-      if (analysis.componentCount > 1) {
-        (options.allowMultipleForegroundComponents ? frameWarnings : frameErrors).push("multiple-foreground-components");
-      }
-      if (analysis.internalTransparentPixels > Math.max(16, analysis.opaquePixels * 0.02)) {
-        (options.allowTransparentHoles ? frameWarnings : frameErrors).push("possible-transparent-holes");
+      for (const finding of classifyFrameFindings(analysis, usedSlotWidths[index]!, usedSlotHeights[index]!, {
+        strictness,
+        allowMultipleForegroundComponents: options.allowMultipleForegroundComponents,
+        allowTransparentHoles: options.allowTransparentHoles,
+        edgeContactCode: "source-touches-slot-edge",
+      })) {
+        (finding.severity === "error" ? frameErrors : frameWarnings).push(finding.code);
       }
       const targetWidth = Math.max(1, Math.round(analysis.bounds.width * sharedScale));
       const targetHeight = Math.max(1, Math.round(analysis.bounds.height * sharedScale));
@@ -652,6 +976,9 @@ export async function extractPoseBoard(
       internalTransparentPixels: analysis.internalTransparentPixels,
       chromaCoverage,
       normalizedBounds: normalized.bounds,
+      borderContactRuns: analysis.borderContactRuns,
+      enclosedRegions: analysis.enclosedRegions,
+      foregroundComponents: analysis.components,
       errors: frameErrors,
       warnings: frameWarnings,
     };
@@ -844,15 +1171,17 @@ export async function inspectFrame(
   options: FrameInspectionOptions = {},
 ): Promise<FrameDiagnostics> {
   const analysis = await analyzeAlpha(input);
+  const metadata = await sharp(input).metadata();
   const errors: string[] = [];
   const warnings: string[] = [];
   if (!analysis.bounds) errors.push("empty-frame");
-  if (analysis.edgePixels > 0) errors.push("touches-cell-edge");
-  if (analysis.componentCount > 1) {
-    (options.allowMultipleForegroundComponents ? warnings : errors).push("multiple-foreground-components");
-  }
-  if (analysis.internalTransparentPixels > Math.max(16, analysis.opaquePixels * 0.02)) {
-    (options.allowTransparentHoles ? warnings : errors).push("possible-transparent-holes");
+  for (const finding of classifyFrameFindings(analysis, metadata.width ?? PET_CELL_WIDTH, metadata.height ?? PET_CELL_HEIGHT, {
+    strictness: options.frameStrictness ?? DEFAULT_FRAME_STRICTNESS,
+    allowMultipleForegroundComponents: options.allowMultipleForegroundComponents,
+    allowTransparentHoles: options.allowTransparentHoles,
+    edgeContactCode: "touches-cell-edge",
+  })) {
+    (finding.severity === "error" ? errors : warnings).push(finding.code);
   }
   return {
     index,
@@ -863,6 +1192,9 @@ export async function inspectFrame(
     componentCount: analysis.componentCount,
     internalTransparentPixels: analysis.internalTransparentPixels,
     chromaCoverage: null,
+    borderContactRuns: analysis.borderContactRuns,
+    enclosedRegions: analysis.enclosedRegions,
+    foregroundComponents: analysis.components,
     errors,
     warnings,
   };

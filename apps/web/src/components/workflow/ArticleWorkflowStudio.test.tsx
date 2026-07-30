@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { ToastProvider } from "../../motion/Toast";
+import { ArticleWorkflowPlatformTabs } from "./ArticleWorkflowPlatformTabs";
 import { ArticleWorkflowStudio } from "./ArticleWorkflowStudio";
 
 function buildCaptionProject() {
@@ -56,6 +57,25 @@ function buildProject() {
 }
 
 describe("ArticleWorkflowStudio", () => {
+  it("renders the three platform switches as top-level tabs", () => {
+    const wechat = buildProject();
+    const xiaohongshu = buildCaptionProject();
+    const douyin = { ...buildCaptionProject(), id: "article-3", platform: "douyin" as const };
+    const html = renderToStaticMarkup(
+      <ArticleWorkflowPlatformTabs
+        projects={[wechat, xiaohongshu, douyin]}
+        activePlatform="wechat"
+        dirtyPlatforms={["xiaohongshu"]}
+        onSelectPlatform={() => undefined}
+      />,
+    );
+
+    expect(html.match(/role="tab"/g)).toHaveLength(3);
+    expect(html).toContain("公众号");
+    expect(html).toContain("小红书");
+    expect(html).toContain("抖音");
+  });
+
   it("renders the input state with text and markdown entry", () => {
     const html = renderToStaticMarkup(
       <ToastProvider>
@@ -68,7 +88,9 @@ describe("ArticleWorkflowStudio", () => {
       </ToastProvider>,
     );
 
-    expect(html).toContain("多平台图文工作流");
+    expect(html).toContain("创建平台图文");
+    expect(html).toContain("输入原文");
+    expect(html).toContain("项目历史");
     expect(html).toContain("纯文本");
     expect(html).toContain("Markdown");
     // 三个平台默认全选，按钮上带数量
@@ -77,6 +99,8 @@ describe("ArticleWorkflowStudio", () => {
     expect(html).toContain("小红书");
     expect(html).toContain("抖音");
     expect(html).toContain("公众号生成方式");
+    expect(html).toContain("xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]");
+    expect(html).not.toContain("xl:grid-cols-[220px_minmax(0,1fr)_300px]");
   });
 
   it("renders the editor state with preview and rewrite controls", () => {
@@ -108,15 +132,12 @@ describe("ArticleWorkflowStudio", () => {
 
     expect(html).toContain("保存修改");
     expect(html).toContain("一键复制到公众号");
-    expect(html).toContain("AI 重新生成");
+    expect(html).toContain("AI 重写");
     expect(html).toContain("配图素材");
     expect(html).toContain("预览");
-    // 公众号封面 1536x864 约到 16:9
-    expect(html).toContain("16:9");
-    expect(html).toContain("下载");
   });
 
-  it("renders the caption editor for xiaohongshu without html body controls", () => {
+  it("renders the xiaohongshu preview first without html body controls", () => {
     const project = buildCaptionProject();
     const html = renderToStaticMarkup(
       <ToastProvider>
@@ -130,15 +151,15 @@ describe("ArticleWorkflowStudio", () => {
     );
 
     expect(html).toContain("小红书");
-    expect(html).toContain("正文文案");
-    // 小红书硬限制：标题 20 字、正文 1000 字、标签 3-6 个
-    expect(html).toContain("/ 20 字");
-    expect(html).toContain("/ 1000 字");
-    expect(html).toContain("3-6 个");
+    expect(html).toContain("预览");
+    expect(html).toContain("编辑");
     expect(html).toContain("第一次用就回不去了。");
     expect(html).toContain("复制文案");
     expect(html).toContain("复制标签");
     expect(html).toContain("#咖啡机");
+    expect(html).toContain('aria-label="平台配图"');
+    expect(html).toContain("aspect-ratio:768 / 1024");
+    expect(html).not.toContain("mdi:image-outline");
     // caption 平台不给 HTML 正文相关入口
     expect(html).not.toContain("一键复制到公众号");
     expect(html).not.toContain("复制摘要");

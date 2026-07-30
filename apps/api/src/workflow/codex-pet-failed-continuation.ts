@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-runner.js";
 import { DOUBAO_IMAGE_MODEL } from "./image-service.js";
 
@@ -16,6 +17,41 @@ type JsonRecord = Record<string, unknown>;
 
 function record(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+export interface ContinuationBillingShape {
+  readonly billingMode: string;
+  readonly billingChargeStatus: string;
+  readonly billingRefundStatus: string;
+  readonly billingRefundedAt: Date | null;
+  readonly billingSettlementStatus: string;
+}
+
+/**
+ * A continuation must never replay work the user has not paid for, so each
+ * billing mode has its own proof that the money side is safe to reuse.
+ *
+ * Legacy package runs charge up front and refund on failure, so the proof is a
+ * completed refund. Per-image runs neither charge up front nor refund — they
+ * hold a reservation and settle once. For them the proof is an *unsettled*
+ * reservation: settlement is irreversible and closes every resume path, so a
+ * still-reserved run is exactly the one that can be continued. Requiring the
+ * legacy refund columns here (as this module originally did) rejected every
+ * per-image run, which is why a fixable failure had no continuation path at all.
+ */
+export function continuationBillingBlocked(run: ContinuationBillingShape): string | null {
+  if (run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
+    if (run.billingSettlementStatus !== "reserved") {
+      return "按次计费续跑只允许调用额度仍处于预留中的失败运行（已结清的运行不能续跑）";
+    }
+    return null;
+  }
+  if (run.billingChargeStatus !== "charged"
+    || run.billingRefundStatus !== "refunded"
+    || !run.billingRefundedAt) {
+    return "失败续跑只允许已退款的失败运行";
+  }
+  return null;
 }
 
 export interface CodexPetFailedContinuationInput {
@@ -79,15 +115,14 @@ export async function initializeCodexPetTargetedBoardRetry(
     }
     const snapshot = record(run.inputSnapshot);
     const existing = record(snapshot.targetedBoardRetry);
+    const targetedBillingBlocked = continuationBillingBlocked(run);
+    if (targetedBillingBlocked) throw new Error(targetedBillingBlocked);
     if (run.status !== "failed"
-      || run.billingChargeStatus !== "charged"
-      || run.billingRefundStatus !== "refunded"
-      || !run.billingRefundedAt
       || run.workerId
       || run.cancelRequested
       || run.project.latestRunId !== run.id
       || run.project.status !== "failed") {
-      throw new Error("定向动作续跑只允许当前已退款、无 lease 的失败运行");
+      throw new Error("定向动作续跑只允许当前无 lease、未取消的失败运行");
     }
     if (run.requestedModel !== DOUBAO_IMAGE_MODEL) {
       throw new Error("running-right 定向脚手架续跑只允许 Seedream 项目");
@@ -332,14 +367,13 @@ export async function initializeCodexPetFailedContinuation(
       }
     }
 
+    const billingBlocked = continuationBillingBlocked(run);
+    if (billingBlocked) throw new Error(billingBlocked);
     if (run.status !== "failed"
-      || run.billingChargeStatus !== "charged"
-      || run.billingRefundStatus !== "refunded"
-      || !run.billingRefundedAt
       || !run.billingActivatedAt
       || run.workerId
       || run.cancelRequested) {
-      throw new Error("失败续跑只允许已退款、无 lease 且未取消的失败运行");
+      throw new Error("失败续跑只允许已激活计费、无 lease 且未取消的失败运行");
     }
     if (run.project.latestRunId !== run.id
       || run.project.status !== "failed"

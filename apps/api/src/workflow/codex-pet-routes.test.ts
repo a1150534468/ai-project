@@ -5,6 +5,7 @@ import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
 import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
+import { CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT } from "./codex-pet-call-ledger.js";
 import {
   CODEX_PET_RESOURCE_KEY,
   codexPetRoutes,
@@ -1422,6 +1423,148 @@ describe("Codex pet routes", () => {
     }]);
     expect(state.jobs[0]).toMatchObject({ status: "queued", maxAttempts: 2, error: null });
     expect(state.runs[0]).toMatchObject({ status: "direction_generating", pendingImageJobKey: null });
+    expect(enqueueRun).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("refuses a repair past the per-job extra ceiling before charging anything", async () => {
+    const project = projectRow({ status: "awaiting_regeneration_approval", latestRunId: "run-1" });
+    const run = runRow({
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
+      progressPercent: 42,
+      pendingImageJobKey: "row-running-right",
+      billingMode: "per_image_call_v1",
+      billingResourceKey: CODEX_PET_RESOURCE_KEY,
+      billingSettlementStatus: "reserved",
+      billingReservedUnits: 14,
+      plannedImageCallLimit: 14,
+      billingChargeStatus: "reserved",
+    });
+    const job = {
+      id: "job-row-running-right",
+      projectId: project.id,
+      runId: run.id,
+      userId: "u1",
+      key: "row-running-right",
+      kind: "standard_row",
+      status: "awaiting_approval",
+      attempt: 1,
+      maxAttempts: 1 + CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT,
+      workerId: null,
+      completedAt: new Date(NOW),
+      error: "frame-has-border-contact",
+      createdAt: new Date(NOW),
+      updatedAt: new Date(NOW),
+    };
+    // The 老鼠猫 run spent ten paid repairs on this one row and still failed.
+    const imageCalls = Array.from({ length: CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT }, (_unused, index) => ({
+      id: `spent-extra-${index}`,
+      projectId: project.id,
+      runId: run.id,
+      userId: "u1",
+      jobKey: "row-running-right",
+      logicalAttempt: index + 2,
+      callKind: "extra",
+      purpose: "repair",
+      status: "succeeded",
+      operationId: `codex-pet:run:run-1:image:row-running-right:${index + 2}:extra`,
+      resourceKey: CODEX_PET_RESOURCE_KEY,
+      points: 200,
+      createdAt: new Date(NOW),
+      updatedAt: new Date(NOW),
+    }));
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [run], jobs: [job], imageCalls });
+    const billing = createBilling();
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, { billing, enqueueRun });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/${project.id}/runs/${run.id}/approve-next-image`,
+      headers: { ...auth, "idempotency-key": "extra-over-cap-0001" },
+      payload: { idempotencyKey: "extra-over-cap-0001" },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({
+      data: { extraCallBudget: { jobUsed: CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT, exhausted: "job" } },
+    });
+    expect(String(response.json().error)).toContain(String(CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT));
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(state.imageCalls).toHaveLength(CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT);
+    expect(state.runs[0]).toMatchObject({ status: "awaiting_regeneration_approval", pendingImageJobKey: "row-running-right" });
+    expect(state.jobs[0]).toMatchObject({ status: "awaiting_approval" });
+    expect(enqueueRun).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("still approves a repair when the exhausted extras were unpaid provider failures", async () => {
+    const project = projectRow({ status: "awaiting_regeneration_approval", latestRunId: "run-1" });
+    const run = runRow({
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
+      progressPercent: 42,
+      pendingImageJobKey: "row-idle",
+      billingMode: "per_image_call_v1",
+      billingResourceKey: CODEX_PET_RESOURCE_KEY,
+      billingSettlementStatus: "reserved",
+      billingReservedUnits: 14,
+      plannedImageCallLimit: 14,
+      billingChargeStatus: "reserved",
+    });
+    const job = {
+      id: "job-row-idle",
+      projectId: project.id,
+      runId: run.id,
+      userId: "u1",
+      key: "row-idle",
+      kind: "standard_row",
+      status: "awaiting_approval",
+      // The attempt counter advanced once per transport failure, which is
+      // exactly why the budget is read from the ledger and not from here.
+      attempt: 1 + CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT + 2,
+      maxAttempts: 1 + CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT + 2,
+      workerId: null,
+      completedAt: new Date(NOW),
+      error: "image relay socket hang up",
+      createdAt: new Date(NOW),
+      updatedAt: new Date(NOW),
+    };
+    // A refunded transport failure delivered no image, so it must not eat the
+    // repair budget: look-cardinals once burned six of these in a row.
+    const imageCalls = Array.from({ length: CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT + 2 }, (_unused, index) => ({
+      id: `failed-extra-${index}`,
+      projectId: project.id,
+      runId: run.id,
+      userId: "u1",
+      jobKey: "row-idle",
+      logicalAttempt: index + 2,
+      callKind: "extra",
+      purpose: "repair",
+      status: "failed",
+      refundStatus: "refunded",
+      operationId: `codex-pet:run:run-1:image:row-idle:${index + 2}:extra`,
+      resourceKey: CODEX_PET_RESOURCE_KEY,
+      points: 200,
+      createdAt: new Date(NOW),
+      updatedAt: new Date(NOW),
+    }));
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [run], jobs: [job], imageCalls });
+    const billing = createBilling();
+    const enqueueRun = vi.fn(async () => undefined);
+    const { app } = await createApp(prisma, { billing, enqueueRun });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/${project.id}/runs/${run.id}/approve-next-image`,
+      headers: { ...auth, "idempotency-key": "extra-after-failures-0001" },
+      payload: { idempotencyKey: "extra-after-failures-0001" },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    expect(state.imageCalls.filter((call) => call.status === "prepared")).toHaveLength(1);
     expect(enqueueRun).toHaveBeenCalledOnce();
     await app.close();
   });

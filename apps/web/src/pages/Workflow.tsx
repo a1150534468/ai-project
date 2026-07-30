@@ -126,7 +126,7 @@ function remainingImageCount(tasks: readonly ImageTask[]): number {
     .reduce((sum, task) => sum + Math.max(task.count - (task.completedCount ?? 0), 0), 0);
 }
 
-const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerce-long-image", "codex-pet"]);
+const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerce-long-image", "article-workflow", "codex-pet"]);
 
 export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument, menuVisibility }: WorkflowProps) {
   const toast = useToast();

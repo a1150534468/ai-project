@@ -653,6 +653,122 @@ describe("codex pet deterministic pipeline", () => {
     expect(nearbyPartDiagnostics.errors).toContain("multiple-foreground-components");
   });
 
+  it("keeps a baseline-resting paw as a warning while still failing a clipped pose", async () => {
+    // Calibration boundary: a paw resting on the slot baseline contacts the
+    // border along ~12% of its length. Failing that discards seven good poses
+    // and bills another board, so it must stay a warning.
+    const restingPaw = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <rect x="105" y="70" width="110" height="290" rx="30" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const resting = await inspectFrame(restingPaw);
+    expect(resting.borderContactRuns.bottom).toBeGreaterThan(0);
+    expect(resting.errors).not.toContain("touches-cell-edge");
+    expect(resting.warnings).toContain("touches-cell-edge");
+
+    // ...while a pose running down half the border is still a hard error.
+    const clipped = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <rect x="0" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const clippedDiagnostics = await inspectFrame(clipped);
+    expect(clippedDiagnostics.errors).toContain("touches-cell-edge");
+
+    // Strict mode keeps the original zero-tolerance behaviour for offline audits.
+    const audited = await inspectFrame(restingPaw, 0, { frameStrictness: "strict" });
+    expect(audited.errors).toContain("touches-cell-edge");
+  });
+
+  it("keeps an anatomically normal enclosed gap as a warning while failing a sliced body", async () => {
+    // Calibration boundary: gaps under a stride or inside a curled tail reach
+    // ~4% of the sprite on real boards; a body sliced open leaves ~19%.
+    const strideGap = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <path fill="#2459c7" fill-rule="evenodd" d="M60 60H260V300H60Z M120 140H176H120Z M120 140H182V196H120Z"/>
+    </svg>`) }]).png().toBuffer();
+    const stride = await inspectFrame(strideGap);
+    const strideFraction = stride.internalTransparentPixels / stride.opaquePixels;
+    expect(strideFraction).toBeGreaterThan(0.02);
+    expect(strideFraction).toBeLessThan(0.08);
+    expect(stride.errors).not.toContain("possible-transparent-holes");
+    expect(stride.warnings).toContain("possible-transparent-holes");
+  });
+
+  it("demotes shallow neighbour bleed but not a component reaching into the slot", async () => {
+    // Slot boundaries are arithmetic divisions with no printed gutter, so an
+    // adjacent pose routinely spills a few pixels across the shared border.
+    const bleed = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <rect x="60" y="60" width="180" height="240" rx="28" fill="#2459c7"/>
+      <rect x="0" y="150" width="9" height="60" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const bled = await inspectFrame(bleed);
+    expect(bled.componentCount).toBe(2);
+    expect(bled.errors).not.toContain("multiple-foreground-components");
+    expect(bled.warnings).toContain("multiple-foreground-components");
+
+    // A border-touching island that reaches well into the slot is not bleed.
+    const intruding = await sharp({
+      create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+      <rect x="120" y="60" width="180" height="240" rx="28" fill="#2459c7"/>
+      <rect x="0" y="150" width="80" height="60" fill="#2459c7"/>
+    </svg>`) }]).png().toBuffer();
+    const intrudingDiagnostics = await inspectFrame(intruding);
+    expect(intrudingDiagnostics.componentCount).toBe(2);
+    expect(intrudingDiagnostics.errors).toContain("multiple-foreground-components");
+  });
+
+  it("erases neighbour bleed from the normalized frame instead of passing it to the atlas", async () => {
+    // A demoted sliver that survives normalization widens the crop and lands in
+    // the atlas cell away from any border, where it no longer matches the bleed
+    // signature and fails the whole assembled sheet on a cosmetic artefact.
+    const board = await boardWithOverlays(2, 1, [{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">
+        <rect x="105" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+        <rect x="311" y="150" width="9" height="60" fill="#2459c7"/>
+        <rect x="425" y="70" width="110" height="240" rx="30" fill="#2459c7"/>
+      </svg>`),
+      left: 0,
+      top: 0,
+    }]);
+    const extracted = await extractPoseBoard(board, {
+      columns: 2,
+      rows: 1,
+      frameCount: 2,
+      chromaKey: "#ff00ff",
+    });
+
+    expect(extracted.ok).toBe(true);
+    expect(extracted.warnings).toContain("frame-0:multiple-foreground-components");
+    // Erased, so the crop is the subject alone and the atlas sees one component.
+    expect(extracted.diagnostics[0]!.sourceBounds).toEqual({
+      left: 105,
+      top: 70,
+      right: 214,
+      bottom: 309,
+      width: 110,
+      height: 240,
+    });
+    expect(extracted.diagnostics[0]!.componentCount).toBe(1);
+    expect(await inspectFrame(extracted.frames[0]!)).toMatchObject({ componentCount: 1, errors: [] });
+
+    // Strict keeps the original zero-tolerance behaviour: nothing is erased.
+    const strict = await extractPoseBoard(board, {
+      columns: 2,
+      rows: 1,
+      frameCount: 2,
+      chromaKey: "#ff00ff",
+      frameStrictness: "strict",
+    });
+    expect(strict.diagnostics[0]!.componentCount).toBe(2);
+    expect(strict.errors).toContain("frame-0:multiple-foreground-components");
+  });
+
   it("removes an aligned detached half-body duplicate without accepting a second subject", async () => {
     const duplicatedHalf = await sharp({
       create: { width: 320, height: 360, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },

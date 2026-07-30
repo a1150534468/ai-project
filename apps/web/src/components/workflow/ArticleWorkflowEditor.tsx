@@ -1,47 +1,29 @@
 import { Icon } from "@iconify/react";
-import type {
-  ArticleWorkflowGenerationMode,
-  ArticleWorkflowPlatform,
-  ArticleWorkflowPlatformConfig,
-} from "@ai-assistant/article-workflow";
-import { useState, type RefObject } from "react";
+import type { ArticleWorkflowPlatformConfig } from "@ai-assistant/article-workflow";
+import { useEffect, useState, type RefObject } from "react";
 import { RippleButton } from "../../motion";
-import type { ArticleWorkflowPricing, ArticleWorkflowProject } from "../../workflowArticleApi";
+import type { ArticleWorkflowProject } from "../../workflowArticleApi";
 import { ArticleWorkflowCaptionEditor } from "./ArticleWorkflowCaptionEditor";
-import { ArticleWorkflowImageAssetPanel } from "./ArticleWorkflowImageAssetPanel";
-import { ArticleWorkflowPlatformTabs } from "./ArticleWorkflowPlatformTabs";
 import { ArticleWorkflowPreview } from "./ArticleWorkflowPreview";
 import { ArticleWorkflowRichEditor } from "./ArticleWorkflowRichEditor";
 import {
-  articleWorkflowPricingText,
   formatArticleWorkflowStatus,
   formatArticleWorkflowTime,
 } from "./articleWorkflowStudioModel";
 
 interface ArticleWorkflowEditorProps {
   readonly project: ArticleWorkflowProject;
-  readonly batchProjects: readonly ArticleWorkflowProject[];
   readonly platformConfig: ArticleWorkflowPlatformConfig;
-  readonly dirtyPlatforms: readonly ArticleWorkflowPlatform[];
   readonly titleDraft: string;
   readonly summaryDraft: string;
   readonly bodyHtmlDraft: string;
   readonly captionDraft: string;
   readonly tagsDraft: readonly string[];
   readonly editorSyncKey: string;
-  readonly rewriteInstruction: string;
-  readonly rewriteGenerationMode: ArticleWorkflowGenerationMode;
-  readonly rewriteRegenerateImages: boolean;
-  readonly pricing: ArticleWorkflowPricing | null;
   readonly dirty: boolean;
   readonly saving: boolean;
-  readonly rewriting: boolean;
-  readonly retryingProjectId: string | null;
-  readonly regeneratingSlot: string | null;
   readonly canSave: boolean;
-  readonly canRewrite: boolean;
   readonly previewBodyRef: RefObject<HTMLDivElement | null>;
-  readonly onSelectPlatform: (platform: ArticleWorkflowPlatform) => void;
   readonly onTitleChange: (value: string) => void;
   readonly onSummaryChange: (value: string) => void;
   readonly onBodyHtmlChange: (value: string) => void;
@@ -54,259 +36,163 @@ interface ArticleWorkflowEditorProps {
   readonly onCopySummary: () => void;
   readonly onCopyCaption: () => void;
   readonly onCopyTags: () => void;
-  readonly onRewriteInstructionChange: (value: string) => void;
-  readonly onRewriteGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
-  readonly onRewriteRegenerateImagesChange: (value: boolean) => void;
-  readonly onRewrite: () => void;
-  readonly onRetry: (projectId: string) => void;
-  readonly onRegenerateImage: (slot: string) => void;
 }
 
 type CanvasMode = "edit" | "preview";
 
 export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
-  const [canvasMode, setCanvasMode] = useState<CanvasMode>("edit");
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>("preview");
   const captionPlatform = props.platformConfig.outputKind === "caption";
-  // 小红书标题只有 20 字，超了只标红不拦保存
   const titleOver = props.titleDraft.trim().length > props.platformConfig.titleMaxLength;
-  const failed = props.project.status === "failed";
-  const retrying = props.retryingProjectId === props.project.id;
+
+  useEffect(() => {
+    setCanvasMode("preview");
+  }, [props.project.id]);
 
   return (
-    <section className="grid gap-4">
-      <ArticleWorkflowPlatformTabs
-        projects={props.batchProjects}
-        activePlatform={props.project.platform}
-        dirtyPlatforms={props.dirtyPlatforms}
-        retryingProjectId={props.retryingProjectId}
-        onSelectPlatform={props.onSelectPlatform}
-        onRetry={props.onRetry}
-      />
-
-      {/* 失败原因原样展示：额度不足 / 权限这类不会自动重试，得让用户看见再决定 */}
-      {failed && (
-        <div
-          role="alert"
-          className="flex flex-col gap-3 rounded-[16px] border border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-red-700">
-              {props.platformConfig.label}生成失败
-            </p>
-            <p className="mt-1 break-words text-xs leading-5 text-red-600">
-              {props.project.error || "未知原因"}
-            </p>
+    <section className="flex min-h-full flex-col bg-[#f7f8fa]">
+      <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="hidden min-w-0 sm:block">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-md bg-[#f0f0f2] px-2 py-1 text-[11px] font-semibold text-[#6e6e73]">
+                {formatArticleWorkflowStatus(props.project.status)}
+              </span>
+              {props.saving && <span className="rounded-md bg-[#eef4ff] px-2 py-1 text-[11px] font-semibold text-[#2d63c8]">保存中</span>}
+              {!props.saving && props.dirty && <span className="rounded-md bg-[#fff4e8] px-2 py-1 text-[11px] font-semibold text-[#c26a12]">待保存</span>}
+            </div>
+            <p className="mt-1 truncate text-xs text-[#8a8a8f]">最近更新 {formatArticleWorkflowTime(props.project.updatedAt)}</p>
           </div>
-          <RippleButton
-            type="button"
-            onClick={() => props.onRetry(props.project.id)}
-            disabled={retrying}
-            className="flex h-9 shrink-0 items-center gap-2 rounded-[10px] bg-red-600 px-3.5 text-sm font-semibold text-white disabled:bg-red-300"
-          >
-            <Icon icon={retrying ? "mdi:loading" : "mdi:refresh"} className={retrying ? "animate-spin" : ""} aria-hidden />
-            {retrying ? "提交中" : "重新生成"}
-          </RippleButton>
-        </div>
-      )}
-
-      <div className="flex flex-col gap-3 rounded-[16px] border border-[#e7e9f0] bg-white px-4 py-3 shadow-[0_16px_40px_rgba(15,23,42,0.05)] xl:flex-row xl:items-center xl:justify-between">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-[#eef8f5] px-2.5 py-1 text-[11px] font-semibold text-brand-ink">{props.platformConfig.label}</span>
-            <span className="rounded-full bg-[#f5f6fa] px-2.5 py-1 text-[11px] font-semibold text-[#667085]">
-              {formatArticleWorkflowStatus(props.project.status)}
-            </span>
-            {props.saving && <span className="rounded-full bg-[#eef4ff] px-2.5 py-1 text-[11px] font-semibold text-[#2d63c8]">保存中</span>}
-            {!props.saving && props.dirty && <span className="rounded-full bg-[#fff4e8] px-2.5 py-1 text-[11px] font-semibold text-[#c26a12]">待保存</span>}
+          <div className="inline-grid shrink-0 grid-cols-2 rounded-lg bg-[#ececf0] p-1">
+            {([
+              { key: "preview", label: "预览" },
+              { key: "edit", label: "编辑" },
+            ] as const).map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                aria-pressed={canvasMode === item.key}
+                onClick={() => setCanvasMode(item.key)}
+                className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
+                  canvasMode === item.key ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          <p className="mt-2 text-xs leading-5 text-[#8a8f98]">最近更新 {formatArticleWorkflowTime(props.project.updatedAt)}</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <RippleButton
             type="button"
             onClick={props.onSave}
             disabled={!props.canSave}
-            className="flex h-9 items-center gap-2 rounded-[10px] bg-brand px-3.5 text-sm font-semibold text-white disabled:bg-brand/40"
+            className="flex h-9 items-center gap-2 rounded-lg bg-brand px-3.5 text-sm font-semibold text-white disabled:bg-brand/40"
           >
             <Icon icon={props.saving ? "mdi:loading" : "mdi:content-save-outline"} className={props.saving ? "animate-spin" : ""} aria-hidden />
             {props.saving ? "保存中" : "保存修改"}
           </RippleButton>
-          {captionPlatform ? (
-            <>
-              <button type="button" onClick={props.onCopyCaption} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-                复制文案
-              </button>
-              <button type="button" onClick={props.onCopyTags} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-                复制标签
-              </button>
-            </>
-          ) : (
-            <button type="button" onClick={props.onCopyBody} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-              一键复制到公众号
-            </button>
-          )}
-          <button type="button" onClick={props.onCopyTitle} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-            复制标题
-          </button>
-          {!captionPlatform && (
-            <button type="button" onClick={props.onCopySummary} className="h-9 rounded-[10px] border border-[#d2d7e0] px-3.5 text-sm font-semibold text-[#1d2433]">
-              复制摘要
-            </button>
-          )}
+
+          <details className="group relative">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3.5 text-sm font-semibold text-[#1d1d1f] marker:content-none">
+              <Icon icon="mdi:content-copy" className="text-base" aria-hidden />
+              复制
+              <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
+            </summary>
+            <div className="absolute right-0 top-11 z-20 grid w-52 overflow-hidden rounded-lg border border-[#d2d2d7] bg-white p-1 shadow-lg">
+              {captionPlatform ? (
+                <>
+                  <button type="button" onClick={props.onCopyCaption} className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]">复制文案</button>
+                  <button type="button" onClick={props.onCopyTags} className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]">复制标签</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" onClick={props.onCopyBody} className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]">一键复制到公众号</button>
+                  <button type="button" onClick={props.onCopySummary} className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]">复制摘要</button>
+                </>
+              )}
+              <button type="button" onClick={props.onCopyTitle} className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]">复制标题</button>
+            </div>
+          </details>
         </div>
       </div>
 
-      <section className="overflow-hidden rounded-[20px] border border-[#e7e9f0] bg-white shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
-        <div className="border-b border-[#edf0f5] px-5 py-4 sm:px-6">
-          {/* caption 平台没有富文本正文，编辑/预览切换没有意义 */}
-          {!captionPlatform && (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="inline-flex rounded-full bg-[#f5f6fa] p-1">
-                {[
-                  { key: "edit", label: "编辑" },
-                  { key: "preview", label: "预览" },
-                ].map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setCanvasMode(item.key as CanvasMode)}
-                    className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${
-                      canvasMode === item.key ? "bg-white text-[#14151a] shadow-sm" : "text-[#667085]"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+      <div className="p-4 lg:p-6">
+        <section className="mx-auto max-w-[980px] overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+          {canvasMode === "edit" && (
+            <>
+              <div className="border-b border-[#e5e7eb] px-5 py-4 sm:px-6">
+                <div className="grid gap-4">
+                  <div className="grid gap-1">
+                    <input
+                      aria-label="图文标题"
+                      value={props.titleDraft}
+                      onChange={(event) => props.onTitleChange(event.target.value)}
+                      className="w-full border-0 bg-transparent p-0 text-[24px] font-semibold leading-[1.35] text-[#1d1d1f] outline-none placeholder:text-[#b2b2b7] focus:shadow-none"
+                      placeholder="输入标题"
+                    />
+                    <span className={`text-xs ${titleOver ? "font-semibold text-red-600" : "text-[#8a8a8f]"}`}>
+                      标题 {props.titleDraft.trim().length} / {props.platformConfig.titleMaxLength} 字
+                    </span>
+                  </div>
+                  {!captionPlatform && (
+                    <textarea
+                      aria-label="图文摘要"
+                      value={props.summaryDraft}
+                      onChange={(event) => props.onSummaryChange(event.target.value)}
+                      rows={2}
+                      className="w-full resize-none rounded-lg border border-[#d2d2d7] bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand focus:bg-white"
+                      placeholder="输入摘要"
+                    />
+                  )}
+                </div>
               </div>
-            </div>
+
+              {captionPlatform ? (
+                <ArticleWorkflowCaptionEditor
+                  captionDraft={props.captionDraft}
+                  tagsDraft={props.tagsDraft}
+                  syncKey={props.editorSyncKey}
+                  platformConfig={props.platformConfig}
+                  onCaptionChange={props.onCaptionChange}
+                  onTagsChange={props.onTagsChange}
+                />
+              ) : (
+                <ArticleWorkflowRichEditor
+                  value={props.bodyHtmlDraft}
+                  syncKey={props.editorSyncKey}
+                  placeholder="开始编辑正文"
+                  onChange={props.onBodyHtmlChange}
+                  onBlurCommit={props.onBodyBlur}
+                />
+              )}
+            </>
           )}
 
-          <div className={`grid gap-4 ${captionPlatform ? "" : "mt-4"}`}>
-            <div className="grid gap-1">
-              <input
-                value={props.titleDraft}
-                onChange={(event) => props.onTitleChange(event.target.value)}
-                className="w-full border-0 p-0 text-[28px] font-semibold leading-[1.35] text-[#14151a] outline-none placeholder:text-[#b2b7c2]"
-                placeholder="输入标题"
-              />
-              <span className={`text-xs ${titleOver ? "font-semibold text-red-600" : "text-[#8a8f98]"}`}>
-                标题 {props.titleDraft.trim().length} / {props.platformConfig.titleMaxLength} 字
-              </span>
-            </div>
-            {!captionPlatform && (
-              <textarea
-                value={props.summaryDraft}
-                onChange={(event) => props.onSummaryChange(event.target.value)}
-                rows={2}
-                className="w-full rounded-[14px] border border-[#e3e7ee] bg-[#fbfcff] px-4 py-3 text-sm leading-6 text-[#344054] outline-none"
-                placeholder="输入摘要"
-              />
-            )}
-          </div>
-        </div>
-
-        {captionPlatform && (
-          <ArticleWorkflowCaptionEditor
-            captionDraft={props.captionDraft}
-            tagsDraft={props.tagsDraft}
-            syncKey={props.editorSyncKey}
-            platformConfig={props.platformConfig}
-            onCaptionChange={props.onCaptionChange}
-            onTagsChange={props.onTagsChange}
-          />
-        )}
-
-        {!captionPlatform && (canvasMode === "edit" ? (
-          <ArticleWorkflowRichEditor
-            value={props.bodyHtmlDraft}
-            syncKey={props.editorSyncKey}
-            placeholder="开始编辑正文"
-            onChange={props.onBodyHtmlChange}
-            onBlurCommit={props.onBodyBlur}
-          />
-        ) : (
-          <ArticleWorkflowPreview
-            previewHtml={props.bodyHtmlDraft}
-            previewBodyRef={props.previewBodyRef}
-          />
-        ))}
-      </section>
-
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-        <section className="rounded-[16px] border border-[#e7e9f0] bg-white p-4 shadow-[0_16px_40px_rgba(15,23,42,0.05)]">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-[#14151a]">AI 重新生成</h3>
-              <p className="mt-1 text-xs leading-5 text-[#667085]">
-                重新生成按首次生成同价扣费，失败自动退费。
-              </p>
-            </div>
-            <label className="flex items-center gap-2 text-xs text-[#475467]">
-              <input
-                type="checkbox"
-                checked={props.rewriteRegenerateImages}
-                onChange={(event) => props.onRewriteRegenerateImagesChange(event.target.checked)}
-              />
-              同时重配图
-            </label>
-          </div>
-
-          {/* caption 平台固定重写文案，没有「保持原文」这一档 */}
-          {!captionPlatform && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {[
-                { key: "preserve-text", label: "保持原文排版" },
-                { key: "polish-text", label: "AI 润色后排版" },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => props.onRewriteGenerationModeChange(item.key as ArticleWorkflowGenerationMode)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-semibold transition ${
-                    props.rewriteGenerationMode === item.key
-                      ? "bg-brand text-white"
-                      : "bg-[#f5f6fa] text-[#475467]"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <textarea
-            value={props.rewriteInstruction}
-            onChange={(event) => props.onRewriteInstructionChange(event.target.value)}
-            rows={4}
-            className="mt-3 w-full rounded-[12px] border border-[#d5dae3] px-3 py-3 text-sm leading-6 outline-none"
-            placeholder="例如：开头更有代入感，整体语气更自然，保留促销信息。"
-          />
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs leading-5 text-[#667085]">
-              文本：{articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}
-              <br />
-              图片：{articleWorkflowPricingText(props.pricing?.image1k, "1K 生图价格")}
-            </p>
-            <RippleButton
-              type="button"
-              onClick={props.onRewrite}
-              disabled={!props.canRewrite}
-              className="flex h-10 items-center gap-2 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:bg-brand/40"
-            >
-              <Icon icon={props.rewriting ? "mdi:loading" : "mdi:auto-fix"} className={props.rewriting ? "animate-spin" : ""} aria-hidden />
-              {props.rewriting ? "提交中" : "按要求重新生成"}
-            </RippleButton>
-          </div>
+          {canvasMode === "preview" && (captionPlatform ? (
+            <section className="min-h-[640px] bg-[#f7f8fa] px-4 py-5 sm:px-6">
+              <article className="mx-auto max-w-[680px] bg-white px-5 py-6">
+                <h1 className="text-[24px] font-semibold leading-[1.4] text-[#1d1d1f]">{props.titleDraft || "未命名图文"}</h1>
+                <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-[#1d1d1f]">{props.captionDraft}</p>
+                {props.tagsDraft.length > 0 && (
+                  <div className="mt-5 flex flex-wrap gap-2">
+                    {props.tagsDraft.map((tag) => (
+                      <span key={tag} className="text-sm font-semibold text-brand-ink">#{tag}</span>
+                    ))}
+                  </div>
+                )}
+              </article>
+            </section>
+          ) : (
+            <ArticleWorkflowPreview
+              title={props.titleDraft}
+              summary={props.summaryDraft}
+              previewHtml={props.bodyHtmlDraft}
+              previewBodyRef={props.previewBodyRef}
+            />
+          ))}
         </section>
-
-        <ArticleWorkflowImageAssetPanel
-          imageManifest={props.project.imageManifestJson}
-          platform={props.project.platform}
-          regeneratingSlot={props.regeneratingSlot}
-          onRegenerateImage={props.onRegenerateImage}
-        />
       </div>
     </section>
   );

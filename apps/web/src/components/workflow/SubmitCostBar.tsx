@@ -6,6 +6,8 @@ export interface SubmitCostBarProps {
   readonly estimatedPointCost: number | null;
   /** 默认「预计消耗」 */
   readonly costLabel?: string;
+  /** 无法预估精确点数时可提供业务化摘要，例如「3 个平台分别计费」。 */
+  readonly costValue?: ReactNode;
   /** 费用旁的补充说明，如「母版 20 + 分段 2×20」 */
   readonly costDetail?: string;
   readonly submitLabel: string;
@@ -28,7 +30,7 @@ export function SubmitCostBar(props: SubmitCostBarProps) {
         <span>{props.costLabel ?? "预计消耗"}</span>
         <span className="inline-flex items-center gap-1 text-[#1d1d1f]">
           <Icon icon="mdi:diamond-stone" className="text-sm text-brand-ink" aria-hidden />
-          {props.estimatedPointCost === null ? "--" : `${props.estimatedPointCost} 算力点`}
+          {props.costValue ?? (props.estimatedPointCost === null ? "--" : `${props.estimatedPointCost} 算力点`)}
           {props.costDetail ? <span className="font-normal text-[#8a8a8f]">（{props.costDetail}）</span> : null}
         </span>
       </div>
