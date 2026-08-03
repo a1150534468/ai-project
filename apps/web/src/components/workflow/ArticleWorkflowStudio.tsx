@@ -2,13 +2,13 @@ import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { ArticleWorkflowBusyPanel } from "./ArticleWorkflowBusyPanel";
+import { ArticleWorkflowCreationCanvas } from "./ArticleWorkflowCreationCanvas";
 import { ArticleWorkflowEditor } from "./ArticleWorkflowEditor";
 import { ArticleWorkflowHistoryPanel, ArticleWorkflowHistorySidebar } from "./ArticleWorkflowHistorySidebar";
 import { ArticleWorkflowImageAssetPanel } from "./ArticleWorkflowImageAssetPanel";
 import { ArticleWorkflowInputPanel } from "./ArticleWorkflowInputPanel";
 import { ArticleWorkflowPlatformTabs } from "./ArticleWorkflowPlatformTabs";
 import { ArticleWorkflowResultTools } from "./ArticleWorkflowResultSidebar";
-import { ArticleWorkflowSourceCanvas } from "./ArticleWorkflowSourceCanvas";
 import type { ArticleWorkflowStudioProps } from "./articleWorkflowStudioModel";
 import { isBusyArticleWorkflowStatus } from "./articleWorkflowStudioModel";
 import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
@@ -21,22 +21,25 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
   const workspaceTitle = state.bootstrapping
     ? "图文工作台"
     : !state.project
-      ? "输入原文"
+      ? (state.creationDraft.mode === "source" ? "输入原文" : "输入主题")
       : state.titleDraft || "未命名图文";
   const workspaceMeta = !state.project
-    ? "粘贴一篇文章，生成多个平台版本"
+    ? (state.creationDraft.mode === "source" ? "粘贴原文，生成多个平台版本" : "用一个主题创作多个平台版本")
     : busy
       ? `${state.batchProgress.completed} / ${state.batchProgress.total} 个平台已完成`
       : state.platformConfig.label;
 
   const inputPanel = (onClose?: () => void) => (
     <ArticleWorkflowInputPanel
+      creationMode={state.creationDraft.mode}
       generationMode={state.generationMode}
+      generateImages={state.generateImages}
       selectedPlatforms={state.selectedPlatforms}
       pricing={state.pricing}
       creating={state.creating}
       canGenerate={state.canGenerate}
       onGenerationModeChange={state.setGenerationMode}
+      onGenerateImagesChange={state.setGenerateImages}
       onTogglePlatform={state.handleTogglePlatform}
       onGenerate={state.handleGenerate}
       onClose={onClose}
@@ -53,8 +56,10 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           batches={state.historyBatches}
           selectedBatchKey={state.selectedBatchKey}
           bootstrapping={state.bootstrapping}
+          deletingBatchKey={state.deletingBatchKey}
           onNewProject={state.handleNewProject}
           onSelectBatch={state.handleSelectBatch}
+          onDeleteBatch={state.handleDeleteBatch}
         />
         {state.bootstrapping ? (
           <div className="flex min-h-0 items-center justify-center text-sm text-[#6e6e73]">
@@ -131,12 +136,18 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
             retryingProjectId={state.retryingProjectId}
             regeneratingSlot={state.regeneratingSlot}
             canRewrite={state.canRewrite}
+            batchMissingProjectCount={state.batchProjects.filter((item) =>
+              item.status === "ready" && item.imageManifestJson.some((image) => !image.imageUrl.trim())
+            ).length}
+            generatingImages={state.generatingImageProjectIds.length > 0}
+            canGenerateImages={state.project.status === "ready" && !state.saving}
             onRewriteInstructionChange={state.setRewriteInstruction}
             onRewriteGenerationModeChange={state.setRewriteGenerationMode}
             onRewriteRegenerateImagesChange={state.setRewriteRegenerateImages}
             onRewrite={state.handleRewrite}
             onRetry={state.handleRetry}
             onRegenerateImage={state.handleRegenerateImage}
+            onGenerateImages={state.handleGenerateImages}
           />
         )}
 
@@ -144,11 +155,10 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           {state.bootstrapping ? (
             <div className="grid h-full min-h-[440px] place-items-center text-sm text-[#8a8a8f]">正在准备内容工作区...</div>
           ) : !state.project ? (
-            <ArticleWorkflowSourceCanvas
-              sourceFormat={state.sourceFormat}
-              sourceText={state.sourceText}
-              onSourceFormatChange={state.setSourceFormat}
-              onSourceTextChange={state.setSourceText}
+            <ArticleWorkflowCreationCanvas
+              draft={state.creationDraft}
+              onChange={state.setCreationDraft}
+              onModeChange={state.handleCreationModeChange}
             />
           ) : busy ? (
             <ArticleWorkflowBusyPanel
@@ -219,6 +229,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
         batches={state.historyBatches}
         selectedBatchKey={state.selectedBatchKey}
         bootstrapping={state.bootstrapping}
+        deletingBatchKey={state.deletingBatchKey}
         onClose={() => setHistoryOpen(false)}
         onNewProject={() => {
           state.handleNewProject();
@@ -228,6 +239,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           state.handleSelectBatch(entry);
           setHistoryOpen(false);
         }}
+        onDeleteBatch={state.handleDeleteBatch}
       />
 
       <AnimatePresence>

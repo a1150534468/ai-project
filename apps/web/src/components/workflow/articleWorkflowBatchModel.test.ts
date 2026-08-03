@@ -13,6 +13,7 @@ function summary(overrides: Partial<ArticleWorkflowProjectSummary> & { id: strin
     title: "标题",
     summary: "摘要",
     generationMode: "polish-text",
+    creationMode: "source",
     platform: "wechat",
     batchId: null,
     status: "ready",
@@ -110,8 +111,8 @@ describe("articleWorkflowBatchModel", () => {
 
   it("picks the active project by platform, then any ready one", () => {
     const projects = [
-      { ...summary({ id: "p-1", platform: "wechat", status: "generating" }), sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", captionText: "", tags: [], imageManifestJson: [] },
-      { ...summary({ id: "p-2", platform: "xiaohongshu", status: "ready" }), sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", captionText: "", tags: [], imageManifestJson: [] },
+      { ...summary({ id: "p-1", platform: "wechat", status: "generating" }), creationConfig: { mode: "source" as const, generateImages: true }, sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", captionText: "", tags: [], imageManifestJson: [] },
+      { ...summary({ id: "p-2", platform: "xiaohongshu", status: "ready" }), creationConfig: { mode: "source" as const, generateImages: true }, sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", captionText: "", tags: [], imageManifestJson: [] },
     ];
 
     expect(resolveActiveArticleWorkflowProject(projects, "wechat")?.id).toBe("p-1");

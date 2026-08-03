@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type {
+  ArticleWorkflowCreationConfig,
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowPlatform,
@@ -116,6 +117,7 @@ async function callLlmText(args: {
 
 export function estimateArticleWorkflowReserveUnits(args: {
   readonly sourceText: string;
+  readonly creationConfig?: ArticleWorkflowCreationConfig;
   readonly currentHtml?: string;
   readonly currentCaption?: string;
   readonly instruction?: string;
@@ -123,6 +125,7 @@ export function estimateArticleWorkflowReserveUnits(args: {
   return Math.max(
     1000,
     args.sourceText.length
+      + (args.creationConfig ? JSON.stringify(args.creationConfig).length : 0)
       + (args.currentHtml?.length ?? 0)
       + (args.currentCaption?.length ?? 0)
       + (args.instruction?.length ?? 0),
@@ -130,6 +133,7 @@ export function estimateArticleWorkflowReserveUnits(args: {
 }
 
 export async function generateArticleWorkflowPlan(args: {
+  readonly creationConfig?: ArticleWorkflowCreationConfig;
   readonly llm: LlmClientLike;
   readonly model: string;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
@@ -143,6 +147,7 @@ export async function generateArticleWorkflowPlan(args: {
     model: args.model,
     system: buildArticleWorkflowPlanSystemPrompt(args.generationMode),
     user: buildArticleWorkflowPlanUserPrompt({
+      creationConfig: args.creationConfig,
       sourceFormat: args.sourceFormat,
       sourceText: args.sourceText,
       currentHtml: args.currentHtml,
@@ -154,6 +159,7 @@ export async function generateArticleWorkflowPlan(args: {
 
 /** caption 平台的单次 LLM 调用；返回未归一化的计划，裁剪交给 normalizeArticleWorkflowCaptionPlan。 */
 export async function generateArticleWorkflowCaptionPlan(args: {
+  readonly creationConfig?: ArticleWorkflowCreationConfig;
   readonly llm: LlmClientLike;
   readonly model: string;
   readonly platform: ArticleWorkflowPlatform;
@@ -168,6 +174,7 @@ export async function generateArticleWorkflowCaptionPlan(args: {
     model: args.model,
     system: buildArticleWorkflowCaptionSystemPrompt({ platform: args.platform, config: args.config }),
     user: buildArticleWorkflowCaptionUserPrompt({
+      creationConfig: args.creationConfig,
       sourceFormat: args.sourceFormat,
       sourceText: args.sourceText,
       currentCaption: args.currentCaption,

@@ -3,6 +3,8 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import {
   ARTICLE_WORKFLOW_PLATFORM_CONFIGS,
+  type ArticleWorkflowCreationConfig,
+  type ArticleWorkflowCreationMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
@@ -106,6 +108,8 @@ export type ArticleProjectRow = NonNullable<
 export interface ArticleWorkflowPersistedProject {
   readonly id: string;
   readonly userId: string;
+  readonly creationMode: ArticleWorkflowCreationMode;
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly sourceFormat: "plain-text" | "markdown";
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;

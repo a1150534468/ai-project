@@ -21,6 +21,8 @@ function buildCaptionProject() {
 function buildProject() {
   return {
     id: "article-1",
+    creationMode: "source" as const,
+    creationConfig: { mode: "source" as const, generateImages: true },
     sourceFormat: "markdown" as const,
     sourceText: "# 标题\n\n正文",
     generationMode: "preserve-text" as const,
@@ -114,6 +116,7 @@ describe("ArticleWorkflowStudio", () => {
             title: project.title,
             summary: project.summary,
             generationMode: project.generationMode,
+            creationMode: project.creationMode,
             platform: project.platform,
             batchId: project.batchId,
             status: project.status,

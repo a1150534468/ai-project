@@ -7,6 +7,8 @@ import { ArticleWorkflowStudio } from "./ArticleWorkflowStudio";
 
 const api = vi.hoisted(() => ({
   createArticleWorkflowProject: vi.fn(),
+  deleteArticleWorkflowProject: vi.fn(),
+  generateArticleWorkflowImages: vi.fn(),
   getArticleWorkflowBatch: vi.fn(),
   getArticleWorkflowPricing: vi.fn(),
   getArticleWorkflowProject: vi.fn(),
@@ -26,6 +28,8 @@ vi.mock("../../workflowArticleApi", async (importOriginal) => ({
 function captionProject(overrides: Record<string, unknown> = {}) {
   return {
     id: "article-1",
+    creationMode: "source" as const,
+    creationConfig: { mode: "source" as const, generateImages: true },
     sourceFormat: "plain-text" as const,
     sourceText: "开头第一段。\n\n第二段继续说明。",
     generationMode: "polish-text" as const,
@@ -69,6 +73,7 @@ function enterEditMode() {
 }
 
 beforeEach(() => {
+  api.deleteArticleWorkflowProject.mockResolvedValue({ deleted: 1, batchId: "batch-1" });
   api.getArticleWorkflowPricing.mockResolvedValue(null);
   api.listArticleWorkflowHistory.mockResolvedValue([]);
 });
@@ -76,6 +81,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("ArticleWorkflowStudio 失败行处理", () => {
@@ -192,6 +198,154 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "AI 重写" }));
     expect(screen.getByLabelText("重新生成要求")).toBeTruthy();
+  });
+
+  it("后补图请求进行中禁用按钮，避免重复提交和重复计费", async () => {
+    let release = (): void => undefined;
+    api.generateArticleWorkflowImages.mockImplementation(
+      () => new Promise((resolve) => {
+        release = () => resolve({ projectId: "article-1", queued: true });
+      }),
+    );
+    const ready = captionProject({
+      status: "ready" as const,
+      progressStage: "ready",
+      progressMessage: "文案已生成",
+      error: null,
+      title: "冰咖啡",
+      captionText: "先确认文案。",
+      creationConfig: {
+        mode: "topic" as const,
+        generateImages: false,
+        topic: "冰咖啡",
+        keyPoints: "",
+        audience: "",
+        avoid: "",
+        style: { mode: "preset" as const, preset: "general" as const },
+      },
+      creationMode: "topic" as const,
+      imageManifestJson: [{
+        slot: "cover" as const,
+        role: "cover" as const,
+        assetId: null,
+        imageUrl: "",
+        thumbnailUrl: "",
+        alt: "封面",
+        caption: "",
+        prompt: "cover prompt",
+      }],
+    });
+    api.getArticleWorkflowBatch.mockResolvedValue({
+      batchId: "batch-1",
+      projects: [{ ...ready, status: "revising" as const, progressStage: "illustrating" }],
+    });
+    await renderStudio(ready);
+
+    const button = screen.getByRole("button", { name: "生成配图" });
+    fireEvent.click(button);
+    await waitFor(() => expect(button).toBeDisabled());
+    fireEvent.click(button);
+    expect(api.generateArticleWorkflowImages).toHaveBeenCalledTimes(1);
+
+    release();
+    await waitFor(() => expect(api.getArticleWorkflowBatch).toHaveBeenCalled());
+  });
+});
+
+describe("ArticleWorkflowStudio 项目历史删除", () => {
+  it("删除当前批次时防止重复提交，并在成功后回到新建态", async () => {
+    let release = (): void => undefined;
+    api.deleteArticleWorkflowProject.mockImplementation(() => new Promise((resolve) => {
+      release = () => resolve({ deleted: 1, batchId: "batch-1" });
+    }));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const ready = captionProject({
+      title: "冰咖啡项目",
+      status: "ready" as const,
+      progressStage: "ready",
+      error: null,
+    });
+    render(
+      <ToastProvider>
+        <ArticleWorkflowStudio
+          token="token"
+          initialHistory={[ready as never]}
+          initialProject={ready as never}
+          initialBootstrapping={false}
+        />
+      </ToastProvider>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    const deleteButton = screen.getByRole("button", { name: "删除 冰咖啡项目" });
+    fireEvent.click(deleteButton);
+    await waitFor(() => expect(deleteButton).toBeDisabled());
+    fireEvent.click(deleteButton);
+    expect(api.deleteArticleWorkflowProject).toHaveBeenCalledTimes(1);
+    expect(api.deleteArticleWorkflowProject).toHaveBeenCalledWith("token", "article-1");
+
+    release();
+    await waitFor(() => expect(screen.getByLabelText("文章原文")).toBeTruthy());
+    expect(screen.queryByRole("button", { name: "删除 冰咖啡项目" })).toBeNull();
+  });
+
+  it("取消确认时保留历史项目", async () => {
+    vi.spyOn(window, "confirm").mockReturnValue(false);
+    const ready = captionProject({
+      title: "保留项目",
+      status: "ready" as const,
+      progressStage: "ready",
+      error: null,
+    });
+    render(
+      <ToastProvider>
+        <ArticleWorkflowStudio
+          token="token"
+          initialHistory={[ready as never]}
+          initialProject={ready as never}
+          initialBootstrapping={false}
+        />
+      </ToastProvider>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole("button", { name: "删除 保留项目" }));
+
+    expect(api.deleteArticleWorkflowProject).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "删除 保留项目" })).toBeTruthy();
+  });
+});
+
+describe("ArticleWorkflowStudio 主题创作", () => {
+  it("switches to copy-first by default and validates custom style before submit", async () => {
+    render(
+      <ToastProvider>
+        <ArticleWorkflowStudio
+          token="token"
+          initialHistory={[]}
+          initialProject={null}
+          initialBootstrapping={false}
+        />
+      </ToastProvider>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole("tab", { name: "主题创作" }));
+    const imageSwitch = screen.getByRole("switch", { name: "同时生成配图" }) as HTMLInputElement;
+    expect(imageSwitch.checked).toBe(false);
+    expect(screen.getByRole("button", { name: "生成 3 个平台文案" })).toBeDisabled();
+
+    fireEvent.change(screen.getByPlaceholderText("例如：夏天在家做一杯清爽咖啡"), {
+      target: { value: "在家做冰咖啡" },
+    });
+    expect(screen.getByRole("button", { name: "生成 3 个平台文案" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("tab", { name: "自定义风格" }));
+    expect(screen.getByRole("button", { name: "生成 3 个平台文案" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("自定义风格"), {
+      target: { value: "先给结论，再分步骤" },
+    });
+    expect(screen.getByRole("button", { name: "生成 3 个平台文案" })).not.toBeDisabled();
   });
 });
 

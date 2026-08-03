@@ -6,9 +6,11 @@ import { randomUUID } from "node:crypto";
 import {
   articleWorkflowPlatformConfig,
   resolveArticleWorkflowMode,
+  type ArticleWorkflowCreationConfig,
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
+import { normalizeArticleWorkflowCreationSource } from "./article-workflow-creation.js";
 import { canRecoverArticleProject, canSaveArticleProject, DEFAULT_ARTICLE_MODEL, scheduledRunner, ARTICLE_HISTORY_LIMIT, type ArticleWorkflowBilling, type ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
 import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
 import {
@@ -34,7 +36,11 @@ import {
   articleWorkflowImageBlobSignatureValid,
   articleWorkflowStableBodyHtml,
 } from "./article-workflow-image-url.js";
-import { runArticleWorkflowRewrite, runInitialArticleWorkflowGeneration } from "./article-workflow-runner.js";
+import {
+  runArticleWorkflowMissingImages,
+  runArticleWorkflowRewrite,
+  runInitialArticleWorkflowGeneration,
+} from "./article-workflow-runner.js";
 import { jsonValue, readArticleWorkflowProject, serializeArticleWorkflowProject, serializeArticleWorkflowProjectSummary } from "./article-workflow-serializer.js";
 import { authUserId, safeErrorMessage } from "./ecom-route-helpers.js";
 
@@ -68,18 +74,33 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const parsed = createArticleWorkflowProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
+    const creationConfig: ArticleWorkflowCreationConfig = parsed.data.creationMode === "topic"
+      ? { ...parsed.data.creationConfig as Extract<ArticleWorkflowCreationConfig, { mode: "topic" }>, generateImages: parsed.data.generateImages }
+      : { mode: "source", generateImages: parsed.data.generateImages };
+    const sourceFormat: ArticleWorkflowSourceFormat = creationConfig.mode === "topic"
+      ? "plain-text"
+      : parsed.data.sourceFormat;
+    const sourceText = creationConfig.mode === "topic"
+      ? normalizeArticleWorkflowCreationSource(creationConfig)
+      : parsed.data.sourceText;
+
     // 一次导入 = 一个批次 = 每平台一行，每行独立生成、独立扣费、独立失败
     const batchId = randomUUID();
     const created: { projectId: string; platform: ArticleWorkflowPlatform }[] = [];
     for (const platform of parsed.data.platforms) {
-      const generationMode = resolveArticleWorkflowMode(platform, parsed.data.generationMode);
+      const generationMode = resolveArticleWorkflowMode(
+        platform,
+        creationConfig.mode === "topic" ? "polish-text" : parsed.data.generationMode,
+      );
       const project = await prisma.articleWorkflowProject.create({
         data: {
           userId,
+          creationMode: creationConfig.mode,
+          creationConfigJson: jsonValue(creationConfig),
           platform,
           batchId,
-          sourceFormat: parsed.data.sourceFormat,
-          sourceText: parsed.data.sourceText,
+          sourceFormat,
+          sourceText,
           generationMode,
           title: "",
           summary: "",
@@ -104,10 +125,12 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
         env,
         userId,
         projectId: project.id,
-        sourceFormat: parsed.data.sourceFormat,
-        sourceText: parsed.data.sourceText,
+        creationConfig,
+        sourceFormat,
+        sourceText,
         generationMode,
         platform,
+        generateImages: creationConfig.generateImages,
         model,
       }));
     }
@@ -205,6 +228,29 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     return { success: true, data: serializeArticleWorkflowProject(project, env) };
   });
 
+  app.delete("/api/workflow/article-workflow/:id", async (req, reply) => {
+    const userId = authUserId(req as { userId?: string }, reply);
+    if (!userId) return;
+    const params = articleWorkflowProjectParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+
+    const rows = project.batchId
+      ? await prisma.articleWorkflowProject.findMany({ where: { userId, batchId: project.batchId } })
+      : [project];
+    if (rows.some((row) => row.status === "draft" || row.status === "generating" || row.status === "revising")) {
+      return reply.code(409).send({ error: "项目正在处理中，暂时无法删除" });
+    }
+
+    const deleted = await prisma.articleWorkflowProject.deleteMany({
+      where: project.batchId
+        ? { userId, batchId: project.batchId }
+        : { userId, id: project.id },
+    });
+    return { success: true, data: { deleted: deleted.count, batchId: project.batchId } };
+  });
+
   app.patch("/api/workflow/article-workflow/:id", async (req, reply) => {
     const userId = authUserId(req as { userId?: string }, reply);
     if (!userId) return;
@@ -292,6 +338,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     if (project.status !== "failed") return reply.code(409).send({ error: "只有生成失败的图文可以重试" });
 
     const platform = project.platform as ArticleWorkflowPlatform;
+    const current = readArticleWorkflowProject(project);
     const generationMode = resolveArticleWorkflowMode(
       platform,
       project.generationMode as "preserve-text" | "polish-text",
@@ -315,10 +362,12 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       env,
       userId,
       projectId: project.id,
-      sourceFormat: project.sourceFormat as ArticleWorkflowSourceFormat,
-      sourceText: project.sourceText,
+      creationConfig: current.creationConfig,
+      sourceFormat: current.sourceFormat,
+      sourceText: current.sourceText,
       generationMode,
       platform,
+      generateImages: current.creationConfig.generateImages,
       model,
     }));
 
@@ -428,13 +477,44 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       return { success: true, data: serializeArticleWorkflowProject(updated, env) };
     } catch (error) {
       await updateArticleWorkflowProjectState(prisma, project.id, {
-        status: "failed",
-        progressStage: "failed",
+        status: "ready",
+        progressStage: "ready",
         progressPercent: 100,
-        progressMessage: "图片重生失败",
+        progressMessage: "图片重生失败，可重新尝试",
         error: safeErrorMessage(error),
       }).catch(() => undefined);
       return reply.code(502).send({ error: safeErrorMessage(error) });
     }
+  });
+
+  app.post("/api/workflow/article-workflow/:id/images/generate", async (req, reply) => {
+    const userId = authUserId(req as { userId?: string }, reply);
+    if (!userId) return;
+    const params = articleWorkflowProjectParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    if (project.status !== "ready") return reply.code(409).send({ error: "项目尚未准备好生成配图" });
+    const current = readArticleWorkflowProject(project);
+    if (!current.imageManifest.some((image) => !image.imageUrl.trim())) {
+      return { success: true, data: { projectId: project.id, queued: false } };
+    }
+
+    await updateArticleWorkflowProjectState(prisma, project.id, {
+      status: "revising",
+      progressStage: "illustrating",
+      progressPercent: 5,
+      progressMessage: "排队生成配图",
+      error: null,
+    });
+    scheduleTask(() => runArticleWorkflowMissingImages({
+      prisma,
+      billing,
+      llm,
+      fetchFn,
+      env,
+      project: { ...project, status: "revising" },
+    }));
+    return reply.code(202).send({ success: true, data: { projectId: project.id, queued: true } });
   });
 }

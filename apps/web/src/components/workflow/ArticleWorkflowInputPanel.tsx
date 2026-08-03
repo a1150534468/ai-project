@@ -3,6 +3,7 @@ import {
   ARTICLE_WORKFLOW_PLATFORMS,
   articleWorkflowPlatformConfig,
   type ArticleWorkflowGenerationMode,
+  type ArticleWorkflowCreationMode,
   type ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
 import type { ArticleWorkflowPricing } from "../../workflowArticleApi";
@@ -10,12 +11,15 @@ import { articleWorkflowPricingText } from "./articleWorkflowStudioModel";
 import { SubmitCostBar } from "./SubmitCostBar";
 
 interface ArticleWorkflowInputPanelProps {
+  readonly creationMode: ArticleWorkflowCreationMode;
   readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly generateImages: boolean;
   readonly selectedPlatforms: readonly ArticleWorkflowPlatform[];
   readonly pricing: ArticleWorkflowPricing | null;
   readonly creating: boolean;
   readonly canGenerate: boolean;
   readonly onGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
+  readonly onGenerateImagesChange: (value: boolean) => void;
   readonly onTogglePlatform: (value: ArticleWorkflowPlatform) => void;
   readonly onGenerate: () => void;
   readonly onClose?: () => void;
@@ -91,7 +95,28 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           </div>
         </fieldset>
 
-        {props.selectedPlatforms.includes("wechat") && (
+        <label className="mt-4 flex items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4">
+          <span className="min-w-0">
+            <span className="block text-xs font-semibold text-[#1d1d1f]">同时生成配图</span>
+            <span className="mt-1 block text-[10px] text-[#8a8a8f]">
+              {props.generateImages ? "文案与配图一起完成" : "先确认文案，再生成配图"}
+            </span>
+          </span>
+          <span className="relative inline-flex h-6 w-10 shrink-0 items-center">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-label="同时生成配图"
+              checked={props.generateImages}
+              onChange={(event) => props.onGenerateImagesChange(event.target.checked)}
+              className="peer absolute inset-0 cursor-pointer opacity-0"
+            />
+            <span className="h-6 w-10 rounded-full bg-[#d2d2d7] transition peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30" aria-hidden />
+            <span className="pointer-events-none absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" aria-hidden />
+          </span>
+        </label>
+
+        {props.creationMode === "source" && props.selectedPlatforms.includes("wechat") && (
           <fieldset className="mt-4">
             <legend className="mb-2 text-xs font-semibold text-[#1d1d1f]">公众号生成方式</legend>
             <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">
@@ -129,8 +154,10 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
       <SubmitCostBar
         estimatedPointCost={null}
         costLabel="计费方式"
-        costValue={`${props.selectedPlatforms.length} 个平台分别计费`}
-        submitLabel={`生成 ${props.selectedPlatforms.length} 个平台图文`}
+        costValue={props.generateImages
+          ? `${props.selectedPlatforms.length} 个平台分别计费`
+          : `先生成 ${props.selectedPlatforms.length} 个平台文案`}
+        submitLabel={`生成 ${props.selectedPlatforms.length} 个平台${props.generateImages ? "图文" : "文案"}`}
         submitIcon="mdi:auto-fix"
         submitDisabled={!props.canGenerate}
         busy={props.creating}

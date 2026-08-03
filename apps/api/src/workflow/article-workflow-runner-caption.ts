@@ -1,9 +1,11 @@
 import type {
+  ArticleWorkflowCreationConfig,
   ArticleWorkflowImageAsset,
   ArticleWorkflowPlatform,
   ArticleWorkflowPlatformConfig,
   ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
+import { assertArticleWorkflowImitationOriginality } from "./article-workflow-creation.js";
 import type { PrismaClient } from "@prisma/client";
 import {
   articleWorkflowCaptionSummary,
@@ -37,6 +39,7 @@ function plannedCaptionImageManifest(
  * 配图仍走注入的 populateImages，图片费回滚清单由调用方统一持有。
  */
 export async function materializeCaptionArticle(args: {
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly prisma: PrismaClient;
   readonly llm: LlmClientLike;
   readonly model: string;
@@ -49,9 +52,11 @@ export async function materializeCaptionArticle(args: {
   readonly currentImages?: readonly ArticleWorkflowImageAsset[];
   readonly instruction?: string;
   readonly regenerateImages: boolean;
+  readonly generateImages: boolean;
   readonly populateImages: PopulateArticleImages;
 }): Promise<MaterializedArticle> {
   const rawPlan = await generateArticleWorkflowCaptionPlan({
+    creationConfig: args.creationConfig,
     llm: args.llm,
     model: args.model,
     platform: args.platform,
@@ -62,6 +67,10 @@ export async function materializeCaptionArticle(args: {
     instruction: args.instruction,
   });
   const plan = normalizeArticleWorkflowCaptionPlan({ plan: rawPlan, config: args.platformConfig });
+  assertArticleWorkflowImitationOriginality({
+    creationConfig: args.creationConfig,
+    outputText: [plan.title, plan.captionText, ...plan.tags].join("\n"),
+  });
   const summary = articleWorkflowCaptionSummary(plan.captionText);
 
   let imageManifest = plannedCaptionImageManifest(plan.images);
@@ -75,26 +84,28 @@ export async function materializeCaptionArticle(args: {
     captionText: plan.captionText,
     tags: plan.tags,
     imageManifestJson: imageManifest,
-    progressStage: "illustrating",
-    progressPercent: 35,
-    progressMessage: "AI 正在生成配图",
+    progressStage: args.generateImages ? "illustrating" : "finalizing",
+    progressPercent: args.generateImages ? 35 : 92,
+    progressMessage: args.generateImages ? "AI 正在生成配图" : "文案即将完成",
   });
 
-  imageManifest = await args.populateImages({
-    imageManifest,
-    onProgress: async (completed, total) => {
-      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-        title: plan.title,
-        summary,
-        captionText: plan.captionText,
-        tags: plan.tags,
-        imageManifestJson: imageManifest,
-        progressStage: "illustrating",
-        progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 60),
-        progressMessage: `正在生成配图（${completed}/${total}）`,
-      });
-    },
-  });
+  if (args.generateImages) {
+    imageManifest = await args.populateImages({
+      imageManifest,
+      onProgress: async (completed, total) => {
+        await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+          title: plan.title,
+          summary,
+          captionText: plan.captionText,
+          tags: plan.tags,
+          imageManifestJson: imageManifest,
+          progressStage: "illustrating",
+          progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 60),
+          progressMessage: `正在生成配图（${completed}/${total}）`,
+        });
+      },
+    });
+  }
 
   return {
     title: plan.title,

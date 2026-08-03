@@ -659,7 +659,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
           {showModuleHeader && (
             <header className="flex-none px-4 pb-3 pt-4 lg:px-6">
               <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
-              <h1 className="page-title text-[24px]">{activeModule.title}</h1>
+              <h1 className="page-title text-[24px] text-[#1d1d1f]">{activeModule.title}</h1>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
             </header>
           )}

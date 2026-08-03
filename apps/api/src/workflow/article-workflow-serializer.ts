@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 import {
   articleWorkflowPlatformConfig,
+  type ArticleWorkflowCreationConfig,
+  type ArticleWorkflowCreationMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowProjectStatus,
@@ -8,6 +10,7 @@ import {
 } from "@ai-assistant/article-workflow";
 import {
   articleWorkflowImageManifestItemSchema,
+  articleWorkflowCreationConfigSchema,
   articleWorkflowTagsSchema,
 } from "./article-workflow-schema.js";
 import {
@@ -38,10 +41,23 @@ export function parseArticleWorkflowImageManifestJson(value: unknown): readonly 
     .map((item) => item.data);
 }
 
+export function parseArticleWorkflowCreationConfigJson(
+  mode: unknown,
+  value: unknown,
+): ArticleWorkflowCreationConfig {
+  const creationMode: ArticleWorkflowCreationMode = mode === "topic" ? "topic" : "source";
+  const parsed = articleWorkflowCreationConfigSchema.safeParse(value);
+  if (parsed.success && parsed.data.mode === creationMode) return parsed.data;
+  return { mode: "source", generateImages: true };
+}
+
 export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkflowPersistedProject {
+  const creationConfig = parseArticleWorkflowCreationConfigJson(row.creationMode, row.creationConfigJson);
   return {
     id: row.id,
     userId: row.userId,
+    creationMode: creationConfig.mode,
+    creationConfig,
     sourceFormat: row.sourceFormat as ArticleWorkflowSourceFormat,
     sourceText: row.sourceText,
     generationMode: row.generationMode as ArticleWorkflowGenerationMode,
@@ -68,6 +84,7 @@ export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
     title: project.title,
     summary: project.summary,
     generationMode: project.generationMode,
+    creationMode: project.creationMode,
     platform: project.platform,
     batchId: project.batchId,
     status: project.status as ArticleWorkflowProjectStatus,
@@ -95,6 +112,7 @@ export function serializeArticleWorkflowProject(row: ArticleProjectRow, env: Nod
     ...serializeArticleWorkflowProjectSummary(row),
     sourceFormat: project.sourceFormat,
     sourceText: project.sourceText,
+    creationConfig: project.creationConfig,
     bodyHtml: articleWorkflowResponseBodyHtml({ html: project.bodyHtml, env }),
     captionText: project.captionText,
     tags: project.tags,

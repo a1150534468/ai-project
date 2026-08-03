@@ -267,6 +267,89 @@ describe("article-workflow routes", () => {
     expect(missing.json().error).toBe("批次不存在");
   });
 
+  it("deletes the current user's entire batch without touching another user's rows", async () => {
+    const createdAt = new Date("2026-07-08T05:00:00.000Z");
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [
+        {
+          id: "p-1", userId: "u1", batchId: "b-1", platform: "wechat",
+          sourceFormat: "plain-text", sourceText: "one", status: "ready",
+          createdAt, updatedAt: createdAt,
+        },
+        {
+          id: "p-2", userId: "u1", batchId: "b-1", platform: "xiaohongshu",
+          sourceFormat: "plain-text", sourceText: "one", status: "failed",
+          createdAt, updatedAt: createdAt,
+        },
+        {
+          id: "p-foreign", userId: "u2", batchId: "b-1", platform: "douyin",
+          sourceFormat: "plain-text", sourceText: "other", status: "ready",
+          createdAt, updatedAt: createdAt,
+        },
+      ],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({ method: "DELETE", url: "/api/workflow/article-workflow/p-1" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ deleted: 2, batchId: "b-1" });
+    expect(prisma.__state.projects.map((row) => row.id)).toEqual(["p-foreign"]);
+  });
+
+  it("deletes a standalone project and returns 404 for an unowned project", async () => {
+    const createdAt = new Date("2026-07-08T05:00:00.000Z");
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [
+        {
+          id: "p-1", userId: "u1", batchId: null,
+          sourceFormat: "plain-text", sourceText: "one", status: "ready",
+          createdAt, updatedAt: createdAt,
+        },
+        {
+          id: "p-2", userId: "u2", batchId: null,
+          sourceFormat: "plain-text", sourceText: "other", status: "ready",
+          createdAt, updatedAt: createdAt,
+        },
+      ],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const deleted = await app.inject({ method: "DELETE", url: "/api/workflow/article-workflow/p-1" });
+    const unowned = await app.inject({ method: "DELETE", url: "/api/workflow/article-workflow/p-2" });
+
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json().data).toEqual({ deleted: 1, batchId: null });
+    expect(unowned.statusCode).toBe(404);
+    expect(prisma.__state.projects.map((row) => row.id)).toEqual(["p-2"]);
+  });
+
+  it("refuses to delete a batch while any platform is still busy", async () => {
+    const createdAt = new Date("2026-07-08T05:00:00.000Z");
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [
+        {
+          id: "p-1", userId: "u1", batchId: "b-1", platform: "wechat",
+          sourceFormat: "plain-text", sourceText: "one", status: "ready",
+          createdAt, updatedAt: createdAt,
+        },
+        {
+          id: "p-2", userId: "u1", batchId: "b-1", platform: "xiaohongshu",
+          sourceFormat: "plain-text", sourceText: "one", status: "revising",
+          createdAt, updatedAt: createdAt,
+        },
+      ],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({ method: "DELETE", url: "/api/workflow/article-workflow/p-1" });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().error).toContain("正在处理中");
+    expect(prisma.articleWorkflowProject.deleteMany).not.toHaveBeenCalled();
+    expect(prisma.__state.projects).toHaveLength(2);
+  });
+
   it("saves edited html via PATCH without charging", async () => {
     const prisma = createArticleWorkflowPrismaMock({
       projects: [{

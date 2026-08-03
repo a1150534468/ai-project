@@ -117,4 +117,31 @@ describe("ArticleWorkflowRichEditor 载入即保真", () => {
     expect((committed.match(/data-ai-assistant-image-slot/gi) ?? []).length).toBe(4);
     expect(committed).toContain("letter-spacing:0.5px");
   });
+
+  it("编辑文字后仍保留空图片槽位，后续配图可以原位注入", async () => {
+    const emptySlotBody = [
+      '<section style="margin:0;padding:0 12px">',
+      '<section data-ai-assistant-image-slot="cover"></section>',
+      '<p style="margin:0">先确认的正文。</p>',
+      '<section data-ai-assistant-image-slot="inline-1"></section>',
+      "</section>",
+    ].join("");
+    const onChange = vi.fn();
+    await mountEditor(emptySlotBody, onChange);
+    const root = surface();
+
+    expect(root.querySelector('section[data-ai-assistant-image-slot="cover"]')).not.toBeNull();
+    expect(root.querySelector('section[data-ai-assistant-image-slot="inline-1"]')).not.toBeNull();
+
+    const paragraph = root.querySelector("p");
+    if (!paragraph) throw new Error("找不到正文段落");
+    paragraph.textContent = "人工确认后的正文。";
+    paragraph.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const saved = onChange.mock.calls.at(-1)?.[0] as string;
+    expect(saved).toContain('data-ai-assistant-image-slot="cover"');
+    expect(saved).toContain('data-ai-assistant-image-slot="inline-1"');
+    expect(saved).toContain("人工确认后的正文。");
+  });
 });

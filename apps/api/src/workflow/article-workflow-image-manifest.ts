@@ -117,6 +117,8 @@ export function applyArticleImageManifestToHtml(
   const document = new DOMParser().parseFromString(`<body>${bodyHtml}</body>`, "text/html");
   const body = document.getElementsByTagName("body")[0];
   if (!body) return bodyHtml;
-  imageManifest.forEach((image) => replaceWithImageSection(body, image.slot, image));
+  imageManifest
+    .filter((image) => image.imageUrl.trim())
+    .forEach((image) => replaceWithImageSection(body, image.slot, image));
   return serializeBody(body).trim();
 }

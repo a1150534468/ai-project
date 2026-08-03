@@ -1,4 +1,6 @@
 import type {
+  ArticleWorkflowCreationConfig,
+  ArticleWorkflowCreationMode,
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowOutputKind,
@@ -13,6 +15,7 @@ export interface ArticleWorkflowProjectSummary {
   readonly title: string;
   readonly summary: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
+  readonly creationMode: ArticleWorkflowCreationMode;
   readonly platform: ArticleWorkflowPlatform;
   /** 存量项目没有批次，为 null */
   readonly batchId: string | null;
@@ -26,6 +29,7 @@ export interface ArticleWorkflowProjectSummary {
 }
 
 export interface ArticleWorkflowProject extends ArticleWorkflowProjectSummary {
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly bodyHtml: string;
@@ -64,7 +68,7 @@ export interface ArticleWorkflowPricing {
 }
 
 type WorkflowResponse<T> = { readonly data: T };
-type RequestMethod = "GET" | "POST" | "PATCH";
+type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
 async function requestArticleWorkflow<T>(args: {
   readonly token: string;
@@ -86,10 +90,13 @@ async function requestArticleWorkflow<T>(args: {
 }
 
 export function createArticleWorkflowProject(token: string, body: {
+  readonly creationMode: ArticleWorkflowCreationMode;
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly platforms: readonly ArticleWorkflowPlatform[];
+  readonly generateImages: boolean;
 }): Promise<{
   readonly batchId: string;
   readonly projects: readonly { readonly projectId: string; readonly platform: ArticleWorkflowPlatform }[];
@@ -101,6 +108,18 @@ export function createArticleWorkflowProject(token: string, body: {
     method: "POST",
     fallback: "创建图文项目失败",
     body,
+  });
+}
+
+export function generateArticleWorkflowImages(
+  token: string,
+  projectId: string,
+): Promise<{ readonly projectId: string; readonly queued: boolean }> {
+  return requestArticleWorkflow({
+    token,
+    path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}/images/generate`,
+    method: "POST",
+    fallback: "生成配图失败",
   });
 }
 
@@ -137,6 +156,18 @@ export function getArticleWorkflowProject(token: string, projectId: string): Pro
     path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}`,
     method: "GET",
     fallback: "获取图文项目失败",
+  });
+}
+
+export function deleteArticleWorkflowProject(
+  token: string,
+  projectId: string,
+): Promise<{ readonly deleted: number; readonly batchId: string | null }> {
+  return requestArticleWorkflow({
+    token,
+    path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}`,
+    method: "DELETE",
+    fallback: "删除图文项目失败",
   });
 }
 

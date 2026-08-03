@@ -10,6 +10,8 @@ import { ApiError } from "../../apiError";
 import { useToast } from "../../motion";
 import {
   createArticleWorkflowProject,
+  deleteArticleWorkflowProject,
+  generateArticleWorkflowImages,
   getArticleWorkflowBatch,
   getArticleWorkflowPricing,
   getArticleWorkflowProject,
@@ -23,10 +25,18 @@ import {
   updateArticleWorkflowProject,
 } from "../../workflowArticleApi";
 import {
+  articleWorkflowCreationConfigFromDraft,
+  articleWorkflowCreationDraftFromProject,
+  canSubmitArticleWorkflowCreationDraft,
+  defaultArticleWorkflowCreationDraft,
+  type ArticleWorkflowCreationDraft,
+} from "./articleWorkflowCreationDraft";
+import {
   articleWorkflowBatchProgress,
   groupArticleWorkflowHistory,
   resolveActiveArticleWorkflowProject,
   shortPlatformLabel,
+  type ArticleWorkflowBatchEntry,
 } from "./articleWorkflowBatchModel";
 import { createArticleWorkflowCopyActions } from "./articleWorkflowCopyActions";
 import type { ArticleWorkflowStudioProps } from "./articleWorkflowStudioModel";
@@ -100,18 +110,22 @@ export function useArticleWorkflowStudio({
   const [tagsDrafts, setTagsDrafts] = useState<TagsRecord>(
     initialProject ? { [initialProject.platform]: initialProject.tags } : {},
   );
-  const [sourceFormat, setSourceFormat] = useState<ArticleWorkflowSourceFormat>(initialProject?.sourceFormat ?? "plain-text");
+  const [creationDraft, setCreationDraft] = useState<ArticleWorkflowCreationDraft>(
+    initialProject ? articleWorkflowCreationDraftFromProject(initialProject) : defaultArticleWorkflowCreationDraft(),
+  );
+  const [generateImages, setGenerateImages] = useState(initialProject?.creationConfig.generateImages ?? true);
   const [generationMode, setGenerationMode] = useState<ArticleWorkflowGenerationMode>(initialProject?.generationMode ?? "preserve-text");
   const [selectedPlatforms, setSelectedPlatforms] = useState<readonly ArticleWorkflowPlatform[]>(
     initialProject ? [initialProject.platform] : ARTICLE_WORKFLOW_PLATFORMS,
   );
-  const [sourceText, setSourceText] = useState(initialProject?.sourceText ?? "");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   /** 正在重试的行 id，用来禁用按钮防重复点击 */
   const [retryingProjectId, setRetryingProjectId] = useState<string | null>(null);
+  const [deletingBatchKey, setDeletingBatchKey] = useState<string | null>(null);
   const [regeneratingSlot, setRegeneratingSlot] = useState<string | null>(null);
+  const [generatingImageProjectIds, setGeneratingImageProjectIds] = useState<readonly string[]>([]);
   const [rewriteInstruction, setRewriteInstruction] = useState("");
   const [rewriteGenerationMode, setRewriteGenerationMode] = useState<ArticleWorkflowGenerationMode>(initialProject?.generationMode ?? "preserve-text");
   const [rewriteRegenerateImages, setRewriteRegenerateImages] = useState(false);
@@ -142,6 +156,10 @@ export function useArticleWorkflowStudio({
   const bodyHtmlDraft = bodyHtmlDrafts[platform] ?? "";
   const captionDraft = captionDrafts[platform] ?? "";
   const tagsDraft = tagsDrafts[platform] ?? [];
+  const sourceFormat: ArticleWorkflowSourceFormat = creationDraft.mode === "source"
+    ? creationDraft.sourceFormat
+    : "plain-text";
+  const sourceText = creationDraft.mode === "source" ? creationDraft.sourceText : "";
 
   const historyBatches = useMemo(() => groupArticleWorkflowHistory(history), [history]);
   const batchProgress = useMemo(() => articleWorkflowBatchProgress(batchProjects), [batchProjects]);
@@ -203,8 +221,8 @@ export function useArticleWorkflowStudio({
 
     const sourceProject = details[0];
     if (force && sourceProject) {
-      setSourceFormat(sourceProject.sourceFormat);
-      setSourceText(sourceProject.sourceText);
+      setCreationDraft(articleWorkflowCreationDraftFromProject(sourceProject));
+      setGenerateImages(sourceProject.creationConfig.generateImages);
       setGenerationMode(sourceProject.generationMode);
       setSelectedPlatforms(
         ARTICLE_WORKFLOW_PLATFORMS.filter((item) => details.some((detail) => detail.platform === item)),
@@ -329,11 +347,15 @@ export function useArticleWorkflowStudio({
           await refreshHistory();
           if (details.some((item) => isBusyArticleWorkflowStatus(item.status))) return;
           const failed = details.filter((item) => item.status === "failed");
+          const imageFailures = details.filter((item) => item.status === "ready" && item.error);
           const ready = details.length - failed.length;
           setNotice(ready > 0 ? `${ready} 个平台已生成` : "图文处理失败");
           if (failed.length > 0) {
             const names = failed.map((item) => shortPlatformLabel(item.platform)).join("、");
             setError(`${names}生成失败：${failed[0]?.error || "未知原因"}`);
+          } else if (imageFailures.length > 0) {
+            const names = imageFailures.map((item) => shortPlatformLabel(item.platform)).join("、");
+            setError(`${names}配图失败：${imageFailures[0]?.error || "未知原因"}`);
           }
           onBalanceRefresh?.();
         } catch (err) {
@@ -344,7 +366,9 @@ export function useArticleWorkflowStudio({
     return () => window.clearInterval(timer);
   }, [batchBusy, loadBatch, onBalanceRefresh, pollBatchId, pollProjectId, refreshHistory]);
 
-  const canGenerate = sourceText.trim().length > 0 && selectedPlatforms.length > 0 && !creating;
+  const canGenerate = canSubmitArticleWorkflowCreationDraft(creationDraft)
+    && selectedPlatforms.length > 0
+    && !creating;
   const canSave = Boolean(project && dirty && savable && !saving);
   const canRewrite = Boolean(project && rewriteInstruction.trim() && !rewriting && !saving && !isBusyArticleWorkflowStatus(project.status));
 
@@ -442,8 +466,7 @@ export function useArticleWorkflowStudio({
     return typeof window === "undefined" || window.confirm("当前有未保存修改，确定切换项目吗？");
   };
 
-  const handleNewProject = () => {
-    if (!ensureCanLeaveDirty()) return;
+  const resetToNewProject = () => {
     setBatchProjects([]);
     setActivePlatform(null);
     setTitleDrafts({});
@@ -453,15 +476,20 @@ export function useArticleWorkflowStudio({
     setTagsDrafts({});
     lastSavedHashRef.current.clear();
     setEditorSyncKey("");
-    setSourceFormat("plain-text");
+    setCreationDraft(defaultArticleWorkflowCreationDraft());
+    setGenerateImages(true);
     setGenerationMode("preserve-text");
     setSelectedPlatforms(ARTICLE_WORKFLOW_PLATFORMS);
-    setSourceText("");
     setRewriteInstruction("");
     setRewriteGenerationMode("preserve-text");
     setRewriteRegenerateImages(false);
     setDirtyPlatforms([]);
     resetMessages();
+  };
+
+  const handleNewProject = () => {
+    if (!ensureCanLeaveDirty()) return;
+    resetToNewProject();
   };
 
   const handleSelectBatch = (entry: ArticleWorkflowBatchSelection) => {
@@ -475,6 +503,34 @@ export function useArticleWorkflowStudio({
         await loadBatch({ batchId: entry.batchId, projectId: entry.projectId, force: true });
       } catch (err) {
         setError(err instanceof Error ? err.message : "加载项目失败");
+      }
+    })();
+  };
+
+  const handleDeleteBatch = (entry: ArticleWorkflowBatchEntry) => {
+    if (deletingBatchKey || entry.status === "busy") return;
+    const title = entry.title || "未命名图文";
+    if (
+      typeof window !== "undefined"
+      && !window.confirm(`确定删除“${title}”吗？该批次下的所有平台内容都会被删除，且无法恢复。`)
+    ) return;
+    setDeletingBatchKey(entry.key);
+    resetMessages();
+    void (async () => {
+      try {
+        await deleteArticleWorkflowProject(token, entry.projectId);
+        setHistory((current) => current.filter((item) => (
+          entry.batchId ? item.batchId !== entry.batchId : item.id !== entry.projectId
+        )));
+        if (entry.key === selectedBatchKey) resetToNewProject();
+        toast.show("ok", "项目已删除");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "删除项目失败";
+        setError(message);
+        toast.show("err", message);
+        await refreshHistory().catch(() => undefined);
+      } finally {
+        setDeletingBatchKey(null);
       }
     })();
   };
@@ -508,11 +564,15 @@ export function useArticleWorkflowStudio({
     resetMessages();
     void (async () => {
       try {
+        const creationConfig = articleWorkflowCreationConfigFromDraft(creationDraft, generateImages);
         const created = await createArticleWorkflowProject(token, {
+          creationMode: creationDraft.mode,
+          creationConfig,
           sourceFormat,
           sourceText: sourceText.trim(),
-          generationMode,
+          generationMode: creationDraft.mode === "topic" ? "polish-text" : generationMode,
           platforms: selectedPlatforms,
+          generateImages,
         });
         setDirtyPlatforms([]);
         dirtyPlatformsRef.current = [];
@@ -523,7 +583,7 @@ export function useArticleWorkflowStudio({
           focusPlatform: created.projects[0]?.platform ?? null,
         });
         await refreshHistory();
-        setNotice(`已开始生成 ${details.length} 个平台的图文`);
+        setNotice(`已开始生成 ${details.length} 个平台的${generateImages ? "图文" : "文案"}`);
       } catch (err) {
         setError(err instanceof Error ? err.message : "创建图文项目失败");
       } finally {
@@ -624,6 +684,41 @@ export function useArticleWorkflowStudio({
     })();
   };
 
+  const handleGenerateImages = (scope: "current" | "batch") => {
+    if (!project || generatingImageProjectIds.length > 0) return;
+    const targets = (scope === "current" ? [project] : batchProjects)
+      .filter((item) => item.status === "ready" && item.imageManifestJson.some((image) => !image.imageUrl.trim()));
+    if (targets.length === 0) return;
+    void (async () => {
+      const saved = dirty ? await saveProject("manual") : true;
+      if (!saved) return;
+      setGeneratingImageProjectIds(targets.map((item) => item.id));
+      resetMessages();
+      try {
+        const results = await Promise.allSettled(
+          targets.map((item) => generateArticleWorkflowImages(token, item.id)),
+        );
+        const rejected = results.filter((result) => result.status === "rejected");
+        await loadBatch({
+          batchId: project.batchId,
+          projectId: project.id,
+          force: false,
+          focusPlatform: project.platform,
+        });
+        await refreshHistory();
+        if (rejected.length > 0) {
+          setError(`${rejected.length} 个平台提交配图失败`);
+        } else {
+          setNotice(scope === "current" ? "已开始生成当前平台配图" : `已开始生成 ${targets.length} 个平台配图`);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "生成配图失败");
+      } finally {
+        setGeneratingImageProjectIds([]);
+      }
+    })();
+  };
+
   return {
     bootstrapping,
     history,
@@ -635,6 +730,8 @@ export function useArticleWorkflowStudio({
     activePlatform: project?.platform ?? null,
     platformConfig,
     captionPlatform,
+    creationDraft,
+    generateImages,
     selectedPlatforms,
     dirtyPlatforms,
     project,
@@ -652,7 +749,9 @@ export function useArticleWorkflowStudio({
     saving,
     rewriting,
     retryingProjectId,
+    deletingBatchKey,
     regeneratingSlot,
+    generatingImageProjectIds,
     rewriteInstruction,
     rewriteGenerationMode,
     rewriteRegenerateImages,
@@ -663,17 +762,27 @@ export function useArticleWorkflowStudio({
     canGenerate,
     canSave,
     canRewrite,
-    setSourceFormat,
-    setGenerationMode,
-    setSourceText: (value: string) => {
-      setSourceText(value);
+    setCreationDraft: (value: ArticleWorkflowCreationDraft) => {
+      setCreationDraft(value);
       resetMessages();
     },
+    handleCreationModeChange: (mode: ArticleWorkflowCreationDraft["mode"]) => {
+      setCreationDraft(defaultArticleWorkflowCreationDraft(mode));
+      setGenerateImages(mode === "source");
+      setGenerationMode(mode === "source" ? "preserve-text" : "polish-text");
+      resetMessages();
+    },
+    setGenerateImages: (value: boolean) => {
+      setGenerateImages(value);
+      resetMessages();
+    },
+    setGenerationMode,
     setRewriteInstruction,
     setRewriteGenerationMode,
     setRewriteRegenerateImages,
     handleNewProject,
     handleSelectBatch,
+    handleDeleteBatch,
     handleSelectPlatform,
     handleTogglePlatform,
     handleGenerate,
@@ -686,6 +795,7 @@ export function useArticleWorkflowStudio({
     handleRewrite,
     handleRetry,
     handleRegenerateImage,
+    handleGenerateImages,
     markTitleDirty: (value: string) => {
       setTitleDrafts((current) => ({ ...current, [platform]: value }));
       syncDirtyByContent(platform, { title: value });

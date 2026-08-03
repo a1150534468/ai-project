@@ -1,6 +1,7 @@
 import {
   ARTICLE_WORKFLOW_HTML_ATTRS,
   ARTICLE_WORKFLOW_HTML_TAGS,
+  type ArticleWorkflowCreationConfig,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
@@ -8,6 +9,7 @@ import {
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_SOURCE_PROMPT_BUDGET } from "./article-workflow-shared.js";
+import { articleWorkflowCreationPrompt } from "./article-workflow-creation.js";
 
 function sourceFormatHint(sourceFormat: ArticleWorkflowSourceFormat): string {
   return sourceFormat === "markdown"
@@ -52,12 +54,14 @@ export function buildArticleWorkflowPlanSystemPrompt(mode: ArticleWorkflowGenera
 }
 
 export function buildArticleWorkflowPlanUserPrompt(args: {
+  readonly creationConfig?: ArticleWorkflowCreationConfig;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly currentHtml?: string;
   readonly instruction?: string;
 }): string {
   return [
+    args.creationConfig ? articleWorkflowCreationPrompt(args.creationConfig) : "",
     sourceFormatHint(args.sourceFormat),
     "",
     "素材内容：",
@@ -112,6 +116,7 @@ export function buildArticleWorkflowCaptionSystemPrompt(args: {
 }
 
 export function buildArticleWorkflowCaptionUserPrompt(args: {
+  readonly creationConfig?: ArticleWorkflowCreationConfig;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly currentCaption?: string;
@@ -119,6 +124,7 @@ export function buildArticleWorkflowCaptionUserPrompt(args: {
   readonly config: ArticleWorkflowPlatformConfig;
 }): string {
   return [
+    args.creationConfig ? articleWorkflowCreationPrompt(args.creationConfig) : "",
     sourceFormatHint(args.sourceFormat),
     `目标平台：${args.config.label}。`,
     "",

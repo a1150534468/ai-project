@@ -215,7 +215,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "article-workflow",
     title: "多平台图文工作流",
-    description: "一篇原文生成公众号 / 小红书 / 抖音三版图文，配图排版后可编辑复制",
+    description: "一篇原文或一个主题生成公众号 / 小红书 / 抖音三版内容，配图排版后可编辑复制",
     icon: "mdi:newspaper-variant-outline",
     status: "available",
   },

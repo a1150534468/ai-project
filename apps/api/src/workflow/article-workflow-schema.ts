@@ -1,14 +1,17 @@
 import { z } from "zod";
 import {
+  ARTICLE_WORKFLOW_CREATION_MODES,
   ARTICLE_WORKFLOW_GENERATION_MODES,
   ARTICLE_WORKFLOW_IMAGE_SLOTS,
   ARTICLE_WORKFLOW_PLATFORMS,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
+  ARTICLE_WORKFLOW_TOPIC_PRESETS,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_MAX_SOURCE_LENGTH } from "./article-workflow-shared.js";
 
 const sourceFormatSchema = z.enum(ARTICLE_WORKFLOW_SOURCE_FORMATS);
 const generationModeSchema = z.enum(ARTICLE_WORKFLOW_GENERATION_MODES);
+const creationModeSchema = z.enum(ARTICLE_WORKFLOW_CREATION_MODES);
 const imageSlotSchema = z.enum(ARTICLE_WORKFLOW_IMAGE_SLOTS);
 export const articleWorkflowPlatformSchema = z.enum(ARTICLE_WORKFLOW_PLATFORMS);
 
@@ -28,6 +31,37 @@ export const articleWorkflowImageManifestItemSchema = z.object({
   caption: z.string().trim().max(400).default(""),
   prompt: z.string().trim().min(1).max(4000),
 });
+
+const articleWorkflowTopicStyleSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("preset"),
+    preset: z.enum(ARTICLE_WORKFLOW_TOPIC_PRESETS),
+  }),
+  z.object({
+    mode: z.literal("custom"),
+    instruction: z.string().trim().min(1).max(2_000),
+  }),
+  z.object({
+    mode: z.literal("imitate"),
+    referenceText: z.string().trim().min(1).max(20_000),
+  }),
+]);
+
+export const articleWorkflowCreationConfigSchema = z.discriminatedUnion("mode", [
+  z.object({
+    mode: z.literal("source"),
+    generateImages: z.boolean().optional().default(true),
+  }),
+  z.object({
+    mode: z.literal("topic"),
+    generateImages: z.boolean().optional().default(false),
+    topic: z.string().trim().min(1).max(200),
+    keyPoints: z.string().trim().max(4_000).optional().default(""),
+    audience: z.string().trim().max(500).optional().default(""),
+    avoid: z.string().trim().max(2_000).optional().default(""),
+    style: articleWorkflowTopicStyleSchema,
+  }),
+]);
 
 /**
  * html-fragment 计划。
@@ -63,8 +97,10 @@ export const articleWorkflowCaptionPlanSchema = z.object({
 });
 
 export const createArticleWorkflowProjectSchema = z.object({
+  creationMode: creationModeSchema.optional().default("source"),
+  creationConfig: articleWorkflowCreationConfigSchema.optional(),
   sourceFormat: sourceFormatSchema,
-  sourceText: z.string().trim().min(1).max(ARTICLE_MAX_SOURCE_LENGTH),
+  sourceText: z.string().trim().max(ARTICLE_MAX_SOURCE_LENGTH).optional().default(""),
   /** 期望模式；caption 平台会被 resolveArticleWorkflowMode 降级为 polish-text */
   generationMode: generationModeSchema.optional().default("preserve-text"),
   /** 缺省 ["wechat"] 兼容旧客户端；重复平台按首次出现顺序去重 */
@@ -76,6 +112,20 @@ export const createArticleWorkflowProjectSchema = z.object({
     .optional()
     .default(["wechat"])
     .transform((platforms) => [...new Set(platforms)]),
+  generateImages: z.boolean().optional().default(true),
+}).superRefine((value, context) => {
+  if (value.creationMode === "source") {
+    if (!value.sourceText) {
+      context.addIssue({ code: "custom", path: ["sourceText"], message: "原文不能为空" });
+    }
+    if (value.creationConfig && value.creationConfig.mode !== "source") {
+      context.addIssue({ code: "custom", path: ["creationConfig"], message: "创作配置与模式不匹配" });
+    }
+    return;
+  }
+  if (!value.creationConfig || value.creationConfig.mode !== "topic") {
+    context.addIssue({ code: "custom", path: ["creationConfig"], message: "主题创作配置不能为空" });
+  }
 });
 
 export const articleWorkflowProjectParamsSchema = z.object({

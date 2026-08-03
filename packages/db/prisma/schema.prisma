@@ -888,6 +888,8 @@ model LocalBusinessPromoRun {
 model ArticleWorkflowProject {
   id                String   @id @default(cuid())
   userId            String
+  creationMode      String   @default("source")
+  creationConfigJson Json    @default("{}")
   sourceFormat      String
   sourceText        String
   generationMode    String   @default("preserve-text")

@@ -11,8 +11,10 @@ interface ArticleWorkflowHistoryProps {
   readonly batches: readonly ArticleWorkflowBatchEntry[];
   readonly selectedBatchKey: string | null;
   readonly bootstrapping: boolean;
+  readonly deletingBatchKey: string | null;
   readonly onNewProject: () => void;
   readonly onSelectBatch: (entry: ArticleWorkflowBatchEntry) => void;
+  readonly onDeleteBatch: (entry: ArticleWorkflowBatchEntry) => void;
 }
 
 interface ArticleWorkflowHistorySidebarProps extends ArticleWorkflowHistoryProps {
@@ -41,31 +43,50 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
 
       {props.batches.map((item) => {
         const selected = item.key === props.selectedBatchKey;
+        const deleting = item.key === props.deletingBatchKey;
+        const deleteDisabled = item.status === "busy" || props.deletingBatchKey !== null;
+        const title = item.title || "未命名图文";
         return (
-          <button
+          <div
             key={item.key}
-            type="button"
-            onClick={() => props.onSelectBatch(item)}
-            className={`mb-1.5 block w-full rounded-lg border px-2.5 py-2.5 text-left transition ${
+            className={`group relative mb-1.5 w-full rounded-lg border transition ${
               selected
                 ? "border-brand/40 bg-brand-soft"
                 : "border-transparent bg-white hover:border-[#e5e7eb] hover:bg-[#f7f8fa]"
             }`}
           >
-            <span className="flex items-start gap-2">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-semibold text-[#1d1d1f]">{item.title || "未命名图文"}</span>
+            <button
+              type="button"
+              onClick={() => props.onSelectBatch(item)}
+              className="block w-full rounded-lg px-2.5 py-2.5 pr-11 text-left"
+              aria-label={`打开 ${title}`}
+            >
+              <span className="block min-w-0">
+                <span className="block truncate text-xs font-semibold text-[#1d1d1f]">{title}</span>
                 <span className="mt-1 block truncate text-[10px] text-[#6e6e73]">
                   {item.platforms.map(shortPlatformLabel).join(" · ")}
                 </span>
               </span>
-              <Icon icon="mdi:chevron-right" className="mt-0.5 shrink-0 text-sm text-[#8a8a8f]" aria-hidden />
-            </span>
-            <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[#8a8a8f]">
-              <span className={item.status === "failed" ? "font-semibold text-red-600" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
-              <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
-            </span>
-          </button>
+              <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[#8a8a8f]">
+                <span className={item.status === "failed" ? "font-semibold text-red-600" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
+                <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => props.onDeleteBatch(item)}
+              disabled={deleteDisabled}
+              aria-label={`删除 ${title}`}
+              title={item.status === "busy"
+                ? "生成中的项目暂时无法删除"
+                : props.deletingBatchKey
+                  ? "正在删除其他项目"
+                  : `删除 ${title}`}
+              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-[#8a8a8f] hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-[#c7c7cc] disabled:hover:bg-transparent"
+            >
+              <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className={`text-base ${deleting ? "animate-spin" : ""}`} aria-hidden />
+            </button>
+          </div>
         );
       })}
     </div>

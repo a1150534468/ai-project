@@ -6,6 +6,8 @@ import { articleWorkflowRoutes } from "./article-workflow-routes.js";
 export type ProjectRow = {
   id: string;
   userId: string;
+  creationMode: string;
+  creationConfigJson: unknown;
   sourceFormat: string;
   sourceText: string;
   generationMode: string;
@@ -115,6 +117,8 @@ function assignDefined(row: ProjectRow, data: Partial<ProjectRow>): void {
 
 /** 列默认值的唯一来源，对齐 schema.prisma；create 与 seed 都过它。 */
 const PROJECT_ROW_DEFAULTS = {
+  creationMode: "source",
+  creationConfigJson: { mode: "source", generateImages: true } as unknown,
   generationMode: "preserve-text",
   platform: "wechat",
   batchId: null,
@@ -179,6 +183,20 @@ export function createArticleWorkflowPrismaMock(seed?: {
       }),
       findFirst: vi.fn(async ({ where }: { where: { id?: string; userId?: string } }) =>
         projects.find((row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId)) ?? null),
+      deleteMany: vi.fn(async ({ where }: {
+        where: { id?: string; userId?: string; batchId?: string };
+      }) => {
+        let count = 0;
+        for (let index = projects.length - 1; index >= 0; index -= 1) {
+          const row = projects[index]!;
+          if (where.id && row.id !== where.id) continue;
+          if (where.userId && row.userId !== where.userId) continue;
+          if (where.batchId && row.batchId !== where.batchId) continue;
+          projects.splice(index, 1);
+          count += 1;
+        }
+        return { count };
+      }),
       updateMany: vi.fn(async ({ where, data }: {
         where: { id: string; status?: string | { in: string[] }; updatedAt?: { lt?: Date } };
         data: Partial<ProjectRow>;

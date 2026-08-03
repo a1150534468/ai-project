@@ -23,12 +23,16 @@ interface ArticleWorkflowResultToolsProps {
   readonly retryingProjectId: string | null;
   readonly regeneratingSlot: string | null;
   readonly canRewrite: boolean;
+  readonly batchMissingProjectCount: number;
+  readonly generatingImages: boolean;
+  readonly canGenerateImages: boolean;
   readonly onRewriteInstructionChange: (value: string) => void;
   readonly onRewriteGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
   readonly onRewriteRegenerateImagesChange: (value: boolean) => void;
   readonly onRewrite: () => void;
   readonly onRetry: (projectId: string) => void;
   readonly onRegenerateImage: (slot: string) => void;
+  readonly onGenerateImages: (scope: "current" | "batch") => void;
 }
 
 type ResultSection = "images" | "rewrite";
@@ -45,9 +49,12 @@ const REWRITE_MODES: readonly { key: ArticleWorkflowGenerationMode; label: strin
 
 export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProps) {
   const [activeSection, setActiveSection] = useState<ResultSection | null>(null);
+  const [imageMenuOpen, setImageMenuOpen] = useState(false);
   const captionPlatform = props.platformConfig.outputKind === "caption";
   const failed = props.project.status === "failed";
   const retrying = props.retryingProjectId === props.project.id;
+  const missingImageCount = props.project.imageManifestJson.filter((image) => !image.imageUrl.trim()).length;
+  const hasProjectError = Boolean(props.project.error);
 
   return (
     <section className="flex-none border-b border-[#e5e7eb] bg-white" aria-label="当前平台工具">
@@ -57,6 +64,47 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
           <span className="truncate">{formatArticleWorkflowStatus(props.project.status)}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {missingImageCount > 0 && (
+            <div className="relative flex items-center">
+              <button
+                type="button"
+                onClick={() => props.onGenerateImages("current")}
+                disabled={!props.canGenerateImages || props.generatingImages}
+                className={`inline-flex h-8 items-center gap-1.5 bg-brand px-2.5 text-xs font-semibold text-white disabled:bg-brand/40 ${
+                  props.batchMissingProjectCount > 1 ? "rounded-l-lg" : "rounded-lg"
+                }`}
+              >
+                <Icon icon={props.generatingImages ? "mdi:loading" : "mdi:image-plus-outline"} className={props.generatingImages ? "animate-spin text-base" : "text-base"} aria-hidden />
+                <span className="hidden sm:inline">生成配图</span>
+              </button>
+              {props.batchMissingProjectCount > 1 && (
+                <button
+                  type="button"
+                  aria-label="选择配图生成范围"
+                  aria-expanded={imageMenuOpen}
+                  disabled={!props.canGenerateImages || props.generatingImages}
+                  onClick={() => setImageMenuOpen((open) => !open)}
+                  className="grid h-8 w-8 place-items-center rounded-r-lg border-l border-white/30 bg-brand text-white disabled:bg-brand/40"
+                >
+                  <Icon icon="mdi:chevron-down" aria-hidden />
+                </button>
+              )}
+              {imageMenuOpen && props.batchMissingProjectCount > 1 && (
+                <div className="absolute right-0 top-10 z-30 w-44 rounded-lg border border-[#d2d2d7] bg-white p-1 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageMenuOpen(false);
+                      props.onGenerateImages("batch");
+                    }}
+                    className="flex h-9 w-full items-center rounded-md px-2.5 text-left text-xs font-semibold text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                  >
+                    生成全部平台配图
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {RESULT_SECTIONS.filter((item) => !captionPlatform || item.key !== "images").map((item) => {
             const active = activeSection === item.key;
             const label = item.key === "images"
@@ -80,21 +128,25 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
         </div>
       </div>
 
-      {failed && (
+      {(failed || hasProjectError) && (
         <div role="alert" className="flex flex-col gap-3 border-t border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-5">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-red-700">{props.platformConfig.label}生成失败</p>
+            <p className="text-xs font-semibold text-red-700">
+              {failed ? `${props.platformConfig.label}生成失败` : "配图生成失败"}
+            </p>
             <p className="mt-0.5 break-words text-[11px] leading-5 text-red-600">{props.project.error || "未知原因"}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => props.onRetry(props.project.id)}
-            disabled={retrying}
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white disabled:bg-red-300"
-          >
-            <Icon icon={retrying ? "mdi:loading" : "mdi:refresh"} className={retrying ? "animate-spin" : ""} aria-hidden />
-            {retrying ? "提交中" : "重新生成"}
-          </button>
+          {failed && (
+            <button
+              type="button"
+              onClick={() => props.onRetry(props.project.id)}
+              disabled={retrying}
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white disabled:bg-red-300"
+            >
+              <Icon icon={retrying ? "mdi:loading" : "mdi:refresh"} className={retrying ? "animate-spin" : ""} aria-hidden />
+              {retrying ? "提交中" : "重新生成"}
+            </button>
+          )}
         </div>
       )}
 

@@ -4,12 +4,14 @@ import {
   articleWorkflowPreservedBodyMarkdown,
   articleWorkflowVisibleTextFromMarkdown,
   articleWorkflowVisibleTextFromSource,
+  type ArticleWorkflowCreationConfig,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
   type ArticleWorkflowPlatformConfig,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
+import { assertArticleWorkflowImitationOriginality } from "./article-workflow-creation.js";
 import type { PrismaClient } from "@prisma/client";
 import { runReservedArticleTextTask } from "./article-workflow-billing.js";
 import {
@@ -158,6 +160,7 @@ async function finalizeFailedArticleProject(
 }
 
 async function materializeArticleWorkflow(args: RunnerDeps & {
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly userId: string;
   readonly projectId: string;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
@@ -170,6 +173,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
   readonly currentImages?: readonly ArticleWorkflowImageAsset[];
   readonly instruction?: string;
   readonly regenerateImages: boolean;
+  readonly generateImages: boolean;
   readonly model: string;
   /** 写 ready 终态；返回 false 表示已被 reaper 抢占，reserve 将退款而非结算 */
   readonly commit: (result: MaterializedArticle) => Promise<boolean>;
@@ -195,6 +199,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
     projectId: args.projectId,
     units: estimateArticleWorkflowReserveUnits({
       sourceText: args.sourceText,
+      creationConfig: args.creationConfig,
       currentHtml: args.currentHtml,
       currentCaption: args.currentCaption,
       instruction: args.instruction,
@@ -224,6 +229,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
       try {
         if (platformConfig.outputKind === "caption") {
           return await materializeCaptionArticle({
+            creationConfig: args.creationConfig,
             prisma: args.prisma,
             llm: args.llm,
             model: args.model,
@@ -235,6 +241,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
             currentCaption: args.currentCaption,
             currentImages: args.currentImages,
             regenerateImages: args.regenerateImages,
+            generateImages: args.generateImages,
             instruction: args.instruction,
             populateImages,
           });
@@ -250,6 +257,7 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
 }
 
 async function materializeHtmlFragmentArticle(args: RunnerDeps & {
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly userId: string;
   readonly projectId: string;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
@@ -259,11 +267,13 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
   readonly currentImages?: readonly ArticleWorkflowImageAsset[];
   readonly instruction?: string;
   readonly regenerateImages: boolean;
+  readonly generateImages: boolean;
   readonly model: string;
   readonly platformConfig: ArticleWorkflowPlatformConfig;
   readonly populateImages: PopulateArticleImages;
 }): Promise<MaterializedArticle> {
   const rawPlan = await generateArticleWorkflowPlan({
+    creationConfig: args.creationConfig,
     llm: args.llm,
     model: args.model,
     sourceFormat: args.sourceFormat,
@@ -285,6 +295,10 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
     })
     : plan.bodyMarkdown;
   const bodyVisibleText = articleWorkflowVisibleTextFromMarkdown(bodyMarkdown);
+  assertArticleWorkflowImitationOriginality({
+    creationConfig: args.creationConfig,
+    outputText: [plan.title, plan.summary, bodyVisibleText].join("\n"),
+  });
   const expectedVisibleText = args.generationMode === "preserve-text"
     ? expectedPreservedVisibleText({
       sourceFormat: args.sourceFormat,
@@ -307,25 +321,27 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
     summary: plan.summary,
     generationMode: args.generationMode,
     imageManifestJson: imageManifest,
-    progressStage: "illustrating",
-    progressPercent: 35,
-    progressMessage: "AI 正在生成配图",
+    progressStage: args.generateImages ? "illustrating" : "layout",
+    progressPercent: args.generateImages ? 35 : 72,
+    progressMessage: args.generateImages ? "AI 正在生成配图" : "AI 正在排版正文",
   });
 
-  imageManifest = await args.populateImages({
-    imageManifest,
-    onProgress: async (completed, total) => {
-      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-        title: plan.title,
-        summary: plan.summary,
-        generationMode: args.generationMode,
-        imageManifestJson: imageManifest,
-        progressStage: "illustrating",
-        progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 35),
-        progressMessage: `正在生成配图（${completed}/${total}）`,
-      });
-    },
-  });
+  if (args.generateImages) {
+    imageManifest = await args.populateImages({
+      imageManifest,
+      onProgress: async (completed, total) => {
+        await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+          title: plan.title,
+          summary: plan.summary,
+          generationMode: args.generationMode,
+          imageManifestJson: imageManifest,
+          progressStage: "illustrating",
+          progressPercent: 35 + Math.round((completed / Math.max(total, 1)) * 35),
+          progressMessage: `正在生成配图（${completed}/${total}）`,
+        });
+      },
+    });
+  }
 
   await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
     progressStage: "layout",
@@ -360,12 +376,14 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
 }
 
 export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
+  readonly creationConfig: ArticleWorkflowCreationConfig;
   readonly userId: string;
   readonly projectId: string;
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly platform: ArticleWorkflowPlatform;
+  readonly generateImages: boolean;
   readonly model: string;
 }): Promise<void> {
   const captionPlatform = articleWorkflowPlatformConfig(args.platform).outputKind === "caption";
@@ -384,6 +402,7 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
       currentImages: [],
       instruction: "",
       regenerateImages: true,
+      generateImages: args.generateImages,
       commit: (result) => commitReadyArticleProject(args.prisma, args.projectId, {
         progressMessage: captionPlatform ? "文案已生成" : "已生成完成",
         generationMode: args.generationMode,
@@ -419,6 +438,7 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
     });
     await materializeArticleWorkflow({
       ...args,
+      creationConfig: current.creationConfig,
       userId: args.project.userId,
       projectId: args.project.id,
       sourceFormat: current.sourceFormat,
@@ -427,6 +447,7 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       currentHtml: current.bodyHtml,
       currentCaption: current.captionText,
       currentImages: current.imageManifest,
+      generateImages: args.regenerateImages,
       commit: (result) => commitReadyArticleProject(args.prisma, args.project.id, {
         progressMessage: captionPlatform ? "文案已更新" : "改稿完成",
         generationMode: args.generationMode,
@@ -438,5 +459,74 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       progressMessage: "改稿失败",
       error,
     });
+  }
+}
+
+export async function runArticleWorkflowMissingImages(args: RunnerDeps & {
+  readonly project: ArticleProjectRow;
+}): Promise<void> {
+  const current = readArticleWorkflowProject(args.project);
+  const missing = current.imageManifest.filter((image) => !image.imageUrl.trim());
+  if (missing.length === 0) {
+    await finalizeArticleWorkflowProjectState(args.prisma, args.project.id, {
+      status: "ready",
+      progressStage: "ready",
+      progressPercent: 100,
+      progressMessage: "配图已齐全",
+      error: null,
+    });
+    return;
+  }
+
+  const chargedOperationIds: string[] = [];
+  try {
+    const imageManifest = await populateArticleWorkflowImages({
+      prisma: args.prisma,
+      billing: args.billing,
+      fetchFn: args.fetchFn,
+      env: args.env,
+      userId: args.project.userId,
+      projectId: args.project.id,
+      imageManifest: current.imageManifest,
+      platformConfig: articleWorkflowPlatformConfig(current.platform),
+      force: false,
+      onCharged: (operationId) => chargedOperationIds.push(operationId),
+      onProgress: async (completed, total) => {
+        await updateArticleWorkflowProjectState(args.prisma, args.project.id, {
+          status: "revising",
+          progressStage: "illustrating",
+          progressPercent: 10 + Math.round((completed / Math.max(total, 1)) * 85),
+          progressMessage: `正在生成配图（${completed}/${total}）`,
+        });
+      },
+    });
+    const bodyHtml = articleWorkflowPlatformConfig(current.platform).outputKind === "caption"
+      ? current.bodyHtml
+      : applyArticleImageManifestToHtml(current.bodyHtml, imageManifest);
+    const committed = await finalizeArticleWorkflowProjectState(args.prisma, args.project.id, {
+      bodyHtml,
+      imageManifestJson: imageManifest,
+      status: "ready",
+      progressStage: "ready",
+      progressPercent: 100,
+      progressMessage: "配图已生成",
+      error: null,
+    });
+    if (!committed) {
+      for (const operationId of chargedOperationIds) {
+        await args.billing.refundResource(operationId).catch(() => undefined);
+      }
+    }
+  } catch (error) {
+    for (const operationId of chargedOperationIds) {
+      await args.billing.refundResource(operationId).catch(() => undefined);
+    }
+    await finalizeArticleWorkflowProjectState(args.prisma, args.project.id, {
+      status: "ready",
+      progressStage: "ready",
+      progressPercent: 100,
+      progressMessage: "配图生成失败，可重新尝试",
+      error: safeErrorMessage(error),
+    }).catch(() => undefined);
   }
 }

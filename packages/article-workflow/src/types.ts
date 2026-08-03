@@ -16,6 +16,26 @@ export const ARTICLE_WORKFLOW_GENERATION_MODES = [
   "polish-text",
 ] as const;
 
+export const ARTICLE_WORKFLOW_CREATION_MODES = [
+  "source",
+  "topic",
+] as const;
+
+export const ARTICLE_WORKFLOW_STYLE_MODES = [
+  "preset",
+  "custom",
+  "imitate",
+] as const;
+
+export const ARTICLE_WORKFLOW_TOPIC_PRESETS = [
+  "general",
+  "experience",
+  "recommendation",
+  "tutorial",
+  "opinion",
+  "healing",
+] as const;
+
 export const ARTICLE_WORKFLOW_PLATFORMS = [
   "wechat",
   "xiaohongshu",
@@ -38,10 +58,42 @@ export const ARTICLE_WORKFLOW_IMAGE_SLOTS = [
 export type ArticleWorkflowProjectStatus = typeof ARTICLE_WORKFLOW_PROJECT_STATUSES[number];
 export type ArticleWorkflowSourceFormat = typeof ARTICLE_WORKFLOW_SOURCE_FORMATS[number];
 export type ArticleWorkflowGenerationMode = typeof ARTICLE_WORKFLOW_GENERATION_MODES[number];
+export type ArticleWorkflowCreationMode = typeof ARTICLE_WORKFLOW_CREATION_MODES[number];
+export type ArticleWorkflowStyleMode = typeof ARTICLE_WORKFLOW_STYLE_MODES[number];
+export type ArticleWorkflowTopicPreset = typeof ARTICLE_WORKFLOW_TOPIC_PRESETS[number];
 export type ArticleWorkflowImageSlot = typeof ARTICLE_WORKFLOW_IMAGE_SLOTS[number];
 export type ArticleWorkflowPlatform = typeof ARTICLE_WORKFLOW_PLATFORMS[number];
 export type ArticleWorkflowOutputKind = typeof ARTICLE_WORKFLOW_OUTPUT_KINDS[number];
 export type ArticleWorkflowImageRole = "cover" | "inline";
+
+export type ArticleWorkflowTopicStyle =
+  | {
+      readonly mode: "preset";
+      readonly preset: ArticleWorkflowTopicPreset;
+    }
+  | {
+      readonly mode: "custom";
+      readonly instruction: string;
+    }
+  | {
+      readonly mode: "imitate";
+      readonly referenceText: string;
+    };
+
+export type ArticleWorkflowCreationConfig =
+  | {
+      readonly mode: "source";
+      readonly generateImages: boolean;
+    }
+  | {
+      readonly mode: "topic";
+      readonly generateImages: boolean;
+      readonly topic: string;
+      readonly keyPoints: string;
+      readonly audience: string;
+      readonly avoid: string;
+      readonly style: ArticleWorkflowTopicStyle;
+    };
 
 export interface ArticleWorkflowImageAsset {
   readonly slot: ArticleWorkflowImageSlot;
