@@ -13,6 +13,7 @@ import * as codexPetApi from "../../codexPetApi";
 import {
   CODEX_PET_IMAGE_MODEL,
   CODEX_PET_IMAGE_MODELS,
+  CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
   CODEX_PET_VISUAL_QA_MODEL,
 } from "../../codexPetApi";
 import type {
@@ -73,6 +74,7 @@ export interface CodexPetStudioClient {
   readonly deleteProject: (token: string, projectId: string) => Promise<void>;
   readonly startRun: (token: string, projectId: string, idempotencyKey: string) => Promise<CodexPetStartResult>;
   readonly continueFailedRun: (token: string, projectId: string, runId: string, idempotencyKey: string) => Promise<CodexPetStartResult>;
+  readonly resumeGateFailure: (token: string, projectId: string, runId: string, reason?: string) => Promise<CodexPetStartResult>;
   readonly selectBase: (
     token: string,
     projectId: string,
@@ -104,6 +106,7 @@ const DEFAULT_CLIENT: CodexPetStudioClient = {
   deleteProject: codexPetApi.deleteCodexPetProject,
   startRun: codexPetApi.startCodexPetRun,
   continueFailedRun: codexPetApi.continueFailedCodexPetRun,
+  resumeGateFailure: codexPetApi.resumeCodexPetGateFailure,
   selectBase: codexPetApi.selectCodexPetBase,
   approveNextImage: codexPetApi.approveCodexPetNextImage,
   cancelRun: codexPetApi.cancelCodexPetRun,
@@ -127,6 +130,7 @@ type BusyAction =
   | "saving"
   | "starting"
   | "continuing"
+  | "resuming-gate"
   | "uploading"
   | "deleting"
   | "cancelling"
@@ -136,6 +140,13 @@ type BusyAction =
   | "installing"
   | "downloading"
   | null;
+
+/** 闸门失败范围里的动作组名 → 中文展示名。 */
+const GATE_ROW_LABELS: Record<string, string> = {
+  ...Object.fromEntries(CODEX_PET_STANDARD_STATES.map((state) => [state.id, state.label])),
+  "look-a": "环视 A（0°–157.5°）",
+  "look-b": "环视 B（180°–337.5°）",
+};
 
 type StreamState = "idle" | "connecting" | "live" | "reconnecting" | "polling" | "ended";
 
@@ -499,6 +510,27 @@ export function CodexPetStudio({
   const canStart = !historicalImageModel && !readOnlyArchive && !interactionLocked
     && (!selectedProjectId || (detailMatchesSelection && projectStatus === "draft" && (!latestRun || runIsTerminal)));
   const runIsCancellable = Boolean(latestRun && !runIsTerminal && !latestRun.cancelRequested);
+  const extraCallBudget = detail?.extraCallBudget ?? null;
+  const extraCallBudgetExhausted = Boolean(extraCallBudget?.exhausted);
+  // Per-image billing settles the planned reservation by the number of calls that
+  // actually reached the provider and did not fail — the same rule as the backend's
+  // four settlement sites. Extra calls are charged separately and are never part of
+  // this reservation, so they are excluded here too.
+  const settledPlannedUnits = (detail?.imageCalls ?? []).filter((call) => (
+    call.callKind === "planned" && call.sentAt !== null && call.status !== "failed"
+  )).length;
+  const projectedRefundPoints = latestRun
+    ? latestRun.billingSettlementStatus === "settled"
+      ? Math.max(0, (latestRun.billingReservedPoints ?? 0) - (latestRun.billingSettledPoints ?? 0))
+      : Math.max(0, ((latestRun.billingReservedUnits ?? 0) - settledPlannedUnits)) * (pricing?.rate ?? 0)
+    : null;
+  // The reservation is `rate * plannedImageCallLimit`, and the limit is a backend
+  // constant served with the price. Hard-coding 14 here meant a backend change to
+  // the plan would quote the user a reservation the backend never charges.
+  const plannedCallLimit = pricing?.plannedImageCallLimit
+    ?? latestRun?.plannedImageCallLimit
+    ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT;
+  const reservedPointsQuote = pricing ? pricing.rate * plannedCallLimit : null;
   const canContinueFailedBase = Boolean(latestRun
     && latestRun.status === "failed"
     && latestRun.billingMode === "per_image_call_v1"
@@ -507,7 +539,13 @@ export function CodexPetStudio({
     && latestRun.hasSuccessfulImage
     && !latestRun.selectedBaseArtifactId
     && latestRun.imageGenerationCallCount === 2
-    && latestRun.plannedImageCallLimit === 14);
+    && latestRun.plannedImageCallLimit === CODEX_PET_PLANNED_IMAGE_CALL_LIMIT);
+  // 闸门在失败时把「该重做哪几组动作」写进了快照，后端据此原地重置那几个画板。
+  const resumableGateRows = latestRun?.status === "failed" ? latestRun.resumableGateRows ?? [] : [];
+  const canResumeGateFailure = resumableGateRows.length > 0 && !canContinueFailedBase;
+  const resumableGateRowLabels = resumableGateRows
+    .map((row) => GATE_ROW_LABELS[row] ?? row)
+    .join("、");
 
   const applyDetail = useCallback((next: CodexPetProjectDetail, hydrateDraft: boolean) => {
     detailRevisionRef.current += 1;
@@ -881,6 +919,28 @@ export function CodexPetStudio({
       .finally(() => setBusyAction(null));
   };
 
+  const handleResumeGateFailure = () => {
+    const project = detail?.project;
+    const run = latestRun;
+    if (!project || !run || !canResumeGateFailure || interactionLocked) return;
+    const confirmed = typeof window === "undefined" || window.confirm(
+      `将只重做闸门指认的动作组：${resumableGateRowLabels}。`
+      + "\n这些动作组的旧画面会作废，重做仍在本次预留额度内，但每次重出图都要单独授权一次付费调用。确认继续？",
+    );
+    if (!confirmed) return;
+    clearFeedback();
+    setBusyAction("resuming-gate");
+    void client.resumeGateFailure(token, project.id, run.id)
+      .then((resumed) => {
+        applyDetail({ project: resumed.project, latestRun: resumed.run, runs: [resumed.run], artifacts: detail?.artifacts ?? [], jobs: [] }, false);
+        setNotice(`已排队重做：${resumableGateRowLabels}；每次重出图仍需单独授权`);
+        onBalanceRefresh?.();
+        void refreshSelectedProject(true);
+      })
+      .catch((resumeError: unknown) => setError(errorMessage(resumeError, "重做闸门指认的动作组失败")))
+      .finally(() => setBusyAction(null));
+  };
+
   const handleDeleteProject = (project: CodexPetProjectSummary) => {
     if (interactionLocked) return;
     const projectId = project.id;
@@ -947,9 +1007,11 @@ export function CodexPetStudio({
     const project = detail?.project;
     const run = latestRun;
     if (!project || !run || !runIsCancellable || interactionLocked) return;
-    const refundText = run.hasSuccessfulImage
-      ? "当前已有成功图片，主动取消不会退款。"
-      : "当前尚无成功图片，取消完成后将全额退款。";
+    // Per-image billing does not settle all-or-nothing: cancelling charges the
+    // planned calls that already reached the provider and refunds the rest of the
+    // reservation. The old "全额退款 / 不退款" wording was wrong in both directions.
+    const refundText = `按次计费：已发出的 ${settledPlannedUnits} 次计划内生图会照常结算，`
+      + `未发出的部分预计退回 ${projectedRefundPoints ?? 0} 积分。`;
     if (typeof window !== "undefined" && !window.confirm(`${refundText}确认取消本次制作？`)) return;
     clearFeedback();
     setBusyAction("cancelling");
@@ -1084,7 +1146,7 @@ export function CodexPetStudio({
             GPT Image 2 · Pixel · AI 质检{draft.qualityInspectionEnabled ? "已开启" : "关闭"}
           </span>
           <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
-            {pricing ? `最多 14 次计划内调用 · ${pricing.rate} 积分/次 · 预留 ${pricing.rate * 14}` : "调用价格加载中"}
+            {pricing ? `最多 ${plannedCallLimit} 次计划内调用 · ${pricing.rate} 积分/次 · 预留 ${reservedPointsQuote}` : "调用价格加载中"}
           </span>
         </div>
       </div>
@@ -1350,7 +1412,7 @@ export function CodexPetStudio({
               </label>
 
               <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-[#6f7078]">
-                正常路径最多 14 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准与计费。上传即表示你拥有参考图与角色的使用权。
+                正常路径最多 {plannedCallLimit} 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准与计费。上传即表示你拥有参考图与角色的使用权。
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1367,7 +1429,7 @@ export function CodexPetStudio({
                   disabled={interactionLocked || !canStart || pricing?.enabled !== true}
                   onClick={handleStart}
                 >
-                  开始制作{pricing ? ` · 预留 ${pricing.rate * 14}` : ""}
+                  开始制作{reservedPointsQuote === null ? "" : ` · 预留 ${reservedPointsQuote}`}
                 </PrimaryButton>
               </div>
 
@@ -1485,10 +1547,31 @@ export function CodexPetStudio({
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-amber-900">{latestRun.status === "awaiting_regeneration_approval" ? "额外真实生图等待批准" : "下一张真实生图已暂停"}</p>
                     <p className="mt-0.5 text-[10px] leading-4 text-amber-800">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，额外调用单独计费，失败后不会自动重画。</p>
+                    {/* Show the cap before the click. Users used to learn it only
+                        from a refusal, which is the moment it helps least. */}
+                    {extraCallBudget && (
+                      <p className="mt-0.5 text-[10px] font-semibold leading-4 text-amber-900" data-testid="codex-pet-extra-call-budget">
+                        {extraCallBudgetExhausted
+                          ? `付费重画次数已用尽（本动作 ${extraCallBudget.jobUsed}/${extraCallBudget.jobLimit} · 本次运行 ${extraCallBudget.runUsed}/${extraCallBudget.runLimit}），请先取消本次运行，再复制为新项目重跑。`
+                          : `付费重画次数：本动作 ${extraCallBudget.jobUsed}/${extraCallBudget.jobLimit} · 本次运行 ${extraCallBudget.runUsed}/${extraCallBudget.runLimit}`}
+                      </p>
+                    )}
                   </div>
-                  <PrimaryButton icon={busyAction === "approving-image" ? "mdi:loading" : "mdi:check-circle-outline"} disabled={interactionLocked} onClick={handleApproveNextImage}>
-                    批准 1 次生图
-                  </PrimaryButton>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {!extraCallBudgetExhausted && (
+                      <PrimaryButton icon={busyAction === "approving-image" ? "mdi:loading" : "mdi:check-circle-outline"} disabled={interactionLocked} onClick={handleApproveNextImage}>
+                        批准 1 次生图
+                      </PrimaryButton>
+                    )}
+                    {/* The parked state is not terminal, so neither 失败续跑 nor the
+                        terminal-only copy button below is reachable from here. Offer
+                        the two steps that actually work: cancel, then copy. */}
+                    {latestRun.status === "awaiting_regeneration_approval" && (
+                      <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>
+                        复制为新项目
+                      </PrimaryButton>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1619,12 +1702,21 @@ export function CodexPetStudio({
               {latestRun && runIsTerminal && !deliveryReady && (
                 <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2.5">
                   <p className="text-[10px] leading-4 text-[#6f7078]">
-                    {canContinueFailedBase ? "候选 1 已成功保存；可在本项目中只重试因 429 失败的候选 2。" : "本次运行已结束；保留原项目记录，复制输入后可用新的幂等键重新制作。"}
+                    {canContinueFailedBase
+                      ? "候选 1 已成功保存；可在本项目中只重试因 429 失败的候选 2。"
+                      : canResumeGateFailure
+                        ? `质检闸门指认这几组动作需要重做：${resumableGateRowLabels}。已通过的其他动作会原样保留。`
+                        : "本次运行已结束；保留原项目记录，复制输入后可用新的幂等键重新制作。"}
                   </p>
                   <div className="flex flex-wrap justify-end gap-2">
                     {canContinueFailedBase && (
                       <PrimaryButton icon={busyAction === "continuing" ? "mdi:loading" : "mdi:restart"} disabled={interactionLocked} onClick={handleContinueFailedRun}>
                         复用候选 1，重试候选 2
+                      </PrimaryButton>
+                    )}
+                    {canResumeGateFailure && (
+                      <PrimaryButton icon={busyAction === "resuming-gate" ? "mdi:loading" : "mdi:auto-fix"} disabled={interactionLocked} onClick={handleResumeGateFailure}>
+                        只重做这 {resumableGateRows.length} 组动作
                       </PrimaryButton>
                     )}
                     <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={handleCopyProject}>复制为新项目</PrimaryButton>
@@ -1720,7 +1812,7 @@ export function CodexPetStudio({
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">真实生图调用</span>
-                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? 14}</span>
+                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT}</span>
                   </div>
                 </div>
               )}
@@ -1751,7 +1843,12 @@ export function CodexPetStudio({
             <div className="space-y-2.5 p-4 text-[11px]">
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">已预留积分</span>
-                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${latestRun.billingReservedPoints ?? 0} 积分` : pricing ? `${pricing.rate * 14} 积分` : "—"}</span>
+                <span className="font-semibold text-[#3f3f45]">
+                  {/* Never restate the planned-call count locally: it is a backend
+                      constant served with the price, and a stale copy here would
+                      quote a reservation the user is not actually charged. */}
+                  {latestRun ? `${latestRun.billingReservedPoints ?? 0} 积分` : pricing ? `${pricing.rate * (pricing.plannedImageCallLimit ?? 0)} 积分` : "—"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">已结算积分</span>
@@ -1759,7 +1856,11 @@ export function CodexPetStudio({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">预计退回</span>
-                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${Math.max(0, (latestRun.billingReservedPoints ?? 0) - (latestRun.billingSettledPoints ?? 0))} 积分` : "—"}</span>
+                {/* Settlement happens once, at the end. Before that `settled` is 0,
+                    so `reserved - settled` reads as a full refund even though every
+                    dispatched planned call will be charged. Project from the ledger
+                    instead, on the same unit rule the backend settles by. */}
+                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${projectedRefundPoints ?? 0} 积分${latestRun.billingSettlementStatus === "settled" ? "" : "（预估）"}` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">知识库</span>

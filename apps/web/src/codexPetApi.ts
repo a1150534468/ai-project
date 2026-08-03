@@ -1,5 +1,5 @@
 import { uploadWorkflowImageReference, type WorkflowImageAsset } from "./api";
-import { ApiError, readErrorMessage } from "./apiError";
+import { ApiError, readErrorBody, readErrorMessage } from "./apiError";
 
 export const CODEX_PET_API_BASE = "/api/workflow/codex-pets";
 
@@ -13,6 +13,12 @@ export const CODEX_PET_IMAGE_MODELS = [
   CODEX_PET_IMAGE_MODEL,
 ] as const;
 export type CodexPetImageModel = typeof CODEX_PET_IMAGE_MODELS[number];
+/**
+ * Fallback only. The authoritative value is the backend constant, served on the
+ * pricing payload as `plannedImageCallLimit` and frozen per run on the run row;
+ * read those first and use this only before either has loaded.
+ */
+export const CODEX_PET_PLANNED_IMAGE_CALL_LIMIT = 14 as const;
 export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol" as const;
 export const CODEX_PET_MODEL_CONTRACT_VERSION = "gpt-only-quality-optional-v3" as const;
 export const CODEX_PET_IMAGE_ACTUAL_MODELS = [
@@ -149,6 +155,8 @@ export interface CodexPetRun {
   readonly plannedImageCallLimit?: number;
   readonly imageGenerationApprovalBudget?: number;
   readonly pendingImageJobKey?: string | null;
+  /** 闸门在失败时指认的动作组，非空即可原地重做这几组。 */
+  readonly resumableGateRows?: readonly string[];
   readonly modelContractVersion: string;
   readonly visualQaModel: string;
   readonly visualQaActualModels: readonly string[];
@@ -216,6 +224,16 @@ export interface CodexPetProjectDetail {
   readonly artifacts: readonly CodexPetArtifact[];
   readonly jobs: readonly CodexPetJob[];
   readonly imageCalls?: readonly CodexPetImageCall[];
+  readonly extraCallBudget?: CodexPetExtraCallBudget | null;
+}
+
+/** Paid repair attempts already committed, against the per-action and per-run caps. */
+export interface CodexPetExtraCallBudget {
+  readonly jobUsed: number;
+  readonly jobLimit: number;
+  readonly runUsed: number;
+  readonly runLimit: number;
+  readonly exhausted: "job" | "run" | null;
 }
 
 export interface CodexPetImageCall {
@@ -300,7 +318,12 @@ async function requestCodexPet<T>(args: {
     body: args.body === undefined ? undefined : JSON.stringify(args.body),
     signal: args.signal,
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
+  if (!response.ok) {
+    // Keep the structured payload: the 409 for an exhausted repair budget carries
+    // `data.extraCallBudget`, which is what the panel needs to explain the refusal.
+    const failure = await readErrorBody(response, args.fallback);
+    throw new ApiError(failure.message, response.status, failure.data);
+  }
   if (response.status === 204) return undefined as T;
   return unwrapData(await response.json() as T | { readonly data: T });
 }
@@ -360,6 +383,7 @@ export async function getCodexPetProject(token: string, projectId: string, signa
     artifacts: detail.artifacts ?? [],
     jobs: detail.jobs ?? [],
     imageCalls: detail.imageCalls ?? [],
+    extraCallBudget: detail.extraCallBudget ?? null,
   };
 }
 
@@ -422,6 +446,25 @@ export async function continueFailedCodexPetRun(
   });
   if (!("project" in data) || !data.project) {
     throw new Error("续跑已创建，但接口未返回项目状态");
+  }
+  return { project: data.project, run: data.run };
+}
+
+export async function resumeCodexPetGateFailure(
+  token: string,
+  projectId: string,
+  runId: string,
+  reason?: string,
+): Promise<CodexPetStartResult> {
+  const data = await requestCodexPet<CodexPetStartResult | { readonly run: CodexPetRun; readonly project?: CodexPetProject }>({
+    token,
+    path: `/projects/${encodeURIComponent(projectId)}/runs/${encodeURIComponent(runId)}/resume-gate-failure`,
+    method: "POST",
+    body: reason && reason.trim().length > 0 ? { reason: reason.trim() } : {},
+    fallback: "重做闸门指认的动作组失败",
+  });
+  if (!("project" in data) || !data.project) {
+    throw new Error("已提交重做，但接口未返回项目状态");
   }
   return { project: data.project, run: data.run };
 }

@@ -15,6 +15,7 @@ import {
   reconcilePerImageBillingSettlements,
   recoverStaleRuns,
   releasePreemptedRuns,
+  expireParkedCodexPetRuns,
 } from "./codex-pet-worker.js";
 
 describe("Codex pet worker health and Prometheus lifecycle", () => {
@@ -312,6 +313,140 @@ describe("Codex pet deleting-project recovery", () => {
       .resolves.toEqual({ scanned: 2, enqueued: 1, failed: 1 });
     expect(enqueue).toHaveBeenCalledTimes(2);
     expect(onEnqueueError).toHaveBeenCalledWith(queueError, "project-1");
+  });
+});
+
+/**
+ * `recoverStaleRuns` deliberately never wakes an approval pause, which is right —
+ * only the user may authorise the next paid call. But with no expiry the wait had
+ * no end: the run held its 14-unit reservation open indefinitely and stayed
+ * wake-able forever, so a user who moved on could later approve the zombie and
+ * put two runs on the same relay quota at once.
+ */
+describe("Codex pet parked-approval expiry", () => {
+  function parkedPrisma(candidates: readonly Record<string, unknown>[]) {
+    const findMany = vi.fn(async (_args: { readonly where: Record<string, unknown> }) => candidates);
+    const updateMany = vi.fn(async () => ({ count: 1 }));
+    const findUniqueOrThrow = vi.fn(async () => ({ lastEventSequence: 12, progressPercent: 62 }));
+    const createEvent = vi.fn(async () => ({}));
+    const updateProject = vi.fn(async () => ({ count: 1 }));
+    const queryRawUnsafe = vi.fn(async () => [{ id: "run-parked" }]);
+    const prisma = {
+      $queryRawUnsafe: queryRawUnsafe,
+      codexPetRun: { findMany, updateMany, findUniqueOrThrow },
+      codexPetEvent: { create: createEvent },
+      codexPetProject: { updateMany: updateProject },
+      codexPetImageCall: { findMany: vi.fn(async () => []), updateMany: vi.fn(async () => ({ count: 0 })) },
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        $queryRawUnsafe: queryRawUnsafe,
+        codexPetRun: { updateMany, findUniqueOrThrow },
+        codexPetEvent: { create: createEvent },
+        codexPetProject: { updateMany: updateProject },
+      }),
+    };
+    return { prisma: prisma as unknown as PrismaClient, findMany, updateMany, createEvent, updateProject };
+  }
+
+  const parkedRun = { id: "run-parked", projectId: "project-1", userId: "user-1", progressPercent: 62 } as const;
+
+  it("cancels a run that waited past the window and records why", async () => {
+    const at = new Date("2026-07-31T00:00:00.000Z");
+    const { prisma, findMany, updateMany, createEvent, updateProject } = parkedPrisma([parkedRun]);
+
+    await expect(expireParkedCodexPetRuns({
+      prisma, now: () => at, expiryMs: 7 * 24 * 60 * 60_000,
+    })).resolves.toBe(1);
+
+    // Only a run whose lease is free and whose wait has actually elapsed.
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        status: "awaiting_regeneration_approval",
+        workerId: null,
+        updatedAt: { lte: new Date("2026-07-24T00:00:00.000Z") },
+      }),
+    }));
+    // Same transition a user could make by hand, so the settle path recognises it.
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "run-parked", status: "awaiting_regeneration_approval", workerId: null },
+      data: expect.objectContaining({ status: "cancelled", cancelRequested: true, completedAt: at }),
+    }));
+    expect(createEvent).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        type: "run.cancelled",
+        sequence: 12,
+        payload: { reason: "approval_expired", expiryMs: 7 * 24 * 60 * 60_000 },
+      }),
+    }));
+    expect(updateProject).toHaveBeenCalledOnce();
+  });
+
+  it("leaves a run still inside its waiting window alone", async () => {
+    const at = new Date("2026-07-31T00:00:00.000Z");
+    const { prisma, updateMany } = parkedPrisma([]);
+
+    await expect(expireParkedCodexPetRuns({ prisma, now: () => at })).resolves.toBe(0);
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not count a run the user approved between the scan and the write", async () => {
+    const at = new Date("2026-07-31T00:00:00.000Z");
+    const { prisma, createEvent } = parkedPrisma([parkedRun]);
+    (prisma as unknown as { codexPetRun: { updateMany: unknown } }).codexPetRun.updateMany = vi.fn(async () => ({ count: 0 }));
+    const raced = {
+      ...(prisma as unknown as Record<string, unknown>),
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
+        $queryRawUnsafe: async () => [],
+        codexPetRun: { updateMany: async () => ({ count: 0 }), findUniqueOrThrow: vi.fn() },
+        codexPetEvent: { create: createEvent },
+        codexPetProject: { updateMany: vi.fn() },
+      }),
+    } as unknown as PrismaClient;
+
+    await expect(expireParkedCodexPetRuns({ prisma: raced, now: () => at })).resolves.toBe(0);
+    expect(createEvent).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The reservation is settled by `reconcilePerImageBillingSettlements`, which
+   * already accepts `cancelled`. Extras charged at approval but never dispatched
+   * are outside that reservation, so they need their own refund.
+   */
+  it("returns points for extras charged at approval but never dispatched", async () => {
+    const at = new Date("2026-07-31T00:00:00.000Z");
+    const { prisma } = parkedPrisma([parkedRun]);
+    const extraRow = { id: "call-1", operationId: "codex-pet:run:run-parked:image:row-idle:2:extra" };
+    (prisma as unknown as { codexPetImageCall: { findMany: unknown } }).codexPetImageCall.findMany = vi.fn(async () => [extraRow]);
+    const refundResource = vi.fn(async () => ({ success: true }));
+
+    await expect(expireParkedCodexPetRuns({
+      prisma, billing: { refundResource }, now: () => at,
+    })).resolves.toBe(1);
+
+    expect(refundResource).toHaveBeenCalledWith(extraRow.operationId);
+  });
+
+  it("keeps sweeping after one run fails and reports it", async () => {
+    const at = new Date("2026-07-31T00:00:00.000Z");
+    const { prisma } = parkedPrisma([
+      { ...parkedRun, id: "run-broken" },
+      { ...parkedRun, id: "run-ok" },
+    ]);
+    let call = 0;
+    (prisma as unknown as { $transaction: unknown }).$transaction = async (callback: (tx: unknown) => Promise<unknown>) => {
+      call += 1;
+      if (call === 1) throw new Error("deadlock detected");
+      return callback({
+        $queryRawUnsafe: async () => [],
+        codexPetRun: { updateMany: async () => ({ count: 1 }), findUniqueOrThrow: async () => ({ lastEventSequence: 3, progressPercent: 40 }) },
+        codexPetEvent: { create: async () => ({}) },
+        codexPetProject: { updateMany: async () => ({ count: 1 }) },
+      });
+    };
+    const onError = vi.fn();
+
+    await expect(expireParkedCodexPetRuns({ prisma, now: () => at, onError })).resolves.toBe(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0]![1]).toBe("run-broken");
   });
 });
 

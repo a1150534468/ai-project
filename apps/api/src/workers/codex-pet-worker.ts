@@ -27,7 +27,10 @@ import {
 import { createCodexPetArtifactStore, deleteCodexPetArtifact } from "../workflow/codex-pet-storage.js";
 import { assertCodexPetImageRoute } from "../workflow/codex-pet-model-contract.js";
 import { installCodexPetUpstreamDnsOverride } from "../workflow/codex-pet-network.js";
-import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "../workflow/codex-pet-call-ledger.js";
+import {
+  CODEX_PET_PER_IMAGE_BILLING_MODE,
+  refundCodexPetUndispatchedExtraCalls,
+} from "../workflow/codex-pet-call-ledger.js";
 import {
   isVerifiedWorkflowImageObjectKeyForUser,
   sanitizeImageUpstreamRequestId,
@@ -53,6 +56,7 @@ export type WorkerMetrics = {
   billingRefunded: number;
   billingRefundFailed: number;
   staleRunsRecovered: number;
+  parkedRunsExpired: number;
   deletingProjectsRecovered: number;
   deletingProjectRecoveryFailed: number;
   projectsCleaned: number;
@@ -105,6 +109,7 @@ export function createCodexPetWorkerMetrics(): WorkerMetrics {
     billingRefunded: 0,
     billingRefundFailed: 0,
     staleRunsRecovered: 0,
+    parkedRunsExpired: 0,
     deletingProjectsRecovered: 0,
     deletingProjectRecoveryFailed: 0,
     projectsCleaned: 0,
@@ -504,6 +509,116 @@ type CodexPetSettlementClient = {
     readonly units: number;
   }) => Promise<{ readonly settled: number }>;
 };
+
+/**
+ * How long a run may sit in `awaiting_regeneration_approval` before maintenance
+ * cancels it.
+ *
+ * `recoverStaleRuns` deliberately never touches an approval-waiting run: nobody
+ * should re-enqueue work the user has not authorised. But without any expiry
+ * that wait had no end, which left two debts: its 14-unit reservation was held
+ * open indefinitely (the settlement reconciler only considers terminal runs),
+ * and the run stayed wake-able forever — so a user who moved on to a new project
+ * could later approve the zombie and have both runs hit the same relay quota at
+ * once, which is exactly the 429 shape that killed an earlier run.
+ *
+ * Cancelling is the conservative resolution: it is the same transition the user
+ * could make by hand, it settles only the units actually delivered, and it
+ * leaves every artifact in place.
+ */
+export const CODEX_PET_PARKED_APPROVAL_EXPIRY_MS = positiveNumber(
+  "CODEX_PET_PARKED_APPROVAL_EXPIRY_MS",
+  7 * 24 * 60 * 60_000,
+);
+
+/**
+ * Cancel runs that have waited for image approval past the expiry window.
+ *
+ * Only flips the run to `cancelled` and records the reason; the reservation is
+ * then settled by `reconcilePerImageBillingSettlements` (which already accepts
+ * `cancelled`) and any charged-but-undispatched extras are refunded here, since
+ * those points sit outside the run reservation entirely.
+ */
+export async function expireParkedCodexPetRuns(input: {
+  readonly prisma: PrismaClient;
+  readonly billing?: { readonly refundResource: (operationId: string) => Promise<{ success: boolean }> };
+  readonly now?: () => Date;
+  readonly limit?: number;
+  readonly expiryMs?: number;
+  readonly onError?: (error: unknown, runId: string) => void;
+}): Promise<number> {
+  const now = input.now ?? (() => new Date());
+  const expiryMs = Math.max(0, input.expiryMs ?? CODEX_PET_PARKED_APPROVAL_EXPIRY_MS);
+  const parkedBefore = new Date(now().getTime() - expiryMs);
+  const candidates = await input.prisma.codexPetRun.findMany({
+    where: {
+      status: "awaiting_regeneration_approval",
+      // A worker still holding the lease is mid-transition; leave it alone.
+      workerId: null,
+      updatedAt: { lte: parkedBefore },
+    },
+    select: { id: true, projectId: true, userId: true, progressPercent: true },
+    take: Math.min(200, Math.max(1, input.limit ?? 50)),
+  });
+  let cancelled = 0;
+  for (const run of candidates) {
+    try {
+      const expiredAt = now();
+      const changed = await input.prisma.$transaction(async (tx) => {
+        await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', run.id);
+        const updated = await tx.codexPetRun.updateMany({
+          where: { id: run.id, status: "awaiting_regeneration_approval", workerId: null },
+          data: {
+            cancelRequested: true,
+            status: "cancelled",
+            progressStage: "cancelled",
+            progressMessage: "等待授权超时，已自动取消并结清",
+            completedAt: expiredAt,
+            lastEventSequence: { increment: 1 },
+          },
+        });
+        if (updated.count === 0) return false;
+        const fresh = await tx.codexPetRun.findUniqueOrThrow({
+          where: { id: run.id },
+          select: { lastEventSequence: true, progressPercent: true },
+        });
+        await tx.codexPetEvent.create({
+          data: {
+            projectId: run.projectId,
+            runId: run.id,
+            userId: run.userId,
+            sequence: fresh.lastEventSequence,
+            type: "run.cancelled",
+            stage: "cancelled",
+            message: "等待重出图授权超时，已自动取消，未交付的预留额度会退回",
+            progress: fresh.progressPercent,
+            payload: { reason: "approval_expired", expiryMs },
+          },
+        });
+        await tx.codexPetProject.updateMany({
+          where: { id: run.projectId, userId: run.userId, latestRunId: run.id, status: { not: "deleting" } },
+          data: { status: "cancelled" },
+        });
+        return true;
+      });
+      if (!changed) continue;
+      cancelled += 1;
+      if (input.billing) {
+        await refundCodexPetUndispatchedExtraCalls({
+          prisma: input.prisma,
+          billing: input.billing,
+          runId: run.id,
+          projectId: run.projectId,
+          userId: run.userId,
+          onError: (error) => input.onError?.(error, run.id),
+        }).catch((error: unknown) => input.onError?.(error, run.id));
+      }
+    } catch (error) {
+      input.onError?.(error, run.id);
+    }
+  }
+  return cancelled;
+}
 
 /**
  * A worker can finish the artifact work yet lose connectivity while settling
@@ -908,6 +1023,16 @@ async function main() {
       const settled = await reconcilePerImageBillingSettlements({ prisma, billing });
       if (settled) console.info(`[codex-pet-worker] settled ${settled} per-image billed runs`);
       metrics.staleRunsRecovered += await recoverStaleRuns();
+      const expiredParked = await expireParkedCodexPetRuns({
+        prisma,
+        billing,
+        now: () => now,
+        onError: (error, runId) => console.warn(
+          `[codex-pet-worker] parked run ${runId} expiry deferred: ${safeWorkerError(error)}`,
+        ),
+      });
+      metrics.parkedRunsExpired += expiredParked;
+      if (expiredParked) console.info(`[codex-pet-worker] cancelled ${expiredParked} runs that waited past the approval window`);
       const deletionRecovery = await recoverDeletingProjects({
         prisma,
         onEnqueueError: (error) => console.warn(

@@ -1607,6 +1607,49 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
+  /**
+   * A parked run is not *running*, but approving it dispatches paid image calls
+   * at once. Leaving it out of the new-run block let a user start a second run and
+   * then approve the parked one, putting two runs on the same upstream quota —
+   * the 429 shape that killed an earlier run.
+   */
+  it("blocks a new run while another sits parked on approval, and names the exit", async () => {
+    const parkedProject = projectRow({ id: "project-parked", status: "standard_generating", latestRunId: "run-parked" });
+    const draft = projectRow({ id: "project-fresh", status: "draft", latestRunId: null });
+    const parked = runRow({
+      id: "run-parked",
+      projectId: parkedProject.id,
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
+      idempotencyKey: "start-key-parked",
+      billingMode: "per_image_call_v1",
+      billingSettlementStatus: "reserved",
+      billingReservedUnits: 14,
+      workerId: null,
+    });
+    const { prisma, state } = createPrismaMock({ projects: [parkedProject, draft], runs: [parked] });
+    const billing = createBilling();
+    const { app } = await createApp(prisma, { billing, enqueueRun: vi.fn(async () => undefined) });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/${draft.id}/start`,
+      headers: { ...auth, "idempotency-key": "start-key-second" },
+      payload: { idempotencyKey: "start-key-second" },
+    });
+
+    expect(response.statusCode).toBe(409);
+    const body = response.json() as { readonly error: string; readonly activeRunId?: string };
+    // The generic "已有正在制作" message leaves a parked run undiagnosable, since
+    // from the user's side nothing appears to be happening.
+    expect(body.error).toContain("等待重出图授权");
+    expect(body.error).toContain("取消");
+    expect(body.activeRunId).toBe("run-parked");
+    expect(state.runs).toHaveLength(1);
+    expect(billing.reserveResource).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it("does not resurrect a legacy insufficient idempotent run", async () => {
     const originalProject = projectRow({ id: "project-1", status: "draft" });
     const insufficient = runRow({

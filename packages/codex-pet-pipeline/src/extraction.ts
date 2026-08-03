@@ -1161,6 +1161,81 @@ export async function extractFullPoseBoardsWithSharedRegistration(
   };
 }
 
+export interface SpliceSourcePoseBoardSlotsInput {
+  /** Newest board; its dimensions define the output grid arithmetic. */
+  readonly base: Buffer;
+  /** Earlier board whose listed slots replace the base slots. */
+  readonly donor: Buffer;
+  readonly columns: number;
+  readonly rows: number;
+  /** Row-major physical source slot indexes to take from the donor. */
+  readonly slots: readonly number[];
+  readonly chromaKey: string;
+}
+
+/**
+ * Replace individual *source* slots of a pose board with the same slots of an
+ * earlier board, before any normalization.
+ *
+ * A rejected board is usually rejected for one or two cells; the rest are
+ * production quality. Salvaging must happen here, at source-slot granularity,
+ * and never by merging already-extracted frames: `extractPoseBoard` derives one
+ * `sharedScale` and one baseline per board, so frames normalized from two boards
+ * carry incompatible scales and produce the exact size/baseline pop that
+ * `extractFullPoseBoardsWithSharedRegistration` exists to prevent. Splicing the
+ * raw slots keeps a single later extraction pass as the only owner of scale and
+ * registration for every frame.
+ *
+ * The donor is resized to the base dimensions when the gateway returned a
+ * different size, because slot rectangles are pure proportional divisions of the
+ * board: after that resize, slot `i` of the donor covers exactly slot `i` of the
+ * base. Each replaced rectangle is first painted with the chroma key so donor
+ * transparency cannot let base pixels show through.
+ */
+export async function spliceSourcePoseBoardSlots(input: SpliceSourcePoseBoardSlotsInput): Promise<Buffer> {
+  if (!Number.isInteger(input.columns) || input.columns < 1 || !Number.isInteger(input.rows) || input.rows < 1) {
+    throw new Error("Board columns and rows must be positive integers");
+  }
+  const slotCount = input.columns * input.rows;
+  const slots = [...new Set(input.slots)].sort((left, right) => left - right);
+  if (slots.some((slot) => !Number.isInteger(slot) || slot < 0 || slot >= slotCount)) {
+    throw new Error("Spliced slot indexes must address the board grid");
+  }
+  if (slots.length === 0) return input.base;
+  if (slots.length === slotCount) return input.donor;
+  const baseMetadata = await sharp(input.base).metadata();
+  if (!baseMetadata.width || !baseMetadata.height) throw new Error("Base pose board has no readable dimensions");
+  const donorMetadata = await sharp(input.donor).metadata();
+  if (!donorMetadata.width || !donorMetadata.height) throw new Error("Donor pose board has no readable dimensions");
+  const alignedDonor = donorMetadata.width === baseMetadata.width && donorMetadata.height === baseMetadata.height
+    ? input.donor
+    : await sharp(input.donor)
+      .resize(baseMetadata.width, baseMetadata.height, { fit: "fill", kernel: sharp.kernel.lanczos3 })
+      .png()
+      .toBuffer();
+  const composites: Array<{ input: Buffer; left: number; top: number }> = [];
+  for (const slot of slots) {
+    const column = slot % input.columns;
+    const row = Math.floor(slot / input.columns);
+    const left = Math.floor(column * baseMetadata.width / input.columns);
+    const right = Math.floor((column + 1) * baseMetadata.width / input.columns);
+    const top = Math.floor(row * baseMetadata.height / input.rows);
+    const bottom = Math.floor((row + 1) * baseMetadata.height / input.rows);
+    const width = right - left;
+    const height = bottom - top;
+    const tile = await sharp(alignedDonor).extract({ left, top, width, height }).png().toBuffer();
+    composites.push({
+      input: await sharp({ create: { width, height, channels: 4, background: input.chromaKey } })
+        .composite([{ input: tile, left: 0, top: 0 }])
+        .png()
+        .toBuffer(),
+      left,
+      top,
+    });
+  }
+  return sharp(input.base).composite(composites).png().toBuffer();
+}
+
 export async function mirrorFramesPreservingOrder(frames: readonly Buffer[]): Promise<readonly Buffer[]> {
   return Promise.all(frames.map((frame) => sharp(frame).flop().png().toBuffer()));
 }

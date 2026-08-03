@@ -28,8 +28,12 @@ import {
   CODEX_PET_PER_IMAGE_BILLING_MODE,
   CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
   codexPetExtraCallBudget,
+  codexPetExtraCallBudgetFromCalls,
   prepareCodexPetExtraImageCall,
+  refundCodexPetUndispatchedExtraCalls,
 } from "./codex-pet-call-ledger.js";
+import { initializeCodexPetFailedContinuation } from "./codex-pet-failed-continuation.js";
+import { readCodexPetGateFailureSnapshot } from "./codex-pet-gate-failure.js";
 import { CODEX_PET_GPT_FAILED_CONTINUATION_SCHEMA_VERSION } from "./codex-pet-gpt-continuation.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import {
@@ -80,6 +84,14 @@ const ACTIVE_RUN_STATUSES = [
   "packaging",
   "archiving",
 ] as const;
+
+// A run parked on `awaiting_regeneration_approval` is not *running*, but it is
+// still wake-able: approving it dispatches paid image calls immediately. Any
+// check that asks "does this account already have a run that could hit the
+// relay?" must therefore include it. Leaving it out of the new-run block let a
+// user start a second run and then approve the parked one, putting two runs on
+// the same upstream quota at once — the 429 shape that killed an earlier run.
+const BLOCKING_RUN_STATUSES = [...ACTIVE_RUN_STATUSES, "awaiting_regeneration_approval"] as const;
 
 const TERMINAL_RUN_STATUSES = ["ready", "failed", "cancelled", CODEX_PET_LEGACY_READ_ONLY_STATUS] as const;
 // Final artifacts are independently verified when the package job commits.
@@ -135,6 +147,7 @@ const updateProjectSchema = projectFieldsSchema.partial().superRefine((value, co
 
 const startRunSchema = z.object({ idempotencyKey: idempotencyKeySchema.optional() }).default({});
 const failedContinuationSchema = z.object({ idempotencyKey: idempotencyKeySchema.optional() }).default({});
+const gateFailureResumeSchema = z.object({ reason: z.string().trim().min(1).max(500).optional() }).default({});
 const baseSelectionSchema = z.union([
   z.object({ artifactId: idSchema }).strict(),
   z.object({ autoSelect: z.literal(true) }).strict(),
@@ -332,8 +345,12 @@ type EventShape = {
 class ActiveCodexPetRunError extends Error {
   readonly runId: string;
 
-  constructor(runId: string) {
-    super("当前账号已有正在制作的桌宠");
+  // A parked run reads as "nothing is happening" from the user's side, so the
+  // generic message leaves them with no idea what to do. Name the exit.
+  constructor(runId: string, status?: string) {
+    super(status === "awaiting_regeneration_approval"
+      ? "当前账号有一个停摆的桌宠运行正在等待重出图授权，请先授权继续或取消它，再开始新的制作"
+      : "当前账号已有正在制作的桌宠");
     this.name = "ActiveCodexPetRunError";
     this.runId = runId;
   }
@@ -457,6 +474,10 @@ function serializeRun(run: RunShape) {
     usage: run.usage,
     knowledgeDocumentId: run.knowledgeDocumentId,
     lastEventSequence: run.lastEventSequence,
+    // A gate that named its action groups leaves the failure resumable inside the
+    // same paid run. Publishing the scope is what lets the panel offer that resume
+    // instead of only "copy to a new project and pay for everything again".
+    resumableGateRows: [...(readCodexPetGateFailureSnapshot(run.inputSnapshot)?.rows ?? [])],
     error: run.error,
     startedAt: safeDate(run.startedAt),
     completedAt: safeDate(run.completedAt),
@@ -1026,6 +1047,45 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     result: { readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean },
   ): Promise<{ readonly run: RunShape; readonly eventSequences: readonly number[]; readonly refundPending: boolean }> {
     if (result.run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
+      // Extra calls charged at approval but never dispatched are refunded on
+      // their own axis: they are not part of the run reservation, so the planned
+      // settle below can neither return nor account for them. Runs first so an
+      // already-settled reservation does not short-circuit the extras refund.
+      let extraRefundSequences = result.eventSequences;
+      if (result.run.status === "cancelled" && result.run.workerId === null) {
+        const extras = await refundCodexPetUndispatchedExtraCalls({
+          prisma,
+          billing,
+          runId: result.run.id,
+          projectId: result.run.projectId,
+          userId: result.run.userId,
+        }).catch(() => ({ refunded: 0, pending: 0 }));
+        if (extras.refunded > 0) {
+          const recorded = await prisma.$transaction(async (tx) => {
+            const bumped = await tx.codexPetRun.update({
+              where: { id: result.run.id },
+              data: { lastEventSequence: { increment: 1 } },
+              select: { lastEventSequence: true, projectId: true, userId: true, status: true, progressPercent: true },
+            });
+            await tx.codexPetEvent.create({
+              data: {
+                projectId: bumped.projectId,
+                runId: result.run.id,
+                userId: bumped.userId,
+                sequence: bumped.lastEventSequence,
+                type: "billing.refunded",
+                stage: bumped.status,
+                message: `已退回 ${extras.refunded} 次已授权但未派发的额外生图积分`,
+                progress: bumped.progressPercent,
+                payload: { refundedExtraCalls: extras.refunded, pendingExtraRefunds: extras.pending },
+              },
+            });
+            return bumped.lastEventSequence;
+          }).catch(() => null);
+          if (recorded !== null) extraRefundSequences = [...extraRefundSequences, recorded];
+        }
+      }
+      result = { ...result, eventSequences: extraRefundSequences };
       if (result.run.status !== "cancelled"
         || result.run.workerId !== null
         || result.run.billingSettlementStatus === "settled"
@@ -1311,6 +1371,15 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
             completedAt: call.completedAt instanceof Date ? call.completedAt.toISOString() : null,
             error: typeof call.error === "string" ? call.error : null,
           })),
+          // Sent with the run so the approval panel can state the remaining paid
+          // repair attempts up front, instead of letting the user discover the cap
+          // by being refused after a click.
+          extraCallBudget: latestRun
+            ? codexPetExtraCallBudgetFromCalls(
+              imageCalls.map((call) => ({ callKind: String(call.callKind), status: String(call.status), jobKey: String(call.jobKey) })),
+              latestRun.pendingImageJobKey ?? null,
+            )
+            : null,
         },
       },
     };
@@ -1603,8 +1672,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           return { project: project as ProjectShape, run: existing as RunShape, created: false };
         }
         if (project.status !== "draft") throw new Error("CODEX_PET_PROJECT_NOT_DRAFT");
-        const active = await tx.codexPetRun.findFirst({ where: { userId, status: { in: [...ACTIVE_RUN_STATUSES] } }, orderBy: { createdAt: "desc" } });
-        if (active) throw new ActiveCodexPetRunError(active.id);
+        const active = await tx.codexPetRun.findFirst({ where: { userId, status: { in: [...BLOCKING_RUN_STATUSES] } }, orderBy: { createdAt: "desc" } });
+        if (active) throw new ActiveCodexPetRunError(active.id, active.status);
         const runId = deriveCodexPetRunId(userId, project.id, key.value);
         const operationId = `codex-pet:run:${runId}:planned-images`;
         const inputSnapshot = {
@@ -1810,12 +1879,12 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
             where: {
               userId,
               id: { not: params.data.runId },
-              status: { in: [...ACTIVE_RUN_STATUSES, "awaiting_regeneration_approval"] },
+              status: { in: [...BLOCKING_RUN_STATUSES] },
             },
           }),
         ]);
         if (!project || !source) throw new Error("CODEX_PET_CONTINUATION_NOT_FOUND");
-        if (active) throw new ActiveCodexPetRunError(active.id);
+        if (active) throw new ActiveCodexPetRunError(active.id, active.status);
         const candidateOneJob = sourceJobs.find((job) => job.key === "base-candidate-1");
         const candidateTwoJob = sourceJobs.find((job) => job.key === "base-candidate-2");
         const sourceBaseArtifactId = candidateOneJob?.outputArtifactIds.length === 1
@@ -2005,6 +2074,76 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
       sourceRunId: params.data.runId,
       reusedArtifactId: prepared.sourceBaseArtifactId,
       plannedCallsRemaining: prepared.plannedCallsRemaining,
+    } });
+  });
+
+  /**
+   * Resume a failed run whose deterministic/visual gate named the action groups
+   * it rejected, redoing only those boards inside the same reservation.
+   *
+   * This charges nothing by itself: the reset rows arrive at the per-image ledger
+   * as fresh logical attempts, so each redo still has to be approved and paid for
+   * one at a time. Without this route the gate scope recorded at failure time had
+   * no consumer and the only exit was copying the project and paying for all
+   * fourteen planned calls again.
+   */
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/resume-gate-failure", async (request, reply) => {
+    const userId = userIdOf(request);
+    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const params = runParamsSchema.safeParse(request.params);
+    const body = gateFailureResumeSchema.safeParse(request.body ?? {});
+    if (!params.success || !body.success) return reply.code(400).send({ error: "闸门续跑参数不合法" });
+    const run = await ownedRun(userId, params.data.projectId, params.data.runId);
+    if (!run) return reply.code(404).send({ error: "桌宠运行不存在" });
+    const project = await ownedProject(userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "桌宠项目不存在" });
+    if (project.status === CODEX_PET_LEGACY_READ_ONLY_STATUS || run.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) {
+      return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能继续制作" });
+    }
+    const gateFailure = readCodexPetGateFailureSnapshot(run.inputSnapshot);
+    if (!gateFailure) return reply.code(409).send({ error: "本次失败没有可重做的动作组范围，请复制为新项目重跑" });
+    const active = await prisma.codexPetRun.findFirst({
+      where: {
+        userId,
+        id: { not: run.id },
+        status: { in: [...BLOCKING_RUN_STATUSES] },
+      },
+      select: { id: true, status: true },
+    });
+    if (active) {
+      return reply.code(409).send({
+        error: new ActiveCodexPetRunError(active.id, active.status).message,
+        activeRunId: active.id,
+      });
+    }
+
+    try {
+      await initializeCodexPetFailedContinuation({
+        prisma,
+        runId: run.id,
+        projectId: params.data.projectId,
+        userId,
+        reason: body.data.reason?.trim()
+          || `${gateFailure.gate} 闸门指认动作组重做：${gateFailure.rows.join("、")}`,
+      });
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: run.id, status: "gate_resume_rejected" }, "Codex pet gate-failure resume rejected");
+      return reply.code(409).send({ error: safeDiagnostic(error) });
+    }
+    try {
+      await enqueueRun(run.id);
+    } catch (error) {
+      app.log.error({ error: safeDiagnostic(error), runId: run.id }, "failed to enqueue Codex pet gate-failure resume");
+      return reply.code(503).send({ error: "续跑已登记但入队失败，请稍后重试", runId: run.id, retryable: true });
+    }
+    const resumed = await ownedRun(userId, params.data.projectId, params.data.runId);
+    const refreshedProject = await ownedProject(userId, params.data.projectId);
+    await notifyEvent(app, deps, run.id);
+    return reply.code(202).send({ success: true, data: {
+      ...(refreshedProject ? { project: serializeProject(refreshedProject as ProjectShape) } : {}),
+      run: serializeRun((resumed ?? run) as RunShape),
+      gate: gateFailure.gate,
+      rows: [...gateFailure.rows],
     } });
   });
 
@@ -2373,10 +2512,14 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         jobKey: job.key,
       });
       if (budget.exhausted) {
+        // The run is parked in `awaiting_regeneration_approval`, which is not a
+        // terminal state: neither 失败续跑 (needs `failed`) nor 复制为新项目 (needs a
+        // terminal run) is reachable from here. Cancelling first is the only real
+        // way out, so name that step instead of an option the user cannot click.
         return reply.code(409).send({
           error: budget.exhausted === "job"
-            ? `该动作的额外生图次数已达上限（${budget.jobLimit} 次），请改用失败续跑或复制为新工作`
-            : `本次运行的额外生图次数已达上限（${budget.runLimit} 次），请改用失败续跑或复制为新工作`,
+            ? `该动作的额外生图次数已达上限（${budget.jobLimit} 次），请先取消本次运行，再复制为新项目重跑`
+            : `本次运行的额外生图次数已达上限（${budget.runLimit} 次），请先取消本次运行，再复制为新项目重跑`,
           data: { extraCallBudget: budget },
         });
       }

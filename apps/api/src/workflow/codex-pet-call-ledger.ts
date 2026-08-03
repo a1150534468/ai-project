@@ -45,6 +45,37 @@ export const CODEX_PET_EXTRA_IMAGE_CALLS_PER_RUN_LIMIT = positiveInteger(
  */
 const BILLABLE_EXTRA_STATUSES = ["dispatching", "sent", "succeeded"] as const;
 
+/** Whether one ledger row commits the user's points against the repair budget. */
+export function codexPetCallConsumesExtraBudget(call: { readonly callKind: string; readonly status: string }): boolean {
+  return call.callKind === "extra" && (BILLABLE_EXTRA_STATUSES as readonly string[]).includes(call.status);
+}
+
+/**
+ * The same budget as `codexPetExtraCallBudget`, computed from ledger rows the
+ * caller already holds.
+ *
+ * The project detail response loads the whole ledger anyway, and the approval
+ * panel needs the remaining count *before* the user clicks: hitting a 409 is how
+ * users used to discover the cap, which is the worst possible moment.
+ */
+export function codexPetExtraCallBudgetFromCalls(
+  calls: readonly { readonly callKind: string; readonly status: string; readonly jobKey: string }[],
+  jobKey: string | null,
+): CodexPetExtraCallBudget {
+  const billable = calls.filter(codexPetCallConsumesExtraBudget);
+  const jobUsed = jobKey ? billable.filter((call) => call.jobKey === jobKey).length : 0;
+  const runUsed = billable.length;
+  const jobLimit = CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT;
+  const runLimit = CODEX_PET_EXTRA_IMAGE_CALLS_PER_RUN_LIMIT;
+  return {
+    jobUsed,
+    jobLimit,
+    runUsed,
+    runLimit,
+    exhausted: jobKey && jobUsed >= jobLimit ? "job" : runUsed >= runLimit ? "run" : null,
+  };
+}
+
 export interface CodexPetExtraCallBudget {
   readonly jobUsed: number;
   readonly jobLimit: number;
@@ -142,6 +173,15 @@ export interface CodexPetImageCallDispatchInput {
   readonly requestedModel: string;
   /** Frozen from the run's reservation-time pricing snapshot. */
   readonly points: number;
+  /**
+   * Transport-layer attempt inside this one logical attempt, 1-based.
+   *
+   * A logical attempt is the billing unit: one ledger row, one settled unit, one
+   * user approval. Everything above 1 here is the adapter retrying a socket-level
+   * failure under that already-paid unit, so it re-dispatches the SAME row rather
+   * than reserving a new one, and never increments the run's call count.
+   */
+  readonly transportAttempt?: number;
 }
 
 /**
@@ -183,13 +223,22 @@ export async function prepareCodexPetImageCallDispatch(input: CodexPetImageCallD
       where: { runId_jobKey_logicalAttempt: { runId: input.runId, jobKey: input.jobKey, logicalAttempt: input.logicalAttempt } },
     });
     const callKind = call?.callKind === "extra" ? "extra" as const : "planned" as const;
-    if (call && ["dispatching", "sent", "succeeded", "failed"].includes(call.status)) {
+    // A transport retry re-enters this row on purpose. `succeeded` and `failed`
+    // are still refused: those are terminal outcomes of the paid unit, and
+    // re-dispatching them would be a second unpaid image or a double refund.
+    const transportRetry = (input.transportAttempt ?? 1) > 1
+      && Boolean(call)
+      && (call!.status === "dispatching" || call!.status === "sent");
+    if (call && !transportRetry && ["dispatching", "sent", "succeeded", "failed"].includes(call.status)) {
       throw new CodexPetImageCallAlreadySentError(input.runId, input.jobKey, input.logicalAttempt);
     }
     if (!call && input.logicalAttempt > 1) {
       throw new CodexPetImageCallApprovalRequiredError(input.runId, input.jobKey, input.logicalAttempt);
     }
-    if (callKind === "planned") {
+    // A transport retry consumes no new planned slot — its own row is already
+    // inside the counts below, so re-checking the limit would reject the retry
+    // of the very last planned call.
+    if (callKind === "planned" && !transportRetry) {
       const [sentPlanned, dispatching] = await Promise.all([
         tx.codexPetImageCall.count({
           where: { runId: input.runId, projectId: input.projectId, userId: input.userId, callKind: "planned", sentAt: { not: null } },
@@ -240,9 +289,16 @@ export async function prepareCodexPetImageCallDispatch(input: CodexPetImageCallD
 }
 
 /**
- * Record a local provider request only after the adapter has invoked fetch.
- * A socket error after this point remains billable because the request may
- * already have reached the relay; failures before fetch leave sentAt null.
+ * Record a local provider request only after the adapter has invoked fetch, so
+ * `sentAt` distinguishes "reached the relay" from "never left this process".
+ *
+ * `sentAt` is deliberately NOT a billing predicate. A call that ends `failed`
+ * is refunded (extras) or excluded from the settled units (planned) regardless
+ * of `sentAt` — all four settlement sites filter `status: { not: "failed" }`.
+ * That means the platform absorbs the upstream cost of a request that did reach
+ * the relay but produced no image, instead of passing it to the user. `sentAt`
+ * survives only as diagnostic evidence and as the "was it really dispatched"
+ * half of the settled-unit filter (`sentAt: { not: null }`).
  */
 export async function markCodexPetImageCallSent(input: CodexPetImageCallDispatchInput): Promise<{
   readonly callCount: number;
@@ -270,7 +326,14 @@ export async function markCodexPetImageCallSent(input: CodexPetImageCallDispatch
       throw new CodexPetImageCallAlreadySentError(input.runId, input.jobKey, input.logicalAttempt);
     }
     const callKind = call.callKind === "extra" ? "extra" as const : "planned" as const;
-    if (callKind === "planned") {
+    // A transport retry of an already-sent unit keeps its original sentAt and
+    // does not re-count: `imageGenerationCallCount` and the planned limit both
+    // measure billed units, not upstream round trips.
+    // `!= null` on purpose: a freshly created row omits the column, so a strict
+    // `!== null` reads `undefined` as "already sent" and silently swallows the
+    // increment for the *first* send of every call.
+    const alreadySent = call.sentAt != null;
+    if (callKind === "planned" && !alreadySent) {
       const sentPlanned = await tx.codexPetImageCall.count({
         where: { runId: input.runId, projectId: input.projectId, userId: input.userId, callKind: "planned", sentAt: { not: null } },
       });
@@ -281,14 +344,18 @@ export async function markCodexPetImageCallSent(input: CodexPetImageCallDispatch
     const sentAt = new Date();
     await tx.codexPetImageCall.update({
       where: { id: call.id },
-      data: { status: "sent", sentAt, error: null },
+      data: { status: "sent", error: null, ...(alreadySent ? {} : { sentAt }) },
     });
     const updated = await tx.codexPetRun.updateMany({
       where: { id: input.runId, projectId: input.projectId, userId: input.userId, workerId: input.workerId, cancelRequested: false },
-      data: { imageGenerationCallCount: { increment: 1 }, heartbeatAt: sentAt },
+      data: { ...(alreadySent ? {} : { imageGenerationCallCount: { increment: 1 } }), heartbeatAt: sentAt },
     });
     if (updated.count !== 1) throw new Error("Codex pet lease lost while recording provider request");
-    return { callCount: run.imageGenerationCallCount + 1, callKind, operationId: call.operationId };
+    return {
+      callCount: alreadySent ? run.imageGenerationCallCount : run.imageGenerationCallCount + 1,
+      callKind,
+      operationId: call.operationId,
+    };
   });
 }
 
@@ -376,6 +443,65 @@ export async function refundCodexPetFailedExtraCall(input: {
     data: { refundStatus: "refunded", refundedAt: new Date(), refundError: null },
   });
   return true;
+}
+
+/**
+ * Refund every extra call of a run that was charged at approval but never
+ * dispatched to the provider.
+ *
+ * The charge is attached to the *approval* action (`prepareCodexPetExtraImageCall`
+ * runs before the job is queued), while `refundCodexPetFailedExtraCall` is
+ * attached to the *provider outcome*. A run cancelled between those two points
+ * leaves a `prepared` row that neither predicate covers, so its points stay in
+ * the system. Cancellation settlement calls this to close that window.
+ *
+ * Only `prepared` rows qualify: `dispatching`/`sent` reached the relay and are
+ * refunded (or not) by their own terminal outcome, and `cancelled` rows were
+ * never charged. Best-effort and idempotent, exactly like the failed-call path.
+ */
+export async function refundCodexPetUndispatchedExtraCalls(input: {
+  readonly prisma: Pick<PrismaClient, "codexPetImageCall">;
+  readonly billing: { readonly refundResource: (operationId: string) => Promise<{ success: boolean }> };
+  readonly runId: string;
+  readonly projectId: string;
+  readonly userId: string;
+  readonly onError?: (error: unknown, operationId: string) => void;
+}): Promise<{ readonly refunded: number; readonly pending: number }> {
+  const calls = await input.prisma.codexPetImageCall.findMany({
+    where: {
+      runId: input.runId,
+      projectId: input.projectId,
+      userId: input.userId,
+      callKind: "extra",
+      status: "prepared",
+      refundStatus: { not: "refunded" },
+    },
+    select: { id: true, operationId: true },
+  });
+  let refunded = 0;
+  let pending = 0;
+  for (const call of calls) {
+    try {
+      const receipt = await input.billing.refundResource(call.operationId);
+      if (!receipt.success) throw new Error("billing refund was not accepted");
+    } catch (error) {
+      pending += 1;
+      input.onError?.(error, call.operationId);
+      await input.prisma.codexPetImageCall.updateMany({
+        where: { id: call.id, refundStatus: { not: "refunded" } },
+        data: { refundStatus: "pending", refundError: sanitizeCodexPetDiagnosticText(String(error), 400) },
+      }).catch(() => undefined);
+      continue;
+    }
+    // The row is kept as an audit trail of a charge that was made and returned;
+    // `cancelled` would wrongly claim it was never charged.
+    await input.prisma.codexPetImageCall.updateMany({
+      where: { id: call.id, refundStatus: { not: "refunded" } },
+      data: { refundStatus: "refunded", refundedAt: new Date(), refundError: null },
+    });
+    refunded += 1;
+  }
+  return { refunded, pending };
 }
 
 export async function prepareCodexPetExtraImageCall(input: {

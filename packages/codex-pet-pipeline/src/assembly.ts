@@ -34,6 +34,13 @@ export interface AtlasCellValidation {
   readonly state: string;
   readonly expectedUsed: boolean;
   readonly opaquePixels: number;
+  /**
+   * Chroma pixels the final despill left behind in this cell, so residue is
+   * attributable to an action group instead of only to the whole atlas. A caller
+   * repairing rows needs to know *which* row to regenerate; `0` when no chroma
+   * key was supplied.
+   */
+  readonly opaqueChromaPixels: number;
   readonly errors: readonly string[];
   readonly warnings: readonly string[];
 }
@@ -450,16 +457,33 @@ export async function validatePetAtlas(
           cellErrors.push(...cellFindingCodes(diagnostics.errors));
           cellWarnings.push(...cellFindingCodes(diagnostics.warnings));
         }
+        const cellChromaPixels = chromaKey ? await countOpaqueKeyPixels(cell, chromaKey, 32) : 0;
+        if (cellChromaPixels > 0) cellErrors.push(`opaque-chroma-pixels:${cellChromaPixels}`);
         errors.push(...cellErrors.map((error) => `${spec.state}[${column}]:${error}`));
         warnings.push(...cellWarnings.map((warning) => `${spec.state}[${column}]:${warning}`));
-        cells.push({ row, column, state: spec.state, expectedUsed, opaquePixels: diagnostics.opaquePixels, errors: cellErrors, warnings: cellWarnings });
+        cells.push({
+          row,
+          column,
+          state: spec.state,
+          expectedUsed,
+          opaquePixels: diagnostics.opaquePixels,
+          opaqueChromaPixels: cellChromaPixels,
+          errors: cellErrors,
+          warnings: cellWarnings,
+        });
       }
     }
   }
   const opaqueChromaPixels = chromaKey && metadata.width === PET_ATLAS_WIDTH && metadata.height === PET_ATLAS_HEIGHT
     ? await countOpaqueKeyPixels(input, chromaKey, 32)
     : 0;
-  if (opaqueChromaPixels > 0) errors.push(`opaque-chroma-pixels:${opaqueChromaPixels}`);
+  // Cells already carry their own share as `<state>[<column>]:opaque-chroma-pixels`.
+  // The atlas-wide count stays a separate error only for residue outside the
+  // cell grid, which no row regeneration could fix.
+  const attributedChromaPixels = cells.reduce((total, cell) => total + cell.opaqueChromaPixels, 0);
+  if (opaqueChromaPixels > attributedChromaPixels) {
+    errors.push(`opaque-chroma-pixels:${opaqueChromaPixels - attributedChromaPixels}`);
+  }
   return {
     ok: errors.length === 0,
     spriteVersionNumber: 2,
@@ -516,7 +540,18 @@ export async function validateStandardPetAtlas(
         }
         errors.push(...cellErrors.map((error) => `${spec.state}[${column}]:${error}`));
         warnings.push(...cellWarnings.map((warning) => `${spec.state}[${column}]:${warning}`));
-        cells.push({ row: spec.row, column, state: spec.state, expectedUsed, opaquePixels: diagnostics.opaquePixels, errors: cellErrors, warnings: cellWarnings });
+        // Chroma is deliberately not graded here: the complete atlas owns the
+        // single despill pass, so this intermediate has nothing to attribute.
+        cells.push({
+          row: spec.row,
+          column,
+          state: spec.state,
+          expectedUsed,
+          opaquePixels: diagnostics.opaquePixels,
+          opaqueChromaPixels: 0,
+          errors: cellErrors,
+          warnings: cellWarnings,
+        });
       }
     }
   }

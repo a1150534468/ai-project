@@ -30,6 +30,7 @@ import {
   measureDirectionContinuity,
   measureDirectionRowContinuity,
   mirrorFramesPreservingOrder,
+  spliceSourcePoseBoardSlots,
   validatePetAtlas,
   validateStandardPetAtlas,
   type PetFramesByState,
@@ -827,6 +828,171 @@ describe("codex pet deterministic pipeline", () => {
     expect((await sharp(contact).metadata()).width).toBe(768);
     expect((await sharp(directions).metadata()).width).toBeGreaterThan(1000);
   }, 15_000);
+
+  /**
+   * A board verdict is the conjunction of every cell, so one broken pose used to
+   * discard seven good paid poses. The `老鼠猫` run was rescued offline by exactly
+   * this reuse; splicing raw source slots is what makes it automatic.
+   */
+  it("splices only the named source slots and leaves the rest of the base board alone", async () => {
+    const slotColor = (slot: number, palette: string) => Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360"><rect x="90" y="70" width="140" height="240" rx="30" fill="${palette}"/></svg>`,
+    );
+    const baseColors = ["#111180", "#222280", "#333380", "#444480", "#555580", "#666680", "#777780", "#888880"];
+    const donorColors = ["#801111", "#802222", "#803333", "#804444", "#805555", "#806666", "#807777", "#808888"];
+    const overlaysFor = (colors: readonly string[]) => colors.map((color, slot) => ({
+      input: slotColor(slot, color),
+      left: (slot % 4) * 320,
+      top: Math.floor(slot / 4) * 360,
+    }));
+    const base = await boardWithOverlays(4, 2, overlaysFor(baseColors));
+    const donor = await boardWithOverlays(4, 2, overlaysFor(donorColors));
+
+    const spliced = await spliceSourcePoseBoardSlots({
+      base,
+      donor,
+      columns: 4,
+      rows: 2,
+      slots: [2, 5],
+      chromaKey: "#ff00ff",
+    });
+    // Re-extract as the runner does: one pass owns the shared scale and baseline
+    // for the merged board, which is the whole reason the splice is on raw slots.
+    const extracted = await extractPoseBoard(spliced, {
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+      frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
+      chromaKey: "#ff00ff",
+    });
+    expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
+    const sampled = await Promise.all(extracted.frames.map(async (frame, index) => {
+      const bounds = extracted.diagnostics[index]!.normalizedBounds!;
+      const { data } = await sharp(frame).extract({
+        left: Math.round(bounds.left + (bounds.width - 1) / 2),
+        top: Math.round(bounds.top + (bounds.height - 1) / 2),
+        width: 1,
+        height: 1,
+      }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      return `#${[data[0], data[1], data[2]].map((value) => value!.toString(16).padStart(2, "0")).join("")}`;
+    }));
+    expect(sampled).toEqual(baseColors.map((color, slot) => (slot === 2 || slot === 5 ? donorColors[slot] : color)));
+  }, 20_000);
+
+  it("aligns a differently sized donor and rejects slot indexes outside the grid", async () => {
+    const base = await poseBoard(4, 2, 8);
+    const donorSource = await boardWithOverlays(4, 2, Array.from({ length: 8 }, (_, slot) => ({
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360"><rect x="95" y="75" width="130" height="230" rx="30" fill="#0d8f3a"/></svg>`),
+      left: (slot % 4) * 320,
+      top: Math.floor(slot / 4) * 360,
+    })));
+    // Relays return a different canvas per call, so the donor is rarely the same
+    // pixel size as the base. Slot rectangles are proportional divisions, so a
+    // fill-resize makes donor slot i cover base slot i exactly.
+    const donor = await sharp(donorSource).resize(1024, 688, { fit: "fill" }).png().toBuffer();
+
+    const spliced = await spliceSourcePoseBoardSlots({ base, donor, columns: 4, rows: 2, slots: [7], chromaKey: "#ff00ff" });
+    expect(await sharp(spliced).metadata()).toMatchObject({ width: 1280, height: 720 });
+    const extracted = await extractPoseBoard(spliced, {
+      columns: 4,
+      rows: 2,
+      frameCount: 8,
+      frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
+      chromaKey: "#ff00ff",
+    });
+    expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
+    const bounds = extracted.diagnostics[7]!.normalizedBounds!;
+    const { data } = await sharp(extracted.frames[7]!).extract({
+      left: Math.round(bounds.left + (bounds.width - 1) / 2),
+      top: Math.round(bounds.top + (bounds.height - 1) / 2),
+      width: 1,
+      height: 1,
+    }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+    expect(`#${[data[0], data[1], data[2]].map((value) => value!.toString(16).padStart(2, "0")).join("")}`).toBe("#0d8f3a");
+
+    // No slots is a no-op and every slot is the donor: both keep the caller from
+    // paying a needless composite, and both must stay byte-identical.
+    expect(await spliceSourcePoseBoardSlots({ base, donor, columns: 4, rows: 2, slots: [], chromaKey: "#ff00ff" })).toBe(base);
+    expect(await spliceSourcePoseBoardSlots({
+      base,
+      donor,
+      columns: 4,
+      rows: 2,
+      slots: [0, 1, 2, 3, 4, 5, 6, 7],
+      chromaKey: "#ff00ff",
+    })).toBe(donor);
+    await expect(spliceSourcePoseBoardSlots({ base, donor, columns: 4, rows: 2, slots: [8], chromaKey: "#ff00ff" }))
+      .rejects.toThrow(/address the board grid/);
+    await expect(spliceSourcePoseBoardSlots({ base, donor, columns: 0, rows: 2, slots: [1], chromaKey: "#ff00ff" }))
+      .rejects.toThrow(/positive integers/);
+  }, 20_000);
+
+  /**
+   * Chroma residue used to be reported only as one atlas-wide count, which named
+   * no action group. The terminal gate therefore had nothing to blame and the run
+   * died with all fourteen paid calls unusable. Attributing residue to its cell is
+   * what makes that failure a bounded redo.
+   */
+  it("attributes chroma residue to the cell that carries it", async () => {
+    const frame = await solidFrame();
+    const byState: PetFramesByState = {};
+    for (const spec of PET_ROW_SPECS) byState[spec.state] = Array.from({ length: spec.frameCount }, () => frame);
+    const clean = await assemblePetAtlas(byState, "png");
+
+    const residue = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12"><rect width="12" height="12" fill="#ff00ff"/></svg>`,
+    );
+    // Row 2 is running-left, column 1 — a used cell well inside the grid.
+    const contaminated = await sharp(clean).composite([{
+      input: residue,
+      left: 1 * PET_CELL_WIDTH + 20,
+      top: 2 * PET_CELL_HEIGHT + 20,
+    }]).png().toBuffer();
+
+    const validation = await validatePetAtlas(contaminated, "#ff00ff");
+    expect(validation.ok).toBe(false);
+    const blamed = validation.cells.filter((cell) => cell.opaqueChromaPixels > 0);
+    expect(blamed).toHaveLength(1);
+    expect(blamed[0]).toMatchObject({ row: 2, column: 1, state: "running-left" });
+    expect(validation.errors.some((error) => error.startsWith("running-left[1]:opaque-chroma-pixels:"))).toBe(true);
+    // Fully attributed: no bare atlas-wide count remains, so the gate can scope
+    // the repair to one row instead of failing the whole run.
+    expect(validation.errors.some((error) => /^opaque-chroma-pixels:/.test(error))).toBe(false);
+    expect(validation.opaqueChromaPixels).toBe(
+      validation.cells.reduce((total, cell) => total + cell.opaqueChromaPixels, 0),
+    );
+  }, 20_000);
+
+  it("blames a padding cell's residue on its own row", async () => {
+    const frame = await solidFrame();
+    const byState: PetFramesByState = {};
+    for (const spec of PET_ROW_SPECS) byState[spec.state] = Array.from({ length: spec.frameCount }, () => frame);
+    const clean = await assemblePetAtlas(byState, "png");
+    expect((await validatePetAtlas(clean, "#ff00ff")).errors).toEqual([]);
+
+    const residue = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="10" height="10" fill="#ff00ff"/></svg>`,
+    );
+    // Row 0 is idle with 6 frames, so column 7 is padding the row never fills.
+    const contaminated = await sharp(clean).composite([{
+      input: residue,
+      left: 7 * PET_CELL_WIDTH + 30,
+      top: 30,
+    }]).png().toBuffer();
+
+    const validation = await validatePetAtlas(contaminated, "#ff00ff");
+    const blamed = validation.cells.find((cell) => cell.opaqueChromaPixels > 0);
+    expect(blamed).toMatchObject({ row: 0, column: 7, state: "idle", expectedUsed: false });
+    expect(validation.errors).toContain("idle[7]:unused-cell-not-transparent");
+    expect(validation.errors.some((error) => error.startsWith("idle[7]:opaque-chroma-pixels:"))).toBe(true);
+    // The 8x11 grid tiles the canvas exactly, so every chroma pixel lands in some
+    // cell. That is what lets the gate scope any chroma defect to a row instead of
+    // condemning the whole run: the atlas-wide residual has nothing left to report.
+    expect(validation.errors.some((error) => /^opaque-chroma-pixels:/.test(error))).toBe(false);
+    expect(validation.opaqueChromaPixels).toBe(
+      validation.cells.reduce((total, cell) => total + cell.opaqueChromaPixels, 0),
+    );
+  }, 20_000);
 
   it("validates the 8x9 standard atlas before direction generation", async () => {
     const frame = await solidFrame();

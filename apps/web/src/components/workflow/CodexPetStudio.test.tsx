@@ -184,6 +184,10 @@ function makeClient(args: {
         imageGenerationCallCount: 0,
       }),
     }),
+    resumeGateFailure: vi.fn().mockResolvedValue({
+      project: { ...project, status: "standard_generating", latestRunId: "run-1" },
+      run: makeRun({ status: "standard_generating", progressStage: "standard_generating" }),
+    }),
     selectBase: vi.fn().mockResolvedValue(makeRun({ status: "standard_generating", selectedBaseArtifactId: "base-2" })),
     approveNextImage: vi.fn().mockResolvedValue(makeRun({ status: "direction_generating", imageGenerationApprovalBudget: 1, pendingImageJobKey: null })),
     cancelRun: vi.fn().mockResolvedValue(makeRun({ cancelRequested: true })),

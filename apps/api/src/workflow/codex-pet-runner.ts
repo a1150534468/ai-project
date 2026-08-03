@@ -28,6 +28,7 @@ import {
   mirrorFramesPreservingOrder,
   parseNeutralDirectionRegistrationManifest,
   petRowSpec,
+  spliceSourcePoseBoardSlots,
   registerFirstDirectionRowToNeutral,
   registerSecondDirectionRowWithManifest,
   splitRegisteredDirectionRow,
@@ -67,6 +68,11 @@ import {
   refundCodexPetFailedExtraCall,
 } from "./codex-pet-call-ledger.js";
 import { codexPetGptFailedContinuationSnapshot } from "./codex-pet-gpt-continuation.js";
+import {
+  CODEX_PET_GATE_REPAIR_ROWS,
+  codexPetGateFailureSnapshotValue,
+  type CodexPetGateRepairRow,
+} from "./codex-pet-gate-failure.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import { sanitizeCodexPetDiagnosticText, type CodexPetRunStage } from "./codex-pet-events.js";
 import {
@@ -86,6 +92,7 @@ import {
   generateCodexPetIdentityGuide,
   generateCodexPetLookMechanics,
   generateCodexPetVisual,
+  codexPetImageMaxAttempts,
   createSeedreamPoseBoardScaffold,
   selectSeedreamGaitScaffoldVariants,
   codexPetVisualQaConsensusPasses,
@@ -354,6 +361,136 @@ function poseBoardRepairPrompt(errors: readonly string[]): string {
   return [...hints].join(" ") || errors.join("; ");
 }
 
+const POSE_BOARD_SALVAGE_SCHEMA_VERSION = "codex-pet-pose-board-salvage-v1";
+
+export interface PoseBoardSalvage {
+  /** Board bytes holding the best known pixels for every listed slot. */
+  readonly board: Buffer;
+  /** Row-major physical source slot indexes whose extraction was clean. */
+  readonly goodSourceSlots: readonly number[];
+  readonly attempt: number;
+  readonly boardArtifactId: string | null;
+}
+
+/**
+ * Which physical source slots of a board came out of deterministic extraction
+ * without a single per-frame error.
+ *
+ * `diagnostics` is indexed chronologically, so a board with a `frameOrder`
+ * permutation needs that mapping to name the physical slot. Unused trailing
+ * slots have no diagnostics: they are clean exactly when they are empty, which
+ * is what `unusedSlotOpaquePixels` measures.
+ */
+export function poseBoardSlotHealth(
+  extracted: ExtractPoseBoardResult,
+  input: { readonly columns: number; readonly rows: number; readonly frameCount: number; readonly frameOrder?: readonly number[] },
+): { readonly good: readonly number[]; readonly bad: readonly number[] } {
+  const frameOrder = input.frameOrder ?? Array.from({ length: input.frameCount }, (_, index) => index);
+  const good: number[] = [];
+  const bad: number[] = [];
+  for (let frameIndex = 0; frameIndex < input.frameCount; frameIndex += 1) {
+    const sourceSlot = frameOrder[frameIndex];
+    if (sourceSlot === undefined) continue;
+    ((extracted.diagnostics[frameIndex]?.errors.length ?? 1) === 0 ? good : bad).push(sourceSlot);
+  }
+  extracted.unusedSlotOpaquePixels.forEach((opaquePixels, offset) => {
+    (opaquePixels > 32 ? bad : good).push(input.frameCount + offset);
+  });
+  return { good, bad };
+}
+
+/**
+ * Carry the clean source slots of a rejected board into the next attempt.
+ *
+ * A board verdict is the conjunction of every cell, so one broken pose throws
+ * away seven good paid poses; the `老鼠猫` incident was rescued offline by
+ * exactly this reuse. Splicing happens on raw source slots so the following
+ * single `extractPoseBoard` pass still owns one shared scale and baseline for
+ * every frame (see `spliceSourcePoseBoardSlots`).
+ *
+ * Only slots the new board would have failed anyway are replaced, so a splice
+ * can only turn a certain rejection into a candidate that still has to pass the
+ * same deterministic gates and the same visual review.
+ */
+export function poseBoardSalvageSlots(salvage: PoseBoardSalvage | null, badSlots: readonly number[]): readonly number[] {
+  if (!salvage || badSlots.length === 0) return [];
+  const donatable = new Set(salvage.goodSourceSlots);
+  return badSlots.filter((slot) => donatable.has(slot));
+}
+
+/** Keep whichever board covers more clean slots as the next donor. */
+export function preferPoseBoardSalvage(previous: PoseBoardSalvage | null, next: PoseBoardSalvage): PoseBoardSalvage {
+  if (!previous) return next;
+  const covered = new Set(next.goodSourceSlots);
+  const previousOnly = previous.goodSourceSlots.filter((slot) => !covered.has(slot));
+  return previousOnly.length > 0 && next.goodSourceSlots.length <= previous.goodSourceSlots.length
+    ? previous
+    : next;
+}
+
+export function poseBoardSalvageMetadata(salvage: { readonly goodSourceSlots: readonly number[]; readonly attempt: number }): Record<string, unknown> {
+  return {
+    schemaVersion: POSE_BOARD_SALVAGE_SCHEMA_VERSION,
+    goodSourceSlots: [...salvage.goodSourceSlots],
+    attempt: salvage.attempt,
+  };
+}
+
+/**
+ * Recover a salvage donor written by an earlier process.
+ *
+ * Per-image billing runs one attempt per invocation: the in-memory donor never
+ * survives to the approved retry, so the durable board artifact is the only
+ * carrier. The donor is scoped to the job's current `inputRevision` because a
+ * changed dependency invalidates the old pixels along with the old attempt
+ * budget.
+ */
+export async function loadPoseBoardSalvage(
+  ctx: RunnerContext,
+  job: CodexPetJob,
+  input: { readonly columns: number; readonly rows: number; readonly frameCount: number },
+): Promise<PoseBoardSalvage | null> {
+  const inputRevision = asRecord(job.input).inputRevision;
+  if (typeof inputRevision !== "string") return null;
+  const candidates = await ctx.prisma.codexPetArtifact.findMany({
+    where: {
+      jobId: job.id,
+      runId: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      kind: "pose_board",
+      status: "ready",
+    },
+    orderBy: { createdAt: "desc" },
+    take: 4,
+  });
+  for (const candidate of candidates) {
+    const metadata = asRecord(candidate.metadata);
+    if (metadata.inputRevision !== inputRevision) continue;
+    const salvage = asRecord(metadata.salvage);
+    if (salvage.schemaVersion !== POSE_BOARD_SALVAGE_SCHEMA_VERSION) continue;
+    const goodSourceSlots = Array.isArray(salvage.goodSourceSlots)
+      ? salvage.goodSourceSlots.filter((slot): slot is number => Number.isInteger(slot)
+        && slot >= 0
+        && slot < input.columns * input.rows)
+      : [];
+    if (goodSourceSlots.length === 0) continue;
+    if (metadata.columns !== input.columns || metadata.rows !== input.rows || metadata.frameCount !== input.frameCount) continue;
+    try {
+      return {
+        board: await ctx.artifacts.load(candidate),
+        goodSourceSlots,
+        attempt: Number.isInteger(salvage.attempt) ? Number(salvage.attempt) : 0,
+        boardArtifactId: candidate.id,
+      };
+    } catch {
+      // An expired or swept object simply means there is nothing to salvage.
+      continue;
+    }
+  }
+  return null;
+}
+
 /**
  * Seedream image edits tend to preserve and amplify a failed board's split
  * anatomy and broken grid. Repair it from the canonical identity plus the
@@ -409,9 +546,31 @@ function isJumpingScaleEvidenceConflict(
   ));
 }
 
+/**
+ * How many times one *already-paid* image call may be re-sent to the provider.
+ *
+ * This is the transport axis and it is deliberately independent of the board /
+ * quality axis (`maxBoardAttempts`, `job.maxAttempts`), which is pinned to 1
+ * under per-image billing because every redraw is a separately charged unit that
+ * needs its own user approval. Conflating the two meant a single socket blip
+ * parked the run and demanded a paid approval for work the user never chose to
+ * redo — the failure shape where `look-cardinals` burned 6 extra calls on 6
+ * consecutive socket errors. A transport retry re-enters the same ledger row, so
+ * it costs the user nothing.
+ *
+ * `CODEX_PET_IMAGE_MAX_ATTEMPTS=1` still forces one-shot for acceptance runs.
+ */
+function configuredTransportAttempts(env: NodeJS.ProcessEnv): number {
+  return codexPetImageMaxAttempts(env);
+}
+
+// Both call sites of this value dispatch real billed image calls (the two base
+// candidates, and the repair fan-out over standard rows). Concurrency > 1 makes
+// them compete for the same upstream relay quota, which self-inflicts the 429
+// that killed an earlier run. Serial by default; raise it only deliberately.
 function configuredVisualConcurrency(env: NodeJS.ProcessEnv): number {
   const value = Number(env.CODEX_PET_VISUAL_CONCURRENCY);
-  return Number.isInteger(value) && value > 0 ? Math.min(3, value) : 3;
+  return Number.isInteger(value) && value > 0 ? Math.min(3, value) : 1;
 }
 
 function configuredArchiveMaxAttempts(env: NodeJS.ProcessEnv): number {
@@ -419,10 +578,28 @@ function configuredArchiveMaxAttempts(env: NodeJS.ProcessEnv): number {
   return Number.isInteger(value) && value > 0 ? Math.min(100, value) : 10;
 }
 
-const FINAL_REPAIR_ROWS = [
-  "idle", "running-right", "running-left", "waving", "jumping", "failed", "waiting", "running", "review", "look-a", "look-b",
-] as const;
-type FinalRepairRow = (typeof FINAL_REPAIR_ROWS)[number];
+const FINAL_REPAIR_ROWS = CODEX_PET_GATE_REPAIR_ROWS;
+type FinalRepairRow = CodexPetGateRepairRow;
+
+/**
+ * A terminal gate rejection that still knows which action groups it blames.
+ *
+ * The in-process repair loop is bounded, so exhausting it ends the run. Carrying
+ * the row scope out to `finalizeFailure` lets the failure be recorded as
+ * continuable work instead of an opaque wall: the user can resume the same paid
+ * run and redo exactly those rows.
+ */
+class CodexPetGateFailureError extends Error {
+  constructor(
+    message: string,
+    readonly gate: string,
+    readonly rows: readonly FinalRepairRow[],
+    readonly failures: readonly string[],
+  ) {
+    super(message);
+    this.name = "CodexPetGateFailureError";
+  }
+}
 
 /** Normalize model-provided repairRows and retain a conservative fallback for
  * providers upgraded before the structured field was introduced. */
@@ -441,6 +618,52 @@ function repairRowsFromFinalQa(verdict: PetVisualQaVerdict): FinalRepairRow[] {
   // A final verdict without structured scope is still actionable: regenerate
   // every complete action group once, never attempt a single-frame patch.
   return [...FINAL_REPAIR_ROWS];
+}
+
+/**
+ * Which complete action groups a deterministic atlas gate implicates.
+ *
+ * Both atlas validators return `cells[]` keyed by `state`, and continuity's only
+ * hard error is `<direction>:empty-direction-cell`, so a structural rejection is
+ * row-addressable evidence rather than an unexplained wall. Without this
+ * mapping the gates could only throw after all fourteen paid calls, which is
+ * exactly how a run reached `failed` holding nine good action groups.
+ */
+export function repairRowsFromAtlasValidation(
+  validation: { readonly cells: readonly { readonly state: string; readonly errors: readonly string[] }[]; readonly errors: readonly string[] },
+): FinalRepairRow[] {
+  const rows = new Set<FinalRepairRow>();
+  for (const cell of validation.cells) {
+    if (cell.errors.length === 0) continue;
+    const row = FINAL_REPAIR_ROWS.find((candidate) => candidate === cell.state);
+    if (row) rows.add(row);
+  }
+  return [...rows];
+}
+
+/**
+ * Atlas-wide errors (wrong dimensions, missing alpha, an unattributed chroma
+ * pixel count) are assembly or despill defects that regenerating an action group
+ * cannot fix. They must stay hard failures instead of burning the repair budget.
+ */
+export function atlasValidationErrorsWithoutCellScope(
+  validation: { readonly cells: readonly { readonly state: string; readonly column: number; readonly errors: readonly string[] }[]; readonly errors: readonly string[] },
+): string[] {
+  const cellScoped = new Set(validation.cells.flatMap((cell) => (
+    cell.errors.map((error) => `${cell.state}[${cell.column}]:${error}`)
+  )));
+  return validation.errors.filter((error) => !cellScoped.has(error));
+}
+
+export function repairRowsFromDirectionContinuity(continuity: { readonly errors: readonly string[] }): FinalRepairRow[] {
+  const rows = new Set<FinalRepairRow>();
+  for (const error of continuity.errors) {
+    const direction = error.split(":")[0] ?? "";
+    const index = LOOK_DIRECTIONS.indexOf(direction as (typeof LOOK_DIRECTIONS)[number]);
+    if (index < 0) continue;
+    rows.add(index < 8 ? "look-a" : "look-b");
+  }
+  return [...rows];
 }
 
 async function mapWithConcurrency<T, R>(
@@ -599,7 +822,9 @@ async function recordImageGenerationAttempt(
       type: "image.call.sent",
       stage: run.progressStage,
       progress: run.progressPercent,
-      message: `已发起第 ${sent.callCount} 次真实生图调用`,
+      message: providerAttempt > 1
+        ? `第 ${sent.callCount} 次真实生图调用重发（同一次授权内的第 ${providerAttempt} 次传输尝试）`
+        : `已发起第 ${sent.callCount} 次真实生图调用`,
       payload: {
         callCount: sent.callCount,
         callKind: sent.callKind,
@@ -647,6 +872,7 @@ async function prepareImageGenerationDispatch(
   ctx: RunnerContext,
   jobKey: string,
   logicalAttempt: number,
+  transportAttempt = 1,
 ): Promise<void> {
   if (!ctx.perImageBilling) return;
   await prepareCodexPetImageCallDispatch({
@@ -659,6 +885,7 @@ async function prepareImageGenerationDispatch(
     logicalAttempt,
     requestedModel: ctx.imageModel,
     points: ctx.perImageCallPoints,
+    transportAttempt,
   });
 }
 
@@ -1277,13 +1504,18 @@ async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: number)
       quality: "low",
       env: ctx.env,
       signal: ctx.signal,
-      maxAttempts: ctx.perImageBilling ? 1 : undefined,
+      // Transport retries stay inside this one charged unit; only a quality
+      // redraw costs another approval.
+      maxAttempts: ctx.perImageBilling ? configuredTransportAttempts(ctx.env) : undefined,
       onAttempt: ctx.perImageBilling ? undefined : (providerAttempt) => recordImageGenerationAttempt(ctx, key, attempt, providerAttempt),
-      onRequestDispatching: ctx.perImageBilling ? () => prepareImageGenerationDispatch(ctx, key, attempt) : undefined,
+      onRequestDispatching: ctx.perImageBilling
+        ? (transportAttempt) => prepareImageGenerationDispatch(ctx, key, attempt, transportAttempt)
+        : undefined,
       onRequestSent: ctx.perImageBilling ? (providerAttempt) => recordImageGenerationAttempt(ctx, key, attempt, providerAttempt) : undefined,
-      onRetry: ctx.perImageBilling ? undefined : async (error, transportAttempt) => emit(ctx, "job.retrying", "base_generating", 8, "生图服务暂时不可用，正在重试", {
+      onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", "base_generating", 8, "生图服务暂时不可用，正在重试", {
         transportAttempt,
         retryKind: "transport",
+        ...(ctx.perImageBilling ? { withinPaidCall: true } : {}),
         ...imageFailureMetadata(error),
       }, key),
     });
@@ -1945,6 +2177,12 @@ async function runBoardJob(ctx: RunnerContext, input: {
     : normalizeRepairRequirement(persistedRegistrationRepair);
   const repairRequirements = initialRepairRequirement ? [initialRepairRequirement] : [];
   let previousFailedBoard: Buffer | null = null;
+  // A forced repair deliberately discards the previous art, so it must not
+  // splice the superseded pixels back in. Within one process the in-memory
+  // donor still accumulates across this loop's attempts.
+  let salvage: PoseBoardSalvage | null = input.force
+    ? null
+    : await loadPoseBoardSalvage(ctx, job, { columns: input.columns, rows: input.rows, frameCount: input.frameCount });
   let lastError = "";
   // A process may die after persisting status=running but before producing a
   // durable board/diagnostic result. A stale-lease replay retries that same
@@ -1989,21 +2227,39 @@ async function runBoardJob(ctx: RunnerContext, input: {
         quality: "low",
         env: ctx.env,
         signal: ctx.signal,
-        maxAttempts: ctx.perImageBilling || requiresSingleCallApproval || job.maxAttempts === 1 || ctx.maxBoardAttempts === 1
-          ? 1
-          : undefined,
+        // Per-image billing retries the transport inside the one paid unit; the
+        // legacy approval gate keeps its one-shot semantics because there each
+        // provider attempt consumes a separate approval.
+        maxAttempts: ctx.perImageBilling
+          ? configuredTransportAttempts(ctx.env)
+          : requiresSingleCallApproval || job.maxAttempts === 1 || ctx.maxBoardAttempts === 1
+            ? 1
+            : undefined,
         onAttempt: ctx.perImageBilling ? undefined : (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, attempt, providerAttempt),
-        onRequestDispatching: ctx.perImageBilling ? () => prepareImageGenerationDispatch(ctx, input.key, attempt) : undefined,
+        onRequestDispatching: ctx.perImageBilling
+          ? (transportAttempt) => prepareImageGenerationDispatch(ctx, input.key, attempt, transportAttempt)
+          : undefined,
         onRequestSent: ctx.perImageBilling ? (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, attempt, providerAttempt) : undefined,
-        onRetry: ctx.perImageBilling ? undefined : async (error, transportAttempt) => emit(ctx, "job.retrying", workflowStage, input.progress, "上游生图调用重试中", {
+        onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", workflowStage, input.progress, "上游生图调用重试中", {
           transportAttempt,
           retryKind: "transport",
+          ...(ctx.perImageBilling ? { withinPaidCall: true } : {}),
           ...imageFailureMetadata(error),
         }, input.key),
       });
       await completeImageGenerationAttempt(ctx, input.key, attempt, generated.provider);
       await checkCancelled(ctx);
-      const boardArtifact = await ctx.artifacts.put({
+      const boardMetadata = {
+        ...providerMetadata(generated.provider),
+        attempt,
+        jobKey: input.key,
+        promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+        inputRevision: asRecord(job.input).inputRevision,
+        columns: input.columns,
+        rows: input.rows,
+        frameCount: input.frameCount,
+      };
+      let boardArtifact = await ctx.artifacts.put({
         userId: ctx.project.userId,
         projectId: ctx.project.id,
         runId: ctx.runId,
@@ -2012,17 +2268,11 @@ async function runBoardJob(ctx: RunnerContext, input: {
         name: `${input.qaContext}姿势板 · 第 ${attempt} 次`,
         buffer: generated.buffer,
         mime: generated.mime,
-        metadata: {
-          ...providerMetadata(generated.provider),
-          attempt,
-          jobKey: input.key,
-          promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
-          inputRevision: asRecord(job.input).inputRevision,
-        },
+        metadata: boardMetadata,
         expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
       });
       await persistProviderMetadata(ctx, job, generated.provider);
-      const extracted = await extractPoseBoard(generated.buffer, {
+      const extractOptions = {
         columns: input.columns,
         rows: input.rows,
         frameCount: input.frameCount,
@@ -2032,7 +2282,59 @@ async function runBoardJob(ctx: RunnerContext, input: {
         allowVerticalTravel: input.key === "row-jumping",
         requireJumpingArc: input.key === "row-jumping",
         maxHeightRatio: input.key === "row-jumping" || input.key === "row-failed" ? 1.8 : undefined,
-      });
+      } as const;
+      let board = generated.buffer;
+      let extracted = await extractPoseBoard(board, extractOptions);
+      let salvagedSlots: readonly number[] = [];
+      if (!extracted.ok) {
+        // Reuse the clean paid cells of an earlier rejected board instead of
+        // discarding the whole group over one broken pose. The splice is on raw
+        // source slots, so the re-extraction below is still the single owner of
+        // the shared scale and baseline for every frame.
+        const candidateSlots = poseBoardSalvageSlots(salvage, poseBoardSlotHealth(extracted, input).bad);
+        if (candidateSlots.length > 0 && salvage) {
+          const splicedBoard = await spliceSourcePoseBoardSlots({
+            base: board,
+            donor: salvage.board,
+            columns: input.columns,
+            rows: input.rows,
+            slots: candidateSlots,
+            chromaKey: ctx.identity.chromaKey,
+          });
+          const respliced = await extractPoseBoard(splicedBoard, extractOptions);
+          // Accept only a strict improvement: one shared scale is recomputed
+          // over the merged silhouettes, so a splice can in principle push a
+          // previously fitting pose outside the safe margin.
+          if (respliced.errors.length < extracted.errors.length) {
+            board = splicedBoard;
+            extracted = respliced;
+            salvagedSlots = candidateSlots;
+            boardArtifact = await ctx.artifacts.put({
+              userId: ctx.project.userId,
+              projectId: ctx.project.id,
+              runId: ctx.runId,
+              jobId: job.id,
+              kind: "pose_board",
+              name: `${input.qaContext}姿势板（复用第 ${salvage.attempt} 次合格格位） · 第 ${attempt} 次`,
+              buffer: splicedBoard,
+              mime: "image/png",
+              metadata: {
+                ...boardMetadata,
+                salvagedFromAttempt: salvage.attempt,
+                salvagedFromArtifactId: salvage.boardArtifactId,
+                salvagedSourceSlots: [...candidateSlots],
+              },
+              expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
+            });
+            await emit(ctx, "validation.warning", workflowStage, input.progress, `${input.qaContext}复用了上一次调用的 ${candidateSlots.length} 个合格格位，未额外付费生图`, {
+              retryKind: "salvage",
+              salvagedSourceSlots: [...candidateSlots],
+              salvagedFromAttempt: salvage.attempt,
+              remainingErrors: [...extracted.errors],
+            }, input.key);
+          }
+        }
+      }
       let qa: PetVisualQaConsensus = { pass: false, verdicts: [], score: 0, mirrorSafe: false, warnings: extracted.warnings, failures: extracted.errors };
       if (extracted.ok && !ctx.qualityInspectionEnabled) {
         qa = {
@@ -2065,7 +2367,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
             || reference.filename === "approved-registered-look-row-9-4x2.png")
           : [];
         const canonicalQaImage = {
-          buffer: canonicalReference ? Buffer.from(canonicalReference.b64, "base64") : generated.buffer,
+          buffer: canonicalReference ? Buffer.from(canonicalReference.b64, "base64") : board,
           mime: canonicalReference?.mime,
         };
         // Direction reviewers must see the complete generated eight-pose row
@@ -2176,7 +2478,36 @@ async function runBoardJob(ctx: RunnerContext, input: {
         if (normalizedRepairRequirement && !repairRequirements.includes(normalizedRepairRequirement)) {
           repairRequirements.push(normalizedRepairRequirement);
         }
-        previousFailedBoard = generated.buffer;
+        previousFailedBoard = board;
+        // Record this board's clean cells so the next attempt can splice them
+        // back in instead of paying for eight poses to fix one. The donor board
+        // must stay loadable, so the pixels live on the artifact and the slot
+        // map lives in its metadata.
+        const health = poseBoardSlotHealth(extracted, input);
+        const candidate: PoseBoardSalvage = {
+          board,
+          goodSourceSlots: health.good,
+          attempt,
+          boardArtifactId: boardArtifact.id,
+        };
+        const nextSalvage = health.good.length > 0 ? preferPoseBoardSalvage(salvage, candidate) : salvage;
+        if (nextSalvage === candidate) {
+          await ctx.prisma.codexPetArtifact.updateMany({
+            where: {
+              id: boardArtifact.id,
+              runId: ctx.runId,
+              projectId: ctx.project.id,
+              userId: ctx.project.userId,
+            },
+            data: {
+              metadata: {
+                ...asRecord(boardArtifact.metadata),
+                salvage: poseBoardSalvageMetadata(candidate),
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
+        salvage = nextSalvage;
         await putJsonArtifact(ctx, {
           jobId: job.id,
           kind: "qa_report",
@@ -2200,6 +2531,12 @@ async function runBoardJob(ctx: RunnerContext, input: {
               warnings: extracted.warnings,
             },
             visual: qa,
+            salvage: {
+              appliedSourceSlots: [...salvagedSlots],
+              reusableSourceSlots: [...health.good],
+              brokenSourceSlots: [...health.bad],
+              donorAttempt: salvage?.attempt ?? null,
+            },
           },
           expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
         });
@@ -2282,6 +2619,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
             jumpingArc: extracted.jumpingArc,
             chromaCoverage: extracted.diagnostics.map((diagnostic) => diagnostic.chromaCoverage),
           },
+          salvagedSourceSlots: [...salvagedSlots],
         } as unknown as Prisma.InputJsonValue,
         providerMetadata: {
           ...providerMetadata(generated.provider),
@@ -2298,7 +2636,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
         frameArtifactIds: frameArtifacts.map((artifact) => artifact.id),
       }, input.key);
       await emit(ctx, "job.completed", eventStage, input.progress, `${input.qaContext}已通过检查`, { attempt, warnings: qa.warnings }, input.key);
-      return { job, frames: extracted.frames, frameArtifacts, board: generated.buffer, boardArtifact, mirrorSafe: qa.mirrorSafe, qa };
+      return { job, frames: extracted.frames, frameArtifacts, board, boardArtifact, mirrorSafe: qa.mirrorSafe, qa };
     } catch (error) {
       await completeImageGenerationAttempt(ctx, input.key, attempt, undefined, error).catch(() => undefined);
       if (error instanceof CodexPetImageApprovalRequiredError) throw error;
@@ -2650,6 +2988,20 @@ async function runStandardRow(
   });
 }
 
+/**
+ * A freshly assembled standard atlas failed its deterministic structure gate.
+ *
+ * The report travels with the error so the caller can regenerate exactly the
+ * implicated action groups. At this point in the run no direction row exists
+ * yet, so the repair loop lives at the call site rather than here.
+ */
+class CodexPetStandardAtlasStructureError extends Error {
+  constructor(readonly validation: Awaited<ReturnType<typeof validateStandardPetAtlas>>) {
+    super(`标准 8×9 图集结构检查失败：${validation.errors.join("；")}`);
+    this.name = "CodexPetStandardAtlasStructureError";
+  }
+}
+
 async function storeStandardAtlas(ctx: RunnerContext, frames: PetFramesByState, force = false): Promise<{
   atlas: Buffer;
   contact: Buffer;
@@ -2667,13 +3019,16 @@ async function storeStandardAtlas(ctx: RunnerContext, frames: PetFramesByState, 
     if (atlasArtifact && contactArtifact) {
       const [atlas, contact] = await Promise.all([ctx.artifacts.load(atlasArtifact), ctx.artifacts.load(contactArtifact)]);
       const validation = await validateStandardPetAtlas(atlas);
-      if (!validation.ok) throw new Error(`已恢复的标准 8×9 图集结构检查失败：${validation.errors.join("；")}`);
+      // A recovered atlas that no longer validates carries the same row-scoped
+      // evidence as a fresh one, so the caller can repair and force a rebuild
+      // instead of failing a run whose rows are mostly good.
+      if (!validation.ok) throw new CodexPetStandardAtlasStructureError(validation);
       return { atlas, contact, atlasArtifact, contactArtifact, validation };
     }
   }
   const atlas = await assembleStandardPetAtlas(frames, "webp");
   const validation = await validateStandardPetAtlas(atlas);
-  if (!validation.ok) throw new Error(`标准 8×9 图集结构检查失败：${validation.errors.join("；")}`);
+  if (!validation.ok) throw new CodexPetStandardAtlasStructureError(validation);
   const contact = await createStandardAtlasContactSheet(atlas);
   const [atlasArtifact, contactArtifact, validationArtifact] = await Promise.all([
     ctx.artifacts.put({ userId: ctx.project.userId, projectId: ctx.project.id, runId: ctx.runId, jobId: job.id, kind: "standard_atlas", name: "标准 8×9 中间图集", buffer: atlas, mime: "image/webp", expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS) }),
@@ -3556,6 +3911,7 @@ async function finalizeClaimedSetupFailure(input: {
 async function finalizeFailure(ctx: RunnerContext, error: unknown): Promise<void> {
   const message = safeError(error);
   const now = new Date();
+  const gateFailure = error instanceof CodexPetGateFailureError && error.rows.length > 0 ? error : null;
   const outcome = await ctx.prisma.$transaction(async (tx) => {
     const current = await tx.codexPetRun.findFirst({ where: { id: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId } });
     if (!current || current.status === "ready" || current.status === "failed" || current.status === "cancelled") {
@@ -3580,6 +3936,23 @@ async function finalizeFailure(ctx: RunnerContext, error: unknown): Promise<void
         completedAt: now,
         heartbeatAt: now,
         workerId: null,
+        // A gate that named its rows leaves behind actionable work: persist that
+        // scope so 失败续跑 can redo exactly those action groups. Without it the
+        // rows are all `completed` at the current prompt version and admission
+        // has nothing to reset, which made this failure shape non-continuable.
+        ...(gateFailure
+          ? {
+            inputSnapshot: {
+              ...asRecord(current.inputSnapshot),
+              gateFailure: codexPetGateFailureSnapshotValue({
+                gate: gateFailure.gate,
+                rows: gateFailure.rows,
+                failures: gateFailure.failures,
+                recordedAt: now,
+              }),
+            } as Prisma.InputJsonObject,
+          }
+          : {}),
         ...(refundPending ? { billingRefundStatus: "pending", billingRefundError: null, billingRefundNextRetryAt: now } : {}),
       },
     });
@@ -3618,6 +3991,7 @@ async function finalizeFailure(ctx: RunnerContext, error: unknown): Promise<void
   await emit(ctx, "run.failed", "failed", outcome.run?.progressPercent ?? 0, message, {
     retryable: false,
     errorCategory: failure.category,
+    ...(gateFailure ? { gate: gateFailure.gate, repairRows: [...gateFailure.rows] } : {}),
     ...(failure.transportCode ? { transportCode: failure.transportCode } : {}),
     ...(failure.upstreamRequestId ? { upstreamRequestId: failure.upstreamRequestId } : {}),
   }).catch(() => undefined);
@@ -4231,7 +4605,51 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     running: remaining.get("running")!.frames,
     review: remaining.get("review")!.frames,
   };
-  let standard = await storeStandardAtlas(ctx, frames);
+  // Assembling the intermediate is the first moment all nine action groups are
+  // graded together. A rejection here names its cells, so regenerate only the
+  // implicated groups instead of failing a run that already paid for eleven
+  // boards; each repair is one extra call that the caller still has to approve
+  // under per-image billing.
+  const standardAtlasMaxAttempts = 2;
+  let assembledStandard: Awaited<ReturnType<typeof storeStandardAtlas>> | null = null;
+  for (let standardAttempt = 1; standardAttempt <= standardAtlasMaxAttempts; standardAttempt += 1) {
+    try {
+      assembledStandard = await storeStandardAtlas(ctx, frames, standardAttempt > 1);
+      break;
+    } catch (error) {
+      if (!(error instanceof CodexPetStandardAtlasStructureError)) throw error;
+      const rows = repairRowsFromAtlasValidation(error.validation);
+      const unscoped = atlasValidationErrorsWithoutCellScope(error.validation);
+      if (unscoped.length > 0 || rows.length === 0) throw error;
+      if (standardAttempt >= standardAtlasMaxAttempts) {
+        throw new CodexPetGateFailureError(
+          error.message,
+          "standard-atlas-structure",
+          rows,
+          [...error.validation.errors],
+        );
+      }
+      const failures = [...error.validation.errors];
+      const repairHint = `修复以下动作组的结构缺陷（单元格空白、越界或未用格位不透明）：${failures.slice(0, 20).join("；")}`;
+      await emit(ctx, "run.repairing", "repairing", 62, `标准图集结构缺陷动作组修复 ${standardAttempt}/${standardAtlasMaxAttempts - 1}`, { retryKind: "visual", rows, failures });
+      const standardRowsSet = new Set(rows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
+      // The travel rows are one semantic pair; never leave a stale counterpart.
+      if (standardRowsSet.has("running-right")) standardRowsSet.add("running-left");
+      if (standardRowsSet.has("running-left")) standardRowsSet.add("running-right");
+      const progressByState: Record<string, number> = { idle: 20, "running-right": 25, "running-left": 30, waving: 35, jumping: 40, failed: 45, waiting: 50, running: 55, review: 60 };
+      for (const state of standardRowsSet) {
+        const result = await runStandardRow(ctx, state, selected, progressByState[state] ?? 60, true, repairHint, "standard_generating");
+        if (state === "idle") idle = result;
+        else if (state === "running-right") runningRight = result;
+        else if (state === "running-left") runningLeft = result;
+        else remaining.set(state, result);
+        frames[state] = result.frames;
+      }
+      await resumeStageIfRepairing(ctx, "standard_generating", 62, "标准动作结构修复完成，正在重新组装中间图集");
+    }
+  }
+  if (!assembledStandard) throw new Error("标准 8×9 图集没有生成完整报告");
+  let standard = assembledStandard;
   await emit(ctx, "stage.completed", "standard_generating", 65, "9 组标准动作已完成", { contactArtifactId: standard.contactArtifact.id });
 
   await stage(ctx, "direction_generating", 65, "正在制作 16 个观察方向");
@@ -4578,6 +4996,62 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     await resumeStageIfRepairing(ctx, "validating", 84, "方向修复已通过，正在继续最终质量检查");
   };
 
+  /**
+   * Regenerate the complete action groups a verdict implicates, then rebuild
+   * every downstream artifact that depends on them.
+   *
+   * Deterministic structural gates and the independent visual reviewer both
+   * produce row-scoped evidence, so both must reach the same bounded repair
+   * path. Throwing on a structural rejection instead would end the run holding
+   * fully paid, fully approved action groups — the `老鼠猫` failure mode.
+   */
+  const repairScopedRows = async (input: {
+    readonly rows: readonly FinalRepairRow[];
+    readonly repairHint: string;
+    readonly progress: number;
+    readonly message: string;
+    readonly failures: readonly string[];
+  }): Promise<void> => {
+    await emit(ctx, "run.repairing", "repairing", input.progress, input.message, { retryKind: "visual", rows: [...input.rows], failures: [...input.failures] });
+    const standardRowsSet = new Set(input.rows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
+    // Horizontal locomotion is a coupled pair: repairing one side must never
+    // leave a stale mirrored/independently-generated counterpart beside it, so
+    // cadence and asymmetric props stay synchronized.
+    if (standardRowsSet.has("running-right")) standardRowsSet.add("running-left");
+    if (standardRowsSet.has("running-left")) standardRowsSet.add("running-right");
+    const standardRows = [...standardRowsSet];
+    if (standardRows.length > 0) {
+      const progressByState: Record<string, number> = { idle: 20, "running-right": 25, "running-left": 30, waving: 35, jumping: 40, failed: 45, waiting: 50, running: 55, review: 60 };
+      const repaired = await mapWithConcurrency(standardRows, visualConcurrency, (state, _index, signal) => (
+        runStandardRow({ ...ctx, signal }, state, selected, progressByState[state] ?? 64, true, input.repairHint, "validating")
+      ), ctx.signal);
+      repaired.forEach((result, index) => {
+        const state = standardRows[index]!;
+        if (state === "idle") idle = result;
+        else if (state === "running-right") runningRight = result;
+        else runningLeft = state === "running-left" ? result : runningLeft;
+        if (state !== "idle" && state !== "running-right" && state !== "running-left") remaining.set(state, result);
+        frames[state] = result.frames;
+      });
+      if (standardRows.includes("idle")) {
+        neutralDirectionFrame = { artifact: idle.frameArtifacts[0]!, buffer: idle.frames[0]! };
+      }
+      standard = await storeStandardAtlas(ctx, frames, true);
+
+      // Direction references include the approved standard contact; refresh
+      // the cardinal anchors as well whenever standard action art changes.
+      cardinals = await runBoardJob(ctx, {
+        key: "look-cardinals", kind: "look_cardinals", dependencies: ["look-mechanics", "standard-atlas"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id],
+        prompt: buildCardinalPrompt(ctx.identity, mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
+        columns: 2, rows: 2, frameCount: 4, progress: 83, qaKind: "cardinals", qaContext: "修复后四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左", qaRepetitions: 3, workflowStage: "validating", force: true, repairHint: input.repairHint,
+      });
+      cardinalAnchor = await createApprovedCardinalAnchor(ctx, cardinals, true);
+      lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
+      lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
+    }
+    await regenerateDirectionRows(input.repairHint);
+  };
+
   const directionMaxAttempts = 3;
   for (let directionAttempt = 1; directionAttempt <= directionMaxAttempts; directionAttempt += 1) {
     requireApprovedRegisteredRow(registeredLookA, "最终组装第一组观察方向");
@@ -4612,7 +5086,12 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     });
     if (!directionRegistration.ok) {
       if (directionAttempt >= directionMaxAttempts) {
-        throw new Error(`16 个观察方向中立帧锁定注册经 ${directionMaxAttempts} 次尝试后仍未通过：${directionRegistration.errors.join("；")}`);
+        throw new CodexPetGateFailureError(
+          `16 个观察方向中立帧锁定注册经 ${directionMaxAttempts} 次尝试后仍未通过：${directionRegistration.errors.join("；")}`,
+          "direction-registration",
+          ["look-a", "look-b"],
+          directionRegistration.errors,
+        );
       }
       const repairHint = directionRegistration.errors.join("; ") || "keep all 16 direction poses at the approved neutral body scale, lower-body anchor and baseline";
       await emit(ctx, "run.repairing", "repairing", 82, `方向中立帧锁定注册自动修复 ${directionAttempt}/${directionMaxAttempts - 1}`, { retryKind: "visual", failures: directionRegistration.errors });
@@ -4629,9 +5108,39 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     finalAtlas = cleaned.image;
     despill = cleaned.report;
     validation = await validatePetAtlas(finalAtlas, ctx.identity.chromaKey);
-    if (!despill.ok || !validation.ok) throw new Error(`最终图集结构检查失败：${[...validation.errors, ...(despill.ok ? [] : [`残留色键像素 ${despill.remainingOpaqueKeyPixels}`])].join("；")}`);
     continuity = await measureDirectionContinuity(finalAtlas);
-    if (!continuity.ok) throw new Error(`观察方向连续性结构检查失败：${continuity.errors.join("；")}`);
+    if (!validation.ok || !continuity.ok) {
+      // Both reports name the offending cells, so a structural rejection is a
+      // repair scope rather than a wall. Only unattributable atlas-wide defects
+      // (dimensions, missing alpha, residue outside the cell grid) remain fatal,
+      // because no action group could be regenerated to fix them.
+      const structuralFailures = [...validation.errors, ...continuity.errors];
+      const unscopedErrors = atlasValidationErrorsWithoutCellScope(validation);
+      const structuralRows = [...new Set([
+        ...repairRowsFromAtlasValidation(validation),
+        ...repairRowsFromDirectionContinuity(continuity),
+      ])];
+      if (unscopedErrors.length > 0 || structuralRows.length === 0 || directionAttempt >= directionMaxAttempts) {
+        const message = `最终图集结构检查失败：${structuralFailures.join("；")}`;
+        // An unattributable defect has no row scope to hand a continuation; a
+        // scoped one does, even after the in-process attempts are spent.
+        throw unscopedErrors.length > 0 || structuralRows.length === 0
+          ? new Error(message)
+          : new CodexPetGateFailureError(message, "final-atlas-structure", structuralRows, structuralFailures);
+      }
+      finalRepairHistory.push({ attempt: directionAttempt, rows: structuralRows, failures: structuralFailures });
+      await repairScopedRows({
+        rows: structuralRows,
+        repairHint: `修复以下动作组的结构缺陷（单元格空白、越界、残留色键或方向缺失）：${structuralFailures.slice(0, 20).join("；")}`,
+        progress: 86,
+        message: `最终图集结构缺陷动作组修复 ${directionAttempt}/${directionMaxAttempts - 1}`,
+        failures: structuralFailures,
+      });
+      continue;
+    }
+    // Despill residue inside the cell grid is already attributed per row above;
+    // anything left here is a defect of the despill pass itself.
+    if (!despill.ok) throw new Error(`最终图集残留色键像素 ${despill.remainingOpaqueKeyPixels}`);
     contactSheet = await createAtlasContactSheet(finalAtlas);
     directionSheet = await createDirectionQaSheet(finalAtlas);
     const blind = await createDirectionBlindQaSheet(finalAtlas);
@@ -4663,8 +5172,20 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     });
     const semanticFailures = semantics.filter((item) => item.verdict === "fail");
     if (!(blindValidation.ok && semanticFailures.length === 0)) {
+      const directionFailures = [...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}:${item.reason}`)];
       if (directionAttempt >= directionMaxAttempts) {
-        throw new Error(`方向质检经 ${directionMaxAttempts} 次尝试后仍未通过：${[...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}:${item.reason}`)].join("；")}`);
+        // Blind QA and semantics both speak in direction labels; map them back to
+        // the two direction rows so a continuation redoes only those boards.
+        const directionRows = [...new Set([
+          ...repairRowsFromDirectionContinuity({ errors: directionFailures }),
+          ...(blindValidation.failures.length > 0 ? ["look-a", "look-b"] as const : []),
+        ])];
+        throw new CodexPetGateFailureError(
+          `方向质检经 ${directionMaxAttempts} 次尝试后仍未通过：${directionFailures.join("；")}`,
+          "direction-qa",
+          directionRows,
+          directionFailures,
+        );
       }
       const repairHint = [...blindValidation.failures, ...semanticFailures.map((item) => `${item.direction}: ${item.reason}`)].join("; ");
       await emit(ctx, "run.repairing", "repairing", 84, `方向动作自动修复 ${directionAttempt}/${directionMaxAttempts - 1}`, { retryKind: "visual", failures: repairHint });
@@ -4701,55 +5222,22 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     assertCodexPetVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
     if (codexPetVisualQaVerdictPasses(finalQa)) break;
     if (directionAttempt >= directionMaxAttempts) {
-      throw new Error(`最终独立视觉质检经 ${directionMaxAttempts} 次尝试后仍未通过：${finalQa.failures.join("；") || "角色一致性或动作连续性失败"}`);
+      throw new CodexPetGateFailureError(
+        `最终独立视觉质检经 ${directionMaxAttempts} 次尝试后仍未通过：${finalQa.failures.join("；") || "角色一致性或动作连续性失败"}`,
+        "final-visual-qa",
+        repairRowsFromFinalQa(finalQa),
+        finalQa.failures,
+      );
     }
     const repairRows = repairRowsFromFinalQa(finalQa);
     finalRepairHistory.push({ attempt: directionAttempt, rows: repairRows, failures: finalQa.failures });
-    const repairHint = finalQa.repairPrompt || finalQa.failures.join("；") || "修复指定动作组的身份、动作语义、节奏与连续性";
-    await emit(ctx, "run.repairing", "repairing", 88, `最终视觉质检动作组修复 ${directionAttempt}/${directionMaxAttempts - 1}`, { retryKind: "visual", rows: repairRows, failures: finalQa.failures });
-
-    const standardRowsSet = new Set(repairRows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
-    // The two travel rows form one semantic pair.  If the right-facing source
-    // is repaired, never leave a stale mirrored/independently-generated left
-    // row beside it; regenerate the complete left group in the same repair
-    // pass so cadence and asymmetric props remain synchronized.
-    if (standardRowsSet.has("running-right")) standardRowsSet.add("running-left");
-    const standardRows = [...standardRowsSet];
-    // Horizontal locomotion is a coupled pair: repairing one side must not
-    // leave a stale mirrored/independently-generated counterpart in the final
-    // atlas.  Expand the requested scope to both complete rows.
-    if (standardRows.includes("running-right") && !standardRows.includes("running-left")) standardRows.push("running-left");
-    if (standardRows.includes("running-left") && !standardRows.includes("running-right")) standardRows.push("running-right");
-    if (standardRows.length > 0) {
-      const progressByState: Record<string, number> = { idle: 20, "running-right": 25, "running-left": 30, waving: 35, jumping: 40, failed: 45, waiting: 50, running: 55, review: 60 };
-      const repaired = await mapWithConcurrency(standardRows, visualConcurrency, (state, _index, signal) => (
-        runStandardRow({ ...ctx, signal }, state, selected, progressByState[state] ?? 64, true, repairHint, "validating")
-      ), ctx.signal);
-      repaired.forEach((result, index) => {
-        const state = standardRows[index]!;
-        if (state === "idle") idle = result;
-        else if (state === "running-right") runningRight = result;
-        else runningLeft = state === "running-left" ? result : runningLeft;
-        if (state !== "idle" && state !== "running-right" && state !== "running-left") remaining.set(state, result);
-        frames[state] = result.frames;
-      });
-      if (standardRows.includes("idle")) {
-        neutralDirectionFrame = { artifact: idle.frameArtifacts[0]!, buffer: idle.frames[0]! };
-      }
-      standard = await storeStandardAtlas(ctx, frames, true);
-
-      // Direction references include the approved standard contact; refresh
-      // the cardinal anchors as well whenever standard action art changes.
-      cardinals = await runBoardJob(ctx, {
-        key: "look-cardinals", kind: "look_cardinals", dependencies: ["look-mechanics", "standard-atlas"], inputArtifactIds: [selected.artifact.id, standard.contactArtifact.id],
-        prompt: buildCardinalPrompt(ctx.identity, mechanics), references: [imageInput(selected.buffer, selected.artifact.mime, "canonical-base.png"), imageInput(cardinalLayout, "image/png", "cardinal-layout.png")],
-        columns: 2, rows: 2, frameCount: 4, progress: 83, qaKind: "cardinals", qaContext: "修复后四个方向锚点必须明确为 000 向上、090 屏幕右、180 向下、270 屏幕左", qaRepetitions: 3, workflowStage: "validating", force: true, repairHint,
-      });
-      cardinalAnchor = await createApprovedCardinalAnchor(ctx, cardinals, true);
-      lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
-      lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
-    }
-    await regenerateDirectionRows(repairHint);
+    await repairScopedRows({
+      rows: repairRows,
+      repairHint: finalQa.repairPrompt || finalQa.failures.join("；") || "修复指定动作组的身份、动作语义、节奏与连续性",
+      progress: 88,
+      message: `最终视觉质检动作组修复 ${directionAttempt}/${directionMaxAttempts - 1}`,
+      failures: finalQa.failures,
+    });
   }
   if (!validation || !despill || !blindValidation || !continuity || !directionRegistration?.ok || !finalQa || (ctx.qualityInspectionEnabled && !codexPetVisualQaVerdictPasses(finalQa))) {
     throw new Error("最终验证没有生成完整报告");

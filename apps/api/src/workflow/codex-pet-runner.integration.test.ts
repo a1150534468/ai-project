@@ -2279,6 +2279,10 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
+    // A sibling can only be *cancelled* if it was running, so this contract needs
+    // the two base candidates in flight together. Production defaults to serial to
+    // keep the pair off the same upstream quota, so pin the parallel case here.
+    Object.assign(deps.env, { CODEX_PET_VISUAL_CONCURRENCY: "2" });
     deps.visual!.generate = vi.fn(async (input: { readonly prompt: string; readonly signal?: AbortSignal }) => {
       if (input.prompt.includes("Candidate variation 1")) {
         throw new TypeError("fetch failed", {

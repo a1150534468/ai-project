@@ -1,5 +1,9 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
+import {
+  codexPetGateRowJobKey,
+  readCodexPetGateFailureSnapshot,
+} from "./codex-pet-gate-failure.js";
 import { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-runner.js";
 import { DOUBAO_IMAGE_MODEL } from "./image-service.js";
 
@@ -52,6 +56,118 @@ export function continuationBillingBlocked(run: ContinuationBillingShape): strin
     return "失败续跑只允许已退款的失败运行";
   }
   return null;
+}
+
+/** Deterministic checkpoints that only re-derive from board output. Clearing
+ * them costs no provider call and is what makes the row reset actually reach the
+ * assembled artifacts: `standard-atlas` would otherwise hand back its stale
+ * completed atlas and hide the regenerated rows. */
+const STANDARD_ROW_DERIVED_JOB_KEYS = ["standard-atlas"] as const;
+
+interface GateScopedResetJob {
+  readonly id: string;
+  readonly key: string;
+  readonly kind: string;
+  readonly attempt: number;
+  readonly outputArtifactIds: readonly string[];
+}
+
+/**
+ * Clear the gate-blamed boards so the normal runner regenerates them.
+ *
+ * The board is `completed`, so nothing else in the pipeline would redo it: the
+ * runner returns a completed board verbatim. Marking it failed with its output
+ * detached is the reset. The attempt counter is deliberately preserved under
+ * per-image billing, because it is the ledger's logical-attempt key — a redo has
+ * to arrive as a *new* attempt so it is charged and approved rather than
+ * colliding with the call the user already paid for.
+ */
+async function resetGateScopedJobs(
+  tx: Prisma.TransactionClient,
+  input: {
+    readonly runId: string;
+    readonly projectId: string;
+    readonly userId: string;
+    readonly perImageBilling: boolean;
+    readonly jobs: readonly GateScopedResetJob[];
+    readonly gate: string;
+    readonly now: Date;
+  },
+): Promise<void> {
+  const obsoleteArtifactIds = input.jobs.flatMap((job) => [...job.outputArtifactIds]);
+  if (obsoleteArtifactIds.length > 0) {
+    await tx.codexPetArtifact.updateMany({
+      where: {
+        id: { in: obsoleteArtifactIds },
+        runId: input.runId,
+        projectId: input.projectId,
+        userId: input.userId,
+      },
+      data: { status: "superseded" },
+    });
+  }
+  for (const job of input.jobs) {
+    await tx.codexPetJob.update({
+      where: { id: job.id },
+      data: {
+        status: "failed",
+        error: `${input.gate} 闸门指认该动作组需要重做`,
+        // One more attempt, so the ledger sees a fresh logical attempt and the
+        // per-image gate can ask the user to approve (and pay for) the redo.
+        // Never lower a durable limit an approval already raised.
+        ...(input.perImageBilling
+          ? { maxAttempts: Math.max(job.attempt + 1, 1) }
+          : { attempt: 0 }),
+        output: Prisma.DbNull,
+        outputArtifactIds: [],
+        providerMetadata: Prisma.DbNull,
+        workerId: null,
+        startedAt: null,
+        completedAt: input.now,
+      },
+    });
+  }
+  // Reassembly must be forced only when a standard row actually changed; a
+  // direction-only scope leaves the intermediate atlas (and the paid cardinal
+  // board derived from it) untouched.
+  const standardRowChanged = input.jobs.some((job) => job.kind === "standard_row");
+  if (!standardRowChanged) return;
+  const derived = await tx.codexPetJob.findMany({
+    where: {
+      runId: input.runId,
+      projectId: input.projectId,
+      userId: input.userId,
+      key: { in: [...STANDARD_ROW_DERIVED_JOB_KEYS] },
+      status: "completed",
+    },
+    select: { id: true, outputArtifactIds: true },
+  });
+  const derivedArtifactIds = derived.flatMap((job) => job.outputArtifactIds);
+  if (derivedArtifactIds.length > 0) {
+    await tx.codexPetArtifact.updateMany({
+      where: {
+        id: { in: derivedArtifactIds },
+        runId: input.runId,
+        projectId: input.projectId,
+        userId: input.userId,
+      },
+      data: { status: "superseded" },
+    });
+  }
+  if (derived.length > 0) {
+    await tx.codexPetJob.updateMany({
+      where: { id: { in: derived.map((job) => job.id) } },
+      data: {
+        status: "queued",
+        output: Prisma.DbNull,
+        outputArtifactIds: [],
+        error: null,
+        workerId: null,
+        startedAt: null,
+        completedAt: null,
+      },
+    });
+  }
 }
 
 export interface CodexPetFailedContinuationInput {
@@ -415,13 +531,40 @@ export async function initializeCodexPetFailedContinuation(
       && ["failed", "cancelled", "queued"].includes(job.status)
       && record(job.input).promptVersion !== CODEX_PET_BOARD_PROMPT_VERSION
     ));
-    if (resettableJobs.length === 0) {
-      throw new Error(`失败续跑没有可由 ${CODEX_PET_BOARD_PROMPT_VERSION} 修复的旧动作任务`);
+    // A gate rejection is the other continuable shape: every row can be
+    // `completed` at the current prompt version while the assembled atlas still
+    // fails, so "did the prompt version move" cannot be the only admission test.
+    // The scope comes from the gate itself, recorded when the run failed, and is
+    // therefore never an implicit redo of an action the user approved.
+    const gateFailure = readCodexPetGateFailureSnapshot(run.inputSnapshot);
+    const gateScopedJobs = gateFailure
+      ? gateFailure.rows
+        .map((row) => jobsByKey.get(codexPetGateRowJobKey(row)))
+        .filter((job): job is NonNullable<typeof job> => Boolean(job)
+          && BOARD_JOB_KINDS.has(job!.kind)
+          && !resettableJobs.some((candidate) => candidate.id === job!.id))
+      : [];
+    if (resettableJobs.length === 0 && gateScopedJobs.length === 0) {
+      throw new Error(gateFailure
+        ? `失败续跑找不到闸门指认的动作任务：${gateFailure.rows.join("、")}`
+        : `失败续跑没有可由 ${CODEX_PET_BOARD_PROMPT_VERSION} 修复的旧动作任务`);
     }
 
     const now = new Date();
-    const resettableJobKeys = resettableJobs.map((job) => job.key);
-    const sourcePromptVersions = [...new Set(resettableJobs.map((job) => record(job.input).promptVersion)
+    if (gateScopedJobs.length > 0) {
+      await resetGateScopedJobs(tx, {
+        runId: run.id,
+        projectId: run.projectId,
+        userId: run.userId,
+        perImageBilling: run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE,
+        jobs: gateScopedJobs,
+        gate: gateFailure!.gate,
+        now,
+      });
+    }
+    const resettableJobKeys = [...resettableJobs, ...gateScopedJobs].map((job) => job.key);
+    const sourcePromptVersions = [...new Set([...resettableJobs, ...gateScopedJobs]
+      .map((job) => record(job.input).promptVersion)
       .filter((value): value is string => typeof value === "string" && value.length > 0))];
     const priorTargetPromptVersions = [...new Set([
       ...(Array.isArray(existingContinuation.priorTargetPromptVersions)
@@ -433,6 +576,10 @@ export async function initializeCodexPetFailedContinuation(
     ])];
     const nextSnapshot = {
       ...snapshot,
+      // The gate scope has been consumed by this continuation's reset. Leaving it
+      // behind would let a later continuation silently re-clear the same rows
+      // from a record that no longer describes the current run.
+      gateFailure: null,
       failedContinuation: {
         schemaVersion: CONTINUATION_SCHEMA_VERSION,
         initializedAt: now.toISOString(),
@@ -445,6 +592,16 @@ export async function initializeCodexPetFailedContinuation(
         maxBoardAttemptsPerJob: 1,
         reusableCheckpointKeys: [...REQUIRED_CHECKPOINT_KEYS],
         resettableJobKeys,
+        ...(gateFailure && gateScopedJobs.length > 0
+          ? {
+            gateFailure: {
+              gate: gateFailure.gate,
+              rows: [...gateFailure.rows],
+              recordedAt: gateFailure.recordedAt,
+              resetJobKeys: gateScopedJobs.map((job) => job.key),
+            },
+          }
+          : {}),
       },
     } as Prisma.InputJsonObject;
 
@@ -479,12 +636,17 @@ export async function initializeCodexPetFailedContinuation(
         type: "run.continuation_initialized",
         stage: "standard_generating",
         progress: Math.max(16, run.progressPercent),
-        message: "已锁定旧检查点，等待一次性续跑缺失动作",
+        message: gateScopedJobs.length > 0
+          ? `已锁定旧检查点，等待重做闸门指认的 ${gateScopedJobs.length} 组动作`
+          : "已锁定旧检查点，等待一次性续跑缺失动作",
         payload: {
           targetPromptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
           preservedImageGenerationCallCount: run.imageGenerationCallCount,
           reusableCheckpointKeys: [...REQUIRED_CHECKPOINT_KEYS],
           resettableJobKeys,
+          ...(gateFailure && gateScopedJobs.length > 0
+            ? { gate: gateFailure.gate, gateRows: [...gateFailure.rows] }
+            : {}),
         },
       },
     });
