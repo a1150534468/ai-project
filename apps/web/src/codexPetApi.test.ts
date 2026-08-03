@@ -255,6 +255,7 @@ describe("codex pet API", () => {
       artifacts: [],
       jobs: [],
       imageCalls: [],
+      extraCallBudget: null,
     });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/workflow/codex-pets/projects/project%20%2F%201/install-link");
