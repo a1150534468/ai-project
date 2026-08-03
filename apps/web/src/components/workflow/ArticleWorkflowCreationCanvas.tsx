@@ -11,6 +11,7 @@ interface ArticleWorkflowCreationCanvasProps {
   readonly draft: ArticleWorkflowCreationDraft;
   readonly onChange: (draft: ArticleWorkflowCreationDraft) => void;
   readonly onModeChange: (mode: ArticleWorkflowCreationDraft["mode"]) => void;
+  readonly variant?: "workspace" | "panel";
 }
 
 const STYLE_SOURCES: readonly { key: ArticleWorkflowTopicStyle["mode"]; label: string }[] = [
@@ -36,14 +37,21 @@ function nextStyle(mode: ArticleWorkflowTopicStyle["mode"]): ArticleWorkflowTopi
 
 export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanvasProps) {
   const draft = props.draft;
+  const panel = props.variant === "panel";
   const updateTopic = (patch: Partial<Extract<ArticleWorkflowCreationDraft, { mode: "topic" }>>) => {
     if (draft.mode !== "topic") return;
     props.onChange({ ...draft, ...patch });
   };
 
   return (
-    <section className="flex h-full min-h-[520px] flex-col bg-[#f7f8fa]" aria-label="创作内容">
-      <div className="flex h-12 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4 lg:px-5">
+    <section
+      className={panel ? "grid gap-4 bg-white" : "flex h-full min-h-[520px] flex-col bg-[#f7f8fa]"}
+      aria-label="创作内容"
+    >
+      <div className={panel
+        ? "flex items-center justify-between gap-3"
+        : "flex h-12 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4 lg:px-5"}
+      >
         <span className="text-xs font-semibold text-[#1d1d1f]">创作方式</span>
         <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1" role="tablist" aria-label="创作方式">
           {(["source", "topic"] as const).map((mode) => (
@@ -51,7 +59,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
               key={mode}
               type="button"
               role="tab"
-                aria-selected={draft.mode === mode}
+              aria-selected={draft.mode === mode}
               onClick={() => props.onModeChange(mode)}
               className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
                 draft.mode === mode ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
@@ -69,10 +77,11 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
           sourceText={draft.sourceText}
           onSourceFormatChange={(sourceFormat) => props.onChange({ ...draft, sourceFormat })}
           onSourceTextChange={(sourceText) => props.onChange({ ...draft, sourceText })}
+          compact={panel}
         />
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-6">
-          <div className="mx-auto grid max-w-[760px] gap-5">
+        <div className={panel ? "grid gap-4" : "min-h-0 flex-1 overflow-y-auto px-4 py-5 lg:px-6"}>
+          <div className={panel ? "grid gap-4" : "mx-auto grid max-w-[760px] gap-5"}>
             <label className="grid gap-2">
               <span className="text-xs font-semibold text-[#1d1d1f]">主题 / 关键词</span>
               <input

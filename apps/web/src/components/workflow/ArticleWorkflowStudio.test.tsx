@@ -91,7 +91,9 @@ describe("ArticleWorkflowStudio", () => {
     );
 
     expect(html).toContain("创建平台图文");
-    expect(html).toContain("输入原文");
+    expect(html).toContain("实时输出 / 预览");
+    expect(html).toContain('aria-label="实时输出预览"');
+    expect(html).toContain('aria-label="文章原文"');
     expect(html).toContain("项目历史");
     expect(html).toContain("纯文本");
     expect(html).toContain("Markdown");

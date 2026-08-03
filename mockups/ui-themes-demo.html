@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI 工作台 · UI 风格对比 Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+<style>
+  /* ============ 通用 / 变量 ============ */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+      "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    transition: background 0.4s ease, color 0.4s ease;
+    overflow-x: hidden;
+  }
+
+  /* 玻璃模式背景光斑（默认隐藏） */
+  .bg-orbs { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity .5s; }
+  .bg-orbs span {
+    position: absolute; border-radius: 50%; filter: blur(60px); opacity: .8;
+  }
+  .bg-orbs span:nth-child(1){ width:420px;height:420px;background:#7b2ff7;top:-80px;left:-60px;animation:float1 14s ease-in-out infinite; }
+  .bg-orbs span:nth-child(2){ width:380px;height:380px;background:#ff5fa2;bottom:-100px;right:-40px;animation:float2 18s ease-in-out infinite; }
+  .bg-orbs span:nth-child(3){ width:340px;height:340px;background:#2fd8ff;top:40%;left:55%;animation:float1 16s ease-in-out infinite reverse; }
+  .bg-orbs span:nth-child(4){ width:300px;height:300px;background:#ffd24a;top:10%;right:20%;animation:float2 20s ease-in-out infinite; }
+  @keyframes float1{0%,100%{transform:translate(0,0)}50%{transform:translate(40px,60px)}}
+  @keyframes float2{0%,100%{transform:translate(0,0)}50%{transform:translate(-50px,-40px)}}
+
+  /* ============ 主题切换条 ============ */
+  .switcher {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    z-index: 100; display: flex; gap: 6px; padding: 6px;
+    background: rgba(20,20,28,.85); backdrop-filter: blur(10px);
+    border-radius: 999px; box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    border: 1px solid rgba(255,255,255,.12);
+  }
+  .switcher button {
+    border: none; cursor: pointer; font-size: 13px; font-weight: 600;
+    color: #cfd2dc; background: transparent; padding: 9px 16px; border-radius: 999px;
+    transition: all .2s; font-family: inherit;
+  }
+  .switcher button:hover { color: #fff; }
+  .switcher button.active { background: #fff; color: #111; }
+
+  /* ============ 布局骨架 ============ */
+  .layout {
+    position: relative; z-index: 1;
+    display: grid; grid-template-columns: 232px 1fr; min-height: 100vh;
+    max-width: 1180px; margin: 0 auto; padding-top: 70px;
+  }
+  .sidebar { padding: 22px 14px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 800; margin-bottom: 26px; padding: 0 8px; }
+  .logo .mark { width: 30px; height: 30px; display: grid; place-items: center; font-size: 16px; }
+  .nav { display: flex; flex-direction: column; gap: 4px; }
+  .nav a {
+    display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+    text-decoration: none; color: inherit; font-size: 14px; font-weight: 600;
+    border-radius: 10px; transition: all .18s;
+  }
+  .nav a .ic { width: 20px; text-align: center; }
+  .nav a:hover { background: var(--hover); }
+  .nav a.active { background: var(--active-bg); color: var(--active-fg); }
+
+  .main { padding: 8px 26px 60px; }
+  .topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; }
+  .topbar h1 { font-size: 22px; font-weight: 800; flex: 1; }
+  .search { flex: 0 0 260px; display: flex; align-items: center; gap: 8px; padding: 9px 14px; }
+  .search input { border: none; background: transparent; outline: none; flex: 1; font-size: 13px; color: inherit; font-family: inherit; }
+  .balance { display: flex; align-items: center; gap: 6px; padding: 9px 14px; font-weight: 700; font-size: 13px; white-space: nowrap; }
+  .avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; }
+
+  .grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 18px; }
+  .card { padding: 20px; }
+  .card h3 { font-size: 15px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .span2 { grid-column: 1 / -1; }
+
+  /* 模型卡片 */
+  .models { display: flex; flex-direction: column; gap: 12px; }
+  .model {
+    display: flex; align-items: center; gap: 14px; padding: 14px;
+    border-radius: 14px; transition: transform .15s;
+  }
+  .model:hover { transform: translateY(-2px); }
+  .model .badge { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; flex: none; }
+  .model .meta { flex: 1; }
+  .model .meta b { font-size: 14px; }
+  .model .meta p { font-size: 12px; opacity: .65; margin-top: 2px; }
+  .model .price { font-size: 13px; font-weight: 700; }
+
+  /* 按钮 */
+  .btns { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
+  .btn { border: none; cursor: pointer; font-family: inherit; font-weight: 700; font-size: 13px; padding: 11px 18px; transition: all .15s; }
+  .btn:active { transform: scale(.96); }
+
+  /* 数据条 */
+  .bars { display: flex; align-items: flex-end; gap: 12px; height: 130px; padding-top: 10px; }
+  .bars .b { flex: 1; border-radius: 8px 8px 0 0; position: relative; transition: height .6s; }
+  .bars .b span { position: absolute; bottom: -22px; left: 0; right: 0; text-align: center; font-size: 11px; opacity: .7; }
+
+  /* 聊天气泡 */
+  .chat { display: flex; flex-direction: column; gap: 14px; }
+  .bubble { max-width: 80%; padding: 12px 15px; font-size: 13px; line-height: 1.6; }
+  .bubble.me { align-self: flex-end; }
+  .bubble.ai { align-self: flex-start; }
+
+  /* 统计数字 */
+  .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .stat { text-align: center; padding: 14px 8px; border-radius: 14px; }
+  .stat .n { font-size: 24px; font-weight: 900; }
+  .stat .l { font-size: 12px; opacity: .65; margin-top: 4px; }
+
+  /* ============ 主题：像素风 ============ */
+  body.theme-pixel {
+    background: #14071f;
+    color: #e8e8f0;
+    font-family: "Press Start 2P", "PingFang SC", monospace;
+    image-rendering: pixelated;
+  }
+  body.theme-pixel .layout { --hover:#241138; --active-bg:#39ff14; --active-fg:#0b0b0b; }
+  body.theme-pixel .card,
+  body.theme-pixel .sidebar,
+  body.theme-pixel .search,
+  body.theme-pixel .balance,
+  body.theme-pixel .model,
+  body.theme-pixel .stat,
+  body.theme-pixel .bubble {
+    background: #1d0b2e; border: 3px solid #4b2c7a;
+    border-radius: 0; box-shadow: 6px 6px 0 #000;
+  }
+  body.theme-pixel .logo .mark { background:#00f0ff; color:#000; border:3px solid #000; box-shadow:3px 3px 0 #000; }
+  body.theme-pixel .nav a { border-radius: 0; }
+  body.theme-pixel .nav a.active { box-shadow: 4px 4px 0 #000; }
+  body.theme-pixel .model .badge { border:3px solid #000; box-shadow:3px 3px 0 #000; }
+  body.theme-pixel .btn {
+    border:3px solid #000; border-radius:0; box-shadow:4px 4px 0 #000;
+    background:#ffe600; color:#000; text-transform:uppercase;
+  }
+  body.theme-pixel .btn.sec { background:#00f0ff; }
+  body.theme-pixel .btn.ghost { background:#ff2e97; color:#fff; }
+  body.theme-pixel .btn:hover { transform: translate(2px,2px); box-shadow:2px 2px 0 #000; }
+  body.theme-pixel .bars .b { background:#00f0ff; border:2px solid #000; }
+  body.theme-pixel .bubble.me { background:#ff2e97; color:#fff; border-color:#000; }
+  body.theme-pixel .bubble.ai { background:#39ff14; color:#000; border-color:#000; }
+  body.theme-pixel .topbar h1 { font-size:16px; letter-spacing:1px; color:#00f0ff; }
+  body.theme-pixel .search input::placeholder { color:#8a7ab0; }
+  body.theme-pixel .avatar { background:#39ff14; color:#000; border:3px solid #000; }
+  body.theme-pixel .stat { background:#241138; }
+  body.theme-pixel .stat .n { color:#ffe600; }
+
+  /* ============ 主题：苹果风 ============ */
+  body.theme-apple {
+    background: #f5f5f7; color: #1d1d1f;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+  }
+  body.theme-apple .layout { --hover:#ececf0; --active-bg:#0071e3; --active-fg:#fff; }
+  body.theme-apple .card,
+  body.theme-apple .sidebar,
+  body.theme-apple .search,
+  body.theme-apple .balance,
+  body.theme-apple .model,
+  body.theme-apple .stat,
+  body.theme-apple .bubble {
+    background: #ffffff; border-radius: 18px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.06); border: none;
+  }
+  body.theme-apple .logo .mark { background: linear-gradient(135deg,#0071e3,#42a5f5); color:#fff; border-radius:9px; }
+  body.theme-apple .nav a { border-radius: 10px; }
+  body.theme-apple .nav a.active { font-weight: 700; }
+  body.theme-apple .model .badge { border-radius: 11px; }
+  body.theme-apple .btn {
+    border-radius: 980px; background:#0071e3; color:#fff;
+  }
+  body.theme-apple .btn.sec { background:#e8e8ed; color:#1d1d1f; }
+  body.theme-apple .btn.ghost { background:transparent; color:#0071e3; }
+  body.theme-apple .btn:hover { filter: brightness(1.05); }
+  body.theme-apple .bars .b { background: linear-gradient(180deg,#42a5f5,#0071e3); }
+  body.theme-apple .bubble.me { background:#0071e3; color:#fff; }
+  body.theme-apple .bubble.ai { background:#f0f0f3; color:#1d1d1f; }
+  body.theme-apple .topbar h1 { letter-spacing:-.5px; }
+  body.theme-apple .search { background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.05); }
+  body.theme-apple .balance { background:#fff; box-shadow:0 2px 10px rgba(0,0,0,.05); color:#0071e3; }
+  body.theme-apple .avatar { background: linear-gradient(135deg,#ff9f0a,#ff375f); color:#fff; }
+  body.theme-apple .stat { background:#fafafc; }
+  body.theme-apple .stat .n { color:#0071e3; }
+
+  /* ============ 主题：液态玻璃 ============ */
+  body.theme-glass { background: #1b1033; color: #fff; }
+  body.theme-glass .bg-orbs { opacity: 1; }
+  body.theme-glass .layout { --hover:rgba(255,255,255,.10); --active-bg:rgba(255,255,255,.2); --active-fg:#fff; }
+  body.theme-glass .card,
+  body.theme-glass .sidebar,
+  body.theme-glass .search,
+  body.theme-glass .balance,
+  body.theme-glass .model,
+  body.theme-glass .stat,
+  body.theme-glass .bubble {
+    background: rgba(255,255,255,.12);
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid rgba(255,255,255,.28);
+    border-radius: 22px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.25);
+  }
+  body.theme-glass .logo .mark { background: rgba(255,255,255,.25); border-radius:11px; backdrop-filter: blur(8px); }
+  body.theme-glass .nav a { border-radius: 12px; }
+  body.theme-glass .nav a.active { backdrop-filter: blur(10px); }
+  body.theme-glass .model .badge { background: rgba(255,255,255,.2); border-radius: 13px; }
+  body.theme-glass .btn {
+    border-radius: 14px; background: rgba(255,255,255,.22); color:#fff;
+    border:1px solid rgba(255,255,255,.4); backdrop-filter: blur(10px);
+  }
+  body.theme-glass .btn.sec { background: rgba(255,255,255,.12); }
+  body.theme-glass .btn.ghost { background: transparent; }
+  body.theme-glass .btn:hover { background: rgba(255,255,255,.32); }
+  body.theme-glass .bars .b { background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.4)); }
+  body.theme-glass .bubble.me { background: rgba(123,47,247,.45); border-color: rgba(255,255,255,.35); }
+  body.theme-glass .bubble.ai { background: rgba(255,255,255,.18); }
+  body.theme-glass .topbar h1 { font-weight: 800; }
+  body.theme-glass .search input::placeholder { color: rgba(255,255,255,.6); }
+  body.theme-glass .avatar { background: rgba(255,255,255,.25); border:1px solid rgba(255,255,255,.4); }
+  body.theme-glass .stat .n { color:#fff; }
+
+  @media (max-width: 820px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .grid { grid-template-columns: 1fr; }
+    .search { display: none; }
+  }
+</style>
+</head>
+<body class="theme-apple">
+  <!-- 玻璃背景光斑 -->
+  <div class="bg-orbs"><span></span><span></span><span></span><span></span></div>
+
+  <!-- 主题切换条 -->
+  <div class="switcher">
+    <button data-theme="pixel">🟦 像素风</button>
+    <button data-theme="apple" class="active">🍎 苹果风</button>
+    <button data-theme="glass">💧 液态玻璃</button>
+  </div>
+
+  <div class="layout">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="logo"><span class="mark">AI</span> AI 工作台</div>
+      <nav class="nav">
+        <a href="#" class="active"><span class="ic">💬</span> 对话</a>
+        <a href="#"><span class="ic">🛒</span> 模型广场</a>
+        <a href="#"><span class="ic">🔧</span> 工作流</a>
+        <a href="#"><span class="ic">🤖</span> 智能体</a>
+        <a href="#"><span class="ic">📊</span> 数据报表</a>
+        <a href="#"><span class="ic">💰</span> 计费中心</a>
+        <a href="#"><span class="ic">⚙️</span> 设置</a>
+      </nav>
+    </aside>
+
+    <!-- 主区域 -->
+    <main class="main">
+      <div class="topbar">
+        <h1>工作台总览</h1>
+        <div class="search">🔍 <input placeholder="搜索模型 / 智能体 / 工作流" /></div>
+        <div class="balance">⚡ 算力点 1,280</div>
+        <div class="avatar">陈</div>
+      </div>
+
+      <!-- 统计 -->
+      <div class="card span2" style="margin-bottom:18px;">
+        <div class="stats">
+          <div class="stat"><div class="n">37</div><div class="l">本月对话</div></div>
+          <div class="stat"><div class="n">12</div><div class="l">智能体</div></div>
+          <div class="stat"><div class="n">8</div><div class="l">工作流</div></div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <!-- 模型广场 -->
+        <div class="card">
+          <h3>🛒 模型广场</h3>
+          <div class="models">
+            <div class="model">
+              <div class="badge" style="background:#111;color:#fff;">G</div>
+              <div class="meta"><b>GPT-5.6 Sol</b><p>通用对话 · 推理增强</p></div>
+              <div class="price">6 点/1k</div>
+            </div>
+            <div class="model">
+              <div class="badge" style="background:#7b2ff7;color:#fff;">豆</div>
+              <div class="meta"><b>豆包 Seedream</b><p>文生图 · 4K 高清</p></div>
+              <div class="price">9 点/张</div>
+            </div>
+            <div class="model">
+              <div class="badge" style="background:#ff5fa2;color:#fff;">Q</div>
+              <div class="meta"><b>Qwen Image 2.0 Pro</b><p>图像编辑 · 商用授权</p></div>
+              <div class="price">8 点/张</div>
+            </div>
+          </div>
+          <div class="btns" style="margin-top:16px;">
+            <button class="btn">立即使用</button>
+            <button class="btn sec">查看详情</button>
+          </div>
+        </div>
+
+        <!-- 算力消耗 -->
+        <div class="card">
+          <h3>📈 近 7 日算力消耗</h3>
+          <div class="bars">
+            <div class="b" style="height:40%"><span>一</span></div>
+            <div class="b" style="height:65%"><span>二</span></div>
+            <div class="b" style="height:50%"><span>三</span></div>
+            <div class="b" style="height:80%"><span>四</span></div>
+            <div class="b" style="height:60%"><span>五</span></div>
+            <div class="b" style="height:95%"><span>六</span></div>
+            <div class="b" style="height:72%"><span>日</span></div>
+          </div>
+        </div>
+
+        <!-- 对话预览 -->
+        <div class="card span2">
+          <h3>💬 对话预览</h3>
+          <div class="chat">
+            <div class="bubble ai">你好，陈工！今天想让我帮你跑工作流，还是先看看模型广场的新模型？</div>
+            <div class="bubble me">帮我把上周的算力消耗做个图表，再生成一份周报。</div>
+            <div class="bubble ai">已为你生成近 7 日消耗柱状图，并整理好周报草稿，点「查看详情」即可导出。</div>
+          </div>
+          <div class="btns" style="margin-top:16px;">
+            <button class="btn">发送</button>
+            <button class="btn ghost">清空对话</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const body = document.body;
+    const btns = document.querySelectorAll('.switcher button');
+    btns.forEach(b => b.addEventListener('click', () => {
+      body.className = 'theme-' + b.dataset.theme;
+      btns.forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    }));
+  </script>
+</body>
+</html>

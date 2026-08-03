@@ -3,15 +3,16 @@ import {
   ARTICLE_WORKFLOW_PLATFORMS,
   articleWorkflowPlatformConfig,
   type ArticleWorkflowGenerationMode,
-  type ArticleWorkflowCreationMode,
   type ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
 import type { ArticleWorkflowPricing } from "../../workflowArticleApi";
+import { ArticleWorkflowCreationCanvas } from "./ArticleWorkflowCreationCanvas";
+import type { ArticleWorkflowCreationDraft } from "./articleWorkflowCreationDraft";
 import { articleWorkflowPricingText } from "./articleWorkflowStudioModel";
 import { SubmitCostBar } from "./SubmitCostBar";
 
 interface ArticleWorkflowInputPanelProps {
-  readonly creationMode: ArticleWorkflowCreationMode;
+  readonly creationDraft: ArticleWorkflowCreationDraft;
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly generateImages: boolean;
   readonly selectedPlatforms: readonly ArticleWorkflowPlatform[];
@@ -19,6 +20,8 @@ interface ArticleWorkflowInputPanelProps {
   readonly creating: boolean;
   readonly canGenerate: boolean;
   readonly onGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
+  readonly onCreationDraftChange: (value: ArticleWorkflowCreationDraft) => void;
+  readonly onCreationModeChange: (value: ArticleWorkflowCreationDraft["mode"]) => void;
   readonly onGenerateImagesChange: (value: boolean) => void;
   readonly onTogglePlatform: (value: ArticleWorkflowPlatform) => void;
   readonly onGenerate: () => void;
@@ -62,7 +65,14 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin]">
-        <fieldset>
+        <ArticleWorkflowCreationCanvas
+          draft={props.creationDraft}
+          onChange={props.onCreationDraftChange}
+          onModeChange={props.onCreationModeChange}
+          variant="panel"
+        />
+
+        <fieldset className="mt-5 border-t border-[#e5e7eb] pt-4">
           <div className="mb-2 flex items-center justify-between gap-3">
             <legend className="text-xs font-semibold text-[#1d1d1f]">发布平台</legend>
             <span className="text-[10px] text-[#8a8a8f]">可多选</span>
@@ -116,7 +126,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           </span>
         </label>
 
-        {props.creationMode === "source" && props.selectedPlatforms.includes("wechat") && (
+        {props.creationDraft.mode === "source" && props.selectedPlatforms.includes("wechat") && (
           <fieldset className="mt-4">
             <legend className="mb-2 text-xs font-semibold text-[#1d1d1f]">公众号生成方式</legend>
             <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">

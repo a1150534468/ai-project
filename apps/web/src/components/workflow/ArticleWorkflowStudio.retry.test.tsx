@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../../motion/Toast";
 import { ArticleWorkflowStudio } from "./ArticleWorkflowStudio";
@@ -317,6 +317,27 @@ describe("ArticleWorkflowStudio 项目历史删除", () => {
 });
 
 describe("ArticleWorkflowStudio 主题创作", () => {
+  it("keeps all creation inputs in the left configuration panel and reserves the workspace for output", async () => {
+    render(
+      <ToastProvider>
+        <ArticleWorkflowStudio
+          token="token"
+          initialHistory={[]}
+          initialProject={null}
+          initialBootstrapping={false}
+        />
+      </ToastProvider>,
+    );
+    await act(async () => { await Promise.resolve(); });
+
+    const config = screen.getByRole("region", { name: "图文生成配置" });
+    const output = screen.getByRole("region", { name: "实时输出预览" });
+    expect(within(config).getByLabelText("文章原文")).toBeTruthy();
+    expect(within(config).getByRole("tab", { name: "主题创作" })).toBeTruthy();
+    expect(within(output).queryByLabelText("文章原文")).toBeNull();
+    expect(within(output).getByText("尚无输出")).toBeTruthy();
+  });
+
   it("switches to copy-first by default and validates custom style before submit", async () => {
     render(
       <ToastProvider>
