@@ -5,7 +5,10 @@
     "dev": { "cache": false, "persistent": true },
     "test": {
       "dependsOn": ["^build"],
-      "passThroughEnv": [
+      // 这些变量必须放 env 而非 passThroughEnv：passThroughEnv 只透传、不参与缓存哈希，
+      // 于是缓存命中会重放「换了 env 的旧结果」——包括没 source .env 时被 skipIf 静默跳过的那一次。
+      // 放进 env 后 env 一变即失效缓存。CI 另加 --force 兜底，保证 skip 计数防护读到的是真跑出来的报告。
+      "env": [
         "ADMIN_SESSION_SECRET",
         "BAILIAN_API_KEY",
         "BAILIAN_REGION",

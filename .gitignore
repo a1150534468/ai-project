@@ -1,6 +1,9 @@
 node_modules
 dist
 out
+.cc-tmp/
+# vitest JSON 报告：CI 的 skip 计数防护用，各 workspace 生成，不入库
+.vitest-report.json
 .env
 .env.local
 .turbo

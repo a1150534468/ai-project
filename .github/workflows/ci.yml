@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # main 上的每一次提交都要有独立结论，不允许被后来的推送取消
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  DO_NOT_TRACK: 1
+
+jobs:
+  static:
+    name: typecheck + lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # biome --changed 要跟基准 ref 比对，需要历史；默认 fetch-depth:1 拿不到。
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 确定 lint 比对基准
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "ref=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            # main 上比对上一个提交，即「这次推进来的改动」
+            echo "ref=$(git rev-parse HEAD~1)" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=origin/main" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: lint 改动文件（仅 noUnusedImports）
+        # --formatter-enabled=false 是刻意的：本仓 932 个文件里约 748 个不符合 biome
+        # 的格式，全量格式化不在本任务范围（计划明确禁止）。而只要开着格式检查，
+        # 改一行就会要求重排整个文件（实测某文件 329 行里 215 行被改），
+        # 改动会被格式噪声淹没。故 CI 只门禁 lint，格式化留给 pnpm format 本地渐进采用。
+        run: >-
+          pnpm exec biome ci --changed --since=${{ steps.base.outputs.ref }}
+          --formatter-enabled=false
+
+      - name: typecheck（脚本内含 prisma generate）
+        run: pnpm typecheck
+        env:
+          # prisma generate 只读 schema 不连库，但个别版本会校验 url 格式，给个占位值
+          DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder
+
+  test:
+    name: test
+    # 按项目所有者要求：测试目前只在 main 跑。ci-verify/** 用于验证本工作流自身，
+    # workflow_dispatch 用于手动补跑。
+    if: >-
+      github.ref == 'refs/heads/main' ||
+      startsWith(github.ref, 'refs/heads/ci-verify/') ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        # 必须是 pgvector 镜像：migration 20260626061702_memory_pgvector 里有
+        # CREATE EXTENSION vector，普通 postgres 镜像会在此直接失败。
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: ai-assistant
+          POSTGRES_PASSWORD: ai-assistant
+          POSTGRES_DB: ai-assistant
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ai-assistant -d ai-assistant"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql://ai-assistant:ai-assistant@127.0.0.1:5432/ai-assistant
+      REDIS_URL: redis://127.0.0.1:6379
+      SESSION_SECRET: ci-session-secret-that-is-long-enough-for-tests
+      ADMIN_SESSION_SECRET: ci-admin-session-secret-long-enough-for-tests
+      CODEX_PET_ARTIFACT_SIGNING_SECRET: ci-codex-pet-signing-secret-long-enough
+      BILLING_INTERNAL_TOKEN: ci-billing-internal-token
+      # 必须「存在但不可达」：缺了它 5 个 admin 测试在 beforeAll 就抛；
+      # 端口必须含 8093，openapi.test.ts 断言 servers[0].url 含该串。
+      BILLING_BASE_URL: http://127.0.0.1:8093
+      # packages/llm 在 LLM_PROVIDER 未设时落到 anthropic 分支，缺这两个会抛。
+      LLM_BASE_URL: http://127.0.0.1:9
+      LLM_API_KEY: ci-placeholder-not-a-real-key
+      # 模型类 Key 与 S3 一律留空：不在 CI 花钱、不依赖外部服务。
+      # 后果是 6 个 .poc. 文件与 s3.test.ts 的 1 例按预期跳过，已计入 skip 基线。
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 生成 prisma client
+        run: pnpm --filter @ai-assistant/db generate
+
+      - name: 应用数据库迁移
+        # 必须是 migrate deploy 不是 migrate dev：dev 会因 drift 要求 reset。
+        run: pnpm --filter @ai-assistant/db exec prisma migrate deploy
+
+      - name: 跑测试
+        # --force：不吃缓存，保证下一步的 skip 计数防护读到的是真跑出来的报告。
+        # --continue：某个 workspace 红了也把其余跑完，否则防护只会抱怨「报告不齐」，
+        #             掩盖真正的失败信息。
+        run: >-
+          pnpm exec turbo run test --force --continue --
+          --reporter=default --reporter=json --outputFile.json=.vitest-report.json
+
+      - name: 假绿防护（skip 计数与基线比对）
+        # always()：测试红了也要跑，这一步的表格是判断「红在哪」的主要依据。
+        if: always()
+        run: node scripts/check-test-report.mjs
+
+      - name: 留存测试报告
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vitest-reports
+          path: |
+            apps/*/.vitest-report.json
+            packages/*/.vitest-report.json
+          if-no-files-found: warn
+          retention-days: 14

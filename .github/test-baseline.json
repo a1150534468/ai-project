@@ -1,0 +1,20 @@
+{
+  "_why": "假绿防护基线。本仓有一批 describe.skipIf/it.skipIf 守卫的测试，缺 env 时静默跳过且退出码 0——「少跑了几十个测试」在 CI 上表现为绿色。scripts/check-test-report.mjs 拿各 workspace 的 vitest JSON 报告与这里比对。",
+  "_measured": "2026-08-05，在已提交树（af5f926）上用与 .github/workflows/ci.yml 完全一致的 env 实测，非推算。api 单独实测 1653/0/18，其余 9 个 workspace 实测合计 686/0/5。",
+
+  "expectedWorkspaces": 10,
+  "minPassed": 2339,
+  "maxSkipped": 23,
+
+  "_breakdown": {
+    "passed": "api 1653 + web 416 + desktop 123 + codex-pet-pipeline 48 + billing 31 + admin 17 + article-workflow 13 + novel-workflow 13 + connector-protocol 13 + llm 12 = 2339",
+    "skipped": "api 18（6 个 .poc. 文件共 16 例 + codex-pet-runner.integration 1 例 + storage/s3 1 例）+ llm 5（2 个 .poc. 文件）= 23",
+    "workspaces": "10 个有 test 脚本的 workspace；@ai-assistant/db 没有 test 脚本，turbo 不会为它建任务，故不计。"
+  },
+
+  "_skipsAreExpected": "CI 不配模型类 Key、不配 S3，故 .poc. 文件与 s3 的 1 例按预期跳过。.poc. 另有 RUN_*_POC=1 的独立开关，未设时无论有没有 Key 都跳过。",
+
+  "_howToUpdate": "只有在「真的删了测试」或「真的新增了预期 skip」时才改这里，并在 commit message 里写清原因。新增测试会让 passed 上升，不会触发防护（minPassed 是下限），无需改。绝不要为了让 CI 变绿而放宽数字——那正是这套防护要拦的事。",
+
+  "_remeasureOnCleanDb": "重新实测必须用空库。api 的 kb/service.test.ts 有一例（「所有人可以读官方库」）会被库里遗留的 KnowledgeBase 行搞挂：本次首轮在复用库（残留 291 行 KnowledgeBase）上得到 1652/1/18，换空库后是 1653/0/18。CI 每次起新的 service container，天然是空库，不受影响；本地复现时请建新库并跑 prisma migrate deploy。"
+}
