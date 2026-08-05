@@ -98,8 +98,17 @@ if (rows.length !== baseline.expectedWorkspaces) {
   );
 }
 
-if (total.failed > 0 || total.failedSuites > 0) {
-  fail(`${total.failed} 个测试失败，${total.failedSuites} 个测试文件失败。`);
+if (total.failed > 0) {
+  fail(`${total.failed} 个测试失败。`);
+}
+
+if (total.failedSuites > 0) {
+  // 用例数达标、只有 suite 失败，通常是 import/收集阶段就炸了（语法错、缺依赖、
+  // 顶层 throw）。这种情况整个文件的用例一个都没跑，但 numPassedTests 不会变，
+  // 单看计数是绿的，所以必须独立成一条。
+  fail(
+    `${total.failedSuites} 个测试文件失败${total.failed === 0 ? "（用例数达标，说明是 import/收集阶段就失败了，整个文件没跑）" : ""}。`,
+  );
 }
 
 if (total.skipped > baseline.maxSkipped) {
