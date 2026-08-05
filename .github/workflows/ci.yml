@@ -50,9 +50,12 @@ jobs:
         # 的格式，全量格式化不在本任务范围（计划明确禁止）。而只要开着格式检查，
         # 改一行就会要求重排整个文件（实测某文件 329 行里 215 行被改），
         # 改动会被格式噪声淹没。故 CI 只门禁 lint，格式化留给 pnpm format 本地渐进采用。
+        # --no-errors-on-unmatched：只改 biome 忽略的文件（如 .github/*.json、*.md）时，
+        # biome 会报「No files were processed」并 exit 1，把纯配置/文档提交判成红灯。
+        # 「这次没有需要 lint 的文件」是正常情况，不是失败。
         run: >-
           pnpm exec biome ci --changed --since=${{ steps.base.outputs.ref }}
-          --formatter-enabled=false
+          --formatter-enabled=false --no-errors-on-unmatched
 
       - name: typecheck（脚本内含 prisma generate）
         run: pnpm typecheck
