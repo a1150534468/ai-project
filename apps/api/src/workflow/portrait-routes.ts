@@ -3,6 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import sharp, { type Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
@@ -40,6 +41,13 @@ import {
 } from "./workflow-pricing.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
 import type { ImageResolutionLabel } from "./image-upstream-options.js";
+import { startPortraitReaper } from "./portrait-reaper.js";
+import {
+  PORTRAIT_ACTIVE_STATUSES,
+  PORTRAIT_TERMINAL_STATUSES,
+  portraitMaxAttempts,
+  portraitRetryDelayMs,
+} from "./portrait-shared.js";
 
 const PORTRAIT_MAX_REFERENCE_COUNT = 3;
 const PORTRAIT_MAX_COUNT = 4;
@@ -47,9 +55,6 @@ const PORTRAIT_REFERENCE_MAX_PIXELS = 40_000_000;
 const PORTRAIT_REFERENCE_TTL_MS = 24 * 60 * 60 * 1000;
 const PORTRAIT_BLOB_TTL_MS = 15 * 60 * 1000;
 const PORTRAIT_TASK_KEEP_LIMIT = 30;
-const PORTRAIT_RETRY_DELAY_MS = 3_000;
-const PORTRAIT_DEFAULT_MAX_ATTEMPTS = 3;
-const PORTRAIT_TERMINAL_STATUSES = new Set(["completed", "partial", "failed", "cancelled"]);
 
 const portraitReferenceMimeTypes = new Set([...IMAGE_REFERENCE_MIME_TYPES, "image/heic", "image/heif"]);
 const portraitReferenceSchema = z.object({
@@ -149,6 +154,8 @@ interface PortraitBilling {
 interface PortraitRouteDeps {
   readonly prisma?: PrismaClient;
   readonly billing?: PortraitBilling;
+  /** 传了才起主动扫兜底；不传（单测）只保留 GET /state 的被动 recover。 */
+  readonly redis?: Redis;
   readonly fetchFn?: typeof fetch;
   readonly scheduleTask?: (work: () => Promise<void>) => void;
   readonly retryDelayMs?: number;
@@ -488,8 +495,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   const deleteStoredImage = deps.deleteStoredImage ?? ((objectKey: string) => deleteObject(makeS3(loadS3Config()), objectKey));
   const callImageEdit = deps.callImageEdit ?? (async (args: Parameters<typeof callImageEditService>[0]) => callImageEditService(args));
   const scheduleTask = deps.scheduleTask ?? ((work: () => Promise<void>) => { void work().catch(() => undefined); });
-  const retryDelayMs = deps.retryDelayMs ?? (Number(process.env.PORTRAIT_RETRY_DELAY_MS) || PORTRAIT_RETRY_DELAY_MS);
-  const maxAttempts = deps.maxAttempts ?? (Number(process.env.PORTRAIT_MAX_ATTEMPTS) || PORTRAIT_DEFAULT_MAX_ATTEMPTS);
+  const retryDelayMs = deps.retryDelayMs ?? portraitRetryDelayMs();
+  const maxAttempts = deps.maxAttempts ?? portraitMaxAttempts();
   const activeTasks = new Map<string, AbortController>();
   // 管理台费率只拉一次；失败时回落通用 key 但必须留痕。
   const listPriceRows = async (): Promise<readonly WorkflowResourcePriceRow[]> => {
@@ -515,12 +522,17 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     });
   };
 
-  const recover = async (userId?: string) => {
-    const rows = await prisma.portraitTask.findMany({
-      where: { ...(userId ? { userId } : {}), status: { in: ["pending", "running"] } },
+  /**
+   * 续跑仍活着的任务：pending 重新预留后排期，running 直接排期。
+   * 两个入口共用它——GET /state 的被动触发（按 userId 限定），
+   * 和 reaper 的主动扫（跨用户，只捞心跳超期的行）。
+   */
+  const recover = async (opts: { userId?: string; rows?: readonly PortraitTaskRow[] } = {}) => {
+    const rows = opts.rows ?? (await prisma.portraitTask.findMany({
+      where: { ...(opts.userId ? { userId: opts.userId } : {}), status: { in: [...PORTRAIT_ACTIVE_STATUSES] } },
       orderBy: { createdAt: "asc" },
       take: 50,
-    }) as unknown as PortraitTaskRow[];
+    }) as unknown as PortraitTaskRow[]);
     for (const row of rows) {
       if (row.status === "pending") {
         try {
@@ -549,8 +561,31 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   }, 60 * 60 * 1000);
   cleanupTimer.unref?.();
   void cleanupExpiredPortraitReferences({ prisma, deleteStoredImage }).catch(() => undefined);
+
+  /**
+   * 主动扫兜底。原先续跑只挂在 GET /api/workflow/portraits/state 上：
+   * 用户不回来刷页面，进程重启前排期的任务就永远停在 running，钱挂在预留里。
+   * reaper 起在这里而不是 server.ts，是因为续跑要用到上面那套闭包依赖
+   * （activeTasks / scheduleTask / callImageEdit …），搬到 server.ts 就得整套重接一遍。
+   */
+  const reaperTimer = deps.redis
+    ? startPortraitReaper({
+      prisma,
+      redis: deps.redis,
+      resume: async (row) => { await recover({ rows: [row as unknown as PortraitTaskRow] }); },
+      settle: ({ task, units }) => settlePortraitBilling({
+        prisma,
+        billing,
+        task: task as unknown as PortraitTaskRow,
+        units,
+      }),
+      onError: (error) => app.log.warn({ error: safeErrorMessage(error) }, "portrait reaper tick failed"),
+    })
+    : undefined;
+
   app.addHook("onClose", async () => {
     clearInterval(cleanupTimer);
+    if (reaperTimer) clearInterval(reaperTimer);
     for (const controller of activeTasks.values()) controller.abort();
     activeTasks.clear();
   });
@@ -674,7 +709,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   app.get("/api/workflow/portraits/state", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
     if (!userId) return reply.code(401).send({ error: "未登录" });
-    await recover(userId);
+    await recover({ userId });
     const [references, tasks] = await Promise.all([
       prisma.portraitReferenceAsset.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: "desc" }, take: PORTRAIT_MAX_REFERENCE_COUNT }),
       prisma.portraitTask.findMany({ where: { userId }, include: { outputs: { orderBy: { requestIndex: "asc" } } }, orderBy: { createdAt: "desc" }, take: PORTRAIT_TASK_KEEP_LIMIT }),
