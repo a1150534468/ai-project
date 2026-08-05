@@ -157,7 +157,9 @@ export async function buildServer() {
   await app.register(membershipUserRoutes);
   await app.register(agentRoutes, { redis: getRedis() });
   await app.register(agentTeamRoutes);
-  await app.register(imageWorkflowRoutes);
+  // 同上：传 redis 才起 image 的主动扫。之前 image 的续跑只挂在轮询接口上，
+  // 用户关掉页面就没人推进了。
+  await app.register((instance) => imageWorkflowRoutes(instance, { redis: getRedis() }));
   // 传 redis 才会起人像的主动扫兜底（抢锁用），reaper 的清理挂在该插件自己的 onClose 上
   await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }));

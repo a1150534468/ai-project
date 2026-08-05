@@ -3,6 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
@@ -16,6 +17,13 @@ import {
   normalizeImageSize,
 } from "./image-upstream-options.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
+import { startImageReaper } from "./image-reaper.js";
+import {
+  IMAGE_TASK_STATUS,
+  type ImageGenerationTaskRow,
+  loadImageStaleTaskMs,
+  SETTLING_STALE_MS,
+} from "./image-shared.js";
 import {
   resolveImageChargeRow,
   resolveImagePricingMatrix,
@@ -45,17 +53,8 @@ const IMAGE_MAX_COUNT = 8;
 const DEFAULT_RETRY_DELAY_MS = 3000;
 const DEFAULT_MAX_ATTEMPTS = 3;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
-const DEFAULT_STALE_TASK_MS = DEFAULT_ATTEMPT_TIMEOUT_MS + DEFAULT_RETRY_DELAY_MS + 30_000;
-// 进程崩在 settling 的预留：超过该时长视为无人认领，可重置回 reserved 再结算
-const SETTLING_STALE_MS = 10 * 60_000;
 const IMAGE_BLOB_URL_TTL_MS = 15 * 60_000;
 const ECOM_IMAGE_REQUEST_PREFIX = "ecom-";
-const IMAGE_TASK_STATUS = {
-  running: "running",
-  completed: "completed",
-  failed: "failed",
-  cancelled: "cancelled",
-} as const;
 const IMAGE_GENERATION_INTENTS = ["new", "variation", "edit"] as const;
 const imageRequestSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
@@ -138,30 +137,11 @@ interface ImageWorkflowRouteDeps {
   readonly maxAttempts?: number;
   readonly staleTaskMs?: number;
   readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
-}
-
-interface ImageGenerationTaskRow {
-  readonly id: string;
-  readonly userId: string;
-  readonly requestId: string;
-  readonly prompt: string;
-  readonly model: string;
-  readonly size: string;
-  readonly referenceAssetIds?: readonly string[];
-  readonly sourceImageAssetId?: string | null;
-  readonly generationIntent?: string;
-  readonly count: number;
-  readonly status: string;
-  readonly completedCount: number;
-  readonly error: string | null;
-  // 旧任务（升级前创建）没有这些列的值：billingMode 缺省视为 "charge"。
-  readonly billingMode?: string;
-  readonly billingResourceKey?: string | null;
-  readonly billingReservedUnits?: number;
-  readonly billingSettledUnits?: number | null;
-  readonly billingStatus?: string | null;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
+  /**
+   * 给了才起主动扫的定时器。留成可选是为了让既有测试注册插件时不需要 redis，
+   * 也避免测试进程里凭空多一个后台定时器。生产在 server.ts 注入。
+   */
+  readonly redis?: Redis;
 }
 
 interface RetryOptions {
@@ -189,11 +169,6 @@ function tryLoadImageGenerationConfig(model?: string): ImageGenerationConfig | n
   } catch {
     return null;
   }
-}
-
-function loadStaleTaskMs(env: NodeJS.ProcessEnv = process.env): number {
-  const value = Number(env.IMAGE_STALE_TASK_MS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_STALE_TASK_MS;
 }
 
 export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -873,10 +848,10 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
   // value must not turn a persistent 429/timeout into an infinite background
   // task; callers can still choose a different bounded value explicitly.
   const maxAttempts = deps.maxAttempts ?? loadImageMaxAttempts();
-  const staleTaskMs = deps.staleTaskMs ?? loadStaleTaskMs();
+  const staleTaskMs = deps.staleTaskMs ?? loadImageStaleTaskMs();
 
-  async function resumeTasksIfNeeded(tasks: readonly ImageGenerationTaskRow[]): Promise<number> {
-    const reconciled = await reconcilePendingImageBilling({
+  async function reconcileTasksBilling(tasks: readonly ImageGenerationTaskRow[]): Promise<number> {
+    return reconcilePendingImageBilling({
       prisma,
       billing,
       tasks,
@@ -890,7 +865,10 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
         app.log.error({ requestId: task.requestId, operationId, err: error }, "image task billing reconciliation failed");
       },
     });
-    const resumed = await resumeStaleTasks({
+  }
+
+  async function resumeTasksIfStale(tasks: readonly ImageGenerationTaskRow[]): Promise<number> {
+    return resumeStaleTasks({
       prisma,
       billing,
       fetchFn,
@@ -913,7 +891,31 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
         app.log.error({ requestId: task.requestId, operationId, err: error }, "image task billing settlement failed");
       },
     });
+  }
+
+  /**
+   * 被动路径：轮询接口顺手把自己这批行救一下。两趟合起来算，行为与拆分前一致。
+   * 主动扫走的是 reaper，各扫各的查询——两条路撞上同一行时靠 claimStaleTask 的
+   * 乐观锁和 settleImageTaskBilling 的 settling 抢占定胜负，不会双花。
+   */
+  async function resumeTasksIfNeeded(tasks: readonly ImageGenerationTaskRow[]): Promise<number> {
+    const reconciled = await reconcileTasksBilling(tasks);
+    const resumed = await resumeTasksIfStale(tasks);
     return reconciled + resumed;
+  }
+
+  if (deps.redis) {
+    const timer = startImageReaper({
+      prisma,
+      redis: deps.redis,
+      resume: resumeTasksIfStale,
+      reconcile: reconcileTasksBilling,
+      onError: (error) => app.log.error({ err: error }, "image reaper tick failed"),
+    });
+    // 必须清：插件可以被反复注册（测试、多实例 fastify），漏了就攒定时器。
+    app.addHook("onClose", async () => {
+      clearInterval(timer);
+    });
   }
 
   app.get("/api/workflow/images/:imageId/blob", async (req, reply) => {

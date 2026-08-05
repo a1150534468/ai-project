@@ -87,8 +87,34 @@ function createPrismaMock(rows: ImageRow[] = [], tasks: ImageTaskRow[] = []) {
       deleteMany: vi.fn(async () => ({ count: 0 })),
     },
     imageGenerationTask: {
-      findMany: vi.fn(async (args: { where?: { userId?: string }; orderBy?: Record<string, string>; take?: number }) => {
-        let result = tasks.filter((row) => !args.where?.userId || row.userId === args.where.userId);
+      // status / billing* / updatedAt 这几个条件是 reaper 的查询在用的（不带 userId）。
+      // 轮询路径只传 userId，那几个 undefined 时不过滤，所以既有用例行为不变。
+      findMany: vi.fn(async (args: {
+        where?: {
+          userId?: string;
+          status?: string | { in?: readonly string[] };
+          billingMode?: string;
+          billingStatus?: { in?: readonly string[] };
+          updatedAt?: { lt?: Date };
+        };
+        orderBy?: Record<string, string>;
+        take?: number;
+      }) => {
+        const where = args.where;
+        let result = tasks.filter((row) => !where?.userId || row.userId === where.userId);
+        if (typeof where?.status === "string") {
+          result = result.filter((row) => row.status === where.status);
+        } else if (where?.status?.in) {
+          result = result.filter((row) => where.status && typeof where.status !== "string" && where.status.in?.includes(row.status));
+        }
+        if (where?.billingMode) result = result.filter((row) => row.billingMode === where.billingMode);
+        if (where?.billingStatus?.in) {
+          result = result.filter((row) => row.billingStatus && where.billingStatus?.in?.includes(row.billingStatus));
+        }
+        if (where?.updatedAt?.lt) {
+          const lt = where.updatedAt.lt.getTime();
+          result = result.filter((row) => row.updatedAt.getTime() < lt);
+        }
         result = [...result].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
         if (args.take) result = result.slice(0, args.take);
         return result;
@@ -189,6 +215,7 @@ async function createApp(options: {
   readonly retryDelayMs?: number;
   readonly staleTaskMs?: number;
   readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
+  readonly redis?: { set: (...args: unknown[]) => Promise<string | null> };
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
@@ -207,6 +234,7 @@ async function createApp(options: {
     maxAttempts: 3,
     staleTaskMs: options.staleTaskMs,
     loadStoredImage: options.loadStoredImage,
+    redis: options.redis as never,
   });
   await app.ready();
   return app;
@@ -1737,5 +1765,189 @@ describe("image workflow routes", () => {
     expect(response.statusCode).toBe(500);
     expect(billing.refundResource).toHaveBeenCalledWith("image:req-create-broken");
     await app.close();
+  });
+});
+
+describe("image 主动扫接线", () => {
+  function makeRedis(result: "OK" | null = "OK") {
+    return { set: vi.fn(async () => result) };
+  }
+
+  function staleRunningTask(overrides: Partial<ImageTaskRow> = {}): ImageTaskRow {
+    return {
+      id: "task-reaper",
+      userId: "u-other",
+      requestId: "req-reaper",
+      prompt: "商业美食摄影",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      count: 1,
+      status: "running",
+      completedCount: 0,
+      error: null,
+      createdAt: new Date("2026-06-29T07:00:00.000Z"),
+      updatedAt: new Date("2026-06-29T07:00:00.000Z"),
+      ...overrides,
+    };
+  }
+
+  function okFetch() {
+    return vi.fn(async () =>
+      new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })
+    ) as typeof fetch;
+  }
+
+  it("没人轮询也能把卡住的任务拉起来（任务属于别的用户，请求一次都没发）", async () => {
+    vi.useFakeTimers();
+    try {
+      const task = staleRunningTask();
+      const prisma = createPrismaMock([], [task]);
+      const billing = createBillingMock();
+      const scheduled: Promise<void>[] = [];
+      const redis = makeRedis("OK");
+      const app = await createApp({ prisma, billing, fetchFn: okFetch(), scheduled, staleTaskMs: 1, redis });
+
+      // 关键：全程不发任何 HTTP 请求，纯靠定时器
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(redis.set).toHaveBeenCalledTimes(1);
+      expect(scheduled).toHaveLength(1);
+
+      vi.useRealTimers();
+      await scheduled[0];
+      expect(task.status).toBe("completed");
+      expect(task.completedCount).toBe(1);
+      // 续跑不该重新扣费
+      expect(billing.reserveResource).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("不给 redis 就不起定时器（既有测试与单机部署不受影响）", async () => {
+    vi.useFakeTimers();
+    try {
+      const prisma = createPrismaMock([], [staleRunningTask()]);
+      const scheduled: Promise<void>[] = [];
+      const app = await createApp({
+        prisma,
+        billing: createBillingMock(),
+        fetchFn: okFetch(),
+        scheduled,
+        staleTaskMs: 1,
+      });
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(scheduled).toHaveLength(0);
+      expect(prisma.imageGenerationTask.findMany).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("抢不到锁就整轮跳过，多实例不会重复拉起同一批", async () => {
+    vi.useFakeTimers();
+    try {
+      const prisma = createPrismaMock([], [staleRunningTask()]);
+      const scheduled: Promise<void>[] = [];
+      const app = await createApp({
+        prisma,
+        billing: createBillingMock(),
+        fetchFn: okFetch(),
+        scheduled,
+        staleTaskMs: 1,
+        redis: makeRedis(null),
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(scheduled).toHaveLength(0);
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("onClose 清掉定时器，插件反复注册不攒 timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const prisma = createPrismaMock([], []);
+      const redis = makeRedis("OK");
+      const app = await createApp({
+        prisma,
+        billing: createBillingMock(),
+        fetchFn: okFetch(),
+        staleTaskMs: 1,
+        redis,
+      });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(redis.set).toHaveBeenCalledTimes(1);
+
+      await app.close();
+      await vi.advanceTimersByTimeAsync(300_000);
+      // 关掉之后不再有新一轮
+      expect(redis.set).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 这条证的是「对账那趟接到了真结算」。
+  // 「并发不双花」不在这里证：瞬时竞争由既有用例
+  // 「settles a reservation exactly once when two settlement paths race」守着
+  // （settleImageTaskBilling 里 billingStatus -> settling 的原子抢占），
+  // 跨轮不重复由 reconcilePendingImageBilling 自己的 billingStatus 过滤守着。
+  // 下面多跑几轮只是顺带的冒烟，不是那两条保证的替身。
+  it("没人轮询也能把终态漏掉的账补上", async () => {
+    const task = staleRunningTask({
+      id: "task-leak",
+      userId: "u1",
+      requestId: "req-leak",
+      status: "completed",
+      completedCount: 1,
+      billingMode: "reserve",
+      billingResourceKey: "image.qwen",
+      billingReservedUnits: 1,
+      billingStatus: "reserved",
+    });
+    const prisma = createPrismaMock(
+      [{
+        id: "img-leak",
+        userId: "u1",
+        requestId: "req-leak",
+        requestIndex: 0,
+        prompt: "商业美食摄影",
+        model: "qwen-image-2.0-pro-2026-04-22",
+        size: "1024x1024",
+        originalUrl: "https://img.test/leak.png",
+        thumbnailUrl: "https://img.test/leak.png",
+        objectKey: "images/leak.png",
+        mime: "image/png",
+        createdAt: new Date("2026-06-29T07:00:00.000Z"),
+      }],
+      [task],
+    );
+    const billing = createBillingMock();
+    const redis = makeRedis("OK");
+
+    // 假定时器必须在建 app 之前开：setInterval 是注册插件时创建的，
+    // 事后切假的不会把已存在的真定时器接管过来（这里踩过一次）。
+    vi.useFakeTimers();
+    try {
+      const app = await createApp({ prisma, billing, fetchFn: okFetch(), staleTaskMs: 1, redis });
+
+      // 第一轮：这行是 completed + billingStatus=reserved，谁都没在等它，
+      // 之前只有用户自己轮询才会被补上——现在定时器就该补掉。
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(billing.settleResource).toHaveBeenCalledTimes(1);
+      expect(task.billingStatus).toBe("settled");
+
+      // 顺带：再跑三轮不该又结算一次（真正的守卫在上面注释里，这里只是冒烟）
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(redis.set).toHaveBeenCalledTimes(4);
+      expect(billing.settleResource).toHaveBeenCalledTimes(1);
+      expect(billing.refundResource).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
