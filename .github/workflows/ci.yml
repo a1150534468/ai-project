@@ -120,6 +120,20 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+
+      # ubuntu-latest 不带 ffmpeg。缺了它有两种后果，且两种都发生过：
+      #   1. dub-ffmpeg / video-compress / local-business-promo-render 用
+      #      describe.runIf(hasFfmpeg) 守卫，静默跳过 6 个用例——是假绿；
+      #   2. local-business-promo-edit-analysis 没有守卫，直接 spawn ffmpeg ENOENT
+      #      挂 2 个用例。
+      # 这 8 个用例都是真要跑真 ffmpeg 的，所以装上，而不是放宽基线。
+      - name: 安装 ffmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+
       - name: 安装依赖
         run: pnpm install --frozen-lockfile
 
@@ -151,5 +165,9 @@ jobs:
           path: |
             apps/*/.vitest-report.json
             packages/*/.vitest-report.json
-          if-no-files-found: warn
+          # 报告名以点开头，v4 默认按隐藏文件排除，实测「上传成功但零文件」
+          # ——第一次红灯时想下报告排查，发现 artifact 是空的。
+          include-hidden-files: true
+          # 这一步是红灯时唯一能拿到逐用例结果的地方，没上传成功要当失败看。
+          if-no-files-found: error
           retention-days: 14
