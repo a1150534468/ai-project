@@ -5,6 +5,7 @@ import PDFDocument from "pdfkit";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { requireUser } from "../auth/require-user.js";
 import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 
 type ExportChapter = { readonly chapterIndex: number; readonly title: string; readonly content: string };
@@ -145,9 +146,12 @@ const importSchema = z.object({
 });
 
 export async function registerNovelExportRoutes(app: FastifyInstance, options: { prisma: PrismaClient }) {
+  // 本文件两个路由都必须登录，挂插件级。钩子和它保护的路由放在同一个文件里，
+  // 这样测试单独注册本文件时守卫不会凭空消失（`resource-routes.test.ts` 就是这么装的）。
+  app.addHook("preHandler", requireUser);
+
   app.post("/api/workflow/novels/projects/:projectId/import", { bodyLimit: 6_000_000 }, async (req, reply) => {
-    const userId = (req as { userId?: string }).userId ?? "";
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = paramsSchema.safeParse(req.params);
     const body = importSchema.safeParse(req.body);
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
@@ -194,8 +198,7 @@ export async function registerNovelExportRoutes(app: FastifyInstance, options: {
   });
 
   app.get("/api/workflow/novels/projects/:projectId/export", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId ?? "";
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = paramsSchema.safeParse(req.params);
     const query = querySchema.safeParse(req.query);
     if (!params.success || !query.success) return reply.code(400).send({ error: "参数不合法" });

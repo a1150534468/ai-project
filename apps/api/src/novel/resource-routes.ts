@@ -5,6 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { captureNovelStructuredSnapshot, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 import { syncNovelSetupAssets } from "./structured-sync.js";
+import { requireUser } from "../auth/require-user.js";
 import { refreshNovelVectorMemoryBestEffort } from "../workflow/novel-task-runner.js";
 import { backfillNovelContinuityAssets } from "./continuity-assets.js";
 import { backfillNovelNarrativeLedgers } from "./narrative-ledger.js";
@@ -16,10 +17,6 @@ const promptParams = projectParams.extend({ templateId: z.string().min(1) });
 const checkpointParams = projectParams.extend({ checkpointId: z.string().min(1) });
 const setupParams = projectParams.extend({ setupKind: z.enum(["bible", "characters", "locations", "plot"]) });
 const setupSaveSchema = z.object({ data: z.unknown() });
-
-function userIdOf(req: unknown): string {
-  return (req as { userId?: string }).userId ?? "";
-}
 
 async function requireProject(prisma: PrismaClient, userId: string, projectId: string) {
   return prisma.novelProject.findFirst({ where: { id: projectId, userId } });
@@ -245,10 +242,13 @@ async function restoreCheckpointSnapshot(args: {
 export async function registerNovelResourceRoutes(app: FastifyInstance, options: { prisma: PrismaClient }) {
   const { prisma } = options;
 
+  // 本文件 48 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样 `resource-routes.test.ts` 单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   app.get("/api/workflow/novels/projects/:projectId/setup", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await requireProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -268,10 +268,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.put("/api/workflow/novels/projects/:projectId/setup/:setupKind", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = setupParams.safeParse(req.params);
     const body = setupSaveSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await requireProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -281,9 +280,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/setup/complete", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await requireProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -299,9 +297,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/structure", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const nodes = await prisma.novelStructureNode.findMany({ where: { projectId: parsed.data.projectId }, orderBy: [{ parentId: "asc" }, { number: "asc" }] });
@@ -309,10 +306,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/structure", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = structureSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const node = await prisma.novelStructureNode.create({ data: { projectId: params.data.projectId, ...body.data, metadata: json(body.data.metadata) } });
@@ -320,10 +316,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/structure/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = structureSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelStructureNode.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -336,9 +331,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/structure/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelStructureNode.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -347,9 +341,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/characters", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const [characters, relations] = await Promise.all([
@@ -360,10 +353,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/characters", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = characterSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const character = await prisma.novelCharacter.create({ data: { projectId: params.data.projectId, ...body.data, moralTaboos: body.data.moralTaboos, state: json(body.data.state) } });
@@ -371,10 +363,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/characters/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = characterSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelCharacter.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -387,9 +378,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/characters/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelCharacter.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -399,10 +389,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/character-relations", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = relationSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const count = await prisma.novelCharacter.count({ where: { projectId: params.data.projectId, id: { in: [body.data.fromCharacterId, body.data.toCharacterId] } } });
@@ -416,9 +405,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/character-relations/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelCharacterRelation.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -427,19 +415,17 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/locations", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     return { success: true, data: { locations: await prisma.novelLocation.findMany({ where: { projectId: parsed.data.projectId }, orderBy: { name: "asc" } }) } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/locations", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = locationSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const location = await prisma.novelLocation.create({ data: { projectId: params.data.projectId, ...body.data, metadata: json(body.data.metadata) } });
@@ -447,10 +433,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/locations/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = locationSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelLocation.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -461,9 +446,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/locations/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelLocation.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -473,9 +457,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/storylines", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const storylines = await prisma.novelStoryline.findMany({ where: { projectId: parsed.data.projectId }, include: { milestones: { orderBy: { chapterNumber: "asc" } } }, orderBy: { createdAt: "asc" } });
@@ -483,10 +466,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/storylines", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = storylineSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const storyline = await prisma.novelStoryline.create({ data: { projectId: params.data.projectId, ...body.data, promiseTags: body.data.promiseTags, aliases: body.data.aliases } });
@@ -494,10 +476,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/storylines/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = storylineSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelStoryline.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -508,9 +489,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/storylines/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelStoryline.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -520,10 +500,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/storylines/:entityId/milestones", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = milestoneSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const storyline = await prisma.novelStoryline.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -534,10 +513,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/storyline-milestones/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = milestoneSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelStorylineMilestone.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -548,9 +526,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/storyline-milestones/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelStorylineMilestone.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -560,9 +537,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/props", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const props = await prisma.novelProp.findMany({ where: { projectId: parsed.data.projectId }, include: { events: { orderBy: { createdAt: "desc" } } }, orderBy: { name: "asc" } });
@@ -570,10 +546,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/props", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = propSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const prop = await prisma.novelProp.create({ data: { projectId: params.data.projectId, ...body.data, metadata: json(body.data.metadata) } });
@@ -581,10 +556,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/props/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = propSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelProp.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -594,9 +568,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/props/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelProp.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -605,10 +578,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/props/:entityId/events", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = propEventSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const prop = await prisma.novelProp.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -618,9 +590,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/narrative-assets", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const [timeline, foreshadows, debts, events, causalEdges, facts, foreshadowEvents] = await Promise.all([
@@ -636,9 +607,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/narrative-assets/backfill", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     if (await hasActiveNovelRun(prisma, params.data.projectId)) return reply.code(409).send({ error: "作品正在生成中，请等待运行结束后再补齐叙事资产" });
@@ -652,10 +622,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/timeline", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = timelineSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const event = await prisma.novelTimelineEvent.create({ data: { projectId: params.data.projectId, ...body.data, participants: body.data.participants } });
@@ -663,10 +632,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/timeline/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = timelineSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelTimelineEvent.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -676,9 +644,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/timeline/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelTimelineEvent.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -687,10 +654,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/foreshadows", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = foreshadowSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const item = await prisma.novelForeshadowItem.create({ data: { projectId: params.data.projectId, ...body.data } });
@@ -698,10 +664,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/foreshadows/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = foreshadowSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelForeshadowItem.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -711,9 +676,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/foreshadows/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelForeshadowItem.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -722,10 +686,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/narrative-debts", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = debtSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const debt = await prisma.novelNarrativeDebt.create({ data: { projectId: params.data.projectId, ...body.data } });
@@ -733,10 +696,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.patch("/api/workflow/novels/projects/:projectId/narrative-debts/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
     const body = debtSchema.partial().safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const found = await prisma.novelNarrativeDebt.findFirst({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -746,9 +708,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.delete("/api/workflow/novels/projects/:projectId/narrative-debts/:entityId", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = entityParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const deleted = await prisma.novelNarrativeDebt.deleteMany({ where: { id: params.data.entityId, projectId: params.data.projectId } });
@@ -757,9 +718,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/narrative-dashboard", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await requireProject(prisma, userId, parsed.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -777,19 +737,17 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/checkpoints", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     return { success: true, data: { checkpoints: await prisma.novelCheckpoint.findMany({ where: { projectId: parsed.data.projectId }, orderBy: { createdAt: "desc" }, take: 100 }) } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/checkpoints", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = z.object({ label: z.string().max(120).default("手动检查点"), branchName: z.string().trim().min(1).max(80).optional() }).safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await requireProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -807,9 +765,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/checkpoints/:checkpointId/rollback", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = checkpointParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     if (await hasActiveNovelRun(prisma, params.data.projectId)) return reply.code(409).send({ error: "请先暂停并结束当前小说运行，再切换检查点" });
@@ -824,10 +781,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/checkpoints/:checkpointId/branch", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = checkpointParams.safeParse(req.params);
     const body = z.object({ branchName: z.string().trim().min(1).max(80) }).safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     if (await hasActiveNovelRun(prisma, params.data.projectId)) return reply.code(409).send({ error: "请先暂停并结束当前小说运行，再创建世界线" });
@@ -843,9 +799,8 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.get("/api/workflow/novels/projects/:projectId/prompts", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const parsed = projectParams.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const templates = await prisma.novelPromptTemplate.findMany({ where: { projectId: parsed.data.projectId }, include: { versions: { orderBy: { version: "desc" }, take: 20 } }, orderBy: [{ category: "asc" }, { name: "asc" }] });
@@ -853,10 +808,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/prompts", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = projectParams.safeParse(req.params);
     const body = promptSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     if (body.data.model) {
@@ -878,10 +832,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
   });
 
   app.post("/api/workflow/novels/projects/:projectId/prompts/:templateId/rollback", async (req, reply) => {
-    const userId = userIdOf(req);
+    const userId = req.userId;
     const params = promptParams.safeParse(req.params);
     const body = z.object({ version: z.number().int().min(1) }).safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
     const template = await prisma.novelPromptTemplate.findFirst({ where: { id: params.data.templateId, projectId: params.data.projectId } });

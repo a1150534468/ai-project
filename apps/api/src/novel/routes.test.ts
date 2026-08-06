@@ -399,4 +399,32 @@ describe("novel engine routes", () => {
     expect(mocks.createNextNovelStep).not.toHaveBeenCalled();
     await app.close();
   });
+
+  /**
+   * P1.1 把这 10 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * 原先本文件一条 401 断言都没有，等于守卫全靠人眼守着 —— 删掉也是全绿。
+   * 这条把守卫钉住：未登录必须 401，且 handler 一次都不许跑到查库。
+   */
+  it("未登录时全部路由返回 401，且不碰数据库", async () => {
+    const prisma = prismaMock();
+    const app = await buildApp(prisma, "");
+    const cases = [
+      { method: "POST" as const, url: `/api/workflow/novels/projects/${project.id}/runs/assisted` },
+      { method: "POST" as const, url: `/api/workflow/novels/projects/${project.id}/runs/autopilot` },
+      { method: "GET" as const, url: `/api/workflow/novels/projects/${project.id}/runs` },
+      { method: "GET" as const, url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}` },
+      { method: "POST" as const, url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}/pause` },
+      { method: "POST" as const, url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}/cancel` },
+      { method: "POST" as const, url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}/revise` },
+      { method: "POST" as const, url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}/resume` },
+      { method: "GET" as const, url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}/events` },
+    ];
+    for (const one of cases) {
+      const response = await app.inject(one);
+      expect(response.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(response.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    expect(prisma.novelProject.findFirst).not.toHaveBeenCalled();
+    await app.close();
+  });
 });

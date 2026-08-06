@@ -5,6 +5,7 @@ import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { completedNovelChapterCount, nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import { novelAssistedRunSchema, novelAutopilotStartSchema } from "@ai-assistant/novel-workflow/contracts";
+import { requireUser } from "../auth/require-user.js";
 import { appendNovelRunEvent, novelRunChannel, serializeNovelRunEvent } from "./events.js";
 import { dispatchNovelOutboxBatch } from "./outbox.js";
 import { createNovelRun, createNextNovelStep, serializeNovelRun } from "./run-store.js";
@@ -24,10 +25,6 @@ async function ownedRun(prisma: PrismaClient, userId: string, projectId: string,
   return prisma.novelRun.findFirst({ where: { id: runId, projectId, userId } });
 }
 
-function userIdOf(req: unknown): string {
-  return (req as { userId?: string }).userId ?? "";
-}
-
 function activeRunConflict(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
@@ -42,9 +39,15 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
     token: process.env.BILLING_INTERNAL_TOKEN!,
   });
 
+  // 本文件 10 个路由全部必须登录，挂插件级。
+  // 注意下面 registerNovelResourceRoutes / registerNovelExportRoutes 是直接调用而非
+  // register，和本文件共享同一个作用域，所以这个钩子也会覆盖它们的 50 个路由 ——
+  // 那两个文件自己也各挂了一个，是为了被单独注册时守卫仍在。重复挂无害：
+  // 第一个钩子 send 后 Fastify 就短路，后面的不执行。
+  app.addHook("preHandler", requireUser);
+
   app.post("/api/workflow/novels/projects/:projectId/runs/assisted", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = projectParamsSchema.safeParse(req.params);
     const body = novelAssistedRunSchema.safeParse(req.body);
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
@@ -71,8 +74,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.post("/api/workflow/novels/projects/:projectId/runs/autopilot", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = projectParamsSchema.safeParse(req.params);
     const body = novelAutopilotStartSchema.safeParse(req.body);
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
@@ -114,8 +116,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.get("/api/workflow/novels/projects/:projectId/runs", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = projectParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await ownedProject(prisma, userId, params.data.projectId);
@@ -125,8 +126,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.get("/api/workflow/novels/projects/:projectId/runs/:runId", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await prisma.novelRun.findFirst({
@@ -178,8 +178,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.post("/api/workflow/novels/projects/:projectId/runs/:runId/pause", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
@@ -190,8 +189,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.post("/api/workflow/novels/projects/:projectId/runs/:runId/cancel", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
@@ -221,8 +219,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.post("/api/workflow/novels/projects/:projectId/runs/:runId/revise", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
@@ -249,8 +246,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.post("/api/workflow/novels/projects/:projectId/runs/:runId/resume", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const run = await ownedRun(prisma, userId, params.data.projectId, params.data.runId);
@@ -299,8 +295,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.get("/api/workflow/novels/projects/:projectId/runs/:runId/events", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     const query = eventsQuerySchema.safeParse(req.query);
     if (!params.success || !query.success) return reply.code(400).send({ error: "参数不合法" });
@@ -317,8 +312,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
   });
 
   app.get("/api/workflow/novels/projects/:projectId/runs/:runId/events/stream", async (req, reply) => {
-    const userId = userIdOf(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const params = runParamsSchema.safeParse(req.params);
     const query = eventsQuerySchema.safeParse(req.query);
     if (!params.success || !query.success) return reply.code(400).send({ error: "参数不合法" });

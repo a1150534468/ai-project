@@ -40,10 +40,10 @@ function checkpointPrisma(active = false) {
   return { prisma, projectUpdate, chapterCreate };
 }
 
-async function appFor(prisma: PrismaClient) {
+async function appFor(prisma: PrismaClient, userId = "user-1") {
   const app = Fastify();
   app.decorateRequest("userId", "");
-  app.addHook("preHandler", async (request) => { (request as typeof request & { userId: string }).userId = "user-1"; });
+  app.addHook("preHandler", async (request) => { (request as typeof request & { userId: string }).userId = userId; });
   await registerNovelResourceRoutes(app, { prisma });
   return app;
 }
@@ -130,6 +130,28 @@ describe("novel checkpoint resources", () => {
     const app = await appFor(state.prisma);
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/checkpoints/checkpoint-1/rollback" });
     expect(response.statusCode).toBe(409);
+    expect(state.projectUpdate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  /**
+   * P1.1 把这 48 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * 原先本文件一条 401 断言都没有 —— 守卫删掉也是全绿。这条把它钉住。
+   */
+  it("未登录时返回 401，且不碰数据库", async () => {
+    const state = checkpointPrisma();
+    const app = await appFor(state.prisma, "");
+    const cases = [
+      { method: "GET" as const, url: "/api/workflow/novels/projects/project-1/setup" },
+      { method: "GET" as const, url: "/api/workflow/novels/projects/project-1/checkpoints" },
+      { method: "POST" as const, url: "/api/workflow/novels/projects/project-1/checkpoints/checkpoint-1/rollback" },
+      { method: "POST" as const, url: "/api/workflow/novels/projects/project-1/narrative-assets/backfill" },
+    ];
+    for (const one of cases) {
+      const response = await app.inject(one);
+      expect(response.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(response.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
     expect(state.projectUpdate).not.toHaveBeenCalled();
     await app.close();
   });
