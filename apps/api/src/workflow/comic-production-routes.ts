@@ -26,12 +26,6 @@ import {
   type FetchLike,
 } from "./comic-production-helpers.js";
 
-declare module "fastify" {
-  interface FastifyRequest {
-    userId?: string;
-  }
-}
-
 export interface ComicProductionRouteOptions extends FastifyPluginOptions {
   readonly prisma?: PrismaClient;
   readonly fetchFn?: FetchLike;

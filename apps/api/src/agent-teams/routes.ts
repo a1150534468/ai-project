@@ -22,35 +22,25 @@ import {
   requestRecommendedTeam,
 } from "./agent-team-service.js";
 import { formatAgentWorkflowError } from "./agent-workflow-error.js";
-import { requestWorkflowPlan, workflowPlanErrorMessage, type WorkflowPlanStep } from "./agent-workflow-plan.js";
+import type { WorkflowPlanStep } from "./agent-workflow-plan.js";
 import { runAgentWorkflowSteps, type AgentWorkflowRunnerStore, type RunAgentWorkflowStepsArgs } from "./agent-workflow-runner.js";
 import { serializeRun, serializeTeam } from "./agent-workflow-serializer.js";
-import { createRunFromTeam, createWorkflowSteps } from "./agent-workflow-service.js";
+import { createRunFromTeam } from "./agent-workflow-service.js";
 import { createPrismaWorkflowStore } from "./agent-workflow-store.js";
 import {
   defaultExecuteStep,
   defaultSummarize,
-  eventContext,
-  runContext,
-  stepContext,
   type WorkflowStepExecutionContext,
   type WorkflowSummaryContext,
 } from "./agent-workflow-llm.js";
 import {
   buildAgentTaskContext,
-  readTaskContextFromSnapshot,
   type AgentTaskContext,
 } from "./agent-task-context.js";
 import { buildAgentKnowledgeBaseContext } from "./agent-knowledge-context.js";
 import { executeTeamRun } from "./execute-run.js";
 import type { RunTurnToolEvent } from "../agent/run.js";
 import type { ChatAttachmentPayload } from "../chat/attachments.js";
-
-declare module "fastify" {
-  interface FastifyRequest {
-    userId?: string;
-  }
-}
 
 type ScheduleTask = (work: () => Promise<void>) => void;
 type RecommendTeamFn = (taskGoal: string, taskContext: AgentTaskContext) => Promise<RecommendedTeam>;

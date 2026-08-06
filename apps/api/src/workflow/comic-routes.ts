@@ -22,12 +22,6 @@ import {
 } from "./comic-project-service.js";
 import { comicScriptSourceSchema } from "./comic-types.js";
 
-declare module "fastify" {
-  interface FastifyRequest {
-    userId?: string;
-  }
-}
-
 interface ComicWorkflowRouteOptions extends FastifyPluginOptions {
   readonly store?: ComicProjectStore;
 }
