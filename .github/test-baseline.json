@@ -1,15 +1,15 @@
 {
   "_why": "假绿防护基线。本仓有一批 describe.skipIf/it.skipIf 守卫的测试，缺 env 时静默跳过且退出码 0——「少跑了几十个测试」在 CI 上表现为绿色。scripts/check-test-report.mjs 拿各 workspace 的 vitest JSON 报告与这里比对。",
-  "_measured": "2026-08-05，直接取 CI run 31000904356（P0.4 那次 push）自己打印的合计 2375/0/23，比上一版的本地 worktree 实测更可信——CI 就是被防护的那个环境，不存在「本地与 CI 不可比」的余地。上一版 2354 是同日在「干净 HEAD + 只叠 P0.3 那 5 个文件」的 worktree 上按 ci.yml 的 env/空库/原 turbo 命令实测的。两版都是实测，不是推算。",
+  "_measured": "2026-08-06，直接取 CI run 31062750749（P0.5 那次 push）自己打印的合计 2411/0/23。沿用 P0.4 定下的做法：取 CI 自己的打印值而非本地实测——CI 就是被防护的那个环境。（历史：2375 取自 run 31000904356 即 P0.4；2354 是同日在「干净 HEAD + 只叠 P0.3 那 5 个文件」的 worktree 上按 ci.yml 的 env/空库/原 turbo 命令实测。全是实测，不是推算。）",
 
   "_ffmpegCaveat": "上一版基线（2339）标称「与 ci.yml 完全一致的 env」，但漏了一个不在 env block 里的差异：本地 PATH 上有 ffmpeg，ubuntu-latest 没有。后果是 CI 首跑 api 报 1645/2/24 而非本地的 1653/0/18——3 个文件用 describe.runIf(hasFfmpeg) 静默跳 6 例，local-business-promo-edit-analysis 无守卫直接 spawn ENOENT 挂 2 例。已在 ci.yml 加装 ffmpeg 的步骤，从此两边可比；重测时请确认 `ffmpeg -version` 可用，否则会低估 8 个用例。",
 
   "expectedWorkspaces": 10,
-  "minPassed": 2375,
+  "minPassed": 2411,
   "maxSkipped": 23,
 
   "_breakdown": {
-    "passed": "api 1689 + web 416 + desktop 123 + codex-pet-pipeline 48 + billing 31 + admin 17 + article-workflow 13 + novel-workflow 13 + connector-protocol 13 + llm 12 = 2375。相比上一版 2354 只多了 api 的 +21，即 P0.4 的 image-reaper.test.ts 16 例 + image-routes.test.ts 新增的 5 例接线用例，无新增 skip。（上一版 2354 相比 2339 多的是 P0.3 portrait-reaper.test.ts 的 15 例。）",
+    "passed": "api 1725 + web 416 + desktop 123 + codex-pet-pipeline 48 + billing 31 + admin 17 + article-workflow 13 + novel-workflow 13 + connector-protocol 13 + llm 12 = 2411。相比上一版 2375 只多了 api 的 +36，即 P0.5 的 video-reaper.test.ts 20 例 + video-routes.test.ts 新增 8 例接线用例 + video-service.test.ts 新增 8 例 probe 用例，无新增 skip。（2375 相比 2354 多的是 P0.4 image 的 21 例；2354 相比 2339 多的是 P0.3 portrait-reaper.test.ts 的 15 例。）",
     "skipped": "api 18（6 个 .poc. 文件共 16 例 + codex-pet-runner.integration 1 例 + storage/s3 1 例）+ llm 5（2 个 .poc. 文件）= 23",
     "workspaces": "10 个有 test 脚本的 workspace；@ai-assistant/db 没有 test 脚本，turbo 不会为它建任务，故不计。"
   },
