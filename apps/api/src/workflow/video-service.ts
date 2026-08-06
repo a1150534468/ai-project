@@ -320,6 +320,61 @@ export async function getVideoGenerationStatus(args: {
   return extractVideoStatus(await response.json());
 }
 
+/**
+ * 探测上游任务的存在性与状态，**把「上游没有这个任务」和「上游暂时答不了」分开**。
+ *
+ * `getVideoGenerationStatus` 对所有非 2xx 一律抛同一种 Error，404 与 500/超时/DNS
+ * 长得一样。轮询主路径那样用没问题（抛出去就是失败退款，用户正在等着看结果）；
+ * 但兜底扫的判断完全不同：把一次上游抖动当成「任务没了」去退款，会把仍在正常跑的
+ * 长任务误杀 —— 用户拿到了货还被退了钱，比不退款更糟。
+ *
+ * 所以这里返回三态而不是抛：
+ * - `found`  —— 拿到了状态，照 `status` 决定续跑还是结算
+ * - `missing` —— 上游明确说没有（404/410），可以判失败退款
+ * - `unknown` —— 其他任何情况（5xx、429、网络、超时、响应体解析失败），
+ *   调用方**必须原样不动**，等下一轮再问。宁可多等一轮，不可错退一笔。
+ *
+ * 刻意不改 `getVideoGenerationStatus` 的签名与行为：它在轮询主路径上，改它影响面大。
+ */
+export type VideoStatusProbe =
+  | { readonly kind: "found"; readonly status: ExtractedVideoStatus }
+  | { readonly kind: "missing"; readonly httpStatus: number }
+  | { readonly kind: "unknown"; readonly reason: string };
+
+/** 上游明确表示「没有这个任务」的状态码。410 Gone 一并算上（任务过期被清掉）。 */
+const PROVIDER_MISSING_STATUSES = new Set([404, 410]);
+
+export async function probeVideoGenerationStatus(args: {
+  readonly cfg: VideoGenerationConfig;
+  readonly providerTaskId: string;
+  readonly fetchFn: FetchLike;
+  readonly timeoutMs: number;
+  readonly signal?: AbortSignal;
+}): Promise<VideoStatusProbe> {
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(args.fetchFn, `${args.cfg.statusEndpointBase}/${encodeURIComponent(args.providerTaskId)}`, {
+      method: "GET",
+      headers: { authorization: `Bearer ${args.cfg.apiKey}` },
+    }, args.timeoutMs, args.signal);
+  } catch (error) {
+    // 网络层失败（含超时触发的 abort）。说明不了上游有没有这个任务。
+    return { kind: "unknown", reason: error instanceof Error ? error.message.slice(0, 200) : "fetch failed" };
+  }
+  if (PROVIDER_MISSING_STATUSES.has(response.status)) {
+    return { kind: "missing", httpStatus: response.status };
+  }
+  if (!response.ok) {
+    return { kind: "unknown", reason: `video status ${response.status}` };
+  }
+  try {
+    return { kind: "found", status: extractVideoStatus(await response.json()) };
+  } catch (error) {
+    // 200 但响应体不是预期结构。同样不能据此断定任务不存在。
+    return { kind: "unknown", reason: error instanceof Error ? error.message.slice(0, 200) : "bad status payload" };
+  }
+}
+
 function encodeObjectKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
 }

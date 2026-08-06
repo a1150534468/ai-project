@@ -163,7 +163,9 @@ export async function buildServer() {
   // 传 redis 才会起人像的主动扫兜底（抢锁用），reaper 的清理挂在该插件自己的 onClose 上
   await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }));
-  await app.register(videoWorkflowRoutes);
+  // 同上：传 redis 才起 video 的主动扫。video 是外部异步任务，兜底不是「超期即失败」，
+  // 而是拿 providerTaskId 向上游核对真实状态再决定续跑还是退款（见 video-reaper.ts）。
+  await app.register((instance) => videoWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register(dubRoutes);
   await app.register(ecomWorkflowRoutes);
   await app.register(localBusinessPromoRoutes);

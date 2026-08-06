@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   VIDEO_PRICE_CONFIGS,
   buildVideoGenerationPayload,
   extractVideoStatus,
   isAutoDuration,
   isDurationSupported,
+  probeVideoGenerationStatus,
   videoGenerationResourceKey,
 } from "./video-service.js";
 
@@ -131,5 +132,82 @@ describe("video service", () => {
     expect(VIDEO_PRICE_CONFIGS.map((row) => row.resourceKey)).toContain("video_seedance_2_4k_text");
     expect(VIDEO_PRICE_CONFIGS.map((row) => row.resourceKey)).toContain("video_seedance_2_mini_480p_with_video");
     expect(new Set(VIDEO_PRICE_CONFIGS.map((row) => row.resourceKey)).size).toBe(VIDEO_PRICE_CONFIGS.length);
+  });
+});
+
+// 兜底扫用的三态探测。与 getVideoGenerationStatus 的区别就是「查不到」和「暂时答不了」
+// 必须分开：前者该收尸退款，后者只能等下一轮。混成一种就会在上游抖动时错退钱。
+describe("probeVideoGenerationStatus", () => {
+  const cfg = {
+    apiKey: "k",
+    endpoint: "https://toapis.test/v1/videos/generations",
+    statusEndpointBase: "https://toapis.test/v1/videos/generations",
+  } satisfies Parameters<typeof probeVideoGenerationStatus>[0]["cfg"];
+
+  async function probe(fetchFn: typeof fetch) {
+    return probeVideoGenerationStatus({ cfg, providerTaskId: "tsk_1", fetchFn, timeoutMs: 1_000 });
+  }
+
+  it("200 → found，带上游解析出的状态", async () => {
+    const result = await probe(vi.fn(async () => new Response(JSON.stringify({
+      id: "tsk_1", status: "in_progress", progress: 42,
+    }), { status: 200 })) as unknown as typeof fetch);
+    expect(result.kind).toBe("found");
+    if (result.kind !== "found") throw new Error("unreachable");
+    expect(result.status.status).toBe("running");
+    expect(result.status.progress).toBe(42);
+  });
+
+  it("404 / 410 → missing（上游明确说没有这个任务，才允许收尸）", async () => {
+    for (const httpStatus of [404, 410]) {
+      const result = await probe(vi.fn(async () => new Response("gone", { status: httpStatus })) as unknown as typeof fetch);
+      expect(result).toEqual({ kind: "missing", httpStatus });
+    }
+  });
+
+  it("5xx → unknown（上游自己坏了，不代表任务没了）", async () => {
+    for (const httpStatus of [500, 502, 503]) {
+      const result = await probe(vi.fn(async () => new Response("boom", { status: httpStatus })) as unknown as typeof fetch);
+      expect(result.kind).toBe("unknown");
+    }
+  });
+
+  it("401 / 429 → unknown（鉴权失配、限流都不是「任务不存在」）", async () => {
+    // 这两个尤其危险：配置写错或被限流时，若判成 missing 会把全库在跑的任务集体退款。
+    for (const httpStatus of [401, 403, 429]) {
+      const result = await probe(vi.fn(async () => new Response("nope", { status: httpStatus })) as unknown as typeof fetch);
+      expect(result.kind).toBe("unknown");
+    }
+  });
+
+  it("fetch 抛异常（超时 / DNS / 连接被拒）→ unknown，绝不是 missing", async () => {
+    const result = await probe(vi.fn(async () => { throw new Error("The operation was aborted due to timeout"); }) as unknown as typeof fetch);
+    expect(result.kind).toBe("unknown");
+    if (result.kind !== "unknown") throw new Error("unreachable");
+    expect(result.reason).toContain("timeout");
+  });
+
+  it("响应体不是 JSON → unknown（网关塞了 HTML 错误页这种）", async () => {
+    const result = await probe(vi.fn(async () => new Response("<html>502</html>", {
+      status: 200, headers: { "content-type": "text/html" },
+    })) as unknown as typeof fetch);
+    expect(result.kind).toBe("unknown");
+  });
+
+  it("reason 截断到 200 字，日志不被上游长报文淹", async () => {
+    const result = await probe(vi.fn(async () => { throw new Error("x".repeat(500)); }) as unknown as typeof fetch);
+    if (result.kind !== "unknown") throw new Error("unreachable");
+    expect(result.reason).toHaveLength(200);
+  });
+
+  it("providerTaskId 做过 URL 编码，异常 id 不会拼歪路径", async () => {
+    // 入参类型要显式写出来，否则 mock.calls[0] 被推成空元组，取 [0] 报 TS2493。
+    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
+      new Response(JSON.stringify({ id: "x", status: "completed", progress: 100 }), { status: 200 })
+    );
+    await probeVideoGenerationStatus({
+      cfg, providerTaskId: "a/../b?x=1", fetchFn: fetchFn as unknown as typeof fetch, timeoutMs: 1_000,
+    });
+    expect(fetchFn.mock.calls[0]![0]).toBe("https://toapis.test/v1/videos/generations/a%2F..%2Fb%3Fx%3D1");
   });
 });

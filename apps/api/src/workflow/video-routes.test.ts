@@ -81,9 +81,23 @@ function createPrismaMock(
       }),
     },
     videoGenerationTask: {
-      findMany: vi.fn(async (args: { where?: { userId?: string }; orderBy?: Record<string, string>; take?: number }) => {
-        let result = tasks.filter((row) => !args.where?.userId || row.userId === args.where.userId);
-        result = [...result].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      // 兜底扫按 { status, updatedAt: { lt } } 查、且不带 userId，所以这里必须实现这两个条件 ——
+      // 只认 userId 的旧 mock 会把所有行都返回，兜底测试就变成假通过。
+      findMany: vi.fn(async (args: {
+        where?: { userId?: string; status?: string; updatedAt?: { lt?: Date } };
+        orderBy?: Record<string, string>;
+        take?: number;
+      }) => {
+        let result = tasks.filter((row) =>
+          (!args.where?.userId || row.userId === args.where.userId) &&
+          (!args.where?.status || row.status === args.where.status) &&
+          (!args.where?.updatedAt?.lt || row.updatedAt.getTime() < args.where.updatedAt.lt.getTime())
+        );
+        result = [...result].sort((a, b) =>
+          args.orderBy?.createdAt === "asc"
+            ? a.createdAt.getTime() - b.createdAt.getTime()
+            : b.createdAt.getTime() - a.createdAt.getTime()
+        );
         if (args.take) result = result.slice(0, args.take);
         return result;
       }),
@@ -157,6 +171,7 @@ async function createApp(options: {
   readonly visionCfg?: import("./vision-client.js").VisionConfig;
   readonly callVisionFn?: typeof import("./vision-client.js").callVision;
   readonly submitRetries?: number;
+  readonly redis?: import("ioredis").Redis;
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
@@ -167,6 +182,7 @@ async function createApp(options: {
     prisma: options.prisma as unknown as PrismaClient,
     billing: options.billing,
     fetchFn: options.fetchFn,
+    redis: options.redis,
     pollInitialDelayMs: 0,
     pollIntervalMs: 1,
     maxPollAttempts: 2,
@@ -482,5 +498,221 @@ describe("video workflow routes", () => {
     // usage 10/8 ×2 = 20/16
     expect(billing.settle).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 20, outputTokens: 16 }));
     await app.close();
+  });
+});
+
+// 兜底扫在插件里的接线。上面的 reaper 单测覆盖分支判定，这里只验「装上没装错」：
+// 有 redis 才起、抢锁、扫出来的行确实走到真实的续跑/退款代码，而不是 mock 的 handler。
+describe("video 兜底扫接线", () => {
+  const STALE_AT = new Date("2026-07-04T07:00:00.000Z");
+
+  function makeStaleTask(overrides: Partial<VideoTaskRow> = {}): VideoTaskRow {
+    return {
+      id: "task-stale",
+      userId: "u1",
+      requestId: "vid-stale-0001",
+      providerTaskId: "tsk_vid_stale",
+      prompt: "一只猫",
+      model: "seedance-2-mini",
+      aspectRatio: "16:9",
+      resolution: "720p",
+      durationSec: 8,
+      generateAudio: true,
+      hasInputVideo: false,
+      resourceKey: "video_seedance_2_mini_720p",
+      chargedPoints: 120,
+      status: "running",
+      progress: 20,
+      error: null,
+      resultPayload: null,
+      completedAt: null,
+      createdAt: new Date("2026-07-04T06:00:00.000Z"),
+      updatedAt: STALE_AT,
+      ...overrides,
+    };
+  }
+
+  function makeRedis(setResult: "OK" | null = "OK") {
+    return { set: vi.fn(async () => setResult) } as unknown as import("ioredis").Redis;
+  }
+
+  /** 定时器必须在 createApp 之前装好，否则 startVideoReaper 的 setInterval 落在真定时器上，advance 推不动它。 */
+  async function tick(app: import("fastify").FastifyInstance) {
+    // 续跑那条链在假定时器下全是微任务（initialDelayMs=0，首轮就 completed，无 S3 所以不下载），
+    // advanceTimersByTimeAsync 会在跑定时器之间排空微任务；再多推一点收尾。
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(100);
+    void app;
+  }
+
+  it("不传 redis 就不起定时器（单机/测试环境保持安静）", async () => {
+    vi.useFakeTimers();
+    try {
+      const prisma = createPrismaMock([], [makeStaleTask()]);
+      const app = await createApp({ prisma, billing: createBillingMock(), fetchFn: vi.fn() as unknown as typeof fetch });
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(prisma.videoGenerationTask.findMany).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("抢不到锁就整轮跳过，多实例不会重复处置同一批", async () => {
+    vi.useFakeTimers();
+    try {
+      const prisma = createPrismaMock([], [makeStaleTask()]);
+      const app = await createApp({
+        prisma,
+        billing: createBillingMock(),
+        fetchFn: vi.fn() as unknown as typeof fetch,
+        redis: makeRedis(null),
+      });
+      await vi.advanceTimersByTimeAsync(180_000);
+      expect(prisma.videoGenerationTask.findMany).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("上游仍认这个任务 → 续跑到完成，不退款、不重复提交", async () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [makeStaleTask()];
+      const prisma = createPrismaMock([], tasks);
+      const billing = createBillingMock();
+      const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.method === "POST") throw new Error(`兜底扫不该重新提交：${url}`);
+        return new Response(JSON.stringify({
+          id: "tsk_vid_stale",
+          object: "generation.task",
+          model: "seedance-2-mini",
+          status: "completed",
+          progress: 100,
+          completed_at: 1781577700,
+          result: { type: "video", data: [{ url: "https://cdn.example.test/out.mp4", format: "mp4" }] },
+        }), { status: 200 });
+      }) as unknown as typeof fetch;
+      const redis = makeRedis();
+      const app = await createApp({ prisma, billing, fetchFn, redis });
+
+      await tick(app);
+
+      expect(redis.set).toHaveBeenCalledWith("ai-assistant:video:reaper:lock", "1", "EX", 55, "NX");
+      expect(tasks[0]!.status).toBe("completed");
+      // 关键：一次 POST 都没有 —— 复用的是「提交之后那半段」，不是整条 runVideoTask。
+      const posts = (fetchFn as unknown as ReturnType<typeof vi.fn>).mock.calls.filter((call) => call[1]?.method === "POST");
+      expect(posts).toHaveLength(0);
+      expect(billing.refundResource).not.toHaveBeenCalled();
+      // 视频也真的入库了，不是只把状态改了。
+      expect(prisma.videoAsset.upsert).toHaveBeenCalledTimes(1);
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("上游查不到（404）→ 置 failed 并按 video:{requestId} 退款", async () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [makeStaleTask()];
+      const prisma = createPrismaMock([], tasks);
+      const billing = createBillingMock();
+      const fetchFn = vi.fn(async () => new Response("not found", { status: 404 })) as unknown as typeof fetch;
+      const app = await createApp({ prisma, billing, fetchFn, redis: makeRedis() });
+
+      await tick(app);
+
+      expect(tasks[0]!.status).toBe("failed");
+      expect(billing.refundResource).toHaveBeenCalledWith("video:vid-stale-0001");
+      expect(tasks[0]!.error).toContain("上游已无此任务");
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("上游暂时答不了（500）→ 不退款、状态不动，等下一轮", async () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [makeStaleTask()];
+      const prisma = createPrismaMock([], tasks);
+      const billing = createBillingMock();
+      const fetchFn = vi.fn(async () => new Response("boom", { status: 500 })) as unknown as typeof fetch;
+      const app = await createApp({ prisma, billing, fetchFn, redis: makeRedis() });
+
+      await tick(app);
+
+      // 探测确实发出去了（不是因为没扫到才没退款）。
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+      expect(billing.refundResource).not.toHaveBeenCalled();
+      expect(tasks[0]!.status).toBe("running");
+      expect(tasks[0]!.updatedAt.getTime()).toBe(STALE_AT.getTime());
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("没有 providerTaskId → 直接失败退款，一次上游请求都不发", async () => {
+    vi.useFakeTimers();
+    try {
+      const tasks = [makeStaleTask({ providerTaskId: null })];
+      const prisma = createPrismaMock([], tasks);
+      const billing = createBillingMock();
+      const fetchFn = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+      const app = await createApp({ prisma, billing, fetchFn, redis: makeRedis() });
+
+      await tick(app);
+
+      expect(tasks[0]!.status).toBe("failed");
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(billing.refundResource).toHaveBeenCalledWith("video:vid-stale-0001");
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("心跳没超期的行不碰", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-07-04T07:00:30.000Z"));
+    try {
+      // updatedAt = 07:00:00，现在 07:00:30，推 60s 后也只有 90s，远没到 10 分钟阈值。
+      const tasks = [makeStaleTask()];
+      const prisma = createPrismaMock([], tasks);
+      const billing = createBillingMock();
+      const fetchFn = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+      const app = await createApp({ prisma, billing, fetchFn, redis: makeRedis() });
+
+      await tick(app);
+
+      expect(prisma.videoGenerationTask.findMany).toHaveBeenCalled();
+      expect(fetchFn).not.toHaveBeenCalled();
+      expect(tasks[0]!.status).toBe("running");
+      expect(billing.refundResource).not.toHaveBeenCalled();
+      await app.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("onClose 清掉定时器，插件反复注册不攒 timer", async () => {
+    vi.useFakeTimers();
+    try {
+      const prisma = createPrismaMock([], [makeStaleTask()]);
+      const redis = makeRedis();
+      const fetchFn = vi.fn(async () => new Response("not found", { status: 404 })) as unknown as typeof fetch;
+      const app = await createApp({ prisma, billing: createBillingMock(), fetchFn, redis });
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(redis.set).toHaveBeenCalledTimes(1);
+
+      await app.close();
+      await vi.advanceTimersByTimeAsync(300_000);
+      expect(redis.set).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

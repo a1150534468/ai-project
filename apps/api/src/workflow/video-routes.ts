@@ -25,6 +25,7 @@ import {
   isResolutionSupported,
   loadVideoGenerationConfig,
   MAX_VIDEO_DURATION_SEC,
+  probeVideoGenerationStatus,
   storeGeneratedVideo,
   storeVideoMaterial,
   submitVideoGeneration,
@@ -39,6 +40,8 @@ import {
   type VideoRoleInput,
   type VideoTaskStatus,
 } from "./video-service.js";
+import { startVideoReaper, type VideoReapHandlers } from "./video-reaper.js";
+import { VIDEO_TASK_STATUS, videoOperationId, type VideoTaskRow } from "./video-shared.js";
 
 const VIDEO_KEEP_LIMIT = 30;
 const VIDEO_TASK_KEEP_LIMIT = 20;
@@ -48,11 +51,8 @@ const DEFAULT_POLL_INITIAL_DELAY_MS = 5_000;
 const DEFAULT_POLL_INTERVAL_MS = 10_000;
 const DEFAULT_MAX_POLL_ATTEMPTS = 60;
 
-const videoTaskStatus = {
-  running: "running",
-  completed: "completed",
-  failed: "failed",
-} as const;
+/** 从 video-shared.ts 搬来（reaper 也要用，放共享文件破循环导入）。别名保留，免得这一整个文件都要改。 */
+const videoTaskStatus = VIDEO_TASK_STATUS;
 
 const imageRoleSchema = z.object({
   url: z.string().trim().min(1).max(8000),
@@ -184,33 +184,15 @@ interface VideoWorkflowRouteDeps {
   // 视频/图片理解已切到 gemini 原生 vision（见 vision-client.ts）；测试注入用
   readonly visionCfg?: import("./vision-client.js").VisionConfig;
   readonly callVisionFn?: typeof import("./vision-client.js").callVision;
+  /**
+   * 给了才起主动扫的定时器。留成可选是为了让既有测试注册插件时不需要 redis，
+   * 也避免测试进程里凭空多一个后台定时器。生产在 server.ts 注入。
+   */
+  readonly redis?: import("ioredis").Redis;
 }
 
 // 参考视频独立小限（区别于生成素材的 350MB）；UI 引导 30 秒以内。
 const VIDEO_REF_MAX_BYTES = Number(process.env.VIDEO_REF_MAX_BYTES) || 50 * 1024 * 1024;
-
-interface VideoTaskRow {
-  readonly id: string;
-  readonly userId: string;
-  readonly requestId: string;
-  readonly providerTaskId: string | null;
-  readonly prompt: string;
-  readonly model: string;
-  readonly aspectRatio: string;
-  readonly resolution: string;
-  readonly durationSec: number;
-  readonly generateAudio: boolean;
-  readonly hasInputVideo: boolean;
-  readonly resourceKey: string;
-  readonly chargedPoints: number;
-  readonly status: string;
-  readonly progress: number;
-  readonly error: string | null;
-  readonly resultPayload: unknown;
-  readonly completedAt: Date | null;
-  readonly createdAt: Date;
-  readonly updatedAt: Date;
-}
 
 interface VideoAssetRow {
   readonly id: string;
@@ -466,6 +448,119 @@ async function pollVideoUntilDone(args: {
   throw new Error(`video task timeout${lastStatus ? `: ${lastStatus.providerStatus}` : ""}`);
 }
 
+/**
+ * 提交之后那半段：轮询到终态 → 下载入库 → 自动时长结算 → 标记 completed。
+ *
+ * 从 `runVideoTask` 里抽出来，是因为兜底扫必须能对**已经拿到 `providerTaskId`**
+ * 的行单独跑这半段。直接拿 `runVideoTask` 去续跑会从提交开始，向上游重复提交
+ * 一个新任务（还会重复计费）。
+ *
+ * 不含 try/catch：失败一律往外抛，由调用方决定收尾（主路径与兜底都收敛到
+ * `refundAndFailVideoTask`，语义保持一致）。
+ *
+ * `inputDurationSec` 传 `null` 表示「不知道」。这不是可选参数的省略 ——
+ * 见下方结算处的说明，传错比不传更糟。
+ */
+async function finishSubmittedVideoTask(args: {
+  readonly prisma: PrismaClient;
+  readonly billing: BillingForVideos;
+  readonly fetchFn: typeof fetch;
+  readonly task: VideoTaskRow;
+  readonly cfg: ReturnType<typeof loadVideoGenerationConfig>;
+  readonly pollInitialDelayMs: number;
+  readonly pollIntervalMs: number;
+  readonly maxPollAttempts: number;
+  readonly inputDurationSec: number | null;
+  readonly onSettleSkipped?: (task: VideoTaskRow) => void;
+}): Promise<void> {
+  const operationId = videoOperationId(args.task.requestId);
+  const task = args.task;
+  const finalStatus = await pollVideoUntilDone({
+    task,
+    cfg: args.cfg,
+    prisma: args.prisma,
+    fetchFn: args.fetchFn,
+    initialDelayMs: args.pollInitialDelayMs,
+    intervalMs: args.pollIntervalMs,
+    maxAttempts: args.maxPollAttempts,
+  });
+  if (finalStatus.status === videoTaskStatus.failed) throw new Error(finalStatus.error ?? "视频生成失败");
+  if (!finalStatus.videoUrl) throw new Error("视频生成结果缺少 URL");
+  const stored = await storeGeneratedVideo({
+    url: finalStatus.videoUrl,
+    userId: task.userId,
+    requestId: task.requestId,
+    requestIndex: 0,
+    format: finalStatus.format,
+    fetchFn: args.fetchFn,
+  });
+  // 自动时长：按实际输出秒结算，退回预扣（15s）多扣的差额。best-effort：结算失败不回滚已生成的视频。
+  //
+  // 有输入视频而又不知道输入秒数时**必须跳过**，不能拿 0 顶上：结算侧
+  // `SettleVideoIO` 会用 `QuoteVideoIO(resourceKey, inputSec, outputSec)` 重算实际成本，
+  // 对 VIDEO_IO 定价是 `输入秒×输入单价 + 输出秒×输出单价`（billing 的
+  // resource.go:88）。inputSec 传 0 会把实际成本算少，于是**多退**给用户一笔。
+  // 跳过只是让用户按预扣的 15s 多付一点，方向上安全得多。
+  const inputUnitsUnknown = task.hasInputVideo && args.inputDurationSec === null;
+  if (isAutoDuration(task.durationSec) && stored.durationSec > 0 && args.billing.settleVideoResource) {
+    if (inputUnitsUnknown) args.onSettleSkipped?.(task);
+    else {
+      await args.billing.settleVideoResource({
+        operationId,
+        resourceKey: task.resourceKey,
+        units: stored.durationSec,
+        ...(task.hasInputVideo ? { inputUnits: args.inputDurationSec as number } : {}),
+      }).catch(() => undefined);
+    }
+  }
+  const assetDurationSec = stored.durationSec > 0 ? stored.durationSec : task.durationSec;
+  await args.prisma.videoAsset.upsert({
+    where: { requestId_requestIndex: { requestId: task.requestId, requestIndex: 0 } },
+    update: {},
+    create: {
+      userId: task.userId,
+      requestId: task.requestId,
+      requestIndex: 0,
+      prompt: task.prompt,
+      model: task.model,
+      aspectRatio: task.aspectRatio,
+      resolution: task.resolution,
+      durationSec: assetDurationSec,
+      originalUrl: stored.originalUrl,
+      objectKey: stored.objectKey,
+      mime: stored.mime,
+      format: stored.format,
+    },
+  });
+  await args.prisma.videoGenerationTask.update({
+    where: { id: task.id },
+    data: {
+      status: videoTaskStatus.completed,
+      progress: 100,
+      error: null,
+      completedAt: finalStatus.completedAt ?? new Date(),
+      resultPayload: statusPayloadJson(finalStatus),
+    },
+  });
+}
+
+/** 退款 + 置 failed。主路径与兜底扫共用，保证两边的失败语义一字不差。 */
+async function refundAndFailVideoTask(args: {
+  readonly prisma: PrismaClient;
+  readonly billing: BillingForVideos;
+  readonly task: VideoTaskRow;
+  readonly error: unknown;
+}): Promise<void> {
+  await args.billing.refundResource(videoOperationId(args.task.requestId)).catch(() => undefined);
+  await args.prisma.videoGenerationTask.update({
+    where: { id: args.task.id },
+    data: {
+      status: videoTaskStatus.failed,
+      error: safeErrorMessage(args.error),
+    },
+  }).catch(() => undefined);
+}
+
 async function runVideoTask(args: {
   readonly prisma: PrismaClient;
   readonly billing: BillingForVideos;
@@ -480,7 +575,6 @@ async function runVideoTask(args: {
   readonly submitRetryDelayMs: number;
   readonly onSubmitRetry?: (error: unknown, attempt: number) => void;
 }): Promise<void> {
-  const operationId = `video:${args.task.requestId}`;
   try {
     const cfg = loadVideoGenerationConfig();
     const submitted = await submitWithRetry({
@@ -498,72 +592,19 @@ async function runVideoTask(args: {
         error: null,
       },
     });
-    const finalStatus = await pollVideoUntilDone({
+    await finishSubmittedVideoTask({
+      prisma: args.prisma,
+      billing: args.billing,
+      fetchFn: args.fetchFn,
       task,
       cfg,
-      prisma: args.prisma,
-      fetchFn: args.fetchFn,
-      initialDelayMs: args.pollInitialDelayMs,
-      intervalMs: args.pollIntervalMs,
-      maxAttempts: args.maxPollAttempts,
-    });
-    if (finalStatus.status === videoTaskStatus.failed) throw new Error(finalStatus.error ?? "视频生成失败");
-    if (!finalStatus.videoUrl) throw new Error("视频生成结果缺少 URL");
-    const stored = await storeGeneratedVideo({
-      url: finalStatus.videoUrl,
-      userId: task.userId,
-      requestId: task.requestId,
-      requestIndex: 0,
-      format: finalStatus.format,
-      fetchFn: args.fetchFn,
-    });
-    // 自动时长：按实际输出秒结算，退回预扣（15s）多扣的差额。best-effort：结算失败不回滚已生成的视频。
-    if (isAutoDuration(task.durationSec) && stored.durationSec > 0 && args.billing.settleVideoResource) {
-      await args.billing.settleVideoResource({
-        operationId,
-        resourceKey: task.resourceKey,
-        units: stored.durationSec,
-        ...(task.hasInputVideo ? { inputUnits: args.inputDurationSec } : {}),
-      }).catch(() => undefined);
-    }
-    const assetDurationSec = stored.durationSec > 0 ? stored.durationSec : task.durationSec;
-    await args.prisma.videoAsset.upsert({
-      where: { requestId_requestIndex: { requestId: task.requestId, requestIndex: 0 } },
-      update: {},
-      create: {
-        userId: task.userId,
-        requestId: task.requestId,
-        requestIndex: 0,
-        prompt: task.prompt,
-        model: task.model,
-        aspectRatio: task.aspectRatio,
-        resolution: task.resolution,
-        durationSec: assetDurationSec,
-        originalUrl: stored.originalUrl,
-        objectKey: stored.objectKey,
-        mime: stored.mime,
-        format: stored.format,
-      },
-    });
-    await args.prisma.videoGenerationTask.update({
-      where: { id: task.id },
-      data: {
-        status: videoTaskStatus.completed,
-        progress: 100,
-        error: null,
-        completedAt: finalStatus.completedAt ?? new Date(),
-        resultPayload: statusPayloadJson(finalStatus),
-      },
+      pollInitialDelayMs: args.pollInitialDelayMs,
+      pollIntervalMs: args.pollIntervalMs,
+      maxPollAttempts: args.maxPollAttempts,
+      inputDurationSec: args.inputDurationSec,
     });
   } catch (error) {
-    await args.billing.refundResource(operationId).catch(() => undefined);
-    await args.prisma.videoGenerationTask.update({
-      where: { id: args.task.id },
-      data: {
-        status: videoTaskStatus.failed,
-        error: safeErrorMessage(error),
-      },
-    }).catch(() => undefined);
+    await refundAndFailVideoTask({ prisma: args.prisma, billing: args.billing, task: args.task, error });
     throw error;
   }
 }
@@ -589,6 +630,69 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
     if (!llmClientCache) llmClientCache = createLlmClient(loadLlmConfig());
     return llmClientCache;
   };
+
+  // —— 主动扫（超时兜底）——
+  // 之前 video 一个兜底都没有：进程被杀，行就永久停在 running，钱也永久悬空。
+  // 注册在插件内而非 server.ts，因为续跑要用这里的 fetchFn / billing / 轮询参数。
+  const reapHandlers: VideoReapHandlers = {
+    probe: async (row) => {
+      const probed = await probeVideoGenerationStatus({
+        cfg: loadVideoGenerationConfig(),
+        providerTaskId: row.providerTaskId,
+        fetchFn,
+        timeoutMs: loadNumber("VIDEO_STATUS_TIMEOUT_MS", DEFAULT_STATUS_TIMEOUT_MS),
+      });
+      if (probed.kind === "found") {
+        return { kind: "found", upstreamFailed: probed.status.status === videoTaskStatus.failed };
+      }
+      return probed.kind === "missing" ? { kind: "missing" } : { kind: "unknown", reason: probed.reason };
+    },
+    resume: async (row) => {
+      try {
+        await finishSubmittedVideoTask({
+          prisma,
+          billing,
+          fetchFn,
+          task: row,
+          cfg: loadVideoGenerationConfig(),
+          // 续跑时不再等首次延迟：这一行早就提交出去了，没必要再空等 5 秒。
+          pollInitialDelayMs: 0,
+          pollIntervalMs,
+          maxPollAttempts,
+          // 兜底扫拿不到输入视频秒数：建行时写进 resultPayload 的请求体已被首次轮询
+          // 覆盖成状态体。传 null 让结算那步跳过而不是拿 0 顶上（拿 0 会多退钱）。
+          inputDurationSec: null,
+          onSettleSkipped: (task) => app.log.warn(
+            { requestId: task.requestId },
+            "video reaper resumed a task with input video; skipped auto-duration settle (input seconds unknown)",
+          ),
+        });
+      } catch (error) {
+        // 续跑失败 → 与主路径同一套收尾：退款 + 置 failed。
+        await refundAndFailVideoTask({ prisma, billing, task: row, error });
+        throw error;
+      }
+    },
+    fail: async (row, reason) => {
+      await refundAndFailVideoTask({ prisma, billing, task: row, error: new Error(reason) });
+    },
+    onOutcome: (row, outcome, detail) => {
+      if (outcome === "resumed" || outcome === "failed") {
+        app.log.warn({ requestId: row.requestId, outcome, detail }, "video reaper handled a stale task");
+      }
+    },
+  };
+
+  if (deps.redis) {
+    const timer = startVideoReaper({
+      prisma,
+      redis: deps.redis,
+      handlers: reapHandlers,
+      onError: (error) => app.log.error({ err: error }, "video reaper tick failed"),
+    });
+    // 必须清：插件可以被反复注册（测试、多实例 fastify），漏了就攒定时器。
+    app.addHook("onClose", async () => { clearInterval(timer); });
+  }
 
   app.get("/api/workflow/videos/pricing", async (req, reply) => {
     const userId = (req as unknown as { userId: string }).userId;
@@ -787,7 +891,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
     const request = normalizeRequest(parsed.data);
     const inputVideo = hasInputVideo(parsed.data);
     const resourceKey = videoGenerationResourceKey(request.model, request.resolution, inputVideo);
-    const operationId = `video:${request.requestId}`;
+    const operationId = videoOperationId(request.requestId);
 
     const existingTask = await prisma.videoGenerationTask.findFirst({
       where: { userId, requestId: request.requestId },
