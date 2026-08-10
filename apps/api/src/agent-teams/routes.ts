@@ -1,5 +1,6 @@
 import { Prisma, type AgentWorkflowEvent, type AgentWorkflowRun, type AgentWorkflowStep, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { getPrisma } from "@ai-assistant/db";
 import { localTools } from "@ai-assistant/connector-protocol";
 import { InsufficientBalanceError } from "@ai-assistant/billing";
@@ -67,10 +68,6 @@ type OwnedRunRecord = AgentWorkflowRun & {
   readonly steps: AgentWorkflowStep[];
   readonly events: AgentWorkflowEvent[];
 };
-
-function requireUserId(userId: string | undefined): string | null {
-  return userId?.trim() || null;
-}
 
 function paramsId(value: unknown, key: "runId" | "teamId"): string | null {
   if (typeof value !== "object" || value === null) return null;
@@ -177,6 +174,10 @@ async function resolveComputerToolExecution(prisma: PrismaClient, userId: string
 }
 
 export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRouteOptions = {}) {
+  // 本文件 9 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = opts.prisma ?? getPrisma();
   const scheduleTask = opts.scheduleTask ?? scheduledRunner(app);
   const recommendTeam = opts.recommendTeam;
@@ -201,15 +202,13 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   }
 
   app.get("/api/agent-teams", async (req, reply) => {
-    const userId = requireUserId(req.userId);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const teams = await listTeams(prisma, userId);
     return { success: true, data: { teams: teams.map(serializeTeam) } };
   });
 
   app.post("/api/agent-teams/recommend", async (req, reply) => {
-    const userId = requireUserId(req.userId);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = recommendTeamBodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     try {
@@ -232,9 +231,8 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.post("/api/agent-teams/runs/:runId/confirm-team", async (req, reply) => {
-    const userId = requireUserId(req.userId);
+    const userId = req.userId;
     const runId = paramsId(req.params, "runId");
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!runId) return reply.code(400).send({ error: "参数不合法" });
     const parsed = confirmTeamBodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
@@ -257,9 +255,8 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.post("/api/agent-teams/:teamId/runs", async (req, reply) => {
-    const userId = requireUserId(req.userId);
+    const userId = req.userId;
     const teamId = paramsId(req.params, "teamId");
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!teamId) return reply.code(400).send({ error: "参数不合法" });
     const parsed = createRunBodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
@@ -276,8 +273,7 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.get("/api/agent-teams/runs", async (req, reply) => {
-    const userId = requireUserId(req.userId);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const runs = await prisma.agentWorkflowRun.findMany({
       where: { userId },
       include: {
@@ -291,9 +287,8 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.delete("/api/agent-teams/:teamId", async (req, reply) => {
-    const userId = requireUserId(req.userId);
+    const userId = req.userId;
     const teamId = paramsId(req.params, "teamId");
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!teamId) return reply.code(400).send({ error: "参数不合法" });
     try {
       await deleteOwnedTeam(prisma, userId, teamId);
@@ -306,9 +301,8 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.get("/api/agent-teams/:teamId", async (req, reply) => {
-    const userId = requireUserId(req.userId);
+    const userId = req.userId;
     const teamId = paramsId(req.params, "teamId");
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!teamId) return reply.code(400).send({ error: "参数不合法" });
     const team = await findOwnedTeam(prisma, userId, teamId);
     if (!team) return reply.code(404).send({ error: "团队不存在" });
@@ -316,9 +310,8 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.get("/api/agent-teams/runs/:runId", async (req, reply) => {
-    const userId = requireUserId(req.userId);
+    const userId = req.userId;
     const runId = paramsId(req.params, "runId");
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!runId) return reply.code(400).send({ error: "参数不合法" });
     const run = await loadOwnedRun(prisma, userId, runId);
     if (!run) return reply.code(404).send({ error: "运行不存在" });
@@ -326,9 +319,8 @@ export async function agentTeamRoutes(app: FastifyInstance, opts: AgentTeamRoute
   });
 
   app.post("/api/agent-teams/runs/:runId/cancel", async (req, reply) => {
-    const userId = requireUserId(req.userId);
+    const userId = req.userId;
     const runId = paramsId(req.params, "runId");
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!runId) return reply.code(400).send({ error: "参数不合法" });
 
     const updated = await prisma.agentWorkflowRun.updateMany({
