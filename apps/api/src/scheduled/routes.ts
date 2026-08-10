@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { InsufficientBalanceError } from "@ai-assistant/billing";
@@ -28,12 +29,14 @@ export interface ScheduledRoutesOpts {
 }
 
 export async function scheduledRoutes(app: FastifyInstance, opts: ScheduledRoutesOpts = {}): Promise<void> {
+  // 本文件 6 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = getPrisma();
-  const uid = (req: unknown): string | undefined => (req as { userId?: string }).userId;
 
   app.post("/api/scheduled-tasks/ai-draft", async (req, reply) => {
-    const userId = uid(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = aiDraftSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!opts.aiDraft) return reply.code(503).send({ error: "AI 起草暂不可用" });
@@ -49,15 +52,13 @@ export async function scheduledRoutes(app: FastifyInstance, opts: ScheduledRoute
   });
 
   app.get("/api/scheduled-tasks", async (req, reply) => {
-    const userId = uid(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const tasks = await prisma.scheduledTask.findMany({ where: { userId }, orderBy: { createdAt: "desc" } });
     return reply.send({ data: tasks });
   });
 
   app.post("/api/scheduled-tasks", async (req, reply) => {
-    const userId = uid(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const d = parsed.data;
@@ -98,8 +99,7 @@ export async function scheduledRoutes(app: FastifyInstance, opts: ScheduledRoute
   });
 
   app.patch("/api/scheduled-tasks/:id", async (req, reply) => {
-    const userId = uid(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id } = req.params as { id: string };
     const existing = await prisma.scheduledTask.findFirst({ where: { id, userId } });
     if (!existing) return reply.code(404).send({ error: "任务不存在" });
@@ -145,8 +145,7 @@ export async function scheduledRoutes(app: FastifyInstance, opts: ScheduledRoute
   });
 
   app.delete("/api/scheduled-tasks/:id", async (req, reply) => {
-    const userId = uid(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id } = req.params as { id: string };
     const existing = await prisma.scheduledTask.findFirst({ where: { id, userId } });
     if (!existing) return reply.code(404).send({ error: "任务不存在" });
@@ -155,8 +154,7 @@ export async function scheduledRoutes(app: FastifyInstance, opts: ScheduledRoute
   });
 
   app.get("/api/scheduled-tasks/:id/runs", async (req, reply) => {
-    const userId = uid(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id } = req.params as { id: string };
     const existing = await prisma.scheduledTask.findFirst({ where: { id, userId }, select: { id: true } });
     if (!existing) return reply.code(404).send({ error: "任务不存在" });
