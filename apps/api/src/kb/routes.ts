@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient } from "@ai-assistant/billing";
@@ -28,6 +29,10 @@ const renameKbSchema = z.object({
 });
 
 export async function kbRoutes(app: FastifyInstance) {
+  // 本文件 9 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = getPrisma();
   let s3: ReturnType<typeof makeS3> | null = null;
   const getS3 = () => {
@@ -48,16 +53,14 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // GET /api/kb
   app.get("/api/kb", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const kbs = await listKbsForUser(prisma, userId);
     return reply.send(kbs);
   });
 
   // POST /api/kb
   app.post("/api/kb", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = createKbSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: "参数不合法" });
@@ -73,8 +76,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // PATCH /api/kb/:id
   app.patch("/api/kb/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id } = req.params as { id: string };
     const parsed = renameKbSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -94,8 +96,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // DELETE /api/kb/:id
   app.delete("/api/kb/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id } = req.params as { id: string };
 
     try {
@@ -111,8 +112,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // GET /api/kb/:id/documents
   app.get("/api/kb/:id/documents", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id } = req.params as { id: string };
 
     try {
@@ -149,8 +149,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // GET /api/kb/:id/documents/:docId
   app.get("/api/kb/:id/documents/:docId", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id, docId } = req.params as { id: string; docId: string };
 
     try {
@@ -173,8 +172,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // DELETE /api/kb/:id/documents/:docId
   app.delete("/api/kb/:id/documents/:docId", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id, docId } = req.params as { id: string; docId: string };
 
     try {
@@ -205,8 +203,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // POST /api/kb/:id/documents
   app.post("/api/kb/:id/documents", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const { id: kbId } = req.params as { id: string };
 
     try {
@@ -258,8 +255,7 @@ export async function kbRoutes(app: FastifyInstance) {
 
   // GET /api/kb/quota
   app.get("/api/kb/quota", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     try {
       const quota = await myQuota(prisma, quotaBilling, userId);
