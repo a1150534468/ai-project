@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import {
@@ -17,11 +18,14 @@ const createSchema = z.object({
 });
 
 export async function wechatRoutes(app: FastifyInstance): Promise<void> {
+  // 本文件 3 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = getPrisma();
   // POST /api/wechat/bindings - 创建或更新微信绑定
   app.post("/api/wechat/bindings", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     const parsed = createSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
@@ -39,8 +43,7 @@ export async function wechatRoutes(app: FastifyInstance): Promise<void> {
 
   // GET /api/wechat/bindings - 列出当前用户的微信绑定
   app.get("/api/wechat/bindings", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     const data = await listBindings(prisma, userId);
     return reply.send({ success: true, data });
@@ -48,8 +51,7 @@ export async function wechatRoutes(app: FastifyInstance): Promise<void> {
 
   // DELETE /api/wechat/bindings/:id - 删除微信绑定
   app.delete("/api/wechat/bindings/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     const { id } = req.params as { id: string };
 
