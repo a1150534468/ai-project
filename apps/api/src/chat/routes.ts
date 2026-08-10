@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { getRedis } from "@ai-assistant/db";
@@ -274,6 +275,10 @@ function resolveModelMaxOutput(model: string): number {
 }
 
 export async function chatRoutes(app: FastifyInstance) {
+  // 本文件 4 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = getPrisma();
   const redis = getRedis();
   const cfg = loadLlmConfig();
@@ -284,8 +289,7 @@ export async function chatRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/chat", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = bodySchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
@@ -713,8 +717,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
   // 获取用户会话列表
   app.get("/api/sessions", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     const sessions = await prisma.session.findMany({
       where: { userId },
@@ -758,8 +761,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
   // 取会话消息列表（权限检验）
   app.get("/api/sessions/:id/messages", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     const { id: sessionId } = req.params as { id: string };
 
@@ -792,8 +794,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
   // 删除用户会话（级联删Message）
   app.delete("/api/sessions/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
 
     const { id: sessionId } = req.params as { id: string };
 
