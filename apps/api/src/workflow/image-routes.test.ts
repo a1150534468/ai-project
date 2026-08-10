@@ -216,11 +216,13 @@ async function createApp(options: {
   readonly staleTaskMs?: number;
   readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
   readonly redis?: { set: (...args: unknown[]) => Promise<string | null> };
+  /** 传空串模拟未登录。默认 "u1"，保持既有用例不变。 */
+  readonly userId?: string;
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (req) => {
-    (req as unknown as { userId: string }).userId = "u1";
+    req.userId = options.userId ?? "u1";
   });
   await app.register(imageWorkflowRoutes, {
     prisma: options.prisma as unknown as PrismaClient,
@@ -1764,6 +1766,54 @@ describe("image workflow routes", () => {
 
     expect(response.statusCode).toBe(500);
     expect(billing.refundResource).toHaveBeenCalledWith("image:req-create-broken");
+    await app.close();
+  });
+
+  /**
+   * P1.1 把这 8 个路由的内联 401 守卫换成了逐路由 `{ preHandler: requireUser }`。
+   *
+   * 本文件不能挂插件级钩子：`GET /:imageId/blob` 是签名 URL 取图，故意不要登录态
+   * （前端 <img src> 带不了 Authorization 头）。所以守卫是一条一条挂的 ——
+   * 这意味着一条断言只能钉住一条路由，删掉别的 preHandler 照样全绿。故此处逐条断言。
+   *
+   * 本文件原先唯一那处 401 是「签名被篡改」，走的是 blob 路由的签名校验，
+   * 跟登录守卫是两回事。等于 8 个登录守卫此前一条都没测过。
+   */
+  it("未登录时 8 个受保护路由逐条返回 401，签名取图路由不受影响", async () => {
+    const prisma = createPrismaMock();
+    // listResourcePrices 在 BillingMock 里是可选的，默认工厂不给。
+    // 不显式传，下面那句 not.toHaveBeenCalled() 会因为拿到 undefined 直接报错。
+    const billing = createBillingMock({ listResourcePrices: vi.fn(async () => ({ data: [] })) });
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    const app = await createApp({ prisma, billing, fetchFn, userId: "" });
+    const cases = [
+      { method: "GET" as const, url: "/api/workflow/images" },
+      { method: "POST" as const, url: "/api/workflow/images/references", payload: {} },
+      { method: "GET" as const, url: "/api/workflow/images/pricing" },
+      { method: "GET" as const, url: "/api/workflow/images/tasks" },
+      { method: "GET" as const, url: "/api/workflow/images/state" },
+      { method: "POST" as const, url: "/api/workflow/images/optimize-prompt", payload: { prompt: "x" } },
+      { method: "POST" as const, url: "/api/workflow/images/tasks/req-1/cancel" },
+      { method: "POST" as const, url: "/api/workflow/images/generate", payload: { prompt: "x" } },
+    ];
+    for (const one of cases) {
+      const res = await app.inject(one);
+      expect(res.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(res.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    // 守卫失效的真实后果不是崩：/pricing、/state 这类只读路由会拿着空 userId 返 200
+    // （别人的图会漏出去），/generate 会真去占额度并打供应商。所以要断到上游一次没碰。
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(billing.reserveResource).not.toHaveBeenCalled();
+    expect(billing.listResourcePrices).not.toHaveBeenCalled();
+    expect(prisma.imageAsset.findMany).not.toHaveBeenCalled();
+    expect(prisma.imageGenerationTask.findMany).not.toHaveBeenCalled();
+    expect(prisma.imageGenerationTask.create).not.toHaveBeenCalled();
+
+    // 反证：blob 路由故意没挂 preHandler，未登录不该被拦。不带签名参数时它自己校验失败
+    // 返 400 —— 能走到自己的 handler 才说明守卫没误伤它。
+    const blob = await app.inject({ method: "GET", url: "/api/workflow/images/img-1/blob" });
+    expect(blob.statusCode).toBe(400);
     await app.close();
   });
 });

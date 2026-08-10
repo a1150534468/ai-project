@@ -3,6 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
@@ -940,16 +941,14 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     }
   });
 
-  app.get("/api/workflow/images", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/images", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const rows = await listRecentImages(prisma, userId);
     return { success: true, data: rows.map(serializeImageRow) };
   });
 
-  app.post("/api/workflow/images/references", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/images/references", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = imageReferenceSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参考图参数不合法" });
     const bytes = Buffer.from(parsed.data.image.b64, "base64");
@@ -998,9 +997,8 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     }
   });
 
-  app.get("/api/workflow/images/pricing", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/images/pricing", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const query = imagePricingQuerySchema.safeParse(req.query);
     const model = query.success ? query.data.model : undefined;
     try {
@@ -1011,17 +1009,15 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     }
   });
 
-  app.get("/api/workflow/images/tasks", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/images/tasks", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     let rows = await listRecentTasks(prisma, userId);
     if (await resumeTasksIfNeeded(rows)) rows = await listRecentTasks(prisma, userId);
     return { success: true, data: rows.map(serializeTask) };
   });
 
-  app.get("/api/workflow/images/state", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/images/state", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const [images, initialTasks] = await Promise.all([
       listRecentImages(prisma, userId),
       listRecentTasks(prisma, userId),
@@ -1038,9 +1034,8 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     };
   });
 
-  app.post("/api/workflow/images/optimize-prompt", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/images/optimize-prompt", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = optimizePromptSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "请输入提示词" });
     const sourcePrompt = parsed.data.prompt;
@@ -1088,9 +1083,8 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     }
   });
 
-  app.post("/api/workflow/images/tasks/:requestId/cancel", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/images/tasks/:requestId/cancel", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = imageTaskParamsSchema.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
@@ -1136,9 +1130,8 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
     return { success: true, data: { task: serializeTask(updated) } };
   });
 
-  app.post("/api/workflow/images/generate", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/images/generate", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = imageRequestSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
