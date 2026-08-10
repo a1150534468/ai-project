@@ -57,9 +57,55 @@ afterAll(async () => {
 });
 
 describe("dub 路由", () => {
-  it("GET /avatars 未登录 401", async () => {
-    const r = await app.inject({ method: "GET", url: "/api/workflow/dub/avatars" });
-    expect(r.statusCode).toBe(401);
+  /**
+   * P1.1 把这 22 个路由的内联 401 守卫换成了逐路由 `{ preHandler: requireUser }`。
+   *
+   * 本文件不能挂插件级钩子：POST /skyhuman/callback 是供应商回调，带不了用户票据，
+   * 挂上去成片就永远回不来。所以守卫一条一条挂。
+   *
+   * 代价是钉不住：插件级钩子一条断言就锁整个文件，逐路由 preHandler 各自独立 ——
+   * 删掉某一条的 preHandler，其它条的测试照样绿。原先只有 5 条散落的 401 单测
+   * （avatars / analyze / rewrite / projects / pricing），剩下 17 条谁的守卫被删
+   * 都不会有人发现。那 5 条做的事跟这里的循环完全一样，合并进来。
+   *
+   * 公开回调不用在这儿反证：下面 "回调 secret 错误 403" / "正确 200 received"
+   * 两条已经证明它未登录也能进 handler。
+   */
+  it("未登录时 22 个受保护路由逐条返回 401", async () => {
+    const cases: ReadonlyArray<{
+      method: "GET" | "POST" | "PATCH" | "DELETE";
+      url: string;
+      payload?: Record<string, unknown>;
+    }> = [
+      { method: "GET", url: "/api/workflow/dub/tts/voices" },
+      { method: "POST", url: "/api/workflow/dub/tts", payload: { mode: "preset", text: "x" } },
+      { method: "GET", url: "/api/workflow/dub/pricing" },
+      { method: "GET", url: "/api/workflow/dub/bgm" },
+      { method: "POST", url: "/api/workflow/dub/bgm/upload", payload: {} },
+      { method: "POST", url: "/api/workflow/dub/projects", payload: { title: "x" } },
+      { method: "GET", url: "/api/workflow/dub/projects" },
+      { method: "GET", url: "/api/workflow/dub/projects/p1" },
+      { method: "PATCH", url: "/api/workflow/dub/projects/p1", payload: { script: "x" } },
+      { method: "DELETE", url: "/api/workflow/dub/projects/p1" },
+      { method: "POST", url: "/api/workflow/dub/projects/p1/generate" },
+      { method: "POST", url: "/api/workflow/dub/projects/p1/remix" },
+      { method: "POST", url: "/api/workflow/dub/analyze", payload: {} },
+      { method: "POST", url: "/api/workflow/dub/parse", payload: { text: "x" } },
+      { method: "POST", url: "/api/workflow/dub/analyze-parsed", payload: { objectKey: "x" } },
+      { method: "POST", url: "/api/workflow/dub/rewrite", payload: { text: "x" } },
+      { method: "GET", url: "/api/workflow/dub/avatars" },
+      { method: "POST", url: "/api/workflow/dub/avatars", payload: {} },
+      { method: "PATCH", url: "/api/workflow/dub/avatars/a1", payload: { favorite: true } },
+      { method: "DELETE", url: "/api/workflow/dub/avatars/a1" },
+      { method: "POST", url: "/api/workflow/dub/video/generate", payload: {} },
+      { method: "GET", url: "/api/workflow/dub/tasks/t1" },
+    ];
+    expect(cases).toHaveLength(22);
+    for (const one of cases) {
+      const r = await app.inject(one);
+      expect(r.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(r.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
   });
   it("GET /avatars 已登录返回本人形象", async () => {
     await prisma.avatar.create({ data: { userId, avatarCode: "av_1", title: "我" } });
@@ -100,14 +146,6 @@ describe("dub 路由", () => {
     const r = await app.inject({ method: "POST", url: "/api/workflow/dub/tts", headers: { authorization: auth }, payload: { mode: "preset", text: "你好" } });
     expect(r.statusCode).toBe(400);
   });
-  it("POST /analyze 未登录 401", async () => {
-    const r = await app.inject({ method: "POST", url: "/api/workflow/dub/analyze" });
-    expect(r.statusCode).toBe(401);
-  });
-  it("POST /rewrite 未登录 401", async () => {
-    const r = await app.inject({ method: "POST", url: "/api/workflow/dub/rewrite", payload: { text: "x" } });
-    expect(r.statusCode).toBe(401);
-  });
   it("POST /rewrite 空文案 400", async () => {
     const r = await app.inject({ method: "POST", url: "/api/workflow/dub/rewrite", headers: { authorization: auth }, payload: { text: "  " } });
     expect(r.statusCode).toBe(400);
@@ -117,10 +155,6 @@ describe("dub 路由", () => {
     expect(r.statusCode).toBe(400);
   });
 
-  it("GET /projects 未登录 401", async () => {
-    const r = await app.inject({ method: "GET", url: "/api/workflow/dub/projects" });
-    expect(r.statusCode).toBe(401);
-  });
   it("项目 创建→查询→改字段→删除 全链路", async () => {
     const c = await app.inject({ method: "POST", url: "/api/workflow/dub/projects", headers: { authorization: auth }, payload: { title: "测试口播" } });
     expect(c.statusCode).toBe(200);
@@ -163,10 +197,6 @@ describe("dub 路由", () => {
     const r = await app.inject({ method: "POST", url: `/api/workflow/dub/projects/${id}/remix`, headers: { authorization: auth } });
     expect(r.statusCode).toBe(400);
     await app.inject({ method: "DELETE", url: `/api/workflow/dub/projects/${id}`, headers: { authorization: auth } });
-  });
-  it("GET /pricing 未登录 401", async () => {
-    const r = await app.inject({ method: "GET", url: "/api/workflow/dub/pricing" });
-    expect(r.statusCode).toBe(401);
   });
   it("GET /pricing 返回五项（billing mock 无 listResourcePrices → 全 disabled）", async () => {
     const r = await app.inject({ method: "GET", url: "/api/workflow/dub/pricing", headers: { authorization: auth } });

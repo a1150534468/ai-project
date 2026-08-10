@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { createBillingClient } from "@ai-assistant/billing";
@@ -78,15 +79,13 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     return cachedParse;
   }
 
-  function uid(req: unknown): string | null { return (req as { userId?: string }).userId || null; }
-
-  app.get("/api/workflow/dub/tts/voices", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/tts/voices", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     return { success: true, data: DUB_PRESET_VOICES };
   });
 
-  app.post("/api/workflow/dub/tts", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/tts", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const mimo = getMimo(); if (!mimo) return reply.code(502).send({ error: "MiMo 未配置" });
     const b = (req.body ?? {}) as { mode?: string; text?: string; format?: string; voice?: string; description?: string; style?: string; refAudioBase64?: string; refAudioMime?: string };
     const mode = b.mode as DubTtsMode | undefined;
@@ -119,8 +118,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // 向导用：展示每步预计消耗；未配价（enabled=false）时前端置灰该步。真实扣费仍在后端。
-  app.get("/api/workflow/dub/pricing", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/pricing", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const empty = { rate: 0, perUnits: 1, enabled: false };
     if (!billing.listResourcePrices) return { success: true, data: { analyzeVideoSec: empty, ttsChar: empty, avatarClone: empty, videoSec: empty, parseVideo: empty } };
     try {
@@ -142,13 +141,13 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.get("/api/workflow/dub/bgm", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/bgm", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     return { success: true, data: await listEnabledBgmPresets(prisma) };
   });
 
-  app.post("/api/workflow/dub/bgm/upload", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/bgm/upload", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const file = await req.file(); if (!file) return reply.code(400).send({ error: "请选择 BGM 音频" });
     if (!file.mimetype.startsWith("audio/")) return reply.code(400).send({ error: "仅支持音频文件" });
     const buffer = Buffer.from(await file.toBuffer());
@@ -157,37 +156,37 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     return { success: true, data: await storeAudioBuffer({ userId, buffer, mime: file.mimetype, ext }) };
   });
 
-  app.post("/api/workflow/dub/projects", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/projects", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const title = (req.body as { title?: string } | undefined)?.title;
     return { success: true, data: await createProject(prisma, userId, title) };
   });
 
-  app.get("/api/workflow/dub/projects", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/projects", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     return { success: true, data: await listProjects(prisma, userId) };
   });
 
-  app.get("/api/workflow/dub/projects/:id", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/projects/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const p = await getProject(prisma, userId, (req.params as { id: string }).id);
     return p ? { success: true, data: p } : reply.code(404).send({ error: "项目不存在" });
   });
 
-  app.patch("/api/workflow/dub/projects/:id", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.patch("/api/workflow/dub/projects/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const ok = await patchProject(prisma, userId, (req.params as { id: string }).id, (req.body ?? {}) as Record<string, unknown>);
     return ok ? { success: true } : reply.code(404).send({ error: "项目不存在或无可更新字段" });
   });
 
-  app.delete("/api/workflow/dub/projects/:id", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.delete("/api/workflow/dub/projects/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const ok = await deleteProject(prisma, userId, (req.params as { id: string }).id);
     return ok ? { success: true } : reply.code(404).send({ error: "项目不存在" });
   });
 
-  app.post("/api/workflow/dub/projects/:id/generate", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/projects/:id/generate", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const cfg = getCfg(); if (!cfg) return reply.code(502).send({ error: "飞天未配置" });
     const projectId = (req.params as { id: string }).id;
     const project = await getProject(prisma, userId, projectId);
@@ -218,8 +217,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/api/workflow/dub/projects/:id/remix", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/projects/:id/remix", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const project = await getProject(prisma, userId, (req.params as { id: string }).id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!project.resultObjectKey || !project.resultVideoUrl) return reply.code(400).send({ error: "尚无成片可混流" });
@@ -227,8 +226,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     return { success: true };
   });
 
-  app.post("/api/workflow/dub/analyze", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/analyze", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const file = await req.file(); if (!file) return reply.code(400).send({ error: "请选择参考视频" });
     if (!file.mimetype.startsWith("video/")) return reply.code(400).send({ error: "仅支持视频文件" });
     const buffer = Buffer.from(await file.toBuffer());
@@ -248,8 +247,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/api/workflow/dub/parse", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/parse", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const cfg = getParseCfg(); if (!cfg) return reply.code(502).send({ error: "解析服务未配置" });
     const text = ((req.body as { text?: string })?.text ?? "").trim();
     if (!text) return reply.code(400).send({ error: "请粘贴分享文案或链接" });
@@ -270,8 +269,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/api/workflow/dub/analyze-parsed", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/analyze-parsed", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const objectKey = ((req.body as { objectKey?: string })?.objectKey ?? "").trim();
     if (!objectKey) return reply.code(400).send({ error: "缺少 objectKey" });
     if (!objectKey.startsWith(`dub/parsed/${userId}/`)) return reply.code(403).send({ error: "无权访问该资源" });
@@ -292,8 +291,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.post("/api/workflow/dub/rewrite", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/rewrite", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const b = (req.body ?? {}) as { text?: string; kbIds?: string[]; highlights?: string[]; style?: string; injectHighlights?: boolean };
     const text = (b.text ?? "").trim();
     if (!text) return reply.code(400).send({ error: "请输入原始文案" });
@@ -311,13 +310,13 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.get("/api/workflow/dub/avatars", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/avatars", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     return { success: true, data: await listAvatars(prisma, userId) };
   });
 
-  app.post("/api/workflow/dub/avatars", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/avatars", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const cfg = getCfg(); if (!cfg) return reply.code(502).send({ error: "飞天未配置" });
     const file = await req.file(); if (!file) return reply.code(400).send({ error: "请选择场景视频" });
     if (!file.mimetype.startsWith("video/")) return reply.code(400).send({ error: "仅支持视频文件" });
@@ -333,22 +332,22 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.patch("/api/workflow/dub/avatars/:id", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.patch("/api/workflow/dub/avatars/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const favorite = Boolean((req.body as { favorite?: boolean } | undefined)?.favorite);
     const ok = await setAvatarFavorite(prisma, userId, (req.params as { id: string }).id, favorite);
     return ok ? { success: true } : reply.code(404).send({ error: "形象不存在" });
   });
 
-  app.delete("/api/workflow/dub/avatars/:id", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.delete("/api/workflow/dub/avatars/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const cfg = getCfg(); if (!cfg) return reply.code(502).send({ error: "飞天未配置" });
     const ok = await removeAvatar({ prisma, cfg, fetchFn, userId, avatarId: (req.params as { id: string }).id });
     return ok ? { success: true } : reply.code(404).send({ error: "形象不存在" });
   });
 
-  app.post("/api/workflow/dub/video/generate", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/dub/video/generate", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const cfg = getCfg(); if (!cfg) return reply.code(502).send({ error: "飞天未配置" });
     const file = await req.file(); if (!file) return reply.code(400).send({ error: "请选择驱动音频" });
     if (!file.mimetype.startsWith("audio/")) return reply.code(400).send({ error: "仅支持音频文件" });
@@ -367,8 +366,8 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     }
   });
 
-  app.get("/api/workflow/dub/tasks/:id", async (req, reply) => {
-    const userId = uid(req); if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/dub/tasks/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const task = await prisma.skyhumanTask.findFirst({ where: { id: (req.params as { id: string }).id, userId } });
     if (!task) return reply.code(404).send({ error: "任务不存在" });
     return { success: true, data: { id: task.id, kind: task.kind, status: task.status, resultPayload: task.resultPayload, error: task.error } };
