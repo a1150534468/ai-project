@@ -52,7 +52,7 @@ export async function createApp(options?: {
   await app.register(multipart);
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (req) => {
-    (req as unknown as { userId: string }).userId = options?.userId ?? "u1";
+    req.userId = options?.userId ?? "u1";
   });
   await app.register(localBusinessPromoRoutes, {
     prisma: (options?.prisma ?? createPrismaMockSupport()) as unknown as PrismaClient,

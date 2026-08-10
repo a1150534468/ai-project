@@ -69,7 +69,7 @@ async function buildApp() {
     if (auth?.startsWith("Bearer ")) {
       const verified = verifyToken(auth.slice(7), process.env.SESSION_SECRET!);
       if (verified) {
-        (req as unknown as { userId: string }).userId = verified;
+        req.userId = verified;
       }
     }
   });

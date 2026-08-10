@@ -226,7 +226,7 @@ async function createApp(args: {
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
-  app.addHook("onRequest", async (req) => { (req as unknown as { userId: string }).userId = args.authenticated === false ? "" : "u1"; });
+  app.addHook("onRequest", async (req) => { req.userId = args.authenticated === false ? "" : "u1"; });
   const objects = new Map<string, Buffer>();
   const refBytes = await sharp({ create: { width: 40, height: 50, channels: 3, background: "#807060" } }).jpeg().toBuffer();
   args.db.references.forEach((row) => objects.set(row.objectKey, refBytes));

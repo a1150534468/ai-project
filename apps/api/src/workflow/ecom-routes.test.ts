@@ -230,7 +230,7 @@ function seedWorkflow(overrides?: Partial<WorkflowRow>): WorkflowRow {
 async function createApp(options?: { prisma?: ReturnType<typeof createPrismaMock>; billing?: BillingMock; services?: Partial<Services>; userId?: string; maxAttempts?: number; workflowMutationLocker?: WorkflowMutationLocker }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
-  app.addHook("onRequest", async (req) => { (req as unknown as { userId: string }).userId = options?.userId ?? "u1"; });
+  app.addHook("onRequest", async (req) => { req.userId = options?.userId ?? "u1"; });
   await app.register(ecomWorkflowRoutes, {
     prisma: (options?.prisma ?? createPrismaMock()) as unknown as PrismaClient,
     billing: options?.billing ?? createBillingMock(),

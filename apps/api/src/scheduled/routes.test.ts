@@ -12,7 +12,7 @@ function appAs(userId: string): FastifyInstance {
   const app = Fastify();
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (req) => {
-    (req as unknown as { userId: string }).userId = userId;
+    req.userId = userId;
   });
   return app;
 }

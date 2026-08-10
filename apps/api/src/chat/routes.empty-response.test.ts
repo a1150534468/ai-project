@@ -151,7 +151,7 @@ async function makeApp() {
   const app = Fastify({ logger: false });
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (req) => {
-    (req as unknown as { userId: string }).userId = "user-1";
+    req.userId = "user-1";
   });
   await app.register(chatRoutes);
   await app.ready();

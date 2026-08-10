@@ -62,7 +62,7 @@ async function makeApp() {
   f.addHook("onRequest", async (req) => {
     const auth = req.headers.authorization;
     if (auth?.startsWith("Bearer ")) {
-      (req as unknown as { userId: string }).userId = auth.slice(7);
+      req.userId = auth.slice(7);
     }
   });
   await f.register(multipart, { limits: { fileSize: 20971520 } });
