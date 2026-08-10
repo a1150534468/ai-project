@@ -145,7 +145,7 @@ export async function buildServer() {
       : readCookieValue(req.headers.cookie, "token");
     if (token) {
       const uid = verifyToken(token, process.env.SESSION_SECRET!);
-      if (uid) (req as unknown as { userId: string }).userId = uid;
+      if (uid) req.userId = uid;
     }
   });
 
