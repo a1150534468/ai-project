@@ -266,4 +266,33 @@ describe("agent routes", () => {
     await new Promise((r) => setImmediate(r));
     expect(deleteCalls).toContain("agent-avatars/x.webp");
   });
+
+  /**
+   * P1.1 把本文件 6 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * 原先这里一条 401 断言都没有 —— 上面每个用例都老实带了 Bearer 头，等于没人验过不带头会怎样。
+   *
+   * 不带 authorization 头时 makeApp 的 onRequest 不写 userId，落在 decorateRequest 的默认空串上，
+   * 与线上「有 token 但验签失败」是同一条路径。
+   */
+  it("未登录时全部路由返回 401，且不写库不碰对象存储", async () => {
+    const before = await prisma.userAgent.count();
+    const putsBefore = putCalls.length;
+    const deletesBefore = deleteCalls.length;
+    const cases = [
+      { method: "GET" as const, url: "/api/agents" },
+      { method: "POST" as const, url: "/api/agents/generate", payload: { need: "复盘" } },
+      { method: "PATCH" as const, url: "/api/agents/some-id", payload: { name: "x" } },
+      { method: "DELETE" as const, url: "/api/agents/some-id" },
+      { method: "POST" as const, url: "/api/agents/some-id/avatar/regenerate" },
+      { method: "POST" as const, url: "/api/agents/some-id/avatar/upload" },
+    ];
+    for (const one of cases) {
+      const r = await app.inject(one);
+      expect(r.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(r.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    expect(await prisma.userAgent.count()).toBe(before);
+    expect(putCalls.length).toBe(putsBefore);
+    expect(deleteCalls.length).toBe(deletesBefore);
+  });
 });

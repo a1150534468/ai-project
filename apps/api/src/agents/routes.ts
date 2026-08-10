@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma, getRedis } from "@ai-assistant/db";
@@ -24,6 +25,10 @@ interface AgentRoutesOpts {
 }
 
 export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = {}) {
+  // 本文件 6 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = getPrisma();
   const redis = opts.redis ?? getRedis();
 
@@ -38,8 +43,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   const storage = () => opts.storage ?? (cachedStorage ??= defaultStorage());
 
   app.get("/api/agents", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     return {
       success: true,
       data: {
@@ -50,8 +54,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   });
 
   app.post("/api/agents/generate", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = generateSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     try {
@@ -63,8 +66,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   });
 
   app.patch<{ Params: { id: string } }>("/api/agents/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = renameSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const ok = await renameAgent(prisma, userId, req.params.id, parsed.data.name);
@@ -73,8 +75,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   });
 
   app.delete<{ Params: { id: string } }>("/api/agents/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const deleted = await deleteAgentCascade(prisma, userId, req.params.id);
     if (!deleted) return reply.code(404).send({ error: "智能体不存在" });
     if (deleted.avatarUrl) {
@@ -86,8 +87,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   });
 
   app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/regenerate", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     if (!(await consumeAvatarQuota(redis, userId))) return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });
     const result = await regenerateAgentAvatar(prisma, userId, req.params.id);
     if (!result) return reply.code(404).send({ error: "智能体不存在" });
@@ -95,8 +95,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   });
 
   app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/upload", async (req, reply) => {
-    const userId = (req as unknown as { userId?: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     if (!(await consumeAvatarQuota(redis, userId))) return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });
 
     const existing = await agentAvatarUrlOf(prisma, userId, req.params.id);
