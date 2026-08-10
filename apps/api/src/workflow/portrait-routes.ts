@@ -3,6 +3,7 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import sharp, { type Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
@@ -590,9 +591,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     activeTasks.clear();
   });
 
-  app.get("/api/workflow/portraits/options", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/portraits/options", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const priceRows = await listPriceRows();
     const resolutions: readonly PortraitResolution[] = ["1K", "2K", "4K"];
     const pricingByModel: Record<string, Partial<Record<PortraitResolution, number>>> = {};
@@ -646,9 +646,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     }
   });
 
-  app.post("/api/workflow/portraits/references", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/portraits/references", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = portraitReferenceSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参考图参数不合法" });
     const sourceBytes = Buffer.from(parsed.data.image.b64, "base64");
@@ -692,9 +691,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     return { success: true, data: { asset: serializeReference(row) } };
   });
 
-  app.delete("/api/workflow/portraits/references/:id", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.delete("/api/workflow/portraits/references/:id", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = blobParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参考图参数不合法" });
     const row = await prisma.portraitReferenceAsset.findFirst({ where: { id: params.data.id, userId, deletedAt: null } }) as unknown as PortraitReferenceRow | null;
@@ -706,9 +704,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     return { success: true };
   });
 
-  app.get("/api/workflow/portraits/state", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/portraits/state", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     await recover({ userId });
     const [references, tasks] = await Promise.all([
       prisma.portraitReferenceAsset.findMany({ where: { userId, deletedAt: null }, orderBy: { createdAt: "desc" }, take: PORTRAIT_MAX_REFERENCE_COUNT }),
@@ -723,9 +720,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     };
   });
 
-  app.post("/api/workflow/portraits/generate", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/portraits/generate", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = portraitRequestSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "人像生成参数不完整，且必须确认你拥有参考人物的授权" });
     const model = PORTRAIT_MODELS.find((item) => item.value === parsed.data.model) ?? PORTRAIT_MODELS[0];
@@ -783,9 +779,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
   });
 
-  app.post("/api/workflow/portraits/tasks/:requestId/cancel", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/portraits/tasks/:requestId/cancel", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = z.object({ requestId: z.string().trim().min(8).max(128) }).safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "任务编号不合法" });
     const task = await listTaskWithOutputs(prisma, userId, params.data.requestId);
@@ -798,9 +793,8 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     return { success: true, data: { task: serializeTask(await listTaskWithOutputs(prisma, userId, task.requestId) as PortraitTaskRow) } };
   });
 
-  app.delete("/api/workflow/portraits/tasks/:requestId", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.delete("/api/workflow/portraits/tasks/:requestId", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = z.object({ requestId: z.string().trim().min(8).max(128) }).safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "任务编号不合法" });
     const task = await listTaskWithOutputs(prisma, userId, params.data.requestId);

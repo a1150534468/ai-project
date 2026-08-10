@@ -528,4 +528,55 @@ describe("portrait workflow routes", () => {
     expect(db.tasks[0]).toMatchObject({ status: "completed", billingStatus: "settled", completedCount: 1 });
     await app.close();
   });
+
+  /**
+   * P1.1 把这 7 个路由的内联 401 守卫换成了逐路由 `{ preHandler: requireUser }`。
+   *
+   * 本文件不能挂插件级钩子：references/outputs 两个 blob 路由是签名 URL 取图，
+   * 故意不要登录态（前端 <img src> 带不了 Authorization 头）。所以守卫一条一条挂，
+   * 一条断言只钉一条路由 —— 上面那条 "requires authentication" 只测了 /options，
+   * 剩下 6 条谁的 preHandler 被删都不会有人发现。故此处逐条断言。
+   */
+  it("未登录时 7 个受保护路由逐条返回 401，两个签名取图路由不受影响", async () => {
+    const db = createPrismaMock({ references: [reference()] });
+    const { app, billing, storeImage } = await createApp({ db, authenticated: false });
+    const cases = [
+      { method: "GET" as const, url: "/api/workflow/portraits/options" },
+      { method: "POST" as const, url: "/api/workflow/portraits/references", payload: {} },
+      { method: "DELETE" as const, url: "/api/workflow/portraits/references/ref-1" },
+      { method: "GET" as const, url: "/api/workflow/portraits/state" },
+      { method: "POST" as const, url: "/api/workflow/portraits/generate", payload: validPayload },
+      { method: "POST" as const, url: "/api/workflow/portraits/tasks/portrait-1/cancel" },
+      { method: "DELETE" as const, url: "/api/workflow/portraits/tasks/portrait-1" },
+    ];
+    for (const one of cases) {
+      const res = await app.inject(one);
+      expect(res.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(res.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    // 守卫失效的真实后果不是崩：/state 会拿着空 userId 返 200（别人的写真会漏出去），
+    // /generate 会真去占额度并打图像模型。所以要断到上游一次没碰。
+    expect(billing.reserveResource).not.toHaveBeenCalled();
+    expect(billing.listResourcePrices).not.toHaveBeenCalled();
+    expect(storeImage).not.toHaveBeenCalled();
+    expect(db.prisma.portraitTask.findMany).not.toHaveBeenCalled();
+    expect(db.prisma.portraitTask.create).not.toHaveBeenCalled();
+    expect(db.prisma.portraitTask.update).not.toHaveBeenCalled();
+    expect(db.prisma.portraitTask.delete).not.toHaveBeenCalled();
+    expect(db.prisma.portraitReferenceAsset.create).not.toHaveBeenCalled();
+    expect(db.prisma.portraitReferenceAsset.findFirst).not.toHaveBeenCalled();
+    // 注意：portraitReferenceAsset.findMany 不能断，注册时那次过期清理就会调它，
+    // 跟路由无关。断它会得到一条永远红的假失败。
+
+    // 反证：两个 blob 路由故意没挂 preHandler，未登录不该被拦。不带签名参数时
+    // 它们自己校验失败返 400 —— 能走到自己的 handler 才说明守卫没误伤。
+    for (const url of [
+      "/api/workflow/portraits/references/ref-1/blob",
+      "/api/workflow/portraits/outputs/out-1/blob",
+    ]) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode, url).toBe(400);
+    }
+    await app.close();
+  });
 });
