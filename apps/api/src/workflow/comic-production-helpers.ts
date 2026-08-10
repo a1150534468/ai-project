@@ -52,10 +52,6 @@ export const generateVideoSchema = z.object({
   resolution: z.string().trim().max(24).optional(),
 });
 
-export function userIdFrom(req: { readonly userId?: string }): string | null {
-  return req.userId?.trim() || null;
-}
-
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "请求失败";
 }

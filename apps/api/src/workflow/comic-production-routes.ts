@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import type { PrismaClient } from "@prisma/client";
 import { getPrisma } from "@ai-assistant/db";
 import { callImageGeneration, loadImageGenerationConfig } from "./image-service.js";
@@ -22,7 +23,6 @@ import {
   shotParamsSchema,
   updateAssetSchema,
   updateShotSchema,
-  userIdFrom,
   type FetchLike,
 } from "./comic-production-helpers.js";
 
@@ -37,10 +37,9 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
   const fetchFn = opts.fetchFn ?? fetch;
   const env = opts.env ?? process.env;
 
-  app.get("/api/workflow/comics/projects/:projectId/assets", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.get("/api/workflow/comics/projects/:projectId/assets", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = projectParamsSchema.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await prisma.comicWorkflowProject.findFirst({ where: { id: params.data.projectId, userId } });
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -48,11 +47,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true, data: rows.map(serializeAsset) };
   });
 
-  app.post("/api/workflow/comics/projects/:projectId/assets", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/projects/:projectId/assets", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = projectParamsSchema.safeParse(req.params);
     const body = createAssetSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await prisma.comicWorkflowProject.findFirst({ where: { id: params.data.projectId, userId } });
     if (!project) return reply.code(404).send({ error: "项目不存在" });
@@ -62,11 +60,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return reply.code(201).send({ success: true, data: serializeAsset(row) });
   });
 
-  app.patch("/api/workflow/comics/assets/:assetId", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.patch("/api/workflow/comics/assets/:assetId", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = assetParamsSchema.safeParse(req.params);
     const body = updateAssetSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const asset = await prisma.comicWorkflowAsset.findFirst({ where: { id: params.data.assetId, userId } });
     if (!asset) return reply.code(404).send({ error: "资产不存在" });
@@ -74,10 +71,9 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true, data: serializeAsset(row) };
   });
 
-  app.delete("/api/workflow/comics/assets/:assetId", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.delete("/api/workflow/comics/assets/:assetId", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = assetParamsSchema.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const asset = await prisma.comicWorkflowAsset.findFirst({ where: { id: params.data.assetId, userId } });
     if (!asset) return reply.code(404).send({ error: "资产不存在" });
@@ -85,11 +81,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true };
   });
 
-  app.post("/api/workflow/comics/assets/:assetId/generate-image", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/assets/:assetId/generate-image", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = assetParamsSchema.safeParse(req.params);
     const body = generateImageSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const asset = await prisma.comicWorkflowAsset.findFirst({ where: { id: params.data.assetId, userId }, include: { project: true } });
     if (!asset) return reply.code(404).send({ error: "资产不存在" });
@@ -105,10 +100,9 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     }
   });
 
-  app.get("/api/workflow/comics/episodes/:episodeId/shots", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.get("/api/workflow/comics/episodes/:episodeId/shots", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = episodeParamsSchema.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const episode = await prisma.comicWorkflowEpisode.findFirst({ where: { id: params.data.episodeId, userId } });
     if (!episode) return reply.code(404).send({ error: "剧集不存在" });
@@ -116,11 +110,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true, data: rows.map(serializeShot) };
   });
 
-  app.post("/api/workflow/comics/episodes/:episodeId/shots", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/episodes/:episodeId/shots", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = episodeParamsSchema.safeParse(req.params);
     const body = createShotSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const episode = await prisma.comicWorkflowEpisode.findFirst({ where: { id: params.data.episodeId, userId } });
     if (!episode) return reply.code(404).send({ error: "剧集不存在" });
@@ -138,11 +131,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return reply.code(201).send({ success: true, data: serializeShot(row) });
   });
 
-  app.post("/api/workflow/comics/episodes/:episodeId/shots/generate", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/episodes/:episodeId/shots/generate", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = episodeParamsSchema.safeParse(req.params);
     const body = generateShotListSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const episode = await prisma.comicWorkflowEpisode.findFirst({ where: { id: params.data.episodeId, userId } });
     if (!episode) return reply.code(404).send({ error: "剧集不存在" });
@@ -169,11 +161,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true, data: rows.map(serializeShot) };
   });
 
-  app.patch("/api/workflow/comics/shots/:shotId", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.patch("/api/workflow/comics/shots/:shotId", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = shotParamsSchema.safeParse(req.params);
     const body = updateShotSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const shot = await prisma.comicWorkflowShot.findFirst({ where: { id: params.data.shotId, userId } });
     if (!shot) return reply.code(404).send({ error: "镜头不存在" });
@@ -184,10 +175,9 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true, data: serializeShot(row) };
   });
 
-  app.delete("/api/workflow/comics/shots/:shotId", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.delete("/api/workflow/comics/shots/:shotId", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = shotParamsSchema.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const shot = await prisma.comicWorkflowShot.findFirst({ where: { id: params.data.shotId, userId } });
     if (!shot) return reply.code(404).send({ error: "镜头不存在" });
@@ -195,11 +185,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     return { success: true };
   });
 
-  app.post("/api/workflow/comics/shots/:shotId/generate-image", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/shots/:shotId/generate-image", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = shotParamsSchema.safeParse(req.params);
     const body = generateImageSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const shot = await prisma.comicWorkflowShot.findFirst({ where: { id: params.data.shotId, userId }, include: { project: true } });
     if (!shot) return reply.code(404).send({ error: "镜头不存在" });
@@ -227,11 +216,10 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
 
   app.get("/api/workflow/comics/video/models", async () => ({ success: true, data: listComicVideoModels() }));
 
-  app.post("/api/workflow/comics/shots/:shotId/generate-video", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/shots/:shotId/generate-video", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = shotParamsSchema.safeParse(req.params);
     const body = generateVideoSchema.safeParse(req.body);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const shot = await prisma.comicWorkflowShot.findFirst({ where: { id: params.data.shotId, userId }, include: { imageAsset: true } });
     if (!shot) return reply.code(404).send({ error: "镜头不存在" });
@@ -258,10 +246,9 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     }
   });
 
-  app.post("/api/workflow/comics/shots/:shotId/poll-video", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/shots/:shotId/poll-video", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = shotParamsSchema.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const shot = await prisma.comicWorkflowShot.findFirst({ where: { id: params.data.shotId, userId } });
     if (!shot) return reply.code(404).send({ error: "镜头不存在" });
@@ -283,10 +270,9 @@ export async function comicProductionRoutes(app: FastifyInstance, opts: ComicPro
     }
   });
 
-  app.post("/api/workflow/comics/episodes/:episodeId/render", async (req, reply) => {
-    const userId = userIdFrom(req);
+  app.post("/api/workflow/comics/episodes/:episodeId/render", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const params = episodeParamsSchema.safeParse(req.params);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const episode = await prisma.comicWorkflowEpisode.findFirst({ where: { id: params.data.episodeId, userId } });
     if (!episode) return reply.code(404).send({ error: "剧集不存在" });
