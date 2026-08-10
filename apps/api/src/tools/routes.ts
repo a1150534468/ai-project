@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { connectorToolSchema, localTools, TOOL_SKILL_MARKET_INSTALL, type ConnectorTool } from "@ai-assistant/connector-protocol";
@@ -18,10 +19,6 @@ const installSchema = z.object({
 const installResultSchema = z.object({
   tool: connectorToolSchema,
 });
-
-function userIdFromRequest(req: unknown): string {
-  return (req as { userId?: string }).userId ?? "";
-}
 
 function installTimeoutMs(): number {
   const raw = Number(process.env.TOOL_INSTALL_TIMEOUT_MS);
@@ -92,9 +89,8 @@ export async function toolRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get("/api/tools/installed", async (req, reply) => {
-    const userId = userIdFromRequest(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/tools/installed", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const rows = await prisma.userToolInstall.findMany({
       where: { userId, status: "installed" },
       orderBy: { updatedAt: "desc" },
@@ -118,9 +114,8 @@ export async function toolRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post("/api/tools/install", async (req, reply) => {
-    const userId = userIdFromRequest(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/tools/install", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const parsed = installSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
@@ -204,9 +199,8 @@ export async function toolRoutes(app: FastifyInstance) {
     return reply.send({ success: true, data: installDto(row, true) });
   });
 
-  app.delete("/api/tools/:toolName", async (req, reply) => {
-    const userId = userIdFromRequest(req);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.delete("/api/tools/:toolName", { preHandler: requireUser }, async (req, reply) => {
+    const userId = req.userId;
     const { toolName } = req.params as { toolName: string };
     await prisma.userToolInstall.updateMany({
       where: { userId, toolName },
