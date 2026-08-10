@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import argon2 from "argon2";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
+import { requireUser } from "./require-user.js";
 import { signToken } from "./token.js";
 import { generateUniquePrefixedUid } from "./uid.js";
 
@@ -65,9 +66,9 @@ export async function authRoutes(app: FastifyInstance) {
     return { token: signToken(user.id, secret), userId: user.id, uid: user.uid };
   });
 
-  app.get("/api/auth/me", async (req, reply) => {
+  // 本插件里只有这一条要登录：register / login 必须公开，所以挂逐路由而不是插件级钩子
+  app.get("/api/auth/me", { preHandler: requireUser }, async (req, reply) => {
     const userId = req.userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, uid: true, username: true, bannedAt: true },

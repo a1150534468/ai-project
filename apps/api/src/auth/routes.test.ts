@@ -99,6 +99,9 @@ describe("auth 身份重构", () => {
   it("/me 未带 token 401", async () => {
     const r = await app.inject({ method: "GET", url: "/api/auth/me" });
     expect(r.statusCode).toBe(401);
+    // 必须断 body：摘掉 preHandler 后 req.userId 是装饰器默认空串，
+    // findUnique 拿不到人会走下一行的「用户不存在」，那也是 401，只断 statusCode 会假绿。
+    expect(r.json()).toEqual({ error: "未登录" });
   });
   it("用 uid 登录成功", async () => {
     const r = await app.inject({
