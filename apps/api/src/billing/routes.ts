@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { createBillingClient } from "@ai-assistant/billing";
 
@@ -29,16 +30,17 @@ const tradeNoParamsSchema = z.object({
 });
 
 export async function billingRoutes(app: FastifyInstance) {
+  // 本文件 10 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const billing = createBillingClient({
     baseUrl: process.env.BILLING_BASE_URL!,
     token: process.env.BILLING_INTERNAL_TOKEN!,
   });
 
   app.post("/api/billing/topup", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     const p = topupSchema.safeParse(req.body);
     if (!p.success) {
       return reply.code(400).send({ error: "参数不合法" });
@@ -47,10 +49,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/billing/recharge-packages", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     try {
       return await billing.listRechargePackages();
     } catch {
@@ -59,10 +58,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/billing/recharge-ratio", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     try {
       return await billing.getRechargeRatio();
     } catch {
@@ -71,10 +67,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/billing/usage", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     const q = z.object({ limit: z.coerce.number().int().positive().max(100).default(20) }).safeParse(req.query);
     if (!q.success) {
       return reply.code(400).send({ error: "参数不合法" });
@@ -87,10 +80,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/billing/topup/:tradeNo", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     const p = tradeNoParamsSchema.safeParse(req.params);
     if (!p.success) {
       return reply.code(400).send({ error: "参数不合法" });
@@ -103,10 +93,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/vip/me", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     try {
       return await billing.getVipSummary(userId);
     } catch {
@@ -115,10 +102,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/model-marketplace", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     try {
       return await billing.listModelMarketplace(userId);
     } catch {
@@ -127,10 +111,7 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/billing/redeem", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     const p = redeemSchema.safeParse(req.body);
     if (!p.success) {
       return reply.code(400).send({ error: "参数不合法" });
@@ -139,18 +120,12 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/billing/balance", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     return billing.getBalance(userId);
   });
 
   app.get("/api/billing/points-detail", async (req, reply) => {
-    const userId = (req as { userId?: string }).userId;
-    if (!userId) {
-      return reply.code(401).send({ error: "未登录" });
-    }
+    const userId = req.userId;
     try {
       return await billing.pointsDetail(userId);
     } catch {

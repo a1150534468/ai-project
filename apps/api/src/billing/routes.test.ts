@@ -23,7 +23,7 @@ async function makeApp(userId = "u1") {
   const app = Fastify();
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (req) => {
-    (req as unknown as { userId: string }).userId = userId;
+    req.userId = userId;
   });
   await app.register(billingRoutes);
   await app.ready();
@@ -202,6 +202,37 @@ describe("用户计费路由", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().data.status).toBe("success");
     expect(mockBilling.getTopupOrder).toHaveBeenCalledWith("current-user", "ai123");
+    await app.close();
+  });
+
+  /**
+   * P1.1 把本文件 10 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * 原先这里一条 401 断言都没有，守卫删干净也是全绿 —— 这是钱袋子路由，不能这么放着。
+   * 断言 billing 客户端一次都没被调，是因为守卫失效的真实后果不是报错，而是拿着空 userId
+   * 去问计费服务要余额/下订单。
+   */
+  it("未登录时全部路由返回 401，且不碰计费服务", async () => {
+    const app = await makeApp("");
+    const cases = [
+      { method: "POST" as const, url: "/api/billing/topup", payload: { amountFen: 100 } },
+      { method: "GET" as const, url: "/api/billing/recharge-packages" },
+      { method: "GET" as const, url: "/api/billing/recharge-ratio" },
+      { method: "GET" as const, url: "/api/billing/usage" },
+      { method: "GET" as const, url: "/api/billing/topup/ai123" },
+      { method: "GET" as const, url: "/api/vip/me" },
+      { method: "GET" as const, url: "/api/model-marketplace" },
+      { method: "POST" as const, url: "/api/billing/redeem", payload: { code: "x" } },
+      { method: "GET" as const, url: "/api/billing/balance" },
+      { method: "GET" as const, url: "/api/billing/points-detail" },
+    ];
+    for (const one of cases) {
+      const r = await app.inject(one);
+      expect(r.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(r.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    for (const [name, fn] of Object.entries(mockBilling)) {
+      expect(fn, `${name} 不该被调用`).not.toHaveBeenCalled();
+    }
     await app.close();
   });
 });
