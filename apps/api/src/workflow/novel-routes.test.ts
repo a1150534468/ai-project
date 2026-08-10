@@ -202,10 +202,11 @@ async function createApp(options: {
   billing: ReturnType<typeof createBillingMock>;
   generator?: ReturnType<typeof vi.fn>;
   scheduled?: Promise<void>[];
+  userId?: string;
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
-  app.addHook("onRequest", async (request) => { (request as typeof request & { userId: string }).userId = "user-1"; });
+  app.addHook("onRequest", async (request) => { request.userId = options.userId ?? "user-1"; });
   await app.register(novelWorkflowRoutes, {
     prisma: options.prisma,
     billing: options.billing as never,
@@ -384,6 +385,35 @@ describe("PlotPilot novel workflow routes", () => {
     const app = await createApp({ prisma: state.prisma, billing });
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/setup/characters/generate", payload: {} });
     expect(response.statusCode).toBe(402);
+    expect(state.rows.tasks).toHaveLength(0);
+    await app.close();
+  });
+
+  /**
+   * P1.1 把这 18 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * 本文件此前 401 断言数为 0 —— 守卫删掉也是全绿。这条钉住它。
+   */
+  it("未登录时返回 401，且不碰计费和数据库", async () => {
+    const state = createPrismaMock();
+    const billing = createBillingMock();
+    const app = await createApp({ prisma: state.prisma, billing, userId: "" });
+    const cases = [
+      { method: "GET" as const, url: "/api/workflow/novels/pricing" },
+      { method: "GET" as const, url: "/api/workflow/novels/projects" },
+      { method: "POST" as const, url: "/api/workflow/novels/projects" },
+      { method: "GET" as const, url: "/api/workflow/novels/projects/project-1" },
+      { method: "PATCH" as const, url: "/api/workflow/novels/projects/project-1" },
+      { method: "DELETE" as const, url: "/api/workflow/novels/projects/project-1" },
+      { method: "POST" as const, url: "/api/workflow/novels/projects/project-1/chapters/generate" },
+      { method: "POST" as const, url: "/api/workflow/novels/projects/project-1/setup/characters/generate" },
+      { method: "POST" as const, url: "/api/workflow/novels/tasks/task-1/cancel" },
+    ];
+    for (const one of cases) {
+      const response = await app.inject({ ...one, payload: {} });
+      expect(response.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(response.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    expect(billing.reserveResource).not.toHaveBeenCalled();
     expect(state.rows.tasks).toHaveLength(0);
     await app.close();
   });
