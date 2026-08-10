@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
@@ -610,6 +611,10 @@ async function runVideoTask(args: {
 }
 
 export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkflowRouteDeps = {}) {
+  // 本文件 11 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 这样测试单独注册本文件时守卫不会凭空消失。
+  app.addHook("preHandler", requireUser);
+
   const prisma = deps.prisma ?? getPrisma();
   const billing = deps.billing ?? createBillingClient({
     baseUrl: process.env.BILLING_BASE_URL!,
@@ -695,8 +700,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
   }
 
   app.get("/api/workflow/videos/pricing", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     if (!billing.listResourcePrices) return { success: true, data: configuredVideoPriceRows([]) };
     try {
       const rows = (await billing.listResourcePrices()).data ?? [];
@@ -709,8 +713,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
 
   // 帮我写「拆解」价：图片按张 + 视频按秒。供向导预估消耗与判断价格是否已配置。
   app.get("/api/workflow/videos/analyze-pricing", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const empty = { rate: 0, perUnits: 1, enabled: false };
     if (!billing.listResourcePrices) return { success: true, data: { image: empty, videoSec: empty } };
     try {
@@ -727,8 +730,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
   });
 
   app.post("/api/workflow/videos/optimize-prompt", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = optimizePromptSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     try {
@@ -744,16 +746,14 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
   });
 
   app.get("/api/workflow/videos", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const rows = await listRecentVideos(prisma, userId);
     return { success: true, data: rows.map(serializeVideo) };
   });
 
   // —— 帮我写：素材分析（图片按张 + 视频按秒计费）——
   app.post("/api/workflow/videos/analyze-materials", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = analyzeMaterialsSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     try {
@@ -783,8 +783,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
 
   // —— 帮我写：参考视频拆解（≤50MB，按秒计费）——
   app.post("/api/workflow/videos/analyze-reference", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const file = await req.file();
     if (!file) return reply.code(400).send({ error: "请选择参考视频" });
     if (!file.mimetype.startsWith("video/")) return reply.code(400).send({ error: "仅支持视频文件" });
@@ -813,8 +812,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
 
   // —— 帮我写：脚本生成（token 原价×2 计费）——
   app.post("/api/workflow/videos/generate-script", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = generateScriptSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     try {
@@ -828,15 +826,13 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
   });
 
   app.get("/api/workflow/videos/tasks", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const rows = await listRecentTasks(prisma, userId);
     return { success: true, data: rows.map(serializeTask) };
   });
 
   app.get("/api/workflow/videos/state", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const [videos, tasks] = await Promise.all([
       listRecentVideos(prisma, userId),
       listRecentTasks(prisma, userId),
@@ -851,8 +847,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
   });
 
   app.post("/api/workflow/videos/materials", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const file = await req.file();
     if (!file) return reply.code(400).send({ error: "请选择素材文件" });
     const buffer = Buffer.from(await file.toBuffer());
@@ -884,8 +879,7 @@ export async function videoWorkflowRoutes(app: FastifyInstance, deps: VideoWorkf
   });
 
   app.post("/api/workflow/videos/generate", async (req, reply) => {
-    const userId = (req as unknown as { userId: string }).userId;
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+    const userId = req.userId;
     const parsed = videoRequestSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const request = normalizeRequest(parsed.data);

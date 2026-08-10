@@ -172,11 +172,13 @@ async function createApp(options: {
   readonly callVisionFn?: typeof import("./vision-client.js").callVision;
   readonly submitRetries?: number;
   readonly redis?: import("ioredis").Redis;
+  /** 传空串模拟未登录。默认 "u1"，保持既有用例不变。 */
+  readonly userId?: string;
 }) {
   const app = Fastify();
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (req) => {
-    (req as unknown as { userId: string }).userId = "u1";
+    req.userId = options.userId ?? "u1";
   });
   await app.register(videoWorkflowRoutes, {
     prisma: options.prisma as unknown as PrismaClient,
@@ -497,6 +499,46 @@ describe("video workflow routes", () => {
     expect(billing.reserve).toHaveBeenCalledWith(expect.objectContaining({ type: "video-script", model: "MiniMax-M3" }));
     // usage 10/8 ×2 = 20/16
     expect(billing.settle).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 20, outputTokens: 16 }));
+    await app.close();
+  });
+
+  /**
+   * P1.1 把本文件 11 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * 原先这里一条 401 断言都没有 —— 11 个守卫全删掉也是全绿。
+   *
+   * 断言 fetchFn/billing 一次都没被调，是因为守卫失效的真实后果不是 500：
+   * pricing 这类只读路由会拿着空 userId 正常返回 200（数据泄露），generate 会真去
+   * 扣费并打供应商。所以只断 401 不够，要断「上游一次都没被碰」。
+   */
+  it("未登录时全部路由返回 401，且不碰计费、供应商和数据库", async () => {
+    const prisma = createPrismaMock();
+    const billing = createBillingMock();
+    const fetchFn = vi.fn(async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    const app = await createApp({ prisma, billing, fetchFn, userId: "" });
+    const cases = [
+      { method: "GET" as const, url: "/api/workflow/videos/pricing" },
+      { method: "GET" as const, url: "/api/workflow/videos/analyze-pricing" },
+      { method: "POST" as const, url: "/api/workflow/videos/optimize-prompt", payload: { prompt: "x" } },
+      { method: "GET" as const, url: "/api/workflow/videos" },
+      { method: "POST" as const, url: "/api/workflow/videos/analyze-materials", payload: { urls: [] } },
+      { method: "POST" as const, url: "/api/workflow/videos/analyze-reference", payload: { url: "http://x" } },
+      { method: "POST" as const, url: "/api/workflow/videos/generate-script", payload: { brief: "x" } },
+      { method: "GET" as const, url: "/api/workflow/videos/tasks" },
+      { method: "GET" as const, url: "/api/workflow/videos/state" },
+      { method: "POST" as const, url: "/api/workflow/videos/materials", payload: { url: "http://x" } },
+      { method: "POST" as const, url: "/api/workflow/videos/generate", payload: { prompt: "x" } },
+    ];
+    for (const one of cases) {
+      const res = await app.inject(one);
+      expect(res.statusCode, `${one.method} ${one.url}`).toBe(401);
+      expect(res.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
+    }
+    expect(fetchFn).not.toHaveBeenCalled();
+    expect(billing.reserve).not.toHaveBeenCalled();
+    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(billing.listResourcePrices).not.toHaveBeenCalled();
+    expect(prisma.videoGenerationTask.findMany).not.toHaveBeenCalled();
+    expect(prisma.videoAsset.findMany).not.toHaveBeenCalled();
     await app.close();
   });
 });
