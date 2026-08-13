@@ -116,14 +116,27 @@ function canonicalJson(value: unknown): unknown {
       source[key] === undefined ? [] : [[key, canonicalJson(source[key])]]
     )));
   }
-  // PostgreSQL jsonb preserves numeric value, not the exact shortest IEEE-754
-  // decimal spelling emitted by V8. Prisma can therefore round a 17-digit
-  // tail by one ULP on the write/read boundary. Bind reports at 15 significant
-  // digits so the durable artifact checksum is stable across that round trip.
-  if (typeof value === "number" && Number.isFinite(value)) {
+  // 15 significant digits is the widest decimal spelling that round trips
+  // through an IEEE-754 double unambiguously, so a canonical number never
+  // hands PostgreSQL a 17-digit tail that jsonb could round by one ULP.
+  // Non-finite values collapse to null exactly as JSON.stringify would, so the
+  // bytes we hash are always the bytes we persist.
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
     return Object.is(value, -0) ? 0 : Number(value.toPrecision(15));
   }
   return value;
+}
+
+/**
+ * The canonical projection of a report. This is what gets persisted, so the
+ * checksum always covers the exact bytes in the database rather than the
+ * in-memory spelling that produced them.
+ */
+export function codexPetCanonicalValidationReport(
+  report: Record<string, unknown>,
+): Prisma.InputJsonObject {
+  return canonicalJson(report) as Prisma.InputJsonObject;
 }
 
 function reportBytes(report: Record<string, unknown>): Buffer {
@@ -252,7 +265,7 @@ async function initializeJob(input: CodexPetDurablePackagingInput): Promise<{ jo
         petId: input.seed.petId,
         displayName: input.displayName,
         description: input.description,
-        report: input.seed.report as Prisma.InputJsonObject,
+        report: codexPetCanonicalValidationReport(input.seed.report),
         reportChecksum: binding.reportChecksum,
         artifacts: {},
       } as Prisma.InputJsonObject,
@@ -288,7 +301,7 @@ async function initializeJob(input: CodexPetDurablePackagingInput): Promise<{ jo
             petId: input.seed!.petId,
             displayName: input.displayName,
             description: input.description,
-            report: input.seed!.report as Prisma.InputJsonObject,
+            report: codexPetCanonicalValidationReport(input.seed!.report),
             reportChecksum: binding.reportChecksum,
             artifacts: {},
           } as Prisma.InputJsonObject,
