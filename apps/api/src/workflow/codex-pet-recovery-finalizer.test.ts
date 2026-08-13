@@ -13,6 +13,7 @@ import {
 } from "@ai-assistant/codex-pet-pipeline";
 import sharp from "sharp";
 import { afterAll, describe, expect, it } from "vitest";
+import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 import {
   buildCodexPetRecoverySeed,
@@ -65,6 +66,7 @@ async function recoveryFixture(): Promise<CodexPetRecoveryBuildInput> {
     displayName: "恢复测试宠",
     description: "零模型调用恢复最终化测试",
     chromaKey: "#ff00ff",
+    qualityInspectionEnabled: true,
     standardAtlas,
     neutralFrame: neutral,
     registeredLookAFrames: registeredA.frames,
@@ -170,6 +172,102 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/** A failed, lease-free source run whose billing fields the caller dictates. */
+async function recoveryScenario(billing: Record<string, unknown>) {
+  const suffix = randomUUID();
+  const workerId = `recovery-${suffix}`;
+  const user = await prisma.user.create({ data: { uid: `pet-billing-${suffix}`, username: `pet-billing-${suffix}`, passwordHash: "test" } });
+  cleanupUserIds.push(user.id);
+  const project = await prisma.codexPetProject.create({ data: {
+    userId: user.id,
+    name: "计费闸门测试宠",
+    description: "账务已结清判定",
+    prompt: "蓝色圆角机器人",
+    stylePreset: "pixel",
+    imageModel: "gpt-image-2",
+    visualQaModel: "gpt-5.6-sol",
+    status: "failed",
+  } });
+  const sourceRun = await prisma.codexPetRun.create({ data: {
+    projectId: project.id,
+    userId: user.id,
+    inputSnapshot: {
+      name: project.name,
+      description: project.description,
+      prompt: project.prompt,
+      stylePreset: project.stylePreset,
+      modelContractVersion: "selectable-visual-v2",
+      requestedModel: "gpt-image-2",
+      visualQaModel: "gpt-5.6-sol",
+    },
+    status: "failed",
+    progressStage: "failed",
+    progressPercent: 94,
+    colorKey: "#ff00ff",
+    requestedModel: "gpt-image-2",
+    visualQaModel: "gpt-5.6-sol",
+    imageGenerationCallCount: 24,
+    hasSuccessfulImage: true,
+    actualModels: ["gpt-image-2-codex"],
+    startedAt: new Date(),
+    completedAt: new Date(),
+    ...billing,
+  } as Prisma.CodexPetRunUncheckedCreateInput });
+  const withRun = await prisma.codexPetProject.update({
+    where: { id: project.id },
+    data: { latestRunId: sourceRun.id },
+  });
+  return { prisma, project: withRun, user, workerId, sourceRun };
+}
+
+async function recoveryBuildInput(imageGenerationCalls: number): Promise<CodexPetRecoveryBuildInput> {
+  const fixture = await recoveryFixture();
+  return {
+    ...fixture,
+    provider: {
+      ...fixture.provider,
+      imageGeneration: {
+        ...fixture.provider.imageGeneration,
+        usage: { ...fixture.provider.imageGeneration.usage, imageGenerationCalls },
+      },
+    },
+  };
+}
+
+/**
+ * The evidence a run records when AI quality inspection is off: the deterministic
+ * pixel gates still pass, but no reviewer was ever called, so blind/semantic
+ * provenance is empty. This mirrors codex-pet-runner's own QA-off branch.
+ */
+async function uninspectedRecoveryFixture(): Promise<CodexPetRecoveryBuildInput> {
+  const fixture = await recoveryFixture();
+  return {
+    ...fixture,
+    qualityInspectionEnabled: false,
+    provider: {
+      ...fixture.provider,
+      visualQa: { requestedModel: "gpt-5.6-sol", actualModels: [], routes: [] },
+    },
+    qa: {
+      ...fixture.qa,
+      blindDirectionValidation: { ok: true, reviewers: [], consensus: [], failures: [], warnings: [] },
+      directionSemantics: [],
+      finalVisualQa: {
+        pass: true,
+        score: 100,
+        mirrorSafe: false,
+        identity: true,
+        structure: true,
+        semantics: true,
+        continuity: true,
+        warnings: [],
+        failures: [],
+        repairPrompt: "",
+      },
+    },
+  };
+}
+
 describe("Codex pet recovery finalizer", () => {
   it("builds a validated 1536x2288 v2 package without a model dependency", async () => {
     const result = await buildCodexPetRecoverySeed(await recoveryFixture());
@@ -192,6 +290,42 @@ describe("Codex pet recovery finalizer", () => {
     await expect(buildCodexPetRecoverySeed({
       ...fixture,
       qa: { ...fixture.qa, directionSemantics: fixture.qa.directionSemantics.slice(0, 15) },
+    })).rejects.toThrow(/16 个方向/);
+  }, 120_000);
+
+  it("builds a package for a run whose AI quality inspection was off", async () => {
+    const result = await buildCodexPetRecoverySeed(await uninspectedRecoveryFixture());
+    expect(result.finalValidation.ok).toBe(true);
+    expect(result.continuity.ok).toBe(true);
+    expect(codexPetValidationPassed(result.report)).toBe(true);
+    // The report says plainly that no reviewer ran, so it cannot be mistaken
+    // for an inspected one.
+    expect(result.report.modelProvenance).toMatchObject({
+      visualQa: { enabled: false, requestedModel: null, actualModels: [], routes: [] },
+    });
+    expect(result.report.directionSemantics).toEqual([]);
+  }, 120_000);
+
+  it("refuses a quality-inspection-off recovery that claims reviewer evidence", async () => {
+    const fixture = await uninspectedRecoveryFixture();
+    const inspected = await recoveryFixture();
+    await expect(buildCodexPetRecoverySeed({
+      ...fixture,
+      qa: { ...fixture.qa, directionSemantics: inspected.qa.directionSemantics },
+    })).rejects.toThrow(/方向盲测或语义评审证据/);
+    await expect(buildCodexPetRecoverySeed({
+      ...fixture,
+      provider: { ...fixture.provider, visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] } },
+    })).rejects.toThrow(/不能声称调用过视觉质检模型/);
+  }, 120_000);
+
+  it("still demands the full 16-direction evidence when inspection was on", async () => {
+    const fixture = await uninspectedRecoveryFixture();
+    // Same empty evidence, but the run says it was inspected: that is a bypass.
+    await expect(buildCodexPetRecoverySeed({
+      ...fixture,
+      qualityInspectionEnabled: true,
+      provider: { ...fixture.provider, visualQa: { requestedModel: "gpt-5.6-sol", actualModels: ["gpt-5.6-sol"], routes: ["chatgpt_model_route"] } },
     })).rejects.toThrow(/16 个方向/);
   }, 120_000);
 
@@ -310,5 +444,118 @@ describe("Codex pet recovery finalizer", () => {
     expect(document).toMatchObject({ sourceModule: "codex_pet", sourceId: initialized.runId, mime: "application/zip" });
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: persistedRun.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
+  }, 180_000);
+
+  // A per-image run is billed per real call. When it dies after the atlas is
+  // approved, those calls genuinely happened, so nothing is refunded and
+  // `billingRefundStatus` stays "none" forever. Settlement is what closes its
+  // books, and recovery must key off that instead of demanding a refund that
+  // can never arrive.
+  it.skipIf(!databaseEnabled)("recovers a settled per-image source run that has no refund to wait for", async () => {
+    const { prisma, project, user, workerId } = await recoveryScenario({
+      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+      billingChargeStatus: "reserved",
+      billingPoints: 0,
+      billingRefundStatus: "none",
+      billingRefundedAt: null,
+      billingSettlementStatus: "settled",
+      billingSettledAt: new Date(),
+    });
+    const built = await recoveryBuildInput(26);
+
+    const initialized = await initializeCodexPetRecoveryRun({
+      ...built, prisma, sourceRunId: project.latestRunId!, projectId: project.id, userId: user.id, workerId,
+    });
+
+    expect(initialized.created).toBe(true);
+    expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: initialized.runId } }))
+      .toMatchObject({ status: "packaging", billingChargeStatus: "not_required", billingPoints: 0 });
+    // The source run's money is untouched by the rescue.
+    expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: project.latestRunId! } }))
+      .toMatchObject({ status: "failed", billingRefundStatus: "none", billingSettlementStatus: "settled" });
+  }, 180_000);
+
+  it.skipIf(!databaseEnabled)("still refuses a per-image source run whose settlement is not closed", async () => {
+    const { prisma, project, user, workerId } = await recoveryScenario({
+      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+      billingChargeStatus: "reserved",
+      billingPoints: 0,
+      billingRefundStatus: "none",
+      billingRefundedAt: null,
+      billingSettlementStatus: "reserved",
+      billingSettledAt: null,
+    });
+    const built = await recoveryBuildInput(26);
+
+    await expect(initializeCodexPetRecoveryRun({
+      ...built, prisma, sourceRunId: project.latestRunId!, projectId: project.id, userId: user.id, workerId,
+    })).rejects.toThrow("账务已结清");
+  }, 180_000);
+
+  it.skipIf(!databaseEnabled)("still refuses a points source run that was never refunded", async () => {
+    const { prisma, project, user, workerId } = await recoveryScenario({
+      billingChargeStatus: "charged",
+      billingPoints: 200,
+      billingRefundStatus: "none",
+      billingRefundedAt: null,
+    });
+    const built = await recoveryBuildInput(26);
+
+    await expect(initializeCodexPetRecoveryRun({
+      ...built, prisma, sourceRunId: project.latestRunId!, projectId: project.id, userId: user.id, workerId,
+    })).rejects.toThrow("账务已结清");
+  }, 180_000);
+
+  it.skipIf(!databaseEnabled)("carries the source run's quality-inspection posture onto the recovery run", async () => {
+    const { prisma, project, user, workerId } = await recoveryScenario({
+      qualityInspectionEnabled: false,
+      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+      billingChargeStatus: "reserved",
+      billingPoints: 0,
+      billingRefundStatus: "none",
+      billingRefundedAt: null,
+      billingSettlementStatus: "settled",
+      billingSettledAt: new Date(),
+    });
+    const fixture = await uninspectedRecoveryFixture();
+    const built: CodexPetRecoveryBuildInput = {
+      ...fixture,
+      provider: {
+        ...fixture.provider,
+        imageGeneration: { ...fixture.provider.imageGeneration, usage: { ...fixture.provider.imageGeneration.usage, imageGenerationCalls: 26 } },
+      },
+    };
+
+    const initialized = await initializeCodexPetRecoveryRun({
+      ...built, prisma, sourceRunId: project.latestRunId!, projectId: project.id, userId: user.id, workerId,
+    });
+
+    // The column defaults to true, so this asserts the value was carried over
+    // rather than left at its default.
+    expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: initialized.runId } }))
+      .toMatchObject({ status: "packaging", qualityInspectionEnabled: false });
+  }, 180_000);
+
+  it.skipIf(!databaseEnabled)("refuses to claim inspection was off when the source run was inspected", async () => {
+    const { prisma, project, user, workerId } = await recoveryScenario({
+      qualityInspectionEnabled: true,
+      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
+      billingChargeStatus: "reserved",
+      billingPoints: 0,
+      billingRefundStatus: "none",
+      billingRefundedAt: null,
+      billingSettlementStatus: "settled",
+      billingSettledAt: new Date(),
+    });
+    const fixture = await uninspectedRecoveryFixture();
+
+    await expect(initializeCodexPetRecoveryRun({
+      ...fixture,
+      provider: {
+        ...fixture.provider,
+        imageGeneration: { ...fixture.provider.imageGeneration, usage: { ...fixture.provider.imageGeneration.usage, imageGenerationCalls: 26 } },
+      },
+      prisma, sourceRunId: project.latestRunId!, projectId: project.id, userId: user.id, workerId,
+    })).rejects.toThrow("质检开关不一致");
   }, 180_000);
 });

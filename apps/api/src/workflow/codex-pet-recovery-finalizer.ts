@@ -20,6 +20,7 @@ import {
   type PetFramesByState,
 } from "@ai-assistant/codex-pet-pipeline";
 import { archiveCodexPetRun } from "./codex-pet-archive.js";
+import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { CODEX_PET_MODEL_CONTRACT_VERSION, codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 import { persistOrResumeCodexPetFinalPackage, type CodexPetFinalPackageSeed } from "./codex-pet-packaging.js";
 import type { CodexPetArtifactStore } from "./codex-pet-runner.js";
@@ -56,6 +57,14 @@ export interface CodexPetRecoveryBuildInput {
   readonly displayName: string;
   readonly description: string;
   readonly chromaKey: string;
+  /**
+   * Must equal the source run's own setting. A run created with AI quality
+   * inspection off never produced blind/semantic verdicts, so demanding them
+   * back would make its recovery impossible; a run created with it on must
+   * still present them. `initializeCodexPetRecoveryRun` binds this to the
+   * source row so the weaker posture cannot be claimed by a caller.
+   */
+  readonly qualityInspectionEnabled: boolean;
   /** Either a validated 8x9 atlas or already extracted standard row frames. */
   readonly standardAtlas?: Buffer;
   readonly standardFrames?: PetFramesByState;
@@ -160,13 +169,26 @@ async function validateCellDimensions(frames: readonly Buffer[], label: string):
   }));
 }
 
-function validateProviderEvidence(provider: CodexPetRecoveryProviderEvidence): void {
+function validateProviderEvidence(provider: CodexPetRecoveryProviderEvidence, qualityInspectionEnabled: boolean): void {
   const image = provider.imageGeneration;
   const visual = provider.visualQa;
   if (!image.requestedModel.trim() || image.actualModels.length === 0 || image.actualModels.some((model) => !model.trim())) {
     throw new Error("恢复最终化缺少真实生图模型来源");
   }
-  if (!visual.requestedModel.trim() || visual.actualModels.length === 0 || visual.actualModels.some((model) => model !== visual.requestedModel)) {
+  // The requested model always binds to the source run, even when inspection is
+  // off, so the recovery cannot be re-pointed at a different reviewer.
+  if (!visual.requestedModel.trim()) {
+    throw new Error("恢复最终化缺少严格匹配的视觉质检模型来源");
+  }
+  if (!qualityInspectionEnabled) {
+    // No reviewer was ever called, so there is no provenance to present. Empty
+    // is the only honest value: anything else would be invented evidence.
+    if (visual.actualModels.length > 0 || visual.routes.length > 0) {
+      throw new Error("质检关闭的恢复不能声称调用过视觉质检模型");
+    }
+    return;
+  }
+  if (visual.actualModels.length === 0 || visual.actualModels.some((model) => model !== visual.requestedModel)) {
     throw new Error("恢复最终化缺少严格匹配的视觉质检模型来源");
   }
   const expectedRoute = codexPetVisualQaRouteForModel(visual.requestedModel);
@@ -175,13 +197,24 @@ function validateProviderEvidence(provider: CodexPetRecoveryProviderEvidence): v
   }
 }
 
-function validateQaEvidence(qa: CodexPetRecoveryQaEvidence): void {
+function validateQaEvidence(qa: CodexPetRecoveryQaEvidence, qualityInspectionEnabled: boolean): void {
+  // These four are deterministic pixel gates. They run regardless of whether AI
+  // inspection is on, so they are required in both postures.
   requirePass(qa.cardinalAnchor, "四方向锚点");
   requirePass(qa.directionRegistration, "方向注册");
   requirePass(qa.row9PreGenerationGate, "row 9 前置门禁");
   requirePass(qa.row10PreGenerationGate, "row 10 前置门禁");
   if (!qa.blindDirectionValidation.ok) throw new Error("恢复最终化不能绕过方向盲测失败");
-  if (qa.directionSemantics.length !== LOOK_DIRECTIONS.length
+  if (!qualityInspectionEnabled) {
+    // Mirrors what the runner records when inspection is off: no reviewers, no
+    // consensus, no per-direction verdicts. Requiring emptiness here is what
+    // stops a QA-enabled failure from being laundered as a QA-off recovery.
+    if (qa.blindDirectionValidation.reviewers.length > 0
+      || qa.blindDirectionValidation.consensus.length > 0
+      || qa.directionSemantics.length > 0) {
+      throw new Error("质检关闭的恢复不能声称取得方向盲测或语义评审证据");
+    }
+  } else if (qa.directionSemantics.length !== LOOK_DIRECTIONS.length
     || qa.directionSemantics.some((item) => item.verdict === "fail")) {
     throw new Error("恢复最终化需要 16 个方向的完整语义通过证据");
   }
@@ -197,8 +230,8 @@ function validateQaEvidence(qa: CodexPetRecoveryQaEvidence): void {
  * may use after a failed run has produced all visual evidence.
  */
 export async function buildCodexPetRecoverySeed(input: CodexPetRecoveryBuildInput): Promise<CodexPetRecoveryBuildResult> {
-  validateProviderEvidence(input.provider);
-  validateQaEvidence(input.qa);
+  validateProviderEvidence(input.provider, input.qualityInspectionEnabled);
+  validateQaEvidence(input.qa, input.qualityInspectionEnabled);
   assertEightCells(input.registeredLookAFrames, "row 9");
   assertEightCells(input.registeredLookBFrames, "row 10");
   await validateCellDimensions(input.registeredLookAFrames, "row 9");
@@ -253,7 +286,7 @@ export async function buildCodexPetRecoverySeed(input: CodexPetRecoveryBuildInpu
     createDirectionQaSheet(packaged.spritesheet),
     createDirectionBlindQaSheet(packaged.spritesheet),
   ]);
-  validateProviderEvidence(input.provider);
+  validateProviderEvidence(input.provider, input.qualityInspectionEnabled);
   const report: JsonRecord = {
     ok: true,
     spriteVersionNumber: 2,
@@ -265,7 +298,10 @@ export async function buildCodexPetRecoverySeed(input: CodexPetRecoveryBuildInpu
         actualModels: [...input.provider.imageGeneration.actualModels],
       },
       visualQa: {
-        requestedModel: input.provider.visualQa.requestedModel,
+        // Same shape the runner writes, so a recovered report is not mistakable
+        // for an inspected one when inspection was off.
+        enabled: input.qualityInspectionEnabled,
+        requestedModel: input.qualityInspectionEnabled ? input.provider.visualQa.requestedModel : null,
         actualModels: [...input.provider.visualQa.actualModels],
         routes: [...input.provider.visualQa.routes],
       },
@@ -369,12 +405,26 @@ export async function initializeCodexPetRecoveryRun(input: CodexPetRecoveryRunIn
       || source.colorKey?.toLowerCase() !== input.chromaKey.toLowerCase()) {
       throw new Error("恢复证据与源运行的模型或色键不一致");
     }
+    // The inspection posture is the source run's, not the caller's. Without this
+    // a caller could pass `false` to skip the blind/semantic evidence gate on a
+    // run that really was inspected and really did fail it.
+    if (source.qualityInspectionEnabled !== input.qualityInspectionEnabled) {
+      throw new Error("恢复证据与源运行的质检开关不一致");
+    }
+    // The precondition is that the source run is terminal and its money is
+    // already closed out, so a zero-charge recovery cannot double-bill.
+    // "Closed out" differs by billing mode: a points/package run is refunded,
+    // while a per-image run is charged per real call and settled — those calls
+    // genuinely happened and produced the approved atlas, so there is nothing
+    // to refund and `refunded` is unreachable for it.
+    const financiallyClosed = source.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE
+      ? source.billingSettlementStatus === "settled" && Boolean(source.billingSettledAt)
+      : source.billingRefundStatus === "refunded" && Boolean(source.billingRefundedAt);
     if (source.status !== "failed"
-      || source.billingRefundStatus !== "refunded"
-      || !source.billingRefundedAt
+      || !financiallyClosed
       || source.cancelRequested
       || source.workerId) {
-      throw new Error("恢复只允许从已失败且已退款的无 lease 源运行开始");
+      throw new Error("恢复只允许从已失败且账务已结清的无 lease 源运行开始");
     }
     if (source.project.deletedAt || source.project.status === "deleting") {
       throw new Error("恢复源项目已删除或正在删除");
@@ -449,6 +499,9 @@ export async function initializeCodexPetRecoveryRun(input: CodexPetRecoveryRunIn
         hasSuccessfulImage: true,
         requestedModel: source.requestedModel,
         visualQaModel: source.visualQaModel,
+        // The column defaults to true, so it has to be carried over explicitly
+        // or a QA-off recovery would advertise itself as inspected.
+        qualityInspectionEnabled: source.qualityInspectionEnabled,
         imageGenerationCallCount: usageCalls,
         imageGenerationApprovalBudget: 0,
         actualModels: actualImageModels,
@@ -483,6 +536,11 @@ export async function finalizeCodexPetRecovery(input: CodexPetRecoveryFinalizeIn
   }
   if (run.status !== "packaging" || run.workerId !== input.workerId || run.cancelRequested) {
     throw new Error("恢复最终化只允许由当前 packaging lease 执行");
+  }
+  // This entry point is callable on its own, so the inspection posture is
+  // re-bound to the run row rather than trusted from the caller.
+  if (run.qualityInspectionEnabled !== input.qualityInspectionEnabled) {
+    throw new Error("恢复最终化与运行记录的质检开关不一致");
   }
   const imageCallsBefore = run.imageGenerationCallCount;
   const built = await buildCodexPetRecoverySeed(input);

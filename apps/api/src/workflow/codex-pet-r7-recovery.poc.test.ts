@@ -562,6 +562,7 @@ describe.skipIf(!enabled)("Codex pet R7 real zero-image recovery", () => {
       displayName: source.project.name,
       description: source.project.description,
       chromaKey: source.colorKey,
+      qualityInspectionEnabled: source.qualityInspectionEnabled,
       standardFrames,
       neutralFrame: neutral,
       registeredLookAFrames: rowA,
