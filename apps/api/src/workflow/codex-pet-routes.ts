@@ -411,7 +411,19 @@ function serializeProjectSummary(project: ProjectShape) {
   };
 }
 
-function serializeRun(run: RunShape) {
+function recoverySourceRunId(
+  inputSnapshot: unknown,
+  ownedRunIds: ReadonlySet<string> | null,
+): string | null {
+  if (!ownedRunIds) return null;
+  const recovery = recordOf(recordOf(inputSnapshot).recovery);
+  const sourceRunId = recovery.sourceRunId;
+  return typeof sourceRunId === "string" && ownedRunIds.has(sourceRunId)
+    ? sourceRunId
+    : null;
+}
+
+function serializeRun(run: RunShape, ownedRunIds: ReadonlySet<string> | null = null) {
   const inputSnapshot = recordOf(run.inputSnapshot);
   const validationReport = recordOf(run.validationReport);
   const validationProvenance = recordOf(validationReport.modelProvenance);
@@ -453,6 +465,10 @@ function serializeRun(run: RunShape) {
     spritesheetArtifactId: run.spritesheetArtifactId,
     packageArtifactId: run.packageArtifactId,
     previewArtifactId: run.previewArtifactId,
+    // Recovery runs own the final delivery artifacts, while their standard
+    // animation previews remain on the failed source run. Only publish the
+    // lineage when that source is another run returned for this owned project.
+    recoverySourceRunId: recoverySourceRunId(run.inputSnapshot, ownedRunIds),
     validationReport: run.validationReport,
     requestedModel: run.requestedModel,
     qualityInspectionEnabled: typeof inputSnapshot.qualityInspectionEnabled === "boolean"
@@ -1348,13 +1364,14 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         createdAt: asset.createdAt.toISOString(),
       })),
     };
+    const ownedRunIds = new Set(runs.map((run) => run.id));
     return {
       success: true,
       data: {
         detail: {
           project: projectData,
-          latestRun: latestRun ? serializeRun(latestRun as RunShape) : null,
-          runs: runs.map((run) => serializeRun(run as RunShape)),
+          latestRun: latestRun ? serializeRun(latestRun as RunShape, ownedRunIds) : null,
+          runs: runs.map((run) => serializeRun(run as RunShape, ownedRunIds)),
           artifacts: serializedArtifacts,
           jobs: jobs.map(serializeJob),
           imageCalls: imageCalls.map((call) => ({

@@ -148,6 +148,8 @@ export interface CodexPetRun {
   readonly spritesheetArtifactId: string | null;
   readonly packageArtifactId: string | null;
   readonly previewArtifactId: string | null;
+  /** Failed source run whose standard animation previews a recovery run reuses. */
+  readonly recoverySourceRunId?: string | null;
   readonly validationReport: unknown;
   readonly requestedModel: string;
   readonly qualityInspectionEnabled?: boolean;

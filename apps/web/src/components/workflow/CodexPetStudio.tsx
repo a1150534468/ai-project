@@ -441,11 +441,20 @@ export function CodexPetStudio({
     [artifacts],
   );
   const animationPreviews = useMemo(
-    () => artifacts
-      .filter(isCodexPetAnimationPreview)
-      .slice()
-      .sort((left, right) => artifactTime(right) - artifactTime(left)),
-    [artifacts],
+    () => {
+      const currentRunId = latestRun?.id;
+      if (!currentRunId) return [];
+      const sourceRunId = latestRun.recoverySourceRunId;
+      return (detail?.artifacts ?? [])
+        .filter((artifact) => artifact.runId === currentRunId || artifact.runId === sourceRunId)
+        .filter(isCodexPetAnimationPreview)
+        .slice()
+        .sort((left, right) => {
+          const currentRunPriority = Number(right.runId === currentRunId) - Number(left.runId === currentRunId);
+          return currentRunPriority || artifactTime(right) - artifactTime(left);
+        });
+    },
+    [detail?.artifacts, latestRun?.id, latestRun?.recoverySourceRunId],
   );
   const standardAnimationPreviews = useMemo(
     () => CODEX_PET_STANDARD_STATES.map((state) => ({

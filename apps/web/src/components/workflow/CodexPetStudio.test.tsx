@@ -838,6 +838,79 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
+  it("uses source-run animation previews for a recovery run while keeping final delivery artifacts current", async () => {
+    const run = makeRun({
+      id: "run-recovery",
+      status: "ready",
+      progressPercent: 100,
+      recoverySourceRunId: "run-source",
+      spritesheetArtifactId: "sheet-recovery",
+      packageArtifactId: "zip-recovery",
+      previewArtifactId: "contact-recovery",
+      validationReport: { ok: true, spriteVersionNumber: 2, warnings: [] },
+    });
+    const project = makeProject({ status: "ready", latestRunId: run.id });
+    const states = ["idle", "running-right", "running-left", "waving", "jumping", "failed", "waiting", "running", "review"] as const;
+    const sourceAnimations = states.map((state, index) => artifact(`source-animation-${state}`, "animation_preview", {
+      runId: "run-source",
+      metadata: { jobKey: `row-${state}` },
+      previewUrl: `https://example.test/source-${state}.webp`,
+      createdAt: `2026-07-17T08:0${index + 1}:00.000Z`,
+    }));
+    const currentIdle = artifact("recovery-animation-idle", "animation_preview", {
+      runId: run.id,
+      metadata: { jobKey: "row-idle" },
+      previewUrl: "https://example.test/recovery-idle.webp",
+      createdAt: "2026-07-17T09:00:00.000Z",
+    });
+    const currentSpritesheet = artifact("sheet-recovery", "spritesheet", {
+      runId: run.id,
+      previewUrl: "https://example.test/recovery-spritesheet.webp",
+      width: 1536,
+      height: 2288,
+    });
+    const sourceSpritesheet = artifact("sheet-source", "spritesheet", {
+      runId: "run-source",
+      previewUrl: "https://example.test/source-spritesheet.webp",
+      width: 1536,
+      height: 2288,
+    });
+    const contact = artifact("contact-recovery", "preview", {
+      runId: run.id,
+      previewUrl: "https://example.test/recovery-contact.png",
+      width: 768,
+      height: 1144,
+    });
+    const packageArtifact = artifact("zip-recovery", "package", {
+      runId: run.id,
+      mime: "application/zip",
+      previewUrl: null,
+    });
+    const detail: CodexPetProjectDetail = {
+      project,
+      latestRun: run,
+      runs: [run],
+      artifacts: [sourceSpritesheet, ...sourceAnimations, currentIdle, currentSpritesheet, contact, packageArtifact],
+      jobs: [],
+    };
+    const mounted = await mountStudio({ token: "token", client: makeClient({ project, detail }) });
+
+    const grid = mounted.container.querySelector('[data-testid="codex-pet-standard-animations"]');
+    expect(grid?.querySelector<HTMLImageElement>('[data-testid="codex-pet-animation-idle"] img')?.src)
+      .toBe("https://example.test/recovery-idle.webp");
+    for (const state of states.slice(1)) {
+      expect(grid?.querySelector<HTMLImageElement>(`[data-testid="codex-pet-animation-${state}"] img`)?.src)
+        .toBe(`https://example.test/source-${state}.webp`);
+    }
+    expect(mounted.container.querySelector('[data-testid="codex-pet-animation-progress"]')?.textContent).toContain("已完成 9/9");
+    expect(mounted.container.querySelector<HTMLImageElement>('img[alt="最终 Codex v2 桌宠精灵图"]')?.src)
+      .toBe("https://example.test/recovery-spritesheet.webp");
+    expect(mounted.container.querySelector('img[src="https://example.test/source-spritesheet.webp"]')).toBeNull();
+    expect(mounted.container.querySelector<HTMLImageElement>('[data-testid="codex-pet-final-contact-sheet"] img')?.src)
+      .toBe("https://example.test/recovery-contact.png");
+    await act(async () => { mounted.root.unmount(); });
+  });
+
   it("fills the nine labelled animation cells progressively mid-run and never shows a look-* row", async () => {
     const run = makeRun({ status: "standard_generating", progressPercent: 40 });
     const project = makeProject({ status: "standard_generating", latestRunId: run.id });

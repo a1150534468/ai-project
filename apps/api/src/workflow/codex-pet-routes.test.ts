@@ -992,6 +992,56 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
+  it("publishes only an owned recovery source run in project details", async () => {
+    const project = projectRow({ latestRunId: "run-recovery", status: "ready" });
+    const source = runRow({ id: "run-source", status: "failed", progressStage: "failed" });
+    const recovery = runRow({
+      id: "run-recovery",
+      status: "ready",
+      progressStage: "ready",
+      inputSnapshot: {
+        recovery: {
+          schemaVersion: "codex-pet-recovery-v1",
+          sourceRunId: source.id,
+        },
+      },
+    });
+    const invalidRecovery = runRow({
+      id: "run-invalid-recovery",
+      status: "ready",
+      progressStage: "ready",
+      inputSnapshot: {
+        recovery: {
+          schemaVersion: "codex-pet-recovery-v1",
+          sourceRunId: "run-from-another-project",
+        },
+      },
+    });
+    const foreignSource = runRow({
+      id: "run-from-another-project",
+      projectId: "project-other",
+      userId: "u2",
+    });
+    const { prisma } = createPrismaMock({
+      projects: [project],
+      runs: [recovery, source, invalidRecovery, foreignSource],
+    });
+    const { app } = await createApp(prisma);
+
+    const response = await app.inject({ method: "GET", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
+
+    expect(response.statusCode).toBe(200);
+    const detail = response.json().data.detail as {
+      latestRun: { recoverySourceRunId: string | null };
+      runs: Array<{ id: string; recoverySourceRunId: string | null }>;
+    };
+    expect(detail.latestRun.recoverySourceRunId).toBe("run-source");
+    expect(detail.runs.find((run) => run.id === "run-source")?.recoverySourceRunId).toBeNull();
+    expect(detail.runs.find((run) => run.id === "run-invalid-recovery")?.recoverySourceRunId).toBeNull();
+    expect(detail.runs.some((run) => run.id === foreignSource.id)).toBe(false);
+    await app.close();
+  });
+
   it("issues 15-minute signed preview capabilities only from an owned project and binds them to the artifact id", async () => {
     const ownedProject = projectRow();
     const otherProject = projectRow({ id: "project-other", userId: "u2", name: "别人的桌宠" });
