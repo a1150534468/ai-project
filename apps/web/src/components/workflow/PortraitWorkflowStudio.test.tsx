@@ -81,6 +81,7 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  vi.restoreAllMocks();
   vi.clearAllMocks();
 });
 
@@ -112,7 +113,7 @@ describe("PortraitWorkflowStudio", () => {
     expect(mocks.create).toHaveBeenCalledWith("token", expect.objectContaining({ presetId: "business-elite", model: "doubao-seedream-5-0-260128", referenceAssetIds: ["ref-1", "ref-2", "ref-3"], authorizationAccepted: true, consentVersion: "portrait-consent-v1" }));
   });
 
-  it("renders a completed result with a download-link dialog and history", async () => {
+  it("renders a completed result and downloads the original image directly", async () => {
     mocks.refs.push(reference());
     mocks.tasks.push(task());
     container = document.createElement("div");
@@ -121,15 +122,19 @@ describe("PortraitWorkflowStudio", () => {
     act(() => root?.render(<PortraitWorkflowStudio token="token" />));
     await flush();
     expect(container.querySelector('[data-testid="portrait-preview"]')?.getAttribute("src")).toBe("https://example.test/out.png");
-    expect(container.querySelector("a[download]")).toBeNull();
     const download = Array.from(container.querySelectorAll("button")).find((button) => button.textContent?.includes("下载原图"));
     expect(download).toBeTruthy();
+    const clickedAnchors: HTMLAnchorElement[] = [];
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("image-bytes", { status: 200, headers: { "content-type": "image/png" } }));
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: vi.fn(() => "blob:portrait-output") });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click(this: HTMLAnchorElement) {
+      clickedAnchors.push(this);
+    });
     act(() => { download?.click(); });
-    expect(container.textContent).toContain("原图下载链接");
-    const linkInput = container.querySelector<HTMLInputElement>("input[readonly]");
-    expect(linkInput?.value).toBe("https://example.test/out.png");
-    const close = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "关闭");
-    act(() => { close?.click(); });
+    await waitFor(() => expect(clickedAnchors).toHaveLength(1));
+    expect(clickedAnchors[0]?.download).toBe("portrait-1.png");
+    expect(clickedAnchors[0]?.href).toBe("blob:portrait-output");
     expect(container.textContent).not.toContain("原图下载链接");
     expect(container.textContent).toContain("商务精英");
     expect(container.textContent).toContain("已完成");

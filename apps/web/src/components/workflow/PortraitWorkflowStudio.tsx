@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { InAppSelect } from "../agent-teams/InAppSelect";
-import { DownloadLinkDialog, type DownloadDialogState } from "../ui/DownloadLinkDialog";
 import { DownloadOverlayButton } from "./DownloadOverlayButton";
+import { downloadImageFile, imageDownloadFileName } from "./imageDownload";
 import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { WorkflowHistoryStrip } from "./ImageHistoryStrip";
 import { SubmitCostBar } from "./SubmitCostBar";
@@ -137,7 +137,6 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   const [model, setModel] = useState(DEFAULT_MODEL);
   const [aspectRatio, setAspectRatio] = useState<PortraitAspectRatio>("3:4");
   const [resolution, setResolution] = useState<PortraitResolution>("2K");
-  const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState | null>(null);
   const [count, setCount] = useState(1);
   const [promptOptions, setPromptOptions] = useState<PortraitPromptOptions>({
     scene: "明亮影棚",
@@ -230,6 +229,13 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   const pointRate = options?.pricingByModel?.[model]?.[resolution] ?? options?.pricing[resolution]?.rate ?? null;
   const pointCost = pointRate == null ? null : pointRate * count;
   const canSubmit = references.length > 0 && authorizationAccepted && !isSubmitting && !isUploading && !hasActiveTask;
+
+  const handleDownload = (output: NonNullable<typeof selectedOutput>) => {
+    void downloadImageFile({
+      url: output.originalUrl,
+      fileName: imageDownloadFileName({ prefix: "portrait", url: output.originalUrl, mime: output.mime, index: output.index }),
+    }).catch((downloadError) => setError(errorMessage(downloadError, "下载原图失败")));
+  };
 
   const handleModelChange = (value: string) => {
     setModel(value);
@@ -428,7 +434,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           {selectedOutput ? (
             <>
               <img data-testid="portrait-preview" src={selectedOutput.originalUrl} alt="AI 生成形象照预览" className="max-h-full max-w-full rounded-[8px] object-contain shadow-[0_22px_70px_rgba(0,0,0,0.18)]" />
-              <DownloadOverlayButton positionClassName="right-4 top-4" onClick={() => setDownloadDialog({ title: "原图下载链接", links: [selectedOutput.originalUrl] })} />
+              <DownloadOverlayButton positionClassName="right-4 top-4" onClick={() => handleDownload(selectedOutput)} />
             </>
           ) : selectedTask && isActive(selectedTask) ? (
             <div className="grid max-w-sm place-items-center text-center">
@@ -499,8 +505,6 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           </aside>
         </div>
       )}
-
-      {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}
     </section>
   );
 }

@@ -24,6 +24,7 @@ import { readFileAsInlineImage } from "../components/workflow/ecomWorkflowStudio
 import { LocalBusinessPromoWorkflowStudio } from "../components/workflow/LocalBusinessPromoWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
 import { CodexPetStudio } from "../components/workflow/CodexPetStudio";
+import { downloadImageFile, imageDownloadFileName } from "../components/workflow/imageDownload";
 import type { EcomMainJob } from "../workflowEcomMainApi";
 import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
 import { visibleImageHubTabs, type ClientMenuVisibility, type ImageHubTabId } from "../clientMenu";
@@ -504,7 +505,14 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
   };
 
   const openSingleDownload = (image: WorkflowImageAsset) => {
-    setDownloadDialog({ title: "原图下载链接", links: [image.originalUrl] });
+    void downloadImageFile({
+      url: image.originalUrl,
+      fileName: imageDownloadFileName({ prefix: "generated-image", url: image.originalUrl, mime: image.mime, index: image.requestIndex }),
+    }).then(() => toast.show("ok", "已开始下载原图")).catch((downloadError) => {
+      const message = errorMessage(downloadError, "下载原图失败");
+      setError(message);
+      toast.show("err", message);
+    });
   };
 
   const handleSelectHistoryImage = (image: WorkflowImageAsset) => {
