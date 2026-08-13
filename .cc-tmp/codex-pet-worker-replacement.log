@@ -1,8 +1,0 @@
-
-> @ai-assistant/api@0.0.0 worker:codex-pet /Users/z/code/ai project/apps/api
-> tsx src/workers/codex-pet-worker.ts
-
-[codex-pet-worker] image route ready model=gpt-image-2
-[codex-pet-worker] visual QA preflight skipped; no quality-enabled Codex pet run is active
-[codex-pet-worker] failed run=cpr_7f8c7e59f8690565e26a70baf5417905: fetch failed
-[codex-pet-worker] received SIGTERM, shutting down

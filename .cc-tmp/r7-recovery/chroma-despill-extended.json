@@ -1,9 +1,0 @@
-{
-  "ok": true,
-  "algorithm": "edge-local-nearest-interior-v1",
-  "key": "#ff00ff",
-  "radius": 5,
-  "changedPixels": 145813,
-  "clearedHiddenRgbPixels": 0,
-  "remainingOpaqueKeyPixels": 0
-}
