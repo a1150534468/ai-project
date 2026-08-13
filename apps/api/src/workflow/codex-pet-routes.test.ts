@@ -3,7 +3,7 @@ import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
+import { GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
 import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import { CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT } from "./codex-pet-call-ledger.js";
 import {

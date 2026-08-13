@@ -12,7 +12,6 @@ import { ApiError } from "../../apiError";
 import * as codexPetApi from "../../codexPetApi";
 import {
   CODEX_PET_IMAGE_MODEL,
-  CODEX_PET_IMAGE_MODELS,
   CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
   CODEX_PET_VISUAL_QA_MODEL,
 } from "../../codexPetApi";

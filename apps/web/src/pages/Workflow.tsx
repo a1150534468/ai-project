@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { useToast, RippleButton } from "../motion";
+import { useToast } from "../motion";
 import {
   ApiError,
   cancelWorkflowImageTask,
