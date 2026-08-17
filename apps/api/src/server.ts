@@ -27,6 +27,7 @@ import { agentRoutes } from "./agents/routes.js";
 import { agentTeamRoutes } from "./agent-teams/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image-routes.js";
 import { portraitWorkflowRoutes } from "./workflow/portrait-routes.js";
+import { tryOnWorkflowRoutes } from "./workflow/try-on-routes.js";
 import { codexPetRoutes } from "./workflow/codex-pet-routes.js";
 import { enqueueCodexPetProjectCleanup } from "./workflow/codex-pet-cleanup.js";
 import { videoWorkflowRoutes } from "./workflow/video-routes.js";
@@ -162,6 +163,7 @@ export async function buildServer() {
   await app.register((instance) => imageWorkflowRoutes(instance, { redis: getRedis() }));
   // 传 redis 才会起人像的主动扫兜底（抢锁用），reaper 的清理挂在该插件自己的 onClose 上
   await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
+  await app.register((instance) => tryOnWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }));
   // 同上：传 redis 才起 video 的主动扫。video 是外部异步任务，兜底不是「超期即失败」，
   // 而是拿 providerTaskId 向上游核对真实状态再决定续跑还是退款（见 video-reaper.ts）。

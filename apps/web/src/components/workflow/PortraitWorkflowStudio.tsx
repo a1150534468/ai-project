@@ -6,6 +6,7 @@ import { downloadImageFile, imageDownloadFileName } from "./imageDownload";
 import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { WorkflowHistoryStrip } from "./ImageHistoryStrip";
 import { SubmitCostBar } from "./SubmitCostBar";
+import { HumanImageGenerationFields, HUMAN_RESOLUTION_OPTIONS } from "./HumanImageGenerationFields";
 import {
   cancelPortraitTask,
   createPortraitTask,
@@ -61,18 +62,6 @@ const LEGACY_PRESET_NAMES: Readonly<Record<string, string>> = {
   lifestyle: "生活写真",
   traditional: "传统服饰",
 };
-const ASPECT_OPTIONS = [
-  { value: "1:1", label: "1:1 · 方形" },
-  { value: "3:4", label: "3:4 · 竖版" },
-  { value: "4:3", label: "4:3 · 横版" },
-  { value: "9:16", label: "9:16 · 全屏竖版" },
-  { value: "16:9", label: "16:9 · 宽屏" },
-] as const;
-const RESOLUTION_OPTIONS = [
-  { value: "1K", label: "1K · 快速" },
-  { value: "2K", label: "2K · 标准" },
-  { value: "4K", label: "4K · 高清" },
-] as const;
 const SCENE_OPTIONS = ["明亮影棚", "现代办公室", "城市街景", "自然户外", "温馨室内", "纯色背景"];
 const OUTFIT_OPTIONS = ["保持参考穿搭", "商务正装", "简约休闲", "时尚造型", "传统服饰"];
 const COMPOSITION_OPTIONS = ["头肩特写", "半身肖像", "全身人像", "居中构图", "环境人像"];
@@ -212,7 +201,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   const modelSupports4K = selectedModel?.supports4K ?? true;
   // 老服务端不返回 supports1K：此时按「不支持」处理，避免前端提交出 400。
   const modelSupports1K = selectedModel?.supports1K ?? false;
-  const resolutionOptions = RESOLUTION_OPTIONS.filter((option) => (
+  const resolutionOptions = HUMAN_RESOLUTION_OPTIONS.filter((option) => (
     option.value === "4K" ? modelSupports4K : option.value === "1K" ? modelSupports1K : true
   ));
   const legacyPresetNames = options?.legacyPresetNames;
@@ -394,15 +383,18 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         </div>
         <label className="mt-3 grid gap-2 text-sm font-semibold text-[#1d1d1f]">补充提示词<textarea aria-label="补充提示词" value={promptOptions.extraPrompt} onChange={(event) => updatePromptOption("extraPrompt", event.target.value)} maxLength={1200} placeholder="光线、氛围、背景细节等" className="min-h-[76px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" /></label>
 
-        <div className="mt-4 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
-          <p>模型</p>
-          <InAppSelect icon="mdi:creation-outline" label="模型" value={model} options={models.map((item) => ({ value: item.value, label: item.label }))} onChange={handleModelChange} />
-        </div>
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]"><p>画面比例</p><InAppSelect icon="mdi:aspect-ratio" label="画面比例" value={aspectRatio} options={ASPECT_OPTIONS} onChange={(value) => setAspectRatio(value as PortraitAspectRatio)} /></div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]"><p>清晰度</p><InAppSelect icon="mdi:image-size-select-large" label="清晰度" value={resolution} options={resolutionOptions} onChange={(value) => setResolution(value as PortraitResolution)} /></div>
-        </div>
-        <div className="mt-3"><p className="mb-2 text-sm font-semibold text-[#1d1d1f]">生成张数</p><div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7]">{[1, 2, 3, 4].map((value) => <button key={value} type="button" onClick={() => setCount(value)} className={`h-9 border-r border-[#e5e7eb] text-sm font-semibold last:border-r-0 ${count === value ? "bg-brand-soft text-brand-ink" : "bg-white text-[#6e6e73]"}`}>{value}</button>)}</div></div>
+        <HumanImageGenerationFields
+          models={models}
+          model={model}
+          aspectRatio={aspectRatio}
+          resolution={resolution}
+          resolutionOptions={resolutionOptions}
+          count={count}
+          onModelChange={handleModelChange}
+          onAspectRatioChange={(value) => setAspectRatio(value as PortraitAspectRatio)}
+          onResolutionChange={(value) => setResolution(value as PortraitResolution)}
+          onCountChange={setCount}
+        />
 
         <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-[#424245]"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
         {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}

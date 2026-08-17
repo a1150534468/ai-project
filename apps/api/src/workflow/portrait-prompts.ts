@@ -1,15 +1,16 @@
+import {
+  HUMAN_IMAGE_MODEL,
+  HUMAN_IMAGE_MODELS,
+  humanImageOutputSize,
+  type HumanImageAspectRatio,
+  type HumanImageModel,
+  type HumanImageResolution,
+} from "./human-image-options.js";
+
 export const PORTRAIT_CONSENT_VERSION = "portrait-consent-v1";
-// Ark's API identifier for the Doubao Seedream 5.0 product tier.
-export const PORTRAIT_MODEL = "doubao-seedream-5-0-260128";
-
-// supports1K=false 的模型（豆包 Seedream）上游会把 1K 请求提升到 2K 出图，
-// 若开放 1K 档就会出现「按 1K 计费拿到 2K 成片」的价差漏洞，因此不下发该档。
-export const PORTRAIT_MODELS = [
-  { value: "doubao-seedream-5-0-260128", label: "豆包 Seedream 5.0", supports1K: false, supports4K: true },
-  { value: "gpt-image-2", label: "GPT Image 2", supports1K: true, supports4K: false },
-] as const;
-
-export type PortraitModelValue = (typeof PORTRAIT_MODELS)[number]["value"];
+export const PORTRAIT_MODEL = HUMAN_IMAGE_MODEL;
+export const PORTRAIT_MODELS = HUMAN_IMAGE_MODELS;
+export type PortraitModelValue = HumanImageModel;
 
 export const PORTRAIT_PRESET_IDS = [
   "business-elite",
@@ -69,8 +70,8 @@ export const LEGACY_PORTRAIT_PRESET_NAMES: Readonly<Record<string, string>> = {
   traditional: "传统服饰",
 };
 
-export type PortraitAspectRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
-export type PortraitResolution = "1K" | "2K" | "4K";
+export type PortraitAspectRatio = HumanImageAspectRatio;
+export type PortraitResolution = HumanImageResolution;
 
 export interface PortraitPromptOptions {
   readonly scene?: string;
@@ -82,34 +83,8 @@ export interface PortraitPromptOptions {
   readonly extraPrompt?: string;
 }
 
-// 1K 档为 2K 档的等比半尺寸：长短边均为 16 的倍数、像素数 ≥ 655360，
-// 满足 gpt-image-2 的尺寸约束，同时把单次出图耗时压到网关超时以内。
-const SIZE_BY_RESOLUTION: Readonly<Record<PortraitResolution, Readonly<Record<PortraitAspectRatio, string>>>> = {
-  "1K": {
-    "1:1": "1024x1024",
-    "3:4": "864x1152",
-    "4:3": "1152x864",
-    "9:16": "800x1424",
-    "16:9": "1424x800",
-  },
-  "2K": {
-    "1:1": "2048x2048",
-    "3:4": "1728x2304",
-    "4:3": "2304x1728",
-    "9:16": "1600x2848",
-    "16:9": "2848x1600",
-  },
-  "4K": {
-    "1:1": "4096x4096",
-    "3:4": "3520x4704",
-    "4:3": "4704x3520",
-    "9:16": "3040x5504",
-    "16:9": "5504x3040",
-  },
-};
-
 export function portraitOutputSize(resolution: PortraitResolution, aspectRatio: PortraitAspectRatio): string {
-  return SIZE_BY_RESOLUTION[resolution][aspectRatio];
+  return humanImageOutputSize(resolution, aspectRatio);
 }
 
 export function buildPortraitPrompt(args: {

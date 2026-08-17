@@ -8,12 +8,13 @@ export interface ClientMenuItem {
 export type ClientMenuVisibility = Readonly<Record<string, boolean>>;
 
 /** 生图模块页内 tab：后台按 workflow.image.* 单独开关。 */
-export type ImageHubTabId = "general" | "ecom" | "portrait";
+export type ImageHubTabId = "general" | "ecom" | "portrait" | "try-on";
 
 export const IMAGE_HUB_TABS: readonly { readonly id: ImageHubTabId; readonly label: string; readonly menuKey: string }[] = [
   { id: "general", label: "通用生图", menuKey: "workflow.image.general" },
   { id: "ecom", label: "电商生图", menuKey: "workflow.image.ecom" },
   { id: "portrait", label: "形象照", menuKey: "workflow.image.portrait" },
+  { id: "try-on", label: "服装试穿", menuKey: "workflow.image.try-on" },
 ] as const;
 
 const DEFAULT_HIDDEN_KEYS = [
