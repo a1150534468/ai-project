@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
+import { requireUser } from "../auth/require-user.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import sharp from "sharp";
 import { z } from "zod";
@@ -354,10 +355,6 @@ class ActiveCodexPetRunError extends Error {
     this.name = "ActiveCodexPetRunError";
     this.runId = runId;
   }
-}
-
-function userIdOf(request: unknown): string {
-  return (request as { readonly userId?: string }).userId?.trim() ?? "";
 }
 
 function recordOf(value: unknown): Record<string, unknown> {
@@ -1218,9 +1215,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   }
 
-  app.get("/api/workflow/codex-pets/pricing", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/pricing", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     try {
       const pricing = await price();
       return {
@@ -1239,8 +1235,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   });
 
-  app.get("/api/workflow/codex-pets/models", async (request, reply) => {
-    if (!userIdOf(request)) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/models", { preHandler: requireUser }, async (request, reply) => {
     try {
       return { success: true, data: await codexPetModelOptions() };
     } catch (error) {
@@ -1249,9 +1244,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   });
 
-  app.get("/api/workflow/codex-pets/projects", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/projects", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const projects = await prisma.codexPetProject.findMany({
       where: { userId, deletedAt: null },
       orderBy: { updatedAt: "desc" },
@@ -1260,9 +1254,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     return { success: true, data: { projects: projects.map((project) => serializeProjectSummary(project as ProjectShape)) } };
   });
 
-  app.post("/api/workflow/codex-pets/projects", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const parsed = createProjectSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "桌宠项目参数不合法", issues: parsed.error.flatten() });
     const keyResult = parsed.data.idempotencyKey || request.headers["idempotency-key"]
@@ -1307,9 +1300,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   });
 
-  app.get("/api/workflow/codex-pets/projects/:projectId", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/projects/:projectId", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = projectParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
     const project = await ownedProject(userId, params.data.projectId);
@@ -1402,9 +1394,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     };
   });
 
-  app.patch("/api/workflow/codex-pets/projects/:projectId", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.patch("/api/workflow/codex-pets/projects/:projectId", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = projectParamsSchema.safeParse(request.params);
     const body = updateProjectSchema.safeParse(request.body);
     if (!params.success || !body.success || Object.keys(body.data).length === 0) {
@@ -1558,9 +1549,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     });
   });
 
-  app.delete("/api/workflow/codex-pets/projects/:projectId", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.delete("/api/workflow/codex-pets/projects/:projectId", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = projectParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
     const project = await ownedProject(userId, params.data.projectId);
@@ -1617,9 +1607,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     });
   });
 
-  app.post("/api/workflow/codex-pets/projects/:projectId/start", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/start", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = projectParamsSchema.safeParse(request.params);
     const body = startRunSchema.safeParse(request.body ?? {});
     if (!params.success || !body.success) return reply.code(400).send({ error: "启动参数不合法" });
@@ -1840,9 +1829,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
 
   });
 
-  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/continue-failed", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/continue-failed", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     const body = failedContinuationSchema.safeParse(request.body ?? {});
     if (!params.success || !body.success) return reply.code(400).send({ error: "失败续跑参数不合法" });
@@ -2104,9 +2092,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
    * no consumer and the only exit was copying the project and paying for all
    * fourteen planned calls again.
    */
-  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/resume-gate-failure", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/resume-gate-failure", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     const body = gateFailureResumeSchema.safeParse(request.body ?? {});
     if (!params.success || !body.success) return reply.code(400).send({ error: "闸门续跑参数不合法" });
@@ -2164,9 +2151,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     } });
   });
 
-  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/base-selection", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/base-selection", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     const body = baseSelectionSchema.safeParse(request.body);
     if (!params.success || !body.success) return reply.code(400).send({ error: "主形象选择参数不合法" });
@@ -2464,9 +2450,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     return reply.code(202).send({ success: true, data: { run: serializeRun(updated as RunShape) } });
   });
 
-  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/cancel", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/cancel", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: "取消参数不合法" });
     try {
@@ -2489,9 +2474,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   });
 
-  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/approve-next-image", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/approve-next-image", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     const body = extraImageApprovalSchema.safeParse(request.body ?? {});
     if (!params.success || !body.success) return reply.code(400).send({ error: "生图批准参数不合法" });
@@ -2689,9 +2673,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     return reply.code(202).send({ success: true, data: { run: serializeRun(updated as RunShape) } });
   });
 
-  app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     const query = eventsQuerySchema.safeParse(request.query);
     if (!params.success || !query.success) return reply.code(400).send({ error: "事件查询参数不合法" });
@@ -2713,9 +2696,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     };
   });
 
-  app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events/stream", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/projects/:projectId/runs/:runId/events/stream", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = runParamsSchema.safeParse(request.params);
     const query = eventsQuerySchema.safeParse(request.query);
     if (!params.success || !query.success) return reply.code(400).send({ error: "事件流参数不合法" });
@@ -2811,9 +2793,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     };
   }
 
-  app.post("/api/workflow/codex-pets/projects/:projectId/install-link", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.post("/api/workflow/codex-pets/projects/:projectId/install-link", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = projectParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
     const query = deliveryRunQuerySchema.safeParse(request.query);
@@ -2849,9 +2830,8 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
     }
   });
 
-  app.get("/api/workflow/codex-pets/projects/:projectId/download", async (request, reply) => {
-    const userId = userIdOf(request);
-    if (!userId) return reply.code(401).send({ error: "未登录" });
+  app.get("/api/workflow/codex-pets/projects/:projectId/download", { preHandler: requireUser }, async (request, reply) => {
+    const userId = request.userId;
     const params = projectParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: "项目参数不合法" });
     const query = deliveryRunQuerySchema.safeParse(request.query);

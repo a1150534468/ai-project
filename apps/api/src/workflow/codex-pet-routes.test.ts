@@ -7,6 +7,7 @@ import { GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
 import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import { CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT } from "./codex-pet-call-ledger.js";
 import {
+  CODEX_PET_PREVIEW_ARTIFACT_PURPOSE,
   CODEX_PET_RESOURCE_KEY,
   codexPetRoutes,
   codexPetValidationPassed,
@@ -510,7 +511,7 @@ async function createApp(prisma: PrismaClient, overrides: Partial<CodexPetRouteD
   app.decorateRequest("userId", "");
   app.addHook("onRequest", async (request) => {
     const raw = request.headers["x-test-user"];
-    (request as unknown as { userId: string }).userId = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
+    request.userId = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
   });
   const billing = overrides.billing ?? createBilling();
   const enqueueRun = overrides.enqueueRun ?? vi.fn(async () => undefined);
@@ -2434,6 +2435,63 @@ describe("Codex pet routes", () => {
     expect(history.json().data.projects).toEqual([]);
     const detail = await app.inject({ method: "GET", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
     expect(detail.statusCode).toBe(404);
+    await app.close();
+  });
+
+  // 本插件是「逐路由挂 requireUser」而不是插件级钩子，因为
+  // /api/public/codex-pets/artifacts/:artifactId 必须公开（凭签名访问，没有登录态）。
+  // 逐路由的后果是每条路由各自独立：少挂一条不会有任何别的测试变红。
+  // 所以下面这张表必须和生产代码里 17 处 `{ preHandler: requireUser }` 一一对应，
+  // 新增需要登录的路由时同步加一行。
+  const guardedRoutes: Array<[method: "GET" | "POST" | "PATCH" | "DELETE", url: string]> = [
+    ["GET", "/api/workflow/codex-pets/pricing"],
+    ["GET", "/api/workflow/codex-pets/models"],
+    ["GET", "/api/workflow/codex-pets/projects"],
+    ["POST", "/api/workflow/codex-pets/projects"],
+    ["GET", "/api/workflow/codex-pets/projects/project-1"],
+    ["PATCH", "/api/workflow/codex-pets/projects/project-1"],
+    ["DELETE", "/api/workflow/codex-pets/projects/project-1"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/start"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/runs/run-1/continue-failed"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/runs/run-1/resume-gate-failure"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/runs/run-1/base-selection"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/runs/run-1/cancel"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/runs/run-1/approve-next-image"],
+    ["GET", "/api/workflow/codex-pets/projects/project-1/runs/run-1/events"],
+    ["GET", "/api/workflow/codex-pets/projects/project-1/runs/run-1/events/stream"],
+    ["POST", "/api/workflow/codex-pets/projects/project-1/install-link"],
+    ["GET", "/api/workflow/codex-pets/projects/project-1/download"],
+  ];
+
+  it.each(guardedRoutes)("%s %s 未登录时 401", async (method, url) => {
+    const { prisma } = createPrismaMock({ projects: [projectRow()], runs: [runRow()] });
+    const { app, enqueueRun } = await createApp(prisma);
+    // 用 seed 好的 project/run：摘掉 preHandler 后 handler 会拿空 userId 去查库，
+    // 那会返回 404 而不是 401，所以这条断言摘了守卫就一定红。
+    const response = await app.inject({ method, url, payload: method === "GET" || method === "DELETE" ? undefined : {} });
+    expect(response.statusCode).toBe(401);
+    // 断 body：401 在本文件里只可能来自 requireUser（公开 artifact 路由的
+    // 「资源地址已失效」是另一条 URL），只断 statusCode 会给未来的改动留假绿空间。
+    expect(response.json()).toEqual({ error: "未登录" });
+    expect(enqueueRun).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("公开 artifact 路由不需要登录", async () => {
+    const { prisma } = createPrismaMock({ artifacts: [artifactRow({ id: "preview-svg" })] });
+    const loadArtifact = vi.fn(async () => Buffer.from("preview-bytes"));
+    const { app } = await createApp(prisma, { loadArtifact });
+    const exp = Math.floor(NOW.getTime() / 1_000) + 300;
+    const sig = signCodexPetArtifact("preview-svg", exp, "test-signing-secret-that-is-long-enough", CODEX_PET_PREVIEW_ARTIFACT_PURPOSE);
+    // 不带 x-test-user：这条是全插件唯一的公开路由，
+    // 有人顺手给它补上 requireUser 的话这里会变 401。
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/public/codex-pets/artifacts/preview-svg?exp=${exp}&sig=${encodeURIComponent(sig)}&purpose=preview`,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toBe("preview-bytes");
+    expect(loadArtifact).toHaveBeenCalledWith(artifactRow().objectKey);
     await app.close();
   });
 });

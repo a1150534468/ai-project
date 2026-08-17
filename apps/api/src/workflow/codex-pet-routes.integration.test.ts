@@ -49,7 +49,7 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
     app.decorateRequest("userId", "");
     app.addHook("onRequest", async (request) => {
       const raw = request.headers["x-test-user"];
-      (request as unknown as { userId: string }).userId = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
+      request.userId = Array.isArray(raw) ? raw[0] ?? "" : raw ?? "";
     });
     await app.register(codexPetRoutes, {
       prisma,
