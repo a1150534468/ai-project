@@ -20,6 +20,7 @@ import { ArticleWorkflowStudio } from "../components/workflow/ArticleWorkflowStu
 import { ScheduledTaskStudio } from "../components/workflow/ScheduledTaskStudio";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
 import { PortraitWorkflowStudio } from "../components/workflow/PortraitWorkflowStudio";
+import { TryOnWorkflowStudio } from "../components/workflow/TryOnWorkflowStudio";
 import { readFileAsInlineImage } from "../components/workflow/ecomWorkflowStudioModel";
 import { LocalBusinessPromoWorkflowStudio } from "../components/workflow/LocalBusinessPromoWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
@@ -788,6 +789,11 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
               {hasImageTab("portrait") && (
               <div className={imageSubMode === "portrait" ? "min-h-0 xl:h-full" : "hidden"}>
                 <PortraitWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
+              </div>
+              )}
+              {hasImageTab("try-on") && (
+              <div className={imageSubMode === "try-on" ? "min-h-0 xl:h-full" : "hidden"}>
+                <TryOnWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
               </div>
               )}
             </>

@@ -9,17 +9,20 @@ import Workflow from "./Workflow";
 import { ToastProvider } from "../motion";
 
 describe("Workflow image hub", () => {
-  it("keeps general, e-commerce, and portrait studios mounted under separate tabs", () => {
+  it("keeps all four image studios mounted under separate tabs", () => {
     const html = renderToStaticMarkup(<ToastProvider><Workflow token="token" activeModuleId="image" /></ToastProvider>);
     expect(html).toContain("通用生图");
     expect(html).toContain("电商生图");
     expect(html).toContain("形象照");
+    expect(html).toContain("服装试穿");
     expect(html).toContain('data-testid="portrait-studio"');
+    expect(html).toContain('data-testid="try-on-studio"');
     expect(html).toContain("产品资料");
     expect(html).toContain("商品主图");
     expect(html).toContain("生成图片");
     expect(html).toContain('aria-label="电商图生成历史"');
     expect(html).toContain('aria-label="形象照生成历史"');
+    expect(html).toContain('aria-label="服装试穿生成历史"');
     expect(html).toContain("生成概览");
     expect(html).toMatch(/class="hidden"[^>]*><section data-testid="portrait-studio"/);
   });
@@ -30,13 +33,14 @@ describe("Workflow image hub", () => {
         <Workflow
           token="token"
           activeModuleId="image"
-          menuVisibility={{ "workflow.image.ecom": false, "workflow.image.portrait": false }}
+          menuVisibility={{ "workflow.image.ecom": false, "workflow.image.portrait": false, "workflow.image.try-on": false }}
         />
       </ToastProvider>,
     );
     expect(html).not.toContain("电商生图");
     expect(html).not.toContain("形象照");
     expect(html).not.toContain('data-testid="portrait-studio"');
+    expect(html).not.toContain('data-testid="try-on-studio"');
     expect(html).not.toContain("商品主图");
     expect(html).toContain("生成图片");
   });

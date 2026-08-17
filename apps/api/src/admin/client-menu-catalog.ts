@@ -39,6 +39,7 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
     legacyKey: "workflow.commerce-long-image",
   },
   { key: "workflow.image.portrait", label: "形象照", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
+  { key: "workflow.image.try-on", label: "服装试穿", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.novel", label: "小说模块", group: "workflow", defaultVisible: true },
   { key: "workflow.codex-pet", label: "Codex 桌宠工坊", group: "workflow", defaultVisible: false },
   { key: "workflow.report", label: "AI 智能报告", group: "workflow", defaultVisible: false },

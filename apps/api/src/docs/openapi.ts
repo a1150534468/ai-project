@@ -416,7 +416,7 @@ function tagForPath(url: string): string {
   if (url.startsWith("/api/billing")) return "计费与充值";
   if (url.startsWith("/api/membership") || url.startsWith("/api/vip") || url.startsWith("/api/model-marketplace")) return "会员与 VIP";
   if (url.startsWith("/api/scheduled-tasks")) return "定时任务";
-  if (url.startsWith("/api/workflow/images")) return "工作流 · 图片";
+  if (url.startsWith("/api/workflow/images") || url.startsWith("/api/workflow/portraits") || url.startsWith("/api/workflow/try-ons")) return "工作流 · 图片";
   if (url.startsWith("/api/workflow/codex-pets") || url.startsWith("/api/public/codex-pets")) return "工作流 · Codex 桌宠";
   if (url.startsWith("/api/workflow/videos")) return "工作流 · 视频";
   if (url.startsWith("/api/workflow/dub")) return "工作流 · 配音";
