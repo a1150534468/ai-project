@@ -1,4 +1,5 @@
 import "./env.js";
+import { assertRequiredEnv, warnMissingOptionalEnv } from "./env.js";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import websocket from "@fastify/websocket";
@@ -292,6 +293,10 @@ export async function buildServer() {
 }
 
 if (process.argv[1]?.endsWith("server.ts") || process.argv[1]?.endsWith("server.js")) {
+  // P1.4 启动期聚合校验：缺 DATABASE_URL/REDIS_URL/SESSION_SECRET 直接拒绝启动，
+  // 不再「跑到一半才炸」；模型 Key 缺失只 warn。测试入口不经过这里。
+  assertRequiredEnv();
+  warnMissingOptionalEnv();
   const port = Number(process.env.PORT ?? 8090);
   buildServer().then(async (app) => {
     await seedPlatformChannel(getPrisma());

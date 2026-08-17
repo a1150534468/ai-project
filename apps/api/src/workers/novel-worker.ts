@@ -1,4 +1,4 @@
-import "../env.js";
+import { assertRequiredEnv } from "../env.js";
 import { createServer } from "node:http";
 import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
@@ -19,6 +19,8 @@ let ready = false;
 let lastDispatchAt = 0;
 
 async function main() {
+  // P1.4 启动期聚合校验：缺必需 env 直接拒绝启动（见 env.ts）
+  assertRequiredEnv();
   await recoverInterruptedNovelSteps(prisma);
   await recoverInterruptedNovelTasks(prisma);
   await dispatchNovelOutboxBatch(prisma);

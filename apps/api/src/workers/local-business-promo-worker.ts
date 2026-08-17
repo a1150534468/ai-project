@@ -1,4 +1,4 @@
-import "../env.js";
+import { assertRequiredEnv } from "../env.js";
 import { getPrisma } from "@ai-assistant/db";
 import {
   closeLocalBusinessPromoQueue,
@@ -7,6 +7,8 @@ import {
 import { executeLocalBusinessPromoRun } from "../workflow/local-business-promo-runner.js";
 
 async function main() {
+  // P1.4 启动期聚合校验：缺必需 env 直接拒绝启动（见 env.ts）
+  assertRequiredEnv();
   const worker = createLocalBusinessPromoWorker(async (job) => {
     await executeLocalBusinessPromoRun({ runId: job.data.runId });
   });

@@ -1,4 +1,4 @@
-import "../env.js";
+import { assertRequiredEnv } from "../env.js";
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { createBillingClient } from "@ai-assistant/billing";
@@ -795,6 +795,8 @@ async function reconcileBillingIntents(prisma: PrismaClient, billing: CodexPetCh
 }
 
 async function main() {
+  // P1.4 启动期聚合校验：缺必需 env 直接拒绝启动（见 env.ts）
+  assertRequiredEnv();
   const imageRoute = assertCodexPetImageRoute(process.env);
   const dnsOverride = installCodexPetUpstreamDnsOverride(imageRoute.generationEndpoint, process.env);
   console.info(`[codex-pet-worker] image route ready model=${imageRoute.model}`);
