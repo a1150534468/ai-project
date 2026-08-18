@@ -971,6 +971,9 @@ model ArticleWorkflowProject {
   platform          String   @default("wechat")
   // 一次导入 = 同 batchId 的 N 行；存量行为 null，视为单平台独立批次
   batchId           String?
+  // 公众号排版主题：auto = AI 自由发挥；themeColor 为空 = 用主题默认主色
+  theme             String   @default("auto")
+  themeColor        String?
   title             String   @default("")
   summary           String   @default("")
   bodyHtml          String   @default("")
