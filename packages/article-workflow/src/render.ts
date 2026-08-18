@@ -2,9 +2,10 @@ import MarkdownIt, { type Token } from "markdown-it";
 // @ts-expect-error markdown-it-mark 无类型声明（==高亮== 插件）
 import markdownItMark from "markdown-it-mark";
 import { buildStyles, type BuildStylesOpts, type MdWechatTheme } from "./themes.js";
+import type { ArticleWorkflowGalleryMode } from "./types.js";
 
 /** 画廊布局模式：拼贴 / 网格 / 单列。 */
-export type GalleryMode = "collage" | "grid" | "stack";
+export type GalleryMode = ArticleWorkflowGalleryMode;
 
 const GAP = 0.012;
 

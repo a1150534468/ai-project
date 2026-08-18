@@ -1,31 +1,12 @@
-export const ARTICLE_WORKFLOW_PROJECT_STATUSES = [
-  "draft",
-  "generating",
-  "revising",
-  "ready",
-  "failed",
-] as const;
+export const ARTICLE_WORKFLOW_PROJECT_STATUSES = ["draft", "generating", "revising", "ready", "failed"] as const;
 
-export const ARTICLE_WORKFLOW_SOURCE_FORMATS = [
-  "plain-text",
-  "markdown",
-] as const;
+export const ARTICLE_WORKFLOW_SOURCE_FORMATS = ["plain-text", "markdown"] as const;
 
-export const ARTICLE_WORKFLOW_GENERATION_MODES = [
-  "preserve-text",
-  "polish-text",
-] as const;
+export const ARTICLE_WORKFLOW_GENERATION_MODES = ["preserve-text", "polish-text"] as const;
 
-export const ARTICLE_WORKFLOW_CREATION_MODES = [
-  "source",
-  "topic",
-] as const;
+export const ARTICLE_WORKFLOW_CREATION_MODES = ["source", "topic"] as const;
 
-export const ARTICLE_WORKFLOW_STYLE_MODES = [
-  "preset",
-  "custom",
-  "imitate",
-] as const;
+export const ARTICLE_WORKFLOW_STYLE_MODES = ["preset", "custom", "imitate"] as const;
 
 export const ARTICLE_WORKFLOW_TOPIC_PRESETS = [
   "general",
@@ -66,35 +47,25 @@ export const ARTICLE_WORKFLOW_THEMES = [
   "candy-pop",
 ] as const;
 
-export const ARTICLE_WORKFLOW_PLATFORMS = [
-  "wechat",
-  "xiaohongshu",
-  "douyin",
-] as const;
+export const ARTICLE_WORKFLOW_PLATFORMS = ["wechat", "xiaohongshu", "douyin"] as const;
 
-export const ARTICLE_WORKFLOW_OUTPUT_KINDS = [
-  "html-fragment",
-  "caption",
-] as const;
+export const ARTICLE_WORKFLOW_OUTPUT_KINDS = ["html-fragment", "caption"] as const;
 
-export const ARTICLE_WORKFLOW_IMAGE_SLOTS = [
-  "cover",
-  "inline-1",
-  "inline-2",
-  "inline-3",
-  "inline-4",
-] as const;
+export const ARTICLE_WORKFLOW_IMAGE_SLOTS = ["cover", "inline-1", "inline-2", "inline-3", "inline-4"] as const;
 
-export type ArticleWorkflowProjectStatus = typeof ARTICLE_WORKFLOW_PROJECT_STATUSES[number];
-export type ArticleWorkflowSourceFormat = typeof ARTICLE_WORKFLOW_SOURCE_FORMATS[number];
-export type ArticleWorkflowGenerationMode = typeof ARTICLE_WORKFLOW_GENERATION_MODES[number];
-export type ArticleWorkflowCreationMode = typeof ARTICLE_WORKFLOW_CREATION_MODES[number];
-export type ArticleWorkflowStyleMode = typeof ARTICLE_WORKFLOW_STYLE_MODES[number];
-export type ArticleWorkflowTopicPreset = typeof ARTICLE_WORKFLOW_TOPIC_PRESETS[number];
-export type ArticleWorkflowThemeKey = typeof ARTICLE_WORKFLOW_THEMES[number];
-export type ArticleWorkflowImageSlot = typeof ARTICLE_WORKFLOW_IMAGE_SLOTS[number];
-export type ArticleWorkflowPlatform = typeof ARTICLE_WORKFLOW_PLATFORMS[number];
-export type ArticleWorkflowOutputKind = typeof ARTICLE_WORKFLOW_OUTPUT_KINDS[number];
+export const ARTICLE_WORKFLOW_GALLERY_MODES = ["collage", "grid", "stack"] as const;
+
+export type ArticleWorkflowProjectStatus = (typeof ARTICLE_WORKFLOW_PROJECT_STATUSES)[number];
+export type ArticleWorkflowSourceFormat = (typeof ARTICLE_WORKFLOW_SOURCE_FORMATS)[number];
+export type ArticleWorkflowGenerationMode = (typeof ARTICLE_WORKFLOW_GENERATION_MODES)[number];
+export type ArticleWorkflowCreationMode = (typeof ARTICLE_WORKFLOW_CREATION_MODES)[number];
+export type ArticleWorkflowStyleMode = (typeof ARTICLE_WORKFLOW_STYLE_MODES)[number];
+export type ArticleWorkflowTopicPreset = (typeof ARTICLE_WORKFLOW_TOPIC_PRESETS)[number];
+export type ArticleWorkflowThemeKey = (typeof ARTICLE_WORKFLOW_THEMES)[number];
+export type ArticleWorkflowImageSlot = (typeof ARTICLE_WORKFLOW_IMAGE_SLOTS)[number];
+export type ArticleWorkflowGalleryMode = (typeof ARTICLE_WORKFLOW_GALLERY_MODES)[number];
+export type ArticleWorkflowPlatform = (typeof ARTICLE_WORKFLOW_PLATFORMS)[number];
+export type ArticleWorkflowOutputKind = (typeof ARTICLE_WORKFLOW_OUTPUT_KINDS)[number];
 export type ArticleWorkflowImageRole = "cover" | "inline";
 
 export type ArticleWorkflowTopicStyle =
