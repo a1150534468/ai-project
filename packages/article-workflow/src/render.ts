@@ -1,11 +1,7 @@
 import MarkdownIt, { type Token } from "markdown-it";
 // @ts-expect-error markdown-it-mark 无类型声明（==高亮== 插件）
 import markdownItMark from "markdown-it-mark";
-import {
-  buildStyles,
-  type BuildStylesOpts,
-  type MdWechatTheme,
-} from "./themes.js";
+import { buildStyles, type BuildStylesOpts, type MdWechatTheme } from "./themes.js";
 
 /** 画廊布局模式：拼贴 / 网格 / 单列。 */
 export type GalleryMode = "collage" | "grid" | "stack";
@@ -39,12 +35,12 @@ function justifiedWidths(mode: GalleryMode, count: number, aspects: number[]): (
   const row = (idxs: number[]): number[] => {
     const sum = idxs.reduce((s, j) => s + aspects[j]!, 0);
     const scale = 1 - GAP * (idxs.length - 1);
-    return idxs.map((j) => Math.round(((aspects[j]! / sum) * scale) * 10000) / 100);
+    return idxs.map((j) => Math.round((aspects[j]! / sum) * scale * 10000) / 100);
   };
   const all = [...Array(count).keys()];
   if (mode === "grid") {
-    const w3 = Math.round((((100 - GAP * 100 * 2) / 3) * 100)) / 100;
-    const w2 = Math.round((((100 - GAP * 100) / 2) * 100)) / 100;
+    const w3 = Math.round(((100 - GAP * 100 * 2) / 3) * 100) / 100;
+    const w2 = Math.round(((100 - GAP * 100) / 2) * 100) / 100;
     const rows: number[] = [];
     if (count === 2 || count === 4) {
       rows.push(2);
@@ -108,13 +104,14 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
   md.core.ruler.push("gallery", (state) => {
     const t = state.tokens;
     const isSingleImgPara = (i: number): boolean =>
-      t[i]?.type === "paragraph_open"
-      && t[i + 1]?.type === "inline"
-      && t[i + 1]?.children?.length === 1
-      && t[i + 1]?.children?.[0]?.type === "image"
-      && t[i + 2]?.type === "paragraph_close";
+      t[i]?.type === "paragraph_open" &&
+      t[i + 1]?.type === "inline" &&
+      t[i + 1]?.children?.length === 1 &&
+      t[i + 1]?.children?.[0]?.type === "image" &&
+      t[i + 2]?.type === "paragraph_close";
     const galleryInlineCount = (i: number): number => {
-      if (t[i]?.type !== "paragraph_open" || t[i + 1]?.type !== "inline" || t[i + 2]?.type !== "paragraph_close") return 0;
+      if (t[i]?.type !== "paragraph_open" || t[i + 1]?.type !== "inline" || t[i + 2]?.type !== "paragraph_close")
+        return 0;
       const c = t[i + 1]?.children ?? [];
       const imgs = c.filter((x) => x.type === "image");
       return imgs.length >= 2 && c.every((x) => x.type === "image" || x.type === "softbreak") ? imgs.length : 0;
@@ -146,7 +143,11 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
         t[i]!.attrSet("data-g", `${count}:wrap`);
         t[i + 2]!.attrSet("data-gc", "wrap");
         const imgChildren = (t[i + 1]?.children ?? []).filter((x) => x.type === "image");
-        const widths = justifiedWidths(galleryMode, count, imgChildren.map((x) => aspectOf(attrStr(x, "src"))));
+        const widths = justifiedWidths(
+          galleryMode,
+          count,
+          imgChildren.map((x) => aspectOf(attrStr(x, "src"))),
+        );
         let k = 0;
         for (const x of t[i + 1]?.children ?? []) {
           if (x.type === "image") {
@@ -229,29 +230,41 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
     }
     if (count === 2) {
       return {
-        open: i === 0 ? `<section style="width:${gw || 61}%;margin-right:1.2%;">` : "<section style=\"flex:1;\">",
+        open: i === 0 ? `<section style="width:${gw || 61}%;margin-right:1.2%;">` : '<section style="flex:1;">',
         close: "</section>",
         image: "height:auto;box-sizing:border-box;",
       };
     }
     if (count === 3) {
       if (i === 0) {
-        return { open: `<section style="width:${gw || 62}%;margin-right:1.2%;">`, close: "</section>", image: "height:auto;box-sizing:border-box;" };
+        return {
+          open: `<section style="width:${gw || 62}%;margin-right:1.2%;">`,
+          close: "</section>",
+          image: "height:auto;box-sizing:border-box;",
+        };
       }
       return {
-        open: i === 1 ? "<section style=\"flex:1;display:flex;flex-direction:column;\"><section style=\"margin-bottom:1.2%;\">" : "<section>",
+        open:
+          i === 1
+            ? '<section style="flex:1;display:flex;flex-direction:column;"><section style="margin-bottom:1.2%;">'
+            : "<section>",
         close: i === 2 ? "</section></section>" : "</section>",
         image: "height:auto;box-sizing:border-box;",
       };
     }
     if (count === 4) {
       if (i === 0) {
-        return { open: "<section style=\"margin-bottom:1.2%;\">", close: "</section>", image: "height:auto;box-sizing:border-box;" };
+        return {
+          open: '<section style="margin-bottom:1.2%;">',
+          close: "</section>",
+          image: "height:auto;box-sizing:border-box;",
+        };
       }
       return {
-        open: i === 1
-          ? `<section style="display:flex;justify-content:space-between;"><section style="width:${gw || 32}%;">`
-          : `<section style="width:${gw || 32}%;">`,
+        open:
+          i === 1
+            ? `<section style="display:flex;justify-content:space-between;"><section style="width:${gw || 32}%;">`
+            : `<section style="width:${gw || 32}%;">`,
         close: i === 3 ? "</section></section>" : "</section>",
         image: "height:auto;box-sizing:border-box;",
       };
@@ -265,7 +278,10 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
     }
     if (i === 1 || i === 2) {
       return {
-        open: i === 1 ? "<section style=\"flex:1;display:flex;flex-direction:column;\"><section style=\"margin-bottom:1.2%;\">" : "<section>",
+        open:
+          i === 1
+            ? '<section style="flex:1;display:flex;flex-direction:column;"><section style="margin-bottom:1.2%;">'
+            : "<section>",
         close: i === 2 ? "</section></section></section>" : "</section>",
         image: "height:auto;box-sizing:border-box;",
       };
@@ -273,9 +289,10 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
     const remaining = count - 3;
     const fallbackWidth = remaining === 3 ? "32%" : "49%";
     return {
-      open: i === 3
-        ? `<section style="display:flex;flex-wrap:wrap;justify-content:space-between;"><section style="width:${gw || fallbackWidth};margin-bottom:1.2%;">`
-        : `<section style="width:${gw || fallbackWidth};margin-bottom:1.2%;">`,
+      open:
+        i === 3
+          ? `<section style="display:flex;flex-wrap:wrap;justify-content:space-between;"><section style="width:${gw || fallbackWidth};margin-bottom:1.2%;">`
+          : `<section style="width:${gw || fallbackWidth};margin-bottom:1.2%;">`,
       close: i === count - 1 ? "</section></section>" : "</section>",
       image: "height:auto;box-sizing:border-box;",
     };
@@ -327,7 +344,10 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
 
   md.renderer.rules.heading_open = (tokens, idx) => {
     const level = Number(tokens[idx]!.tag.slice(1));
-    const style = ({ 1: styles.h1, 2: styles.h2, 3: styles.h3, 4: styles.h4, 5: styles.h5, 6: styles.h6 } as Record<number, string>)[level] || styles.h4;
+    const style =
+      (
+        { 1: styles.h1, 2: styles.h2, 3: styles.h3, 4: styles.h4, 5: styles.h5, 6: styles.h6 } as Record<number, string>
+      )[level] || styles.h4;
     const wrap = styles[`h${level}WrapOpen`] || "";
     const sectionIndex = tokens[idx]!.meta?.sectionIndex as string | undefined;
     const indexHtml =
@@ -343,7 +363,9 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
   };
 
   md.renderer.rules.blockquote_open = (tokens, idx) => {
-    const style = (tokens[idx]!.meta?.blockquoteDepth as number | undefined) ? styles.blockquoteNested : styles.blockquote;
+    const style = (tokens[idx]!.meta?.blockquoteDepth as number | undefined)
+      ? styles.blockquoteNested
+      : styles.blockquote;
     return `<blockquote${dl(tokens[idx]!)} style="${escapeHtmlAttr(style)}">`;
   };
   md.renderer.rules.bullet_list_open = (tokens, idx) => `<ul${dl(tokens[idx]!)} style="${escapeHtmlAttr(styles.ul)}">`;
@@ -405,7 +427,8 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
     return `<td style="${escapeHtmlAttr(`${styles.td}${align}`)}">`;
   };
 
-  md.renderer.rules.code_inline = (tokens, idx) => `<code style="${escapeHtmlAttr(styles.code)}">${esc(tokens[idx]!.content)}</code>`;
+  md.renderer.rules.code_inline = (tokens, idx) =>
+    `<code style="${escapeHtmlAttr(styles.code)}">${esc(tokens[idx]!.content)}</code>`;
   md.renderer.rules.code_block = (tokens, idx) => wrapCode(esc(tokens[idx]!.content), tokens[idx]!);
   md.renderer.rules.fence = (tokens, idx) => wrapCode(esc(tokens[idx]!.content), tokens[idx]!);
 
@@ -413,11 +436,52 @@ function createRenderer(theme: MdWechatTheme, opts: RenderOpts): RendererResult 
 }
 
 /** 用确定性主题把 Markdown 渲染成公众号可粘贴的内联 CSS HTML 片段。 */
-export function renderArticleWorkflowHtml(
-  markdown: string,
-  theme: MdWechatTheme,
-  opts: RenderOpts = {},
-): string {
+export function renderArticleWorkflowHtml(markdown: string, theme: MdWechatTheme, opts: RenderOpts = {}): string {
   const { render, styles } = createRenderer(theme, opts);
   return `<section style="${escapeHtmlAttr(styles.container)}">${render(markdown)}</section>`;
+}
+
+/**
+ * 图片注入用的最小形态：只有槽位与落库稳定地址。
+ *
+ * 为什么不在共享包里依赖 ArticleWorkflowImageAsset：确定性渲染只关心「哪张图、放哪」，
+ * assetId/thumbnailUrl/caption/prompt 都与排版无关。前端本地换肤（阶段 5）也会用同一份
+ * imageManifest 的 imageUrl，保持签名前稳定地址即可。
+ */
+export interface ArticleWorkflowImageMarkdownSource {
+  readonly slot: string;
+  readonly imageUrl: string;
+}
+
+/** 把 url 用尖括号包起来，防止空格/括号破坏 markdown 图片语法；顺带清掉尖括号本身。 */
+function markdownSafeImageUrl(url: string): string {
+  const cleaned = url.replace(/[<>]/g, "");
+  return cleaned.includes(" ") || cleaned.includes("(") || cleaned.includes(")") ? `<${cleaned}>` : cleaned;
+}
+
+/**
+ * 把正文 Markdown 与配图清单合成「渲染器可直接消费」的 Markdown。
+ *
+ * 图片是独立 imageManifest + 生成后才有的 URL，正文 Markdown 里本没有图片语法。
+ * 这里按封面在前、正文居中、内页图连续排在末尾的方式注入：
+ * - 封面单图不与其他图相邻，渲染器按普通单图处理；
+ * - 内页图连续段落会命中渲染器的画廊 core rule，自动拼成拼贴/网格/单列布局。
+ *
+ * 图片统一用空 alt（`![]`），这样 Markdown 可见文字与渲染出的 HTML 可见文字都不含图注，
+ * 保证确定性渲染在「可见文字完全一致」的硬闸下零回归。
+ */
+export function articleWorkflowMarkdownWithImages(
+  bodyMarkdown: string,
+  images: readonly ArticleWorkflowImageMarkdownSource[],
+): string {
+  const withUrl = images.filter((image) => image.imageUrl.trim());
+  const cover = withUrl.filter((image) => image.slot === "cover");
+  const inline = withUrl.filter((image) => image.slot !== "cover");
+
+  const parts: string[] = [];
+  for (const image of cover) parts.push(`![](${markdownSafeImageUrl(image.imageUrl.trim())})`);
+  const body = bodyMarkdown.trim();
+  if (body) parts.push(body);
+  for (const image of inline) parts.push(`![](${markdownSafeImageUrl(image.imageUrl.trim())})`);
+  return parts.join("\n\n");
 }

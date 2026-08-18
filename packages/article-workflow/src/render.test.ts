@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderArticleWorkflowHtml } from "./render.js";
+import { articleWorkflowMarkdownWithImages, renderArticleWorkflowHtml } from "./render.js";
 import { ARTICLE_WORKFLOW_THEME_MAP } from "./themes.js";
 
 const literary = ARTICLE_WORKFLOW_THEME_MAP.literary!;
@@ -59,5 +59,52 @@ describe("renderArticleWorkflowHtml", () => {
     const a = renderArticleWorkflowHtml(md, literary);
     const b = renderArticleWorkflowHtml(md, ARTICLE_WORKFLOW_THEME_MAP["swiss-index"]!);
     expect(a).not.toBe(b);
+  });
+});
+
+describe("articleWorkflowMarkdownWithImages", () => {
+  it("封面在前、正文居中、内页图连续排在末尾", () => {
+    const markdown = articleWorkflowMarkdownWithImages("正文段落。", [
+      { slot: "inline-1", imageUrl: "https://a/1.png" },
+      { slot: "cover", imageUrl: "https://a/cover.png" },
+      { slot: "inline-2", imageUrl: "https://a/2.png" },
+    ]);
+    const lines = markdown.split("\n");
+    expect(lines[0]).toContain("cover.png");
+    expect(markdown).toContain("正文段落。");
+    expect(lines[lines.length - 1]).toContain("2.png");
+    // 封面与内页图之间隔着正文，不会被拼进画廊
+    const coverIndex = markdown.indexOf("cover.png");
+    const bodyIndex = markdown.indexOf("正文段落。");
+    const inlineIndex = markdown.indexOf("1.png");
+    expect(coverIndex).toBeLessThan(bodyIndex);
+    expect(bodyIndex).toBeLessThan(inlineIndex);
+  });
+
+  it("图片用空 alt，正文可见文字不受图注污染", () => {
+    const markdown = articleWorkflowMarkdownWithImages("正文段落。", [
+      { slot: "cover", imageUrl: "https://a/cover.png" },
+      { slot: "inline-1", imageUrl: "https://a/1.png" },
+      { slot: "inline-2", imageUrl: "https://a/2.png" },
+    ]);
+    const html = renderArticleWorkflowHtml(markdown, literary, { galleryMode: "collage" });
+    // 正文文字仍在，图片本身不产生可见文字
+    expect(html).toContain("正文段落。");
+    expect(html).toContain("<img");
+    expect(html).toContain("cover.png");
+  });
+
+  it("无图清单时原样返回正文", () => {
+    expect(articleWorkflowMarkdownWithImages("正文。", [])).toBe("正文。");
+    expect(articleWorkflowMarkdownWithImages("正文。", [{ slot: "cover", imageUrl: "" }])).toBe("正文。");
+  });
+
+  it("带空格/括号的地址被尖括号保护，可正常渲染", () => {
+    const markdown = articleWorkflowMarkdownWithImages("正文。", [
+      { slot: "cover", imageUrl: "https://a/img (1).png" },
+    ]);
+    const html = renderArticleWorkflowHtml(markdown, literary);
+    // markdown-it 会把空格编码成 %20，括号得以保留——关键是不能因括号把语法拆坏
+    expect(html).toContain("https://a/img%20(1).png");
   });
 });

@@ -50,7 +50,9 @@ export {
 } from "./themes.js";
 
 export {
+  articleWorkflowMarkdownWithImages,
   renderArticleWorkflowHtml,
+  type ArticleWorkflowImageMarkdownSource,
   type GalleryMode,
   type RenderOpts,
 } from "./render.js";
