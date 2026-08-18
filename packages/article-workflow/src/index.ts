@@ -7,6 +7,7 @@ export {
   ARTICLE_WORKFLOW_PROJECT_STATUSES,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
   ARTICLE_WORKFLOW_STYLE_MODES,
+  ARTICLE_WORKFLOW_THEMES,
   ARTICLE_WORKFLOW_TOPIC_PRESETS,
   type ArticleWorkflowCreationConfig,
   type ArticleWorkflowCreationMode,
@@ -20,6 +21,7 @@ export {
   type ArticleWorkflowProjectStatus,
   type ArticleWorkflowSourceFormat,
   type ArticleWorkflowStyleMode,
+  type ArticleWorkflowThemeKey,
   type ArticleWorkflowTopicPreset,
   type ArticleWorkflowTopicStyle,
 } from "./types.js";
@@ -31,6 +33,13 @@ export {
   resolveArticleWorkflowMode,
   type ArticleWorkflowPlatformConfig,
 } from "./platforms.js";
+
+export {
+  ARTICLE_WORKFLOW_THEME_MAP,
+  articleWorkflowTheme,
+  articleWorkflowThemeConfig,
+  type ArticleWorkflowTheme,
+} from "./themes.js";
 
 export {
   ARTICLE_WORKFLOW_HTML_ATTRS,

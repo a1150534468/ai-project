@@ -36,6 +36,15 @@ export const ARTICLE_WORKFLOW_TOPIC_PRESETS = [
   "healing",
 ] as const;
 
+export const ARTICLE_WORKFLOW_THEMES = [
+  "auto",
+  "minimal",
+  "business",
+  "warm",
+  "fresh",
+  "magazine",
+] as const;
+
 export const ARTICLE_WORKFLOW_PLATFORMS = [
   "wechat",
   "xiaohongshu",
@@ -61,6 +70,7 @@ export type ArticleWorkflowGenerationMode = typeof ARTICLE_WORKFLOW_GENERATION_M
 export type ArticleWorkflowCreationMode = typeof ARTICLE_WORKFLOW_CREATION_MODES[number];
 export type ArticleWorkflowStyleMode = typeof ARTICLE_WORKFLOW_STYLE_MODES[number];
 export type ArticleWorkflowTopicPreset = typeof ARTICLE_WORKFLOW_TOPIC_PRESETS[number];
+export type ArticleWorkflowThemeKey = typeof ARTICLE_WORKFLOW_THEMES[number];
 export type ArticleWorkflowImageSlot = typeof ARTICLE_WORKFLOW_IMAGE_SLOTS[number];
 export type ArticleWorkflowPlatform = typeof ARTICLE_WORKFLOW_PLATFORMS[number];
 export type ArticleWorkflowOutputKind = typeof ARTICLE_WORKFLOW_OUTPUT_KINDS[number];
