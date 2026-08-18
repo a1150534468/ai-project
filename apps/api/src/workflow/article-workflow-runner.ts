@@ -360,8 +360,6 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
     model: args.model,
     bodyMarkdown,
     imageManifest,
-    theme: args.theme,
-    themeColor: args.themeColor,
   });
   // 先修到词汇表以内再硬校验：排版是最后一步，配图钱已经花了，
   // 不该因为模型多写一个 <h2> 就让整行 failed。修的都是不动可见文字的操作。

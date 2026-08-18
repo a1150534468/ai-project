@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ArticleWorkflowThemePicker } from "./ArticleWorkflowThemePicker";
 
 describe("ArticleWorkflowThemePicker", () => {
-  it("renders the auto card plus all preset themes", () => {
+  it("renders the auto card plus preset themes", () => {
     const html = renderToStaticMarkup(
       <ArticleWorkflowThemePicker
         selectedTheme="auto"
@@ -13,11 +13,8 @@ describe("ArticleWorkflowThemePicker", () => {
       />,
     );
     expect(html).toContain("AI 自动");
-    expect(html).toContain("极简");
-    expect(html).toContain("商务");
-    expect(html).toContain("暖阳");
-    expect(html).toContain("清新");
-    expect(html).toContain("杂志");
+    expect(html).toContain("纸上散文");
+    expect(html).toContain("瑞士索引");
   });
 
   it("hides the color picker when auto is selected", () => {
@@ -32,23 +29,23 @@ describe("ArticleWorkflowThemePicker", () => {
     expect(html).not.toContain("自定义主色");
   });
 
-  it("shows the color picker seeded with the theme default color", () => {
+  it("shows the color picker seeded with the theme primary color", () => {
     const html = renderToStaticMarkup(
       <ArticleWorkflowThemePicker
-        selectedTheme="magazine"
+        selectedTheme="literary"
         selectedThemeColor=""
         onThemeChange={() => undefined}
         onThemeColorChange={() => undefined}
       />,
     );
     expect(html).toContain("自定义主色");
-    expect(html).toContain("#c0392b");
+    expect(html).toContain("#9c4b3f");
   });
 
   it("prefers the user override color over the theme default", () => {
     const html = renderToStaticMarkup(
       <ArticleWorkflowThemePicker
-        selectedTheme="magazine"
+        selectedTheme="literary"
         selectedThemeColor="#123456"
         onThemeChange={() => undefined}
         onThemeColorChange={() => undefined}

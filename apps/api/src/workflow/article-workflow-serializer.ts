@@ -8,6 +8,7 @@ import {
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowProjectStatus,
   type ArticleWorkflowSourceFormat,
+  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import {
   articleWorkflowImageManifestItemSchema,
@@ -64,7 +65,7 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
     generationMode: row.generationMode as ArticleWorkflowGenerationMode,
     platform: articleWorkflowPlatformConfig(row.platform).platform,
     batchId: row.batchId,
-    theme: articleWorkflowTheme(row.theme),
+    theme: articleWorkflowTheme(row.theme) as ArticleWorkflowThemeKey,
     themeColor: row.themeColor ?? null,
     title: fallbackTitle(row.title),
     summary: row.summary.trim(),

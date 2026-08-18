@@ -1,15 +1,12 @@
 import {
   ARTICLE_WORKFLOW_HTML_ATTRS,
   ARTICLE_WORKFLOW_HTML_TAGS,
-  articleWorkflowThemeConfig,
   type ArticleWorkflowCreationConfig,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
   type ArticleWorkflowPlatformConfig,
   type ArticleWorkflowSourceFormat,
-  type ArticleWorkflowTheme,
-  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_SOURCE_PROMPT_BUDGET } from "./article-workflow-shared.js";
 import { articleWorkflowCreationPrompt } from "./article-workflow-creation.js";
@@ -138,34 +135,8 @@ export function buildArticleWorkflowCaptionUserPrompt(args: {
   ].filter(Boolean).join("\n");
 }
 
-/** 非 auto 主题的排版风格约束，追加在现状约束之后。 */
-function articleWorkflowThemePromptHints(
-  theme: ArticleWorkflowTheme,
-  primaryColor: string,
-): readonly string[] {
-  const { palette, typography, rhythm } = theme;
+export function buildArticleWorkflowLayoutSystemPrompt(): string {
   return [
-    "",
-    `Visual style theme: ${theme.label} — ${theme.description}`,
-    "Apply this color palette (use these exact values, or visually-equivalent values within ±10%):",
-    `- primary color: ${primaryColor} — for headings, emphasis, links, and section accents.`,
-    `- secondary color: ${palette.secondary} — for dividers and subtle fills.`,
-    `- page background: ${palette.background}; body text: ${palette.text}; muted text: ${palette.muted}.`,
-    `- accent background: ${palette.accentBg} — for blockquote/quote/card backgrounds.`,
-    "Apply this typography rhythm:",
-    `- body font size around ${typography.baseFontSize}, line-height around ${typography.lineHeight}, letter-spacing around ${typography.letterSpacing}.`,
-    `- headings scaled about ${typography.headingScale}× the body size.`,
-    "Spacing and shape:",
-    `- section padding around ${rhythm.sectionPadding}, border-radius around ${rhythm.radius}, borders ${rhythm.borderWidth} when used.`,
-    "Keep ALL constraints above: only allowed tags/attributes; no position/float/z-index/transform/filter; no fixed heights; no negative margins.",
-  ];
-}
-
-export function buildArticleWorkflowLayoutSystemPrompt(args: {
-  readonly theme?: ArticleWorkflowThemeKey;
-  readonly themeColor?: string;
-} = {}): string {
-  const base = [
     "You are an expert WeChat official account article layout assistant.",
     "Turn the article into a polished WeChat-ready HTML fragment.",
     "You may improve structure, typography, spacing, borders, backgrounds, and rhythm, but you must preserve all visible article text exactly.",
@@ -184,13 +155,6 @@ export function buildArticleWorkflowLayoutSystemPrompt(args: {
     '<section data-ai-assistant-image-slot="cover"></section>',
     "Do not put visible text inside image placeholder sections.",
     "Do not wrap the answer in Markdown code fences.",
-  ];
-  // auto（或未知）主题：逐字返回现状，零回归。
-  const config = articleWorkflowThemeConfig(args.theme);
-  if (!config) return base.join("\n");
-  return [
-    ...base,
-    ...articleWorkflowThemePromptHints(config, args.themeColor ?? config.palette.primary),
   ].join("\n");
 }
 

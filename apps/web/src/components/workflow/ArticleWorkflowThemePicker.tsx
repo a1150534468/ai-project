@@ -24,12 +24,12 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
     ? null
     : ARTICLE_WORKFLOW_THEME_MAP[props.selectedTheme];
   const effectiveColor = activeConfig
-    ? (props.selectedThemeColor || activeConfig.palette.primary)
+    ? (props.selectedThemeColor || activeConfig.primary)
     : "";
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid max-h-[320px] grid-cols-3 gap-2 overflow-y-auto pr-1">
         <ThemeCard
           label="AI 自动"
           preview={{ background: "#f5f5f7", text: "#1d1d1f", primary: "#888780" }}
@@ -41,11 +41,11 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
           return (
             <ThemeCard
               key={key}
-              label={theme.label}
+              label={theme.name}
               preview={{
-                background: theme.palette.background,
-                text: theme.palette.text,
-                primary: theme.palette.primary,
+                background: theme.surface || "#ffffff",
+                text: "#3f3f46",
+                primary: theme.primary,
               }}
               selected={props.selectedTheme === key}
               onClick={() => props.onThemeChange(key)}
@@ -80,7 +80,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
   );
 }
 
-/** 主题卡片：用主题色渲染一个迷你排版示意（主色标题条 + 正文段落条），替代单调的色块。 */
+/** 主题卡片：用主题主色渲染一个迷你排版示意（主色标题条 + 正文段落条）。 */
 function ThemeCard(props: {
   readonly label: string;
   readonly preview: ThemePreview;
