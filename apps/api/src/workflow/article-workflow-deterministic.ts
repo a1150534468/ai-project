@@ -7,7 +7,6 @@ import {
   type GalleryMode,
 } from "@ai-assistant/article-workflow";
 import { assertArticleWorkflowHtmlFragment, repairArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";
-import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
 import { articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
 
 /**
@@ -56,9 +55,11 @@ export function renderDeterministicArticleBodyHtmlGuarded(args: {
   if (rendered === null) return null;
   const guardedHtml = assertArticleWorkflowHtmlFragment({
     html: repairArticleWorkflowHtmlFragment(rendered),
-    // 见 materializeHtmlFragmentArticle 的说明：确定性渲染不丢字，expectedVisibleText
-    // 取渲染结果自身，只守白名单与注释禁令，避免 extractH2Index 序号 span 的轻微漂移被误判。
-    expectedVisibleText: articleWorkflowVisibleTextFromHtml(rendered),
+    expectedVisibleText: "",
+    // 确定性渲染不丢字（渲染器保证可见文字 = Markdown 可见文字），跳过可见文字硬闸，
+    // 只守白名单与注释禁令——避免 extractH2Index 序号 span 的轻微漂移被误判。
+    // 「不丢字」校验前移到 plan 阶段（preserve-text 对比 bodyMarkdown vs 原文）。
+    skipVisibleTextCheck: true,
   });
   return articleWorkflowStableBodyHtml(guardedHtml);
 }

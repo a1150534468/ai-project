@@ -936,4 +936,123 @@ describe("article-workflow routes", () => {
     expect(row.bodyHtml).not.toContain("data-ai-assistant-image-slot");
     expect(row.bodyMarkdown).toContain("开头第一段。");
   });
+
+  it("applies a theme change by re-rendering the deterministic body", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "wechat",
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+        theme: "literary",
+        themeColor: null,
+        galleryMode: "collage",
+        title: "标题",
+        summary: "",
+        bodyHtml: "",
+        bodyMarkdown: "开头第一段。\n\n第二段继续说明。",
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1/theme",
+      payload: { theme: "swiss-index", themeColor: "#123456", galleryMode: "grid" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const row = prisma.__state.projects[0]!;
+    expect(row.theme).toBe("swiss-index");
+    expect(row.themeColor).toBe("#123456");
+    expect(row.galleryMode).toBe("grid");
+    expect(row.bodyHtml).toContain("开头第一段。");
+    expect(row.bodyHtml).toContain("<img");
+    expect(row.bodyHtml).not.toContain("data-ai-assistant-image-slot");
+  });
+
+  it("rejects theme change for an auto body without markdown", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "wechat",
+        sourceFormat: "plain-text",
+        sourceText: "原文内容",
+        generationMode: "preserve-text",
+        theme: "auto",
+        themeColor: null,
+        galleryMode: "collage",
+        title: "标题",
+        summary: "",
+        bodyHtml: buildArticleWorkflowHtml(),
+        bodyMarkdown: "",
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1/theme",
+      payload: { theme: "literary", themeColor: null, galleryMode: "collage" },
+    });
+
+    // auto 排版（无 bodyMarkdown）无法确定性换肤
+    expect(response.statusCode).toBe(409);
+  });
+
+  it("rejects theme change to auto", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "wechat",
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。",
+        generationMode: "preserve-text",
+        theme: "literary",
+        themeColor: null,
+        galleryMode: "collage",
+        title: "标题",
+        summary: "",
+        bodyHtml: "",
+        bodyMarkdown: "开头第一段。",
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "PATCH",
+      url: "/api/workflow/article-workflow/p-1/theme",
+      payload: { theme: "auto", themeColor: null, galleryMode: "collage" },
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
 });

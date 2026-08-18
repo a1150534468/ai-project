@@ -4,6 +4,7 @@ import {
   articleWorkflowTheme,
   type ArticleWorkflowCreationConfig,
   type ArticleWorkflowCreationMode,
+  type ArticleWorkflowGalleryMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowProjectStatus,
@@ -61,6 +62,9 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
     batchId: row.batchId,
     theme: articleWorkflowTheme(row.theme) as ArticleWorkflowThemeKey,
     themeColor: row.themeColor ?? null,
+    galleryMode: (row.galleryMode === "grid" || row.galleryMode === "stack"
+      ? row.galleryMode
+      : "collage") as ArticleWorkflowGalleryMode,
     title: fallbackTitle(row.title),
     summary: row.summary.trim(),
     bodyHtml: row.bodyHtml.trim(),
@@ -88,6 +92,7 @@ export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
     batchId: project.batchId,
     theme: project.theme,
     themeColor: project.themeColor,
+    galleryMode: project.galleryMode,
     status: project.status as ArticleWorkflowProjectStatus,
     progressStage: project.progressStage,
     progressPercent: project.progressPercent,

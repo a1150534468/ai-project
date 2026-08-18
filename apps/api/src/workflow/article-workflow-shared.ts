@@ -5,6 +5,7 @@ import {
   ARTICLE_WORKFLOW_PLATFORM_CONFIGS,
   type ArticleWorkflowCreationConfig,
   type ArticleWorkflowCreationMode,
+  type ArticleWorkflowGalleryMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
@@ -42,7 +43,8 @@ export const ARTICLE_PROJECT_STALE_MS = 15 * 60_000;
  */
 export function articleProjectStaleMs(env: NodeJS.ProcessEnv = process.env): number {
   const attemptMs = loadImageAttemptTimeoutMs(env);
-  const backoffMs = ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS * articleWorkflowRetryDelayMs(ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, env);
+  const backoffMs =
+    ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS * articleWorkflowRetryDelayMs(ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, env);
   // 1.5 倍余量留给下载、入库、S3 上传等批次内的非上游耗时。
   const worstChunkMs = Math.round((attemptMs * ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS + backoffMs) * 1.5);
   return Math.max(ARTICLE_PROJECT_STALE_MS, worstChunkMs);
@@ -102,9 +104,7 @@ export interface ArticleWorkflowRouteDeps {
   readonly loadImageBlob?: (objectKey: string) => Promise<Buffer>;
 }
 
-export type ArticleProjectRow = NonNullable<
-  Awaited<ReturnType<PrismaClient["articleWorkflowProject"]["findFirst"]>>
->;
+export type ArticleProjectRow = NonNullable<Awaited<ReturnType<PrismaClient["articleWorkflowProject"]["findFirst"]>>>;
 
 export interface ArticleWorkflowPersistedProject {
   readonly id: string;
@@ -118,6 +118,7 @@ export interface ArticleWorkflowPersistedProject {
   readonly batchId: string | null;
   readonly theme: ArticleWorkflowThemeKey;
   readonly themeColor: string | null;
+  readonly galleryMode: ArticleWorkflowGalleryMode;
   readonly title: string;
   readonly summary: string;
   readonly bodyHtml: string;

@@ -5,6 +5,7 @@ import {
   articleWorkflowVisibleTextFromMarkdown,
   articleWorkflowVisibleTextFromSource,
   type ArticleWorkflowCreationConfig,
+  type ArticleWorkflowGalleryMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
@@ -173,6 +174,7 @@ async function materializeArticleWorkflow(
     readonly platform: ArticleWorkflowPlatform;
     readonly theme: ArticleWorkflowThemeKey;
     readonly themeColor: string | null;
+    readonly galleryMode: ArticleWorkflowGalleryMode;
     readonly currentHtml?: string;
     /** caption 平台改稿时的现有文案，等价于公众号链路的 currentHtml */
     readonly currentCaption?: string;
@@ -279,6 +281,7 @@ async function materializeHtmlFragmentArticle(
     readonly model: string;
     readonly theme: ArticleWorkflowThemeKey;
     readonly themeColor: string | null;
+    readonly galleryMode: ArticleWorkflowGalleryMode;
     readonly platformConfig: ArticleWorkflowPlatformConfig;
     readonly populateImages: PopulateArticleImages;
   },
@@ -372,6 +375,7 @@ async function materializeHtmlFragmentArticle(
     themeColor: args.themeColor,
     bodyMarkdown,
     imageManifest,
+    galleryMode: args.galleryMode,
   });
   let bodyHtml: string;
   if (deterministicHtml !== null) {
@@ -417,6 +421,7 @@ export async function runInitialArticleWorkflowGeneration(
     readonly model: string;
     readonly theme: ArticleWorkflowThemeKey;
     readonly themeColor: string | null;
+    readonly galleryMode: ArticleWorkflowGalleryMode;
   },
 ): Promise<void> {
   const captionPlatform = articleWorkflowPlatformConfig(args.platform).outputKind === "caption";
@@ -482,6 +487,7 @@ export async function runArticleWorkflowRewrite(
       platform,
       theme: current.theme,
       themeColor: current.themeColor,
+      galleryMode: current.galleryMode,
       currentHtml: current.bodyHtml,
       currentCaption: current.captionText,
       currentImages: current.imageManifest,
@@ -550,6 +556,7 @@ export async function runArticleWorkflowMissingImages(
           themeColor: current.themeColor,
           bodyMarkdown: current.bodyMarkdown,
           imageManifest,
+          galleryMode: current.galleryMode,
         })
       : null;
     const bodyHtml =

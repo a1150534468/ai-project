@@ -1,16 +1,13 @@
 import type { PrismaClient } from "@prisma/client";
 import type {
+  ArticleWorkflowGalleryMode,
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowProjectStatus,
 } from "@ai-assistant/article-workflow";
 import { jsonValue } from "./article-workflow-serializer.js";
 
-export async function findOwnedArticleWorkflowProject(
-  prisma: PrismaClient,
-  userId: string,
-  projectId: string,
-) {
+export async function findOwnedArticleWorkflowProject(prisma: PrismaClient, userId: string, projectId: string) {
   return prisma.articleWorkflowProject.findFirst({ where: { id: projectId, userId } });
 }
 
@@ -23,6 +20,7 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   captionText: string;
   tags: readonly string[];
   imageManifestJson: readonly ArticleWorkflowImageAsset[];
+  galleryMode: ArticleWorkflowGalleryMode;
   status: ArticleWorkflowProjectStatus;
   progressStage: string;
   progressPercent: number;
@@ -45,6 +43,7 @@ function articleWorkflowStateData(data: ArticleWorkflowProjectStatePatch) {
     captionText: data.captionText,
     tagsJson: data.tags ? jsonValue(data.tags) : undefined,
     imageManifestJson: data.imageManifestJson ? jsonValue(data.imageManifestJson) : undefined,
+    galleryMode: data.galleryMode,
     status: data.status,
     progressStage: data.progressStage,
     progressPercent: data.progressPercent,

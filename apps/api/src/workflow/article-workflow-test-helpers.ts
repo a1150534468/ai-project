@@ -15,6 +15,7 @@ export type ProjectRow = {
   batchId: string | null;
   theme: string;
   themeColor: string | null;
+  galleryMode: string;
   title: string;
   summary: string;
   bodyHtml: string;
@@ -51,11 +52,7 @@ export function buildArticleWorkflowPlan() {
   return {
     title: "咖啡机夏促",
     summary: "适合公众号摘要",
-    bodyMarkdown: [
-      "开头第一段。",
-      "",
-      "第二段继续说明。",
-    ].join("\n"),
+    bodyMarkdown: ["开头第一段。", "", "第二段继续说明。"].join("\n"),
     images: [
       { slot: "cover" as const, role: "cover" as const, alt: "头图", caption: "", prompt: "cover prompt" },
       { slot: "inline-1" as const, role: "inline" as const, alt: "细节图", caption: "", prompt: "detail prompt" },
@@ -127,6 +124,7 @@ const PROJECT_ROW_DEFAULTS = {
   batchId: null,
   theme: "auto",
   themeColor: null,
+  galleryMode: "collage",
   title: "",
   summary: "",
   bodyHtml: "",
@@ -141,8 +139,8 @@ const PROJECT_ROW_DEFAULTS = {
   error: null,
 } satisfies Partial<ProjectRow>;
 
-export type ArticleProjectRowSeed =
-  Partial<ProjectRow> & Pick<ProjectRow, "id" | "userId" | "sourceFormat" | "sourceText" | "createdAt" | "updatedAt">;
+export type ArticleProjectRowSeed = Partial<ProjectRow> &
+  Pick<ProjectRow, "id" | "userId" | "sourceFormat" | "sourceText" | "createdAt" | "updatedAt">;
 
 export function articleProjectRow(seed: ArticleProjectRowSeed): ProjectRow {
   return { ...PROJECT_ROW_DEFAULTS, ...seed };
@@ -157,41 +155,53 @@ export function createArticleWorkflowPrismaMock(seed?: {
   const now = new Date("2026-07-08T06:00:00.000Z");
   return {
     articleWorkflowProject: {
-      create: vi.fn(async ({ data }: {
-        data: Partial<ProjectRow> & Pick<ProjectRow, "userId" | "sourceFormat" | "sourceText">;
-      }) => {
-        // 路由不传的列由库补默认，mock 也得补，否则序列化时 row.captionText.trim() 会炸。
-        const row = articleProjectRow({
-          ...data,
-          id: `article-${projects.length + 1}`,
-          createdAt: now,
-          updatedAt: now,
-        });
-        projects.push(row);
-        return row;
-      }),
-      findMany: vi.fn(async ({ where, take, orderBy }: {
-        where?: { userId?: string; batchId?: string; status?: { in: string[] }; updatedAt?: { lt?: Date } };
-        take?: number;
-        orderBy?: { createdAt?: "asc" | "desc"; updatedAt?: "asc" | "desc" };
-      }) => {
-        const rows = projects
-          .filter((row) => !where?.userId || row.userId === where.userId)
-          .filter((row) => where?.batchId === undefined || row.batchId === where.batchId)
-          .filter((row) => !where?.status || where.status.in.includes(row.status))
-          .filter((row) => !where?.updatedAt?.lt || row.updatedAt.getTime() < where.updatedAt.lt.getTime());
-        const ascending = orderBy?.createdAt === "asc" || orderBy?.updatedAt === "asc";
-        const key = orderBy?.createdAt ? "createdAt" : "updatedAt";
-        rows.sort((left, right) => ascending
-          ? left[key].getTime() - right[key].getTime()
-          : right[key].getTime() - left[key].getTime());
-        return rows.slice(0, take ?? rows.length);
-      }),
-      findFirst: vi.fn(async ({ where }: { where: { id?: string; userId?: string } }) =>
-        projects.find((row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId)) ?? null),
-      deleteMany: vi.fn(async ({ where }: {
-        where: { id?: string; userId?: string; batchId?: string };
-      }) => {
+      create: vi.fn(
+        async ({
+          data,
+        }: {
+          data: Partial<ProjectRow> & Pick<ProjectRow, "userId" | "sourceFormat" | "sourceText">;
+        }) => {
+          // 路由不传的列由库补默认，mock 也得补，否则序列化时 row.captionText.trim() 会炸。
+          const row = articleProjectRow({
+            ...data,
+            id: `article-${projects.length + 1}`,
+            createdAt: now,
+            updatedAt: now,
+          });
+          projects.push(row);
+          return row;
+        },
+      ),
+      findMany: vi.fn(
+        async ({
+          where,
+          take,
+          orderBy,
+        }: {
+          where?: { userId?: string; batchId?: string; status?: { in: string[] }; updatedAt?: { lt?: Date } };
+          take?: number;
+          orderBy?: { createdAt?: "asc" | "desc"; updatedAt?: "asc" | "desc" };
+        }) => {
+          const rows = projects
+            .filter((row) => !where?.userId || row.userId === where.userId)
+            .filter((row) => where?.batchId === undefined || row.batchId === where.batchId)
+            .filter((row) => !where?.status || where.status.in.includes(row.status))
+            .filter((row) => !where?.updatedAt?.lt || row.updatedAt.getTime() < where.updatedAt.lt.getTime());
+          const ascending = orderBy?.createdAt === "asc" || orderBy?.updatedAt === "asc";
+          const key = orderBy?.createdAt ? "createdAt" : "updatedAt";
+          rows.sort((left, right) =>
+            ascending ? left[key].getTime() - right[key].getTime() : right[key].getTime() - left[key].getTime(),
+          );
+          return rows.slice(0, take ?? rows.length);
+        },
+      ),
+      findFirst: vi.fn(
+        async ({ where }: { where: { id?: string; userId?: string } }) =>
+          projects.find(
+            (row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId),
+          ) ?? null,
+      ),
+      deleteMany: vi.fn(async ({ where }: { where: { id?: string; userId?: string; batchId?: string } }) => {
         let count = 0;
         for (let index = projects.length - 1; index >= 0; index -= 1) {
           const row = projects[index]!;
@@ -203,20 +213,25 @@ export function createArticleWorkflowPrismaMock(seed?: {
         }
         return { count };
       }),
-      updateMany: vi.fn(async ({ where, data }: {
-        where: { id: string; status?: string | { in: string[] }; updatedAt?: { lt?: Date } };
-        data: Partial<ProjectRow>;
-      }) => {
-        const row = projects.find((item) => item.id === where.id);
-        if (!row) return { count: 0 };
-        // status 既可能是精确值（reaper 的乐观锁），也可能是 { in: [...] }（终态条件写）
-        if (typeof where.status === "string" && row.status !== where.status) return { count: 0 };
-        if (typeof where.status === "object" && !where.status.in.includes(row.status)) return { count: 0 };
-        if (where.updatedAt?.lt && row.updatedAt.getTime() >= where.updatedAt.lt.getTime()) return { count: 0 };
-        assignDefined(row, data);
-        row.updatedAt = new Date("2026-07-08T06:01:00.000Z");
-        return { count: 1 };
-      }),
+      updateMany: vi.fn(
+        async ({
+          where,
+          data,
+        }: {
+          where: { id: string; status?: string | { in: string[] }; updatedAt?: { lt?: Date } };
+          data: Partial<ProjectRow>;
+        }) => {
+          const row = projects.find((item) => item.id === where.id);
+          if (!row) return { count: 0 };
+          // status 既可能是精确值（reaper 的乐观锁），也可能是 { in: [...] }（终态条件写）
+          if (typeof where.status === "string" && row.status !== where.status) return { count: 0 };
+          if (typeof where.status === "object" && !where.status.in.includes(row.status)) return { count: 0 };
+          if (where.updatedAt?.lt && row.updatedAt.getTime() >= where.updatedAt.lt.getTime()) return { count: 0 };
+          assignDefined(row, data);
+          row.updatedAt = new Date("2026-07-08T06:01:00.000Z");
+          return { count: 1 };
+        },
+      ),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<ProjectRow> }) => {
         const row = projects.find((item) => item.id === where.id);
         if (!row) throw new Error("project not found");
@@ -226,10 +241,12 @@ export function createArticleWorkflowPrismaMock(seed?: {
       }),
     },
     imageAsset: {
-      findFirst: vi.fn(async ({ where }: { where: { id?: string; userId?: string } }) =>
-        imageAssets.find((row) =>
-          (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId)
-        ) ?? null),
+      findFirst: vi.fn(
+        async ({ where }: { where: { id?: string; userId?: string } }) =>
+          imageAssets.find(
+            (row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId),
+          ) ?? null,
+      ),
       create: vi.fn(async ({ data }: { data: Omit<ImageAssetRow, "id" | "createdAt"> }) => {
         const row: ImageAssetRow = {
           ...data,
@@ -278,10 +295,12 @@ export async function buildArticleWorkflowApp(args?: {
   }[];
 }) {
   const prisma = args?.prisma ?? createArticleWorkflowPrismaMock();
-  const llmResponses = [...(args?.llmResponses ?? [
-    createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
-    createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
-  ])];
+  const llmResponses = [
+    ...(args?.llmResponses ?? [
+      createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
+      createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
+    ]),
+  ];
   const billing = {
     reserveResource: vi.fn(async (_args: BillingCallArgs) => ({ reserved: 1 })),
     settleResource: vi.fn(async (_args: Omit<BillingCallArgs, "userId">) => ({ settled: 1 })),
@@ -304,26 +323,36 @@ export async function buildArticleWorkflowApp(args?: {
       (req as { userId?: string }).userId = "u1";
     });
   }
-  await app.register((instance) => articleWorkflowRoutes(instance, {
-    prisma: prisma as never,
-    billing: billing as never,
-    llm: llm as never,
-    fetchFn: args?.fetchFn ?? (vi.fn(async () => new Response(JSON.stringify({
-      data: [{ b64_json: Buffer.from("png").toString("base64"), mime_type: "image/png" }],
-    }), {
-      status: 200,
-      headers: { "content-type": "application/json" },
-    })) as unknown as typeof fetch),
-    scheduleTask: args?.scheduleTask,
-    loadImageBlob: args?.loadImageBlob,
-    env: {
-      IMAGE_API_KEY: "image-key",
-      IMAGE_BASE_URL: "https://image.test",
-      LLM_DEFAULT_MODEL: "MiniMax-M3",
-      // 系统兜底重试的退避在测试里归零：只验重试次数与终态，不真等 2s + 4s
-      ARTICLE_WORKFLOW_RETRY_BASE_MS: "0",
-      ...args?.envPatch,
-    },
-  }));
+  await app.register((instance) =>
+    articleWorkflowRoutes(instance, {
+      prisma: prisma as never,
+      billing: billing as never,
+      llm: llm as never,
+      fetchFn:
+        args?.fetchFn ??
+        (vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({
+                data: [{ b64_json: Buffer.from("png").toString("base64"), mime_type: "image/png" }],
+              }),
+              {
+                status: 200,
+                headers: { "content-type": "application/json" },
+              },
+            ),
+        ) as unknown as typeof fetch),
+      scheduleTask: args?.scheduleTask,
+      loadImageBlob: args?.loadImageBlob,
+      env: {
+        IMAGE_API_KEY: "image-key",
+        IMAGE_BASE_URL: "https://image.test",
+        LLM_DEFAULT_MODEL: "MiniMax-M3",
+        // 系统兜底重试的退避在测试里归零：只验重试次数与终态，不真等 2s + 4s
+        ARTICLE_WORKFLOW_RETRY_BASE_MS: "0",
+        ...args?.envPatch,
+      },
+    }),
+  );
   return { app, prisma, billing, llm };
 }

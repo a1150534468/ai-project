@@ -33,6 +33,7 @@ import {
   rewriteArticleWorkflowProjectSchema,
   updateArticleWorkflowCaptionProjectSchema,
   updateArticleWorkflowProjectSchema,
+  updateArticleWorkflowThemeSchema,
 } from "./article-workflow-schema.js";
 import { articleWorkflowCaptionSummary } from "./article-workflow-caption.js";
 import { resolveArticleWorkflowPricing } from "./article-workflow-pricing.js";
@@ -42,7 +43,6 @@ import {
   assertArticleWorkflowBodyNotDestroyed,
   assertArticleWorkflowHtmlFragment,
 } from "./article-workflow-html-guard.js";
-import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
 import { generateArticleWorkflowImageAsset } from "./article-workflow-images.js";
 import { articleWorkflowImageBlobSignatureValid, articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
 import {
@@ -119,6 +119,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
           // theme 只对公众号排版有意义，caption 行统一存 auto
           theme: platform === "wechat" ? parsed.data.theme : "auto",
           themeColor: platform === "wechat" ? (parsed.data.themeColor ?? null) : null,
+          galleryMode: platform === "wechat" ? parsed.data.galleryMode : "collage",
           sourceFormat,
           sourceText,
           generationMode,
@@ -155,6 +156,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
           model,
           theme: parsed.data.theme,
           themeColor: parsed.data.themeColor ?? null,
+          galleryMode: parsed.data.galleryMode,
         }),
       );
     }
@@ -312,7 +314,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const parsed = updateArticleWorkflowProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     // 先跟库里的旧正文比，拦住整体销毁；再走形状校验。
-    // 顺序很重要：形状校验的 expectedVisibleText 取自请求自身，对「被清空」是无感的。
+    // 「不毁稿」由 assertArticleWorkflowBodyNotDestroyed 守，这里只需形状白名单校验。
     try {
       assertArticleWorkflowBodyNotDestroyed({
         nextHtml: parsed.data.bodyHtml,
@@ -324,7 +326,8 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     }
     const guardedHtml = assertArticleWorkflowHtmlFragment({
       html: parsed.data.bodyHtml,
-      expectedVisibleText: articleWorkflowVisibleTextFromHtml(parsed.data.bodyHtml),
+      expectedVisibleText: "",
+      skipVisibleTextCheck: true,
     });
     // 落库前把出参时现签的短期地址还原成稳定地址，否则存进去的是一批会过期的死链。
     // 配图区随后会按 manifest 整段重建，这一步管的是重建覆盖不到的残留。
@@ -389,6 +392,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
         platform,
         theme: current.theme,
         themeColor: current.themeColor,
+        galleryMode: current.galleryMode,
         generateImages: current.creationConfig.generateImages,
         model,
       }),
@@ -491,6 +495,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
             themeColor: current.themeColor,
             bodyMarkdown: current.bodyMarkdown,
             imageManifest: nextManifest,
+            galleryMode: current.galleryMode,
           })
         : null;
       const nextHtml =
@@ -520,6 +525,55 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       }).catch(() => undefined);
       return reply.code(502).send({ error: safeErrorMessage(error) });
     }
+  });
+
+  app.patch("/api/workflow/article-workflow/:id/theme", async (req, reply) => {
+    const userId = authUserId(req as { userId?: string }, reply);
+    if (!userId) return;
+    const params = articleWorkflowProjectParamsSchema.safeParse(req.params);
+    const parsed = updateArticleWorkflowThemeSchema.safeParse(req.body);
+    if (!params.success || !parsed.success) return reply.code(400).send({ error: "参数不合法" });
+    const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    if (!canSaveArticleProject(project.status)) {
+      return reply.code(409).send({ error: "项目尚未生成成功，无法换肤" });
+    }
+    const current = readArticleWorkflowProject(project);
+    // 换肤只对确定性主题（有正文 Markdown）的公众号项目有意义；auto 主题没有确定性模板可换
+    if (!current.bodyMarkdown.trim()) {
+      return reply.code(409).send({ error: "该正文由 AI 排版，无法换肤，请重新生成时选择主题" });
+    }
+    if (parsed.data.theme === "auto") {
+      return reply.code(400).send({ error: "请选择一个具体主题" });
+    }
+
+    const nextHtml = renderDeterministicArticleBodyHtmlGuarded({
+      theme: parsed.data.theme,
+      themeColor: parsed.data.themeColor ?? null,
+      bodyMarkdown: current.bodyMarkdown,
+      imageManifest: current.imageManifest,
+      galleryMode: parsed.data.galleryMode,
+    });
+    // theme 已通过 schema 校验为非 auto，这里不该为 null；兜底用现有正文避免静默清空
+    if (nextHtml === null) {
+      return reply.code(400).send({ error: "主题不可用" });
+    }
+
+    const updated = await prisma.articleWorkflowProject.update({
+      where: { id: project.id },
+      data: {
+        theme: parsed.data.theme,
+        themeColor: parsed.data.themeColor ?? null,
+        galleryMode: parsed.data.galleryMode,
+        bodyHtml: nextHtml,
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: "主题已应用",
+        error: null,
+      },
+    });
+    return { success: true, data: serializeArticleWorkflowProject(updated, env) };
   });
 
   app.post("/api/workflow/article-workflow/:id/images/generate", async (req, reply) => {

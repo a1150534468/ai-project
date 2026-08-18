@@ -95,7 +95,12 @@ function walk(node: any, requiredSlots: Set<string>) {
  * 改写、增删、重排仍然拦得住：那些都会改变字符序列本身。
  */
 function comparableVisibleText(value: string): string {
-  return value.replaceAll("\r\n", "\n").split("\n").map((line) => line.trim()).filter(Boolean).join("");
+  return value
+    .replaceAll("\r\n", "\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("");
 }
 
 /** 收集 HTML 里出现过的图片槽位名。section 和 img 上都有这个属性，所以要去重。 */
@@ -231,6 +236,12 @@ export function assertArticleWorkflowHtmlFragment(args: {
   readonly html: string;
   readonly expectedVisibleText: string;
   readonly requiredImageSlots?: readonly ArticleWorkflowImageSlot[];
+  /**
+   * 确定性渲染（非 auto 主题）下为 true：渲染器保证可见文字 = Markdown 可见文字，
+   * 且不会产出解释性文案，只需守标签/属性白名单与注释禁令。
+   * 可见文字的「不丢字」校验已前移到 plan 阶段（preserve-text 对比 bodyMarkdown vs 原文）。
+   */
+  readonly skipVisibleTextCheck?: boolean;
 }): string {
   const normalizedHtml = args.html.replaceAll("\r\n", "\n").trim();
   if (!normalizedHtml) throw new Error("模型没有返回正文 HTML");
@@ -246,13 +257,15 @@ export function assertArticleWorkflowHtmlFragment(args: {
     throw new Error(`HTML 缺少图片槽位: ${Array.from(requiredSlots).join(", ")}`);
   }
 
-  const visibleText = articleWorkflowVisibleTextFromHtml(normalizedHtml);
-  if (comparableVisibleText(visibleText) !== comparableVisibleText(args.expectedVisibleText)) {
-    throw new Error("HTML 可见文字与预期内容不一致");
-  }
-  for (const phrase of FORBIDDEN_VISIBLE_PHRASES) {
-    if (visibleText.includes(phrase)) {
-      throw new Error("HTML 中混入了解释性文案");
+  if (!args.skipVisibleTextCheck) {
+    const visibleText = articleWorkflowVisibleTextFromHtml(normalizedHtml);
+    if (comparableVisibleText(visibleText) !== comparableVisibleText(args.expectedVisibleText)) {
+      throw new Error("HTML 可见文字与预期内容不一致");
+    }
+    for (const phrase of FORBIDDEN_VISIBLE_PHRASES) {
+      if (visibleText.includes(phrase)) {
+        throw new Error("HTML 中混入了解释性文案");
+      }
     }
   }
   return normalizedHtml;

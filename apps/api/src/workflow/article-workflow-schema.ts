@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   ARTICLE_WORKFLOW_CREATION_MODES,
+  ARTICLE_WORKFLOW_GALLERY_MODES,
   ARTICLE_WORKFLOW_GENERATION_MODES,
   ARTICLE_WORKFLOW_IMAGE_SLOTS,
   ARTICLE_WORKFLOW_PLATFORMS,
@@ -16,6 +17,7 @@ const creationModeSchema = z.enum(ARTICLE_WORKFLOW_CREATION_MODES);
 const imageSlotSchema = z.enum(ARTICLE_WORKFLOW_IMAGE_SLOTS);
 export const articleWorkflowPlatformSchema = z.enum(ARTICLE_WORKFLOW_PLATFORMS);
 export const articleWorkflowThemeSchema = z.enum(ARTICLE_WORKFLOW_THEMES);
+export const articleWorkflowGalleryModeSchema = z.enum(ARTICLE_WORKFLOW_GALLERY_MODES);
 /** 主色覆盖：可选 3/6 位 hex，缺省 = 用主题默认主色。前端未选色时传 null，故按 nullish 收。 */
 export const articleWorkflowThemeColorSchema = z
   .string()
@@ -24,10 +26,7 @@ export const articleWorkflowThemeColorSchema = z
   .nullish();
 
 /** 话题标签：统一去掉前导 #，长度与数量取三平台里最宽的上限，具体裁剪交给平台归一化。 */
-export const articleWorkflowTagsSchema = z
-  .array(z.string().trim().min(1).max(40))
-  .max(8)
-  .default([]);
+export const articleWorkflowTagsSchema = z.array(z.string().trim().min(1).max(40)).max(8).default([]);
 
 export const articleWorkflowImageManifestItemSchema = z.object({
   slot: imageSlotSchema,
@@ -82,11 +81,16 @@ export const articleWorkflowPlanSchema = z.object({
   title: z.string().trim().max(120).default(""),
   summary: z.string().trim().max(300).default(""),
   bodyMarkdown: z.string().trim().min(1).max(500_000),
-  images: z.array(articleWorkflowImageManifestItemSchema.omit({
-    assetId: true,
-    imageUrl: true,
-    thumbnailUrl: true,
-  })).min(1).max(5),
+  images: z
+    .array(
+      articleWorkflowImageManifestItemSchema.omit({
+        assetId: true,
+        imageUrl: true,
+        thumbnailUrl: true,
+      }),
+    )
+    .min(1)
+    .max(5),
 });
 
 /**
@@ -97,48 +101,57 @@ export const articleWorkflowCaptionPlanSchema = z.object({
   title: z.string().trim().min(1).max(200),
   captionText: z.string().trim().min(1).max(20_000),
   tags: articleWorkflowTagsSchema,
-  images: z.array(articleWorkflowImageManifestItemSchema.omit({
-    assetId: true,
-    imageUrl: true,
-    thumbnailUrl: true,
-  })).min(1).max(5),
+  images: z
+    .array(
+      articleWorkflowImageManifestItemSchema.omit({
+        assetId: true,
+        imageUrl: true,
+        thumbnailUrl: true,
+      }),
+    )
+    .min(1)
+    .max(5),
 });
 
-export const createArticleWorkflowProjectSchema = z.object({
-  creationMode: creationModeSchema.optional().default("source"),
-  creationConfig: articleWorkflowCreationConfigSchema.optional(),
-  sourceFormat: sourceFormatSchema,
-  sourceText: z.string().trim().max(ARTICLE_MAX_SOURCE_LENGTH).optional().default(""),
-  /** 期望模式；caption 平台会被 resolveArticleWorkflowMode 降级为 polish-text */
-  generationMode: generationModeSchema.optional().default("preserve-text"),
-  /** 缺省 ["wechat"] 兼容旧客户端；重复平台按首次出现顺序去重 */
-  platforms: z
-    .array(articleWorkflowPlatformSchema)
-    .min(1)
-    // 长度上限只为挡住畸形入参；去重后天然不超过平台总数，重复传同一平台不该报错
-    .max(ARTICLE_WORKFLOW_PLATFORMS.length * 4)
-    .optional()
-    .default(["wechat"])
-    .transform((platforms) => [...new Set(platforms)]),
-  generateImages: z.boolean().optional().default(true),
-  /** 公众号排版主题；caption-only 批次会被静默忽略（仍存 auto） */
-  theme: articleWorkflowThemeSchema.optional().default("auto"),
-  /** 主色覆盖，仅 theme != auto 时生效 */
-  themeColor: articleWorkflowThemeColorSchema,
-}).superRefine((value, context) => {
-  if (value.creationMode === "source") {
-    if (!value.sourceText) {
-      context.addIssue({ code: "custom", path: ["sourceText"], message: "原文不能为空" });
+export const createArticleWorkflowProjectSchema = z
+  .object({
+    creationMode: creationModeSchema.optional().default("source"),
+    creationConfig: articleWorkflowCreationConfigSchema.optional(),
+    sourceFormat: sourceFormatSchema,
+    sourceText: z.string().trim().max(ARTICLE_MAX_SOURCE_LENGTH).optional().default(""),
+    /** 期望模式；caption 平台会被 resolveArticleWorkflowMode 降级为 polish-text */
+    generationMode: generationModeSchema.optional().default("preserve-text"),
+    /** 缺省 ["wechat"] 兼容旧客户端；重复平台按首次出现顺序去重 */
+    platforms: z
+      .array(articleWorkflowPlatformSchema)
+      .min(1)
+      // 长度上限只为挡住畸形入参；去重后天然不超过平台总数，重复传同一平台不该报错
+      .max(ARTICLE_WORKFLOW_PLATFORMS.length * 4)
+      .optional()
+      .default(["wechat"])
+      .transform((platforms) => [...new Set(platforms)]),
+    generateImages: z.boolean().optional().default(true),
+    /** 公众号排版主题；caption-only 批次会被静默忽略（仍存 auto） */
+    theme: articleWorkflowThemeSchema.optional().default("auto"),
+    /** 主色覆盖，仅 theme != auto 时生效 */
+    themeColor: articleWorkflowThemeColorSchema,
+    /** 配图画廊布局模式，仅 theme != auto 时生效；caption 平台忽略 */
+    galleryMode: articleWorkflowGalleryModeSchema.optional().default("collage"),
+  })
+  .superRefine((value, context) => {
+    if (value.creationMode === "source") {
+      if (!value.sourceText) {
+        context.addIssue({ code: "custom", path: ["sourceText"], message: "原文不能为空" });
+      }
+      if (value.creationConfig && value.creationConfig.mode !== "source") {
+        context.addIssue({ code: "custom", path: ["creationConfig"], message: "创作配置与模式不匹配" });
+      }
+      return;
     }
-    if (value.creationConfig && value.creationConfig.mode !== "source") {
-      context.addIssue({ code: "custom", path: ["creationConfig"], message: "创作配置与模式不匹配" });
+    if (!value.creationConfig || value.creationConfig.mode !== "topic") {
+      context.addIssue({ code: "custom", path: ["creationConfig"], message: "主题创作配置不能为空" });
     }
-    return;
-  }
-  if (!value.creationConfig || value.creationConfig.mode !== "topic") {
-    context.addIssue({ code: "custom", path: ["creationConfig"], message: "主题创作配置不能为空" });
-  }
-});
+  });
 
 export const articleWorkflowProjectParamsSchema = z.object({
   id: z.string().trim().min(1).max(160),
@@ -158,7 +171,11 @@ export const articleWorkflowImageBlobParamsSchema = z.object({
 
 /** 取图地址上的短期签名。缺省即视为「没带签名」，回落到会话鉴权。 */
 export const articleWorkflowImageBlobQuerySchema = z.object({
-  exp: z.string().trim().regex(/^\d{1,15}$/).optional(),
+  exp: z
+    .string()
+    .trim()
+    .regex(/^\d{1,15}$/)
+    .optional(),
   sig: z.string().trim().min(1).max(256).optional(),
 });
 
@@ -186,13 +203,20 @@ export const regenerateArticleWorkflowImageSchema = z.object({
   promptOverride: z.string().trim().min(1).max(4000).optional(),
 });
 
+/** 确定性主题换肤：改主题/主色/画廊模式，后端按 bodyMarkdown 重渲正文。 */
+export const updateArticleWorkflowThemeSchema = z.object({
+  theme: articleWorkflowThemeSchema,
+  themeColor: articleWorkflowThemeColorSchema,
+  galleryMode: articleWorkflowGalleryModeSchema.optional().default("collage"),
+});
+
 export type ArticleWorkflowPlan = z.infer<typeof articleWorkflowPlanSchema>;
 export type ArticleWorkflowCaptionPlan = z.infer<typeof articleWorkflowCaptionPlanSchema>;
 export type CreateArticleWorkflowProjectInput = z.infer<typeof createArticleWorkflowProjectSchema>;
 export type ArticleWorkflowProjectParams = z.infer<typeof articleWorkflowProjectParamsSchema>;
 export type ArticleWorkflowImageParams = z.infer<typeof articleWorkflowImageParamsSchema>;
 export type UpdateArticleWorkflowProjectInput = z.infer<typeof updateArticleWorkflowProjectSchema>;
-export type UpdateArticleWorkflowCaptionProjectInput =
-  z.infer<typeof updateArticleWorkflowCaptionProjectSchema>;
+export type UpdateArticleWorkflowCaptionProjectInput = z.infer<typeof updateArticleWorkflowCaptionProjectSchema>;
 export type RewriteArticleWorkflowProjectInput = z.infer<typeof rewriteArticleWorkflowProjectSchema>;
 export type RegenerateArticleWorkflowImageInput = z.infer<typeof regenerateArticleWorkflowImageSchema>;
+export type UpdateArticleWorkflowThemeInput = z.infer<typeof updateArticleWorkflowThemeSchema>;
