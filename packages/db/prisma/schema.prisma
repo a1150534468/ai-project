@@ -974,6 +974,8 @@ model ArticleWorkflowProject {
   // 公众号排版主题：auto = AI 自由发挥；themeColor 为空 = 用主题默认主色
   theme             String   @default("auto")
   themeColor        String?
+  // 配图画廊布局模式：collage / grid / stack；caption 平台恒为 collage
+  galleryMode       String   @default("collage")
   title             String   @default("")
   summary           String   @default("")
   bodyHtml          String   @default("")
