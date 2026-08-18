@@ -977,6 +977,8 @@ model ArticleWorkflowProject {
   title             String   @default("")
   summary           String   @default("")
   bodyHtml          String   @default("")
+  // 公众号正文的 Markdown 原文：确定性主题换肤的前端本地渲染输入；auto 主题为空串
+  bodyMarkdown      String   @default("")
   // caption 平台的正文文案与话题标签；公众号项目保持空值
   captionText       String   @default("")
   tagsJson          Json     @default("[]")
