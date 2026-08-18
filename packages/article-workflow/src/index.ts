@@ -38,7 +38,15 @@ export {
   ARTICLE_WORKFLOW_THEME_MAP,
   articleWorkflowTheme,
   articleWorkflowThemeConfig,
-  type ArticleWorkflowTheme,
+  buildStyles,
+  themes,
+  fontOptions,
+  themeCategories,
+  categoryOrder,
+  type MdWechatTheme,
+  type ThemeStyles,
+  type ThemeStyleFn,
+  type BuildStylesOpts,
 } from "./themes.js";
 
 export {
