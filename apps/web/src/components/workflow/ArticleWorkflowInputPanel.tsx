@@ -2,6 +2,7 @@ import { Icon } from "@iconify/react";
 import {
   ARTICLE_WORKFLOW_PLATFORMS,
   articleWorkflowPlatformConfig,
+  type ArticleWorkflowGalleryMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowPlatform,
   type ArticleWorkflowThemeKey,
@@ -28,8 +29,10 @@ interface ArticleWorkflowInputPanelProps {
   readonly onTogglePlatform: (value: ArticleWorkflowPlatform) => void;
   readonly selectedTheme: ArticleWorkflowThemeKey;
   readonly selectedThemeColor: string;
+  readonly galleryMode: ArticleWorkflowGalleryMode;
   readonly onThemeChange: (value: ArticleWorkflowThemeKey) => void;
   readonly onThemeColorChange: (value: string) => void;
+  readonly onGalleryModeChange: (value: ArticleWorkflowGalleryMode) => void;
   readonly onGenerate: () => void;
   readonly onClose?: () => void;
 }
@@ -101,10 +104,14 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   aria-checked={checked}
                   onClick={() => props.onTogglePlatform(platform)}
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
-                    checked ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white hover:border-[#cbd3d0]"
+                    checked
+                      ? "border-brand bg-brand-soft ring-1 ring-brand/20"
+                      : "border-[#e1e5e3] bg-white hover:border-[#cbd3d0]"
                   }`}
                 >
-                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-[#f0f2f1] text-[#6e7673]"}`}>
+                  <span
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-[#f0f2f1] text-[#6e7673]"}`}
+                  >
                     <Icon icon={PLATFORM_ICONS[platform]} className="text-lg" aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
@@ -138,8 +145,14 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
               onChange={(event) => props.onGenerateImagesChange(event.target.checked)}
               className="peer absolute inset-0 cursor-pointer opacity-0"
             />
-            <span className="h-6 w-10 rounded-full bg-[#d2d2d7] transition peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30" aria-hidden />
-            <span className="pointer-events-none absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4" aria-hidden />
+            <span
+              className="h-6 w-10 rounded-full bg-[#d2d2d7] transition peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30"
+              aria-hidden
+            />
+            <span
+              className="pointer-events-none absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"
+              aria-hidden
+            />
           </span>
         </label>
 
@@ -155,9 +168,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   aria-checked={props.generationMode === option.key}
                   onClick={() => props.onGenerationModeChange(option.key)}
                   className={`h-9 rounded-md px-2 text-xs font-semibold transition ${
-                    props.generationMode === option.key
-                      ? "bg-white text-[#1d1d1f] shadow-sm"
-                      : "text-[#6e6e73]"
+                    props.generationMode === option.key ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
                   }`}
                 >
                   {option.label}
@@ -173,8 +184,10 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
             <ArticleWorkflowThemePicker
               selectedTheme={props.selectedTheme}
               selectedThemeColor={props.selectedThemeColor}
+              galleryMode={props.galleryMode}
               onThemeChange={props.onThemeChange}
               onThemeColorChange={props.onThemeColorChange}
+              onGalleryModeChange={props.onGalleryModeChange}
             />
           </fieldset>
         )}
@@ -185,7 +198,8 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
             <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
           </summary>
           <p className="mt-2 text-[11px] leading-5 text-[#8a8a8f]">
-            文本 {articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}；配图 {articleWorkflowPricingText(props.pricing?.image1k, "按 1K 生图价格")}。失败任务自动退费。
+            文本 {articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}；配图{" "}
+            {articleWorkflowPricingText(props.pricing?.image1k, "按 1K 生图价格")}。失败任务自动退费。
           </p>
         </details>
       </div>
@@ -193,9 +207,11 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
       <SubmitCostBar
         estimatedPointCost={null}
         costLabel="计费方式"
-        costValue={props.generateImages
-          ? `${props.selectedPlatforms.length} 个平台分别计费`
-          : `先生成 ${props.selectedPlatforms.length} 个平台文案`}
+        costValue={
+          props.generateImages
+            ? `${props.selectedPlatforms.length} 个平台分别计费`
+            : `先生成 ${props.selectedPlatforms.length} 个平台文案`
+        }
         submitLabel={`生成 ${props.selectedPlatforms.length} 个平台${props.generateImages ? "图文" : "文案"}`}
         submitIcon="mdi:auto-fix"
         submitDisabled={!props.canGenerate}

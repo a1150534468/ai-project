@@ -18,6 +18,7 @@ function summary(overrides: Partial<ArticleWorkflowProjectSummary> & { id: strin
     batchId: null,
     theme: "auto",
     themeColor: null,
+    galleryMode: "collage",
     status: "ready",
     progressStage: "ready",
     progressPercent: 100,
@@ -113,8 +114,8 @@ describe("articleWorkflowBatchModel", () => {
 
   it("picks the active project by platform, then any ready one", () => {
     const projects = [
-      { ...summary({ id: "p-1", platform: "wechat", status: "generating" }), creationConfig: { mode: "source" as const, generateImages: true }, sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", captionText: "", tags: [], imageManifestJson: [] },
-      { ...summary({ id: "p-2", platform: "xiaohongshu", status: "ready" }), creationConfig: { mode: "source" as const, generateImages: true }, sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", captionText: "", tags: [], imageManifestJson: [] },
+      { ...summary({ id: "p-1", platform: "wechat", status: "generating" }), creationConfig: { mode: "source" as const, generateImages: true }, sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", bodyMarkdown: "", captionText: "", tags: [], imageManifestJson: [] },
+      { ...summary({ id: "p-2", platform: "xiaohongshu", status: "ready" }), creationConfig: { mode: "source" as const, generateImages: true }, sourceFormat: "plain-text" as const, sourceText: "", bodyHtml: "", bodyMarkdown: "", captionText: "", tags: [], imageManifestJson: [] },
     ];
 
     expect(resolveActiveArticleWorkflowProject(projects, "wechat")?.id).toBe("p-1");

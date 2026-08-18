@@ -1,6 +1,7 @@
 import type {
   ArticleWorkflowCreationConfig,
   ArticleWorkflowCreationMode,
+  ArticleWorkflowGalleryMode,
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
   ArticleWorkflowOutputKind,
@@ -22,6 +23,7 @@ export interface ArticleWorkflowProjectSummary {
   readonly batchId: string | null;
   readonly theme: ArticleWorkflowThemeKey;
   readonly themeColor: string | null;
+  readonly galleryMode: ArticleWorkflowGalleryMode;
   readonly status: ArticleWorkflowProjectStatus;
   readonly progressStage: string;
   readonly progressPercent: number;
@@ -36,6 +38,8 @@ export interface ArticleWorkflowProject extends ArticleWorkflowProjectSummary {
   readonly sourceFormat: ArticleWorkflowSourceFormat;
   readonly sourceText: string;
   readonly bodyHtml: string;
+  /** 公众号正文 Markdown：确定性主题换肤的本地渲染输入；auto 主题为空串 */
+  readonly bodyMarkdown: string;
   /** caption 平台的正文文案；公众号为空串 */
   readonly captionText: string;
   readonly tags: readonly string[];
@@ -82,9 +86,10 @@ async function requestArticleWorkflow<T>(args: {
 }): Promise<T> {
   const response = await fetch(args.path, {
     method: args.method,
-    headers: args.body === undefined
-      ? { authorization: `Bearer ${args.token}` }
-      : { "content-type": "application/json", authorization: `Bearer ${args.token}` },
+    headers:
+      args.body === undefined
+        ? { authorization: `Bearer ${args.token}` }
+        : { "content-type": "application/json", authorization: `Bearer ${args.token}` },
     body: args.body === undefined ? undefined : JSON.stringify(args.body),
   });
   if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
@@ -92,17 +97,21 @@ async function requestArticleWorkflow<T>(args: {
   return payload.data;
 }
 
-export function createArticleWorkflowProject(token: string, body: {
-  readonly creationMode: ArticleWorkflowCreationMode;
-  readonly creationConfig: ArticleWorkflowCreationConfig;
-  readonly sourceFormat: ArticleWorkflowSourceFormat;
-  readonly sourceText: string;
-  readonly generationMode: ArticleWorkflowGenerationMode;
-  readonly platforms: readonly ArticleWorkflowPlatform[];
-  readonly generateImages: boolean;
-  readonly theme: ArticleWorkflowThemeKey;
-  readonly themeColor: string | null;
-}): Promise<{
+export function createArticleWorkflowProject(
+  token: string,
+  body: {
+    readonly creationMode: ArticleWorkflowCreationMode;
+    readonly creationConfig: ArticleWorkflowCreationConfig;
+    readonly sourceFormat: ArticleWorkflowSourceFormat;
+    readonly sourceText: string;
+    readonly generationMode: ArticleWorkflowGenerationMode;
+    readonly platforms: readonly ArticleWorkflowPlatform[];
+    readonly generateImages: boolean;
+    readonly theme: ArticleWorkflowThemeKey;
+    readonly themeColor: string | null;
+    readonly galleryMode: ArticleWorkflowGalleryMode;
+  },
+): Promise<{
   readonly batchId: string;
   readonly projects: readonly { readonly projectId: string; readonly platform: ArticleWorkflowPlatform }[];
   readonly projectId: string;
@@ -180,11 +189,11 @@ export function deleteArticleWorkflowProject(
 export type UpdateArticleWorkflowProjectBody =
   | { readonly title: string; readonly summary: string; readonly bodyHtml: string }
   | {
-    readonly title: string;
-    readonly summary?: string;
-    readonly captionText: string;
-    readonly tags: readonly string[];
-  };
+      readonly title: string;
+      readonly summary?: string;
+      readonly captionText: string;
+      readonly tags: readonly string[];
+    };
 
 export function updateArticleWorkflowProject(
   token: string,
@@ -213,11 +222,15 @@ export function retryArticleWorkflowProject(token: string, projectId: string): P
   });
 }
 
-export function rewriteArticleWorkflowProject(token: string, projectId: string, body: {
-  readonly instruction: string;
-  readonly generationMode?: ArticleWorkflowGenerationMode;
-  readonly regenerateImages?: boolean;
-}): Promise<{ projectId: string }> {
+export function rewriteArticleWorkflowProject(
+  token: string,
+  projectId: string,
+  body: {
+    readonly instruction: string;
+    readonly generationMode?: ArticleWorkflowGenerationMode;
+    readonly regenerateImages?: boolean;
+  },
+): Promise<{ projectId: string }> {
   return requestArticleWorkflow({
     token,
     path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}/rewrite`,
@@ -238,6 +251,25 @@ export function regenerateArticleWorkflowImage(
     path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}/images/${encodeURIComponent(slot)}/regenerate`,
     method: "POST",
     fallback: "重生图片失败",
+    body,
+  });
+}
+
+/** 确定性主题换肤：后端按 bodyMarkdown + 新主题重渲正文，返回更新后的项目。 */
+export function applyArticleWorkflowTheme(
+  token: string,
+  projectId: string,
+  body: {
+    readonly theme: ArticleWorkflowThemeKey;
+    readonly themeColor: string | null;
+    readonly galleryMode: ArticleWorkflowGalleryMode;
+  },
+): Promise<ArticleWorkflowProject> {
+  return requestArticleWorkflow({
+    token,
+    path: `/api/workflow/article-workflow/${encodeURIComponent(projectId)}/theme`,
+    method: "PATCH",
+    fallback: "应用主题失败",
     body,
   });
 }

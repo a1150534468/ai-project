@@ -1,9 +1,15 @@
 import { Icon } from "@iconify/react";
-import type { ArticleWorkflowPlatformConfig } from "@ai-assistant/article-workflow";
+import type {
+  ArticleWorkflowGalleryMode,
+  ArticleWorkflowImageAsset,
+  ArticleWorkflowPlatformConfig,
+  ArticleWorkflowThemeKey,
+} from "@ai-assistant/article-workflow";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { RippleButton } from "../../motion";
 import type { ArticleWorkflowProject } from "../../workflowArticleApi";
 import { ArticleWorkflowCaptionEditor } from "./ArticleWorkflowCaptionEditor";
+import { ArticleWorkflowPreviewThemeBar } from "./ArticleWorkflowPreviewThemeBar";
 import {
   ArticleWorkflowPreview,
   ArticleWorkflowPreviewScaleToggle,
@@ -11,6 +17,7 @@ import {
   type ArticleWorkflowPreviewScale,
 } from "./ArticleWorkflowPreview";
 import { ArticleWorkflowRichEditor } from "./ArticleWorkflowRichEditor";
+import { renderArticleWorkflowLocalPreview } from "./articleWorkflowLocalPreview";
 import { formatArticleWorkflowStatus, formatArticleWorkflowTime } from "./articleWorkflowStudioModel";
 
 interface ArticleWorkflowEditorProps {
@@ -26,12 +33,26 @@ interface ArticleWorkflowEditorProps {
   readonly saving: boolean;
   readonly canSave: boolean;
   readonly previewBodyRef: RefObject<HTMLDivElement | null>;
+  readonly imageManifest: readonly ArticleWorkflowImageAsset[];
+  readonly bodyMarkdown: string;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
+  readonly galleryMode: ArticleWorkflowGalleryMode;
+  readonly previewTheme: ArticleWorkflowThemeKey | null;
+  readonly previewThemeColor: string | null;
+  readonly previewGalleryMode: ArticleWorkflowGalleryMode | null;
+  readonly applyingTheme: boolean;
   readonly onTitleChange: (value: string) => void;
   readonly onSummaryChange: (value: string) => void;
   readonly onBodyHtmlChange: (value: string) => void;
   readonly onBodyBlur: (value: string) => void;
   readonly onCaptionChange: (value: string) => void;
   readonly onTagsChange: (value: readonly string[]) => void;
+  readonly onPreviewTheme: (theme: ArticleWorkflowThemeKey) => void;
+  readonly onPreviewThemeColor: (color: string) => void;
+  readonly onPreviewGalleryMode: (mode: ArticleWorkflowGalleryMode) => void;
+  readonly onResetPreviewTheme: () => void;
+  readonly onApplyTheme: () => void;
   readonly onSave: () => void;
   readonly onCopyBody: () => void;
   readonly onCopyTitle: () => void;
@@ -53,6 +74,23 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   const [previewScale, setPreviewScale] = useState<ArticleWorkflowPreviewScale>("full");
   const captionPlatform = props.platformConfig.outputKind === "caption";
   const titleOver = props.titleDraft.trim().length > props.platformConfig.titleMaxLength;
+
+  // 确定性主题换肤：正文 Markdown 非空时用本地渲染，预览即时换肤零延迟；
+  // auto 主题（bodyMarkdown 为空）或渲染结果为 null 时回落到后端已落库的 bodyHtml。
+  const effectivePreviewTheme = props.previewTheme ?? props.theme;
+  const effectivePreviewThemeColor = props.previewThemeColor ?? props.themeColor;
+  const effectivePreviewGalleryMode = props.previewGalleryMode ?? props.galleryMode;
+  const localPreviewHtml =
+    !captionPlatform && props.bodyMarkdown.trim()
+      ? renderArticleWorkflowLocalPreview({
+          bodyMarkdown: props.bodyMarkdown,
+          imageManifest: props.imageManifest,
+          theme: effectivePreviewTheme,
+          themeColor: effectivePreviewThemeColor,
+          galleryMode: effectivePreviewGalleryMode,
+        })
+      : null;
+  const previewHtml = localPreviewHtml ?? props.bodyHtmlDraft;
 
   /** 对照模式的两个滚动容器，编辑驱动预览做比例同步 */
   const editScrollRef = useRef<HTMLDivElement | null>(null);
@@ -155,8 +193,26 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
     <ArticleWorkflowPreview
       title={props.titleDraft}
       summary={props.summaryDraft}
-      previewHtml={props.bodyHtmlDraft}
+      previewHtml={previewHtml}
       previewBodyRef={props.previewBodyRef}
+      headerExtra={
+        props.bodyMarkdown.trim() ? (
+          <ArticleWorkflowPreviewThemeBar
+            projectTheme={props.theme}
+            projectThemeColor={props.themeColor}
+            projectGalleryMode={props.galleryMode}
+            previewTheme={props.previewTheme}
+            previewThemeColor={props.previewThemeColor}
+            previewGalleryMode={props.previewGalleryMode}
+            applying={props.applyingTheme}
+            onPreviewTheme={props.onPreviewTheme}
+            onPreviewThemeColor={props.onPreviewThemeColor}
+            onPreviewGalleryMode={props.onPreviewGalleryMode}
+            onReset={props.onResetPreviewTheme}
+            onApply={props.onApplyTheme}
+          />
+        ) : undefined
+      }
     />
   );
 

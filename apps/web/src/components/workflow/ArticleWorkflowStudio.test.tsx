@@ -30,6 +30,7 @@ function buildProject() {
     batchId: "batch-1",
     theme: "auto" as const,
     themeColor: null,
+    galleryMode: "collage" as const,
     title: "咖啡机夏促",
     summary: "适合公众号摘要",
     bodyHtml: [
@@ -38,6 +39,7 @@ function buildProject() {
       '<section data-ai-assistant-image-slot="cover"><img src="https://example.test/cover.png" alt="头图" style="display:block;width:100%;max-width:100%;height:auto;border:0;border-radius:12px;"/></section>',
       "</section>",
     ].join(""),
+    bodyMarkdown: "",
     imageManifestJson: [{
       slot: "cover" as const,
       role: "cover" as const,
@@ -125,6 +127,7 @@ describe("ArticleWorkflowStudio", () => {
             batchId: project.batchId,
             theme: project.theme,
             themeColor: project.themeColor,
+            galleryMode: project.galleryMode,
             status: project.status,
             progressStage: project.progressStage,
             progressPercent: project.progressPercent,

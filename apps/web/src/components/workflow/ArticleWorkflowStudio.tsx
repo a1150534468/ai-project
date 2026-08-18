@@ -69,8 +69,10 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
       onTogglePlatform={state.handleTogglePlatform}
       selectedTheme={state.selectedTheme}
       selectedThemeColor={state.selectedThemeColor}
+      galleryMode={state.selectedGalleryMode}
       onThemeChange={state.onThemeChange}
       onThemeColorChange={state.onThemeColorChange}
+      onGalleryModeChange={state.onGalleryModeChange}
       onGenerate={state.handleGenerate}
       onClose={onClose}
     />
@@ -235,12 +237,26 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
                   saving={state.saving}
                   canSave={state.canSave}
                   previewBodyRef={state.previewBodyRef}
+                  imageManifest={state.project.imageManifestJson}
+                  bodyMarkdown={state.project.bodyMarkdown ?? ""}
+                  theme={state.project.theme}
+                  themeColor={state.project.themeColor}
+                  galleryMode={state.project.galleryMode}
+                  previewTheme={state.previewTheme}
+                  previewThemeColor={state.previewThemeColor}
+                  previewGalleryMode={state.previewGalleryMode}
+                  applyingTheme={state.applyingTheme}
                   onTitleChange={state.markTitleDirty}
                   onSummaryChange={state.markSummaryDirty}
                   onBodyHtmlChange={state.markBodyHtmlDirty}
                   onBodyBlur={state.handleBodyBlur}
                   onCaptionChange={state.markCaptionDirty}
                   onTagsChange={state.markTagsDirty}
+                  onPreviewTheme={state.onPreviewThemeChange}
+                  onPreviewThemeColor={state.onPreviewThemeColorChange}
+                  onPreviewGalleryMode={state.onPreviewGalleryModeChange}
+                  onResetPreviewTheme={state.onResetPreviewTheme}
+                  onApplyTheme={state.handleApplyTheme}
                   onSave={() => {
                     void state.handleSave();
                   }}

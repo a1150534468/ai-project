@@ -1,5 +1,5 @@
 import { Icon } from "@iconify/react";
-import { useState, type RefObject } from "react";
+import { useState, type ReactNode, type RefObject } from "react";
 
 export type ArticleWorkflowPreviewScale = "full" | "desktop" | "mobile";
 
@@ -52,6 +52,8 @@ interface ArticleWorkflowPreviewProps {
   readonly summary: string;
   readonly previewHtml: string;
   readonly previewBodyRef: RefObject<HTMLDivElement | null>;
+  /** 预览区顶部的额外控件（如主题换肤条），渲染在比例切换左侧 */
+  readonly headerExtra?: ReactNode;
 }
 
 export function ArticleWorkflowPreview({
@@ -59,25 +61,23 @@ export function ArticleWorkflowPreview({
   summary,
   previewHtml,
   previewBodyRef,
+  headerExtra,
 }: ArticleWorkflowPreviewProps) {
   const [scale, setScale] = useState<ArticleWorkflowPreviewScale>("full");
   const mobile = scale === "mobile";
 
   return (
     <section className="min-h-[640px] bg-[#f7f8fa] px-4 py-5 sm:px-6">
-      <div className="mx-auto mb-4 flex max-w-[760px] justify-end">
+      <div className="mx-auto mb-4 flex max-w-[760px] items-center justify-between gap-3">
+        {headerExtra}
         <ArticleWorkflowPreviewScaleToggle scale={scale} onChange={setScale} />
       </div>
       <div
         className={`mx-auto bg-white ${previewScaleWidthClass(scale)} ${
-          mobile
-            ? "overflow-hidden rounded-[32px] border-[8px] border-[#1d1d1f] px-4 py-4"
-            : "px-5 py-6"
+          mobile ? "overflow-hidden rounded-[32px] border-[8px] border-[#1d1d1f] px-4 py-4" : "px-5 py-6"
         }`}
       >
-        {mobile && (
-          <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />
-        )}
+        {mobile && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />}
         <header className="mb-6 border-b border-[#ececf0] pb-5">
           <h1 className="text-[24px] font-semibold leading-[1.4] text-[#1d1d1f]">{title || "未命名图文"}</h1>
           {summary && <p className="mt-2 text-sm leading-6 text-[#6e6e73]">{summary}</p>}
