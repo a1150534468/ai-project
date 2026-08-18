@@ -50,6 +50,12 @@ export {
 } from "./themes.js";
 
 export {
+  renderArticleWorkflowHtml,
+  type GalleryMode,
+  type RenderOpts,
+} from "./render.js";
+
+export {
   ARTICLE_WORKFLOW_HTML_ATTRS,
   ARTICLE_WORKFLOW_HTML_BLOCKED_TAGS,
   ARTICLE_WORKFLOW_HTML_TAGS,

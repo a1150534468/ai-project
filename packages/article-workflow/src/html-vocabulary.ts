@@ -28,6 +28,7 @@ export const ARTICLE_WORKFLOW_HTML_TAGS: readonly string[] = [
   "i",
   "u",
   "s",
+  "mark",
   "br",
   "h1",
   "h2",
