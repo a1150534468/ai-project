@@ -168,7 +168,7 @@ describe("ArticleWorkflowStudio", () => {
     expect(html).toContain("#咖啡机");
     expect(html).toContain('aria-label="平台配图"');
     expect(html).toContain("aspect-ratio:768 / 1024");
-    expect(html).not.toContain("mdi:image-outline");
+    expect(html).toContain('aria-label="配图素材"');
     // caption 平台不给 HTML 正文相关入口
     expect(html).not.toContain("一键复制到公众号");
     expect(html).not.toContain("复制摘要");

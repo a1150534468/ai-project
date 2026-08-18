@@ -193,7 +193,7 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
       title: "夏天必囤的咖啡机",
     }));
 
-    expect(screen.getByRole("heading", { name: "配图素材" })).toBeTruthy();
+    expect(screen.getAllByRole("heading", { name: "配图素材" }).length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "配图素材 0" })).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "AI 重写" }));

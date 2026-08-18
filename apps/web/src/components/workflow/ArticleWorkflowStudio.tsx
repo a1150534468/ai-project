@@ -14,13 +14,14 @@ import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
 
 function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boolean }) {
   return (
-    <section
-      className="grid h-full min-h-[440px] place-items-center bg-[#f7f8fa] px-6 py-10"
-      aria-label="实时输出预览"
-    >
+    <section className="grid h-full min-h-[440px] place-items-center bg-[#f7f8fa] px-6 py-10" aria-label="实时输出预览">
       <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white px-6 py-12 text-center">
         <span className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink">
-          <Icon icon={creating ? "mdi:loading" : "mdi:file-eye-outline"} className={creating ? "animate-spin" : ""} aria-hidden />
+          <Icon
+            icon={creating ? "mdi:loading" : "mdi:file-eye-outline"}
+            className={creating ? "animate-spin" : ""}
+            aria-hidden
+          />
         </span>
         <h2 className="mt-5 text-base font-semibold text-[#26302d]">
           {creating ? "正在建立生成任务" : "实时输出 / 预览"}
@@ -37,6 +38,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
   const state = useArticleWorkflowStudio(props);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
+  const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const busy = Boolean(state.project && isBusyArticleWorkflowStatus(state.project.status));
   const workspaceTitle = state.bootstrapping
     ? "图文工作台"
@@ -44,7 +46,9 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
       ? "实时输出 / 预览"
       : state.titleDraft || "未命名图文";
   const workspaceMeta = !state.project
-    ? (state.creating ? "正在准备多平台内容" : "尚无输出")
+    ? state.creating
+      ? "正在准备多平台内容"
+      : "尚无输出"
     : busy
       ? `${state.batchProgress.completed} / ${state.batchProgress.total} 个平台已完成`
       : state.platformConfig.label;
@@ -94,15 +98,17 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               正在加载配置
             </span>
           </div>
-        ) : inputPanel()}
+        ) : (
+          inputPanel()
+        )}
       </aside>
 
       <main className="flex min-h-0 min-w-0 flex-col bg-[#f7f8fa] xl:h-full">
-        <header className={`flex min-h-14 flex-none flex-col gap-2 border-b border-[#e5e7eb] bg-white px-4 py-2 xl:items-center xl:px-5 ${
-          state.project
-            ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)_minmax(0,1fr)]"
-            : "xl:flex-row"
-        }`}>
+        <header
+          className={`flex min-h-14 flex-none flex-col gap-2 border-b border-[#e5e7eb] bg-white px-4 py-2 xl:items-center xl:px-5 ${
+            state.project ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)_minmax(0,1fr)]" : "xl:flex-row"
+          }`}
+        >
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-[#1d1d1f]">{workspaceTitle}</p>
             <p className="mt-0.5 truncate text-[10px] text-[#8a8a8f]">{workspaceMeta}</p>
@@ -140,10 +146,27 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               生成配置
             </button>
           </div>
+
+          <div className="hidden shrink-0 items-center justify-end gap-1 xl:flex">
+            {state.project && !busy && (
+              <button
+                type="button"
+                onClick={() => setRightPanelOpen((value) => !value)}
+                aria-pressed={rightPanelOpen}
+                title={rightPanelOpen ? "收起配图素材" : "展开配图素材"}
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightPanelOpen ? "bg-[#eef2f0] text-brand-ink" : "text-[#7c8582]"}`}
+              >
+                <Icon icon="mdi:dock-right" className="text-base" aria-hidden />
+              </button>
+            )}
+          </div>
         </header>
 
         {state.error && (
-          <p role="alert" className="flex-none border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 lg:px-5">
+          <p
+            role="alert"
+            className="flex-none border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 lg:px-5"
+          >
             {state.error}
           </p>
         )}
@@ -166,9 +189,11 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
             retryingProjectId={state.retryingProjectId}
             regeneratingSlot={state.regeneratingSlot}
             canRewrite={state.canRewrite}
-            batchMissingProjectCount={state.batchProjects.filter((item) =>
-              item.status === "ready" && item.imageManifestJson.some((image) => !image.imageUrl.trim())
-            ).length}
+            batchMissingProjectCount={
+              state.batchProjects.filter(
+                (item) => item.status === "ready" && item.imageManifestJson.some((image) => !image.imageUrl.trim()),
+              ).length
+            }
             generatingImages={state.generatingImageProjectIds.length > 0}
             canGenerateImages={state.project.status === "ready" && !state.saving}
             onRewriteInstructionChange={state.setRewriteInstruction}
@@ -181,71 +206,109 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           />
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {state.bootstrapping ? (
-            <div className="grid h-full min-h-[440px] place-items-center text-sm text-[#8a8a8f]">正在准备内容工作区...</div>
-          ) : !state.project ? (
-            <ArticleWorkflowOutputPlaceholder creating={state.creating} />
-          ) : busy ? (
-            <ArticleWorkflowBusyPanel
-              project={state.project}
-              batchProjects={state.batchProjects}
-              batchProgress={state.batchProgress}
-            />
-          ) : (
-            <>
-              <ArticleWorkflowEditor
+        <div className="min-h-0 flex-1 xl:flex xl:flex-row">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+            {state.bootstrapping ? (
+              <div className="grid h-full min-h-[440px] place-items-center text-sm text-[#8a8a8f]">
+                正在准备内容工作区...
+              </div>
+            ) : !state.project ? (
+              <ArticleWorkflowOutputPlaceholder creating={state.creating} />
+            ) : busy ? (
+              <ArticleWorkflowBusyPanel
                 project={state.project}
-                platformConfig={state.platformConfig}
-                titleDraft={state.titleDraft}
-                summaryDraft={state.summaryDraft}
-                bodyHtmlDraft={state.bodyHtmlDraft}
-                captionDraft={state.captionDraft}
-                tagsDraft={state.tagsDraft}
-                editorSyncKey={state.editorSyncKey}
-                dirty={state.dirty}
-                saving={state.saving}
-                canSave={state.canSave}
-                previewBodyRef={state.previewBodyRef}
-                onTitleChange={state.markTitleDirty}
-                onSummaryChange={state.markSummaryDirty}
-                onBodyHtmlChange={state.markBodyHtmlDirty}
-                onBodyBlur={state.handleBodyBlur}
-                onCaptionChange={state.markCaptionDirty}
-                onTagsChange={state.markTagsDirty}
-                onSave={() => {
-                  void state.handleSave();
-                }}
-                onCopyBody={() => {
-                  void state.handleCopyBody();
-                }}
-                onCopyTitle={() => {
-                  void state.handleCopyTitle();
-                }}
-                onCopySummary={() => {
-                  void state.handleCopySummary();
-                }}
-                onCopyCaption={() => {
-                  void state.handleCopyCaption();
-                }}
-                onCopyTags={() => {
-                  void state.handleCopyTags();
-                }}
+                batchProjects={state.batchProjects}
+                batchProgress={state.batchProgress}
               />
-              {state.captionPlatform && (
-                <section className="border-t border-[#e5e7eb] bg-white px-4 py-5 lg:px-6 lg:py-6" aria-label="平台配图">
-                  <div className="mx-auto max-w-[980px]">
-                    <ArticleWorkflowImageAssetPanel
-                      imageManifest={state.project.imageManifestJson}
-                      platform={state.project.platform}
-                      regeneratingSlot={state.regeneratingSlot}
-                      onRegenerateImage={state.handleRegenerateImage}
-                      variant="gallery"
-                    />
-                  </div>
-                </section>
-              )}
-            </>
+            ) : (
+              <>
+                <ArticleWorkflowEditor
+                  project={state.project}
+                  platformConfig={state.platformConfig}
+                  titleDraft={state.titleDraft}
+                  summaryDraft={state.summaryDraft}
+                  bodyHtmlDraft={state.bodyHtmlDraft}
+                  captionDraft={state.captionDraft}
+                  tagsDraft={state.tagsDraft}
+                  editorSyncKey={state.editorSyncKey}
+                  dirty={state.dirty}
+                  saving={state.saving}
+                  canSave={state.canSave}
+                  previewBodyRef={state.previewBodyRef}
+                  onTitleChange={state.markTitleDirty}
+                  onSummaryChange={state.markSummaryDirty}
+                  onBodyHtmlChange={state.markBodyHtmlDirty}
+                  onBodyBlur={state.handleBodyBlur}
+                  onCaptionChange={state.markCaptionDirty}
+                  onTagsChange={state.markTagsDirty}
+                  onSave={() => {
+                    void state.handleSave();
+                  }}
+                  onCopyBody={() => {
+                    void state.handleCopyBody();
+                  }}
+                  onCopyTitle={() => {
+                    void state.handleCopyTitle();
+                  }}
+                  onCopySummary={() => {
+                    void state.handleCopySummary();
+                  }}
+                  onCopyCaption={() => {
+                    void state.handleCopyCaption();
+                  }}
+                  onCopyTags={() => {
+                    void state.handleCopyTags();
+                  }}
+                />
+                {state.captionPlatform && (
+                  <section
+                    className="border-t border-[#e5e7eb] bg-white px-4 py-5 lg:px-6 lg:py-6 xl:hidden"
+                    aria-label="平台配图"
+                  >
+                    <div className="mx-auto max-w-[980px]">
+                      <ArticleWorkflowImageAssetPanel
+                        imageManifest={state.project.imageManifestJson}
+                        platform={state.project.platform}
+                        regeneratingSlot={state.regeneratingSlot}
+                        onRegenerateImage={state.handleRegenerateImage}
+                        variant="gallery"
+                      />
+                    </div>
+                  </section>
+                )}
+              </>
+            )}
+          </div>
+
+          {state.project && !busy && rightPanelOpen && (
+            <aside
+              className="hidden w-[300px] shrink-0 flex-col border-l border-[#e5e7eb] bg-white xl:flex"
+              aria-label="配图素材"
+            >
+              <div className="flex h-10 flex-none items-center justify-between border-b border-[#e5e7eb] px-3">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-[#1d1d1f]">
+                  <Icon icon="mdi:image-outline" className="text-base" aria-hidden />
+                  配图素材
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setRightPanelOpen(false)}
+                  aria-label="收起配图素材"
+                  className="grid h-7 w-7 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7]"
+                >
+                  <Icon icon="mdi:chevron-right" className="text-base" aria-hidden />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                <ArticleWorkflowImageAssetPanel
+                  imageManifest={state.project.imageManifestJson}
+                  platform={state.project.platform}
+                  regeneratingSlot={state.regeneratingSlot}
+                  onRegenerateImage={state.handleRegenerateImage}
+                  variant="compact"
+                />
+              </div>
+            </aside>
           )}
         </div>
       </main>

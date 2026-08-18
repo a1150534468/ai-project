@@ -118,7 +118,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 onClick={() => setActiveSection(active ? null : item.key)}
                 className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
                   active ? "bg-brand-soft text-brand-ink" : "text-[#6e6e73] hover:bg-[#f5f5f7]"
-                }`}
+                }${item.key === "images" ? " xl:hidden" : ""}`}
               >
                 <Icon icon={item.icon} className="text-base" aria-hidden />
                 <span className="hidden sm:inline">{label}</span>
@@ -151,7 +151,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
       )}
 
       {!captionPlatform && activeSection === "images" && (
-        <div className="max-h-[360px] overflow-y-auto border-t border-[#e5e7eb] px-4 py-4 [scrollbar-width:thin] lg:px-5">
+        <div className="max-h-[360px] overflow-y-auto border-t border-[#e5e7eb] px-4 py-4 [scrollbar-width:thin] lg:px-5 xl:hidden">
           <div className="mx-auto max-w-[980px]">
             <ArticleWorkflowImageAssetPanel
               imageManifest={props.project.imageManifestJson}
