@@ -4,7 +4,12 @@ import { useEffect, useState, type RefObject } from "react";
 import { RippleButton } from "../../motion";
 import type { ArticleWorkflowProject } from "../../workflowArticleApi";
 import { ArticleWorkflowCaptionEditor } from "./ArticleWorkflowCaptionEditor";
-import { ArticleWorkflowPreview } from "./ArticleWorkflowPreview";
+import {
+  ArticleWorkflowPreview,
+  ArticleWorkflowPreviewScaleToggle,
+  previewScaleWidthClass,
+  type ArticleWorkflowPreviewScale,
+} from "./ArticleWorkflowPreview";
 import { ArticleWorkflowRichEditor } from "./ArticleWorkflowRichEditor";
 import {
   formatArticleWorkflowStatus,
@@ -42,6 +47,7 @@ type CanvasMode = "edit" | "preview";
 
 export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   const [canvasMode, setCanvasMode] = useState<CanvasMode>("preview");
+  const [previewScale, setPreviewScale] = useState<ArticleWorkflowPreviewScale>("full");
   const captionPlatform = props.platformConfig.outputKind === "caption";
   const titleOver = props.titleDraft.trim().length > props.platformConfig.titleMaxLength;
 
@@ -172,7 +178,19 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
 
           {canvasMode === "preview" && (captionPlatform ? (
             <section className="min-h-[640px] bg-[#f7f8fa] px-4 py-5 sm:px-6">
-              <article className="mx-auto max-w-[680px] bg-white px-5 py-6">
+              <div className="mx-auto mb-4 flex max-w-[760px] justify-end">
+                <ArticleWorkflowPreviewScaleToggle scale={previewScale} onChange={setPreviewScale} />
+              </div>
+              <article
+                className={`mx-auto bg-white ${previewScaleWidthClass(previewScale)} ${
+                  previewScale === "mobile"
+                    ? "overflow-hidden rounded-[32px] border-[8px] border-[#1d1d1f] px-4 py-4"
+                    : "px-5 py-6"
+                }`}
+              >
+                {previewScale === "mobile" && (
+                  <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />
+                )}
                 <h1 className="text-[24px] font-semibold leading-[1.4] text-[#1d1d1f]">{props.titleDraft || "未命名图文"}</h1>
                 <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-[#1d1d1f]">{props.captionDraft}</p>
                 {props.tagsDraft.length > 0 && (
