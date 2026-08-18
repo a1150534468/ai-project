@@ -92,7 +92,7 @@ describe("ArticleWorkflowStudio", () => {
       </ToastProvider>,
     );
 
-    expect(html).toContain("创建平台图文");
+    expect(html).toContain("多平台图文生成");
     expect(html).toContain("实时输出 / 预览");
     expect(html).toContain('aria-label="实时输出预览"');
     expect(html).toContain('aria-label="文章原文"');

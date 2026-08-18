@@ -18,14 +18,16 @@ function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boo
       className="grid h-full min-h-[440px] place-items-center bg-[#f7f8fa] px-6 py-10"
       aria-label="实时输出预览"
     >
-      <div className="text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-lg border border-[#d2d2d7] bg-white text-[#6e6e73]">
-          <Icon icon={creating ? "mdi:loading" : "mdi:file-eye-outline"} className={`text-2xl ${creating ? "animate-spin" : ""}`} aria-hidden />
+      <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white px-6 py-12 text-center">
+        <span className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink">
+          <Icon icon={creating ? "mdi:loading" : "mdi:file-eye-outline"} className={creating ? "animate-spin" : ""} aria-hidden />
         </span>
-        <h2 className="mt-4 text-base font-semibold text-[#1d1d1f]">
+        <h2 className="mt-5 text-base font-semibold text-[#26302d]">
           {creating ? "正在建立生成任务" : "实时输出 / 预览"}
         </h2>
-        <p className="mt-1 text-xs text-[#8a8a8f]">{creating ? "正在准备多平台内容" : "尚无输出"}</p>
+        <p className="mt-2 text-sm leading-6 text-[#7d8582]">
+          {creating ? "正在准备多平台内容，稍候即可查看结果" : "在左侧填写素材或主题，生成后在这里预览与编辑"}
+        </p>
       </div>
     </section>
   );

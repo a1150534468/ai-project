@@ -45,17 +45,23 @@ const PLATFORM_HINTS: Record<ArticleWorkflowPlatform, string> = {
   douyin: "口播文案、标签与 9:16 配图",
 };
 
+const PLATFORM_ICONS: Record<ArticleWorkflowPlatform, string> = {
+  wechat: "mdi:message-text-outline",
+  xiaohongshu: "mdi:notebook-outline",
+  douyin: "mdi:music-note-outline",
+};
+
 export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps) {
   return (
     <section className="flex h-full min-h-0 flex-col bg-white" aria-label="图文生成配置">
       <div className="flex h-14 flex-none items-center justify-between gap-2 border-b border-[#e5e7eb] px-4">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand-ink">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand-ink">
             <Icon icon="mdi:tune-variant" className="text-lg" aria-hidden />
           </span>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-[#1d1d1f]">生成配置</h2>
-            <p className="mt-0.5 truncate text-[10px] text-[#8a8a8f]">创建平台图文</p>
+            <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-brand-ink">Content Studio</p>
+            <h2 className="truncate text-sm font-semibold text-[#1d1d1f]">多平台图文生成</h2>
           </div>
         </div>
         {props.onClose && (
@@ -79,11 +85,11 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
         />
 
         <fieldset className="mt-5 border-t border-[#e5e7eb] pt-4">
-          <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="mb-3 flex items-center justify-between gap-3">
             <legend className="text-xs font-semibold text-[#1d1d1f]">发布平台</legend>
             <span className="text-[10px] text-[#8a8a8f]">可多选</span>
           </div>
-          <div className="overflow-hidden rounded-lg border border-[#d2d2d7] bg-white">
+          <div className="grid gap-2">
             {ARTICLE_WORKFLOW_PLATFORMS.map((platform) => {
               const checked = props.selectedPlatforms.includes(platform);
               const config = articleWorkflowPlatformConfig(platform);
@@ -93,18 +99,23 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   type="button"
                   role="checkbox"
                   aria-checked={checked}
-                  title={PLATFORM_HINTS[platform]}
                   onClick={() => props.onTogglePlatform(platform)}
-                  className={`flex h-10 w-full items-center gap-2.5 border-b border-[#e8e8ed] px-3 text-left transition last:border-b-0 ${
-                    checked ? "bg-brand-soft" : "bg-white hover:bg-[#f7f8fa]"
+                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
+                    checked ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white hover:border-[#cbd3d0]"
                   }`}
                 >
+                  <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-[#f0f2f1] text-[#6e7673]"}`}>
+                    <Icon icon={PLATFORM_ICONS[platform]} className="text-lg" aria-hidden />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-semibold text-[#1d1d1f]">{config.label}</span>
+                    <span className="mt-0.5 block text-[11px] text-[#8a8a8f]">{PLATFORM_HINTS[platform]}</span>
+                  </span>
                   <Icon
-                    icon={checked ? "mdi:checkbox-marked" : "mdi:checkbox-blank-outline"}
-                    className={`shrink-0 text-lg ${checked ? "text-brand" : "text-[#8a8a8f]"}`}
+                    icon={checked ? "mdi:check-circle" : "mdi:circle-outline"}
+                    className={`shrink-0 text-lg ${checked ? "text-brand" : "text-[#cbd3d0]"}`}
                     aria-hidden
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1d1d1f]">{config.label}</span>
                 </button>
               );
             })}

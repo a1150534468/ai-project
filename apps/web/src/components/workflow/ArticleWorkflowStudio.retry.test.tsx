@@ -335,7 +335,7 @@ describe("ArticleWorkflowStudio 主题创作", () => {
     expect(within(config).getByLabelText("文章原文")).toBeTruthy();
     expect(within(config).getByRole("tab", { name: "主题创作" })).toBeTruthy();
     expect(within(output).queryByLabelText("文章原文")).toBeNull();
-    expect(within(output).getByText("尚无输出")).toBeTruthy();
+    expect(within(output).getByText(/在左侧填写素材或主题/)).toBeTruthy();
   });
 
   it("switches to copy-first by default and validates custom style before submit", async () => {

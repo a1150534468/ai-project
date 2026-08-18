@@ -13,6 +13,12 @@ interface ArticleWorkflowThemePickerProps {
 
 const NON_AUTO_THEMES = ARTICLE_WORKFLOW_THEMES.filter((theme) => theme !== "auto");
 
+interface ThemePreview {
+  readonly background: string;
+  readonly text: string;
+  readonly primary: string;
+}
+
 export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProps) {
   const activeConfig = props.selectedTheme === "auto"
     ? null
@@ -23,10 +29,10 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <ThemeCard
           label="AI 自动"
-          swatchColor="#888780"
+          preview={{ background: "#f5f5f7", text: "#1d1d1f", primary: "#888780" }}
           selected={props.selectedTheme === "auto"}
           onClick={() => props.onThemeChange("auto")}
         />
@@ -36,7 +42,11 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
             <ThemeCard
               key={key}
               label={theme.label}
-              swatchColor={theme.palette.primary}
+              preview={{
+                background: theme.palette.background,
+                text: theme.palette.text,
+                primary: theme.palette.primary,
+              }}
               selected={props.selectedTheme === key}
               onClick={() => props.onThemeChange(key)}
             />
@@ -45,7 +55,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
       </div>
 
       {activeConfig && (
-        <div className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] px-3 py-2">
+        <div className="flex items-center gap-3 rounded-xl border border-[#e5e7eb] bg-[#f7f8fa] px-3 py-2">
           <span className="text-xs font-semibold text-[#1d1d1f]">主色</span>
           <input
             type="color"
@@ -70,30 +80,31 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
   );
 }
 
+/** 主题卡片：用主题色渲染一个迷你排版示意（主色标题条 + 正文段落条），替代单调的色块。 */
 function ThemeCard(props: {
   readonly label: string;
-  readonly swatchColor: string;
+  readonly preview: ThemePreview;
   readonly selected: boolean;
   readonly onClick: () => void;
 }) {
+  const { preview } = props;
   return (
     <button
       type="button"
       role="radio"
       aria-checked={props.selected}
       onClick={props.onClick}
-      className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
-        props.selected
-          ? "border-brand bg-brand-soft text-brand-ink"
-          : "border-[#d2d2d7] bg-white text-[#6e6e73] hover:bg-[#f5f5f7]"
+      className={`min-w-0 rounded-xl border p-2 text-left transition ${
+        props.selected ? "border-brand ring-1 ring-brand/20" : "border-[#e1e5e3] hover:border-[#cbd3d0]"
       }`}
     >
-      <span
-        className="h-4 w-4 shrink-0 rounded-full border border-black/10"
-        style={{ backgroundColor: props.swatchColor }}
-        aria-hidden
-      />
-      {props.label}
+      <span className="block rounded-lg p-2" style={{ backgroundColor: preview.background }} aria-hidden>
+        <span className="block h-1.5 w-3/4 rounded-sm" style={{ backgroundColor: preview.primary }} />
+        <span className="mt-1.5 block h-1 w-full rounded-sm" style={{ backgroundColor: preview.text, opacity: 0.35 }} />
+        <span className="mt-1 block h-1 w-5/6 rounded-sm" style={{ backgroundColor: preview.text, opacity: 0.35 }} />
+        <span className="mt-1 block h-1 w-full rounded-sm" style={{ backgroundColor: preview.text, opacity: 0.35 }} />
+      </span>
+      <span className="mt-1.5 block truncate text-xs font-semibold text-[#1d1d1f]">{props.label}</span>
     </button>
   );
 }
