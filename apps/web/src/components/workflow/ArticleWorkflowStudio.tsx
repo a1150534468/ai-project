@@ -61,6 +61,10 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
       onGenerationModeChange={state.setGenerationMode}
       onGenerateImagesChange={state.setGenerateImages}
       onTogglePlatform={state.handleTogglePlatform}
+      selectedTheme={state.selectedTheme}
+      selectedThemeColor={state.selectedThemeColor}
+      onThemeChange={state.onThemeChange}
+      onThemeColorChange={state.onThemeColorChange}
       onGenerate={state.handleGenerate}
       onClose={onClose}
     />

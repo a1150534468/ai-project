@@ -5,6 +5,7 @@ import {
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
+  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { ApiError } from "../../apiError";
 import { useToast } from "../../motion";
@@ -118,6 +119,8 @@ export function useArticleWorkflowStudio({
   const [selectedPlatforms, setSelectedPlatforms] = useState<readonly ArticleWorkflowPlatform[]>(
     initialProject ? [initialProject.platform] : ARTICLE_WORKFLOW_PLATFORMS,
   );
+  const [selectedTheme, setSelectedTheme] = useState<ArticleWorkflowThemeKey>("auto");
+  const [selectedThemeColor, setSelectedThemeColor] = useState("");
   const [creating, setCreating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [rewriting, setRewriting] = useState(false);
@@ -573,6 +576,8 @@ export function useArticleWorkflowStudio({
           generationMode: creationDraft.mode === "topic" ? "polish-text" : generationMode,
           platforms: selectedPlatforms,
           generateImages,
+          theme: selectedTheme,
+          themeColor: selectedThemeColor || null,
         });
         setDirtyPlatforms([]);
         dirtyPlatformsRef.current = [];
@@ -777,6 +782,16 @@ export function useArticleWorkflowStudio({
       resetMessages();
     },
     setGenerationMode,
+    selectedTheme,
+    selectedThemeColor,
+    onThemeChange: (value: ArticleWorkflowThemeKey) => {
+      setSelectedTheme(value);
+      resetMessages();
+    },
+    onThemeColorChange: (value: string) => {
+      setSelectedThemeColor(value);
+      resetMessages();
+    },
     setRewriteInstruction,
     setRewriteGenerationMode,
     setRewriteRegenerateImages,

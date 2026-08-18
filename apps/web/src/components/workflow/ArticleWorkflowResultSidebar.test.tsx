@@ -19,6 +19,8 @@ describe("ArticleWorkflowResultTools image scope", () => {
           generationMode: "polish-text",
           platform: "xiaohongshu",
           batchId: "b-1",
+          theme: "auto",
+          themeColor: null,
           title: "冰咖啡",
           summary: "",
           bodyHtml: "",

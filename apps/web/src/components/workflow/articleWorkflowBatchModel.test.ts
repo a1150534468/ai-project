@@ -16,6 +16,8 @@ function summary(overrides: Partial<ArticleWorkflowProjectSummary> & { id: strin
     creationMode: "source",
     platform: "wechat",
     batchId: null,
+    theme: "auto",
+    themeColor: null,
     status: "ready",
     progressStage: "ready",
     progressPercent: 100,

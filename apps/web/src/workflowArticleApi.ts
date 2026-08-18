@@ -7,6 +7,7 @@ import type {
   ArticleWorkflowPlatform,
   ArticleWorkflowProjectStatus,
   ArticleWorkflowSourceFormat,
+  ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { ApiError, readErrorMessage } from "./apiError";
 
@@ -19,6 +20,8 @@ export interface ArticleWorkflowProjectSummary {
   readonly platform: ArticleWorkflowPlatform;
   /** 存量项目没有批次，为 null */
   readonly batchId: string | null;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
   readonly status: ArticleWorkflowProjectStatus;
   readonly progressStage: string;
   readonly progressPercent: number;
@@ -97,6 +100,8 @@ export function createArticleWorkflowProject(token: string, body: {
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly platforms: readonly ArticleWorkflowPlatform[];
   readonly generateImages: boolean;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
 }): Promise<{
   readonly batchId: string;
   readonly projects: readonly { readonly projectId: string; readonly platform: ArticleWorkflowPlatform }[];

@@ -4,9 +4,11 @@ import {
   articleWorkflowPlatformConfig,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowPlatform,
+  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import type { ArticleWorkflowPricing } from "../../workflowArticleApi";
 import { ArticleWorkflowCreationCanvas } from "./ArticleWorkflowCreationCanvas";
+import { ArticleWorkflowThemePicker } from "./ArticleWorkflowThemePicker";
 import type { ArticleWorkflowCreationDraft } from "./articleWorkflowCreationDraft";
 import { articleWorkflowPricingText } from "./articleWorkflowStudioModel";
 import { SubmitCostBar } from "./SubmitCostBar";
@@ -24,6 +26,10 @@ interface ArticleWorkflowInputPanelProps {
   readonly onCreationModeChange: (value: ArticleWorkflowCreationDraft["mode"]) => void;
   readonly onGenerateImagesChange: (value: boolean) => void;
   readonly onTogglePlatform: (value: ArticleWorkflowPlatform) => void;
+  readonly selectedTheme: ArticleWorkflowThemeKey;
+  readonly selectedThemeColor: string;
+  readonly onThemeChange: (value: ArticleWorkflowThemeKey) => void;
+  readonly onThemeColorChange: (value: string) => void;
   readonly onGenerate: () => void;
   readonly onClose?: () => void;
 }
@@ -147,6 +153,18 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                 </button>
               ))}
             </div>
+          </fieldset>
+        )}
+
+        {props.selectedPlatforms.includes("wechat") && (
+          <fieldset className="mt-4 border-t border-[#e5e7eb] pt-4">
+            <legend className="mb-2 text-xs font-semibold text-[#1d1d1f]">排版主题</legend>
+            <ArticleWorkflowThemePicker
+              selectedTheme={props.selectedTheme}
+              selectedThemeColor={props.selectedThemeColor}
+              onThemeChange={props.onThemeChange}
+              onThemeColorChange={props.onThemeColorChange}
+            />
           </fieldset>
         )}
 

@@ -28,6 +28,8 @@ function buildProject() {
     generationMode: "preserve-text" as const,
     platform: "wechat" as const,
     batchId: "batch-1",
+    theme: "auto" as const,
+    themeColor: null,
     title: "咖啡机夏促",
     summary: "适合公众号摘要",
     bodyHtml: [
@@ -121,6 +123,8 @@ describe("ArticleWorkflowStudio", () => {
             creationMode: project.creationMode,
             platform: project.platform,
             batchId: project.batchId,
+            theme: project.theme,
+            themeColor: project.themeColor,
             status: project.status,
             progressStage: project.progressStage,
             progressPercent: project.progressPercent,
