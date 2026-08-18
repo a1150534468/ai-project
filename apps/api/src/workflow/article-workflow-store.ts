@@ -19,6 +19,7 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   summary: string;
   generationMode: ArticleWorkflowGenerationMode;
   bodyHtml: string;
+  bodyMarkdown: string;
   captionText: string;
   tags: readonly string[];
   imageManifestJson: readonly ArticleWorkflowImageAsset[];
@@ -40,6 +41,7 @@ function articleWorkflowStateData(data: ArticleWorkflowProjectStatePatch) {
     summary: data.summary,
     generationMode: data.generationMode,
     bodyHtml: data.bodyHtml,
+    bodyMarkdown: data.bodyMarkdown,
     captionText: data.captionText,
     tagsJson: data.tags ? jsonValue(data.tags) : undefined,
     imageManifestJson: data.imageManifestJson ? jsonValue(data.imageManifestJson) : undefined,

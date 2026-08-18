@@ -39,7 +39,6 @@ describe("article-workflow routes", () => {
     const { app, prisma } = await buildArticleWorkflowApp({
       llmResponses: [
         createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
-        createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
         createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
       ],
       scheduleTask: (work) => {
@@ -66,7 +65,10 @@ describe("article-workflow routes", () => {
     expect(prisma.__state.projects[1]?.themeColor).toBeNull();
 
     for (const work of scheduled) await work();
-    expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
+    // literary 走确定性渲染：图片内嵌 <img>、正文文字保留，不再有 slot 占位符
+    expect(prisma.__state.projects[0]?.bodyHtml).toContain("<img");
+    expect(prisma.__state.projects[0]?.bodyHtml).toContain("开头第一段。");
+    expect(prisma.__state.projects[0]?.bodyMarkdown).toContain("开头第一段。");
   });
 
   it("accepts themeColor: null on create (frontend sends null when no color chosen)", async () => {
@@ -855,5 +857,83 @@ describe("article-workflow routes", () => {
     });
 
     expect(response.statusCode).toBe(400);
+  });
+
+  it("renders a non-auto theme deterministically with inline images and no slot placeholder", async () => {
+    const scheduled: (() => Promise<void>)[] = [];
+    const { app, prisma } = await buildArticleWorkflowApp({
+      llmResponses: [
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
+      ],
+      scheduleTask: (work) => {
+        scheduled.push(work);
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        platforms: ["wechat"],
+        theme: "literary",
+        themeColor: null,
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    for (const work of scheduled) await work();
+
+    const row = prisma.__state.projects[0]!;
+    expect(row.status).toBe("ready");
+    // 确定性渲染：图片内嵌、正文保留、无 slot 占位符
+    expect(row.bodyHtml).toContain("<img");
+    expect(row.bodyHtml).toContain("开头第一段。");
+    expect(row.bodyHtml).not.toContain("data-ai-assistant-image-slot");
+    // bodyMarkdown 落库，供前端本地换肤
+    expect(row.bodyMarkdown).toContain("开头第一段。");
+  });
+
+  it("regenerates an image on a deterministic project by re-rendering, not slot backfill", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        platform: "wechat",
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        generationMode: "preserve-text",
+        theme: "literary",
+        themeColor: null,
+        title: "标题",
+        summary: "",
+        bodyHtml: "",
+        bodyMarkdown: "开头第一段。\n\n第二段继续说明。",
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/images/cover/regenerate",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    const row = prisma.__state.projects[0]!;
+    // 确定性主题：正文按 bodyMarkdown 重渲，内嵌新图，不出现 slot 占位符
+    expect(row.bodyHtml).toContain("开头第一段。");
+    expect(row.bodyHtml).toContain("<img");
+    expect(row.bodyHtml).not.toContain("data-ai-assistant-image-slot");
+    expect(row.bodyMarkdown).toContain("开头第一段。");
   });
 });

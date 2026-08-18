@@ -18,6 +18,7 @@ export type ProjectRow = {
   title: string;
   summary: string;
   bodyHtml: string;
+  bodyMarkdown: string;
   captionText: string;
   tagsJson: unknown;
   imageManifestJson: unknown;
@@ -129,6 +130,7 @@ const PROJECT_ROW_DEFAULTS = {
   title: "",
   summary: "",
   bodyHtml: "",
+  bodyMarkdown: "",
   captionText: "",
   tagsJson: [] as unknown,
   imageManifestJson: [] as unknown,

@@ -11,7 +11,16 @@ import {
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import { normalizeArticleWorkflowCreationSource } from "./article-workflow-creation.js";
-import { canRecoverArticleProject, canSaveArticleProject, DEFAULT_ARTICLE_MODEL, scheduledRunner, ARTICLE_HISTORY_LIMIT, type ArticleWorkflowBilling, type ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
+import { renderDeterministicArticleBodyHtmlGuarded } from "./article-workflow-deterministic.js";
+import {
+  canRecoverArticleProject,
+  canSaveArticleProject,
+  DEFAULT_ARTICLE_MODEL,
+  scheduledRunner,
+  ARTICLE_HISTORY_LIMIT,
+  type ArticleWorkflowBilling,
+  type ArticleWorkflowRouteDeps,
+} from "./article-workflow-shared.js";
 import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
 import {
   articleWorkflowBatchParamsSchema,
@@ -29,27 +38,33 @@ import { articleWorkflowCaptionSummary } from "./article-workflow-caption.js";
 import { resolveArticleWorkflowPricing } from "./article-workflow-pricing.js";
 import { findOwnedArticleWorkflowProject, updateArticleWorkflowProjectState } from "./article-workflow-store.js";
 import { applyArticleImageManifestToHtml, findArticleImageBySlot } from "./article-workflow-image-manifest.js";
-import { assertArticleWorkflowBodyNotDestroyed, assertArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";
+import {
+  assertArticleWorkflowBodyNotDestroyed,
+  assertArticleWorkflowHtmlFragment,
+} from "./article-workflow-html-guard.js";
 import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
 import { generateArticleWorkflowImageAsset } from "./article-workflow-images.js";
-import {
-  articleWorkflowImageBlobSignatureValid,
-  articleWorkflowStableBodyHtml,
-} from "./article-workflow-image-url.js";
+import { articleWorkflowImageBlobSignatureValid, articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
 import {
   runArticleWorkflowMissingImages,
   runArticleWorkflowRewrite,
   runInitialArticleWorkflowGeneration,
 } from "./article-workflow-runner.js";
-import { jsonValue, readArticleWorkflowProject, serializeArticleWorkflowProject, serializeArticleWorkflowProjectSummary } from "./article-workflow-serializer.js";
+import {
+  jsonValue,
+  readArticleWorkflowProject,
+  serializeArticleWorkflowProject,
+  serializeArticleWorkflowProjectSummary,
+} from "./article-workflow-serializer.js";
 import { authUserId, safeErrorMessage } from "./ecom-route-helpers.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();
-  const billing = (deps.billing ?? createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  })) as ArticleWorkflowBilling;
+  const billing = (deps.billing ??
+    createBillingClient({
+      baseUrl: process.env.BILLING_BASE_URL!,
+      token: process.env.BILLING_INTERNAL_TOKEN!,
+    })) as ArticleWorkflowBilling;
   const llm = deps.llm ?? createLlmClient(loadLlmConfig());
   const fetchFn = deps.fetchFn ?? fetch;
   const env = deps.env ?? process.env;
@@ -74,15 +89,17 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const parsed = createArticleWorkflowProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
-    const creationConfig: ArticleWorkflowCreationConfig = parsed.data.creationMode === "topic"
-      ? { ...parsed.data.creationConfig as Extract<ArticleWorkflowCreationConfig, { mode: "topic" }>, generateImages: parsed.data.generateImages }
-      : { mode: "source", generateImages: parsed.data.generateImages };
-    const sourceFormat: ArticleWorkflowSourceFormat = creationConfig.mode === "topic"
-      ? "plain-text"
-      : parsed.data.sourceFormat;
-    const sourceText = creationConfig.mode === "topic"
-      ? normalizeArticleWorkflowCreationSource(creationConfig)
-      : parsed.data.sourceText;
+    const creationConfig: ArticleWorkflowCreationConfig =
+      parsed.data.creationMode === "topic"
+        ? {
+            ...(parsed.data.creationConfig as Extract<ArticleWorkflowCreationConfig, { mode: "topic" }>),
+            generateImages: parsed.data.generateImages,
+          }
+        : { mode: "source", generateImages: parsed.data.generateImages };
+    const sourceFormat: ArticleWorkflowSourceFormat =
+      creationConfig.mode === "topic" ? "plain-text" : parsed.data.sourceFormat;
+    const sourceText =
+      creationConfig.mode === "topic" ? normalizeArticleWorkflowCreationSource(creationConfig) : parsed.data.sourceText;
 
     // 一次导入 = 一个批次 = 每平台一行，每行独立生成、独立扣费、独立失败
     const batchId = randomUUID();
@@ -101,7 +118,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
           batchId,
           // theme 只对公众号排版有意义，caption 行统一存 auto
           theme: platform === "wechat" ? parsed.data.theme : "auto",
-          themeColor: platform === "wechat" ? parsed.data.themeColor ?? null : null,
+          themeColor: platform === "wechat" ? (parsed.data.themeColor ?? null) : null,
           sourceFormat,
           sourceText,
           generationMode,
@@ -120,24 +137,26 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       });
       created.push({ projectId: project.id, platform });
 
-      scheduleTask(() => runInitialArticleWorkflowGeneration({
-        prisma,
-        billing,
-        llm,
-        fetchFn,
-        env,
-        userId,
-        projectId: project.id,
-        creationConfig,
-        sourceFormat,
-        sourceText,
-        generationMode,
-        platform,
-        generateImages: creationConfig.generateImages,
-        model,
-        theme: parsed.data.theme,
-        themeColor: parsed.data.themeColor ?? null,
-      }));
+      scheduleTask(() =>
+        runInitialArticleWorkflowGeneration({
+          prisma,
+          billing,
+          llm,
+          fetchFn,
+          env,
+          userId,
+          projectId: project.id,
+          creationConfig,
+          sourceFormat,
+          sourceText,
+          generationMode,
+          platform,
+          generateImages: creationConfig.generateImages,
+          model,
+          theme: parsed.data.theme,
+          themeColor: parsed.data.themeColor ?? null,
+        }),
+      );
     }
 
     // projectId 保留首行，旧前端与既有用例不受影响
@@ -173,14 +192,15 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const params = articleWorkflowImageBlobParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
     const query = articleWorkflowImageBlobQuerySchema.safeParse(req.query ?? {});
-    const signed = query.success && query.data.exp && query.data.sig
-      ? articleWorkflowImageBlobSignatureValid({
-        assetId: params.data.assetId,
-        expiresAtMs: Number(query.data.exp),
-        signature: query.data.sig,
-        env,
-      })
-      : false;
+    const signed =
+      query.success && query.data.exp && query.data.sig
+        ? articleWorkflowImageBlobSignatureValid({
+            assetId: params.data.assetId,
+            expiresAtMs: Number(query.data.exp),
+            signature: query.data.sig,
+            env,
+          })
+        : false;
 
     let userId: string | undefined;
     if (!signed) {
@@ -249,9 +269,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     }
 
     const deleted = await prisma.articleWorkflowProject.deleteMany({
-      where: project.batchId
-        ? { userId, batchId: project.batchId }
-        : { userId, id: project.id },
+      where: project.batchId ? { userId, batchId: project.batchId } : { userId, id: project.id },
     });
     return { success: true, data: { deleted: deleted.count, batchId: project.batchId } };
   });
@@ -278,8 +296,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
         where: { id: project.id },
         data: {
           title: parsedCaption.data.title,
-          summary: parsedCaption.data.summary?.trim()
-            ?? articleWorkflowCaptionSummary(parsedCaption.data.captionText),
+          summary: parsedCaption.data.summary?.trim() ?? articleWorkflowCaptionSummary(parsedCaption.data.captionText),
           captionText: parsedCaption.data.captionText,
           tagsJson: jsonValue(parsedCaption.data.tags),
           status: "ready",
@@ -311,10 +328,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     });
     // 落库前把出参时现签的短期地址还原成稳定地址，否则存进去的是一批会过期的死链。
     // 配图区随后会按 manifest 整段重建，这一步管的是重建覆盖不到的残留。
-    const bodyHtml = applyArticleImageManifestToHtml(
-      articleWorkflowStableBodyHtml(guardedHtml),
-      current.imageManifest,
-    );
+    const bodyHtml = applyArticleImageManifestToHtml(articleWorkflowStableBodyHtml(guardedHtml), current.imageManifest);
     const updated = await prisma.articleWorkflowProject.update({
       where: { id: project.id },
       data: {
@@ -359,24 +373,26 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       },
     });
 
-    scheduleTask(() => runInitialArticleWorkflowGeneration({
-      prisma,
-      billing,
-      llm,
-      fetchFn,
-      env,
-      userId,
-      projectId: project.id,
-      creationConfig: current.creationConfig,
-      sourceFormat: current.sourceFormat,
-      sourceText: current.sourceText,
-      generationMode,
-      platform,
-      theme: current.theme,
-      themeColor: current.themeColor,
-      generateImages: current.creationConfig.generateImages,
-      model,
-    }));
+    scheduleTask(() =>
+      runInitialArticleWorkflowGeneration({
+        prisma,
+        billing,
+        llm,
+        fetchFn,
+        env,
+        userId,
+        projectId: project.id,
+        creationConfig: current.creationConfig,
+        sourceFormat: current.sourceFormat,
+        sourceText: current.sourceText,
+        generationMode,
+        platform,
+        theme: current.theme,
+        themeColor: current.themeColor,
+        generateImages: current.creationConfig.generateImages,
+        model,
+      }),
+    );
 
     return { success: true, data: { projectId: project.id } };
   });
@@ -408,21 +424,23 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       },
     });
 
-    scheduleTask(() => runArticleWorkflowRewrite({
-      prisma,
-      billing,
-      llm,
-      fetchFn,
-      env,
-      project: {
-        ...project,
+    scheduleTask(() =>
+      runArticleWorkflowRewrite({
+        prisma,
+        billing,
+        llm,
+        fetchFn,
+        env,
+        project: {
+          ...project,
+          generationMode,
+        },
+        instruction: parsed.data.instruction,
         generationMode,
-      },
-      instruction: parsed.data.instruction,
-      generationMode,
-      regenerateImages: parsed.data.regenerateImages,
-      model,
-    }));
+        regenerateImages: parsed.data.regenerateImages,
+        model,
+      }),
+    );
 
     return { success: true, data: { projectId: project.id } };
   });
@@ -464,11 +482,21 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
         },
         platformConfig,
       });
-      const nextManifest = current.imageManifest.map((image) => image.slot === target.slot ? nextImage : image);
-      // caption 平台没有正文 HTML，只更新 manifest
-      const nextHtml = platformConfig.outputKind === "caption"
-        ? undefined
-        : applyArticleImageManifestToHtml(current.bodyHtml, nextManifest);
+      const nextManifest = current.imageManifest.map((image) => (image.slot === target.slot ? nextImage : image));
+      // caption 平台没有正文 HTML，只更新 manifest；确定性主题（bodyMarkdown 非空）正文重渲；
+      // 否则走 slot 回填
+      const deterministicHtml = current.bodyMarkdown.trim()
+        ? renderDeterministicArticleBodyHtmlGuarded({
+            theme: current.theme,
+            themeColor: current.themeColor,
+            bodyMarkdown: current.bodyMarkdown,
+            imageManifest: nextManifest,
+          })
+        : null;
+      const nextHtml =
+        platformConfig.outputKind === "caption"
+          ? undefined
+          : (deterministicHtml ?? applyArticleImageManifestToHtml(current.bodyHtml, nextManifest));
       const updated = await prisma.articleWorkflowProject.update({
         where: { id: project.id },
         data: {
@@ -514,14 +542,16 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       progressMessage: "排队生成配图",
       error: null,
     });
-    scheduleTask(() => runArticleWorkflowMissingImages({
-      prisma,
-      billing,
-      llm,
-      fetchFn,
-      env,
-      project: { ...project, status: "revising" },
-    }));
+    scheduleTask(() =>
+      runArticleWorkflowMissingImages({
+        prisma,
+        billing,
+        llm,
+        fetchFn,
+        env,
+        project: { ...project, status: "revising" },
+      }),
+    );
     return reply.code(202).send({ success: true, data: { projectId: project.id, queued: true } });
   });
 }

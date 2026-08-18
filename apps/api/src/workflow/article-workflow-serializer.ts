@@ -15,10 +15,7 @@ import {
   articleWorkflowCreationConfigSchema,
   articleWorkflowTagsSchema,
 } from "./article-workflow-schema.js";
-import {
-  articleWorkflowResponseBodyHtml,
-  articleWorkflowResponseImageUrl,
-} from "./article-workflow-image-url.js";
+import { articleWorkflowResponseBodyHtml, articleWorkflowResponseImageUrl } from "./article-workflow-image-url.js";
 import type { ArticleProjectRow, ArticleWorkflowPersistedProject } from "./article-workflow-shared.js";
 
 function fallbackTitle(value: string): string {
@@ -43,10 +40,7 @@ export function parseArticleWorkflowImageManifestJson(value: unknown): readonly 
     .map((item) => item.data);
 }
 
-export function parseArticleWorkflowCreationConfigJson(
-  mode: unknown,
-  value: unknown,
-): ArticleWorkflowCreationConfig {
+export function parseArticleWorkflowCreationConfigJson(mode: unknown, value: unknown): ArticleWorkflowCreationConfig {
   const creationMode: ArticleWorkflowCreationMode = mode === "topic" ? "topic" : "source";
   const parsed = articleWorkflowCreationConfigSchema.safeParse(value);
   if (parsed.success && parsed.data.mode === creationMode) return parsed.data;
@@ -70,6 +64,7 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
     title: fallbackTitle(row.title),
     summary: row.summary.trim(),
     bodyHtml: row.bodyHtml.trim(),
+    bodyMarkdown: row.bodyMarkdown?.trim() ?? "",
     captionText: row.captionText.trim(),
     tags: parseArticleWorkflowTagsJson(row.tagsJson),
     imageManifest: parseArticleWorkflowImageManifestJson(row.imageManifestJson),
@@ -120,6 +115,7 @@ export function serializeArticleWorkflowProject(row: ArticleProjectRow, env: Nod
     sourceText: project.sourceText,
     creationConfig: project.creationConfig,
     bodyHtml: articleWorkflowResponseBodyHtml({ html: project.bodyHtml, env }),
+    bodyMarkdown: project.bodyMarkdown,
     captionText: project.captionText,
     tags: project.tags,
     imageManifestJson: project.imageManifest.map((image) => ({

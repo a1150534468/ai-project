@@ -111,6 +111,7 @@ export async function materializeCaptionArticle(args: {
     title: plan.title,
     summary,
     bodyHtml: "",
+    bodyMarkdown: "",
     captionText: plan.captionText,
     tags: plan.tags,
     imageManifest,

@@ -121,6 +121,7 @@ export interface ArticleWorkflowPersistedProject {
   readonly title: string;
   readonly summary: string;
   readonly bodyHtml: string;
+  readonly bodyMarkdown: string;
   readonly captionText: string;
   readonly tags: readonly string[];
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
