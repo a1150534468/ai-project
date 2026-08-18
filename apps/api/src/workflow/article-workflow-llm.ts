@@ -6,6 +6,7 @@ import type {
   ArticleWorkflowPlatform,
   ArticleWorkflowPlatformConfig,
   ArticleWorkflowSourceFormat,
+  ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { jsonrepair } from "jsonrepair";
 import type { ZodType, ZodTypeDef } from "zod";
@@ -190,11 +191,16 @@ export async function renderArticleWorkflowBodyHtml(args: {
   readonly model: string;
   readonly bodyMarkdown: string;
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
 }): Promise<string> {
   return stripCodeFence(await callLlmText({
     llm: args.llm,
     model: args.model,
-    system: buildArticleWorkflowLayoutSystemPrompt(),
+    system: buildArticleWorkflowLayoutSystemPrompt({
+      theme: args.theme,
+      themeColor: args.themeColor ?? undefined,
+    }),
     user: buildArticleWorkflowLayoutUserPrompt({
       bodyMarkdown: args.bodyMarkdown,
       imageManifest: args.imageManifest,

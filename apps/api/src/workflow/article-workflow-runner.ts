@@ -10,6 +10,7 @@ import {
   type ArticleWorkflowPlatform,
   type ArticleWorkflowPlatformConfig,
   type ArticleWorkflowSourceFormat,
+  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { assertArticleWorkflowImitationOriginality } from "./article-workflow-creation.js";
 import type { PrismaClient } from "@prisma/client";
@@ -167,6 +168,8 @@ async function materializeArticleWorkflow(args: RunnerDeps & {
   readonly sourceText: string;
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly platform: ArticleWorkflowPlatform;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
   readonly currentHtml?: string;
   /** caption 平台改稿时的现有文案，等价于公众号链路的 currentHtml */
   readonly currentCaption?: string;
@@ -269,6 +272,8 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
   readonly regenerateImages: boolean;
   readonly generateImages: boolean;
   readonly model: string;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
   readonly platformConfig: ArticleWorkflowPlatformConfig;
   readonly populateImages: PopulateArticleImages;
 }): Promise<MaterializedArticle> {
@@ -355,6 +360,8 @@ async function materializeHtmlFragmentArticle(args: RunnerDeps & {
     model: args.model,
     bodyMarkdown,
     imageManifest,
+    theme: args.theme,
+    themeColor: args.themeColor,
   });
   // 先修到词汇表以内再硬校验：排版是最后一步，配图钱已经花了，
   // 不该因为模型多写一个 <h2> 就让整行 failed。修的都是不动可见文字的操作。
@@ -385,6 +392,8 @@ export async function runInitialArticleWorkflowGeneration(args: RunnerDeps & {
   readonly platform: ArticleWorkflowPlatform;
   readonly generateImages: boolean;
   readonly model: string;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
 }): Promise<void> {
   const captionPlatform = articleWorkflowPlatformConfig(args.platform).outputKind === "caption";
   try {
@@ -444,6 +453,8 @@ export async function runArticleWorkflowRewrite(args: RunnerDeps & {
       sourceFormat: current.sourceFormat,
       sourceText: current.sourceText,
       platform,
+      theme: current.theme,
+      themeColor: current.themeColor,
       currentHtml: current.bodyHtml,
       currentCaption: current.captionText,
       currentImages: current.imageManifest,

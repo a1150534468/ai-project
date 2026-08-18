@@ -13,6 +13,8 @@ export type ProjectRow = {
   generationMode: string;
   platform: string;
   batchId: string | null;
+  theme: string;
+  themeColor: string | null;
   title: string;
   summary: string;
   bodyHtml: string;
@@ -122,6 +124,8 @@ const PROJECT_ROW_DEFAULTS = {
   generationMode: "preserve-text",
   platform: "wechat",
   batchId: null,
+  theme: "auto",
+  themeColor: null,
   title: "",
   summary: "",
   bodyHtml: "",

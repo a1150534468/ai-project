@@ -5,6 +5,7 @@ import {
   ARTICLE_WORKFLOW_IMAGE_SLOTS,
   ARTICLE_WORKFLOW_PLATFORMS,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
+  ARTICLE_WORKFLOW_THEMES,
   ARTICLE_WORKFLOW_TOPIC_PRESETS,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_MAX_SOURCE_LENGTH } from "./article-workflow-shared.js";
@@ -14,6 +15,13 @@ const generationModeSchema = z.enum(ARTICLE_WORKFLOW_GENERATION_MODES);
 const creationModeSchema = z.enum(ARTICLE_WORKFLOW_CREATION_MODES);
 const imageSlotSchema = z.enum(ARTICLE_WORKFLOW_IMAGE_SLOTS);
 export const articleWorkflowPlatformSchema = z.enum(ARTICLE_WORKFLOW_PLATFORMS);
+export const articleWorkflowThemeSchema = z.enum(ARTICLE_WORKFLOW_THEMES);
+/** 主色覆盖：可选 3/6 位 hex，缺省 = 用主题默认主色。 */
+export const articleWorkflowThemeColorSchema = z
+  .string()
+  .trim()
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+  .optional();
 
 /** 话题标签：统一去掉前导 #，长度与数量取三平台里最宽的上限，具体裁剪交给平台归一化。 */
 export const articleWorkflowTagsSchema = z
@@ -113,6 +121,10 @@ export const createArticleWorkflowProjectSchema = z.object({
     .default(["wechat"])
     .transform((platforms) => [...new Set(platforms)]),
   generateImages: z.boolean().optional().default(true),
+  /** 公众号排版主题；caption-only 批次会被静默忽略（仍存 auto） */
+  theme: articleWorkflowThemeSchema.optional().default("auto"),
+  /** 主色覆盖，仅 theme != auto 时生效 */
+  themeColor: articleWorkflowThemeColorSchema.optional(),
 }).superRefine((value, context) => {
   if (value.creationMode === "source") {
     if (!value.sourceText) {

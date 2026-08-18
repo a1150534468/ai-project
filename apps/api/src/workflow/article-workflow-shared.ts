@@ -8,6 +8,7 @@ import {
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowImageAsset,
   type ArticleWorkflowPlatform,
+  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, articleWorkflowRetryDelayMs } from "./article-workflow-retry.js";
 import { loadImageAttemptTimeoutMs } from "./image-service.js";
@@ -115,6 +116,8 @@ export interface ArticleWorkflowPersistedProject {
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly platform: ArticleWorkflowPlatform;
   readonly batchId: string | null;
+  readonly theme: ArticleWorkflowThemeKey;
+  readonly themeColor: string | null;
   readonly title: string;
   readonly summary: string;
   readonly bodyHtml: string;

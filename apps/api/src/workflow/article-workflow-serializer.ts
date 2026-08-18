@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import {
   articleWorkflowPlatformConfig,
+  articleWorkflowTheme,
   type ArticleWorkflowCreationConfig,
   type ArticleWorkflowCreationMode,
   type ArticleWorkflowGenerationMode,
@@ -63,6 +64,8 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
     generationMode: row.generationMode as ArticleWorkflowGenerationMode,
     platform: articleWorkflowPlatformConfig(row.platform).platform,
     batchId: row.batchId,
+    theme: articleWorkflowTheme(row.theme),
+    themeColor: row.themeColor ?? null,
     title: fallbackTitle(row.title),
     summary: row.summary.trim(),
     bodyHtml: row.bodyHtml.trim(),
@@ -87,6 +90,8 @@ export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
     creationMode: project.creationMode,
     platform: project.platform,
     batchId: project.batchId,
+    theme: project.theme,
+    themeColor: project.themeColor,
     status: project.status as ArticleWorkflowProjectStatus,
     progressStage: project.progressStage,
     progressPercent: project.progressPercent,

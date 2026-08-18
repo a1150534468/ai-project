@@ -34,6 +34,41 @@ describe("article-workflow routes", () => {
     expect(prisma.__state.projects[0]?.generationMode).toBe("preserve-text");
   });
 
+  it("stores theme and themeColor on create, defaults caption rows to auto", async () => {
+    const scheduled: (() => Promise<void>)[] = [];
+    const { app, prisma } = await buildArticleWorkflowApp({
+      llmResponses: [
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
+        createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
+      ],
+      scheduleTask: (work) => {
+        scheduled.push(work);
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "开头第一段。\n\n第二段继续说明。",
+        platforms: ["wechat", "xiaohongshu"],
+        theme: "magazine",
+        themeColor: "#123456",
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    // wechat 行存用户主题与主色，caption 行统一存 auto/null
+    expect(prisma.__state.projects.map((row) => row.theme)).toEqual(["magazine", "auto"]);
+    expect(prisma.__state.projects[0]?.themeColor).toBe("#123456");
+    expect(prisma.__state.projects[1]?.themeColor).toBeNull();
+
+    for (const work of scheduled) await work();
+    expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
+  });
+
   it("fans out one row per platform under a shared batch id", async () => {
     const scheduled: (() => Promise<void>)[] = [];
     const { app, prisma } = await buildArticleWorkflowApp({
@@ -221,13 +256,14 @@ describe("article-workflow routes", () => {
     const prisma = createArticleWorkflowPrismaMock({
       projects: [
         {
-          id: "p-3", userId: "u1", platform: "douyin", batchId: "b-1", captionText: "抖音文案",
+          id: "p-3", userId: "u1", platform: "douyin", batchId: "b-1", captionText: "抖音文案", theme: "bogus",
           sourceFormat: "plain-text", sourceText: "one", status: "ready", progressStage: "ready",
           progressPercent: 100,
           createdAt: new Date("2026-07-08T05:00:02.000Z"), updatedAt: new Date("2026-07-08T05:00:02.000Z"),
         },
         {
           id: "p-1", userId: "u1", platform: "wechat", batchId: "b-1",
+          theme: "magazine", themeColor: "#123456",
           bodyHtml: buildArticleWorkflowHtml(), imageManifestJson: buildArticleWorkflowImageManifest(),
           sourceFormat: "plain-text", sourceText: "one", status: "ready", progressStage: "ready",
           progressPercent: 100,
@@ -258,6 +294,10 @@ describe("article-workflow routes", () => {
       .toEqual(["wechat", "xiaohongshu", "douyin"]);
     expect(data.projects[1].captionText).toBe("小红书文案");
     expect(data.projects[1].tags).toEqual(["咖啡机"]);
+    // theme 透传 + themeColor 透传 + 脏 theme 归一化回落 auto
+    expect(data.projects[0].theme).toBe("magazine");
+    expect(data.projects[0].themeColor).toBe("#123456");
+    expect(data.projects[2].theme).toBe("auto");
 
     // 别人的批次一律 404，不泄露存在性
     const foreign = await app.inject({ method: "GET", url: "/api/workflow/article-workflow/batch/b-2" });
@@ -631,6 +671,58 @@ describe("article-workflow routes", () => {
     await scheduledTask!();
     expect(prisma.__state.projects[0]?.generationMode).toBe("polish-text");
     expect(prisma.__state.projects[0]?.bodyHtml).toContain("重写后的正文");
+  });
+
+  it("rewrite reuses the stored theme for the layout call", async () => {
+    let scheduledTask: (() => Promise<void>) | null = null;
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1",
+        userId: "u1",
+        sourceFormat: "plain-text",
+        sourceText: "原文内容",
+        generationMode: "preserve-text",
+        theme: "magazine",
+        themeColor: null,
+        title: "旧标题",
+        summary: "",
+        bodyHtml: buildArticleWorkflowHtml(),
+        imageManifestJson: buildArticleWorkflowImageManifest(),
+        status: "ready",
+        progressStage: "ready",
+        progressPercent: 100,
+        progressMessage: null,
+        error: null,
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      }],
+    });
+    const { app, llm } = await buildArticleWorkflowApp({
+      prisma,
+      llmResponses: [
+        createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
+        createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
+      ],
+      scheduleTask: (work) => {
+        scheduledTask = work;
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/rewrite",
+      payload: { instruction: "换个风格", generationMode: "polish-text", regenerateImages: false },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await scheduledTask!();
+    // 第二次 LLM 调用是 layout，system prompt 应带上杂志主题的默认主色
+    const createMock = llm.messages.create as unknown as {
+      mock: { calls: [{ system?: string }][] };
+    };
+    const layoutSystem = createMock.mock.calls[1]?.[0]?.system;
+    expect(layoutSystem).toContain("#c0392b");
+    expect(layoutSystem).toContain("Visual style theme");
   });
 
   it("refuses to save a failed project so autosave can't erase the failure reason", async () => {

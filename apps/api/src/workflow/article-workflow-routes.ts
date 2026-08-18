@@ -99,6 +99,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
           creationConfigJson: jsonValue(creationConfig),
           platform,
           batchId,
+          // theme 只对公众号排版有意义，caption 行统一存 auto
+          theme: platform === "wechat" ? parsed.data.theme : "auto",
+          themeColor: platform === "wechat" ? parsed.data.themeColor ?? null : null,
           sourceFormat,
           sourceText,
           generationMode,
@@ -132,6 +135,8 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
         platform,
         generateImages: creationConfig.generateImages,
         model,
+        theme: parsed.data.theme,
+        themeColor: parsed.data.themeColor ?? null,
       }));
     }
 
@@ -367,6 +372,8 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       sourceText: current.sourceText,
       generationMode,
       platform,
+      theme: current.theme,
+      themeColor: current.themeColor,
       generateImages: current.creationConfig.generateImages,
       model,
     }));
