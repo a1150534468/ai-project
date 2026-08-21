@@ -2,15 +2,30 @@
 FROM gcr.io/distroless/static-debian12:nonroot AS certs
 
 FROM node:24-bookworm-slim AS builder
+ARG USE_CHINA_APT_MIRROR=true
+ARG NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+ARG PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
 WORKDIR /repo
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-RUN printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list \
- && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates python3 make g++ \
- && rm -rf /var/lib/apt/lists/*
+RUN if [ "$USE_CHINA_APT_MIRROR" = true ]; then \
+      printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list; \
+      rm -f /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    for attempt in 1 2 3; do \
+      if apt-get -o Acquire::Retries=5 update \
+        && apt-get -o Acquire::Retries=5 install -y --no-install-recommends openssl ca-certificates python3 make g++; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      rm -rf /var/lib/apt/lists/*; \
+      sleep $((attempt * 10)); \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 RUN corepack enable
-ENV npm_config_registry=https://registry.npmmirror.com
-ENV PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
+ENV npm_config_registry=${NPM_CONFIG_REGISTRY}
+ENV npm_config_fetch_retries=5
+ENV npm_config_fetch_retry_maxtimeout=120000
+ENV PRISMA_ENGINES_MIRROR=${PRISMA_ENGINES_MIRROR}
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/article-workflow/package.json packages/article-workflow/package.json
@@ -22,22 +37,41 @@ COPY packages/llm/package.json packages/llm/package.json
 COPY packages/novel-workflow/package.json packages/novel-workflow/package.json
 RUN --mount=type=cache,id=ai-assistant-pnpm,target=/pnpm/store \
     pnpm config set store-dir /pnpm/store \
- && pnpm install --frozen-lockfile --filter @ai-assistant/api...
+ && for attempt in 1 2 3; do \
+      pnpm install --frozen-lockfile --filter @ai-assistant/api... && exit 0; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      sleep $((attempt * 10)); \
+    done
 COPY tsconfig.base.json ./
 COPY apps/api apps/api
 COPY packages packages
-RUN pnpm --filter @ai-assistant/db exec prisma generate
+RUN for attempt in 1 2 3; do \
+      pnpm --filter @ai-assistant/db exec prisma generate && exit 0; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      sleep $((attempt * 10)); \
+    done
 RUN cd apps/api && CI=true pnpm prune --prod
 RUN --mount=type=cache,id=ai-assistant-pnpm,target=/pnpm/store \
     pnpm install --prod --offline --frozen-lockfile --filter @ai-assistant/api...
 
 FROM node:24-bookworm-slim
+ARG USE_CHINA_APT_MIRROR=true
 WORKDIR /repo
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-RUN printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list \
- && rm -f /etc/apt/sources.list.d/debian.sources \
- && apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates ffmpeg fonts-noto-cjk \
- && rm -rf /var/lib/apt/lists/*
+RUN if [ "$USE_CHINA_APT_MIRROR" = true ]; then \
+      printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list; \
+      rm -f /etc/apt/sources.list.d/debian.sources; \
+    fi; \
+    for attempt in 1 2 3; do \
+      if apt-get -o Acquire::Retries=5 update \
+        && apt-get -o Acquire::Retries=5 install -y --no-install-recommends openssl ca-certificates ffmpeg fonts-noto-cjk; then \
+        break; \
+      fi; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      rm -rf /var/lib/apt/lists/*; \
+      sleep $((attempt * 10)); \
+    done; \
+    rm -rf /var/lib/apt/lists/*
 COPY --from=builder /repo /repo
 ENV NODE_ENV=production
 EXPOSE 8090

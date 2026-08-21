@@ -34,6 +34,10 @@
 
 首次生产工作流的 Node 验证全部通过，但 Billing 的会员周期测试曾隐式使用 Runner 本地时区，因 GitHub 使用 UTC 而失败。生产实现始终固定使用北京时区，本次仅将测试输入和预期显式锚定 `BeijingLoc`；Billing 全量 Go 测试已在 `TZ=UTC` 下复测通过。
 
+第二次生产工作流的验证、Gateway 和 Billing 镜像均通过，但 API 与 Migration 镜像在 GitHub 海外 Runner 上持续使用国内 apt/npm/Prisma 镜像而未完成。构建源现已参数化：本地默认继续使用国内镜像，CI 显式使用官方源，并为 apt、npm、Prisma 下载增加重试和镜像 Job 超时。
+
+修正后的 API 已使用 CI 官方源参数完整构建成功，Migration 分别完成官方源构建和默认国内源最终 Dockerfile 构建，两个 Prisma 引擎均可运行。新镜像再次通过全新数据卷迁移、7 服务健康和四个 Host 路由的隔离生产拓扑冒烟。
+
 最新镜像大小（Docker 报告的十进制字节换算）：
 
 | 镜像 | 大小 |

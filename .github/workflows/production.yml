@@ -97,21 +97,33 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
+      max-parallel: 2
       matrix:
         include:
           - name: api
             context: .
             file: infra/docker/api/Dockerfile
-          - name: gateway
-            context: .
-            file: infra/docker/gateway/Dockerfile
-          - name: migrate
-            context: .
-            file: infra/docker/migrate/Dockerfile
+            build_args: |
+              USE_CHINA_APT_MIRROR=false
+              NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+              PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
           - name: billing
             context: services/billing
             file: infra/docker/billing/Dockerfile
+            build_args: ""
+          - name: migrate
+            context: .
+            file: infra/docker/migrate/Dockerfile
+            build_args: |
+              USE_CHINA_APT_MIRROR=false
+              NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+              PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
+          - name: gateway
+            context: .
+            file: infra/docker/gateway/Dockerfile
+            build_args: ""
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -124,6 +136,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          build-args: ${{ matrix.build_args }}
           push: true
           tags: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.name }}
