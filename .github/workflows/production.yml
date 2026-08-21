@@ -97,9 +97,9 @@ jobs:
     if: github.event_name != 'pull_request'
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
-      max-parallel: 2
+      max-parallel: 1
       matrix:
         include:
           - name: api
@@ -126,6 +126,17 @@ jobs:
             build_args: ""
     steps:
       - uses: actions/checkout@v4
+      - name: Limit concurrent registry uploads
+        run: |
+          daemon_config="$(mktemp)"
+          if sudo test -f /etc/docker/daemon.json; then
+            sudo cat /etc/docker/daemon.json \
+              | jq '. + {"max-concurrent-uploads": 1}' > "$daemon_config"
+          else
+            jq -n '{"max-concurrent-uploads": 1}' > "$daemon_config"
+          fi
+          sudo install -m 0644 "$daemon_config" /etc/docker/daemon.json
+          sudo systemctl restart docker
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
@@ -137,10 +148,23 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           build-args: ${{ matrix.build_args }}
-          push: true
+          load: true
           tags: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+      - name: Push image to TCR
+        env:
+          IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
+        run: |
+          for attempt in 1 2 3; do
+            if timeout --signal=TERM 45m docker push "$IMAGE_REF"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 15))
+          done
 
   deploy:
     if: github.event_name != 'pull_request'
