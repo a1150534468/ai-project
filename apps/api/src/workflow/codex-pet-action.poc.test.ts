@@ -9,7 +9,7 @@ import {
   petRowSpec,
 } from "@ai-assistant/codex-pet-pipeline";
 import { beforeAll, describe, expect, it } from "vitest";
-import type { ImageBinaryInput } from "./image-service.js";
+import type { ImageBinaryInput } from "./_shared/image-service.js";
 import {
   buildStandardRowPrompt,
   buildVisualQaPrompt,

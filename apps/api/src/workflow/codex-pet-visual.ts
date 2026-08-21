@@ -12,7 +12,7 @@ import {
   loadImageGenerationConfigForModel,
   type ImageBinaryInput,
   type ImageGenerationResult,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 import { createCodexPetUpstreamFetch } from "./codex-pet-network.js";
 import { loadSharp } from "../runtime/resource-limits.js";
 

@@ -14,7 +14,7 @@ import {
   prepareCodexPetExtraImageCall,
   refundCodexPetFailedExtraCall,
 } from "./codex-pet-call-ledger.js";
-import { callImageGenerationDetailed } from "./image-service.js";
+import { callImageGenerationDetailed } from "./_shared/image-service.js";
 
 type CallRow = Record<string, unknown>;
 

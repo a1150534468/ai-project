@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ecomImageModelSchema, productSchema } from "./ecom-route-types.js";
 import { ECOM_MAIN_MAX_COUNT, ECOM_MAIN_MIN_COUNT, ECOM_MAIN_RATIOS, ECOM_MAIN_STYLE_IDS } from "./ecom-main.js";
-import { IMAGE_MAX_REFERENCE_COUNT } from "./image-service.js";
+import { IMAGE_MAX_REFERENCE_COUNT } from "./_shared/image-service.js";
 
 export const mainImageRequestSchema = z.object({
   platformId: z.string().trim().min(1).max(64),

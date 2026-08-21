@@ -37,7 +37,7 @@ import {
   safeError,
 } from "./runner-util.js";
 import { type CodexPetVisualModelProvenance, codexPetVisualQaVerdictPasses } from "../codex-pet-visual.js";
-import { classifyImageGenerationError } from "../image-service.js";
+import { classifyImageGenerationError } from "../_shared/image-service.js";
 
 export async function reuseGptContinuationBaseCandidate(
   ctx: RunnerContext,

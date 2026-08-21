@@ -20,7 +20,7 @@ import {
   type ImageBinaryInput,
   type ImageGenerationConfig,
   type StoredImage,
-} from "../image-service.js";
+} from "../_shared/image-service.js";
 import {
   buildPortraitPrompt,
   LEGACY_PORTRAIT_PRESET_NAMES,
@@ -40,8 +40,8 @@ import {
   resolveImageChargeRow,
   type WorkflowResourcePriceRow,
 } from "../_shared/workflow-pricing.js";
-import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../image-delivered-tier.js";
-import type { ImageResolutionLabel } from "../image-upstream-options.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
+import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import {

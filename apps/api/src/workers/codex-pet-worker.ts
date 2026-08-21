@@ -34,7 +34,7 @@ import {
 import {
   isVerifiedWorkflowImageObjectKeyForUser,
   sanitizeImageUpstreamRequestId,
-} from "../workflow/image-service.js";
+} from "../workflow/_shared/image-service.js";
 import { assertCodexPetVisualQaRoute } from "../workflow/codex-pet-visual.js";
 import { runHeavyWorkerTask } from "./heavy-task-gate.js";
 import {

@@ -13,7 +13,7 @@ import {
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
   isVerifiedWorkflowImageObjectKeyForUser,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 import { isCodexPetArtifactObjectKey, isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
 import {
   CODEX_PET_ACTION_PROMPT_KEYS,

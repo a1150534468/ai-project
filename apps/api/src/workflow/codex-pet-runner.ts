@@ -29,7 +29,7 @@ import {
 import {
   DOUBAO_IMAGE_MODEL,
   GPT_IMAGE_MODEL,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 import {
   CODEX_PET_MODEL_CONTRACT_VERSION,
   isAllowedCodexPetImageModel,

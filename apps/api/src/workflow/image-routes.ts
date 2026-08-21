@@ -15,8 +15,8 @@ import {
   imageResolutionFromSize,
   imageSizeForResolution,
   normalizeImageSize,
-} from "./image-upstream-options.js";
-import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
+} from "./_shared/image-upstream-options.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./_shared/image-delivered-tier.js";
 import { startImageReaper } from "./image-reaper.js";
 import {
   IMAGE_TASK_STATUS,
@@ -43,7 +43,7 @@ import {
   storeWorkflowImage as storeWorkflowImageService,
   type GeneratedImage,
   type ImageGenerationConfig,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 import { loadOwnedReferenceImages } from "./_shared/ecom-route-helpers.js";
 import { loadSharp } from "../runtime/resource-limits.js";
 

@@ -5,8 +5,8 @@ import type {
   ArticleWorkflowImageSlot,
   ArticleWorkflowPlatformConfig,
 } from "@ai-assistant/article-workflow";
-import { callImageGeneration, loadImageGenerationConfig, storeWorkflowImage } from "./image-service.js";
-import { imageGenerationResourceKey, imageResolutionFromSize } from "./image-upstream-options.js";
+import { callImageGeneration, loadImageGenerationConfig, storeWorkflowImage } from "./_shared/image-service.js";
+import { imageGenerationResourceKey, imageResolutionFromSize } from "./_shared/image-upstream-options.js";
 import {
   ARTICLE_IMAGE_BATCH_SIZE,
   type ArticleWorkflowBilling,

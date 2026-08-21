@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it, vi } from "vitest";
 import { archiveCodexPetRun } from "./codex-pet-archive.js";
 import { appendCodexPetEvent } from "./codex-pet-events.js";
 import { initializeCodexPetTargetedBoardRetry } from "./codex-pet-failed-continuation.js";
-import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, ImageGenerationUpstreamError } from "./image-service.js";
+import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, ImageGenerationUpstreamError } from "./_shared/image-service.js";
 import { codexPetFinalPackageInputRevision } from "./codex-pet-packaging.js";
 import { buildStandardRowPrompt } from "./codex-pet-prompts.js";
 import { CODEX_PET_BOARD_PROMPT_VERSION, CodexPetLeaseLostError, codexPetBoardInputRevision, codexPetStandardRowPromptVersion, executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";

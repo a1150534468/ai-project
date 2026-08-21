@@ -30,7 +30,7 @@ import {
   runCodexPetVisualQaConsensus,
   runLabeledDirectionSemantics,
 } from "../codex-pet-visual.js";
-import { type ImageBinaryInput } from "../image-service.js";
+import { type ImageBinaryInput } from "../_shared/image-service.js";
 
 export const CODEX_PET_ACTIVE_STATUSES = [
   "queued", "base_generating", "awaiting_base_review", "standard_generating", "direction_generating",

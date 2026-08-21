@@ -4,7 +4,7 @@ import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/bil
 import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
 import { ecomMainImageResourceKey, ecomMainImageSize, normalizeEcomMainResolution, ECOM_MAIN_RESOLUTIONS, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
 import { ecomModelSizeError } from "./ecom-resolution.js";
-import { deliveredImageResolution, pixelsFromSize } from "./image-delivered-tier.js";
+import { deliveredImageResolution, pixelsFromSize } from "./_shared/image-delivered-tier.js";
 import {
   appendBillingOperationId,
   authUserId,
@@ -28,7 +28,7 @@ import {
   type GeneratedImage,
   type ImageGenerationConfig,
   type StoredImage,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 import { getEcomPlatform } from "./ecom-prompts.js";
 
 const LEGACY_ECOM_MAIN_MODEL = "ecom_main_image";

@@ -13,7 +13,7 @@ import {
 const enabled = process.env.RUN_GPT_IMAGE_EDIT_POC === "1";
 if (enabled) {
   const loadEnvFile = (process as typeof process & { loadEnvFile?: (path?: string) => void }).loadEnvFile;
-  loadEnvFile?.(resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../..", ".env"));
+  loadEnvFile?.(resolve(fileURLToPath(new URL(".", import.meta.url)), "../../../../..", ".env"));
 }
 
 async function reference(color: string, label: string): Promise<ImageBinaryInput> {

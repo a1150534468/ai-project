@@ -55,7 +55,7 @@ import {
   visualQaPasses,
 } from "./runner-util.js";
 import { type PetVisualQaConsensus, codexPetVisualQaConsensusPasses } from "../codex-pet-visual.js";
-import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "../image-service.js";
+import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "../_shared/image-service.js";
 
 export function poseBoardRepairPrompt(
   errors: readonly string[],

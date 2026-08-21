@@ -17,7 +17,7 @@ import {
   type RunnerContext,
 } from "./runner-types.js";
 import { safeError } from "./runner-util.js";
-import { type ImageGenerationResult, classifyImageGenerationError } from "../image-service.js";
+import { type ImageGenerationResult, classifyImageGenerationError } from "../_shared/image-service.js";
 
 export async function recordImageGenerationAttempt(
   ctx: RunnerContext,

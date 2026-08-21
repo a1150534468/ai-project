@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./image-service.js";
+import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "./_shared/image-service.js";
 import {
   assertCodexPetVisualQaProvenance,
   atlasValidationErrorsWithoutCellScope,

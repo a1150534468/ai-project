@@ -3,7 +3,7 @@ import {
   GPT_IMAGE_MODEL,
   loadGptImageEditEndpoint,
   loadImageGenerationConfigForModel,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 
 export const CODEX_PET_MODEL_CONTRACT_VERSION = "gpt-only-quality-optional-v3";
 export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol";

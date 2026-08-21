@@ -12,7 +12,7 @@ import {
   type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, articleWorkflowRetryDelayMs } from "./article-workflow-retry.js";
-import { loadImageAttemptTimeoutMs } from "./image-service.js";
+import { loadImageAttemptTimeoutMs } from "./_shared/image-service.js";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
 export const ARTICLE_MAX_SOURCE_LENGTH = 200_000;

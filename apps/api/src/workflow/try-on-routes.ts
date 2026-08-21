@@ -21,7 +21,7 @@ import {
   type ImageBinaryInput,
   type ImageGenerationConfig,
   type StoredImage,
-} from "./image-service.js";
+} from "./_shared/image-service.js";
 import {
   HUMAN_IMAGE_ASPECT_RATIOS,
   HUMAN_IMAGE_MODEL,
@@ -34,8 +34,8 @@ import {
   type HumanImageResolution,
 } from "./_shared/human-image-options.js";
 import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
-import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
-import type { ImageResolutionLabel } from "./image-upstream-options.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./_shared/image-delivered-tier.js";
+import type { ImageResolutionLabel } from "./_shared/image-upstream-options.js";
 import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "./portrait/index.js";
 import { buildTryOnPrompt, TRY_ON_CONSENT_VERSION } from "./try-on-prompts.js";
 

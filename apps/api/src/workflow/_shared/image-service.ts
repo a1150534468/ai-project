@@ -1,8 +1,8 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
-import { loadSharp } from "../runtime/resource-limits.js";
-import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js";
+import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
+import { publicObjectUrl as basePublicObjectUrl } from "../../storage/public-url.js";
 import { imageResolutionFromSize } from "./image-upstream-options.js";
 import { IMAGE_STREAM_PARTIAL_IMAGES, readImageStream } from "./image-stream.js";
 import { withImageStreamDispatcher } from "./image-stream-dispatcher.js";

@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { putObject } from "../storage/s3.js";
+import { putObject } from "../../storage/s3.js";
 import {
   callImageEditDetailed,
   callImageEdit,
@@ -29,8 +29,8 @@ async function pngB64(width = 48, height = 32): Promise<string> {
   return (await sharp({ create: { width, height, channels: 4, background: "#ff00ff" } }).png().toBuffer()).toString("base64");
 }
 
-vi.mock("../storage/s3.js", async () => {
-  const actual = await vi.importActual<typeof import("../storage/s3.js")>("../storage/s3.js");
+vi.mock("../../storage/s3.js", async () => {
+  const actual = await vi.importActual<typeof import("../../storage/s3.js")>("../../storage/s3.js");
   return {
     ...actual,
     makeS3: vi.fn(() => ({ client: {} as never, bucket: "ai-assistant-kb" })),
