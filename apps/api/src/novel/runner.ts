@@ -10,16 +10,16 @@ import {
   type NovelPipelineStepKind,
 } from "@ai-assistant/novel-workflow";
 import { nextPipelineStep, runStatusForStep } from "@ai-assistant/novel-workflow/server";
-import { createNovelGenerator } from "../workflow/novel-generation.js";
-import { buildNovelQualityDiagnostics } from "../workflow/novel-text-analysis.js";
 import {
+  createNovelGenerator,
+  buildNovelQualityDiagnostics,
   estimateReserveChars,
   reserveAndCreateTask,
   runNovelTask,
   type BillingForNovels,
   type NovelTaskRow,
-} from "../workflow/novel-task-runner.js";
-import type { NovelTargetKind } from "../workflow/novel-types.js";
+  type NovelTargetKind,
+} from "../workflow/novel/index.js";
 import { appendNovelRunEvent } from "./events.js";
 import { createNextNovelStep } from "./run-store.js";
 import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";

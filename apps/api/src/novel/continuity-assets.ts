@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { deriveNovelChapterAssets } from "../workflow/novel-text-analysis.js";
-import type { NovelEventCard } from "../workflow/novel-workbench-types.js";
+import { deriveNovelChapterAssets, type NovelEventCard } from "../workflow/novel/index.js";
 
 export const AUTO_CONTINUITY_SOURCE = "chapterPostprocess";
 

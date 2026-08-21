@@ -1,5 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
-import { NOVEL_TARGET_KINDS, type NovelTargetKind } from "../workflow/novel-types.js";
+import { NOVEL_TARGET_KINDS, type NovelTargetKind } from "../workflow/novel/index.js";
 import { enqueueNovelEngineStep, enqueueNovelGenerationTask } from "./queue.js";
 
 const OUTBOX_BATCH_SIZE = 50;

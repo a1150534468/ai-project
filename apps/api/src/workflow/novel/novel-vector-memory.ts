@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
-import { embed, loadEmbeddingConfig, type EmbeddingConfig } from "../memory/embedding-client.js";
+import { embed, loadEmbeddingConfig, type EmbeddingConfig } from "../../memory/embedding-client.js";
 
 const VECTOR_CONTEXT_LIMIT = 8;
 const INDEX_CONTENT_LIMIT = 3200;

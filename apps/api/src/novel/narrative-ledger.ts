@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { buildNovelChapterPostprocessPayload } from "../workflow/novel-postprocess.js";
-import type { NovelForeshadowPayload } from "../workflow/novel-workbench-types.js";
+import { buildNovelChapterPostprocessPayload, type NovelForeshadowPayload } from "../workflow/novel/index.js";
 
 export const AUTO_LEDGER_SOURCE = "chapterPostprocess";
 const RESOLUTION_CUE_RE = /(原来|答案|真相|谜底|揭晓|证实|确认了|终于明白|终于知道|身份是|目的就是|因为这|正是|其实是)/u;

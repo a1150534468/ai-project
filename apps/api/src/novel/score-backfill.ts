@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { evaluateNovelQualityGate } from "@ai-assistant/novel-workflow";
-import { buildNovelQualityDiagnostics } from "../workflow/novel-text-analysis.js";
+import { buildNovelQualityDiagnostics } from "../workflow/novel/index.js";
 
 function record(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};

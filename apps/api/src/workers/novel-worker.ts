@@ -2,8 +2,7 @@ import { assertRequiredEnv } from "../env.js";
 import { createServer } from "node:http";
 import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
-import { createNovelGenerator } from "../workflow/novel-generation.js";
-import { runNovelTask } from "../workflow/novel-task-runner.js";
+import { createNovelGenerator, runNovelTask } from "../workflow/novel/index.js";
 import {
   dispatchNovelOutboxBatch,
   recoverInterruptedNovelSteps,

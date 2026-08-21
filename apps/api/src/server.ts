@@ -44,7 +44,7 @@ import { storeGeneratedVideo, storeVideoFile } from "./workflow/_shared/video-se
 import { createBillingClient } from "@ai-assistant/billing";
 import { ecomHelpWriteRoutes, ecomMainImageRoutes, ecomWorkflowRoutes } from "./workflow/ecom/index.js";
 import { localBusinessPromoRoutes } from "./workflow/local-business-promo-routes.js";
-import { novelWorkflowRoutes } from "./workflow/novel-routes.js";
+import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { novelEngineRoutes } from "./novel/routes.js";
 import { comicProductionRoutes, comicWorkflowRoutes } from "./workflow/comic/index.js";
 import { reportRoutes } from "./workflow/report/index.js";

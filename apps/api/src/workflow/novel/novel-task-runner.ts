@@ -10,9 +10,9 @@ import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload } from "./novel-review.js";
 import { buildNovelVectorMemoryContext, refreshNovelVectorMemory } from "./novel-vector-memory.js";
 import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-workbench-types.js";
-import { syncNovelContinuityAssetsForChapter } from "../novel/continuity-assets.js";
-import { syncNovelNarrativeLedgersForChapter } from "../novel/narrative-ledger.js";
-import { syncNovelSetupAssets } from "../novel/structured-sync.js";
+import { syncNovelContinuityAssetsForChapter } from "../../novel/continuity-assets.js";
+import { syncNovelNarrativeLedgersForChapter } from "../../novel/narrative-ledger.js";
+import { syncNovelSetupAssets } from "../../novel/structured-sync.js";
 import { findEnabledNovelModel, novelWritingModel, type NovelPlatformModel } from "./novel-models.js";
 
 export interface BillingForNovels {
