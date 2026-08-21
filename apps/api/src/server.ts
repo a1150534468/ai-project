@@ -31,7 +31,7 @@ import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
 import { tryOnWorkflowRoutes } from "./workflow/try-on-routes.js";
 import { codexPetRoutes } from "./workflow/codex-pet-routes.js";
 import { enqueueCodexPetProjectCleanup } from "./workflow/codex-pet-cleanup.js";
-import { videoWorkflowRoutes } from "./workflow/video-routes.js";
+import { videoWorkflowRoutes } from "./workflow/video/index.js";
 import { dubRoutes } from "./workflow/dub-routes.js";
 import { adminDubRoutes } from "./admin/dub-routes.js";
 import { startDubReaper } from "./workflow/dub-reaper.js";

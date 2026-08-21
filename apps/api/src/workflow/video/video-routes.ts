@@ -2,16 +2,16 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
-import { requireUser } from "../auth/require-user.js";
+import { requireUser } from "../../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { optimizeVideoPrompt } from "./video-prompt-optimize.js";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type Anthropic from "@anthropic-ai/sdk";
-import { analyzeMaterials, analyzeReference } from "./_shared/video-analyze-service.js";
+import { analyzeMaterials, analyzeReference } from "../_shared/video-analyze-service.js";
 import { generateScript, type ScriptPayload } from "./video-script-service.js";
-import { probeVideoDurationSec } from "./_shared/video-probe.js";
+import { probeVideoDurationSec } from "../_shared/video-probe.js";
 import {
   AUDIO_REFERENCE_ROLE,
   VIDEO_ASPECT_RATIOS,
@@ -40,7 +40,7 @@ import {
   type VideoResolution,
   type VideoRoleInput,
   type VideoTaskStatus,
-} from "./_shared/video-service.js";
+} from "../_shared/video-service.js";
 import { startVideoReaper, type VideoReapHandlers } from "./video-reaper.js";
 import { VIDEO_TASK_STATUS, videoOperationId, type VideoTaskRow } from "./video-shared.js";
 
@@ -183,8 +183,8 @@ interface VideoWorkflowRouteDeps {
   readonly submitRetryDelayMs?: number;
   readonly llmClient?: Anthropic;
   // 视频/图片理解已切到 gemini 原生 vision（见 vision-client.ts）；测试注入用
-  readonly visionCfg?: import("./_shared/vision-client.js").VisionConfig;
-  readonly callVisionFn?: typeof import("./_shared/vision-client.js").callVision;
+  readonly visionCfg?: import("../_shared/vision-client.js").VisionConfig;
+  readonly callVisionFn?: typeof import("../_shared/vision-client.js").callVision;
   /**
    * 给了才起主动扫的定时器。留成可选是为了让既有测试注册插件时不需要 redis，
    * 也避免测试进程里凭空多一个后台定时器。生产在 server.ts 注入。

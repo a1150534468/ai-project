@@ -168,8 +168,8 @@ async function createApp(options: {
   readonly fetchFn: typeof fetch;
   readonly scheduled?: Promise<void>[];
   readonly llmClient?: import("@anthropic-ai/sdk").default;
-  readonly visionCfg?: import("./_shared/vision-client.js").VisionConfig;
-  readonly callVisionFn?: typeof import("./_shared/vision-client.js").callVision;
+  readonly visionCfg?: import("../_shared/vision-client.js").VisionConfig;
+  readonly callVisionFn?: typeof import("../_shared/vision-client.js").callVision;
   readonly submitRetries?: number;
   readonly redis?: import("ioredis").Redis;
   /** 传空串模拟未登录。默认 "u1"，保持既有用例不变。 */
