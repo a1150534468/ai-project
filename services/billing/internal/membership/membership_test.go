@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/gorm"
 	"ai-assistant-billing/internal/bucket"
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/pgtest"
 	"ai-assistant-billing/internal/store"
+	"gorm.io/gorm"
 )
 
 func newStore(t *testing.T) *store.Store {
@@ -23,8 +23,10 @@ func newStore(t *testing.T) *store.Store {
 }
 
 func TestPeriodKeyAndExpiry(t *testing.T) {
-	loc := time.Local
-	d := time.Date(2026, 6, 28, 15, 0, 0, 0, loc) // 周日
+	loc := BeijingLoc
+	// 2026-06-28 15:00 in Beijing. Use an explicit UTC instant so the test
+	// does not inherit the workstation or CI runner's local timezone.
+	d := time.Date(2026, 6, 28, 7, 0, 0, 0, time.UTC) // 周日
 	k, exp := PeriodKeyAndExpiry("DAILY", d)
 	if k != "20260628" || !exp.Equal(time.Date(2026, 6, 29, 0, 0, 0, 0, loc)) {
 		t.Fatalf("daily: %s %v", k, exp)
