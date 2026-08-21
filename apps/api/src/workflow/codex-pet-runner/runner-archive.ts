@@ -1,16 +1,16 @@
 // 由 codex-pet-runner.ts 纯移动而来（P3.1 阶段 1，知识归档）。
 
 import { type CodexPetJob, Prisma } from "@prisma/client";
-import { settlePerImageBilling } from "../codex-pet-runner/runner-billing.js";
-import { emit } from "../codex-pet-runner/runner-lease.js";
+import { settlePerImageBilling } from "./runner-billing.js";
+import { emit } from "./runner-lease.js";
 import {
   CodexPetArchiveDeferredError,
   CodexPetCancelledError,
   type CodexPetExecutionResult,
   CodexPetLeaseLostError,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
-import { asRecord, configuredArchiveMaxAttempts, safeError } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { asRecord, configuredArchiveMaxAttempts, safeError } from "./runner-util.js";
 
 export const TERMINAL_ARCHIVE_ERROR_CODES = new Set([
   "run_not_found",

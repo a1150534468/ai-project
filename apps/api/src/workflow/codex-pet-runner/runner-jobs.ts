@@ -2,14 +2,14 @@
 
 import { Buffer } from "node:buffer";
 import { type CodexPetArtifact, type CodexPetJob, Prisma } from "@prisma/client";
-import { checkCancelled, emit } from "../codex-pet-runner/runner-lease.js";
+import { checkCancelled, emit } from "./runner-lease.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetCancelledError,
   CodexPetLeaseLostError,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
-import { asRecord, providerMetadata } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { asRecord, providerMetadata } from "./runner-util.js";
 import { type ImageGenerationResult } from "../image-service.js";
 
 export async function ensureJob(

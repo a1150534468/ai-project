@@ -11,7 +11,7 @@ import {
   DEFAULT_STALE_RUN_MS,
   type RunnerContext,
   type StandardActionState,
-} from "../codex-pet-runner/runner-types.js";
+} from "./runner-types.js";
 import {
   type PetVisualQaConsensus,
   codexPetImageMaxAttempts,

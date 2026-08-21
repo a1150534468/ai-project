@@ -8,15 +8,15 @@ import {
   prepareCodexPetImageCallDispatch,
   refundCodexPetFailedExtraCall,
 } from "../codex-pet-call-ledger.js";
-import { currentRun, emit } from "../codex-pet-runner/runner-lease.js";
+import { currentRun, emit } from "./runner-lease.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetImageApprovalRequiredError,
   CodexPetLeaseLostError,
   type CodexPetRunnerDeps,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
-import { safeError } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { safeError } from "./runner-util.js";
 import { type ImageGenerationResult, classifyImageGenerationError } from "../image-service.js";
 
 export async function recordImageGenerationAttempt(

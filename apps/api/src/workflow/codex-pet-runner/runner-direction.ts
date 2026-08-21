@@ -24,17 +24,17 @@ import {
   buildVisualQaPrompt,
   sanitizeCodexPetDirectionRepairPrompt,
 } from "../codex-pet-prompts.js";
-import { ensureJob, putJsonArtifact, startJob } from "../codex-pet-runner/runner-jobs.js";
-import { checkCancelled, emit } from "../codex-pet-runner/runner-lease.js";
-import { assertCodexPetVisualQaProvenance } from "../codex-pet-runner/runner-provenance.js";
+import { ensureJob, putJsonArtifact, startJob } from "./runner-jobs.js";
+import { checkCancelled, emit } from "./runner-lease.js";
+import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   type BoardJobResult,
   CodexPetLeaseLostError,
   INTERMEDIATE_TTL_MS,
   type RegisteredDirectionRowResult,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
-import { asRecord, imageInput, sameOrderedStrings } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { asRecord, imageInput, sameOrderedStrings } from "./runner-util.js";
 import {
   type CodexPetVisualModelProvenance,
   type PetVisualQaConsensus,

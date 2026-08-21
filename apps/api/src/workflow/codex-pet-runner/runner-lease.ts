@@ -9,8 +9,8 @@ import {
   CodexPetLeaseLostError,
   type RunnerContext,
   type RunnerRunWithProject,
-} from "../codex-pet-runner/runner-types.js";
-import { staleRunMs } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { staleRunMs } from "./runner-util.js";
 
 export async function emit(ctx: RunnerContext, type: string, stage: string, progress: number, message: string, payload: Record<string, unknown> = {}, jobKey?: string): Promise<void> {
   if (stage === "repairing" && (type === "run.repairing" || type === "job.retrying")) {

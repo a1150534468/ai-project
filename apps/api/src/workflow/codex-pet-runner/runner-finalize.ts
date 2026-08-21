@@ -9,15 +9,15 @@ import {
   settlePerImageBilling,
   settlePerImageBillingOnFailure,
   settlePerImageRunBilling,
-} from "../codex-pet-runner/runner-billing.js";
-import { emit, } from "../codex-pet-runner/runner-lease.js";
+} from "./runner-billing.js";
+import { emit, } from "./runner-lease.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetGateFailureError,
   type CodexPetRunnerDeps,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
-import { asRecord, imageFailureMetadata, safeError } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { asRecord, imageFailureMetadata, safeError } from "./runner-util.js";
 
 /**
  * Reference loading happens immediately after a lease claim, before the main

@@ -7,8 +7,8 @@ import {
   codexPetVisualQaRouteForModel,
   isAllowedCodexPetVisualModel,
 } from "../codex-pet-model-contract.js";
-import { type FinalRepairRow, type RunnerContext, type StandardRepairRow } from "../codex-pet-runner/runner-types.js";
-import { asRecord } from "../codex-pet-runner/runner-util.js";
+import { type FinalRepairRow, type RunnerContext, type StandardRepairRow } from "./runner-types.js";
+import { asRecord } from "./runner-util.js";
 import { type PetVisualQaVerdict } from "../codex-pet-visual.js";
 
 export const FINAL_REPAIR_ROWS = CODEX_PET_GATE_REPAIR_ROWS;

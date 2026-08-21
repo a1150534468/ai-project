@@ -17,10 +17,10 @@ import {
 } from "@ai-assistant/codex-pet-pipeline";
 import { type CodexPetArtifact, Prisma } from "@prisma/client";
 import { buildStandardRowPrompt, buildVisualQaPrompt } from "../codex-pet-prompts.js";
-import { completedBoardJob, runBoardJob } from "../codex-pet-runner/runner-board-job.js";
-import { ensureJob, failJobAttempt, putJsonArtifact, startJob } from "../codex-pet-runner/runner-jobs.js";
-import { emit } from "../codex-pet-runner/runner-lease.js";
-import { assertCodexPetVisualQaProvenance } from "../codex-pet-runner/runner-provenance.js";
+import { completedBoardJob, runBoardJob } from "./runner-board-job.js";
+import { ensureJob, failJobAttempt, putJsonArtifact, startJob } from "./runner-jobs.js";
+import { emit } from "./runner-lease.js";
+import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   type BoardJobResult,
   CodexPetLeaseLostError,
@@ -28,8 +28,8 @@ import {
   INTERMEDIATE_TTL_MS,
   type RunnerContext,
   codexPetStandardRowPromptVersion,
-} from "../codex-pet-runner/runner-types.js";
-import { asRecord, customizedStandardActionStates, imageInput, safeError } from "../codex-pet-runner/runner-util.js";
+} from "./runner-types.js";
+import { asRecord, customizedStandardActionStates, imageInput, safeError } from "./runner-util.js";
 import {
   type PetVisualQaConsensus,
   codexPetVisualQaConsensusPasses,

@@ -22,7 +22,7 @@ import {
   consumeImageGenerationApproval,
   prepareImageGenerationDispatch,
   recordImageGenerationAttempt,
-} from "../codex-pet-runner/runner-billing.js";
+} from "./runner-billing.js";
 import {
   ensureJob,
   failJobAttempt,
@@ -31,9 +31,9 @@ import {
   persistProviderMetadata,
   putJsonArtifact,
   startJob,
-} from "../codex-pet-runner/runner-jobs.js";
-import { checkCancelled, currentRun, emit } from "../codex-pet-runner/runner-lease.js";
-import { assertCodexPetVisualQaProvenance } from "../codex-pet-runner/runner-provenance.js";
+} from "./runner-jobs.js";
+import { checkCancelled, currentRun, emit } from "./runner-lease.js";
+import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   BOARD_JOB_INPUT_SCHEMA_VERSION,
   type BoardJobResult,
@@ -43,7 +43,7 @@ import {
   CodexPetLeaseLostError,
   INTERMEDIATE_TTL_MS,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
+} from "./runner-types.js";
 import {
   asRecord,
   configuredTransportAttempts,
@@ -53,7 +53,7 @@ import {
   safeError,
   sameOrderedStrings,
   visualQaPasses,
-} from "../codex-pet-runner/runner-util.js";
+} from "./runner-util.js";
 import { type PetVisualQaConsensus, codexPetVisualQaConsensusPasses } from "../codex-pet-visual.js";
 import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "../image-service.js";
 

@@ -5,14 +5,14 @@ import {
   CodexPetPackagingDeferredError,
   persistOrResumeCodexPetFinalPackage,
 } from "../codex-pet-packaging.js";
-import { completeKnowledgeArchive } from "../codex-pet-runner/runner-archive.js";
-import { emit } from "../codex-pet-runner/runner-lease.js";
-import { summarizeProviderUsage } from "../codex-pet-runner/runner-provenance.js";
+import { completeKnowledgeArchive } from "./runner-archive.js";
+import { emit } from "./runner-lease.js";
+import { summarizeProviderUsage } from "./runner-provenance.js";
 import {
   type CodexPetExecutionResult,
   CodexPetLeaseLostError,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
+} from "./runner-types.js";
 
 export async function releaseDeferredPackagingLease(ctx: RunnerContext, error: CodexPetPackagingDeferredError): Promise<boolean> {
   const released = await ctx.prisma.codexPetRun.updateMany({

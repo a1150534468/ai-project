@@ -10,7 +10,7 @@ import {
   completeImageGenerationAttempt,
   prepareImageGenerationDispatch,
   recordImageGenerationAttempt,
-} from "../codex-pet-runner/runner-billing.js";
+} from "./runner-billing.js";
 import {
   ensureJob,
   failJobAttempt,
@@ -18,9 +18,9 @@ import {
   markImageSucceeded,
   putJsonArtifact,
   startJob,
-} from "../codex-pet-runner/runner-jobs.js";
-import { checkCancelled, currentRun, emit } from "../codex-pet-runner/runner-lease.js";
-import { assertCodexPetVisualQaProvenance } from "../codex-pet-runner/runner-provenance.js";
+} from "./runner-jobs.js";
+import { checkCancelled, currentRun, emit } from "./runner-lease.js";
+import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   CodexPetCancelledError,
   CodexPetImageApprovalRequiredError,
@@ -28,14 +28,14 @@ import {
   IDENTITY_GUIDE_VERSION,
   INTERMEDIATE_TTL_MS,
   type RunnerContext,
-} from "../codex-pet-runner/runner-types.js";
+} from "./runner-types.js";
 import {
   asRecord,
   configuredTransportAttempts,
   imageFailureMetadata,
   providerMetadata,
   safeError,
-} from "../codex-pet-runner/runner-util.js";
+} from "./runner-util.js";
 import { type CodexPetVisualModelProvenance, codexPetVisualQaVerdictPasses } from "../codex-pet-visual.js";
 import { classifyImageGenerationError } from "../image-service.js";
 
