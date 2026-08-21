@@ -26,7 +26,7 @@ import { adminKnowledgeRoutes } from "./admin/knowledge-routes.js";
 import { membershipUserRoutes } from "./membership/routes.js";
 import { agentRoutes } from "./agents/routes.js";
 import { agentTeamRoutes } from "./agent-teams/routes.js";
-import { imageWorkflowRoutes } from "./workflow/image-routes.js";
+import { imageWorkflowRoutes } from "./workflow/image/index.js";
 import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
 import { tryOnWorkflowRoutes } from "./workflow/try-on-routes.js";
 import { codexPetRoutes } from "./workflow/codex-pet-routes.js";

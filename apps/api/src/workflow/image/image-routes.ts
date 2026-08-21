@@ -2,21 +2,21 @@ import { Buffer } from "node:buffer";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
-import { requireUser } from "../auth/require-user.js";
+import { requireUser } from "../../auth/require-user.js";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type Anthropic from "@anthropic-ai/sdk";
-import { deleteObject, getObject, loadS3Config, makeS3, type S3Config } from "../storage/s3.js";
+import { deleteObject, getObject, loadS3Config, makeS3, type S3Config } from "../../storage/s3.js";
 import {
   imageGenerationResourceKey,
   imageResolutionFromSize,
   imageSizeForResolution,
   normalizeImageSize,
-} from "./_shared/image-upstream-options.js";
-import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./_shared/image-delivered-tier.js";
+} from "../_shared/image-upstream-options.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
 import { startImageReaper } from "./image-reaper.js";
 import {
   IMAGE_TASK_STATUS,
@@ -28,7 +28,7 @@ import {
   resolveImageChargeRow,
   resolveImagePricingMatrix,
   type WorkflowResourcePriceRow,
-} from "./_shared/workflow-pricing.js";
+} from "../_shared/workflow-pricing.js";
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,
@@ -43,9 +43,9 @@ import {
   storeWorkflowImage as storeWorkflowImageService,
   type GeneratedImage,
   type ImageGenerationConfig,
-} from "./_shared/image-service.js";
-import { loadOwnedReferenceImages } from "./_shared/ecom-route-helpers.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+} from "../_shared/image-service.js";
+import { loadOwnedReferenceImages } from "../_shared/ecom-route-helpers.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 
 const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";
 const IMAGE_KEEP_LIMIT = 50;
