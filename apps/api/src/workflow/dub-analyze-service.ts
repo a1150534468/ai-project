@@ -2,7 +2,7 @@ import { z } from "zod";
 import { parseLenientJson, callJsonWithRetry } from "./video-analyze-service.js";
 import { VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY } from "./video-service.js";
 import { DUB_ANALYZE_MAX_TOKENS } from "./dub-constants.js";
-import { callVision, loadVisionConfig, type VisionConfig } from "./vision-client.js";
+import { callVision, loadVisionConfig, type VisionConfig } from "./_shared/vision-client.js";
 import { compressForVision } from "./video-compress.js";
 
 const analysisSchema = z.object({

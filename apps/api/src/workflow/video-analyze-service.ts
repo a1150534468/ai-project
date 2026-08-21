@@ -2,7 +2,7 @@ import { z } from "zod";
 import { jsonrepair } from "jsonrepair";
 import { buildVisionMedia, type MediaInput } from "./video-multimodal.js";
 import { VIDEO_ANALYZE_IMAGE_RESOURCE_KEY, VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY } from "./video-service.js";
-import { callVision, loadVisionConfig, type VisionConfig, type VisionMedia } from "./vision-client.js";
+import { callVision, loadVisionConfig, type VisionConfig, type VisionMedia } from "./_shared/vision-client.js";
 import { compressForVision, VISION_MAX_RAW_BYTES } from "./video-compress.js";
 
 // M3 常在中文字符串里塞未转义引号/多余逗号，导致 JSON.parse 失败。先直解，失败则用 jsonrepair 修复再解。

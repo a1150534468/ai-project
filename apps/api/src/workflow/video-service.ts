@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadS3Config, makeS3, putObject, putObjectFile, type S3Config } from "../storage/s3.js";
 import { probeVideoDurationSec, probeVideoDurationSecFromFile } from "./video-probe.js";
-import { loadWorkflowMediaFile } from "./workflow-media-loader.js";
+import { loadWorkflowMediaFile } from "./_shared/workflow-media-loader.js";
 
 export const VIDEO_MODELS = ["seedance-2", "seedance-2-fast", "seedance-2-mini"] as const;
 export const VIDEO_ASPECT_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] as const;

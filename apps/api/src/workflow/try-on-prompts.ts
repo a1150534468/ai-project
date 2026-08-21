@@ -1,4 +1,4 @@
-import type { HumanImageAspectRatio } from "./human-image-options.js";
+import type { HumanImageAspectRatio } from "./_shared/human-image-options.js";
 
 export const TRY_ON_CONSENT_VERSION = "try-on-consent-v1";
 

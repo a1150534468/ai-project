@@ -3,8 +3,8 @@ import { createWriteStream } from "node:fs";
 import { rm, writeFile } from "node:fs/promises";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { getObject, getObjectToFile, loadS3Config, makeS3 } from "../storage/s3.js";
-import { assertTempDiskSpace } from "../runtime/temp-storage.js";
+import { getObject, getObjectToFile, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { assertTempDiskSpace } from "../../runtime/temp-storage.js";
 
 export interface WorkflowMediaSource {
   readonly url: string;

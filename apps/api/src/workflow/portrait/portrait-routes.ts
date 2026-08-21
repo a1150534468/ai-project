@@ -39,7 +39,7 @@ import {
 import {
   resolveImageChargeRow,
   type WorkflowResourcePriceRow,
-} from "../workflow-pricing.js";
+} from "../_shared/workflow-pricing.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../image-delivered-tier.js";
 import type { ImageResolutionLabel } from "../image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";

@@ -13,11 +13,11 @@ import {
   resolveLanguage,
   RefundCompensationError,
   safeErrorMessage,
-} from "./ecom-route-helpers.js";
+} from "./_shared/ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { mainImageParamsSchema, mainImageRequestSchema } from "./ecom-main-route-types.js";
 import { parsePricingModelQuery } from "./ecom-route-types.js";
-import { ecomMainImagePriceFallback, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
+import { ecomMainImagePriceFallback, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,

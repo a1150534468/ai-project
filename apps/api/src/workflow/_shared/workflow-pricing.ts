@@ -1,5 +1,5 @@
 import { ECOM_RESOURCE_KEYS } from "./ecom-route-helpers.js";
-import { imageGenerationResourceKey, imageModelResourceKey, type ImageResolutionLabel } from "./image-upstream-options.js";
+import { imageGenerationResourceKey, imageModelResourceKey, type ImageResolutionLabel } from "../image-upstream-options.js";
 
 export interface WorkflowResourcePriceRow {
   readonly resourceKey: string;

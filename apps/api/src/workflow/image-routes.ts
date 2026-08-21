@@ -28,7 +28,7 @@ import {
   resolveImageChargeRow,
   resolveImagePricingMatrix,
   type WorkflowResourcePriceRow,
-} from "./workflow-pricing.js";
+} from "./_shared/workflow-pricing.js";
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,
@@ -44,7 +44,7 @@ import {
   type GeneratedImage,
   type ImageGenerationConfig,
 } from "./image-service.js";
-import { loadOwnedReferenceImages } from "./ecom-route-helpers.js";
+import { loadOwnedReferenceImages } from "./_shared/ecom-route-helpers.js";
 import { loadSharp } from "../runtime/resource-limits.js";
 
 const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";

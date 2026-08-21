@@ -20,7 +20,7 @@ const { getObjectMock, getObjectToFileMock, loadS3ConfigMock, makeS3Mock } = vi.
   })),
 }));
 
-vi.mock("../storage/s3.js", () => ({
+vi.mock("../../storage/s3.js", () => ({
   getObject: getObjectMock,
   getObjectToFile: getObjectToFileMock,
   loadS3Config: loadS3ConfigMock,

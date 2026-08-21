@@ -4,7 +4,7 @@ import { ECOM_MAX_SEGMENTS, ECOM_MIN_SEGMENTS } from "./ecom-prompts.js";
 import type { ImageGenerationConfig, GeneratedImage, StoredImage } from "./image-service.js";
 import { IMAGE_MAX_REFERENCE_COUNT } from "./image-service.js";
 import type { WorkflowMutationLocker } from "./ecom-route-mutation.js";
-import type { WorkflowResourcePriceRow } from "./workflow-pricing.js";
+import type { WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
 
 export const productSchema = z.object({
   name: z.string().trim().min(1).max(200),

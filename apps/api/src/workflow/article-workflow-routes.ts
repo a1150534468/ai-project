@@ -56,7 +56,7 @@ import {
   serializeArticleWorkflowProject,
   serializeArticleWorkflowProjectSummary,
 } from "./article-workflow-serializer.js";
-import { authUserId, safeErrorMessage } from "./ecom-route-helpers.js";
+import { authUserId, safeErrorMessage } from "./_shared/ecom-route-helpers.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();

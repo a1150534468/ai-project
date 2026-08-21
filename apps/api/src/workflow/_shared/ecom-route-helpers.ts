@@ -1,9 +1,9 @@
 import { Buffer } from "node:buffer";
 import type { FastifyReply } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
-import { segmentRecordSchema, type InlineImageInput, type ProductInput } from "./ecom-route-types.js";
-import { WorkflowMutationConflictError } from "./ecom-route-mutation.js";
-import { getEcomPlatform } from "./ecom-prompts.js";
+import { segmentRecordSchema, type InlineImageInput, type ProductInput } from "../ecom-route-types.js";
+import { WorkflowMutationConflictError } from "../ecom-route-mutation.js";
+import { getEcomPlatform } from "../ecom-prompts.js";
 
 const DATA_URL_PATTERN = /^data:(image\/[A-Za-z0-9.+-]+);base64,(.+)$/;
 

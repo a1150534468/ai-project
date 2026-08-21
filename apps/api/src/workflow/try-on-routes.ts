@@ -32,8 +32,8 @@ import {
   type HumanImageAspectRatio,
   type HumanImageModel,
   type HumanImageResolution,
-} from "./human-image-options.js";
-import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
+} from "./_shared/human-image-options.js";
+import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
 import type { ImageResolutionLabel } from "./image-upstream-options.js";
 import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "./portrait/index.js";

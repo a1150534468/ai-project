@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { loadWorkflowMediaBuffer, type WorkflowMediaSource } from "./workflow-media-loader.js";
+import { loadWorkflowMediaBuffer, type WorkflowMediaSource } from "./_shared/workflow-media-loader.js";
 
 export const M3_MODEL = "MiniMax-M3";
 export const M3_TIMEOUT_MS = 120_000;

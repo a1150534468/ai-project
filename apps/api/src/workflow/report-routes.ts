@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { PrismaClient } from "@ai-assistant/db";
 import { createBillingClient } from "@ai-assistant/billing";
-import { authUserId } from "./ecom-route-helpers.js";
+import { authUserId } from "./_shared/ecom-route-helpers.js";
 import { parseDocument } from "../kb/parse.js";
 import { runReportTask } from "./report-runner.js";
 import { makeS3 } from "../storage/s3.js";

@@ -3,7 +3,6 @@ import {
   articleWorkflowPlatformConfig,
   articleWorkflowPreservedBodyMarkdown,
   articleWorkflowVisibleTextFromMarkdown,
-  articleWorkflowVisibleTextFromSource,
   type ArticleWorkflowCreationConfig,
   type ArticleWorkflowGalleryMode,
   type ArticleWorkflowGenerationMode,
@@ -34,7 +33,7 @@ import { normalizeArticleWorkflowPlan } from "./article-workflow-plan.js";
 import { materializeCaptionArticle } from "./article-workflow-runner-caption.js";
 import { readArticleWorkflowProject } from "./article-workflow-serializer.js";
 import type { ArticleProjectRow, ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
-import { safeErrorMessage } from "./ecom-route-helpers.js";
+import { safeErrorMessage } from "./_shared/ecom-route-helpers.js";
 import { finalizeArticleWorkflowProjectState, updateArticleWorkflowProjectState } from "./article-workflow-store.js";
 
 type RunnerDeps = Required<Pick<ArticleWorkflowRouteDeps, "billing" | "llm" | "fetchFn" | "env">> & {
