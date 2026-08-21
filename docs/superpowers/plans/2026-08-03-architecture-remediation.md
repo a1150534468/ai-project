@@ -13,7 +13,7 @@
 | 既有计划 | 状态 | 本计划的处理 |
 |---|---|---|
 | 阶段 0（修 `codex-pet-routes.integration.test.ts` 红灯） | 未执行（5 步未勾） | **并入本计划 P0.1**，与另一个红灯一起修 |
-| 阶段 1（`codex-pet-runner.ts` 纯移动拆分，37 步） | 未执行 | **不动**，见 P3.1 |
+| 阶段 1（`codex-pet-runner.ts` 纯移动拆分，37 步） | ✅ 2026-08-22 完成（37 步全勾） | **不动**，见 P3.1 |
 | 阶段 2（`executeRun` 去重 / lease CAS 收敛，14 步） | 未执行 | **不动**，见 P3.1 |
 | 阶段 3（加厚 `packages/llm`，14 步） | 未执行 | **不动**，见 P3.1；本计划 P2.2 的去重范围**明确排除** llm 相关符号，避免撞车 |
 | 阶段 4（article-workflow 止血 + reaper） | ✅ 2026-07-28 完成 | **作为 P0.3–P0.5 的模板复制源** |
@@ -615,7 +615,7 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 | `workflow/image-routes.ts` | 1307 | 1 | 2028 | **1.55** | ✅ 可直接拆 |
 | `workflow/codex-pet-visual.ts` | 1133 | 1 | 1176 | **1.04** | ✅ 可直接拆 |
 | `workflow/image-service.ts` | 1082 | 1 | 1064 | **0.98** | ✅ 可直接拆 |
-| `workflow/codex-pet-runner.ts` | 5678 | 3 | 5484 | **0.97** | ✅ 已有计划(P3.1 阶段 1) |
+| `workflow/codex-pet-runner.ts` | 5678 | 3 | 5484 | **0.97** | ✅ P3.1 阶段 1 已拆完（→ 1561 行 + 13 个模块） |
 | `workflow/codex-pet-routes.ts` | 2930 | 2 | 4548 | **1.55** | ✅ 可直接拆 |
 | `workers/codex-pet-worker.ts` | 1157 | 1 | 967 | **0.84** | ✅ 可直接拆 |
 | `workflow/video-routes.ts` | 893 | 1 | 640 | **0.72** | ✅ 可直接拆 |
@@ -684,7 +684,7 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 ## Task P3.1: 执行 `2026-07-27-legacy-workflow-optimization.md` 阶段 1-3
 
-- [ ] 阶段 1：`codex-pet-runner.ts` 纯移动拆分（5678 行 / 110 函数 / 439 await / 嵌套 9 层 → 13 个文件）。37 步已写好，含**门面兼容契约**（6 个源文件 + 5 个测试文件一行不改）。
+- [x] 阶段 1：`codex-pet-runner.ts` 纯移动拆分（5678 行 / 110 函数 / 439 await / 嵌套 9 层 → 13 个文件）。37 步已写好，含**门面兼容契约**（6 个源文件 + 5 个测试文件一行不改）。**2026-08-22 完成**：5815 → 1561 行 + 13 个模块，136 个符号逐字节核对为纯移动，codex-pet 全量 320 passed / 0 failed / 8 skipped 与基线一致。
 - [ ] 阶段 2：`executeRun` 去重（三份 look 修复循环、lease CAS 样板）。14 步。**唯一可能改变行为的阶段。**
 - [ ] 阶段 3：加厚 `packages/llm`（`routes.ts` 严格路由解析 + `retry.ts` 通用重试，TDD）。14 步。
 - [ ] **与本计划的顺序**：P0 全部完成后再开 P3；P2.1（目录拆分）必须等 P3 阶段 1 完成。

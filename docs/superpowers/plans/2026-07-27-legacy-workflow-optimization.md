@@ -70,6 +70,8 @@ commit 0e41be5「harden codex pet generation billing」后 start 路由改为按
 
 ## 阶段 1：codex-pet-runner.ts 纯移动拆分（约 2-3 天）
 
+**执行结果（2026-08-22，37 步全部完成）**：13 个模块搬完，`codex-pet-runner.ts` 5815 → 1561 行，只剩 `WORKER_ID` + `executeRun` + `executeCodexPetRun` + 子模块导入/re-export。136 个符号用脚本逐字节核对与拆分前原文一致（唯一允许的差异是私有符号新增的 `export `），门面兼容契约达成：4 个外部源文件 + 6 个外部测试文件零改动。验证：typecheck 3/3 绿；合同测试 25 passed / 0 failed / 0 skipped；runner 集成（Task 1.4、1.8 检查点）39 passed / 0 failed / 1 skipped；codex-pet 全量 320 passed / 0 failed / 8 skipped，与拆分前基线完全一致。实际模块划分与下方 Task 1.12 的分组略有出入：`runner-archive` 与 `runner-packaging-resume` 拆成了两个独立提交。
+
 **原则：只做移动，不做任何行为修改。** 新建目录 `apps/api/src/workflow/codex-pet-runner/`（与 `codex-pet-runner.ts` 文件同名共存，ESM 导入统一带 `.js` 后缀，与现有代码风格一致）。原 `codex-pet-runner.ts` 最终保留为「编排 + 门面」：`WORKER_ID`、`executeRun`、`executeCodexPetRun` 加全部既有导出符号的 re-export。
 
 **门面兼容契约（拆分成功判据）**：以下 6 个源文件 + 5 个测试文件**一行都不改**——`codex-pet-worker.ts`、`codex-pet-packaging.ts`、`codex-pet-failed-continuation.ts`、`codex-pet-generated-board-recovery.ts`、`codex-pet-recovery-finalizer.ts`、`server.ts`。为此门面必须 re-export：`CODEX_PET_ACTIVE_STATUSES`、`CODEX_PET_RESOURCE_KEY`、`CODEX_PET_BOARD_PROMPT_VERSION`、`CODEX_PET_IDLE_BOARD_PROMPT_VERSION`、`codexPetStandardRowPromptVersion`、`CodexPetLeaseLostError`、`codexPetShouldAttachFailedBoardForRepair`、`codexPetRepairGenerationReferences`、`codexPetMaxBoardAttempts`、`codexPetBoardInputRevision`、`assertCodexPetVisualQaProvenance`，以及全部导出类型（`CodexPetExecutionStatus/CodexPetExecutionResult/CodexPetArtifactPutInput/CodexPetArtifactStore/CodexPetEventInput/CodexPetRunnerDeps`）。
@@ -85,80 +87,80 @@ commit 0e41be5「harden codex pet generation billing」后 start 路由改为按
 
 **Files:** Create `apps/api/src/workflow/codex-pet-runner/runner-types.ts`；Modify `codex-pet-runner.ts`
 
-- [ ] **Step 1:** 移动以下符号（现位于 :110-286 区间）：模块常量组 `CODEX_PET_ACTIVE_STATUSES / CODEX_PET_RESOURCE_KEY / INTERMEDIATE_TTL_MS / DEFAULT_STALE_RUN_MS / IDENTITY_GUIDE_VERSION / BOARD_JOB_INPUT_SCHEMA_VERSION / CODEX_PET_BOARD_PROMPT_VERSION / CODEX_PET_IDLE_BOARD_PROMPT_VERSION / CODEX_PET_RECOVERY_SCHEMA_VERSION`（**`WORKER_ID` 除外**——它在模块加载时求值 `process.pid`，留在入口文件）、`codexPetStandardRowPromptVersion`、四个异常类 `CodexPetLeaseLostError / CodexPetCancelledError / CodexPetImageApprovalRequiredError / CodexPetArchiveDeferredError`（后三个由私有改导出）、类型块 `CodexPetExecutionStatus / CodexPetExecutionResult / CodexPetArtifactPutInput / CodexPetArtifactStore / CodexPetEventInput / CodexPetRunnerDeps / RunnerContext / BoardJobResult / RegisteredDirectionRowResult`（:144-258）、`RunnerRunWithProject`（:756-758）、`isCodexPetRecoverySnapshot`（:493-531 组内）。
-- [ ] **Step 2:** `codex-pet-runner.ts` 顶部 `import { ... } from "./codex-pet-runner/runner-types.js"`，并对既有导出符号加 `export { ... } from "./codex-pet-runner/runner-types.js"`。顺带收益：`codex-pet-packaging.ts` 的 `import type` 改指 runner-types 可打断现存类型级循环导入——**本任务不改 packaging.ts**（门面 re-export 已保证其不需要改），仅在门面保留类型导出。
-- [ ] **Step 3:** typecheck，预期全绿。
-- [ ] **Step 4:** 合同测试，预期通过。
-- [ ] **Step 5:** Commit：`git add -A apps/api/src/workflow && git commit -m "refactor(codex-pet): 拆出 runner-types（纯移动）"`
+- [x] **Step 1:** 移动以下符号（现位于 :110-286 区间）：模块常量组 `CODEX_PET_ACTIVE_STATUSES / CODEX_PET_RESOURCE_KEY / INTERMEDIATE_TTL_MS / DEFAULT_STALE_RUN_MS / IDENTITY_GUIDE_VERSION / BOARD_JOB_INPUT_SCHEMA_VERSION / CODEX_PET_BOARD_PROMPT_VERSION / CODEX_PET_IDLE_BOARD_PROMPT_VERSION / CODEX_PET_RECOVERY_SCHEMA_VERSION`（**`WORKER_ID` 除外**——它在模块加载时求值 `process.pid`，留在入口文件）、`codexPetStandardRowPromptVersion`、四个异常类 `CodexPetLeaseLostError / CodexPetCancelledError / CodexPetImageApprovalRequiredError / CodexPetArchiveDeferredError`（后三个由私有改导出）、类型块 `CodexPetExecutionStatus / CodexPetExecutionResult / CodexPetArtifactPutInput / CodexPetArtifactStore / CodexPetEventInput / CodexPetRunnerDeps / RunnerContext / BoardJobResult / RegisteredDirectionRowResult`（:144-258）、`RunnerRunWithProject`（:756-758）、`isCodexPetRecoverySnapshot`（:493-531 组内）。
+- [x] **Step 2:** `codex-pet-runner.ts` 顶部 `import { ... } from "./codex-pet-runner/runner-types.js"`，并对既有导出符号加 `export { ... } from "./codex-pet-runner/runner-types.js"`。顺带收益：`codex-pet-packaging.ts` 的 `import type` 改指 runner-types 可打断现存类型级循环导入——**本任务不改 packaging.ts**（门面 re-export 已保证其不需要改），仅在门面保留类型导出。
+- [x] **Step 3:** typecheck，预期全绿。
+- [x] **Step 4:** 合同测试，预期通过。
+- [x] **Step 5:** Commit：`git add -A apps/api/src/workflow && git commit -m "refactor(codex-pet): 拆出 runner-types（纯移动）"`
 
 ### Task 1.2: runner-util.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-util.ts`，移动：`asRecord / safeError`（:288-310）、`imageFailureMetadata / providerMetadata`（:493-531 组内）、`mapWithConcurrency`（:445-491，抛 `CodexPetCancelledError`，从 runner-types 导入）、`sameOrderedStrings`（:1628-1679 组内）、`imageInput`（:2424-2426）、`configuredVisualConcurrency / configuredArchiveMaxAttempts`（:411-419）、`staleRunMs`（:753-758 组内）、`frozenPerImageCallPoints`（:312-326）。
-- [ ] **Step 2:** 更新 runner.ts 导入。 **Step 3:** typecheck。 **Step 4:** 合同测试。 **Step 5:** Commit `refactor(codex-pet): 拆出 runner-util（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-util.ts`，移动：`asRecord / safeError`（:288-310）、`imageFailureMetadata / providerMetadata`（:493-531 组内）、`mapWithConcurrency`（:445-491，抛 `CodexPetCancelledError`，从 runner-types 导入）、`sameOrderedStrings`（:1628-1679 组内）、`imageInput`（:2424-2426）、`configuredVisualConcurrency / configuredArchiveMaxAttempts`（:411-419）、`staleRunMs`（:753-758 组内）、`frozenPerImageCallPoints`（:312-326）。
+- [x] **Step 2:** 更新 runner.ts 导入。 **Step 3:** typecheck。 **Step 4:** 合同测试。 **Step 5:** Commit `refactor(codex-pet): 拆出 runner-util（纯移动）`。
 
 ### Task 1.3: runner-lease.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-lease.ts`，移动：`claimRunLease`（:766-818）、`checkCancelled`（:820-833）、`currentRun`（:568-574）、`emit`（:533-566，注意硬约束 2）、`stage`（:835-876）、`resumeStageIfRepairing`（:884-935）。
-- [ ] **Step 2-5:** 同 Task 1.2 的导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-lease（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-lease.ts`，移动：`claimRunLease`（:766-818）、`checkCancelled`（:820-833）、`currentRun`（:568-574）、`emit`（:533-566，注意硬约束 2）、`stage`（:835-876）、`resumeStageIfRepairing`（:884-935）。
+- [x] **Step 2-5:** 同 Task 1.2 的导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-lease（纯移动）`。
 
 ### Task 1.4: runner-billing.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-billing.ts`，移动：`recordImageGenerationAttempt`（:576-643）、`prepareImageGenerationDispatch / completeImageGenerationAttempt`（:645-682）、`consumeImageGenerationApproval`（:684-704）、`pauseForImageApproval`（:706-751）、`refundRun`（:3296-3332）、`settlePerImageRunBilling / settlePerImageBilling / recordPerImageSettlementFailure`（:3334-3410，refundRun→settlePerImageBilling 同文件互调）。
-- [ ] **Step 2-4:** 导入更新 / typecheck / 合同测试。
-- [ ] **Step 5:** **runner 集成**（第一个检查点），预期与基线一致。
-- [ ] **Step 6:** Commit `refactor(codex-pet): 拆出 runner-billing（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-billing.ts`，移动：`recordImageGenerationAttempt`（:576-643）、`prepareImageGenerationDispatch / completeImageGenerationAttempt`（:645-682）、`consumeImageGenerationApproval`（:684-704）、`pauseForImageApproval`（:706-751）、`refundRun`（:3296-3332）、`settlePerImageRunBilling / settlePerImageBilling / recordPerImageSettlementFailure`（:3334-3410，refundRun→settlePerImageBilling 同文件互调）。
+- [x] **Step 2-4:** 导入更新 / typecheck / 合同测试。
+- [x] **Step 5:** **runner 集成**（第一个检查点），预期与基线一致。
+- [x] **Step 6:** Commit `refactor(codex-pet): 拆出 runner-billing（纯移动）`。
 
 ### Task 1.5: runner-jobs.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-jobs.ts`，移动：`ensureJob`（:937-970）、`codexPetMaxBoardAttempts`（:972-987）、`startJob / failJobAttempt`（:989-1042）、`persistProviderMetadata / markImageSucceeded`（:1044-1088）、`putJsonArtifact / loadArtifactsInOrder`（:1090-1150）。
-- [ ] **Step 2-5:** 导入更新（门面 re-export `codexPetMaxBoardAttempts`）/ typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-jobs（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-jobs.ts`，移动：`ensureJob`（:937-970）、`codexPetMaxBoardAttempts`（:972-987）、`startJob / failJobAttempt`（:989-1042）、`persistProviderMetadata / markImageSucceeded`（:1044-1088）、`putJsonArtifact / loadArtifactsInOrder`（:1090-1150）。
+- [x] **Step 2-5:** 导入更新（门面 re-export `codexPetMaxBoardAttempts`）/ typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-jobs（纯移动）`。
 
 ### Task 1.6: runner-provenance.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-provenance.ts`，移动：`REQUIRED_VISUAL_JOB_KEYS / VisualQaProvenanceSummary / assertCodexPetVisualQaProvenance / summarizeRequiredVisualJobProvenance`（:3221-3294）、`summarizeProviderUsage`（:3198-3219）、`FINAL_REPAIR_ROWS / FinalRepairRow / repairRowsFromFinalQa`（:421-443）。
-- [ ] **Step 2-5:** 导入更新（门面 re-export `assertCodexPetVisualQaProvenance`）/ typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-provenance（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-provenance.ts`，移动：`REQUIRED_VISUAL_JOB_KEYS / VisualQaProvenanceSummary / assertCodexPetVisualQaProvenance / summarizeRequiredVisualJobProvenance`（:3221-3294）、`summarizeProviderUsage`（:3198-3219）、`FINAL_REPAIR_ROWS / FinalRepairRow / repairRowsFromFinalQa`（:421-443）。
+- [x] **Step 2-5:** 导入更新（门面 re-export `assertCodexPetVisualQaProvenance`）/ typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-provenance（纯移动）`。
 
 ### Task 1.7: runner-board-job.ts（核心生成循环）
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-board-job.ts`，移动：`poseBoardRepairPrompt`（:328-354）、`codexPetShouldAttachFailedBoardForRepair / codexPetRepairGenerationReferences`（:361-372）、`jumpingQaEvidence / isJumpingScaleEvidenceConflict`（:374-409）、`visualQaPasses`（:493-531 组内）、`completedBoardJob`（:1592-1626）、`BoardJobInputBinding / codexPetBoardInputRevision / boardJobInputPayload / boardOutputArtifactIds`（:1628-1679）、`bindBoardJobInput`（:1691-1787）、`runBoardJob`（:1854-2297）。
-- [ ] **Step 2-5:** 导入更新（门面 re-export `codexPetShouldAttachFailedBoardForRepair / codexPetRepairGenerationReferences / codexPetBoardInputRevision`——`codex-pet-board-version.test.ts` 与 `codex-pet-generated-board-recovery.ts` 依赖）/ typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-board-job（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-board-job.ts`，移动：`poseBoardRepairPrompt`（:328-354）、`codexPetShouldAttachFailedBoardForRepair / codexPetRepairGenerationReferences`（:361-372）、`jumpingQaEvidence / isJumpingScaleEvidenceConflict`（:374-409）、`visualQaPasses`（:493-531 组内）、`completedBoardJob`（:1592-1626）、`BoardJobInputBinding / codexPetBoardInputRevision / boardJobInputPayload / boardOutputArtifactIds`（:1628-1679）、`bindBoardJobInput`（:1691-1787）、`runBoardJob`（:1854-2297）。
+- [x] **Step 2-5:** 导入更新（门面 re-export `codexPetShouldAttachFailedBoardForRepair / codexPetRepairGenerationReferences / codexPetBoardInputRevision`——`codex-pet-board-version.test.ts` 与 `codex-pet-generated-board-recovery.ts` 依赖）/ typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-board-job（纯移动）`。
 
 ### Task 1.8: runner-base.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-base.ts`，移动：`reuseGptContinuationBaseCandidate`（:1152-1227）、`generateBaseCandidate`（:1229-1299）、`selectBaseAutomatically / ensurePersistedBaseSelection`（:1301-1401）、`getIdentityGuide`（:1403-1590，注意 :1578 对 `CodexPetModelContractError` 的提前重抛保持原样）。
-- [ ] **Step 2-4:** 导入更新 / typecheck / 合同测试。
-- [ ] **Step 5:** **runner 集成**（第二个检查点）。
-- [ ] **Step 6:** Commit `refactor(codex-pet): 拆出 runner-base（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-base.ts`，移动：`reuseGptContinuationBaseCandidate`（:1152-1227）、`generateBaseCandidate`（:1229-1299）、`selectBaseAutomatically / ensurePersistedBaseSelection`（:1301-1401）、`getIdentityGuide`（:1403-1590，注意 :1578 对 `CodexPetModelContractError` 的提前重抛保持原样）。
+- [x] **Step 2-4:** 导入更新 / typecheck / 合同测试。
+- [x] **Step 5:** **runner 集成**（第二个检查点）。
+- [x] **Step 6:** Commit `refactor(codex-pet): 拆出 runner-base（纯移动）`。
 
 ### Task 1.9: runner-standard-rows.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-standard-rows.ts`，移动：`runStandardRow`（:2494-2626）、`deriveRunningLeft`（:2299-2422，硬约束 3）、`storeStandardAtlas`（:2628-2669）。
-- [ ] **Step 2-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-standard-rows（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-standard-rows.ts`，移动：`runStandardRow`（:2494-2626）、`deriveRunningLeft`（:2299-2422，硬约束 3）、`storeStandardAtlas`（:2628-2669）。
+- [x] **Step 2-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-standard-rows（纯移动）`。
 
 ### Task 1.10: runner-direction.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-direction.ts`，移动：`createApprovedCardinalAnchor`（:1793-1852）、`lookRowReferences`（:2437-2484）、`appendCumulativeRepairRequirement`（:2486-2492）、`getLookMechanics`（:2671-2711）、`recoveredRegistrationDiagnostics / registeredSourceBoardSize`（:2713-2735）、`completedRegisteredDirectionRow`（:2737-2797）、`registerDirectionRow`（:2804-3011）、`requireApprovedRegisteredRow`（:3013-3020）、`reviewFirstLookRow / reviewSecondLookRow`（:3022-3196）。
+- [x] **Step 1:** Create `codex-pet-runner/runner-direction.ts`，移动：`createApprovedCardinalAnchor`（:1793-1852）、`lookRowReferences`（:2437-2484）、`appendCumulativeRepairRequirement`（:2486-2492）、`getLookMechanics`（:2671-2711）、`recoveredRegistrationDiagnostics / registeredSourceBoardSize`（:2713-2735）、`completedRegisteredDirectionRow`（:2737-2797）、`registerDirectionRow`（:2804-3011）、`requireApprovedRegisteredRow`（:3013-3020）、`reviewFirstLookRow / reviewSecondLookRow`（:3022-3196）。
   **注意**：三份 look 修复循环（:4232-4283 / :4337-4379 / :4421-4504）**不在本任务范围**——它们是 `executeRun` 的内联代码，纯移动阶段留在原地，阶段 2 处理。
-- [ ] **Step 2-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-direction（纯移动）`。
+- [x] **Step 2-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-direction（纯移动）`。
 
 ### Task 1.11: runner-finalize.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-finalize.ts`，移动：`finalizeClaimedSetupFailure`（:3419-3485）、`finalizeFailure`（:3487-3564）、`finalizeCancellation`（:3566-3621）。`finalizeFailure→finalizeCancellation` 互调，必须同文件。
-- [ ] **Step 2-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-finalize（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-finalize.ts`，移动：`finalizeClaimedSetupFailure`（:3419-3485）、`finalizeFailure`（:3487-3564）、`finalizeCancellation`（:3566-3621）。`finalizeFailure→finalizeCancellation` 互调，必须同文件。
+- [x] **Step 2-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-finalize（纯移动）`。
 
 ### Task 1.12: runner-archive.ts + runner-packaging-resume.ts
 
-- [ ] **Step 1:** Create `codex-pet-runner/runner-archive.ts`，移动：`TERMINAL_ARCHIVE_ERROR_CODES / terminalArchiveError / archiveErrorCode`（:3623-3643）、`withCurrentKnowledgeArchiveLease`（:3653-3672）、`transitionKnowledgeArchiveJob / ensureKnowledgeArchiveJob / reconcileKnowledgeArchiveJob`（:3674-3798）、`runKnowledgeArchiveAttempt`（:3807-3891）、`completeKnowledgeArchive`（:3893-3917）、`releaseDeferredArchiveLease`（:3919-3938 组内）。
-- [ ] **Step 2:** Create `codex-pet-runner/runner-packaging-resume.ts`，移动：`releaseDeferredPackagingLease`（:3942-3960）、`deferRecoveryPackaging`（:3963-3994）、`continueAfterDurablePackaging / resumeDurablePackaging`（:3996-4030）。
-- [ ] **Step 3-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-archive 与 runner-packaging-resume（纯移动）`。
+- [x] **Step 1:** Create `codex-pet-runner/runner-archive.ts`，移动：`TERMINAL_ARCHIVE_ERROR_CODES / terminalArchiveError / archiveErrorCode`（:3623-3643）、`withCurrentKnowledgeArchiveLease`（:3653-3672）、`transitionKnowledgeArchiveJob / ensureKnowledgeArchiveJob / reconcileKnowledgeArchiveJob`（:3674-3798）、`runKnowledgeArchiveAttempt`（:3807-3891）、`completeKnowledgeArchive`（:3893-3917）、`releaseDeferredArchiveLease`（:3919-3938 组内）。
+- [x] **Step 2:** Create `codex-pet-runner/runner-packaging-resume.ts`，移动：`releaseDeferredPackagingLease`（:3942-3960）、`deferRecoveryPackaging`（:3963-3994）、`continueAfterDurablePackaging / resumeDurablePackaging`（:3996-4030）。
+- [x] **Step 3-5:** 导入更新 / typecheck / 合同测试 / Commit `refactor(codex-pet): 拆出 runner-archive 与 runner-packaging-resume（纯移动）`。
 
 ### Task 1.13: 门面收尾与全量验证
 
-- [ ] **Step 1:** 确认 `codex-pet-runner.ts` 只剩：`WORKER_ID`、`executeRun`（:4032-4822，含 regenerateDirectionRows 闭包与两个内联 look 修复循环）、`executeCodexPetRun`（:4824-5115）、全部 re-export。`ctx.identity.canonicalGuide` 在 :4111 的原地赋值（RunnerContext 名义 readonly）保持原样。
-- [ ] **Step 2:** `git diff --stat` 核对：6 个外部导入方源文件 + 5 个外部测试文件零改动。
-- [ ] **Step 3:** typecheck + **codex-pet 全量**，预期与基线一致（221 通过 8 跳过）。
-- [ ] **Step 4:** `wc -l apps/api/src/workflow/codex-pet-runner.ts` 记录收尾行数（预期从 5115 降到 ~1400）。
-- [ ] **Step 5:** Commit `refactor(codex-pet): 完成 runner 纯移动拆分`
+- [x] **Step 1:** 确认 `codex-pet-runner.ts` 只剩：`WORKER_ID`、`executeRun`（:4032-4822，含 regenerateDirectionRows 闭包与两个内联 look 修复循环）、`executeCodexPetRun`（:4824-5115）、全部 re-export。`ctx.identity.canonicalGuide` 在 :4111 的原地赋值（RunnerContext 名义 readonly）保持原样。
+- [x] **Step 2:** `git diff --stat` 核对：6 个外部导入方源文件 + 5 个外部测试文件零改动。
+- [x] **Step 3:** typecheck + **codex-pet 全量**，预期与基线一致（221 通过 8 跳过）。
+- [x] **Step 4:** `wc -l apps/api/src/workflow/codex-pet-runner.ts` 记录收尾行数（预期从 5115 降到 ~1400）。
+- [x] **Step 5:** Commit `refactor(codex-pet): 完成 runner 纯移动拆分`
 
 ---
 
