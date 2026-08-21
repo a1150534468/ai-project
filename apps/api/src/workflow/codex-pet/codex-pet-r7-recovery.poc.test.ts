@@ -22,7 +22,7 @@ import {
 } from "@ai-assistant/codex-pet-pipeline";
 import sharp from "sharp";
 import { afterAll, describe, expect, it } from "vitest";
-import { makeS3 } from "../storage/s3.js";
+import { makeS3 } from "../../storage/s3.js";
 import { buildVisualQaPrompt } from "./codex-pet-prompts.js";
 import {
   buildCodexPetRecoverySeed,

@@ -1,19 +1,19 @@
 import { Buffer } from "node:buffer";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { requireUser } from "../auth/require-user.js";
+import { requireUser } from "../../auth/require-user.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma, getRedis } from "@ai-assistant/db";
-import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import { enqueueCodexPetRun } from "./codex-pet-queue.js";
 import {
   GPT_IMAGE_MODEL,
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
   isVerifiedWorkflowImageObjectKeyForUser,
-} from "./_shared/image-service.js";
+} from "../_shared/image-service.js";
 import { isCodexPetArtifactObjectKey, isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
 import {
   CODEX_PET_ACTION_PROMPT_KEYS,
@@ -44,7 +44,7 @@ import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive
 import {
   assertCodexPetVisualQaRoute,
 } from "./codex-pet-visual.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 
 export { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 

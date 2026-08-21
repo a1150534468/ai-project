@@ -1,8 +1,7 @@
 import "../env.js";
 import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
-import { CODEX_PET_RESOURCE_KEY } from "../workflow/codex-pet-routes.js";
-import { correctCodexPetPerImageBilling } from "../workflow/codex-pet-per-image-billing-correction.js";
+import { CODEX_PET_RESOURCE_KEY, correctCodexPetPerImageBilling } from "../workflow/codex-pet/index.js";
 
 const [mode, runId, rawPoints] = process.argv.slice(2);
 const perImageCallPoints = Number(rawPoints);

@@ -5,37 +5,36 @@ import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import type { PrismaClient } from "@prisma/client";
 import { getObject, makeS3, type S3 } from "../storage/s3.js";
-import { archiveCodexPetRun } from "../workflow/codex-pet-archive.js";
 import {
+  archiveCodexPetRun,
   closeCodexPetCleanupQueue,
   createCodexPetCleanupWorker,
   enqueueCodexPetProjectCleanup,
   executeCodexPetProjectCleanup,
-} from "../workflow/codex-pet-cleanup.js";
-import { appendCodexPetEvent, codexPetRunChannel, sanitizeCodexPetDiagnosticText } from "../workflow/codex-pet-events.js";
-import {
+  appendCodexPetEvent,
+  codexPetRunChannel,
+  sanitizeCodexPetDiagnosticText,
   listCodexPetBillingReconciliationCandidates,
   reconcileCodexPetRunBilling,
   type CodexPetChargeClient,
-} from "../workflow/codex-pet-billing.js";
-import { closeCodexPetQueue, createCodexPetWorker, enqueueCodexPetRun } from "../workflow/codex-pet-queue.js";
-import {
+  closeCodexPetQueue,
+  createCodexPetWorker,
+  enqueueCodexPetRun,
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetLeaseLostError,
   executeCodexPetRun,
-} from "../workflow/codex-pet-runner.js";
-import { createCodexPetArtifactStore, deleteCodexPetArtifact } from "../workflow/codex-pet-storage.js";
-import { assertCodexPetImageRoute } from "../workflow/codex-pet-model-contract.js";
-import { installCodexPetUpstreamDnsOverride } from "../workflow/codex-pet-network.js";
-import {
+  createCodexPetArtifactStore,
+  deleteCodexPetArtifact,
+  assertCodexPetImageRoute,
+  installCodexPetUpstreamDnsOverride,
   CODEX_PET_PER_IMAGE_BILLING_MODE,
   refundCodexPetUndispatchedExtraCalls,
-} from "../workflow/codex-pet-call-ledger.js";
+  assertCodexPetVisualQaRoute,
+} from "../workflow/codex-pet/index.js";
 import {
   isVerifiedWorkflowImageObjectKeyForUser,
   sanitizeImageUpstreamRequestId,
 } from "../workflow/_shared/image-service.js";
-import { assertCodexPetVisualQaRoute } from "../workflow/codex-pet-visual.js";
 import { runHeavyWorkerTask } from "./heavy-task-gate.js";
 import {
   isDirectWorkerEntrypoint,

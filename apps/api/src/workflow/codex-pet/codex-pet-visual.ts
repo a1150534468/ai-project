@@ -12,9 +12,9 @@ import {
   loadImageGenerationConfigForModel,
   type ImageBinaryInput,
   type ImageGenerationResult,
-} from "./_shared/image-service.js";
+} from "../_shared/image-service.js";
 import { createCodexPetUpstreamFetch } from "./codex-pet-network.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 
 let petPipelineModule: Promise<typeof import("@ai-assistant/codex-pet-pipeline")> | null = null;
 

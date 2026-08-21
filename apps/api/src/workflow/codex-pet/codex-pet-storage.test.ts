@@ -2,7 +2,7 @@ import { ObjectCannedACL } from "@aws-sdk/client-s3";
 import type { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
-import { makeS3 } from "../storage/s3.js";
+import { makeS3 } from "../../storage/s3.js";
 import {
   codexPetArtifactPrefix,
   deleteCodexPetProjectArtifacts,

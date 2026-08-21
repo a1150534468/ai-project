@@ -8,8 +8,8 @@ import {
   makeS3,
   putObject,
   type S3,
-} from "../storage/s3.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+} from "../../storage/s3.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 
 export const CODEX_PET_ARTIFACT_PREFIX = "workflow/codex-pets";
 export const CODEX_PET_INSTALL_SIGNATURE_TTL_MS = 30 * 60 * 1_000;

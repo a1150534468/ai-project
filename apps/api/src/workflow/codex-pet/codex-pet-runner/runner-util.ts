@@ -17,7 +17,7 @@ import {
   codexPetImageMaxAttempts,
   codexPetVisualQaConsensusPasses,
 } from "../codex-pet-visual.js";
-import { type ImageBinaryInput, type ImageGenerationResult, classifyImageGenerationError } from "../_shared/image-service.js";
+import { type ImageBinaryInput, type ImageGenerationResult, classifyImageGenerationError } from "../../_shared/image-service.js";
 
 export function codexPetShouldMirrorRunningLeft(
   mirrorSafe: boolean,

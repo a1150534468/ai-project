@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 import { extractPoseBoard } from "@ai-assistant/codex-pet-pipeline";
-import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "./_shared/image-service.js";
+import { DOUBAO_IMAGE_MODEL, type ImageBinaryInput } from "../_shared/image-service.js";
 import { adaptCodexPetPromptForModel, assertCodexPetVisualQaRoute, codexPetImageDispatchCooldownMs, codexPetImageMaxAttempts, codexPetImageRetryDelayMs, codexPetVisualQaConsensusPasses, createSeedreamPoseBoardScaffold, generateCodexPetIdentityGuide, generateCodexPetVisual, normalizeSeedreamChromaMatte, resolveCodexPetVisualQaModel, runCodexPetVisualQa, runLabeledDirectionSemantics, selectSeedreamGaitScaffoldVariants, type PetVisualQaVerdict } from "./codex-pet-visual.js";
 import { codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 

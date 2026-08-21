@@ -40,7 +40,7 @@ import {
   type PetVisualQaConsensus,
   codexPetVisualQaConsensusPasses,
 } from "../codex-pet-visual.js";
-import { type ImageBinaryInput } from "../_shared/image-service.js";
+import { type ImageBinaryInput } from "../../_shared/image-service.js";
 
 /** Build a deterministic reference from the four QA-approved cardinal cells.
  * The original 2×2 model board remains provenance; direction generation uses

@@ -1,6 +1,6 @@
 import { Queue, Worker, type Processor } from "bullmq";
 import type { PrismaClient } from "@prisma/client";
-import { deleteObject, makeS3, type S3 } from "../storage/s3.js";
+import { deleteObject, makeS3, type S3 } from "../../storage/s3.js";
 import { codexPetBullConnection } from "./codex-pet-queue.js";
 import { isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
 import { codexPetBillingBlocksProjectDeletion } from "./codex-pet-billing.js";

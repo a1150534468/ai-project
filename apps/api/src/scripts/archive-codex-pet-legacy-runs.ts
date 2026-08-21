@@ -1,6 +1,6 @@
 import "../env.js";
 import { getPrisma } from "@ai-assistant/db";
-import { archiveCodexPetLegacyRuns } from "../workflow/codex-pet-read-only-archive.js";
+import { archiveCodexPetLegacyRuns } from "../workflow/codex-pet/index.js";
 
 const runIds = (process.env.CODEX_PET_ARCHIVE_RUN_IDS ?? "")
   .split(",")

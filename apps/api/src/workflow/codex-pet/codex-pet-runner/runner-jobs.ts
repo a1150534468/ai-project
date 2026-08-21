@@ -10,7 +10,7 @@ import {
   type RunnerContext,
 } from "./runner-types.js";
 import { asRecord, providerMetadata } from "./runner-util.js";
-import { type ImageGenerationResult } from "../_shared/image-service.js";
+import { type ImageGenerationResult } from "../../_shared/image-service.js";
 
 export async function ensureJob(
   ctx: RunnerContext,

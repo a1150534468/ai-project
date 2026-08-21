@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
-import { classifyImageGenerationError } from "./_shared/image-service.js";
+import { classifyImageGenerationError } from "../_shared/image-service.js";
 
 export const CODEX_PET_PLANNED_IMAGE_CALL_LIMIT = 14;
 export const CODEX_PET_PER_IMAGE_BILLING_MODE = "per_image_call_v1";

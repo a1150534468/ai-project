@@ -24,7 +24,7 @@ import { CODEX_PET_MODEL_CONTRACT_VERSION, codexPetVisualQaRouteForModel } from 
 import { persistOrResumeCodexPetFinalPackage, type CodexPetFinalPackageSeed } from "./codex-pet-packaging.js";
 import type { CodexPetArtifactStore } from "./codex-pet-runner.js";
 import type { BlindDirectionValidation, DirectionSemanticVerdict, PetVisualQaVerdict } from "./codex-pet-visual.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 
 type JsonRecord = Record<string, unknown>;
 

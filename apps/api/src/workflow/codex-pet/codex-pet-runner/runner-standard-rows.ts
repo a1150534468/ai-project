@@ -36,7 +36,7 @@ import {
   createSeedreamPoseBoardScaffold,
   selectSeedreamGaitScaffoldVariants,
 } from "../codex-pet-visual.js";
-import { DOUBAO_IMAGE_MODEL } from "../_shared/image-service.js";
+import { DOUBAO_IMAGE_MODEL } from "../../_shared/image-service.js";
 
 export async function deriveRunningLeft(ctx: RunnerContext, right: BoardJobResult, canonical: { artifact: CodexPetArtifact; buffer: Buffer }): Promise<BoardJobResult> {
   let job = await ensureJob(ctx, "row-running-left", "derived_row", ["row-running-right"], { derivation: "per-frame-mirror-preserve-order" });
