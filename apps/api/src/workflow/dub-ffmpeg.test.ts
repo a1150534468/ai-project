@@ -43,7 +43,7 @@ describe.runIf(hasFfmpeg)("mixBgmIntoVideo（真实 ffmpeg）", () => {
       const out = await mixBgmIntoVideo({ videoBuffer: await readFile(v), bgmBuffer: await readFile(b), bgmVolume: 0.3 });
       expect(out.byteLength).toBeGreaterThan(0);
 
-      const { probeVideoDurationSec } = await import("./video-probe.js");
+      const { probeVideoDurationSec } = await import("./_shared/video-probe.js");
       expect(await probeVideoDurationSec(out)).toBeGreaterThan(0);
     } finally {
       await rm(dir, { recursive: true, force: true });

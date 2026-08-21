@@ -1,5 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { M3_MODEL, M3_TIMEOUT_MS } from "./video-multimodal.js";
+import { M3_MODEL, M3_TIMEOUT_MS } from "./_shared/video-multimodal.js";
 import { DUB_REWRITE_MAX_TOKENS, DUB_REWRITE_PRICE_MULTIPLIER, DUB_REWRITE_BILLING_TYPE } from "./dub-constants.js";
 
 export interface RewriteBilling {

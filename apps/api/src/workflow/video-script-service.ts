@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
-import { M3_MODEL, M3_TIMEOUT_MS } from "./video-multimodal.js";
+import { M3_MODEL, M3_TIMEOUT_MS } from "./_shared/video-multimodal.js";
 
 const SCRIPT_MAX_TOKENS = 3000;
 const PRICE_MULTIPLIER = 2; // 脚本按模型原价 2 倍计费

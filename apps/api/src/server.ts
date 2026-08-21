@@ -40,7 +40,7 @@ import { startArticleWorkflowReaper } from "./workflow/article-workflow-reaper.j
 import { loadSkyhumanConfig } from "./workflow/dub-skyhuman-client.js";
 import { finalizeProjectVideo } from "./workflow/dub-project-service.js";
 import { loadS3Config, getObjectToFile } from "./storage/s3.js";
-import { storeGeneratedVideo, storeVideoFile } from "./workflow/video-service.js";
+import { storeGeneratedVideo, storeVideoFile } from "./workflow/_shared/video-service.js";
 import { createBillingClient } from "@ai-assistant/billing";
 import { ecomWorkflowRoutes } from "./workflow/ecom-routes.js";
 import { localBusinessPromoRoutes } from "./workflow/local-business-promo-routes.js";

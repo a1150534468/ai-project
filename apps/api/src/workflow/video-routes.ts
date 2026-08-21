@@ -9,9 +9,9 @@ import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/bil
 import { optimizeVideoPrompt } from "./video-prompt-optimize.js";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type Anthropic from "@anthropic-ai/sdk";
-import { analyzeMaterials, analyzeReference } from "./video-analyze-service.js";
+import { analyzeMaterials, analyzeReference } from "./_shared/video-analyze-service.js";
 import { generateScript, type ScriptPayload } from "./video-script-service.js";
-import { probeVideoDurationSec } from "./video-probe.js";
+import { probeVideoDurationSec } from "./_shared/video-probe.js";
 import {
   AUDIO_REFERENCE_ROLE,
   VIDEO_ASPECT_RATIOS,
@@ -40,7 +40,7 @@ import {
   type VideoResolution,
   type VideoRoleInput,
   type VideoTaskStatus,
-} from "./video-service.js";
+} from "./_shared/video-service.js";
 import { startVideoReaper, type VideoReapHandlers } from "./video-reaper.js";
 import { VIDEO_TASK_STATUS, videoOperationId, type VideoTaskRow } from "./video-shared.js";
 

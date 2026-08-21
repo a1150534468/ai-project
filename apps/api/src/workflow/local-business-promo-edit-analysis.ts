@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import {
   callMiniMaxMessages,
   type ContentBlock,
-} from "./video-multimodal.js";
+} from "./_shared/video-multimodal.js";
 import type {
   LocalBusinessPromoShotPlanEntry,
 } from "./local-business-promo-core.js";
