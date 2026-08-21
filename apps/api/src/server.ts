@@ -28,7 +28,7 @@ import { agentRoutes } from "./agents/routes.js";
 import { agentTeamRoutes } from "./agent-teams/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image/index.js";
 import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
-import { tryOnWorkflowRoutes } from "./workflow/try-on-routes.js";
+import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
 import { videoWorkflowRoutes } from "./workflow/video/index.js";
 import { dubRoutes, startDubReaper, loadSkyhumanConfig, finalizeProjectVideo } from "./workflow/dub/index.js";

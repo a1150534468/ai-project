@@ -7,9 +7,9 @@ import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
-import { requireUser } from "../auth/require-user.js";
-import { deleteObject, getObject, loadS3Config, makeS3 } from "../storage/s3.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+import { requireUser } from "../../auth/require-user.js";
+import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -21,7 +21,7 @@ import {
   type ImageBinaryInput,
   type ImageGenerationConfig,
   type StoredImage,
-} from "./_shared/image-service.js";
+} from "../_shared/image-service.js";
 import {
   HUMAN_IMAGE_ASPECT_RATIOS,
   HUMAN_IMAGE_MODEL,
@@ -32,11 +32,11 @@ import {
   type HumanImageAspectRatio,
   type HumanImageModel,
   type HumanImageResolution,
-} from "./_shared/human-image-options.js";
-import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
-import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./_shared/image-delivered-tier.js";
-import type { ImageResolutionLabel } from "./_shared/image-upstream-options.js";
-import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "./portrait/index.js";
+} from "../_shared/human-image-options.js";
+import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
+import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
+import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "../portrait/index.js";
 import { buildTryOnPrompt, TRY_ON_CONSENT_VERSION } from "./try-on-prompts.js";
 
 const TRY_ON_REFERENCE_KINDS = ["garment_front", "garment_detail", "model"] as const;
