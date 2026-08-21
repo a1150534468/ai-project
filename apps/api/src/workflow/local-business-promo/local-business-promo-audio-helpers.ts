@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
   MIMO_TTS_PRESET_MODEL,
   MIMO_TTS_VOICE_CLONE_MODEL,

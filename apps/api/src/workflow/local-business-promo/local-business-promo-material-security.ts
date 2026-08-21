@@ -1,4 +1,4 @@
-import { loadS3Config, type S3Config } from "../storage/s3.js";
+import { loadS3Config, type S3Config } from "../../storage/s3.js";
 import type {
   LocalBusinessPromoMaterial,
   LocalBusinessPromoMaterials,

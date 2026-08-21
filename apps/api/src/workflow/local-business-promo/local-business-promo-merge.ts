@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { storeVideoMaterial, type StoredVideoMaterial } from "./_shared/video-service.js";
+import { storeVideoMaterial, type StoredVideoMaterial } from "../_shared/video-service.js";
 import { runCommand } from "./local-business-promo-render-ffmpeg.js";
 
 export interface MergeLocalBusinessPromoClipsInput {

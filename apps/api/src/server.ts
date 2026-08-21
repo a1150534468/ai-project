@@ -33,13 +33,15 @@ import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-
 import { videoWorkflowRoutes } from "./workflow/video/index.js";
 import { dubRoutes, startDubReaper, loadSkyhumanConfig, finalizeProjectVideo } from "./workflow/dub/index.js";
 import { adminDubRoutes } from "./admin/dub-routes.js";
-import { startLocalBusinessPromoRefundReaper } from "./workflow/local-business-promo-refund.js";
+import {
+  startLocalBusinessPromoRefundReaper,
+  localBusinessPromoRoutes,
+} from "./workflow/local-business-promo/index.js";
 import { startArticleWorkflowReaper, articleWorkflowRoutes } from "./workflow/article/index.js";
 import { loadS3Config, getObjectToFile } from "./storage/s3.js";
 import { storeGeneratedVideo, storeVideoFile } from "./workflow/_shared/video-service.js";
 import { createBillingClient } from "@ai-assistant/billing";
 import { ecomHelpWriteRoutes, ecomMainImageRoutes, ecomWorkflowRoutes } from "./workflow/ecom/index.js";
-import { localBusinessPromoRoutes } from "./workflow/local-business-promo-routes.js";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { novelEngineRoutes } from "./novel/routes.js";
 import { comicProductionRoutes, comicWorkflowRoutes } from "./workflow/comic/index.js";

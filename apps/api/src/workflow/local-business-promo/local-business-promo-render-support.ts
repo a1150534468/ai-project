@@ -1,5 +1,5 @@
 import { extname } from "node:path";
-import { loadWorkflowMediaFile } from "./_shared/workflow-media-loader.js";
+import { loadWorkflowMediaFile } from "../_shared/workflow-media-loader.js";
 import type {
   LocalBusinessPromoAspectRatio,
   LocalBusinessPromoShotPlanEntry,

@@ -3,7 +3,7 @@ import { getPrisma } from "@ai-assistant/db";
 import {
   closeLocalBusinessPromoQueue,
   createLocalBusinessPromoWorker,
-} from "../workflow/local-business-promo-queue.js";
+} from "../workflow/local-business-promo/index.js";
 import { runHeavyWorkerTask } from "./heavy-task-gate.js";
 import { isDirectWorkerEntrypoint, runStandaloneWorker, type StartedWorkerRuntime } from "./worker-runtime.js";
 
@@ -11,7 +11,7 @@ export async function startLocalBusinessPromoWorker(): Promise<StartedWorkerRunt
   assertRequiredEnv();
   const worker = createLocalBusinessPromoWorker(async (job) => {
     await runHeavyWorkerTask(async () => {
-      const { executeLocalBusinessPromoRun } = await import("../workflow/local-business-promo-runner.js");
+      const { executeLocalBusinessPromoRun } = await import("../workflow/local-business-promo/index.js");
       await executeLocalBusinessPromoRun({ runId: job.data.runId });
     });
   });

@@ -1,8 +1,8 @@
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ContentBlock } from "./_shared/video-multimodal.js";
-import { loadWorkflowMediaBuffer, loadWorkflowMediaFile } from "./_shared/workflow-media-loader.js";
+import type { ContentBlock } from "../_shared/video-multimodal.js";
+import { loadWorkflowMediaBuffer, loadWorkflowMediaFile } from "../_shared/workflow-media-loader.js";
 import type { LocalBusinessPromoMaterial } from "./local-business-promo-core.js";
 import { runCommand } from "./local-business-promo-render-ffmpeg.js";
 

@@ -3,14 +3,14 @@ import { randomUUID } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
+import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
 import { probeAudioDurationSec } from "./audio-probe.js";
 import type { LocalBusinessPromoMusicPreset } from "./local-business-promo-core.js";
 
 const DEFAULT_AUDIO_BASE_URL = "https://api.xiaomimimo.com/v1";
 const DEFAULT_AUDIO_MAX_BYTES = 20 * 1024 * 1024;
 const DEFAULT_VOICE_SAMPLE_MAX_BASE64_BYTES = 10 * 1024 * 1024;
-const BGM_ASSET_DIR = fileURLToPath(new URL("../../assets/workflow/local-business-promo-bgm/", import.meta.url));
+const BGM_ASSET_DIR = fileURLToPath(new URL("../../../assets/workflow/local-business-promo-bgm/", import.meta.url));
 
 export const MIMO_TTS_PRESET_MODEL = "mimo-v2.5-tts" as const;
 export const MIMO_TTS_VOICE_DESIGN_MODEL = "mimo-v2.5-tts-voicedesign" as const;

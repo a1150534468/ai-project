@@ -15,7 +15,7 @@ const { getObjectMock, putObjectMock } = vi.hoisted(() => ({
   putObjectMock: vi.fn(async () => undefined),
 }));
 
-vi.mock("../storage/s3.js", () => ({
+vi.mock("../../storage/s3.js", () => ({
   loadS3Config: vi.fn(() => ({
     endpoint: "http://s3.test",
     region: "us-east-1",

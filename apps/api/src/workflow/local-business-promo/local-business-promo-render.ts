@@ -5,7 +5,7 @@ import { join } from "node:path";
 import {
   storeVideoFile,
   type StoredVideoFile,
-} from "./_shared/video-service.js";
+} from "../_shared/video-service.js";
 import type {
   LocalBusinessPromoAspectRatio,
   LocalBusinessPromoBrief,

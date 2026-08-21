@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
   audioBlobMimeFromQuery,
   findOwnedProject,
