@@ -5,7 +5,7 @@ import {
   type HumanImageAspectRatio,
   type HumanImageModel,
   type HumanImageResolution,
-} from "./human-image-options.js";
+} from "../human-image-options.js";
 
 export const PORTRAIT_CONSENT_VERSION = "portrait-consent-v1";
 export const PORTRAIT_MODEL = HUMAN_IMAGE_MODEL;

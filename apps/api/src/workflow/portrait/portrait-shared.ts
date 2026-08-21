@@ -1,4 +1,4 @@
-import { loadImageAttemptTimeoutMs } from "./image-service.js";
+import { loadImageAttemptTimeoutMs } from "../image-service.js";
 
 /** 单次上游失败后的重试间隔（固定间隔，不退避）。 */
 export const PORTRAIT_RETRY_DELAY_MS = 3_000;

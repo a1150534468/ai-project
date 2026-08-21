@@ -36,7 +36,7 @@ import {
 import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "./workflow-pricing.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
 import type { ImageResolutionLabel } from "./image-upstream-options.js";
-import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "./portrait-shared.js";
+import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "./portrait/index.js";
 import { buildTryOnPrompt, TRY_ON_CONSENT_VERSION } from "./try-on-prompts.js";
 
 const TRY_ON_REFERENCE_KINDS = ["garment_front", "garment_detail", "model"] as const;

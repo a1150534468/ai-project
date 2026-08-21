@@ -3,12 +3,12 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
-import { requireUser } from "../auth/require-user.js";
+import { requireUser } from "../../auth/require-user.js";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
-import { deleteObject, getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -20,7 +20,7 @@ import {
   type ImageBinaryInput,
   type ImageGenerationConfig,
   type StoredImage,
-} from "./image-service.js";
+} from "../image-service.js";
 import {
   buildPortraitPrompt,
   LEGACY_PORTRAIT_PRESET_NAMES,
@@ -39,11 +39,11 @@ import {
 import {
   resolveImageChargeRow,
   type WorkflowResourcePriceRow,
-} from "./workflow-pricing.js";
-import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
-import type { ImageResolutionLabel } from "./image-upstream-options.js";
+} from "../workflow-pricing.js";
+import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../image-delivered-tier.js";
+import type { ImageResolutionLabel } from "../image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";
-import { loadSharp } from "../runtime/resource-limits.js";
+import { loadSharp } from "../../runtime/resource-limits.js";
 import {
   PORTRAIT_ACTIVE_STATUSES,
   PORTRAIT_TERMINAL_STATUSES,
