@@ -4,7 +4,7 @@ import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/bil
 import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
 import { ecomMainImageResourceKey, ecomMainImageSize, normalizeEcomMainResolution, ECOM_MAIN_RESOLUTIONS, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
 import { ecomModelSizeError } from "./ecom-resolution.js";
-import { deliveredImageResolution, pixelsFromSize } from "./_shared/image-delivered-tier.js";
+import { deliveredImageResolution, pixelsFromSize } from "../_shared/image-delivered-tier.js";
 import {
   appendBillingOperationId,
   authUserId,
@@ -13,11 +13,11 @@ import {
   resolveLanguage,
   RefundCompensationError,
   safeErrorMessage,
-} from "./_shared/ecom-route-helpers.js";
+} from "../_shared/ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { mainImageParamsSchema, mainImageRequestSchema } from "./ecom-main-route-types.js";
 import { parsePricingModelQuery } from "./ecom-route-types.js";
-import { ecomMainImagePriceFallback, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
+import { ecomMainImagePriceFallback, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
 import {
   callImageEdit as callImageEditService,
   callImageGeneration as callImageGenerationService,
@@ -28,7 +28,7 @@ import {
   type GeneratedImage,
   type ImageGenerationConfig,
   type StoredImage,
-} from "./_shared/image-service.js";
+} from "../_shared/image-service.js";
 import { getEcomPlatform } from "./ecom-prompts.js";
 
 const LEGACY_ECOM_MAIN_MODEL = "ecom_main_image";
