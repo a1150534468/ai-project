@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@ai-assistant/db";
-import type { S3 } from "../storage/s3.js";
-import { putObject as defaultPutObject } from "../storage/s3.js";
+import type { S3 } from "../../storage/s3.js";
+import { putObject as defaultPutObject } from "../../storage/s3.js";
 import {
   truncateToTokenBudget,
   generateReportBody,

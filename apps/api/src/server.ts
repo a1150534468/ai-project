@@ -50,7 +50,7 @@ import { novelWorkflowRoutes } from "./workflow/novel-routes.js";
 import { novelEngineRoutes } from "./novel/routes.js";
 import { comicWorkflowRoutes } from "./workflow/comic-routes.js";
 import { comicProductionRoutes } from "./workflow/comic-production-routes.js";
-import { reportRoutes } from "./workflow/report-routes.js";
+import { reportRoutes } from "./workflow/report/index.js";
 import { articleWorkflowRoutes } from "./workflow/article-workflow-routes.js";
 import { analyticsRoutes } from "./admin/analytics-routes.js";
 import { adminResellerRoutes } from "./admin/reseller-routes.js";
