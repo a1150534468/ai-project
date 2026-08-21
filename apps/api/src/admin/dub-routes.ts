@@ -2,10 +2,16 @@ import type { FastifyInstance } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
 import { requireAdmin } from "./guard.js";
 import { writeAudit } from "./audit.js";
-import { loadSkyhumanConfig, getCredit } from "../workflow/dub-skyhuman-client.js";
-import { listAllBgmPresets, createBgmPreset, updateBgmPreset, deleteBgmPreset } from "../workflow/dub-bgm-service.js";
-import { storeAudioBuffer } from "../workflow/dub-audio-store.js";
-import { DUB_BGM_MAX_BYTES } from "../workflow/dub-constants.js";
+import {
+  loadSkyhumanConfig,
+  getCredit,
+  listAllBgmPresets,
+  createBgmPreset,
+  updateBgmPreset,
+  deleteBgmPreset,
+  storeAudioBuffer,
+  DUB_BGM_MAX_BYTES,
+} from "../workflow/dub/index.js";
 
 export async function adminDubRoutes(app: FastifyInstance): Promise<void> {
   app.get("/api/admin/dub/skyhuman/credit", { preHandler: requireAdmin("VIEW_ANALYTICS") }, async (_req, reply) => {

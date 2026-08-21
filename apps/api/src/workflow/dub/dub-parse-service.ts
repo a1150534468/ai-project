@@ -1,9 +1,9 @@
 import { extractShareUrl } from "./dub-share-url.js";
 import { parseShareUrl, type ParseConfig, type ParsedShare } from "./dub-parse-client.js";
-import { fetchRemoteToBuffer } from "./_shared/safe-fetch.js";
-import { probeVideoDurationSec } from "./_shared/video-probe.js";
+import { fetchRemoteToBuffer } from "../_shared/safe-fetch.js";
+import { probeVideoDurationSec } from "../_shared/video-probe.js";
 import { DUB_PARSE_VIDEO_KEY, DUB_PARSE_VIDEO_MAX_BYTES, DUB_PARSE_COVER_MAX_BYTES, DUB_PARSE_TIMEOUT_MS } from "./dub-constants.js";
-import { loadS3Config, makeS3, putObject } from "../storage/s3.js";
+import { loadS3Config, makeS3, putObject } from "../../storage/s3.js";
 import { buildAudioPublicUrl } from "./dub-audio-store.js";
 import { randomUUID } from "node:crypto";
 

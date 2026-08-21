@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { parseLenientJson, callJsonWithRetry } from "./_shared/video-analyze-service.js";
-import { VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY } from "./_shared/video-service.js";
+import { parseLenientJson, callJsonWithRetry } from "../_shared/video-analyze-service.js";
+import { VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY } from "../_shared/video-service.js";
 import { DUB_ANALYZE_MAX_TOKENS } from "./dub-constants.js";
-import { callVision, loadVisionConfig, type VisionConfig } from "./_shared/vision-client.js";
-import { compressForVision } from "./_shared/video-compress.js";
+import { callVision, loadVisionConfig, type VisionConfig } from "../_shared/vision-client.js";
+import { compressForVision } from "../_shared/video-compress.js";
 
 const analysisSchema = z.object({
   spokenScript: z.string().default(""),

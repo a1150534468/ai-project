@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { getPrisma } from "@ai-assistant/db";
-import { buildServer } from "../server.js";
-import { signToken } from "../auth/token.js";
-import { generateUniqueUid } from "../auth/uid.js";
+import { buildServer } from "../../server.js";
+import { signToken } from "../../auth/token.js";
+import { generateUniqueUid } from "../../auth/uid.js";
 
 vi.mock("@ai-assistant/billing", () => ({
   createBillingClient: vi.fn(() => ({
@@ -12,8 +12,8 @@ vi.mock("@ai-assistant/billing", () => ({
   })),
   InsufficientBalanceError: class extends Error {},
 }));
-vi.mock("../storage/s3.js", async () => {
-  const actual = await vi.importActual<typeof import("../storage/s3.js")>("../storage/s3.js");
+vi.mock("../../storage/s3.js", async () => {
+  const actual = await vi.importActual<typeof import("../../storage/s3.js")>("../../storage/s3.js");
   return { ...actual, makeS3: vi.fn(() => ({ client: { send: vi.fn().mockResolvedValue({}) }, bucket: "t" })), putObject: vi.fn(), getObject: vi.fn() };
 });
 vi.mock("bullmq", () => ({

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DUB_STAGE } from "./dub-constants.js";
 import { resolveBgmObjectKey } from "./dub-bgm-service.js";
 import { mixBgmFiles } from "./dub-ffmpeg.js";
-import { assertTempDiskSpace } from "../runtime/temp-storage.js";
+import { assertTempDiskSpace } from "../../runtime/temp-storage.js";
 
 const PATCHABLE = ["title", "sourceVideoUrl", "analysis", "script", "attachedKbIds", "ttsMode",
   "audioUrl", "audioObjectKey", "audioDurationSec", "avatarId", "bgmPresetId", "bgmObjectKey", "bgmVolume", "stage"] as const;

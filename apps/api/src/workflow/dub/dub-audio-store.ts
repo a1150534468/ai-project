@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
+import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
 
 function trimTrailingSlash(v: string): string { return v.replace(/\/+$/u, ""); }
 function encodeKey(key: string): string { return key.split("/").map(encodeURIComponent).join("/"); }

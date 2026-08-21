@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@ai-assistant/db";
-import { loadEmbeddingConfig } from "../memory/embedding-client.js";
-import { billableEmbed } from "../memory/embedding-billing.js";
-import { resolveEffectiveKbIds, retrieveChunks, filterRelevantChunks, type RetrievedChunk } from "../kb/retrieve.js";
+import { loadEmbeddingConfig } from "../../memory/embedding-client.js";
+import { billableEmbed } from "../../memory/embedding-billing.js";
+import { resolveEffectiveKbIds, retrieveChunks, filterRelevantChunks, type RetrievedChunk } from "../../kb/retrieve.js";
 
 const KB_TOPK = 6;
 const KB_MIN_SCORE = 0.35;
