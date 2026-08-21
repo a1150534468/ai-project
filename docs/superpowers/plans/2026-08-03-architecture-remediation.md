@@ -531,6 +531,25 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 **验证**：① 删 DATABASE_URL/REDIS_URL/SESSION_SECRET 后 `assertRequiredEnv` 打印三条明细并 exit 1（单元验证，`UNREACHABLE` 未打印）；② 正常启动：4 个未配模型 Key（EMBEDDING/MIMO/SKYHUMAN/TOAPIS）打出 warn，服务照常 listen。tsc 0、相关测试 75 passed。
 
+### P1.4 返工（2026-08-22）：上一轮 6 处不到位
+
+上一轮验收放过了，复查发现 6 处问题，本次一并修掉。
+
+| # | 问题 | 根因 / 影响 | 修法 |
+| --- | --- | --- | --- |
+| 1 | `.env.example` 只补了 32 个，**还差 36 个真实配置** | 上一轮扫描漏了 `env.X`（注入式 `loadXConfig` 的参数）这种读取形态，而 workflow 各域几乎全用它 → 整族配置没记上：SMTP×6、VIDEO/TOAPIS×6、SEEDANCE×3、VISION×2、IMAGE×7、PORTRAIT/TRY_ON×4、AUDIO×1、CODEX_PET 重试×3、各域模型覆盖×3 | 按域分组补齐 36 项（注释形式 + 用途 + 默认值 + 回落关系）；补后重扫「该进 example 的未文档化 = 0」 |
+| 2 | `.env.example` 出现重复项 | `NOVEL_WORKER_CONCURRENCY` 第 99 行已有实值，补齐块里又写了一条注释版 | 删掉重复的注释版；加重复检查（184 条目 / 184 唯一） |
+| 3 | fail-fast 漏了 `ADMIN_SESSION_SECRET` | `server.ts` 无条件 `register(adminRoutes)`，而 `admin/routes.ts:27` 在**注册期**就要求它 ≥32 字节 —— 缺它服务照样起不来，正是「启动必需」档 | 新增 `SERVER_REQUIRED_ENV = REQUIRED_ENV + ADMIN_SESSION_SECRET`；worker 不注册后台路由，仍用 `REQUIRED_ENV` |
+| 4 | 只判「非空」，不判长度 | 5 处代码写着 `secret.length < 32 → throw`（`auth/routes.ts:23`、`admin/routes.ts:27`、`image-routes.ts:279`、`local-business-promo-media-access.ts:7`、`codex-pet-storage.ts:96`），其中两处是注册期抛。配一个 8 字节的 SESSION_SECRET 能通过聚合校验，然后 `buildServer()` 照样炸 —— 这一层的目的就落空了 | `EnvRequirement.minLength`，两个密钥都标 32 |
+| 5 | 可选档报假警报 | `warnMissingOptionalEnv` 逐 key 判存在，但 4 个 key 有等价回落：`BAILIAN←DASHSCOPE`、`GPT_IMAGE←CHATGPT`、`EMBEDDING←BAILIAN/DASHSCOPE/LLM_API_KEY`、`TOAPIS←VIDEO_API_KEY`（`video-service.ts:149` 首选后者）。配了 VIDEO_API_KEY 的人会被告知「视频解析不可用」 | `EnvRequirement.alternates`，任一有值即视为已配 |
+| 6 | **零测试** | `assertRequiredEnv` / `warnMissingOptionalEnv` 全仓无测试文件，「验证」是一次性手工跑。删掉入口的调用、删掉任一必需项，仓库不会有任何测试变红 —— 正是 P1.1 花力气消灭的那类无人看守代码 | 新增 `apps/api/src/env.test.ts`（14 例）：纯函数 `collectEnvProblems` 抽出来专供断言；两条源码级钉子分别钉住「注册期 ≥32 字节的密钥必须在 `SERVER_REQUIRED_ENV` 里」和「5 个进程入口都调用了启动校验」 |
+
+**顺带清掉的死链**：上一轮只修了计划点名的 `DESIGN.md:3`。全仓链接扫描（192 条内部链接，含锚点校验）发现另有 6 条死链，全部指向 `docs/` 下不存在的子目录（`docs/setup/` `docs/reference/` `docs/lessons/` 从来没有过）：根 `README.md` 4 条（`:19` `:26`×2 `:56`），`infra/k8s/README.md` 与 `infra/k8s/overlays/local/README.md` 各 1 条（指向从未入库的 `docs/setup/deploy-k8s.md`）。修后 **192 条链接 / 0 死链**。
+
+**顺带修掉的文档陈述**：`docs/ai-collaboration.md` 是上一轮刚入库的，里面两处声明当场就是假的 —— `:39`「当前 main 是红的」（实际绿，2542 passed）、`:202`「docs 被 gitignore，17 份只有 3 份入库」（实际 23 份全入库）。已改成现状，并补了「本地 12 例假红不要修」的清单。
+
+**双向验证（7/7 破了就红，脚本 `.cc-tmp/reverse-verify-env.py`）**：去掉 `SESSION_SECRET` 的 `minLength` → 红；把 `ADMIN_SESSION_SECRET` 从服务必需集移除 → 红；去掉 TOAPIS 的 `alternates` → 红；长度校验分支短路 → 红；`server.ts` 把启动校验**注释掉** → 红；**整行删掉** → 红；`novel-worker` 删掉调用 → 红。第 5 条一开始是绿的（`toContain` 骗得过注释），已改为先剥整行注释再断言。
+
 ---
 
 # P2：可维护性

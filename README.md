@@ -16,14 +16,14 @@ pnpm dev
 
 - Web：<http://localhost:5174>
 - Admin：<http://localhost:5175>
-- API：<http://localhost:8090>（Swagger 见 <http://localhost:8090/docs>，[使用说明](docs/reference/api-reference.md)）
+- API：<http://localhost:8090>（Swagger 见 <http://localhost:8090/docs>，架构与端点总览见 [docs/overview.md](docs/overview.md)）
 - Billing：<http://localhost:8093>
 - Novel Worker 健康检查：<http://localhost:8091/health>
 - Codex 桌宠 Worker 健康检查：<http://localhost:8092/health>
 
 `Ctrl+C` 只停止本机业务服务，Docker 数据层会保留；停止数据层用 `pnpm dev:infra:stop`。桌面端按需另开终端 `pnpm dev:desktop`。
 
-模型网关（百炼 / AI Pixel / 生图 / 向量）配置详见 [docs/setup/model-providers.md](docs/setup/model-providers.md)；本地开发细节与常见问题见 [docs/setup/local-dev.md](docs/setup/local-dev.md)。
+模型网关（百炼 / AI Pixel / 生图 / 向量）的配置项见 [.env.example](.env.example)，模型选型与踩坑见 [docs/image.md](docs/image.md) 与 [docs/pitfalls.md](docs/pitfalls.md#一模型网关与配额)；本地开发细节与常见问题见 [docs/overview.md](docs/overview.md) 与 [docs/pitfalls.md](docs/pitfalls.md)。
 
 ## Codex 桌宠调用合同
 
@@ -38,7 +38,7 @@ apps/       api（Fastify 单体 + workers）、web、admin、desktop（Electron
 packages/   db（Prisma）、llm、billing 客户端、novel/article/codex-pet 流水线、connector-protocol
 services/   billing（Go + Gin，独立数据库）
 infra/      Docker 镜像、Caddy 与保留的 K8s 配置（轻量生产部署见 docs/deploy-compose.md）
-docs/       项目文档（架构 / 业务线 / 搭建 / 历史 / 踩坑 / 计划归档 / 参考）
+docs/       项目文档（扁平结构，一个模块一个文档 + superpowers/plans 计划归档，导航见 docs/README.md）
 ```
 
 ## 常用命令
@@ -53,4 +53,4 @@ pnpm k8s:validate    # 校验 k8s kustomize 配置
 
 目标服务器使用 Docker Compose、腾讯 COS 和统一 Worker，完整步骤与资源验收标准见 [轻量生产部署](docs/deploy-compose.md)。
 
-若本地数据库结构与迁移记录漂移，可临时 `DEV_SKIP_MIGRATIONS=1 pnpm dev` 跳过启动迁移（见 [docs/lessons/](docs/lessons/README.md)）。
+若本地数据库结构与迁移记录漂移，可临时 `DEV_SKIP_MIGRATIONS=1 pnpm dev` 跳过启动迁移（见 [docs/pitfalls.md](docs/pitfalls.md#prisma-迁移记录漂移本地)）。

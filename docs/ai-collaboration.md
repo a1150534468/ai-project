@@ -36,7 +36,9 @@ cd "/Users/z/code/ai project" && set -a && . .env && set +a
 
 ### 1.2 确认绿基线
 
-先跑一次再动手，区分"我改坏了"和"本来就坏"。**当前 `main` 是红的**（`apps/web` `codexPetApi.test.ts` 1 例，随 `fe35f44` 进仓；`codex-pet-routes.integration.test.ts` 1 例）—— 见整治计划 P0.1。
+先跑一次再动手，区分"我改坏了"和"本来就坏"。**当前 `main` 是绿的**（2026-08-22 最近一次 CI：`passed 2542 / failed 0 / skipped 23`，workspaces 10/10，基线下限 2411）—— 早前 P0.1 记的两处红（`apps/web` `codexPetApi.test.ts`、`codex-pet-routes.integration.test.ts`）已修完。
+
+本地全量跑会有 **12 例稳定失败**，是本地环境造成的假红，不要去"修"：`admin/resource-routes` 7 例、`admin/membership-routes` 3 例、`admin/code-routes` 1 例期望计费服务不可达而本地 `BILLING_BASE_URL` 指着活的 :8093；`agents/routes` 1 例同理（本地 minio 活着）。CI 上这 12 例是绿的。
 
 ### 1.3 读三份文档
 
@@ -199,4 +201,4 @@ dev 库存在与业务无关的历史 drift（`LocalBusinessPromoRun`、`NovelKn
 | `docs/superpowers/plans/` | 执行计划 |
 | 域文档 | `codex-pet.md` / `novel.md` / `dub.md` / `image.md` / `ecom.md` / `billing.md` / `chat.md` / `wechat.md` / `fanout.md` |
 
-**注意**：`docs/*` 当前被 `.gitignore:13` 整目录忽略，17 份文档只有 3 份入库 —— 包括 4204 行的 `dub.md`、3283 行的 `novel.md` 在内的 14 份不在版本控制里。这是需要尽快决策的问题（整治计划 P1.4 Step 3）。`DESIGN.md` 另有一处死链，指向不存在的 `docs/reference/design-system.md`。
+**注意**：`docs/*` 已于 2026-08-17 解除 gitignore，**23 份文档全部入库**（含 4204 行的 `dub.md`、3283 行的 `novel.md`），整治计划 P1.4 Step 3 完成。目录是扁平的，没有 `docs/setup/` `docs/reference/` `docs/lessons/` 这些子目录 —— 写链接前先 `git ls-files docs` 确认文件真的存在，仓库里曾经因此攒下 7 条死链（`DESIGN.md` 1 条、根 `README.md` 4 条、`infra/k8s/**` 2 条，已于 2026-08-22 清零）。
