@@ -21,7 +21,7 @@ import {
   type ArticleWorkflowBilling,
   type ArticleWorkflowRouteDeps,
 } from "./article-workflow-shared.js";
-import { getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
   articleWorkflowBatchParamsSchema,
   articleWorkflowImageBlobParamsSchema,
@@ -56,7 +56,7 @@ import {
   serializeArticleWorkflowProject,
   serializeArticleWorkflowProjectSummary,
 } from "./article-workflow-serializer.js";
-import { authUserId, safeErrorMessage } from "./_shared/ecom-route-helpers.js";
+import { authUserId, safeErrorMessage } from "../_shared/ecom-route-helpers.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();

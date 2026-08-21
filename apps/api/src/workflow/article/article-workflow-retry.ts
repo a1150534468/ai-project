@@ -6,7 +6,7 @@
  * 白等还把失败原因往后推；这类失败交给用户手动重试（额度恢复后一键重跑）。
  */
 
-import { classifyImageGenerationError } from "./_shared/image-service.js";
+import { classifyImageGenerationError } from "../_shared/image-service.js";
 
 export const ARTICLE_RETRY_MAX_ATTEMPTS = 3;
 /**

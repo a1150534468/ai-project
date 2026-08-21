@@ -4,7 +4,7 @@ import {
   type ArticleWorkflowOutputKind,
   type ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
-import { resolveImagePricing, resolveResourcePrice, type ResourcePriceLister, type WorkflowResourcePriceRow } from "./_shared/workflow-pricing.js";
+import { resolveImagePricing, resolveResourcePrice, type ResourcePriceLister, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
 import { ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY } from "./article-workflow-shared.js";
 
 export const DEFAULT_ARTICLE_WORKFLOW_TEXT_PRICE: WorkflowResourcePriceRow = {

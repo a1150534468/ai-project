@@ -12,9 +12,11 @@
  *   cd apps/api && pnpm exec tsx --env-file=../../.env src/scripts/repair-article-workflow-inline-images.ts --dry-run
  */
 import { PrismaClient } from "@prisma/client";
-import { applyArticleImageManifestToHtml } from "../workflow/article-workflow-image-manifest.js";
-import { articleWorkflowStorableImageUrl } from "../workflow/article-workflow-image-url.js";
-import { parseArticleWorkflowImageManifestJson } from "../workflow/article-workflow-serializer.js";
+import {
+  applyArticleImageManifestToHtml,
+  articleWorkflowStorableImageUrl,
+  parseArticleWorkflowImageManifestJson,
+} from "../workflow/article/index.js";
 
 const dryRun = process.argv.includes("--dry-run");
 const prisma = new PrismaClient();

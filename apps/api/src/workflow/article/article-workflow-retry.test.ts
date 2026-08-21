@@ -6,7 +6,7 @@ import {
   isRetryableArticleWorkflowError,
   withArticleWorkflowRetry,
 } from "./article-workflow-retry.js";
-import { ImageGenerationUpstreamError } from "./_shared/image-service.js";
+import { ImageGenerationUpstreamError } from "../_shared/image-service.js";
 
 function statusError(status: number): Error {
   return Object.assign(new Error(`upstream ${status}`), { status });

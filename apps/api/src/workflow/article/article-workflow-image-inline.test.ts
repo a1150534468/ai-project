@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 const putObject = vi.fn(async () => undefined);
 
-vi.mock("../storage/s3.js", () => ({
+vi.mock("../../storage/s3.js", () => ({
   putObject,
   putObjectFile: vi.fn(async () => undefined),
   getObject: vi.fn(async () => Buffer.from("stored-bytes")),
