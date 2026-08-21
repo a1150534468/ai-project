@@ -96,7 +96,7 @@ pnpm test
 | `ecom-main` | ❌ 无 | ⚠️ `refund` 有 3 处调用 | **待审**（P0.6 改范围后未做） |
 | `comic-production` / `report` / `audio` | ❌ 无 | ⚠️ 无 `reserve` 迹象 | **待审**（P0.6 改范围后未做） |
 
-**模板源**：`apps/api/src/workflow/article-workflow-reaper.ts`（2711 字节，含 4 个测试用例）。它的形状是本项目的既定约定，P0.3–P0.5 一律照抄，不要另创设计：
+**模板源**：`apps/api/src/workflow/article/article-workflow-reaper.ts`（2711 字节，含 4 个测试用例）。它的形状是本项目的既定约定，P0.3–P0.5 一律照抄，不要另创设计：
 
 - `updatedAt` 当心跳（runner 每步写进度，`@updatedAt` 自动刷新），超期即认定无人继续
 - **先按原状态条件 `updateMany` 抢占置终态，抢到（`count === 1`）才退款** —— 避免与正在收尾的 runner 双写
@@ -558,12 +558,44 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 **287 个文件全部平铺**在 `apps/api/src/workflow/`，69,381 行、12 个互不相干的业务域共享一个扁平命名空间，域隔离仅靠文件名前缀。没有任何机制阻止 `dub` 直接 import `codex-pet` 的内部实现。
 
-- [ ] **前置**：**必须等既有计划阶段 1（runner 拆分）完成后再做**，否则两个任务会在同一批 `codex-pet-*` 文件上产生大面积冲突。若阶段 1 尚未开始，本任务可先做**不含 codex-pet 的域**。
-- [ ] **Step 1: 纯移动，零行为变化**。每域一个子目录 + `index.ts` 门面：`workflow/dub/`、`workflow/novel/`、`workflow/image/`… 用 `git mv` 保留 history。
-- [ ] **Step 2: 一域一提交，跑该域测试**。顺序从耦合最少的开始：`portrait`（2 文件）→ `audio`（2）→ `report`（4）→ `image`（6）→ `video`（8）→ `comic`（9）→ `ecom`（12）→ `novel`（14）→ `dub`（22）→ `article-workflow`（22）→ `codex-pet`（23）→ `local-business-promo`（39）。
-- [ ] **Step 3: 门面契约**。外部（`server.ts` / `workers/`）只从 `<域>/index.ts` import。这一步产出的边界是后续"禁止跨域 import 内部文件"规则的物理基础。
-- [ ] **验证**：每域 `pnpm vitest run src/workflow/<域>` + `pnpm typecheck`。
-- [ ] Commit（多个）`refactor(workflow): <域> 收进独立目录（纯移动）`
+- [x] **前置**：**必须等既有计划阶段 1（runner 拆分）完成后再做**，否则两个任务会在同一批 `codex-pet-*` 文件上产生大面积冲突。若阶段 1 尚未开始，本任务可先做**不含 codex-pet 的域**。（阶段 1 已完成，codex-pet 正常纳入）
+- [x] **Step 1: 纯移动，零行为变化**。每域一个子目录 + `index.ts` 门面：`workflow/dub/`、`workflow/novel/`、`workflow/image/`… 用 `git mv` 保留 history。
+- [x] **Step 2: 一域一提交，跑该域测试**。顺序从耦合最少的开始：`portrait`（2 文件）→ `audio`（2）→ `report`（4）→ `image`（6）→ `video`（8）→ `comic`（9）→ `ecom`（12）→ `novel`（14）→ `dub`（22）→ `article-workflow`（22）→ `codex-pet`（23）→ `local-business-promo`（39）。
+- [x] **Step 3: 门面契约**。外部（`server.ts` / `workers/`）只从 `<域>/index.ts` import。这一步产出的边界是后续"禁止跨域 import 内部文件"规则的物理基础。
+- [x] **验证**：每域 `pnpm vitest run src/workflow/<域>` + `pnpm typecheck`。
+- [x] Commit（多个）`refactor(workflow): <域> 收进独立目录（纯移动）`
+
+### P2.1 执行记录（2026-08-22，16 个提交 `c5cb0d7..b79ca23`）
+
+`workflow/` 根目录已清空，只剩 13 个子目录（12 个业务域 + `_shared/`）：
+
+| 目录 | 文件数 | 门面导出 | 目录 | 文件数 | 门面导出 |
+| --- | ---: | ---: | --- | ---: | ---: |
+| `_shared/` | 30 | 不设门面 | `novel/` | 24 | 15 |
+| `article/` | 39 | 5 | `portrait/` | 8 | 2 |
+| `codex-pet/` | 53 + 嵌套 `codex-pet-runner/` 13 | 24 | `report/` | 9 | 1 |
+| `comic/` | 16 | 2 | `try-on/` | 5 | 1 |
+| `dub/` | 43 | 9 | `video/` | 12 | 2 |
+| `ecom/` | 18 | 3 | `image/` | 6 | 2 |
+| `local-business-promo/` | 56 | 4 | | | |
+
+**四个计划没写、执行时定下来的判断**：
+
+1. **`_shared/` 的判据是实测消费者，不是文件名前缀。** 进 `_shared/` 的条件是「≥2 个域实际 import 且属于基建」（上游客户端、传输管道、ffmpeg/probe、计价 key、通用路由 helper）。域自己的业务逻辑一律留在域内。按这个判据搬进去 30 个文件，顺带消掉两处 `_shared → 域` 的倒挂依赖。
+2. **`audio` 不是独立域。** 计划里把它列成 2 文件的域，但 `audio-service.ts` 导出的全是 `LOCAL_BUSINESS_PROMO_*` 前缀的 BGM/配音能力，且只被 lbp 引用 —— 既不该单独成域也不属于 `_shared/`，直接并入 `local-business-promo/`（该域因此从 52 变 55 个文件）。同理 `try-on` 计划里没列，实际是独立的 4 文件小域，单独建目录。
+3. **门面导出必须按依赖从叶子到入口排。** `workflow/novel ↔ src/novel` 本来就有模块环（`novel-routes → src/novel/outbox → 门面`），而 outbox 在模块求值期就要 `NOVEL_TARGET_KINDS.filter(...)`。第一版 `novel/index.ts` 把 routes 排在类型/常量前面，直接炸出 5 个套件 `TypeError: Cannot read properties of undefined (reading 'filter')`。改成叶子优先后恢复。codex-pet / lbp 的门面按同一规则排，注释里写了原因。
+4. **`_shared/ecom-route-helpers.ts` 不走 ecom 门面，是有意留的例外。** 它混装了通用路由基建（被 article/image/report 共用）和 ecom 专属入参解析，两边都拆不干净；把门面插进已有的 `ecom-route-types → workflow-pricing → ecom-route-helpers` 环里会重演第 3 条的 TDZ。留到 P2.2 Step 4 拆分后这处倒挂自动消失，注释已写在 `ecom/index.ts`。
+
+**两类 move 脚本看不见的东西，得手工补**（都在 `.cc-tmp/workflow-split/` 的工具改完之后逐一核对）：
+
+- `import.meta.url` 相对路径。`_shared/gpt-image-edit.poc.test.ts` 读 `.env`（`"../../../../.."`）、`local-business-promo/audio-service.ts` 的 BGM 目录（结尾带 `/`，脚本只改能解析到文件的路径）都随目录下沉一层错位；后者是唯一一次测试变红（29 failed，全是 `ENOENT ... local-business-promo-bgm/*.mp3`）。补完写脚本全量核对了 `apps/api/src` 下所有 `import.meta.url` 相对路径，0 处遗漏。
+- `video/` 两个 `.md` skill 资产随 `git mv` 一起搬，`SKILL_PATH` 改回 `./x.md`。
+
+**CI lint 的坑**：`biome ci --changed` **会 lint 被 rename 的文件**，所以移动前就存在的未使用 import 会在移动后变成 CI 报错。这类修复与纯移动无关，单独提了 `3d5e2e4`。另外 biome 的 `--write --unsafe` 会顺手改到不相干文件，作用域必须限定在本次真正动过的目录。
+
+**验证**：每域 `tsc --noEmit` 全部 exit 0；分域测试（passed/failed/skipped）portrait 沿用上轮、`_shared` 99/0/8、report 34/0/0、image 63/0/0、video 41/0/0、comic 20/0/0、ecom 73/0/0、novel（含 `src/novel`）86/0/0、dub（含 `admin/dub-routes`）141/0/0、article 133/0/0、codex-pet（含 `workers/codex-pet-worker.test.ts`）320/0/8 与拆分前基线逐数字一致、local-business-promo + audio-service 57/0/0、try-on 14/0/0。
+
+**文档同步**：只改「活文档」里能解析到现有文件的路径（`docs/image.md` 8 处、`docs/codex-pet.md` 4 处、`docs/pitfalls.md` 1 处）+ `docs/ai-collaboration.md` 5.1 的落位规则。`docs/dub.md` / `docs/novel.md` / `docs/fanout.md` 里的旧路径全在带日期的历史实施计划与审计报告段落内，属于当时的事实记录，不改。
 
 ---
 

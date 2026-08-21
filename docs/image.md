@@ -9,7 +9,7 @@
 - **百炼 Qwen Image**（默认）：`qwen-image-2.0-pro-2026-04-22`
 - **AI Pixel gpt-image-2**：`gpt-image-2`
 
-后端核心 `apps/api/src/workflow/image-service.ts`（协议、路由、重试、错误分类都在这里），HTTP 边界 `image-routes.ts`，上游选项 `image-upstream-options.ts`；前端 `apps/web/src/components/workflow/ImageWorkflowStudio.tsx` + `workflowState.ts`。
+后端核心 `apps/api/src/workflow/_shared/image-service.ts`（协议、路由、重试、错误分类都在这里），HTTP 边界 `image-routes.ts`，上游选项 `image-upstream-options.ts`；前端 `apps/web/src/components/workflow/ImageWorkflowStudio.tsx` + `workflowState.ts`。
 
 ## 二、设计思路（为什么这么做）
 
@@ -87,12 +87,12 @@ flowchart TD
 
 | 文件 | 职责 |
 | --- | --- |
-| `apps/api/src/workflow/image-service.ts` | **核心**：模型常量、双协议请求构造、edits 端点推导、参考图归一化、错误分类、`retryUntilSuccess`、`storeWorkflowImage` |
-| `apps/api/src/workflow/image-routes.ts` | HTTP 边界：任务 CRUD、`/references` 上传、计费扣费/退款、后台恢复执行、取消退款 |
-| `apps/api/src/workflow/image-upstream-options.ts` | 上游请求选项 |
-| `apps/api/src/workflow/image-stream.ts` | SSE 读取：绕开中继 60s 读超时，把流式事件归一化回非流式 payload 形状（见 6.8） |
-| `apps/api/src/workflow/image-stream-dispatcher.ts` | undici dispatcher：关掉自带 headers/body 超时，让截止时间只有一个来源（见 6.9） |
-| `apps/api/src/workflow/gpt-image-edit.poc.test.ts` | GPT Image edits 真实链路 POC（`RUN_GPT_IMAGE_EDIT_POC=1` 触发） |
+| `apps/api/src/workflow/_shared/image-service.ts` | **核心**：模型常量、双协议请求构造、edits 端点推导、参考图归一化、错误分类、`retryUntilSuccess`、`storeWorkflowImage` |
+| `apps/api/src/workflow/image/image-routes.ts` | HTTP 边界：任务 CRUD、`/references` 上传、计费扣费/退款、后台恢复执行、取消退款 |
+| `apps/api/src/workflow/_shared/image-upstream-options.ts` | 上游请求选项 |
+| `apps/api/src/workflow/_shared/image-stream.ts` | SSE 读取：绕开中继 60s 读超时，把流式事件归一化回非流式 payload 形状（见 6.8） |
+| `apps/api/src/workflow/_shared/image-stream-dispatcher.ts` | undici dispatcher：关掉自带 headers/body 超时，让截止时间只有一个来源（见 6.9） |
+| `apps/api/src/workflow/_shared/gpt-image-edit.poc.test.ts` | GPT Image edits 真实链路 POC（`RUN_GPT_IMAGE_EDIT_POC=1` 触发） |
 | `apps/web/src/components/workflow/ImageWorkflowStudio.tsx` | 前端工作台（模型选择、参考图上传、尺寸选择） |
 | `apps/web/src/workflowState.ts` | 前端纯逻辑状态 |
 
@@ -203,4 +203,4 @@ flowchart TD
 
 1. 读 `image-service.ts`：抓住「模型常量 → `loadImageGenerationConfigForModel` 分发 → edits 端点推导 → `classifyImageGenerationError` → `retryUntilSuccess`」这条主线。
 2. 看 `image-routes.ts` 的后台执行：`reserveResource` → 有无参考图分支 → `storeWorkflowImage`（顺手量交付宽高）→ `settleResource(交付档)`，失败 `refundResource`。
-3. 真实验证 GPT edits：`set -a; source .env; set +a; RUN_GPT_IMAGE_EDIT_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/workflow/gpt-image-edit.poc.test.ts`。
+3. 真实验证 GPT edits：`set -a; source .env; set +a; RUN_GPT_IMAGE_EDIT_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/workflow/_shared/gpt-image-edit.poc.test.ts`。

@@ -98,8 +98,8 @@ pnpm test                                       # 全量，仅阶段收尾
 
 | 情况 | 位置 |
 |---|---|
-| 某个业务域独有 | `apps/api/src/workflow/<域>/`（目录化后）。**不要再往平铺根目录加文件** —— 现在已 287 个 |
-| 跨域共用（后端） | `workflow/_shared/` 或 `apps/api/src/shared/` |
+| 某个业务域独有 | `apps/api/src/workflow/<域>/`（P2.1 已完成目录化，根目录只剩 13 个域子目录）。**域外只能从 `<域>/index.ts` 门面 import，不许直接引内部实现文件** |
+| 跨域共用（后端） | `workflow/_shared/`（判据是**实测有 ≥2 个域消费且属基建**，不看文件名前缀）或 `apps/api/src/shared/` |
 | 前后端共用的**类型契约** | `packages/<域>-workflow/`。这是本项目已验证有效的模式（`article-workflow` / `novel-workflow` / `connector-protocol` 三个包确实双端消费） |
 | 前端基础组件 | `apps/web/src/components/ui/`（当前仅 2 文件 198 行，急需加厚） |
 | 前端 HTTP 调用 | 走统一 `http.ts`，不要新建第 14 个 API 模块 |

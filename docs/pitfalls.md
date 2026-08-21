@@ -17,7 +17,7 @@
 
 - **现象**：桌宠生图/质检偶发使用了非预期模型，落库的模型溯源对不上。
 - **根因**：早期实现按模型名**前缀匹配**判定路由，`gpt-image-2-qwen-fallback` 这类别名会骗过前缀匹配；且失败时会静默回退到默认 Bailian/Qwen 客户端。
-- **修法**：`apps/api/src/workflow/codex-pet-model-contract.ts` 改为**显式允许名单**（`CODEX_PET_IMAGE_MODEL_ALLOWLIST`）；质检模型按名字解析到 `chatgpt_model_route` / `bailian_model_route`，非法模型抛**不可重试**的 `CodexPetModelContractError`；Worker 健康就绪前校验路由存在且凭据有效，**禁止回退**。
+- **修法**：`apps/api/src/workflow/codex-pet/codex-pet-model-contract.ts` 改为**显式允许名单**（`CODEX_PET_IMAGE_MODEL_ALLOWLIST`）；质检模型按名字解析到 `chatgpt_model_route` / `bailian_model_route`，非法模型抛**不可重试**的 `CodexPetModelContractError`；Worker 健康就绪前校验路由存在且凭据有效，**禁止回退**。
 - **预防**：涉及付费/交付的模型选择一律写成硬合同 + 允许名单，拒绝前缀匹配；新业务线复用这一模式。详见 [codex-pet.md](./codex-pet.md)。
 
 ### 第三方中继的 60s 读超时：长耗时调用必须流式保活

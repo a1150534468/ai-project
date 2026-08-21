@@ -380,9 +380,9 @@ flowchart TD
 ## 八、自己动手学习入口
 
 1. 先读 `packages/codex-pet-pipeline/src/constants.ts`：一张图看懂产物规格（单元格/行列/状态/方向/蛇形取帧）。
-2. 读 `apps/api/src/workflow/codex-pet-model-contract.ts`：理解「显式允许名单 + 不可重试违约 + 快照冻结」的硬合同模式。
-3. 读 `apps/api/src/workflow/codex-pet-runner.ts` 的租约认领（`FOR UPDATE` + 心跳 + `CodexPetRunLeaseLostError`）。
-4. 真实图片链路验证：`set -a; source .env; set +a; RUN_GPT_IMAGE_EDIT_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/workflow/gpt-image-edit.poc.test.ts`。
+2. 读 `apps/api/src/workflow/codex-pet/codex-pet-model-contract.ts`：理解「显式允许名单 + 不可重试违约 + 快照冻结」的硬合同模式。
+3. 读 `apps/api/src/workflow/codex-pet/codex-pet-runner.ts` 的租约认领（`FOR UPDATE` + 心跳 + `CodexPetRunLeaseLostError`）。
+4. 真实图片链路验证：`set -a; source .env; set +a; RUN_GPT_IMAGE_EDIT_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/workflow/_shared/gpt-image-edit.poc.test.ts`。
 5. 上线前对照本文第九节的门槛清单。
 
 ## 九、运维与上线
@@ -427,7 +427,7 @@ pnpm --filter @ai-assistant/db generate
 pnpm --filter @ai-assistant/db exec prisma migrate status
 pnpm --filter @ai-assistant/api typecheck
 pnpm --filter @ai-assistant/codex-pet-pipeline test
-RUN_GPT_IMAGE_EDIT_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/workflow/gpt-image-edit.poc.test.ts
+RUN_GPT_IMAGE_EDIT_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/workflow/_shared/gpt-image-edit.poc.test.ts
 ```
 
 POC 只在部署、图片网关切换或模型升级时运行，不进入普通 CI。
