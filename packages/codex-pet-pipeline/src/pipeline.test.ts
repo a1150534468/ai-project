@@ -518,6 +518,60 @@ describe("codex pet deterministic pipeline", () => {
     expect(bottoms[1]!).toBeLessThan(bottoms[0]!);
   });
 
+  it("locks jumping to one character scale while compressing only the vertical arc", async () => {
+    const yPositions = [190, 120, 50, 120, 190];
+    const overlays = yPositions.map((y, index) => ({
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="110" y="${y}" width="100" height="120" rx="28" fill="#2459c7"/>
+      </svg>`),
+      left: index * 320,
+      top: 0,
+    }));
+    const board = await boardWithOverlays(5, 1, overlays);
+    const extracted = await extractPoseBoard(board, {
+      columns: 5,
+      rows: 1,
+      frameCount: 5,
+      chromaKey: "#ff00ff",
+      allowVerticalTravel: true,
+      jumpingTargetHeight: 160,
+      requireJumpingArc: true,
+    });
+
+    expect(extracted.ok, extracted.errors.join("; ")).toBe(true);
+    expect(extracted.sharedScale).toBeCloseTo(160 / 120, 3);
+    expect(extracted.diagnostics.map((item) => item.normalizedBounds!.height)).toEqual([160, 160, 160, 160, 160]);
+    const bottoms = extracted.diagnostics.map((item) => item.normalizedBounds!.bottom);
+    expect(bottoms).toEqual([195, 183, 171, 183, 195]);
+    expect(bottoms[0]! - bottoms[2]!).toBeGreaterThanOrEqual(18);
+    expect(bottoms[0]! - bottoms[2]!).toBeLessThanOrEqual(24);
+    expect(extracted.jumpingArc?.ok).toBe(true);
+
+    const tallTarget = await extractPoseBoard(board, {
+      columns: 5,
+      rows: 1,
+      frameCount: 5,
+      chromaKey: "#ff00ff",
+      allowVerticalTravel: true,
+      jumpingTargetHeight: 174,
+      requireJumpingArc: true,
+    });
+    expect(tallTarget.ok, tallTarget.errors.join("; ")).toBe(true);
+    expect(tallTarget.diagnostics.map((item) => item.normalizedBounds!.height))
+      .toEqual([169, 169, 169, 169, 169]);
+    expect(tallTarget.jumpingArc?.peakLiftPixels).toBe(24);
+  });
+
+  it("rejects a jumping height lock unless vertical travel is enabled", async () => {
+    await expect(extractPoseBoard(await poseBoard(1, 1, 1), {
+      columns: 1,
+      rows: 1,
+      frameCount: 1,
+      chromaKey: "#ff00ff",
+      jumpingTargetHeight: 160,
+    })).rejects.toThrow(/requires vertical travel/);
+  });
+
   it("reports deterministic scale discontinuities while grounding ordinary poses and allowing intentional jumps", async () => {
     const poses = [
       { y: 80, height: 230 },
@@ -631,6 +685,97 @@ describe("codex pet deterministic pipeline", () => {
     expect(nearbyLineDiagnostics.componentCount).toBe(2);
     expect(nearbyLineDiagnostics.errors).toContain("multiple-foreground-components");
   });
+
+  it("preserves bounded ZZZ components through pose-board extraction", async () => {
+    const board = await boardWithOverlays(1, 1, [{
+      input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="320" height="360">
+        <rect x="95" y="115" width="110" height="205" rx="28" fill="#2459c7"/>
+        <path d="M215 40H245V47L226 53H245V60H215V53L234 47H215Z" fill="#f4d03f"/>
+        <path d="M215 67H245V74L226 80H245V87H215V80L234 74H215Z" fill="#f4d03f"/>
+        <path d="M215 94H245V101L226 107H245V114H215V107L234 101H215Z" fill="#f4d03f"/>
+      </svg>`),
+      left: 0,
+      top: 0,
+    }]);
+
+    const extracted = await extractPoseBoard(board, {
+      columns: 1,
+      rows: 1,
+      frameCount: 1,
+      chromaKey: "#ff00ff",
+      allowAuxiliaryForegroundComponents: true,
+    });
+
+    expect(extracted.ok).toBe(true);
+    expect(extracted.diagnostics[0]).toMatchObject({ componentCount: 4, errors: [] });
+    expect(extracted.warnings).toContain("frame-0:multiple-foreground-components");
+    const normalized = await inspectFrame(extracted.frames[0]!, 0, {
+      allowAuxiliaryForegroundComponents: true,
+    });
+    expect(normalized.componentCount).toBe(4);
+    expect(normalized.errors).toEqual([]);
+  });
+
+  it("rejects unsafe auxiliary components while keeping ordinary multi-component frames strict", async () => {
+    const inspectSvg = (body: string) => sharp({
+      create: { width: PET_CELL_WIDTH, height: PET_CELL_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="208">${body}</svg>`) }]).png().toBuffer();
+    const subject = '<rect x="42" y="55" width="82" height="135" rx="24" fill="#2459c7"/>';
+    const options = { allowAuxiliaryForegroundComponents: true } as const;
+
+    const tooMany = await inspectFrame(await inspectSvg(`${subject}
+      <circle cx="132" cy="55" r="5" fill="#f4d03f"/><circle cx="143" cy="55" r="5" fill="#f4d03f"/>
+      <circle cx="154" cy="55" r="5" fill="#f4d03f"/><circle cx="132" cy="68" r="5" fill="#f4d03f"/>
+      <circle cx="145" cy="70" r="5" fill="#f4d03f"/>`), 0, options);
+    expect(tooMany.errors).toContain("auxiliary-component-count-exceeded");
+
+    const tooFar = await inspectFrame(await inspectSvg(`${subject}<circle cx="180" cy="18" r="8" fill="#f4d03f"/>`), 0, options);
+    expect(tooFar.errors).toContain("auxiliary-component-too-far");
+
+    const touchingEdge = await inspectFrame(await inspectSvg(`${subject}<circle cx="5" cy="25" r="5" fill="#f4d03f"/>`), 0, options);
+    expect(touchingEdge.errors).toContain("auxiliary-component-touches-edge");
+
+    const secondSubject = await inspectFrame(await inspectSvg(`${subject}<rect x="130" y="62" width="55" height="105" rx="18" fill="#2459c7"/>`), 0, options);
+    expect(secondSubject.errors).toContain("auxiliary-component-too-large");
+
+    const ordinary = await inspectFrame(await inspectSvg(`${subject}<circle cx="145" cy="70" r="12" fill="#f4d03f"/>`));
+    expect(ordinary.errors).toContain("multiple-foreground-components");
+  });
+
+  it("allows auxiliary components only on explicitly selected atlas rows", async () => {
+    const auxiliaryIdle = await sharp({
+      create: { width: PET_CELL_WIDTH, height: PET_CELL_HEIGHT, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+    }).composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="192" height="208">
+      <rect x="42" y="50" width="82" height="140" rx="24" fill="#2459c7"/>
+      <circle cx="145" cy="70" r="12" fill="#f4d03f"/>
+    </svg>`) }]).png().toBuffer();
+    const ordinary = await solidFrame();
+    const standardFrames: PetFramesByState = {};
+    for (const spec of PET_ROW_SPECS.slice(0, 9)) {
+      standardFrames[spec.state] = Array.from({ length: spec.frameCount }, () => (
+        spec.state === "idle" ? auxiliaryIdle : ordinary
+      ));
+    }
+    const standardAtlas = await assembleStandardPetAtlas(standardFrames, "png");
+    expect((await validateStandardPetAtlas(standardAtlas)).errors)
+      .toContain("idle[0]:multiple-foreground-components");
+    const allowedStandard = await validateStandardPetAtlas(standardAtlas, {
+      allowAuxiliaryForegroundComponentsForStates: ["idle"],
+    });
+    expect(allowedStandard.ok).toBe(true);
+
+    const allFrames: PetFramesByState = { ...standardFrames };
+    for (const spec of PET_ROW_SPECS.slice(9)) {
+      allFrames[spec.state] = Array.from({ length: spec.frameCount }, () => ordinary);
+    }
+    const finalAtlas = await assemblePetAtlas(allFrames, "png");
+    expect((await validatePetAtlas(finalAtlas)).errors)
+      .toContain("idle[0]:multiple-foreground-components");
+    const allowedFinal = await validatePetAtlas(finalAtlas, undefined, {
+      allowAuxiliaryForegroundComponentsForStates: ["idle"],
+    });
+    expect(allowedFinal.ok).toBe(true);
+  }, 15_000);
 
   it("removes only tiny distant specks while preserving nearby disconnected anatomy", async () => {
     const distantSpeck = await sharp({

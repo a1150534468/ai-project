@@ -38,6 +38,13 @@ export type CodexPetStylePreset =
   | "3d-toy"
   | "painterly";
 
+export const CODEX_PET_ACTION_PROMPT_KEYS = [
+  "idle", "running-right", "running-left", "waving", "jumping",
+  "failed", "waiting", "running", "review", "look",
+] as const;
+export type CodexPetActionPromptKey = typeof CODEX_PET_ACTION_PROMPT_KEYS[number];
+export type CodexPetActionPrompts = Readonly<Partial<Record<CodexPetActionPromptKey, string>>>;
+
 export type CodexPetProjectStatus =
   | "draft"
   | "queued"
@@ -84,6 +91,7 @@ export interface CodexPetProjectSummary {
 
 export interface CodexPetProject extends CodexPetProjectSummary {
   readonly prompt: string;
+  readonly actionPrompts: CodexPetActionPrompts;
   readonly styleNotes: string;
   readonly referenceAssetIds: readonly string[];
   readonly referenceAssets?: readonly CodexPetReferenceAsset[];
@@ -257,6 +265,7 @@ export interface CodexPetCreatePayload {
   readonly name: string;
   readonly description?: string;
   readonly prompt?: string;
+  readonly actionPrompts?: CodexPetActionPrompts;
   readonly stylePreset?: CodexPetStylePreset;
   readonly styleNotes?: string;
   readonly referenceAssetIds?: readonly string[];

@@ -1,6 +1,5 @@
 import { Buffer } from "node:buffer";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth/require-user.js";
@@ -46,6 +45,7 @@ import {
   type ImageGenerationConfig,
 } from "./image-service.js";
 import { loadOwnedReferenceImages } from "./ecom-route-helpers.js";
+import { loadSharp } from "../runtime/resource-limits.js";
 
 const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";
 const IMAGE_KEEP_LIMIT = 50;
@@ -960,6 +960,7 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
       return reply.code(400).send({ error: "参考图仅支持 JPG、PNG、WEBP、BMP、TIFF 或 GIF" });
     }
     try {
+      const sharp = await loadSharp();
       const metadata = await sharp(bytes, { limitInputPixels: 40_000_000, animated: false }).metadata();
       if (!metadata.width || !metadata.height) throw new Error("missing dimensions");
     } catch {

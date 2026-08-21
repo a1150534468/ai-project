@@ -1,4 +1,4 @@
-import { LOOK_DIRECTIONS, petRowSpec, type PetRowSpec } from "@ai-assistant/codex-pet-pipeline";
+import { LOOK_DIRECTIONS, petRowSpec, type PetRowSpec } from "@ai-assistant/codex-pet-pipeline/constants";
 
 export const CODEX_PET_STYLES = [
   "auto",
@@ -13,10 +13,40 @@ export const CODEX_PET_STYLES = [
 
 export type CodexPetStyle = (typeof CODEX_PET_STYLES)[number];
 
+export const CODEX_PET_ACTION_PROMPT_KEYS = [
+  "idle",
+  "running-right",
+  "running-left",
+  "waving",
+  "jumping",
+  "failed",
+  "waiting",
+  "running",
+  "review",
+  "look",
+] as const;
+
+export type CodexPetActionPromptKey = (typeof CODEX_PET_ACTION_PROMPT_KEYS)[number];
+export type CodexPetActionPrompts = Readonly<Partial<Record<CodexPetActionPromptKey, string>>>;
+export const CODEX_PET_ACTION_PROMPT_MAX_LENGTH = 500;
+export const CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH = 4_000;
+
+export function normalizeCodexPetActionPrompts(value: unknown): CodexPetActionPrompts {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const source = value as Record<string, unknown>;
+  return Object.fromEntries(CODEX_PET_ACTION_PROMPT_KEYS.flatMap((key) => {
+    const prompt = typeof source[key] === "string"
+      ? source[key].trim().slice(0, CODEX_PET_ACTION_PROMPT_MAX_LENGTH)
+      : "";
+    return prompt ? [[key, prompt]] : [];
+  }));
+}
+
 export interface CodexPetVisualIdentity {
   readonly name: string;
   readonly description: string;
   readonly prompt: string;
+  readonly actionPrompts?: CodexPetActionPrompts;
   readonly stylePreset: string;
   readonly styleNotes: string;
   readonly chromaKey: string;
@@ -134,6 +164,20 @@ function canonicalReferenceBlock(identity: CodexPetVisualIdentity): string {
   ].filter(Boolean).join("\n");
 }
 
+function actionPromptBlock(
+  identity: CodexPetVisualIdentity,
+  action: CodexPetActionPromptKey,
+  options: { readonly allowRequestedAdditions?: boolean } = {},
+): string {
+  const prompt = identity.actionPrompts?.[action]?.trim();
+  if (!prompt) return "";
+  const additions = options.allowRequestedAdditions
+    ? "It may explicitly require a new action prop, compact scene object, short readable text, or small state-relevant effect; include those requested elements instead of deleting or replacing them with the default action."
+    : "Apply it through this character's natural look mechanics without adding unrelated props, text, or effects.";
+  return `Authoritative user specification for this ${action} animation: ${prompt}
+This specification replaces the default action semantics for this animation. ${additions} It must still preserve character identity, exact frame count and order, direction contracts, the flat chroma background, safe margins, and sprite-sheet geometry.`;
+}
+
 const GLOBAL_SPRITE_RULES = [
   "Create production sprite source art, not a presentation sheet.",
   "The background is a production chroma-key matte, not an artistic backdrop: every background pixel must be the exact same requested chroma RGB value. Use one perfectly flat solid chroma background and keep every character color clearly different from it.",
@@ -143,6 +187,19 @@ const GLOBAL_SPRITE_RULES = [
   "No detached effects: no motion lines, dust, floating icons, punctuation, stars or separate droplets.",
   "Every pose must be one readable connected sprite component. Preserve identity and scale across all poses.",
 ].join("\n");
+
+function standardRowSpriteRules(hasUserActionPrompt: boolean): string {
+  if (!hasUserActionPrompt) return GLOBAL_SPRITE_RULES;
+  return [
+    "Create production sprite source art, not a presentation sheet.",
+    "The background is a production chroma-key matte, not an artistic backdrop: every background pixel must be the exact same requested chroma RGB value. Use one perfectly flat solid chroma background and keep every character, requested prop, text, and effect color clearly different from it.",
+    "Do not shade, light, vignette, texture, noise, dither, bloom, blur, or gradient the chroma background. No alternate purple/pink/green tones may appear outside the requested foreground.",
+    "Show the complete whole body and every requested action element with generous padding. Nothing may touch or cross a slot or outer canvas edge.",
+    "No unrequested text, labels, numbers, logos, borders, visible grid, scenery, floor, cast shadow, glow, halo, blur, transparency checkerboard, motion lines, dust, icons, punctuation, stars, droplets, or decorative fragments.",
+    "Requested short text, compact action props, and small state-relevant effects are foreground sprite content. Keep them opaque, hard-edged, visually close to the main character, and fully inside the same slot.",
+    "Every pose must contain exactly one readable character. Preserve character identity and scale across all poses; never add a second character or partial duplicate.",
+  ].join("\n");
+}
 
 /**
  * Direction rows use screen-heading semantics, not the conventional portrait
@@ -195,6 +252,7 @@ export function buildBaseChoiceQaContext(candidateIndex: number): string {
 export function buildStandardRowPrompt(identity: CodexPetVisualIdentity, state: PetRowSpec["state"]): string {
   if (state === "look-a" || state === "look-b") throw new Error("Use buildLookRowPrompt for look rows");
   const spec = petRowSpec(state);
+  const userActionPrompt = identity.actionPrompts?.[state]?.trim();
   const unused = spec.frameCount < spec.boardColumns * spec.boardRows
     ? `Leave the final ${spec.boardColumns * spec.boardRows - spec.frameCount} slot completely empty with only chroma background.`
     : "Use every slot.";
@@ -208,9 +266,16 @@ export function buildStandardRowPrompt(identity: CodexPetVisualIdentity, state: 
   const seedreamGaitScaffoldRule = state === "running-right" || state === "running-left"
     ? "If the attached construction reference alternates two source gait phases A/B across odd and even slots, treat its head, antenna, face-panel side, torso orientation, scale and placement as a rigid per-slot direction lock. Preserve the A/B limb opposition and redraw the eight slots in place. A clean A/B/A/B/A/B/A/B two-phase loop is valid and preferred over adding turns or broken anatomy; add intermediate limb phases only when every head and torso remains in the exact same facing profile. Never yaw the head or torso toward front, back or the opposite side in frames 4, 5 or 8. Never keep a scaffold pose and add a second head, body or character above or below it. Do not return eight copies of one stride. Every singular antenna or other appendage still appears exactly once per frame with no ghost or duplicate."
     : "";
+  const foregroundContract = userActionPrompt
+    ? "Hard extraction gate for every slot: draw exactly one complete character contained wholly inside that slot. The head, torso, arms, hands, legs, feet, ears, tail and antennae must stay attached through continuous opaque non-background sprite pixels. Props held or worn by the character should remain visibly connected where physically appropriate. An explicitly requested short text cue, state effect, or compact action object may use up to four separate opaque foreground components in addition to the character; keep every such component substantially smaller than the character, visually close to it, and inside the same safe margins. Never add random specks, unrequested marks, a second character, a partial duplicate, or content crossing into another slot."
+    : "Hard extraction gate for every slot: draw exactly one complete character contained wholly inside that slot. The head, torso, arms, hands, legs, feet, ears, tail, antennae and any existing prop must connect to the main body through continuous opaque non-background sprite pixels. A lifted hand or foot must still be visibly joined to its arm or leg; never leave a chroma-key gap at a shoulder, wrist, hip or ankle. Do not split one character across neighboring slots. Do not draw detached sweat beads, action marks, punctuation, droplets, sparkles, dust or any other floating effect.";
+  const actionSpecification = userActionPrompt
+    ? actionPromptBlock(identity, state, { allowRequestedAdditions: true })
+    : `Default action specification: ${STATE_INSTRUCTIONS[state]}.`;
   return `${canonicalReferenceBlock(identity)}
 
-Generate exactly ${spec.frameCount} separated sequential poses for the “${state}” animation as a ${spec.boardColumns} columns × ${spec.boardRows} ${rowWord} pose board, read left-to-right then top-to-bottom. Action: ${STATE_INSTRUCTIONS[state]}.
+Generate exactly ${spec.frameCount} separated sequential poses for the “${state}” animation as a ${spec.boardColumns} columns × ${spec.boardRows} ${rowWord} pose board, read left-to-right then top-to-bottom.
+${actionSpecification}
 ${jumpingSlotMap}
 ${unused}
 ${directionalProfileRule}
@@ -218,18 +283,19 @@ ${seedreamGaitScaffoldRule}
 All poses share one scale. ${state === "jumping"
     ? "Show clear vertical lift and descent through body height."
     : "Keep the character horizontally centered on one stable foot baseline in every slot; express motion through the pose, not by moving the sprite around the board."} Scale down wide or extreme poses as needed so the complete silhouette keeps at least 15% clear background from every slot boundary. The attached layout is construction guidance only and must not appear in the result.
-Hard extraction gate for every slot: draw exactly one complete character contained wholly inside that slot. The head, torso, arms, hands, legs, feet, ears, tail, antennae and any existing prop must connect to the main body through continuous opaque non-background sprite pixels. A lifted hand or foot must still be visibly joined to its arm or leg; never leave a chroma-key gap at a shoulder, wrist, hip or ankle. Do not split one character across neighboring slots. Do not draw detached sweat beads, action marks, punctuation, droplets, sparkles, dust or any other floating effect.
+${foregroundContract}
 The second attached construction reference may repeat the approved canonical character once inside every target slot. Use only its exact one-complete-character-per-slot count, scale, padding and placement. Redraw each requested action phase by replacing the scaffold character in place; never retain it and add another head, body or character above or below. The complete canvas must contain exactly ${spec.frameCount} total heads and exactly ${spec.frameCount} total bodies, forming exactly ${spec.frameCount} complete characters and no partial duplicates. Never merge the top and bottom slots into one tall character, and never split a character across a row boundary. Do not return repeated static copies.
 
 Background color must be exactly ${identity.chromaKey} at every background pixel; render it as a uniform solid production key, never as a gradient or lit surface.
 The chroma key ${identity.chromaKey} is reserved exclusively for exterior background outside each complete character. No exact or near-key pixel may appear anywhere inside a character's bounding box or enclosed silhouette, including its face panel, screen, eyes, mouth, joints or gaps between attached limbs. Every canonical face/screen panel remains fully filled, opaque foreground in its original dark colour; background must never show through it.
-${GLOBAL_SPRITE_RULES}`;
+${standardRowSpriteRules(Boolean(userActionPrompt))}`;
 }
 
 export function buildCardinalPrompt(identity: CodexPetVisualIdentity, mechanics: string): string {
   return `${canonicalReferenceBlock(identity)}
 
 Look mechanics: ${mechanics}
+${actionPromptBlock(identity, "look")}
 
 Generate exactly four separated cardinal looking poses as a 2×2 board, in this order: 000 looking UP, 090 looking toward SCREEN-RIGHT, 180 looking DOWN, 270 looking toward SCREEN-LEFT. These are viewer/screen coordinates. Make each cardinal unmistakable at 192×208 while preserving a stable lower-body anchor. Use eyes, eyelids, head, face, upper body, appendages and existing props only as physically natural for this character.
 ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT}
@@ -281,6 +347,7 @@ This is one 157.5-degree half-turn, not a full 360-degree turntable. No frame ma
   return `${canonicalReferenceBlock(identity)}
 
 Look mechanics: ${mechanics}
+${actionPromptBlock(identity, "look")}
 ${referenceRoles}
 
 Viewer-coordinate appearance lock: ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} The approved cardinal images are the source of truth for the exact anatomy, but they must themselves obey this screen-heading contract.
@@ -297,31 +364,42 @@ ${GLOBAL_SPRITE_RULES}`;
 }
 
 export function buildLookMechanicsPrompt(identity: CodexPetVisualIdentity): string {
-  return `Describe the natural 16-direction look mechanics for this Codex desktop pet in at most 180 Chinese characters. State what remains anchored, what leads the gaze, what follows, how eyes/eyelids/head/body/appendages and existing props move, and how the four cardinals become unmistakable. Use this fixed screen-heading contract: ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} Do not invent new props.\n\n${identityBlock(identity)}\n${canonicalGuideBlock(identity)}`;
+  return `Describe the natural 16-direction look mechanics for this Codex desktop pet in at most 180 Chinese characters. State what remains anchored, what leads the gaze, what follows, how eyes/eyelids/head/body/appendages and existing props move, and how the four cardinals become unmistakable. Use this fixed screen-heading contract: ${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} Do not invent new props.\n\n${canonicalReferenceBlock(identity)}\n${actionPromptBlock(identity, "look")}`;
 }
 
 export function buildVisualQaPrompt(
   kind: "base-choice" | "row" | "cardinals" | "directions" | "final",
   context: string,
   canonicalGuide?: string,
+  authoritativeActionSpecification?: string,
 ): string {
   const guide = canonicalGuide?.trim();
+  const userAction = authoritativeActionSpecification?.trim();
   const directionalProfileRule = kind === "row" && /(running-right|running-left)/.test(context)
     ? "For this directional running row, side and three-quarter views are expected: the far eye and part of the frontal face panel may be naturally occluded. Do not call the missing frontal second eye identity drift when the visible eye, head module, face-panel boundary, fixed markings, proportions and travel direction remain coherent. Judge the complete cycle's facing direction and identity topology, not frontal eye count."
     : "";
-  const activeTaskRule = (kind === "row" && context.trimStart().startsWith("running 动作组")) || kind === "final"
+  const customizedActiveTask = Boolean(userAction) && (
+    (kind === "row" && context.trimStart().startsWith("running 动作组"))
+    || (kind === "final" && /(?:^|;\s*)running\s*:/.test(userAction!))
+  );
+  const activeTaskRule = ((kind === "row" && context.trimStart().startsWith("running 动作组")) || kind === "final")
+    && !customizedActiveTask
     ? "Codex state semantics are authoritative: the state named running (without -left or -right) means active task processing, not physical locomotion. It should read through attentive eyes, a small head shift, and subtle attached-paw working motion while the feet/base stay fixed. Never require or reward alternating leg stride, foot displacement, walking, jogging, sprinting, body travel, or other locomotion cues in this state; those are wrong-action failures."
     : "";
   const directionContract = kind === "cardinals" || kind === "directions" || kind === "final"
     ? `\n${CODEX_PET_CARDINAL_APPEARANCE_CONTRACT} For cardinal QA, the normalized board's physical cells are top-left 000, top-right 090, bottom-left 180, bottom-right 270. For direction-row QA, compare row endpoints to those exact pose families; a front/back reversal is a hard failure even when the numeric labels are present.`
+    : "";
+  const userActionRule = userAction
+    ? `\nAuthoritative user action specification: ${userAction}\nJudge the named customized row against this specification instead of the default action recipe. Do not reject a requested short text cue, compact action prop, or small state-relevant effect solely because it is detached from the character. It must still stay opaque, bounded, close to the character, inside its cell, and must not become a second character, random residue, or cross-cell content.`
     : "";
   return `You are a strict visual QA gate for a Codex v2 desktop pet. Inspect only the attached images. Return one compact JSON object without markdown. Kind: ${kind}. Context: ${context}.
 ${guide ? `Approved canonical anatomy and identity guide: ${guide}\nUse it to distinguish anatomical features—especially eyes, paws/feet and mouth—from fixed decorative markings, and report any genuine ambiguity instead of relabeling a feature. A feature listed as movable is merely allowed to move when the requested action naturally needs it; do not fail a state just because that feature stays still in this animation or frame.` : ""}
 ${directionalProfileRule}
 ${activeTaskRule}
 ${directionContract}
+${userActionRule}
 Required JSON: {"pass":boolean,"score":0-100,"mirrorSafe":boolean,"identity":boolean,"structure":boolean,"semantics":boolean,"continuity":boolean,"warnings":[string],"failures":[string],"repairPrompt":string,"repairRows":[string]}.
 For a failed final review, repairRows must list complete action groups (never individual frames) using only these names when applicable: idle, running-right, running-left, waving, jumping, failed, waiting, running, review, look-a, look-b. Use an empty array when no repair is needed.
 For a row review, the action name in Context is authoritative: assess that action instead of relabeling it as another row, and if repair is needed name only that current action in repairRows. In particular, “failed” is a sad/error reaction, not an idle blink: its guide-identified eyes may progressively narrow, droop or close and may hold the defeated expression for several frames before recovery. Do not require the tail, ears or every other movable feature to animate in a failed row. Do not call an action-appropriate deformation of guide-identified anatomy identity drift merely because its temporary outline resembles another feature; use its color, canonical position and frame-to-frame continuity to distinguish it from fixed markings or paws.
-Reject identity/style drift, wrong pose count, merged/cropped poses, non-flat background, visible guides, detached effects, accidental transparent holes or sliced seams through a filled body, wrong action semantics, unintended scale/baseline jumps, wrong cardinals, wrong-quadrant directions or loop reversals. For jumping, require the ordered anticipation/rise/peak/descent/settle arc. Different vertical positions are mandatory and must never be reported as a baseline defect; judge scale only from the character's visible width/height and reject actual zoom, squash or stretch, not its top/bottom coordinates. mirrorSafe is true only if horizontal mirroring preserves every marking, text, prop handedness and meaning. mirrorSafe=false is informational and must never by itself make pass=false or be listed as a failure; it only means the opposite-facing row must be generated separately.`;
+Reject identity/style drift, wrong pose count, merged/cropped poses, non-flat background, visible guides, ${userAction ? "unrequested detached residue or auxiliary content that violates the bounded user-action rule" : "detached effects"}, accidental transparent holes or sliced seams through a filled body, wrong action semantics, unintended scale/baseline jumps, wrong cardinals, wrong-quadrant directions or loop reversals. For jumping, require the ordered anticipation/rise/peak/descent/settle arc. Different vertical positions are mandatory and must never be reported as a baseline defect; judge scale only from the character's visible width/height and reject actual zoom, squash or stretch, not its top/bottom coordinates. mirrorSafe is true only if horizontal mirroring preserves every marking, text, prop handedness and meaning. mirrorSafe=false is informational and must never by itself make pass=false or be listed as a failure; it only means the opposite-facing row must be generated separately.`;
 }

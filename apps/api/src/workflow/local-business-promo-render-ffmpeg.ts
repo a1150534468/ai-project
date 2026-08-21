@@ -58,6 +58,13 @@ function appendStderr(buffer: string, chunk: Buffer | string): string {
   return next.length > 16_384 ? next.slice(-16_384) : next;
 }
 
+function commandArgs(command: string, args: readonly string[]): readonly string[] {
+  if (!/(^|[\\/])ffmpeg(?:\.exe)?$/i.test(command) || args.includes("-threads") || args.length === 0) return args;
+  const configured = Number(process.env.FFMPEG_THREADS);
+  const threads = Number.isInteger(configured) && configured > 0 ? configured : 1;
+  return [...args.slice(0, -1), "-threads", String(threads), args.at(-1)!];
+}
+
 function killChildProcessTree(child: ReturnType<typeof spawn>, signal: NodeJS.Signals): void {
   try {
     if (!child.pid) return;
@@ -73,7 +80,7 @@ function killChildProcessTree(child: ReturnType<typeof spawn>, signal: NodeJS.Si
 
 export async function runCommand(command: string, args: readonly string[], options: RunCommandOptions = {}): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(command, commandArgs(command, args), {
       stdio: ["ignore", "ignore", "pipe"],
       detached: process.platform !== "win32",
     });

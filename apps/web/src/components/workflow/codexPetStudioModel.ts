@@ -1,4 +1,6 @@
 import type {
+  CodexPetActionPromptKey,
+  CodexPetActionPrompts,
   CodexPetArtifact,
   CodexPetCreatePayload,
   CodexPetEvent,
@@ -21,6 +23,8 @@ import {
 export const CODEX_PET_POLL_MS = 2_500;
 export const CODEX_PET_STREAM_RECONNECT_MS = 1_200;
 export const CODEX_PET_MAX_REFERENCES = 3;
+export const CODEX_PET_ACTION_PROMPT_MAX_LENGTH = 500;
+export const CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH = 4_000;
 export const CODEX_PET_REFERENCE_MAX_BYTES = 10 * 1024 * 1024;
 export const CODEX_PET_REFERENCE_MIME_TYPES = new Set([
   "image/jpeg",
@@ -46,10 +50,27 @@ export const CODEX_PET_STYLE_OPTIONS: readonly {
   { value: "painterly", label: "绘画风", description: "保留笔触与手绘感" },
 ];
 
+export const CODEX_PET_ACTION_PROMPT_OPTIONS: readonly {
+  readonly value: CodexPetActionPromptKey;
+  readonly label: string;
+}[] = [
+  { value: "idle", label: "待机" },
+  { value: "running-right", label: "向右移动" },
+  { value: "running-left", label: "向左移动" },
+  { value: "waving", label: "挥手" },
+  { value: "jumping", label: "跳跃" },
+  { value: "failed", label: "失败" },
+  { value: "waiting", label: "等待确认" },
+  { value: "running", label: "执行任务" },
+  { value: "review", label: "审阅" },
+  { value: "look", label: "观察方向" },
+];
+
 export interface CodexPetDraft {
   readonly name: string;
   readonly description: string;
   readonly prompt: string;
+  readonly actionPrompts: CodexPetActionPrompts;
   readonly stylePreset: CodexPetStylePreset;
   readonly styleNotes: string;
   readonly referenceAssets: readonly CodexPetReferenceAsset[];
@@ -63,6 +84,7 @@ export const EMPTY_CODEX_PET_DRAFT: CodexPetDraft = {
   name: "",
   description: "",
   prompt: "",
+  actionPrompts: {},
   stylePreset: "auto",
   styleNotes: "",
   referenceAssets: [],
@@ -282,6 +304,12 @@ export function validateCodexPetDraft(
   if (draft.qualityInspectionEnabled && !draft.visualQaModel.trim()) return "请选择视觉理解/质检模型";
   if (!(CODEX_PET_IMAGE_MODELS as readonly string[]).includes(draft.imageModel)) return "请选择可用的生图模型";
   if (Array.from(draft.prompt).length > 4_000) return "角色提示词不能超过 4000 个字";
+  if (Object.values(draft.actionPrompts).some((prompt) => Array.from(prompt ?? "").length > CODEX_PET_ACTION_PROMPT_MAX_LENGTH)) {
+    return "单个动作提示词不能超过 500 个字";
+  }
+  const actionPromptsLength = Object.values(draft.actionPrompts)
+    .reduce((total, prompt) => total + Array.from(prompt ?? "").length, 0);
+  if (actionPromptsLength > CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH) return "动作提示词总计不能超过 4000 个字";
   if (draft.referenceAssets.length > CODEX_PET_MAX_REFERENCES) return "参考图最多 3 张";
   if (options.requireVisualInput !== false && !draft.prompt.trim() && draft.referenceAssets.length === 0) {
     return "请填写角色提示词或上传至少一张参考图";
@@ -294,6 +322,7 @@ export function codexPetDraftFromProject(project: CodexPetProject): CodexPetDraf
     name: project.name,
     description: project.description,
     prompt: project.prompt,
+    actionPrompts: project.actionPrompts ?? {},
     stylePreset: project.stylePreset,
     styleNotes: project.styleNotes,
     referenceAssets: project.referenceAssets ?? project.referenceAssetIds.map((id) => ({
@@ -317,6 +346,9 @@ export function codexPetPayloadFromDraft(draft: CodexPetDraft, idempotencyKey?: 
     name: draft.name.trim(),
     description: draft.description.trim(),
     prompt: draft.prompt.trim(),
+    actionPrompts: Object.fromEntries(Object.entries(draft.actionPrompts)
+      .map(([key, value]) => [key, value?.trim()])
+      .filter((entry): entry is [string, string] => Boolean(entry[1]))),
     stylePreset: draft.stylePreset,
     styleNotes: draft.styleNotes.trim(),
     referenceAssetIds: draft.referenceAssets.map((asset) => asset.id),

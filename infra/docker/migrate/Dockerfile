@@ -13,4 +13,4 @@ ENV PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
 RUN npm config set registry https://registry.npmmirror.com \
  && npm i prisma@6.19.3 @prisma/client@6.19.3 --no-audit --no-fund
 COPY packages/db/prisma /m/prisma
-CMD ["npx", "prisma", "migrate", "deploy", "--schema", "/m/prisma/schema.prisma"]
+CMD ["/m/node_modules/.bin/prisma", "migrate", "deploy", "--schema", "/m/prisma/schema.prisma"]

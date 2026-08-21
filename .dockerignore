@@ -12,6 +12,7 @@ dist
 **/.turbo
 *.tsbuildinfo
 **/*.tsbuildinfo
+*.timestamp-*.mjs
 coverage
 docs
 **/*.test.ts

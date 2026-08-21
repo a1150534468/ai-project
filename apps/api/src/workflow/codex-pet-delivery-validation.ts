@@ -1,4 +1,4 @@
-import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
+import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline/constants";
 import {
   CODEX_PET_MODEL_CONTRACT_VERSION,
   codexPetVisualQaRouteForModel,

@@ -77,6 +77,19 @@ export interface StandardAtlasValidationReport {
   readonly warnings: readonly string[];
 }
 
+export interface AtlasInspectionOptions extends FrameInspectionOptions {
+  /** Standard action rows whose user-authored specification permits bounded detached foreground elements. */
+  readonly allowAuxiliaryForegroundComponentsForStates?: readonly PetRowSpec["state"][];
+}
+
+function frameInspectionOptionsForState(
+  options: AtlasInspectionOptions,
+  state: PetRowSpec["state"],
+): FrameInspectionOptions {
+  if (!options.allowAuxiliaryForegroundComponentsForStates?.includes(state)) return options;
+  return { ...options, allowAuxiliaryForegroundComponents: true };
+}
+
 export interface DespillReport {
   readonly ok: boolean;
   readonly algorithm: "edge-local-nearest-interior-v1";
@@ -428,7 +441,7 @@ export async function despillChromaEdges(
 export async function validatePetAtlas(
   input: Buffer,
   chromaKey?: string,
-  inspectionOptions: FrameInspectionOptions = {},
+  inspectionOptions: AtlasInspectionOptions = {},
 ): Promise<AtlasValidationReport> {
   const metadata = await sharp(input).metadata();
   const errors: string[] = [];
@@ -447,7 +460,11 @@ export async function validatePetAtlas(
           width: PET_CELL_WIDTH,
           height: PET_CELL_HEIGHT,
         }).png().toBuffer();
-        const diagnostics = await inspectFrame(cell, column, inspectionOptions);
+        const diagnostics = await inspectFrame(
+          cell,
+          column,
+          frameInspectionOptionsForState(inspectionOptions, spec.state),
+        );
         const expectedUsed = column < spec.frameCount;
         const cellErrors: string[] = [];
         const cellWarnings: string[] = [];
@@ -508,7 +525,7 @@ export async function validatePetAtlas(
  */
 export async function validateStandardPetAtlas(
   input: Buffer,
-  inspectionOptions: FrameInspectionOptions = {},
+  inspectionOptions: AtlasInspectionOptions = {},
 ): Promise<StandardAtlasValidationReport> {
   const specs = PET_ROW_SPECS.slice(0, 9);
   const expectedHeight = PET_CELL_HEIGHT * specs.length;
@@ -528,7 +545,11 @@ export async function validateStandardPetAtlas(
           width: PET_CELL_WIDTH,
           height: PET_CELL_HEIGHT,
         }).png().toBuffer();
-        const diagnostics = await inspectFrame(cell, column, inspectionOptions);
+        const diagnostics = await inspectFrame(
+          cell,
+          column,
+          frameInspectionOptionsForState(inspectionOptions, spec.state),
+        );
         const expectedUsed = column < spec.frameCount;
         const cellErrors: string[] = [];
         const cellWarnings: string[] = [];

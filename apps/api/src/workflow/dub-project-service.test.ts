@@ -56,7 +56,7 @@ describe("finalizeProjectVideo", () => {
     const d = deps(base);
     const mix = vi.fn();
     await finalizeProjectVideo({ prisma: d.prisma, projectId: "p1", videoUrl: "https://v/1.mp4", videoObjectKey: "k",
-      resolveBgmKey: vi.fn().mockResolvedValue(null), getObject: vi.fn(), storeVideoBuffer: vi.fn(), mixFn: mix });
+      resolveBgmKey: vi.fn().mockResolvedValue(null), getObjectToFile: vi.fn(), storeVideoFile: vi.fn(), mixFn: mix });
     expect(mix).not.toHaveBeenCalled();
     expect(d.prisma.dubProject.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ stage: "done", finalVideoUrl: "https://v/1.mp4" }),
@@ -65,10 +65,10 @@ describe("finalizeProjectVideo", () => {
 
   it("有 BGM：下载→混流→转存→stage=done", async () => {
     const d = deps({ ...base, bgmObjectKey: "bgm/k.mp3" });
-    const mix = vi.fn().mockResolvedValue(Buffer.from("mixed"));
+    const mix = vi.fn().mockResolvedValue(undefined);
     const store = vi.fn().mockResolvedValue({ url: "https://our/final.mp4", objectKey: "fk" });
     await finalizeProjectVideo({ prisma: d.prisma, projectId: "p1", videoUrl: "https://v/1.mp4", videoObjectKey: "k",
-      resolveBgmKey: vi.fn().mockResolvedValue("bgm/k.mp3"), getObject: vi.fn().mockResolvedValue(Buffer.from("x")), storeVideoBuffer: store, mixFn: mix });
+      resolveBgmKey: vi.fn().mockResolvedValue("bgm/k.mp3"), getObjectToFile: vi.fn(), storeVideoFile: store, mixFn: mix });
     expect(mix).toHaveBeenCalled();
     expect(d.prisma.dubProject.update).toHaveBeenCalledWith(expect.objectContaining({
       data: expect.objectContaining({ stage: "done", finalVideoUrl: "https://our/final.mp4" }),
@@ -78,8 +78,8 @@ describe("finalizeProjectVideo", () => {
   it("混流失败：stage=failed，保留无 BGM 原片可下载，不抛出", async () => {
     const d = deps({ ...base, bgmObjectKey: "bgm/k.mp3" });
     await finalizeProjectVideo({ prisma: d.prisma, projectId: "p1", videoUrl: "https://v/1.mp4", videoObjectKey: "k",
-      resolveBgmKey: vi.fn().mockResolvedValue("bgm/k.mp3"), getObject: vi.fn().mockResolvedValue(Buffer.from("x")),
-      storeVideoBuffer: vi.fn(), mixFn: vi.fn().mockRejectedValue(new Error("ffmpeg boom")) });
+      resolveBgmKey: vi.fn().mockResolvedValue("bgm/k.mp3"), getObjectToFile: vi.fn(),
+      storeVideoFile: vi.fn(), mixFn: vi.fn().mockRejectedValue(new Error("ffmpeg boom")) });
     const data = d.prisma.dubProject.update.mock.calls[0][0].data;
     expect(data.stage).toBe("failed");
     expect(data.resultVideoUrl).toBe("https://v/1.mp4");
@@ -89,7 +89,7 @@ describe("finalizeProjectVideo", () => {
   it("项目不存在直接返回，不更新", async () => {
     const d = deps(null);
     await finalizeProjectVideo({ prisma: d.prisma, projectId: "p1", videoUrl: "u", videoObjectKey: "k",
-      resolveBgmKey: vi.fn(), getObject: vi.fn(), storeVideoBuffer: vi.fn(), mixFn: vi.fn() });
+      resolveBgmKey: vi.fn(), getObjectToFile: vi.fn(), storeVideoFile: vi.fn(), mixFn: vi.fn() });
     expect(d.prisma.dubProject.update).not.toHaveBeenCalled();
   });
 });

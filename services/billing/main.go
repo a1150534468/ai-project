@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"ai-assistant-billing/internal/api"
 	"ai-assistant-billing/internal/bucket"
 	"ai-assistant-billing/internal/config"
@@ -18,9 +18,19 @@ import (
 	"ai-assistant-billing/internal/store"
 	"ai-assistant-billing/internal/vip"
 	"ai-assistant-billing/internal/wallet"
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		client := http.Client{Timeout: 2 * time.Second}
+		response, err := client.Get("http://127.0.0.1:" + envOr("BILLING_PORT", "8093") + "/health")
+		if err != nil || response.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		_ = response.Body.Close()
+		return
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatal(err)
@@ -28,6 +38,17 @@ func main() {
 	st, err := store.Open(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		sqlDB, err := st.DB.DB()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if err := sqlDB.Close(); err != nil {
+			log.Fatal(err)
+		}
+		log.Print("billing database migration complete")
+		return
 	}
 	if err := registry.New(st).SeedDefault(); err != nil {
 		log.Fatal(err)
@@ -107,4 +128,11 @@ func main() {
 	if err := r.Run(":" + cfg.Port); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func envOr(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
 }

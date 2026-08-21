@@ -39,11 +39,9 @@ import { startLocalBusinessPromoRefundReaper } from "./workflow/local-business-p
 import { startArticleWorkflowReaper } from "./workflow/article-workflow-reaper.js";
 import { loadSkyhumanConfig } from "./workflow/dub-skyhuman-client.js";
 import { finalizeProjectVideo } from "./workflow/dub-project-service.js";
-import { buildAudioPublicUrl } from "./workflow/dub-audio-store.js";
-import { loadS3Config, putObject, getObject } from "./storage/s3.js";
-import { storeGeneratedVideo } from "./workflow/video-service.js";
+import { loadS3Config, getObjectToFile } from "./storage/s3.js";
+import { storeGeneratedVideo, storeVideoFile } from "./workflow/video-service.js";
 import { createBillingClient } from "@ai-assistant/billing";
-import { randomUUID } from "node:crypto";
 import { ecomWorkflowRoutes } from "./workflow/ecom-routes.js";
 import { localBusinessPromoRoutes } from "./workflow/local-business-promo-routes.js";
 import { ecomMainImageRoutes } from "./workflow/ecom-main-routes.js";
@@ -76,6 +74,7 @@ import { createRunAgent } from "./scheduled/agent-run.js";
 import { createEmailSender, type SmtpEnv } from "./scheduled/email/sender.js";
 import { createAiDraft } from "./scheduled/ai-draft-glue.js";
 import { apiDocsEnabled, registerOpenApi, registerOpenApiUi } from "./docs/openapi.js";
+import { withTimeout } from "./runtime/with-timeout.js";
 
 function readCookieValue(header: string | undefined, name: string): string | null {
   if (!header) return null;
@@ -245,12 +244,19 @@ export async function buildServer() {
   if (process.env.SKYHUMAN_API_TOKEN) {
     const dubFetch: typeof fetch = (...a) => fetch(...a);
     const dubPrisma = getPrisma();
-    const dubGetObject = async (key: string) => getObject(makeS3(loadS3Config()), key);
-    const dubStoreVideoBuffer = async (a: { userId: string; buffer: Buffer }) => {
-      const cfg = loadS3Config();
-      const key = `dub/final/${a.userId}/${randomUUID()}.mp4`;
-      await putObject(makeS3(cfg), key, a.buffer, "video/mp4", { acl: "public-read" });
-      return { url: buildAudioPublicUrl(cfg, key), objectKey: key };
+    const dubGetObjectToFile = async (key: string, filePath: string) =>
+      getObjectToFile(makeS3(loadS3Config()), key, filePath, {
+        maxBytes: Number(process.env.VIDEO_MAX_BYTES) || 350 * 1024 * 1024,
+      });
+    const dubStoreVideoFile = async (a: { userId: string; filePath: string }) => {
+      const stored = await storeVideoFile({
+        userId: a.userId,
+        filename: "final.mp4",
+        mime: "video/mp4",
+        filePath: a.filePath,
+        folder: `dub/final/${a.userId}`,
+      });
+      return { url: stored.url, objectKey: stored.objectKey! };
     };
     startDubReaper({
       prisma: dubPrisma,
@@ -263,7 +269,12 @@ export async function buildServer() {
         return { url: s.originalUrl, objectKey: s.objectKey ?? "" };
       },
       // 兜底路径同样叠 BGM：回调丢失时靠 reaper 完成项目收尾
-      finalizeProject: (a) => finalizeProjectVideo({ prisma: dubPrisma, ...a, getObject: dubGetObject, storeVideoBuffer: dubStoreVideoBuffer }),
+      finalizeProject: (a) => finalizeProjectVideo({
+        prisma: dubPrisma,
+        ...a,
+        getObjectToFile: dubGetObjectToFile,
+        storeVideoFile: dubStoreVideoFile,
+      }),
     });
   }
 
@@ -289,6 +300,41 @@ export async function buildServer() {
   });
 
   app.get("/health", async () => ({ ok: true }));
+  app.get("/health/resources", async () => {
+    const memory = process.memoryUsage();
+    const usage = process.resourceUsage();
+    return {
+      ok: true,
+      process: "api",
+      pid: process.pid,
+      uptimeSec: Math.floor(process.uptime()),
+      memory: {
+        rss: memory.rss,
+        heapTotal: memory.heapTotal,
+        heapUsed: memory.heapUsed,
+        external: memory.external,
+        arrayBuffers: memory.arrayBuffers,
+        maxRss: usage.maxRSS * 1024,
+      },
+    };
+  });
+  app.get("/ready", async (_req, reply) => {
+    try {
+      const billingBaseUrl = process.env.BILLING_BASE_URL?.replace(/\/+$/, "");
+      if (!billingBaseUrl) throw new Error("BILLING_BASE_URL is required");
+      const [, redisResult, billingResponse] = await Promise.all([
+        withTimeout(getPrisma().$queryRawUnsafe("SELECT 1"), 2_000, "PostgreSQL readiness check"),
+        withTimeout(getRedis().ping(), 2_000, "Redis readiness check"),
+        fetch(`${billingBaseUrl}/health`, { signal: AbortSignal.timeout(2_000) }),
+      ]);
+      if (redisResult !== "PONG") throw new Error("Redis ping failed");
+      if (!billingResponse.ok) throw new Error(`Billing health returned ${billingResponse.status}`);
+      return { ok: true };
+    } catch (error) {
+      app.log.warn({ err: error }, "readiness check failed");
+      return reply.code(503).send({ ok: false });
+    }
+  });
   return app;
 }
 

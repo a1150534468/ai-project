@@ -7,9 +7,11 @@ out
 .vitest-report.json
 .env
 .env.local
+.env.production
 .turbo
 .DS_Store
 *.tsbuildinfo
+*.timestamp-*.mjs
 .superpowers/
 # Go binaries
 /services/billing/billing

@@ -25,6 +25,7 @@
 | [pitfalls.md](pitfalls.md) | 通用踩坑集（向量迁移、开发环境、部署回滚等横切问题） |
 | [orchestration.md](orchestration.md) | 编排现状分析：自研编排 vs 引入 agent 框架的评估与建议路线 |
 | [ai-collaboration.md](ai-collaboration.md) | 与 AI（Claude Code / Codex）协作的统一规范 |
+| [deploy-compose.md](deploy-compose.md) | 轻量生产 Compose、Caddy、服务器资源实测与回滚 |
 
 ## 整治 / 计划
 

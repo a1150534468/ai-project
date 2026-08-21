@@ -40,6 +40,10 @@ function loadNumber(envKey: string, fallback: number): number {
   return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
+function workerConcurrency(): number {
+  return Math.max(1, loadNumber("LOCAL_BUSINESS_PROMO_WORKER_CONCURRENCY", loadNumber("WORKER_CONCURRENCY", 1)));
+}
+
 function defaultJobOptions(): JobsOptions {
   return {
     attempts: Math.max(1, loadNumber("LOCAL_BUSINESS_PROMO_JOB_ATTEMPTS", 2)),
@@ -47,8 +51,8 @@ function defaultJobOptions(): JobsOptions {
       type: "fixed",
       delay: Math.max(0, loadNumber("LOCAL_BUSINESS_PROMO_JOB_BACKOFF_MS", 30_000)),
     },
-    removeOnComplete: 200,
-    removeOnFail: 500,
+    removeOnComplete: Math.max(1, loadNumber("QUEUE_COMPLETED_JOB_COUNT", 100)),
+    removeOnFail: Math.max(1, loadNumber("QUEUE_FAILED_JOB_COUNT", 200)),
   };
 }
 
@@ -68,14 +72,10 @@ export function createLocalBusinessPromoWorker(
   processor: Processor<LocalBusinessPromoQueuePayload>,
   options: { concurrency?: number } = {},
 ): Worker<LocalBusinessPromoQueuePayload> {
-  return new Worker<LocalBusinessPromoQueuePayload>(
-    LOCAL_BUSINESS_PROMO_QUEUE_NAME,
-    processor,
-    {
-      connection: createBullConnection(),
-      concurrency: options.concurrency ?? Math.max(1, loadNumber("LOCAL_BUSINESS_PROMO_WORKER_CONCURRENCY", 2)),
-    },
-  );
+  return new Worker<LocalBusinessPromoQueuePayload>(LOCAL_BUSINESS_PROMO_QUEUE_NAME, processor, {
+    connection: createBullConnection(),
+    concurrency: options.concurrency ?? workerConcurrency(),
+  });
 }
 
 export async function closeLocalBusinessPromoQueue(): Promise<void> {

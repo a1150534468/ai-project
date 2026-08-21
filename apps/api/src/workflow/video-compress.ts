@@ -26,12 +26,14 @@ export function needsCompression(bytes: number): boolean {
 }
 
 export function buildCompressArgs(a: { inPath: string; outPath: string; maxWidth: number; crf: number; fps: number; audioKbps: number }): string[] {
+  const configured = Number(process.env.FFMPEG_THREADS);
+  const threads = Number.isInteger(configured) && configured > 0 ? configured : 1;
   return [
     "-y", "-i", a.inPath,
     "-vf", `scale='min(${a.maxWidth},iw)':-2`,
     "-r", String(a.fps),
     "-c:v", "libx264", "-crf", String(a.crf), "-preset", "veryfast", "-pix_fmt", "yuv420p",
-    "-c:a", "aac", "-b:a", `${a.audioKbps}k`, "-ac", "1",
+    "-c:a", "aac", "-b:a", `${a.audioKbps}k`, "-ac", "1", "-threads", String(threads),
     "-movflags", "+faststart",
     a.outPath,
   ];

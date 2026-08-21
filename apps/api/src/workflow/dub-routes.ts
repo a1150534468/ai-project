@@ -12,15 +12,15 @@ import { loadSkyhumanConfig, type SkyhumanConfig } from "./dub-skyhuman-client.j
 import { listAvatars, setAvatarFavorite, removeAvatar, startAvatarClone, pollFinalize, type AvatarBilling, type StoreVideoFn } from "./dub-avatar-service.js";
 import { startVideoCreate } from "./dub-video-service.js";
 import { probeVideoDurationSec } from "./video-probe.js";
-import { storeGeneratedVideo, VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY } from "./video-service.js";
+import { storeGeneratedVideo, storeVideoFile, VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY } from "./video-service.js";
 import { DUB_TTS_CHAR_KEY, DUB_AVATAR_CLONE_KEY, DUB_VIDEO_SEC_KEY, DUB_PARSE_VIDEO_KEY, DUB_PARSE_QUOTA_PER_HOUR } from "./dub-constants.js";
 import { parseShareToStored } from "./dub-parse-service.js";
 import { loadParseConfig, type ParseConfig } from "./dub-parse-client.js";
 import { consumeDubParseQuota } from "./dub-parse-ratelimit.js";
-import { loadS3Config, makeS3, putObject, getObject } from "../storage/s3.js";
+import { loadS3Config, makeS3, getObject, getObjectToFile } from "../storage/s3.js";
 import { loadMimoConfig, type MimoConfig } from "./dub-mimo-client.js";
 import { generateTts } from "./dub-tts-service.js";
-import { storeAudioBuffer, buildAudioPublicUrl } from "./dub-audio-store.js";
+import { storeAudioBuffer } from "./dub-audio-store.js";
 import { listEnabledBgmPresets } from "./dub-bgm-service.js";
 import { createProject, listProjects, getProject, patchProject, deleteProject, assertReadyForGenerate, finalizeProjectVideo } from "./dub-project-service.js";
 import { DUB_PRESET_VOICES, isPresetVoice } from "./dub-tts-voices.js";
@@ -47,14 +47,22 @@ export async function dubRoutes(app: FastifyInstance): Promise<void> {
     return { url: s.originalUrl, objectKey: s.objectKey ?? "" };
   };
   const getObjectByKey = async (key: string) => getObject(makeS3(loadS3Config()), key);
-  const storeVideoBuffer = async (a: { userId: string; buffer: Buffer }) => {
-    const cfg = loadS3Config();
-    const key = `dub/final/${a.userId}/${randomUUID()}.mp4`;
-    await putObject(makeS3(cfg), key, a.buffer, "video/mp4", { acl: "public-read" });
-    return { url: buildAudioPublicUrl(cfg, key), objectKey: key };
+  const getObjectToFileByKey = async (key: string, filePath: string) =>
+    getObjectToFile(makeS3(loadS3Config()), key, filePath, {
+      maxBytes: Number(process.env.VIDEO_MAX_BYTES) || 350 * 1024 * 1024,
+    });
+  const storeFinalVideoFile = async (a: { userId: string; filePath: string }) => {
+    const stored = await storeVideoFile({
+      userId: a.userId,
+      filename: "final.mp4",
+      mime: "video/mp4",
+      filePath: a.filePath,
+      folder: `dub/final/${a.userId}`,
+    });
+    return { url: stored.url, objectKey: stored.objectKey! };
   };
   const finalizeProject = (a: { projectId: string; videoUrl: string; videoObjectKey: string }) =>
-    finalizeProjectVideo({ prisma, ...a, getObject: getObjectByKey, storeVideoBuffer });
+    finalizeProjectVideo({ prisma, ...a, getObjectToFile: getObjectToFileByKey, storeVideoFile: storeFinalVideoFile });
 
   // 懒加载飞天配置：缺 token 时不在注册期抛错（否则拖垮所有 buildServer 测试），用到时返回 null → 502。
   let cachedCfg: SkyhumanConfig | null | undefined;

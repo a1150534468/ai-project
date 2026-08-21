@@ -18,6 +18,7 @@ const project: CodexPetProject = {
   name: "码仔",
   description: "薄荷机器人",
   prompt: "一只薄荷色机器人",
+  actionPrompts: {},
   stylePreset: "pixel",
   styleNotes: "圆润",
   referenceAssetIds: [],

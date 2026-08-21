@@ -16,6 +16,7 @@ import {
   CODEX_PET_VISUAL_QA_MODEL,
 } from "../../codexPetApi";
 import type {
+  CodexPetActionPromptKey,
   CodexPetArtifact,
   CodexPetBaseSelection,
   CodexPetCreatePayload,
@@ -33,6 +34,8 @@ import type {
 } from "../../codexPetApi";
 import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import {
+  CODEX_PET_ACTION_PROMPT_MAX_LENGTH,
+  CODEX_PET_ACTION_PROMPT_OPTIONS,
   CODEX_PET_LOOK_DIRECTIONS,
   CODEX_PET_MAX_REFERENCES,
   CODEX_PET_POLL_MS,
@@ -387,6 +390,7 @@ export function CodexPetStudio({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null | undefined>(initialProjectId ?? undefined);
   const [detail, setDetail] = useState<CodexPetProjectDetail | null>(null);
   const [draft, setDraft] = useState<CodexPetDraft>(EMPTY_CODEX_PET_DRAFT);
+  const [selectedActionPrompt, setSelectedActionPrompt] = useState<CodexPetActionPromptKey>("idle");
   const [pricing, setPricing] = useState<CodexPetPricing | null>(null);
   const [modelOptions, setModelOptions] = useState<CodexPetModelOptions>({
     visualModels: [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }],
@@ -774,6 +778,14 @@ export function CodexPetStudio({
 
   const updateDraft = <K extends keyof CodexPetDraft>(key: K, value: CodexPetDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
+    clearFeedback();
+  };
+
+  const updateActionPrompt = (value: string) => {
+    setDraft((current) => ({
+      ...current,
+      actionPrompts: { ...current.actionPrompts, [selectedActionPrompt]: value },
+    }));
     clearFeedback();
   };
 
@@ -1292,6 +1304,36 @@ export function CodexPetStudio({
                 />
                 <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.prompt).length}/4000</span>
               </label>
+
+              <div className="grid gap-2 sm:grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)]">
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">定制动作</span>
+                  <select
+                    aria-label="定制动作"
+                    value={selectedActionPrompt}
+                    disabled={!canEdit || interactionLocked}
+                    onChange={(event) => setSelectedActionPrompt(event.currentTarget.value as CodexPetActionPromptKey)}
+                    className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  >
+                    {CODEX_PET_ACTION_PROMPT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">动作提示词</span>
+                  <textarea
+                    value={draft.actionPrompts[selectedActionPrompt] ?? ""}
+                    disabled={!canEdit || interactionLocked}
+                    maxLength={CODEX_PET_ACTION_PROMPT_MAX_LENGTH}
+                    onChange={(event) => updateActionPrompt(event.currentTarget.value)}
+                    placeholder="可选：描述这个动作的表情、幅度、节奏或已有肢体和配件如何运动。"
+                    rows={3}
+                    className="w-full resize-y rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  />
+                  <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.actionPrompts[selectedActionPrompt] ?? "").length}/{CODEX_PET_ACTION_PROMPT_MAX_LENGTH}</span>
+                </label>
+              </div>
 
               <div>
                 <div className="mb-1.5 flex items-center justify-between">

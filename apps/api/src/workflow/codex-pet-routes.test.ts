@@ -56,6 +56,7 @@ function projectRow(overrides: Record<string, unknown> = {}) {
     name: "代码狐",
     description: "一只喜欢检查代码的狐狸",
     prompt: "橙色小狐狸，蓝色围巾",
+    actionPrompts: {},
     stylePreset: "pixel",
     styleNotes: "清爽",
     referenceAssetIds: [] as string[],
@@ -853,6 +854,7 @@ describe("Codex pet routes", () => {
     const payload = {
       name: "像素狐",
       prompt: "橙色狐狸",
+      actionPrompts: { waving: "挥手时开心地眨一下眼" },
       stylePreset: "pixel",
       referenceAssetIds: [reference.id],
       idempotencyKey: "draft-key-0001",
@@ -862,7 +864,22 @@ describe("Codex pet routes", () => {
     expect(first.statusCode).toBe(201);
     expect(second.statusCode).toBe(200);
     expect(first.json().data.project.id).toBe(second.json().data.project.id);
+    expect(first.json().data.project.actionPrompts).toEqual({ waving: "挥手时开心地眨一下眼" });
     expect(state.projects).toHaveLength(1);
+
+    for (const actionPrompts of [
+      { dancing: "unknown action" },
+      { idle: "x".repeat(501) },
+      { idle: "x".repeat(500), "running-right": "x".repeat(500), waving: "x".repeat(500), jumping: "x".repeat(500), failed: "x".repeat(500), waiting: "x".repeat(500), running: "x".repeat(500), review: "x".repeat(500), look: "x".repeat(500) },
+    ]) {
+      const invalidActionPrompts = await app.inject({
+        method: "POST",
+        url: "/api/workflow/codex-pets/projects",
+        headers: auth,
+        payload: { name: "动作提示词非法", prompt: "角色", actionPrompts },
+      });
+      expect(invalidActionPrompts.statusCode).toBe(400);
+    }
 
     const invalidReference = await app.inject({
       method: "POST",
@@ -944,7 +961,13 @@ describe("Codex pet routes", () => {
       method: "PATCH",
       url: "/api/workflow/codex-pets/projects/project-1",
       headers: auth,
-      payload: { description: "新描述", prompt: "带星形胸针的橙色狐狸", stylePreset: "plush", autoContinue: true },
+      payload: {
+        description: "新描述",
+        prompt: "带星形胸针的橙色狐狸",
+        actionPrompts: { jumping: "起跳时双耳竖起" },
+        stylePreset: "plush",
+        autoContinue: true,
+      },
     });
 
     expect(response.statusCode).toBe(202);
@@ -957,6 +980,7 @@ describe("Codex pet routes", () => {
       inputSnapshot: expect.objectContaining({
         description: "新描述",
         prompt: "带星形胸针的橙色狐狸",
+        actionPrompts: { jumping: "起跳时双耳竖起" },
         stylePreset: "plush",
         autoContinue: true,
       }),
@@ -1113,7 +1137,7 @@ describe("Codex pet routes", () => {
   });
 
   it("serializes concurrent starts per user, reserves fourteen calls once, and re-enqueues idempotent retries", async () => {
-    const project1 = projectRow();
+    const project1 = projectRow({ actionPrompts: { jumping: "跳跃时保持微笑" } });
     const project2 = projectRow({ id: "project-2", name: "第二只" });
     const { prisma, state, spies } = createPrismaMock({ projects: [project1, project2] });
     const billing = createBilling();
@@ -1145,6 +1169,7 @@ describe("Codex pet routes", () => {
       billingMode: "per_image_call_v1",
       plannedImageCallLimit: 14,
       perImageCallPoints: 200,
+      actionPrompts: { jumping: "跳跃时保持微笑" },
     });
 
     const conflict = await app.inject({

@@ -74,7 +74,7 @@ export async function enqueueCodexPetProjectCleanup(payload: CodexPetProjectClea
     attempts: Math.max(3, Number(process.env.CODEX_PET_CLEANUP_ATTEMPTS) || 120),
     backoff: { type: "fixed", delay: Math.max(1_000, Number(process.env.CODEX_PET_CLEANUP_BACKOFF_MS) || 10_000) },
     removeOnComplete: true,
-    removeOnFail: 500,
+    removeOnFail: Math.max(1, Number(process.env.QUEUE_FAILED_JOB_COUNT) || 200),
   });
 }
 

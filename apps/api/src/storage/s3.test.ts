@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ObjectCannedACL } from "@aws-sdk/client-s3";
-import { makeS3, loadS3Config, putObject, putObjectFile, getObject, deleteObject } from "./s3.js";
+import { makeS3, loadS3Config, putObject, putObjectFile, getObject, getObjectToFile, deleteObject } from "./s3.js";
 
 const have = !!process.env.S3_ENDPOINT;
 
@@ -59,7 +60,7 @@ describe("putObject", () => {
 });
 
 describe("putObjectFile", () => {
-  it("上传 buffer body 而非 stream（S3 兼容存储不支持 aws-chunked 流式签名，会 403/UnknownError）", async () => {
+  it("uses a bounded file stream with an explicit Content-Length", async () => {
     const dir = await mkdtemp(join(tmpdir(), "s3-put-file-"));
     const filePath = join(dir, "final.mp4");
     const content = Buffer.from("rendered-video-bytes");
@@ -69,8 +70,7 @@ describe("putObjectFile", () => {
       await putObjectFile(s3, "videos/final.mp4", filePath, "video/mp4", { acl: ObjectCannedACL.public_read });
       expect(sentCommands).toHaveLength(1);
       const body = sentCommands[0]!.input.Body;
-      expect(Buffer.isBuffer(body)).toBe(true);
-      expect((body as Buffer).equals(content)).toBe(true);
+      expect(body).toBeInstanceOf(Readable);
       expect(sentCommands[0]!.input).toMatchObject({
         Bucket: "bucket",
         Key: "videos/final.mp4",
@@ -78,6 +78,46 @@ describe("putObjectFile", () => {
         ContentLength: content.byteLength,
         ACL: ObjectCannedACL.public_read,
       });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("getObjectToFile", () => {
+  it("streams a response to disk and verifies the declared content length", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "s3-get-file-"));
+    const filePath = join(dir, "download.bin");
+    const content = Buffer.from("streamed-object");
+    try {
+      const { s3 } = fakeS3();
+      Object.assign(s3.client, {
+        send: async () => ({
+          Body: Readable.from([content]),
+          ContentLength: content.byteLength,
+          ContentType: "application/octet-stream",
+        }),
+      });
+      await expect(getObjectToFile(s3, "objects/a", filePath, { maxBytes: 100 })).resolves.toEqual({
+        bytes: content.byteLength,
+        contentType: "application/octet-stream",
+      });
+      await expect(readFile(filePath)).resolves.toEqual(content);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("removes a partial file when the response length does not match", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "s3-get-file-mismatch-"));
+    const filePath = join(dir, "download.bin");
+    try {
+      const { s3 } = fakeS3();
+      Object.assign(s3.client, {
+        send: async () => ({ Body: Readable.from([Buffer.from("short")]), ContentLength: 10 }),
+      });
+      await expect(getObjectToFile(s3, "objects/a", filePath)).rejects.toThrow("length mismatch");
+      await expect(access(filePath)).rejects.toBeDefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

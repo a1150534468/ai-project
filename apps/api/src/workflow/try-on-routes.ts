@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import sharp, { type Metadata } from "sharp";
+import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import type { Redis } from "ioredis";
@@ -9,6 +9,7 @@ import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { requireUser } from "../auth/require-user.js";
 import { deleteObject, getObject, loadS3Config, makeS3 } from "../storage/s3.js";
+import { loadSharp } from "../runtime/resource-limits.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -450,6 +451,7 @@ async function runTryOnTask(args: {
   readonly loadStoredImage: (key: string) => Promise<Buffer>;
   readonly callImageEdit: NonNullable<TryOnRouteDeps["callImageEdit"]>;
 }): Promise<void> {
+  const sharp = await loadSharp();
   const task = (await args.prisma.tryOnTask.findUnique({
     where: { id: args.taskId },
     include: { outputs: true },
@@ -769,6 +771,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
   });
 
   app.post("/api/workflow/try-ons/references", { preHandler: requireUser }, async (req, reply) => {
+    const sharp = await loadSharp();
     const userId = req.userId;
     const parsed = tryOnReferenceSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "试穿素材参数不合法" });

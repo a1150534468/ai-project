@@ -5,6 +5,7 @@ import {
   CODEX_PET_STANDARD_STATES,
   EMPTY_CODEX_PET_DRAFT,
   codexPetCurrentSubtask,
+  codexPetPayloadFromDraft,
   codexPetDisplayProgress,
   codexPetModelContractState,
   codexPetValidationPassed,
@@ -87,6 +88,38 @@ describe("codexPetStudioModel", () => {
     )).toBeNull();
     expect(validateCodexPetDraft({ ...EMPTY_CODEX_PET_DRAFT, name: "码仔", prompt: "一只薄荷色机器人" })).toBeNull();
     expect(validateCodexPetDraft({ ...EMPTY_CODEX_PET_DRAFT, name: "宠".repeat(31), prompt: "角色" })).toBe("桌宠名称不能超过 30 个字");
+  });
+
+  it("validates and serializes per-action prompts without merging them into the character brief", () => {
+    const draft = {
+      ...EMPTY_CODEX_PET_DRAFT,
+      name: "码仔",
+      prompt: "薄荷色机器人",
+      actionPrompts: { idle: "  慢慢眨眼  ", jumping: "双耳竖起" },
+    } as const;
+    expect(validateCodexPetDraft(draft)).toBeNull();
+    expect(codexPetPayloadFromDraft(draft)).toMatchObject({
+      prompt: "薄荷色机器人",
+      actionPrompts: { idle: "慢慢眨眼", jumping: "双耳竖起" },
+    });
+    expect(validateCodexPetDraft({
+      ...draft,
+      actionPrompts: { idle: "x".repeat(501) },
+    })).toBe("单个动作提示词不能超过 500 个字");
+    expect(validateCodexPetDraft({
+      ...draft,
+      actionPrompts: {
+        idle: "x".repeat(500),
+        "running-right": "x".repeat(500),
+        "running-left": "x".repeat(500),
+        waving: "x".repeat(500),
+        jumping: "x".repeat(500),
+        failed: "x".repeat(500),
+        waiting: "x".repeat(500),
+        running: "x".repeat(500),
+        review: "x".repeat(500),
+      },
+    })).toBe("动作提示词总计不能超过 4000 个字");
   });
 
   it("deduplicates persisted and SSE events by monotonic sequence", () => {

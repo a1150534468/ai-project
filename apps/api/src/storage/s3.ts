@@ -6,7 +6,10 @@ import {
   ListObjectsV2Command,
   type ObjectCannedACL,
 } from "@aws-sdk/client-s3";
-import { readFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { rm, stat } from "node:fs/promises";
+import { Readable, Transform } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 export interface S3Config {
   endpoint: string;
@@ -43,6 +46,9 @@ export function makeS3(cfg: S3Config = loadS3Config()) {
         accessKeyId: cfg.accessKey,
         secretAccessKey: cfg.secretKey,
       },
+      // COS accepts ordinary Content-Length streams. Avoid checksum trailers
+      // that some S3-compatible providers interpret as aws-chunked payloads.
+      requestChecksumCalculation: "WHEN_REQUIRED",
     }),
     bucket: cfg.bucket,
   };
@@ -79,20 +85,22 @@ export async function putObjectFile(
   mime: string,
   options: PutObjectOptions = {},
 ): Promise<void> {
-  // 必须一次性读入 buffer 上传：流式 body 会触发 AWS SDK v3 的 aws-chunked/checksum-trailer 签名，
-  // 天翼云 OOS 等 S3 兼容存储不支持，返回 403 且被 SDK 吞成无信息的 "UnknownError"。
-  // 上层已按 VIDEO_MATERIAL_MAX_BYTES 限制文件大小，buffer 内存可控。
-  const body = await readFile(filePath);
-  await s3.client.send(
-    new PutObjectCommand({
-      Bucket: s3.bucket,
-      Key: key,
-      Body: body,
-      ContentLength: body.byteLength,
-      ContentType: mime,
-      ...(options.acl ? { ACL: options.acl } : {}),
-    }),
-  );
+  const file = await stat(filePath);
+  const body = createReadStream(filePath);
+  try {
+    await s3.client.send(
+      new PutObjectCommand({
+        Bucket: s3.bucket,
+        Key: key,
+        Body: body,
+        ContentLength: file.size,
+        ContentType: mime,
+        ...(options.acl ? { ACL: options.acl } : {}),
+      }),
+    );
+  } finally {
+    body.destroy();
+  }
 }
 
 export async function getObject(s3: S3, key: string): Promise<Buffer> {
@@ -104,6 +112,49 @@ export async function getObject(s3: S3, key: string): Promise<Buffer> {
   );
   const arr = await r.Body!.transformToByteArray();
   return Buffer.from(arr);
+}
+
+export interface GetObjectToFileOptions {
+  readonly maxBytes?: number;
+}
+
+export async function getObjectToFile(
+  s3: S3,
+  key: string,
+  filePath: string,
+  options: GetObjectToFileOptions = {},
+): Promise<{ readonly bytes: number; readonly contentType: string | undefined }> {
+  const response = await s3.client.send(new GetObjectCommand({ Bucket: s3.bucket, Key: key }));
+  if (!response.Body) throw new Error(`S3 object ${key} returned an empty body`);
+  const maxBytes = options.maxBytes;
+  const expectedBytes = typeof response.ContentLength === "number" ? response.ContentLength : undefined;
+  if (maxBytes && response.ContentLength && response.ContentLength > maxBytes) {
+    throw new Error(`S3 object ${key} exceeds ${maxBytes} bytes`);
+  }
+
+  let bytes = 0;
+  const limiter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      bytes += chunk.byteLength;
+      if (maxBytes && bytes > maxBytes) {
+        callback(new Error(`S3 object ${key} exceeds ${maxBytes} bytes`));
+        return;
+      }
+      callback(null, chunk);
+    },
+  });
+
+  try {
+    const source = Readable.from(response.Body as AsyncIterable<Uint8Array>);
+    await pipeline(source, limiter, createWriteStream(filePath, { flags: "wx" }));
+    if (expectedBytes !== undefined && bytes !== expectedBytes) {
+      throw new Error(`S3 object ${key} length mismatch: expected ${expectedBytes}, received ${bytes}`);
+    }
+    return { bytes, contentType: response.ContentType };
+  } catch (error) {
+    await rm(filePath, { force: true }).catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function deleteObject(s3: S3, key: string): Promise<void> {

@@ -4,7 +4,7 @@ import { getPrisma } from "@ai-assistant/db";
 import sharp from "sharp";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { recoverCodexPetGeneratedBoards } from "./codex-pet-generated-board-recovery.js";
-import { CODEX_PET_BOARD_PROMPT_VERSION, codexPetBoardInputRevision, type CodexPetArtifactStore } from "./codex-pet-runner.js";
+import { CODEX_PET_BOARD_PROMPT_VERSION, codexPetBoardInputRevision, codexPetStandardRowPromptVersion, type CodexPetArtifactStore } from "./codex-pet-runner.js";
 import type { PetVisualQaConsensus } from "./codex-pet-visual.js";
 
 const prisma = getPrisma();
@@ -195,11 +195,13 @@ describe.skipIf(!enabled)("Codex pet generated-board recovery", () => {
     const requests: Array<{ state: "idle" | "running-right"; artifactId: string }> = [];
     for (const row of rows) {
       const inputArtifactIds = [canonical.id];
+      const promptVersion = codexPetStandardRowPromptVersion(row.state);
       const revision = codexPetBoardInputRevision({
         inputArtifactIds,
         columns: row.columns,
         rows: row.rows,
         frameCount: row.frameCount,
+        promptVersion,
       });
       const job = await prisma.codexPetJob.create({ data: {
         projectId: project.id,
@@ -212,8 +214,8 @@ describe.skipIf(!enabled)("Codex pet generated-board recovery", () => {
         maxAttempts: 1,
         inputArtifactIds,
         input: {
-          schemaVersion: "codex-pet-board-input-v2",
-          promptVersion: CODEX_PET_BOARD_PROMPT_VERSION,
+          schemaVersion: "codex-pet-board-input-v3",
+          promptVersion,
           inputRevision: revision,
           inputArtifactIds,
           columns: row.columns,

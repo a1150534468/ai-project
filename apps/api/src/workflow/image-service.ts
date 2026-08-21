@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import sharp from "sharp";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../storage/s3.js";
+import { loadSharp } from "../runtime/resource-limits.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../storage/public-url.js";
 import { imageResolutionFromSize } from "./image-upstream-options.js";
 import { IMAGE_STREAM_PARTIAL_IMAGES, readImageStream } from "./image-stream.js";
@@ -440,6 +440,7 @@ function usageFromPayload(payload: unknown): ImageGenerationUsage | null {
 async function decodedImageSize(image: GeneratedImage): Promise<string | null> {
   if (image.kind !== "b64") return null;
   try {
+    const sharp = await loadSharp();
     const metadata = await sharp(Buffer.from(image.b64, "base64"), { limitInputPixels: GPT_IMAGE_MAX_PIXELS }).metadata();
     return metadata.width && metadata.height ? `${metadata.width}x${metadata.height}` : null;
   } catch {
@@ -604,6 +605,7 @@ async function openAiEditImagePart(
     return { bytes: validated.bytes, mime: normalizedMime === "image/jpg" ? "image/jpeg" : normalizedMime, filename: image.filename || fallbackFilename };
   }
   try {
+    const sharp = await loadSharp();
     // GPT Image edits accepts PNG/JPEG/WebP. Normalize legacy BMP/TIFF/GIF or
     // other uploaded raster formats in the shared provider adapter so both the
     // ordinary image studio and Codex-pet workflow behave identically. GIFs
@@ -1038,6 +1040,7 @@ export async function callImageEdit(args: CallImageEditArgs): Promise<GeneratedI
 /** 量一下真实宽高，量不出来就当没有——上游返回损坏数据不该拦住入库。 */
 async function measureBinary(buffer: Buffer): Promise<{ width: number | null; height: number | null }> {
   try {
+    const sharp = await loadSharp();
     const metadata = await sharp(buffer, { limitInputPixels: GPT_IMAGE_MAX_PIXELS }).metadata();
     return { width: metadata.width ?? null, height: metadata.height ?? null };
   } catch {

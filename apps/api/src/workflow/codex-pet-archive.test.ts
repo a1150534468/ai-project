@@ -62,6 +62,7 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
       name: "快跑小狐",
       description: "一只戴蓝围巾的小狐狸",
       prompt: "橙色小狐狸，蓝色围巾",
+      actionPrompts: { jumping: "跳到最高点时眨眼" },
       stylePreset: "plush",
       styleNotes: "柔软短绒",
       petId: "quick-fox",
@@ -73,6 +74,7 @@ function archiveFixture(overrides: Record<string, unknown> = {}) {
       name: "mutable name",
       description: "mutable description",
       prompt: "mutable prompt",
+      actionPrompts: {},
       stylePreset: "auto",
       styleNotes: "",
       createdAt: new Date("2026-07-17T01:00:00.000Z"),
@@ -209,6 +211,7 @@ describe("Codex pet AI_ARTIFACTS archive", () => {
       sourceId: "run-1",
     });
     expect(doc.content).toContain("橙色小狐狸，蓝色围巾");
+    expect(doc.content).toContain('逐动作提示词：{"jumping":"跳到最高点时眨眼"}');
     expect(doc.content).toContain("1536×2288");
     expect(doc.content).toContain("337.5°");
     expect(doc.content).toContain("视觉推理与质检模型：请求 gpt-5.6-sol；实际 gpt-5.6-sol");

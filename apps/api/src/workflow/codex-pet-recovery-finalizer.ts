@@ -1,7 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import sharp from "sharp";
 import {
   LOOK_DIRECTIONS,
   PET_ROW_SPECS,
@@ -25,6 +24,7 @@ import { CODEX_PET_MODEL_CONTRACT_VERSION, codexPetVisualQaRouteForModel } from 
 import { persistOrResumeCodexPetFinalPackage, type CodexPetFinalPackageSeed } from "./codex-pet-packaging.js";
 import type { CodexPetArtifactStore } from "./codex-pet-runner.js";
 import type { BlindDirectionValidation, DirectionSemanticVerdict, PetVisualQaVerdict } from "./codex-pet-visual.js";
+import { loadSharp } from "../runtime/resource-limits.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -142,6 +142,7 @@ function assertEightCells(frames: readonly Buffer[], label: string): void {
 }
 
 async function extractStandardFrames(atlas: Buffer): Promise<PetFramesByState> {
+  const sharp = await loadSharp();
   const metadata = await sharp(atlas).metadata();
   if (metadata.width !== 1536 || metadata.height !== 1872) {
     throw new Error("恢复输入的标准图集必须是 1536x1872 的 8x9 中间图集");
@@ -161,6 +162,7 @@ async function extractStandardFrames(atlas: Buffer): Promise<PetFramesByState> {
 }
 
 async function validateCellDimensions(frames: readonly Buffer[], label: string): Promise<void> {
+  const sharp = await loadSharp();
   await Promise.all(frames.map(async (frame, index) => {
     const metadata = await sharp(frame).metadata();
     if (metadata.width !== 192 || metadata.height !== 208 || !metadata.hasAlpha) {

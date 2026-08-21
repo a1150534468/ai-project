@@ -1,0 +1,45 @@
+{
+	auto_https off
+	admin 127.0.0.1:2019
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
+
+http://{$APP_DOMAIN} {
+	import common
+	@api path /api/* /health /ready
+	reverse_proxy @api api:8090
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+http://{$ADMIN_DOMAIN} {
+	import common
+	@api path /api/* /health /ready
+	reverse_proxy @api api:8090
+	handle {
+		root * /srv/admin
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+http://{$API_DOMAIN} {
+	import common
+	reverse_proxy api:8090
+}
+
+http://{$BILLING_DOMAIN} {
+	import common
+	reverse_proxy billing:8093
+}

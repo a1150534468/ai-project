@@ -22,6 +22,7 @@ import {
   createStandardAtlasContactSheet,
   despillChromaEdges,
   extractPoseBoard,
+  inspectFrame,
   inspectCodexPetZip,
   measureDirectionContinuity,
   measureDirectionRowContinuity,
@@ -85,7 +86,9 @@ import {
   buildLookRowPrompt,
   buildStandardRowPrompt,
   buildVisualQaPrompt,
+  normalizeCodexPetActionPrompts,
   sanitizeCodexPetDirectionRepairPrompt,
+  type CodexPetActionPrompts,
   type CodexPetVisualIdentity,
 } from "./codex-pet-prompts.js";
 import {
@@ -105,7 +108,6 @@ import {
   type BlindDirectionValidation,
   type CodexPetVisualModelProvenance,
   type DirectionSemanticVerdict,
-  type GeneratedPetVisual,
   type PetVisualQaConsensus,
   type PetVisualQaVerdict,
 } from "./codex-pet-visual.js";
@@ -125,15 +127,42 @@ const INTERMEDIATE_TTL_MS = 7 * 24 * 60 * 60_000;
 const WORKER_ID = `codex-pet-${process.pid}-${randomUUID().slice(0, 8)}`;
 const DEFAULT_STALE_RUN_MS = 15 * 60_000;
 const IDENTITY_GUIDE_VERSION = 2;
-const BOARD_JOB_INPUT_SCHEMA_VERSION = "codex-pet-board-input-v2";
-export const CODEX_PET_BOARD_PROMPT_VERSION = "codex-pet-board-prompt-v10";
-export const CODEX_PET_IDLE_BOARD_PROMPT_VERSION = "codex-pet-board-prompt-v7";
+const BOARD_JOB_INPUT_SCHEMA_VERSION = "codex-pet-board-input-v3";
+export { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-board-version.js";
+import { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-board-version.js";
+export const CODEX_PET_IDLE_BOARD_PROMPT_VERSION = "codex-pet-board-prompt-v9";
 const CODEX_PET_RECOVERY_SCHEMA_VERSION = "codex-pet-recovery-v1";
 
 export function codexPetStandardRowPromptVersion(
   state: Exclude<PetRowSpec["state"], "look-a" | "look-b">,
 ): string {
   return state === "idle" ? CODEX_PET_IDLE_BOARD_PROMPT_VERSION : CODEX_PET_BOARD_PROMPT_VERSION;
+}
+
+export function codexPetShouldMirrorRunningLeft(
+  mirrorSafe: boolean,
+  actionPrompts: CodexPetActionPrompts | undefined,
+): boolean {
+  return mirrorSafe
+    && !actionPrompts?.["running-right"]
+    && !actionPrompts?.["running-left"];
+}
+
+type StandardActionState = Exclude<PetRowSpec["state"], "look-a" | "look-b">;
+
+function customizedStandardActionStates(
+  actionPrompts: CodexPetActionPrompts | undefined,
+): readonly StandardActionState[] {
+  return PET_ROW_SPECS.slice(0, 9).flatMap((spec) => {
+    const state = spec.state as StandardActionState;
+    return actionPrompts?.[state]?.trim() ? [state] : [];
+  });
+}
+
+function standardActionSpecificationSummary(actionPrompts: CodexPetActionPrompts | undefined): string {
+  return customizedStandardActionStates(actionPrompts)
+    .map((state) => `${state}: ${actionPrompts?.[state]?.trim()}`)
+    .join("; ");
 }
 
 /**
@@ -333,7 +362,10 @@ function frozenPerImageCallPoints(snapshot: Record<string, unknown>, run: CodexP
   throw new Error("Codex pet per-image run is missing a frozen per-call price");
 }
 
-function poseBoardRepairPrompt(errors: readonly string[]): string {
+function poseBoardRepairPrompt(
+  errors: readonly string[],
+  allowAuxiliaryForegroundComponents = false,
+): string {
   const hints = new Set<string>();
   for (const error of errors) {
     if (error.includes("source-touches-slot-edge") || error.includes("normalized-frame-outside-safe-margin")) {
@@ -341,7 +373,19 @@ function poseBoardRepairPrompt(errors: readonly string[]): string {
     } else if (error.includes("empty-frame")) {
       hints.add("Restore every required pose; no used slot may be empty.");
     } else if (error.includes("multiple-foreground-components")) {
-      hints.add("Redraw every slot as exactly one complete connected character. Join the head, torso, arms, hands, legs, feet, ears, tail, antennae and props through continuous opaque character pixels with no chroma gaps at any joint. Remove every detached sweat bead, action mark, punctuation shape, droplet, sparkle, dust mark or other floating effect.");
+      hints.add(allowAuxiliaryForegroundComponents
+        ? "Keep exactly one complete connected character. Preserve only the user-requested short text, action prop or state effect as bounded opaque auxiliary components; remove every unrequested fragment and never add a second character."
+        : "Redraw every slot as exactly one complete connected character. Join the head, torso, arms, hands, legs, feet, ears, tail, antennae and props through continuous opaque character pixels with no chroma gaps at any joint. Remove every detached sweat bead, action mark, punctuation shape, droplet, sparkle, dust mark or other floating effect.");
+    } else if (error.includes("auxiliary-component-count-exceeded")) {
+      hints.add("Keep at most four separate user-requested text/effect/prop components around the one main character.");
+    } else if (error.includes("auxiliary-component-too-large") || error.includes("auxiliary-components-too-large")) {
+      hints.add("Make every detached requested action element substantially smaller than the main character; never let it read as a second subject.");
+    } else if (error.includes("auxiliary-component-too-far")) {
+      hints.add("Move every requested text/effect/prop component visually close to the main character while preserving the slot safe margin.");
+    } else if (error.includes("auxiliary-component-touches-edge")) {
+      hints.add("Move every requested auxiliary component away from all slot edges and keep at least 15% clear chroma background around it.");
+    } else if (error.includes("auxiliary-component-resembles-partial-subject")) {
+      hints.add("Remove the detached duplicate body fragment. Keep exactly one character plus only clearly non-character requested text, effects or action objects.");
     } else if (error.includes("possible-transparent-holes")) {
       hints.add("Remove accidental holes or sliced seams through the filled character body.");
     } else if (error.startsWith("unused-slot-")) {
@@ -529,6 +573,19 @@ function jumpingQaEvidence(extracted: ExtractPoseBoardResult): string {
   });
 }
 
+export async function codexPetJumpingTargetHeight(idleFrames: readonly Buffer[]): Promise<number> {
+  const heights = (await Promise.all(idleFrames.map((frame, index) => inspectFrame(frame, index))))
+    .map((diagnostic) => diagnostic.normalizedBounds?.height)
+    .filter((height): height is number => typeof height === "number" && height > 5)
+    .sort((left, right) => left - right);
+  if (heights.length === 0) throw new Error("Cannot derive jumping scale from empty idle frames");
+  const middle = Math.floor(heights.length / 2);
+  const medianHeight = heights.length % 2 === 0
+    ? (heights[middle - 1]! + heights[middle]!) / 2
+    : heights[middle]!;
+  return Math.max(1, Math.min(174, Math.floor(medianHeight - 5)));
+}
+
 function isJumpingScaleEvidenceConflict(
   qa: PetVisualQaConsensus,
   extracted: ExtractPoseBoardResult,
@@ -580,6 +637,17 @@ function configuredArchiveMaxAttempts(env: NodeJS.ProcessEnv): number {
 
 const FINAL_REPAIR_ROWS = CODEX_PET_GATE_REPAIR_ROWS;
 type FinalRepairRow = CodexPetGateRepairRow;
+type StandardRepairRow = Exclude<FinalRepairRow, "look-a" | "look-b">;
+
+export function codexPetCoupledStandardRepairRows(rows: readonly StandardRepairRow[]): StandardRepairRow[] {
+  const coupled = new Set(rows);
+  if (coupled.has("running-right")) coupled.add("running-left");
+  if (coupled.has("running-left")) coupled.add("running-right");
+  // Jump scale is derived from idle, so replacing idle invalidates the
+  // previously normalized jumping row even when jumping itself passed QA.
+  if (coupled.has("idle")) coupled.add("jumping");
+  return [...coupled].sort((left, right) => Number(right === "idle") - Number(left === "idle"));
+}
 
 /**
  * A terminal gate rejection that still knows which action groups it blames.
@@ -1889,6 +1957,9 @@ interface BoardJobInputBinding {
   readonly frameCount: number;
   readonly frameOrder?: readonly number[];
   readonly promptVersion?: string;
+  readonly prompt?: string;
+  readonly jumpingTargetHeight?: number;
+  readonly allowAuxiliaryForegroundComponents?: boolean;
 }
 
 /**
@@ -1901,11 +1972,14 @@ export function codexPetBoardInputRevision(input: BoardJobInputBinding): string 
   return createHash("sha256").update(JSON.stringify({
     schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
     promptVersion: input.promptVersion ?? CODEX_PET_BOARD_PROMPT_VERSION,
+    promptHash: createHash("sha256").update(input.prompt ?? "").digest("hex"),
+    jumpingTargetHeight: input.jumpingTargetHeight ?? null,
     inputArtifactIds: [...input.inputArtifactIds],
     columns: input.columns,
     rows: input.rows,
     frameCount: input.frameCount,
     frameOrder: input.frameOrder ? [...input.frameOrder] : null,
+    ...(input.allowAuxiliaryForegroundComponents ? { allowAuxiliaryForegroundComponents: true } : {}),
   })).digest("hex");
 }
 
@@ -1917,12 +1991,15 @@ function boardJobInputPayload(input: BoardJobInputBinding): Prisma.InputJsonObje
   return {
     schemaVersion: BOARD_JOB_INPUT_SCHEMA_VERSION,
     promptVersion: input.promptVersion ?? CODEX_PET_BOARD_PROMPT_VERSION,
+    promptHash: createHash("sha256").update(input.prompt ?? "").digest("hex"),
+    jumpingTargetHeight: input.jumpingTargetHeight ?? null,
     inputRevision: codexPetBoardInputRevision(input),
     inputArtifactIds: [...input.inputArtifactIds],
     columns: input.columns,
     rows: input.rows,
     frameCount: input.frameCount,
     frameOrder: input.frameOrder ? [...input.frameOrder] : null,
+    ...(input.allowAuxiliaryForegroundComponents ? { allowAuxiliaryForegroundComponents: true } : {}),
   };
 }
 
@@ -2120,6 +2197,9 @@ async function runBoardJob(ctx: RunnerContext, input: {
   readonly frameCount: number;
   readonly frameOrder?: readonly number[];
   readonly promptVersion?: string;
+  readonly jumpingTargetHeight?: number;
+  readonly allowAuxiliaryForegroundComponents?: boolean;
+  readonly authoritativeActionPrompt?: string;
   readonly progress: number;
   readonly qaKind: "row" | "cardinals" | "directions";
   readonly qaContext: string;
@@ -2144,6 +2224,9 @@ async function runBoardJob(ctx: RunnerContext, input: {
     frameCount: input.frameCount,
     frameOrder: input.frameOrder,
     promptVersion: input.promptVersion,
+    prompt: input.prompt,
+    jumpingTargetHeight: input.jumpingTargetHeight,
+    allowAuxiliaryForegroundComponents: input.allowAuxiliaryForegroundComponents,
   });
   const supersededArtifactIds = input.force ? boardOutputArtifactIds(job) : [];
   if (!input.force) {
@@ -2280,8 +2363,10 @@ async function runBoardJob(ctx: RunnerContext, input: {
         chromaKey: ctx.identity.chromaKey,
         requireUnusedSlotsEmpty: true,
         allowVerticalTravel: input.key === "row-jumping",
+        jumpingTargetHeight: input.key === "row-jumping" ? input.jumpingTargetHeight : undefined,
         requireJumpingArc: input.key === "row-jumping",
         maxHeightRatio: input.key === "row-jumping" || input.key === "row-failed" ? 1.8 : undefined,
+        allowAuxiliaryForegroundComponents: input.allowAuxiliaryForegroundComponents,
       } as const;
       let board = generated.buffer;
       let extracted = await extractPoseBoard(board, extractOptions);
@@ -2392,6 +2477,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
               ? `。确定性尺寸/基线指标需要复核：${extracted.geometry.warnings.join("；")}`
               : ""}${directionEvidenceContext.replace("row-major anchor storyboard", "row-major direction scaffold")}`,
             ctx.identity.canonicalGuide,
+            input.authoritativeActionPrompt,
           ),
           env: ctx.env,
           signal: ctx.signal,
@@ -2473,7 +2559,7 @@ async function runBoardJob(ctx: RunnerContext, input: {
         lastError = [...extracted.errors, ...qa.failures].join("；") || "视觉质量检查未通过";
         const nextRepairRequirement = extracted.ok
           ? qa.verdicts.find((verdict) => verdict.repairPrompt)?.repairPrompt || lastError
-          : poseBoardRepairPrompt(extracted.errors);
+          : poseBoardRepairPrompt(extracted.errors, input.allowAuxiliaryForegroundComponents);
         const normalizedRepairRequirement = normalizeRepairRequirement(nextRepairRequirement);
         if (normalizedRepairRequirement && !repairRequirements.includes(normalizedRepairRequirement)) {
           repairRequirements.push(normalizedRepairRequirement);
@@ -2862,6 +2948,7 @@ async function runStandardRow(
   force = false,
   repairHint = "",
   workflowStage: "standard_generating" | "validating" = "standard_generating",
+  jumpingTargetHeight?: number,
 ): Promise<BoardJobResult> {
   const spec = petRowSpec(state);
   let layout: Buffer | null = null;
@@ -2964,6 +3051,7 @@ async function runStandardRow(
     scaffoldSourceArtifactId,
     scaffoldArtifactId,
   ].filter((artifactId): artifactId is string => Boolean(artifactId)))];
+  const authoritativeActionPrompt = ctx.identity.actionPrompts?.[state]?.trim();
   return runBoardJob(ctx, {
     key: `row-${state}`,
     kind: "standard_row",
@@ -2985,6 +3073,9 @@ async function runStandardRow(
     animationDurations: spec.durations,
     force,
     repairHint,
+    jumpingTargetHeight: state === "jumping" ? jumpingTargetHeight : undefined,
+    allowAuxiliaryForegroundComponents: Boolean(authoritativeActionPrompt),
+    authoritativeActionPrompt,
   });
 }
 
@@ -3009,6 +3100,9 @@ async function storeStandardAtlas(ctx: RunnerContext, frames: PetFramesByState, 
   contactArtifact: CodexPetArtifact;
   validation: Awaited<ReturnType<typeof validateStandardPetAtlas>>;
 }> {
+  const inspectionOptions = {
+    allowAuxiliaryForegroundComponentsForStates: customizedStandardActionStates(ctx.identity.actionPrompts),
+  } as const;
   const job = await ensureJob(ctx, "standard-atlas", "deterministic_assembly", PET_ROW_SPECS.slice(0, 9).map((spec) => `row-${spec.state}`));
   const output = asRecord(job.output);
   if (!force && job.status === "completed" && typeof output.atlasArtifactId === "string" && typeof output.contactArtifactId === "string") {
@@ -3018,7 +3112,7 @@ async function storeStandardAtlas(ctx: RunnerContext, frames: PetFramesByState, 
     ]);
     if (atlasArtifact && contactArtifact) {
       const [atlas, contact] = await Promise.all([ctx.artifacts.load(atlasArtifact), ctx.artifacts.load(contactArtifact)]);
-      const validation = await validateStandardPetAtlas(atlas);
+      const validation = await validateStandardPetAtlas(atlas, inspectionOptions);
       // A recovered atlas that no longer validates carries the same row-scoped
       // evidence as a fresh one, so the caller can repair and force a rebuild
       // instead of failing a run whose rows are mostly good.
@@ -3027,7 +3121,7 @@ async function storeStandardAtlas(ctx: RunnerContext, frames: PetFramesByState, 
     }
   }
   const atlas = await assembleStandardPetAtlas(frames, "webp");
-  const validation = await validateStandardPetAtlas(atlas);
+  const validation = await validateStandardPetAtlas(atlas, inspectionOptions);
   if (!validation.ok) throw new CodexPetStandardAtlasStructureError(validation);
   const contact = await createStandardAtlasContactSheet(atlas);
   const [atlasArtifact, contactArtifact, validationArtifact] = await Promise.all([
@@ -4566,13 +4660,14 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   // discarded immediately. The remaining rows start only after both critical
   // gates pass.
   let idle = await runStandardRow(ctx, "idle", selected, 20);
+  let jumpingTargetHeight = await codexPetJumpingTargetHeight(idle.frames);
   await resumeStageIfRepairing(ctx, "standard_generating", 25, "正在制作 9 组标准动作");
   let runningRight = await runStandardRow(ctx, "running-right", selected, 25);
   await resumeStageIfRepairing(ctx, "standard_generating", 25, "正在制作 9 组标准动作");
   let runningLeft: BoardJobResult;
   if (!ctx.qualityInspectionEnabled) {
     runningLeft = await runStandardRow(ctx, "running-left", selected, 30);
-  } else if (runningRight.mirrorSafe) {
+  } else if (codexPetShouldMirrorRunningLeft(runningRight.mirrorSafe, ctx.identity.actionPrompts)) {
     try {
       runningLeft = await deriveRunningLeft(ctx, runningRight, selected);
     } catch (error) {
@@ -4590,7 +4685,16 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   // is especially important for a user-requested single acceptance run.
   const remainingResults: BoardJobResult[] = [];
   for (const [index, stateName] of remainingStates.entries()) {
-    remainingResults.push(await runStandardRow(ctx, stateName, selected, 35 + index * 5));
+    remainingResults.push(await runStandardRow(
+      ctx,
+      stateName,
+      selected,
+      35 + index * 5,
+      false,
+      "",
+      "standard_generating",
+      stateName === "jumping" ? jumpingTargetHeight : undefined,
+    ));
   }
   await resumeStageIfRepairing(ctx, "standard_generating", 60, "9 组标准动作已通过逐组检查，正在组装中间图集");
   remainingStates.forEach((stateName, index) => remaining.set(stateName, remainingResults[index]!));
@@ -4632,14 +4736,25 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       const failures = [...error.validation.errors];
       const repairHint = `修复以下动作组的结构缺陷（单元格空白、越界或未用格位不透明）：${failures.slice(0, 20).join("；")}`;
       await emit(ctx, "run.repairing", "repairing", 62, `标准图集结构缺陷动作组修复 ${standardAttempt}/${standardAtlasMaxAttempts - 1}`, { retryKind: "visual", rows, failures });
-      const standardRowsSet = new Set(rows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
-      // The travel rows are one semantic pair; never leave a stale counterpart.
-      if (standardRowsSet.has("running-right")) standardRowsSet.add("running-left");
-      if (standardRowsSet.has("running-left")) standardRowsSet.add("running-right");
+      const standardRows = codexPetCoupledStandardRepairRows(
+        rows.filter((row): row is StandardRepairRow => row !== "look-a" && row !== "look-b"),
+      );
       const progressByState: Record<string, number> = { idle: 20, "running-right": 25, "running-left": 30, waving: 35, jumping: 40, failed: 45, waiting: 50, running: 55, review: 60 };
-      for (const state of standardRowsSet) {
-        const result = await runStandardRow(ctx, state, selected, progressByState[state] ?? 60, true, repairHint, "standard_generating");
-        if (state === "idle") idle = result;
+      for (const state of standardRows) {
+        const result = await runStandardRow(
+          ctx,
+          state,
+          selected,
+          progressByState[state] ?? 60,
+          true,
+          repairHint,
+          "standard_generating",
+          state === "jumping" ? jumpingTargetHeight : undefined,
+        );
+        if (state === "idle") {
+          idle = result;
+          jumpingTargetHeight = await codexPetJumpingTargetHeight(idle.frames);
+        }
         else if (state === "running-right") runningRight = result;
         else if (state === "running-left") runningLeft = result;
         else remaining.set(state, result);
@@ -5013,29 +5128,45 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     readonly failures: readonly string[];
   }): Promise<void> => {
     await emit(ctx, "run.repairing", "repairing", input.progress, input.message, { retryKind: "visual", rows: [...input.rows], failures: [...input.failures] });
-    const standardRowsSet = new Set(input.rows.filter((row): row is Exclude<FinalRepairRow, "look-a" | "look-b"> => row !== "look-a" && row !== "look-b"));
-    // Horizontal locomotion is a coupled pair: repairing one side must never
-    // leave a stale mirrored/independently-generated counterpart beside it, so
-    // cadence and asymmetric props stay synchronized.
-    if (standardRowsSet.has("running-right")) standardRowsSet.add("running-left");
-    if (standardRowsSet.has("running-left")) standardRowsSet.add("running-right");
-    const standardRows = [...standardRowsSet];
+    const standardRows = codexPetCoupledStandardRepairRows(
+      input.rows.filter((row): row is StandardRepairRow => row !== "look-a" && row !== "look-b"),
+    );
     if (standardRows.length > 0) {
       const progressByState: Record<string, number> = { idle: 20, "running-right": 25, "running-left": 30, waving: 35, jumping: 40, failed: 45, waiting: 50, running: 55, review: 60 };
-      const repaired = await mapWithConcurrency(standardRows, visualConcurrency, (state, _index, signal) => (
-        runStandardRow({ ...ctx, signal }, state, selected, progressByState[state] ?? 64, true, input.repairHint, "validating")
-      ), ctx.signal);
-      repaired.forEach((result, index) => {
-        const state = standardRows[index]!;
-        if (state === "idle") idle = result;
-        else if (state === "running-right") runningRight = result;
-        else runningLeft = state === "running-left" ? result : runningLeft;
-        if (state !== "idle" && state !== "running-right" && state !== "running-left") remaining.set(state, result);
-        frames[state] = result.frames;
-      });
-      if (standardRows.includes("idle")) {
+      if (standardRows[0] === "idle") {
+        idle = await runStandardRow(
+          ctx,
+          "idle",
+          selected,
+          progressByState.idle!,
+          true,
+          input.repairHint,
+          "validating",
+        );
+        frames.idle = idle.frames;
+        jumpingTargetHeight = await codexPetJumpingTargetHeight(idle.frames);
         neutralDirectionFrame = { artifact: idle.frameArtifacts[0]!, buffer: idle.frames[0]! };
       }
+      const parallelRows = standardRows.filter((state) => state !== "idle");
+      const repaired = await mapWithConcurrency(parallelRows, visualConcurrency, (state, _index, signal) => (
+        runStandardRow(
+          { ...ctx, signal },
+          state,
+          selected,
+          progressByState[state] ?? 64,
+          true,
+          input.repairHint,
+          "validating",
+          state === "jumping" ? jumpingTargetHeight : undefined,
+        )
+      ), ctx.signal);
+      repaired.forEach((result, index) => {
+        const state = parallelRows[index]!;
+        if (state === "running-right") runningRight = result;
+        else runningLeft = state === "running-left" ? result : runningLeft;
+        if (state !== "running-right" && state !== "running-left") remaining.set(state, result);
+        frames[state] = result.frames;
+      });
       standard = await storeStandardAtlas(ctx, frames, true);
 
       // Direction references include the approved standard contact; refresh
@@ -5107,7 +5238,9 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     const cleaned = await despillChromaEdges(assembled, ctx.identity.chromaKey);
     finalAtlas = cleaned.image;
     despill = cleaned.report;
-    validation = await validatePetAtlas(finalAtlas, ctx.identity.chromaKey);
+    validation = await validatePetAtlas(finalAtlas, ctx.identity.chromaKey, {
+      allowAuxiliaryForegroundComponentsForStates: customizedStandardActionStates(ctx.identity.actionPrompts),
+    });
     continuity = await measureDirectionContinuity(finalAtlas);
     if (!validation.ok || !continuity.ok) {
       // Both reports name the offending cells, so a structural rejection is a
@@ -5215,6 +5348,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
         + `If any action group is defective, list its complete row name in repairRows; never request a single-frame patch. `
         + `Continuity metrics are review evidence only: ${continuityWarnings.slice(0, 20).join(" | ") || "no metric warnings"}`,
         ctx.identity.canonicalGuide,
+        standardActionSpecificationSummary(ctx.identity.actionPrompts),
       ),
       env: ctx.env,
       signal: ctx.signal,
@@ -5256,7 +5390,9 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   if (inspectedPackage.manifest.spriteVersionNumber !== 2 || inspectedPackage.manifest.spritesheetPath !== "spritesheet.webp") {
     throw new Error("Codex v2 安装包结构验证失败");
   }
-  const packagedValidation = await validatePetAtlas(packaged.spritesheet, ctx.identity.chromaKey);
+  const packagedValidation = await validatePetAtlas(packaged.spritesheet, ctx.identity.chromaKey, {
+    allowAuxiliaryForegroundComponentsForStates: customizedStandardActionStates(ctx.identity.actionPrompts),
+  });
   if (!packagedValidation.ok) {
     throw new Error(`Codex v2 WebP 图集验证失败：${packagedValidation.errors.join("；")}`);
   }
@@ -5500,6 +5636,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     name: snapshotString("name", run.project.name),
     description: snapshotString("description", run.project.description),
     prompt: snapshotString("prompt", run.project.prompt),
+    actionPrompts: normalizeCodexPetActionPrompts(snapshot.actionPrompts ?? run.project.actionPrompts),
     stylePreset: snapshotString("stylePreset", run.project.stylePreset),
     styleNotes: snapshotString("styleNotes", run.project.styleNotes),
   };

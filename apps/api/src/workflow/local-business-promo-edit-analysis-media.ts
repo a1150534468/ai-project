@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ContentBlock } from "./video-multimodal.js";
-import { loadWorkflowMediaBuffer } from "./workflow-media-loader.js";
+import { loadWorkflowMediaBuffer, loadWorkflowMediaFile } from "./workflow-media-loader.js";
 import type { LocalBusinessPromoMaterial } from "./local-business-promo-core.js";
 import { runCommand } from "./local-business-promo-render-ffmpeg.js";
 
@@ -58,15 +58,15 @@ async function extractVideoPreviewFrames(
   material: LocalBusinessPromoMaterial,
   fetchFn: typeof fetch,
 ): Promise<readonly PreviewFrame[]> {
-  const loaded = await loadWorkflowMediaBuffer({
-    source: materialSource(material),
-    fetchFn,
-    allowUrlFallback: material.objectKey ? false : undefined,
-  });
   const workdir = await mkdtemp(join(tmpdir(), "local-business-promo-analysis-"));
   try {
-    const inputPath = join(workdir, `input.${inputExtensionFromMime(loaded.mime)}`);
-    await writeFile(inputPath, loaded.buffer);
+    const inputPath = join(workdir, `input.${inputExtensionFromMime(material.mime)}`);
+    await loadWorkflowMediaFile({
+      source: materialSource(material),
+      outputPath: inputPath,
+      fetchFn,
+      allowUrlFallback: material.objectKey ? false : undefined,
+    });
     const times = previewSampleTimes(
       Math.max(0, material.durationSec || 0),
       previewFrameCount(Math.max(0, material.durationSec || 0)),

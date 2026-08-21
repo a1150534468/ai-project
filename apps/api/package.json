@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:poc:gpt-image-edit": "RUN_GPT_IMAGE_EDIT_POC=1 vitest run src/workflow/gpt-image-edit.poc.test.ts",
     "typecheck": "tsc --noEmit",
+    "worker": "tsx src/workers/combined-worker.ts",
     "worker:local-business-promo": "tsx src/workers/local-business-promo-worker.ts",
     "worker:codex-pet:dev": "tsx watch src/workers/codex-pet-worker.ts",
     "worker:codex-pet": "tsx src/workers/codex-pet-worker.ts",
@@ -51,6 +52,7 @@
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.17.2",
     "sharp": "^0.35.3",
+    "tsx": "^4.19.0",
     "undici": "^6.27.0",
     "xlsx": "^0.18.5",
     "zod": "^3.23.0"
@@ -60,7 +62,6 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pdfkit": "^0.17.4",
     "form-data": "^4.0.6",
-    "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

@@ -1,8 +1,9 @@
-import { LOOK_DIRECTIONS, STANDARD_PET_STATES } from "@ai-assistant/codex-pet-pipeline";
+import { LOOK_DIRECTIONS, STANDARD_PET_STATES } from "@ai-assistant/codex-pet-pipeline/constants";
 import { Prisma, type Document, type PrismaClient } from "@prisma/client";
 import { createHash } from "node:crypto";
 import { codexPetArtifactPrefix, isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
 import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
+import { normalizeCodexPetActionPrompts, type CodexPetActionPrompts } from "./codex-pet-prompts.js";
 
 export const CODEX_PET_KNOWLEDGE_SYSTEM_KEY = "AI_ARTIFACTS";
 export const CODEX_PET_KNOWLEDGE_SOURCE_MODULE = "codex_pet";
@@ -106,6 +107,7 @@ function buildArchiveContent(args: {
   readonly name: string;
   readonly description: string;
   readonly prompt: string;
+  readonly actionPrompts: CodexPetActionPrompts;
   readonly stylePreset: string;
   readonly styleNotes: string;
   readonly requestedModel: string;
@@ -125,6 +127,7 @@ function buildArchiveContent(args: {
     `桌宠名称：${archiveText(args.name, 120)}`,
     `描述：${archiveText(args.description || "无", 1_000)}`,
     `用户角色提示词：${archiveText(args.prompt || "无", 4_000)}`,
+    `逐动作提示词：${archiveText(JSON.stringify(args.actionPrompts), 6_000)}`,
     `风格预设：${archiveText(args.stylePreset, 80)}`,
     `风格补充：${archiveText(args.styleNotes || "无", 1_000)}`,
     `生成模型：请求 ${archiveText(args.requestedModel, 120)}；实际 ${args.actualModels.map((model) => archiveText(model, 120)).join("、") || archiveText(args.requestedModel, 120)}`,
@@ -271,6 +274,7 @@ export async function archiveCodexPetRun(args: {
     const name = snapshotValue(snapshot, "name", run.project.name);
     const description = snapshotValue(snapshot, "description", run.project.description);
     const prompt = snapshotValue(snapshot, "prompt", run.project.prompt);
+    const actionPrompts = normalizeCodexPetActionPrompts(snapshot.actionPrompts ?? run.project.actionPrompts);
     const stylePreset = snapshotValue(snapshot, "stylePreset", run.project.stylePreset);
     const styleNotes = snapshotValue(snapshot, "styleNotes", run.project.styleNotes);
     const warnings = validationWarnings(report);
@@ -302,6 +306,7 @@ export async function archiveCodexPetRun(args: {
       name,
       description,
       prompt,
+      actionPrompts,
       stylePreset,
       styleNotes,
       requestedModel,

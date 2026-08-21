@@ -91,7 +91,11 @@ export function createCodexPetWorker(
   const env = options.env ?? process.env;
   return new Worker<CodexPetQueuePayload>(CODEX_PET_QUEUE_NAME, processor, {
     connection: codexPetBullConnection(env),
-    concurrency: options.concurrency ?? positiveInteger(env, "CODEX_PET_WORKER_CONCURRENCY", 2),
+    concurrency: options.concurrency ?? positiveInteger(
+      env,
+      "CODEX_PET_WORKER_CONCURRENCY",
+      positiveInteger(env, "WORKER_CONCURRENCY", 1),
+    ),
   });
 }
 

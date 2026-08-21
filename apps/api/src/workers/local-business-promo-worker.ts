@@ -4,13 +4,16 @@ import {
   closeLocalBusinessPromoQueue,
   createLocalBusinessPromoWorker,
 } from "../workflow/local-business-promo-queue.js";
-import { executeLocalBusinessPromoRun } from "../workflow/local-business-promo-runner.js";
+import { runHeavyWorkerTask } from "./heavy-task-gate.js";
+import { isDirectWorkerEntrypoint, runStandaloneWorker, type StartedWorkerRuntime } from "./worker-runtime.js";
 
-async function main() {
-  // P1.4 启动期聚合校验：缺必需 env 直接拒绝启动（见 env.ts）
+export async function startLocalBusinessPromoWorker(): Promise<StartedWorkerRuntime> {
   assertRequiredEnv();
   const worker = createLocalBusinessPromoWorker(async (job) => {
-    await executeLocalBusinessPromoRun({ runId: job.data.runId });
+    await runHeavyWorkerTask(async () => {
+      const { executeLocalBusinessPromoRun } = await import("../workflow/local-business-promo-runner.js");
+      await executeLocalBusinessPromoRun({ runId: job.data.runId });
+    });
   });
 
   worker.on("completed", (job) => {
@@ -21,29 +24,26 @@ async function main() {
     console.error(`[local-business-promo-worker] failed run=${job?.data.runId ?? "unknown"}: ${error.message}`);
   });
 
-  let closing = false;
-  const shutdown = async (signal: string) => {
-    if (closing) return;
-    closing = true;
-    console.info(`[local-business-promo-worker] received ${signal}, shutting down`);
-    try {
+  return {
+    name: "local-business-promo-worker",
+    close: async (signal: string) => {
+      console.info(`[local-business-promo-worker] received ${signal}, shutting down`);
       await worker.close();
       await closeLocalBusinessPromoQueue();
-      await getPrisma().$disconnect();
-    } catch (error) {
-      console.error("[local-business-promo-worker] shutdown error", error);
-    } finally {
-      process.exit(0);
-    }
+    },
   };
-
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
-  process.on("SIGINT", () => void shutdown("SIGINT"));
 }
 
-void main().catch(async (error) => {
-  console.error("[local-business-promo-worker] fatal error", error);
-  await closeLocalBusinessPromoQueue().catch(() => undefined);
-  await getPrisma().$disconnect().catch(() => undefined);
-  process.exit(1);
-});
+if (isDirectWorkerEntrypoint(import.meta.url)) {
+  runStandaloneWorker({
+    name: "local-business-promo-worker",
+    start: startLocalBusinessPromoWorker,
+    afterClose: () => getPrisma().$disconnect(),
+    onFatal: async () => {
+      await closeLocalBusinessPromoQueue().catch(() => undefined);
+      await getPrisma()
+        .$disconnect()
+        .catch(() => undefined);
+    },
+  });
+}

@@ -1,8 +1,11 @@
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { stat } from "node:fs/promises";
+import { mkdtemp, rm, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { loadS3Config, makeS3, putObject, putObjectFile, type S3Config } from "../storage/s3.js";
 import { probeVideoDurationSec, probeVideoDurationSecFromFile } from "./video-probe.js";
+import { loadWorkflowMediaFile } from "./workflow-media-loader.js";
 
 export const VIDEO_MODELS = ["seedance-2", "seedance-2-fast", "seedance-2-mini"] as const;
 export const VIDEO_ASPECT_RATIOS = ["21:9", "16:9", "4:3", "1:1", "3:4", "9:16"] as const;
@@ -404,21 +407,6 @@ function extensionFromMime(mime: string, fallbackFormat: string | null): string 
   return "mp4";
 }
 
-async function fetchRemoteVideo(args: {
-  readonly url: string;
-  readonly fetchFn: FetchLike;
-  readonly env: NodeJS.ProcessEnv;
-  readonly signal?: AbortSignal;
-}): Promise<{ readonly buffer: Buffer; readonly mime: string }> {
-  const response = await fetchWithTimeout(args.fetchFn, args.url, { method: "GET" }, 120_000, args.signal);
-  if (!response.ok) throw new Error(`video download ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const maxBytes = Number(args.env.VIDEO_MAX_BYTES) || DEFAULT_VIDEO_MAX_BYTES;
-  if (buffer.byteLength > maxBytes) throw new Error("video too large");
-  const contentType = response.headers.get("content-type") ?? "video/mp4";
-  return { buffer, mime: contentType.startsWith("video/") ? contentType : "video/mp4" };
-}
-
 export async function storeGeneratedVideo(args: {
   readonly url: string;
   readonly userId: string;
@@ -440,18 +428,33 @@ export async function storeGeneratedVideo(args: {
       durationSec: 0,
     };
   }
-  const binary = await fetchRemoteVideo({ url: args.url, fetchFn: args.fetchFn, env, signal: args.signal });
-  const durationSec = await probeVideoDurationSec(binary.buffer);
-  const extension = extensionFromMime(binary.mime, args.format);
-  const key = `workflow/videos/${args.userId}/${args.requestId}/${args.requestIndex}-${randomUUID()}.${extension}`;
-  await putObject(loaded.s3, key, binary.buffer, binary.mime, { acl: "public-read" });
-  return {
-    originalUrl: publicObjectUrl(loaded.cfg, key, env),
-    objectKey: key,
-    mime: binary.mime,
-    format: extension,
-    durationSec,
-  };
+  const workdir = await mkdtemp(join(tmpdir(), "generated-video-"));
+  const filePath = join(workdir, "source.video");
+  try {
+    const timedFetch = ((url: string | URL | Request, init?: RequestInit) =>
+      fetchWithTimeout(args.fetchFn, String(url), init ?? {}, 120_000, args.signal)) as typeof fetch;
+    const downloaded = await loadWorkflowMediaFile({
+      source: { url: args.url, mime: "video/mp4" },
+      outputPath: filePath,
+      fetchFn: timedFetch,
+      maxBytes: Number(env.VIDEO_MAX_BYTES) || DEFAULT_VIDEO_MAX_BYTES,
+      fetchErrorMessage: (status) => `video download ${status}`,
+    });
+    const mime = downloaded.mime.startsWith("video/") ? downloaded.mime : "video/mp4";
+    const durationSec = await probeVideoDurationSecFromFile(filePath);
+    const extension = extensionFromMime(mime, args.format);
+    const key = `workflow/videos/${args.userId}/${args.requestId}/${args.requestIndex}-${randomUUID()}.${extension}`;
+    await putObjectFile(loaded.s3, key, filePath, mime, { acl: "public-read" });
+    return {
+      originalUrl: publicObjectUrl(loaded.cfg, key, env),
+      objectKey: key,
+      mime,
+      format: extension,
+      durationSec,
+    };
+  } finally {
+    await rm(workdir, { recursive: true, force: true }).catch(() => undefined);
+  }
 }
 
 function extensionFromFilename(filename: string, mime: string): string {

@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import { loadSharp } from "../runtime/resource-limits.js";
 
 export const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 export const AVATAR_SIZE = 256;
@@ -28,6 +28,7 @@ export async function normalizeAvatarImage(buf: Buffer): Promise<Buffer> {
   if (buf.length > MAX_AVATAR_BYTES) throw new AvatarImageError("图片不能超过 2MB");
   if (detectImageKind(buf) === null) throw new AvatarImageError("只支持 PNG / JPEG / WEBP");
   try {
+    const sharp = await loadSharp();
     return await sharp(buf, { limitInputPixels: 4096 * 4096 })
       .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover", position: "center" })
       .webp({ quality: 82 })

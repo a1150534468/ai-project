@@ -7,10 +7,11 @@ import {
   type ExtractPoseBoardResult,
   type StandardPetState,
 } from "@ai-assistant/codex-pet-pipeline";
-import { buildVisualQaPrompt } from "./codex-pet-prompts.js";
+import { buildVisualQaPrompt, normalizeCodexPetActionPrompts } from "./codex-pet-prompts.js";
 import {
   CODEX_PET_BOARD_PROMPT_VERSION,
   assertCodexPetVisualQaProvenance,
+  codexPetStandardRowPromptVersion,
   type CodexPetArtifactStore,
 } from "./codex-pet-runner.js";
 import {
@@ -119,6 +120,7 @@ export async function recoverCodexPetGeneratedBoards(
   }
 
   const snapshot = record(run.inputSnapshot);
+  const actionPrompts = normalizeCodexPetActionPrompts(snapshot.actionPrompts ?? run.project.actionPrompts);
   const continuation = record(snapshot.failedContinuation);
   const targetedRetry = record(snapshot.targetedBoardRetry);
   const authorizedByPromptContinuation = continuation.schemaVersion === "codex-pet-failed-continuation-v1"
@@ -183,7 +185,7 @@ export async function recoverCodexPetGeneratedBoards(
     }
     const jobInput = record(job.input);
     const spec = petRowSpec(request.state);
-    if (jobInput.promptVersion !== CODEX_PET_BOARD_PROMPT_VERSION
+    if (jobInput.promptVersion !== codexPetStandardRowPromptVersion(request.state)
       || integer(jobInput.columns, `${key} columns`) !== spec.boardColumns
       || integer(jobInput.rows, `${key} rows`) !== spec.boardRows
       || integer(jobInput.frameCount, `${key} frameCount`) !== spec.frameCount) {
@@ -203,8 +205,12 @@ export async function recoverCodexPetGeneratedBoards(
       chromaKey: run.colorKey || "#ff00ff",
       requireUnusedSlotsEmpty: true,
       allowVerticalTravel: request.state === "jumping",
+      jumpingTargetHeight: request.state === "jumping" && typeof jobInput.jumpingTargetHeight === "number"
+        ? jobInput.jumpingTargetHeight
+        : undefined,
       requireJumpingArc: request.state === "jumping",
       maxHeightRatio: request.state === "jumping" || request.state === "failed" ? 1.8 : undefined,
+      allowAuxiliaryForegroundComponents: Boolean(actionPrompts[request.state]?.trim()),
     });
     if (!extracted.ok) {
       throw new Error(`${key} still fails deterministic recovery: ${extracted.errors.join("; ")}`);
@@ -238,17 +244,23 @@ export async function recoverCodexPetGeneratedBoards(
   const imageMap = prepared.map((board, index) => (
     `${board.state}: image ${index + 2} is the complete normalized chronological cycle`
   )).join("; ");
+  const authoritativeActions = prepared
+    .flatMap((board) => actionPrompts[board.state]?.trim()
+      ? [`${board.state}: ${actionPrompts[board.state]!.trim()}`]
+      : [])
+    .join("; ");
   const qa = await (input.qaConsensus ?? runCodexPetVisualQaConsensus)({
     images: qaImages,
     prompt: buildVisualQaPrompt(
       "row",
       `Combined recovery review of already-generated standard rows. Image 1 is the canonical identity. ${imageMap}. `
         + "Read every cycle in row-major order. Every listed row must independently preserve identity, contain the exact visible pose count, stay unclipped and connected, and have coherent timing. "
-        + "idle must show only calm breathing, blinking or tiny body motion, never waving, travel or task work. "
-        + "running-right must face and travel screen-right with a visibly alternating gait and no detached effects. "
+        + (actionPrompts.idle ? "" : "idle must show only calm breathing, blinking or tiny body motion, never waving, travel or task work. ")
+        + (actionPrompts["running-right"] ? "" : "running-right must face and travel screen-right with a visibly alternating gait and no detached effects. ")
         + "The normalized images are the production cells after deterministic removal of detached generation residue; judge them, not discarded source-board guides. "
         + "Set pass true only if every listed row passes. Set mirrorSafe solely from whether the running-right row can be mirrored without changing markings, handedness or meaning.",
       canonicalGuide,
+      authoritativeActions,
     ),
     env,
     repetitions: 1,

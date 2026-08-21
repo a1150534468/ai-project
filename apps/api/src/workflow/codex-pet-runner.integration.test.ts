@@ -9,6 +9,7 @@ import { appendCodexPetEvent } from "./codex-pet-events.js";
 import { initializeCodexPetTargetedBoardRetry } from "./codex-pet-failed-continuation.js";
 import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, ImageGenerationUpstreamError } from "./image-service.js";
 import { codexPetFinalPackageInputRevision } from "./codex-pet-packaging.js";
+import { buildStandardRowPrompt } from "./codex-pet-prompts.js";
 import { CODEX_PET_BOARD_PROMPT_VERSION, CodexPetLeaseLostError, codexPetBoardInputRevision, codexPetStandardRowPromptVersion, executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";
 import { CODEX_PET_GPT_FAILED_CONTINUATION_SCHEMA_VERSION } from "./codex-pet-gpt-continuation.js";
 import type { GeneratedPetVisual, PetVisualQaConsensus, PetVisualQaVerdict } from "./codex-pet-visual.js";
@@ -1701,6 +1702,16 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
       orderBy: { createdAt: "asc" },
     });
+    const promptIdentity = {
+      name: seeded.project.name,
+      description: seeded.project.description,
+      prompt: seeded.project.prompt,
+      actionPrompts: {},
+      stylePreset: seeded.project.stylePreset,
+      styleNotes: seeded.project.styleNotes,
+      chromaKey: "#ff00ff",
+      canonicalGuide: IDENTITY_GUIDE,
+    };
     await prisma.codexPetRun.update({
       where: { id: seeded.run.id },
       data: {
@@ -1715,6 +1726,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       rows: 2,
       frameCount: 6,
       promptVersion: codexPetStandardRowPromptVersion("idle"),
+      prompt: buildStandardRowPrompt(promptIdentity, "idle"),
     } as const;
     await prisma.codexPetJob.create({
       data: {
@@ -1783,6 +1795,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
         columns: 4,
         rows: 2,
         frameCount: 8,
+        prompt: buildStandardRowPrompt(promptIdentity, "running-right"),
       }),
     });
   }, 120_000);
@@ -2835,6 +2848,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
           rows: 2,
           frameCount: 6,
           promptVersion: codexPetStandardRowPromptVersion("idle"),
+          prompt,
         } as const;
         expect(resetJob).toMatchObject({
           status: "running",

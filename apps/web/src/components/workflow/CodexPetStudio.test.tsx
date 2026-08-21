@@ -37,6 +37,7 @@ function makeProject(overrides: Partial<CodexPetProject> = {}): CodexPetProject 
     name: "码仔",
     description: "会陪伴写代码的薄荷机器人",
     prompt: "一只薄荷色圆润机器人",
+    actionPrompts: {},
     stylePreset: "pixel",
     styleNotes: "清晰轮廓",
     referenceAssetIds: [],

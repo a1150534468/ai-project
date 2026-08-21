@@ -36,6 +36,12 @@ import {
   sanitizeImageUpstreamRequestId,
 } from "../workflow/image-service.js";
 import { assertCodexPetVisualQaRoute } from "../workflow/codex-pet-visual.js";
+import { runHeavyWorkerTask } from "./heavy-task-gate.js";
+import {
+  isDirectWorkerEntrypoint,
+  runStandaloneWorker,
+  type StartedWorkerRuntime,
+} from "./worker-runtime.js";
 
 function positiveNumber(key: string, fallback: number, env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env[key]);
@@ -794,8 +800,9 @@ async function reconcileBillingIntents(prisma: PrismaClient, billing: CodexPetCh
   return activated;
 }
 
-async function main() {
-  // P1.4 启动期聚合校验：缺必需 env 直接拒绝启动（见 env.ts）
+export async function startCodexPetWorker(options: {
+  readonly healthPort?: number | false;
+} = {}): Promise<StartedWorkerRuntime> {
   assertRequiredEnv();
   const imageRoute = assertCodexPetImageRoute(process.env);
   const dnsOverride = installCodexPetUpstreamDnsOverride(imageRoute.generationEndpoint, process.env);
@@ -861,7 +868,7 @@ async function main() {
     console.info(`[codex-pet-worker] recovered ${deletionRecovery.enqueued} deleting projects`);
   }
 
-  const worker = createCodexPetWorker(async (job) => {
+  const worker = createCodexPetWorker((job) => runHeavyWorkerTask(async () => {
     const runId = job.data.runId;
     // A Bull delivery gets a unique lease token. `job.id` is the run id and
     // may be re-delivered after stale recovery; reusing it would let an old
@@ -975,7 +982,7 @@ async function main() {
       clearInterval(heartbeat);
       activeDeliveries.delete(runId);
     }
-  });
+  }));
   const cleanupWorker = createCodexPetCleanupWorker(async (job) => executeCodexPetProjectCleanup({
     prisma,
     s3,
@@ -1004,13 +1011,16 @@ async function main() {
     console.warn(`[codex-pet-worker] project cleanup deferred: ${safeWorkerError(error)}`);
   });
 
-  const healthServer = createCodexPetWorkerHealthServer({
-    port: Math.floor(positiveNumber("CODEX_PET_WORKER_HEALTH_PORT", 8092)),
-    metrics,
-    stageDurations,
-    actionOutcomes,
-    isHealthy: () => ready && Date.now() - lastMaintenanceAt < Math.max(30_000, positiveNumber("CODEX_PET_HEALTH_STALE_MS", 120_000)),
-  });
+  const healthPort = options.healthPort === false
+    ? null
+    : options.healthPort ?? Math.floor(positiveNumber("CODEX_PET_WORKER_HEALTH_PORT", 8092));
+  const healthServer = healthPort == null ? null : createCodexPetWorkerHealthServer({
+      port: healthPort,
+      metrics,
+      stageDurations,
+      actionOutcomes,
+      isHealthy: () => ready && Date.now() - lastMaintenanceAt < Math.max(30_000, positiveNumber("CODEX_PET_HEALTH_STALE_MS", 120_000)),
+    });
   ready = true;
 
   let maintenanceRunning = false;
@@ -1136,24 +1146,23 @@ async function main() {
       await cleanupWorker.close();
       await closeCodexPetQueue();
       await closeCodexPetCleanupQueue();
-      await new Promise<void>((resolve) => healthServer.close(() => resolve()));
-      await prisma.$disconnect();
+      if (healthServer) await new Promise<void>((resolve) => healthServer.close(() => resolve()));
     } finally {
-      process.exit(0);
+      ready = false;
     }
   };
-  process.on("SIGTERM", () => void shutdown("SIGTERM"));
-  process.on("SIGINT", () => void shutdown("SIGINT"));
+  return { name: "codex-pet-worker", close: shutdown };
 }
 
-// Keep importing the recovery helper side-effect free for focused unit tests;
-// the worker entrypoint still starts normally in every non-test process.
-if (process.env.NODE_ENV !== "test") {
-  void main().catch(async (error) => {
-    console.error(`[codex-pet-worker] fatal error: ${safeWorkerError(error)}`);
-    await closeCodexPetQueue().catch(() => undefined);
-    await closeCodexPetCleanupQueue().catch(() => undefined);
-    await getPrisma().$disconnect().catch(() => undefined);
-    process.exit(1);
+if (isDirectWorkerEntrypoint(import.meta.url)) {
+  runStandaloneWorker({
+    name: "codex-pet-worker",
+    start: startCodexPetWorker,
+    afterClose: () => getPrisma().$disconnect(),
+    onFatal: async () => {
+      await closeCodexPetQueue().catch(() => undefined);
+      await closeCodexPetCleanupQueue().catch(() => undefined);
+      await getPrisma().$disconnect().catch(() => undefined);
+    },
   });
 }

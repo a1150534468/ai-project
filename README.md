@@ -37,7 +37,7 @@ Codex 桌宠的新项目仅使用 `GPT Image 2` 经 Pixel 路由生成和编辑�
 apps/       api（Fastify 单体 + workers）、web、admin、desktop（Electron）
 packages/   db（Prisma）、llm、billing 客户端、novel/article/codex-pet 流水线、connector-protocol
 services/   billing（Go + Gin，独立数据库）
-infra/      docker 镜像与 k8s 部署（部署文档见 docs/setup/deploy-k8s.md）
+infra/      Docker 镜像、Caddy 与保留的 K8s 配置（轻量生产部署见 docs/deploy-compose.md）
 docs/       项目文档（架构 / 业务线 / 搭建 / 历史 / 踩坑 / 计划归档 / 参考）
 ```
 
@@ -50,5 +50,7 @@ pnpm typecheck       # 生成 Prisma Client 并全仓类型检查
 pnpm build           # 全仓构建
 pnpm k8s:validate    # 校验 k8s kustomize 配置
 ```
+
+目标服务器使用 Docker Compose、腾讯 COS 和统一 Worker，完整步骤与资源验收标准见 [轻量生产部署](docs/deploy-compose.md)。
 
 若本地数据库结构与迁移记录漂移，可临时 `DEV_SKIP_MIGRATIONS=1 pnpm dev` 跳过启动迁移（见 [docs/lessons/](docs/lessons/README.md)）。

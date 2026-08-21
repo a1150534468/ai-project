@@ -1,9 +1,8 @@
 import { Buffer } from "node:buffer";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import type { PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 import { requireUser } from "../auth/require-user.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import sharp from "sharp";
 import { z } from "zod";
 import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma, getRedis } from "@ai-assistant/db";
@@ -16,7 +15,12 @@ import {
   isVerifiedWorkflowImageObjectKeyForUser,
 } from "./image-service.js";
 import { isCodexPetArtifactObjectKey, isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
-import { CODEX_PET_STYLES } from "./codex-pet-prompts.js";
+import {
+  CODEX_PET_ACTION_PROMPT_KEYS,
+  CODEX_PET_ACTION_PROMPT_MAX_LENGTH,
+  CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH,
+  CODEX_PET_STYLES,
+} from "./codex-pet-prompts.js";
 import { sanitizeCodexPetDiagnosticText, sanitizeCodexPetEventPayload } from "./codex-pet-events.js";
 import {
   assertCodexPetImageRoute,
@@ -40,6 +44,7 @@ import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive
 import {
   assertCodexPetVisualQaRoute,
 } from "./codex-pet-visual.js";
+import { loadSharp } from "../runtime/resource-limits.js";
 
 export { codexPetValidationPassed } from "./codex-pet-delivery-validation.js";
 
@@ -119,10 +124,20 @@ const deliveryRunQuerySchema = z.object({
   runId: idSchema.optional(),
 });
 
+const actionPromptsSchema = z.object(Object.fromEntries(
+  CODEX_PET_ACTION_PROMPT_KEYS.map((key) => [key, z.string().trim().max(CODEX_PET_ACTION_PROMPT_MAX_LENGTH).optional()]),
+) as Record<(typeof CODEX_PET_ACTION_PROMPT_KEYS)[number], z.ZodOptional<z.ZodString>>).strict().transform((value) => Object.fromEntries(
+  Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0),
+)).refine(
+  (value) => Object.values(value).reduce((total, prompt) => total + prompt.length, 0) <= CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH,
+  { message: `动作提示词总长度不能超过 ${CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH} 个字符` },
+);
+
 const projectFieldsSchema = z.object({
   name: z.string().trim().min(1).max(30),
   description: z.string().trim().max(500).default(""),
   prompt: z.string().trim().max(4_000).default(""),
+  actionPrompts: actionPromptsSchema.default({}),
   stylePreset: z.enum(CODEX_PET_STYLES).default("auto"),
   styleNotes: z.string().trim().max(1_000).default(""),
   referenceAssetIds: z.array(idSchema).max(3).default([]),
@@ -261,6 +276,7 @@ type ProjectShape = {
   readonly name: string;
   readonly description: string;
   readonly prompt: string;
+  readonly actionPrompts: unknown;
   readonly stylePreset: string;
   readonly styleNotes: string;
   readonly referenceAssetIds: readonly string[];
@@ -380,6 +396,7 @@ function serializeProject(project: ProjectShape) {
     name: project.name,
     description: project.description,
     prompt: project.prompt,
+    actionPrompts: recordOf(project.actionPrompts),
     stylePreset: project.stylePreset,
     styleNotes: project.styleNotes,
     referenceAssetIds: [...project.referenceAssetIds],
@@ -733,6 +750,7 @@ export async function validateCodexPetReferenceAsset(
   const bytes = await load(asset.objectKey);
   if (bytes.byteLength < 1 || bytes.byteLength > IMAGE_REFERENCE_MAX_BYTES) return false;
   try {
+    const sharp = await loadSharp();
     const metadata = await sharp(bytes, { limitInputPixels: 40_000_000, animated: false }).metadata();
     return Boolean(metadata.width && metadata.height);
   } catch {
@@ -1279,6 +1297,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           name: parsed.data.name,
           description: parsed.data.description,
           prompt: parsed.data.prompt,
+          actionPrompts: parsed.data.actionPrompts,
           stylePreset: parsed.data.stylePreset,
           styleNotes: parsed.data.styleNotes,
           referenceAssetIds: parsed.data.referenceAssetIds,
@@ -1448,6 +1467,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         name: updatedProject.name,
         description: updatedProject.description,
         prompt: updatedProject.prompt,
+        actionPrompts: recordOf(updatedProject.actionPrompts) as Prisma.InputJsonObject,
         stylePreset: updatedProject.stylePreset,
         styleNotes: updatedProject.styleNotes,
         referenceAssetIds: updatedProject.referenceAssetIds,
@@ -1686,6 +1706,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
         name: project.name,
         description: project.description,
         prompt: project.prompt,
+        actionPrompts: recordOf(project.actionPrompts) as Prisma.InputJsonObject,
         stylePreset: project.stylePreset,
         styleNotes: project.styleNotes,
         referenceAssetIds: project.referenceAssetIds,

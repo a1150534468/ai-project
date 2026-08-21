@@ -206,6 +206,17 @@ const multipartRoutes = new Set([
   "POST /api/workflow/videos/materials",
 ]);
 
+const codexPetActionPromptsSchema: JsonSchema = {
+  type: "object",
+  additionalProperties: false,
+  maxProperties: 10,
+  description: "每个动作最多 500 字，全部动作合计最多 4000 字",
+  properties: Object.fromEntries([
+    "idle", "running-right", "running-left", "waving", "jumping",
+    "failed", "waiting", "running", "review", "look",
+  ].map((key) => [key, { type: "string", maxLength: 500 }])),
+};
+
 const bodySchemas: Record<string, JsonSchema> = {
   "POST /api/auth/register": {
     type: "object",
@@ -307,6 +318,7 @@ const bodySchemas: Record<string, JsonSchema> = {
       name: { type: "string", minLength: 1, maxLength: 30 },
       description: { type: "string", maxLength: 500 },
       prompt: { type: "string", maxLength: 4000 },
+      actionPrompts: codexPetActionPromptsSchema,
       stylePreset: { type: "string", enum: ["auto", "pixel", "plush", "clay", "sticker", "flat-illustration", "3d-toy", "painterly"] },
       styleNotes: { type: "string", maxLength: 1000 },
       referenceAssetIds: { type: "array", maxItems: 3, items: { type: "string" } },
@@ -323,6 +335,7 @@ const bodySchemas: Record<string, JsonSchema> = {
       name: { type: "string", maxLength: 30 },
       description: { type: "string", maxLength: 500 },
       prompt: { type: "string", maxLength: 4000 },
+      actionPrompts: codexPetActionPromptsSchema,
       stylePreset: { type: "string" },
       styleNotes: { type: "string", maxLength: 1000 },
       referenceAssetIds: { type: "array", maxItems: 3, items: { type: "string" } },

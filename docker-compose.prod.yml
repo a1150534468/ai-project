@@ -1,0 +1,243 @@
+name: ai-assistant
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=30
+    environment:
+      POSTGRES_USER: ai-assistant
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ai-assistant
+    volumes:
+      - main_postgres_data:/var/lib/postgresql/data
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai-assistant -d ai-assistant"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  billing-postgres:
+    image: postgres:17
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_buffers=32MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - maintenance_work_mem=32MB
+      - -c
+      - max_connections=10
+    environment:
+      POSTGRES_USER: ai_assistant_billing
+      POSTGRES_PASSWORD: ${BILLING_POSTGRES_PASSWORD:?BILLING_POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ai_assistant_billing
+    volumes:
+      - billing_postgres_data:/var/lib/postgresql/data
+    shm_size: 64mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_assistant_billing -d ai_assistant_billing"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  billing:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-billing:${IMAGE_TAG:-latest}
+    build:
+      context: services/billing
+      dockerfile: ../../infra/docker/billing/Dockerfile
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      BILLING_DATABASE_URL: ${BILLING_DATABASE_URL:?BILLING_DATABASE_URL is required}
+      BILLING_INTERNAL_TOKEN: ${BILLING_INTERNAL_TOKEN:?BILLING_INTERNAL_TOKEN is required}
+      BILLING_PORT: "8093"
+      BILLING_DB_MAX_OPEN_CONNS: ${BILLING_DB_MAX_OPEN_CONNS:-5}
+      BILLING_DB_MAX_IDLE_CONNS: ${BILLING_DB_MAX_IDLE_CONNS:-2}
+      PUBLIC_CALLBACK_BASE: https://${BILLING_DOMAIN:?BILLING_DOMAIN is required}
+      GIN_MODE: release
+    depends_on:
+      billing-postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/billing", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  billing-migrate:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-billing:${IMAGE_TAG:-latest}
+    command: ["migrate"]
+    profiles: ["tools"]
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      BILLING_DATABASE_URL: ${BILLING_DATABASE_URL:?BILLING_DATABASE_URL is required}
+      BILLING_DB_MAX_OPEN_CONNS: ${BILLING_DB_MAX_OPEN_CONNS:-5}
+      BILLING_DB_MAX_IDLE_CONNS: ${BILLING_DB_MAX_IDLE_CONNS:-2}
+    depends_on:
+      billing-postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  migrate:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-migrate:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: infra/docker/migrate/Dockerfile
+    profiles: ["tools"]
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
+  api:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-api:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: infra/docker/api/Dockerfile
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=512
+      PORT: "8090"
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      REDIS_URL: redis://redis:6379
+      BILLING_BASE_URL: http://billing:8093
+      BILLING_INTERNAL_TOKEN: ${BILLING_INTERNAL_TOKEN:?BILLING_INTERNAL_TOKEN is required}
+      CORS_ORIGIN: https://${APP_DOMAIN:?APP_DOMAIN is required},https://${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+      API_PUBLIC_BASE_URL: https://${API_DOMAIN:?API_DOMAIN is required}
+      CODEX_PET_PUBLIC_BASE_URL: https://${API_DOMAIN}
+      SHARP_CONCURRENCY: ${SHARP_CONCURRENCY:-1}
+      SHARP_CACHE_MEMORY_MB: ${SHARP_CACHE_MEMORY_MB:-32}
+      FFMPEG_THREADS: ${FFMPEG_THREADS:-1}
+      TMPDIR: /var/tmp/ai-assistant/api
+    volumes:
+      - media_tmp:/var/tmp/ai-assistant
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      billing:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  worker:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-api:${IMAGE_TAG:-latest}
+    command: ["/repo/apps/api/node_modules/.bin/tsx", "/repo/apps/api/src/workers/combined-worker.ts"]
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env.production}
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=640
+      DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL is required}
+      REDIS_URL: redis://redis:6379
+      BILLING_BASE_URL: http://billing:8093
+      BILLING_INTERNAL_TOKEN: ${BILLING_INTERNAL_TOKEN:?BILLING_INTERNAL_TOKEN is required}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      HEAVY_TASK_CONCURRENCY: ${HEAVY_TASK_CONCURRENCY:-1}
+      WORKER_HEALTH_PORT: "8091"
+      SHARP_CONCURRENCY: ${SHARP_CONCURRENCY:-1}
+      SHARP_CACHE_MEMORY_MB: ${SHARP_CACHE_MEMORY_MB:-32}
+      FFMPEG_THREADS: ${FFMPEG_THREADS:-1}
+      TMPDIR: /var/tmp/ai-assistant/worker
+    volumes:
+      - media_tmp:/var/tmp/ai-assistant
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      billing:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8091/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    logging: *default-logging
+
+  gateway:
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-gateway:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: infra/docker/gateway/Dockerfile
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is required}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
+      BILLING_DOMAIN: ${BILLING_DOMAIN:?BILLING_DOMAIN is required}
+    ports:
+      - "127.0.0.1:${GATEWAY_HTTP_PORT:-18080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+      billing:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+volumes:
+  main_postgres_data:
+  billing_postgres_data:
+  redis_data:
+  media_tmp:

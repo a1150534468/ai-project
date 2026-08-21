@@ -76,6 +76,7 @@ const petDetail = {
     name: "码仔",
     description: "陪伴写代码的机器人",
     prompt: "薄荷色圆润机器人",
+    actionPrompts: {},
     stylePreset: "pixel",
     styleNotes: "",
     referenceAssetIds: [],

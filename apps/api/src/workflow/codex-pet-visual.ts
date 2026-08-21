@@ -1,14 +1,8 @@
 import { Buffer } from "node:buffer";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonrepair } from "jsonrepair";
-import sharp from "sharp";
 import { buildBailianBaseURL } from "@ai-assistant/llm";
-import {
-  colorDistance,
-  parseHexColor,
-  removeChroma,
-  type DirectionBlindAnswerKey,
-} from "@ai-assistant/codex-pet-pipeline";
+import type { DirectionBlindAnswerKey } from "@ai-assistant/codex-pet-pipeline";
 import {
   DOUBAO_IMAGE_MODEL,
   GPT_IMAGE_MODEL,
@@ -20,6 +14,14 @@ import {
   type ImageGenerationResult,
 } from "./image-service.js";
 import { createCodexPetUpstreamFetch } from "./codex-pet-network.js";
+import { loadSharp } from "../runtime/resource-limits.js";
+
+let petPipelineModule: Promise<typeof import("@ai-assistant/codex-pet-pipeline")> | null = null;
+
+function loadPetPipeline(): Promise<typeof import("@ai-assistant/codex-pet-pipeline")> {
+  petPipelineModule ??= import("@ai-assistant/codex-pet-pipeline");
+  return petPipelineModule;
+}
 
 const SEEDREAM_CHROMA_NAMES: Readonly<Record<string, string>> = {
   "#ff00ff": "a perfectly flat solid hot-magenta chroma-key background",
@@ -338,6 +340,7 @@ async function compactEditReferences(
   references: readonly ImageBinaryInput[],
 ): Promise<readonly ImageBinaryInput[]> {
   if (references.length <= 3) return references;
+  const sharp = await loadSharp();
 
   const keepCount = Math.min(2, references.length - 1);
   const kept = references.slice(0, keepCount);
@@ -435,6 +438,8 @@ export async function normalizeSeedreamChromaMatte(
   }
   const keyToken = originalPrompt.match(/#[0-9a-f]{6}/i)?.[0];
   if (!keyToken) return { buffer: input, mime: "" };
+  const sharp = await loadSharp();
+  const { colorDistance, parseHexColor, removeChroma } = await loadPetPipeline();
   const key = parseHexColor(keyToken);
   const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
   const border = Math.max(1, Math.floor(Math.min(info.width, info.height) * 0.02));
@@ -530,6 +535,8 @@ export async function createSeedreamPoseBoardScaffold(input: {
   readonly width?: number;
   readonly height?: number;
 }): Promise<Buffer> {
+  const sharp = await loadSharp();
+  const { parseHexColor, removeChroma } = await loadPetPipeline();
   // Seedream preserves the prompt's square target slots much more reliably
   // when the construction reference uses the same columns:rows aspect ratio.
   // A fixed 1536x1024 canvas is correct for 3x2 idle, but it turns a 4x2 gait
@@ -602,6 +609,7 @@ export async function selectSeedreamGaitScaffoldVariants(
   frames: readonly Buffer[],
 ): Promise<readonly [Buffer, Buffer]> {
   if (frames.length < 2) throw new Error("Seedream gait scaffold requires at least two source phases");
+  const sharp = await loadSharp();
   const decoded = await Promise.all(frames.map((frame) => (
     sharp(frame).ensureAlpha().raw().toBuffer({ resolveWithObject: true })
   )));
@@ -764,6 +772,7 @@ export async function generateCodexPetVisual(input: {
         buffer: normalized.buffer,
         mime: normalized.mime || binary.mime,
       };
+      const sharp = await loadSharp();
       const metadata = await sharp(output.buffer, { limitInputPixels: 40_000_000 }).metadata();
       if (!metadata.width || !metadata.height) throw new Error("image provider returned an unreadable raster");
       return { ...output, provider: { ...provider, actualSize: `${metadata.width}x${metadata.height}` } };

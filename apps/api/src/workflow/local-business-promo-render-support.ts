@@ -1,6 +1,5 @@
-import { writeFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { loadWorkflowMediaBuffer } from "./workflow-media-loader.js";
+import { loadWorkflowMediaFile } from "./workflow-media-loader.js";
 import type {
   LocalBusinessPromoAspectRatio,
   LocalBusinessPromoShotPlanEntry,
@@ -27,7 +26,7 @@ export async function fetchToFile(args: {
   readonly objectKey?: string | null;
   readonly outputPath: string;
 }): Promise<{ readonly filePath: string; readonly mime: string }> {
-  const loaded = await loadWorkflowMediaBuffer({
+  await loadWorkflowMediaFile({
     source: {
       url: args.url,
       mime: args.mime,
@@ -37,8 +36,8 @@ export async function fetchToFile(args: {
     allowUrlFallback: args.objectKey ? false : undefined,
     fetchOptions: { method: "GET" },
     fetchErrorMessage: (status) => `素材下载失败：${status}`,
+    outputPath: args.outputPath,
   });
-  await writeFile(args.outputPath, loaded.buffer);
   return {
     filePath: args.outputPath,
     mime: args.mime,

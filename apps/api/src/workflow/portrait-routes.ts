@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
-import sharp, { type Metadata } from "sharp";
+import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth/require-user.js";
@@ -43,6 +43,7 @@ import {
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "./image-delivered-tier.js";
 import type { ImageResolutionLabel } from "./image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";
+import { loadSharp } from "../runtime/resource-limits.js";
 import {
   PORTRAIT_ACTIVE_STATUSES,
   PORTRAIT_TERMINAL_STATUSES,
@@ -407,6 +408,7 @@ async function runPortraitTask(args: {
   readonly callImageEdit: NonNullable<PortraitRouteDeps["callImageEdit"]>;
   readonly onFailure?: (taskId: string, error: unknown) => void;
 }): Promise<void> {
+  const sharp = await loadSharp();
   const task = await args.prisma.portraitTask.findUnique({ where: { id: args.taskId }, include: { outputs: true } }) as unknown as PortraitTaskRow | null;
   if (!task) return;
   const existing = (task.outputs ?? []).slice().sort((a, b) => a.requestIndex - b.requestIndex);
@@ -647,6 +649,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   });
 
   app.post("/api/workflow/portraits/references", { preHandler: requireUser }, async (req, reply) => {
+    const sharp = await loadSharp();
     const userId = req.userId;
     const parsed = portraitReferenceSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参考图参数不合法" });

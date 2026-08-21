@@ -1,7 +1,11 @@
 import type { PrismaClient } from "@ai-assistant/db";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { DUB_STAGE } from "./dub-constants.js";
 import { resolveBgmObjectKey } from "./dub-bgm-service.js";
-import { mixBgmIntoVideo } from "./dub-ffmpeg.js";
+import { mixBgmFiles } from "./dub-ffmpeg.js";
+import { assertTempDiskSpace } from "../runtime/temp-storage.js";
 
 const PATCHABLE = ["title", "sourceVideoUrl", "analysis", "script", "attachedKbIds", "ttsMode",
   "audioUrl", "audioObjectKey", "audioDurationSec", "avatarId", "bgmPresetId", "bgmObjectKey", "bgmVolume", "stage"] as const;
@@ -44,9 +48,9 @@ export interface FinalizeProjectArgs {
   videoUrl: string;
   videoObjectKey: string;
   resolveBgmKey?: typeof resolveBgmObjectKey;
-  getObject: (key: string) => Promise<Buffer>;
-  storeVideoBuffer: (a: { userId: string; buffer: Buffer }) => Promise<{ url: string; objectKey: string }>;
-  mixFn?: typeof mixBgmIntoVideo;
+  getObjectToFile: (key: string, filePath: string) => Promise<unknown>;
+  storeVideoFile: (a: { userId: string; filePath: string }) => Promise<{ url: string; objectKey: string }>;
+  mixFn?: typeof mixBgmFiles;
 }
 
 // 成片完成后的收尾：无 BGM 直接定稿；有 BGM 则本地混流。
@@ -55,7 +59,7 @@ export async function finalizeProjectVideo(args: FinalizeProjectArgs): Promise<v
   const project = await args.prisma.dubProject.findUnique({ where: { id: args.projectId } });
   if (!project) return;
   const resolveBgm = args.resolveBgmKey ?? resolveBgmObjectKey;
-  const mix = args.mixFn ?? mixBgmIntoVideo;
+  const mix = args.mixFn ?? mixBgmFiles;
 
   const bgmKey = await resolveBgm(args.prisma, { bgmObjectKey: project.bgmObjectKey, bgmPresetId: project.bgmPresetId });
   if (!bgmKey) {
@@ -66,10 +70,18 @@ export async function finalizeProjectVideo(args: FinalizeProjectArgs): Promise<v
     return;
   }
 
+  const workdir = await mkdtemp(join(tmpdir(), "dub-finalize-"));
+  const videoPath = join(workdir, "source.mp4");
+  const bgmPath = join(workdir, "bgm.audio");
+  const outputPath = join(workdir, "final.mp4");
   try {
-    const [videoBuffer, bgmBuffer] = await Promise.all([args.getObject(args.videoObjectKey), args.getObject(bgmKey)]);
-    const mixed = await mix({ videoBuffer, bgmBuffer, bgmVolume: project.bgmVolume });
-    const stored = await args.storeVideoBuffer({ userId: project.userId, buffer: mixed });
+    await assertTempDiskSpace(outputPath);
+    await Promise.all([
+      args.getObjectToFile(args.videoObjectKey, videoPath),
+      args.getObjectToFile(bgmKey, bgmPath),
+    ]);
+    await mix({ videoPath, bgmPath, outPath: outputPath, bgmVolume: project.bgmVolume });
+    const stored = await args.storeVideoFile({ userId: project.userId, filePath: outputPath });
     await args.prisma.dubProject.update({
       where: { id: project.id },
       data: { stage: DUB_STAGE.done, resultVideoUrl: args.videoUrl, resultObjectKey: args.videoObjectKey, finalVideoUrl: stored.url, finalObjectKey: stored.objectKey, error: null },
@@ -79,5 +91,7 @@ export async function finalizeProjectVideo(args: FinalizeProjectArgs): Promise<v
       where: { id: project.id },
       data: { stage: DUB_STAGE.failed, resultVideoUrl: args.videoUrl, resultObjectKey: args.videoObjectKey, error: `BGM 混流失败：${(e as Error).message}` },
     }).catch(() => undefined);
+  } finally {
+    await rm(workdir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

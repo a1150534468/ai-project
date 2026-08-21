@@ -4,6 +4,7 @@ import {
   buildBaseChoiceQaContext,
   buildCardinalPrompt,
   buildJumpingQaEvidenceContext,
+  buildLookMechanicsPrompt,
   buildLookRowPrompt,
   buildStandardRowPrompt,
   buildVisualQaPrompt,
@@ -30,6 +31,92 @@ describe("Codex pet prompts", () => {
     expect(prompt).toContain("temporary gesture");
     expect(prompt).toContain("both paws relaxed, visibly attached, and lowered away from the eyes and mouth");
     expect(prompt).toContain("Do not copy an action pose as the canonical base");
+  });
+
+  it("keeps character and per-action prompts isolated across every generation stage", () => {
+    const actionPrompts = {
+      idle: "ONLY_ACTION_A01",
+      "running-right": "ONLY_ACTION_B02",
+      "running-left": "ONLY_ACTION_C03",
+      waving: "ONLY_ACTION_D04",
+      jumping: "ONLY_ACTION_E05",
+      failed: "ONLY_ACTION_F06",
+      waiting: "ONLY_ACTION_G07",
+      running: "ONLY_ACTION_H08",
+      review: "ONLY_ACTION_I09",
+      look: "ONLY_ACTION_J10",
+    } as const;
+    const customized = { ...identity, actionPrompts };
+    const allMarkers = Object.values(actionPrompts);
+    const base = buildBasePetPrompt(customized, 1);
+    expect(base).toContain(identity.prompt);
+    allMarkers.forEach((marker) => expect(base).not.toContain(marker));
+
+    for (const [state, ownMarker] of Object.entries(actionPrompts).filter(([state]) => state !== "look")) {
+      const row = buildStandardRowPrompt(customized, state as Exclude<keyof typeof actionPrompts, "look">);
+      expect(row).not.toContain(identity.prompt);
+      expect(row).toContain(ownMarker);
+      allMarkers.filter((marker) => marker !== ownMarker).forEach((marker) => expect(row).not.toContain(marker));
+    }
+
+    const lookPrompts = [
+      buildLookMechanicsPrompt(customized),
+      buildCardinalPrompt(customized, "脚底固定"),
+      buildLookRowPrompt(customized, "look-a", "脚底固定"),
+      buildLookRowPrompt(customized, "look-b", "脚底固定"),
+    ];
+    for (const prompt of lookPrompts) {
+      expect(prompt).toContain(actionPrompts.look);
+      expect(prompt).not.toContain(identity.prompt);
+      allMarkers.filter((marker) => marker !== actionPrompts.look).forEach((marker) => expect(prompt).not.toContain(marker));
+    }
+  });
+
+  it("preserves the previous row prompts when no action customization is supplied", () => {
+    expect(buildStandardRowPrompt(identity, "waving"))
+      .toBe(buildStandardRowPrompt({ ...identity, actionPrompts: {} }, "waving"));
+    expect(buildLookRowPrompt(identity, "look-a", "脚底固定"))
+      .toBe(buildLookRowPrompt({ ...identity, actionPrompts: {} }, "look-a", "脚底固定"));
+  });
+
+  it("makes ds action prompts authoritative over conflicting default semantics", () => {
+    const idleAction = "Standing, nodding off to sleep, with \"ZZZ\" floating above (sleeping indication)";
+    const runningAction = "Sitting at a computer desk and typing on a keyboard";
+    const customized = {
+      ...identity,
+      actionPrompts: { idle: idleAction, running: runningAction },
+    };
+
+    const idle = buildStandardRowPrompt(customized, "idle");
+    expect(idle).toContain(`Authoritative user specification for this idle animation: ${idleAction}`);
+    expect(idle).toContain("This specification replaces the default action semantics");
+    expect(idle).toContain("short readable text");
+    expect(idle).toContain("up to four separate opaque foreground components");
+    expect(idle).not.toContain("Never wave, raise a hand, sleep");
+    expect(idle).not.toContain("No text, labels, numbers");
+    expect(idle).not.toContain("No detached effects");
+
+    const running = buildStandardRowPrompt(customized, "running");
+    expect(running).toContain(`Authoritative user specification for this running animation: ${runningAction}`);
+    expect(running).not.toContain("must not add a device, paper, text or UI");
+    expect(running).not.toContain("using the existing character only");
+
+    const defaultIdle = buildStandardRowPrompt(identity, "idle");
+    expect(defaultIdle).toContain("Never wave, raise a hand, sleep");
+    expect(defaultIdle).toContain("No detached effects");
+  });
+
+  it("lets QA grade requested auxiliary content against the authoritative action", () => {
+    const action = "Standing and sleeping with ZZZ floating above";
+    const prompt = buildVisualQaPrompt("row", "idle 动作组", undefined, action);
+    expect(prompt).toContain(`Authoritative user action specification: ${action}`);
+    expect(prompt).toContain("Do not reject a requested short text cue");
+    expect(prompt).toContain("unrequested detached residue");
+    expect(prompt).not.toContain("visible guides, detached effects");
+
+    const running = buildVisualQaPrompt("row", "running 动作组", undefined, "Dancing in place");
+    expect(running).not.toContain("Codex state semantics are authoritative");
+    expect(running).toContain("Dancing in place");
   });
 
   it("uses original references to disambiguate base anatomy without weakening structure gates", () => {

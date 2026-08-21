@@ -4,7 +4,7 @@ import {
   codexPetGateRowJobKey,
   readCodexPetGateFailureSnapshot,
 } from "./codex-pet-gate-failure.js";
-import { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-runner.js";
+import { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-board-version.js";
 import { DOUBAO_IMAGE_MODEL } from "./image-service.js";
 
 const CONTINUATION_SCHEMA_VERSION = "codex-pet-failed-continuation-v1";

@@ -77,6 +77,12 @@ export interface ExtractPoseBoardOptions {
   readonly requireUnusedSlotsEmpty?: boolean;
   /** Jumping opts into preserving source-board travel; ordinary poses are centred and grounded. */
   readonly allowVerticalTravel?: boolean;
+  /**
+   * Maximum normalized pose height for jumping. When provided, all frames use
+   * one raster scale and source-board travel is compressed into the available
+   * 18-24px arc instead of shrinking the character to fit the raw travel span.
+   */
+  readonly jumpingTargetHeight?: number;
   /** Opt-in five-frame semantic geometry gate; callers should enable it only for jumping. */
   readonly requireJumpingArc?: boolean;
   readonly maxHeightRatio?: number;
@@ -85,6 +91,13 @@ export interface ExtractPoseBoardOptions {
   readonly maxCenterSpreadPixels?: number;
   /** Deliberate opt-in for character designs whose sprite has separate opaque islands. */
   readonly allowMultipleForegroundComponents?: boolean;
+  /**
+   * Preserve and validate a small bounded set of detached foreground elements,
+   * such as user-requested ZZZ text or an action prop. Unlike the broad
+   * `allowMultipleForegroundComponents` escape hatch, this still rejects
+   * distant, oversized, edge-touching, or duplicate-subject-like islands.
+   */
+  readonly allowAuxiliaryForegroundComponents?: boolean;
   /** Deliberate opt-in for designs with intentional enclosed negative space, such as a ring body. */
   readonly allowTransparentHoles?: boolean;
   /**
@@ -144,6 +157,7 @@ export const FRAME_TOLERANCE = {
 
 export interface FrameInspectionOptions {
   readonly allowMultipleForegroundComponents?: boolean;
+  readonly allowAuxiliaryForegroundComponents?: boolean;
   readonly allowTransparentHoles?: boolean;
   readonly frameStrictness?: FrameStrictness;
 }
@@ -203,6 +217,8 @@ interface AlphaAnalysis {
    * from every other field, so the caller reports the finding from this count.
    */
   readonly removedBleedComponentCount: number;
+  /** Hard failures raised by the bounded auxiliary-component contract. */
+  readonly auxiliaryComponentErrors: readonly string[];
   /** Source image with only proven detached generation residue removed. */
   readonly cleanedImage: Buffer | null;
 }
@@ -220,6 +236,7 @@ function emptyAlphaAnalysis(): AlphaAnalysis {
     enclosedRegions: [],
     components: [],
     removedBleedComponentCount: 0,
+    auxiliaryComponentErrors: [],
     cleanedImage: null,
   };
 }
@@ -428,6 +445,7 @@ function detachedDuplicateFragmentLabels(
 
 interface AnalyzeAlphaOptions {
   readonly minAlpha?: number;
+  readonly allowAuxiliaryForegroundComponents?: boolean;
   /**
    * Erase shallow neighbour-bleed slivers instead of merely retaining them.
    *
@@ -438,6 +456,52 @@ interface AnalyzeAlphaOptions {
    * bleed signature and re-raises as a hard error on the assembled sheet.
    */
   readonly dropNeighbourBleed?: boolean;
+}
+
+function validateAuxiliaryComponents(
+  components: readonly AlphaComponent[],
+  primary: AlphaComponent,
+  canvasWidth: number,
+  canvasHeight: number,
+): readonly string[] {
+  const auxiliary = components.filter((component) => component.label !== primary.label);
+  if (auxiliary.length === 0) return [];
+  const errors = new Set<string>();
+  if (auxiliary.length > 4) errors.add("auxiliary-component-count-exceeded");
+  const maximumGap = Math.max(
+    Math.min(canvasWidth, canvasHeight) * 0.2,
+    Math.min(primary.bounds.width, primary.bounds.height) * 0.35,
+  );
+  const totalPixels = auxiliary.reduce((total, component) => total + component.pixels, 0);
+  if (totalPixels > primary.pixels * 0.65) errors.add("auxiliary-components-too-large");
+
+  for (const component of auxiliary) {
+    if (component.edgePixels > 0) errors.add("auxiliary-component-touches-edge");
+    if (component.pixels > primary.pixels * 0.45
+      || component.bounds.width > primary.bounds.width * 1.25
+      || component.bounds.height > primary.bounds.height * 0.65) {
+      errors.add("auxiliary-component-too-large");
+    }
+    const horizontalGap = axisGap(
+      component.bounds.left,
+      component.bounds.right,
+      primary.bounds.left,
+      primary.bounds.right,
+    );
+    const verticalGap = axisGap(
+      component.bounds.top,
+      component.bounds.bottom,
+      primary.bounds.top,
+      primary.bounds.bottom,
+    );
+    if (Math.hypot(horizontalGap, verticalGap) > maximumGap) {
+      errors.add("auxiliary-component-too-far");
+    }
+    if (isDetachedPartialDuplicateResidue(component, primary, canvasWidth, canvasHeight)) {
+      errors.add("auxiliary-component-resembles-partial-subject");
+    }
+  }
+  return [...errors];
 }
 
 async function analyzeAlpha(input: Buffer, options: AnalyzeAlphaOptions = {}): Promise<AlphaAnalysis> {
@@ -521,14 +585,15 @@ async function analyzeAlpha(input: Buffer, options: AnalyzeAlphaOptions = {}): P
     (largest, component) => !largest || component.pixels > largest.pixels ? component : largest,
     null,
   );
-  const duplicateFragmentLabels = primary
+  const preserveAuxiliary = options.allowAuxiliaryForegroundComponents === true;
+  const duplicateFragmentLabels = primary && !preserveAuxiliary
     ? detachedDuplicateFragmentLabels(eligibleComponents, primary, width)
     : new Set<number>();
   const survivingComponents = primary
     ? eligibleComponents.filter((component) => (
-        !isDetachedLineResidue(component, primary, width, height)
+        (preserveAuxiliary || (!isDetachedLineResidue(component, primary, width, height)
         && !isDetachedSpeckResidue(component, primary, width, height)
-        && !isDetachedPartialDuplicateResidue(component, primary, width, height)
+        && !isDetachedPartialDuplicateResidue(component, primary, width, height)))
         && !isDetachedLayoutGuideResidue(component, primary, width, height)
         && !duplicateFragmentLabels.has(component.label)
       ))
@@ -542,6 +607,9 @@ async function analyzeAlpha(input: Buffer, options: AnalyzeAlphaOptions = {}): P
   const bleedLabels = new Set(bleedComponents.map((component) => component.label));
   const retainedComponents = survivingComponents.filter((component) => !bleedLabels.has(component.label));
   const removedBleedComponentCount = bleedComponents.length;
+  const auxiliaryComponentErrors = preserveAuxiliary && primary
+    ? validateAuxiliaryComponents(retainedComponents, primary, width, height)
+    : [];
   const retainedLabels = new Set(retainedComponents.map((component) => component.label));
   let left = width;
   let right = -1;
@@ -673,6 +741,7 @@ async function analyzeAlpha(input: Buffer, options: AnalyzeAlphaOptions = {}): P
       edgePixels: component.edgePixels,
     })),
     removedBleedComponentCount,
+    auxiliaryComponentErrors,
     cleanedImage: removedComponentPixels > 0
       ? await sharp(data, { raw: { width, height, channels: info.channels } }).png().toBuffer()
       : null,
@@ -725,18 +794,21 @@ function looksLikeNeighbourBleed(
  * board.
  */
 function classifyFrameFindings(
-  analysis: Pick<AlphaAnalysis, "opaquePixels" | "edgePixels" | "componentCount" | "internalTransparentPixels" | "borderContactRuns" | "enclosedRegions" | "components" | "removedBleedComponentCount">,
+  analysis: Pick<AlphaAnalysis, "opaquePixels" | "edgePixels" | "componentCount" | "internalTransparentPixels" | "borderContactRuns" | "enclosedRegions" | "components" | "removedBleedComponentCount" | "auxiliaryComponentErrors">,
   slotWidth: number,
   slotHeight: number,
   options: {
     readonly strictness: FrameStrictness;
     readonly allowMultipleForegroundComponents?: boolean;
+    readonly allowAuxiliaryForegroundComponents?: boolean;
     readonly allowTransparentHoles?: boolean;
     readonly edgeContactCode: string;
   },
 ): readonly FrameFinding[] {
   const findings: FrameFinding[] = [];
   const strict = options.strictness === "strict";
+
+  findings.push(...analysis.auxiliaryComponentErrors.map((code) => ({ code, severity: "error" as const })));
 
   if (analysis.edgePixels > 0) {
     const runs = analysis.borderContactRuns;
@@ -760,7 +832,11 @@ function classifyFrameFindings(
       ));
     findings.push({
       code: "multiple-foreground-components",
-      severity: options.allowMultipleForegroundComponents || onlyNeighbourBleed ? "warning" : "error",
+      severity: options.allowMultipleForegroundComponents
+        || options.allowAuxiliaryForegroundComponents
+        || onlyNeighbourBleed
+        ? "warning"
+        : "error",
     });
   } else if (analysis.removedBleedComponentCount > 0) {
     // The sliver is already erased, so nothing downstream can see it. Report it
@@ -852,7 +928,10 @@ export async function extractPoseBoard(
     // Bleed removal is a slot-only concern: the slot border is shared with the
     // adjacent pose, whereas a normalized cell keeps padding on every side, so
     // anything touching its border is a real overflow the safe-margin check owns.
-    const analysis = await analyzeAlpha(result.image, { dropNeighbourBleed: strictness !== "strict" });
+    const analysis = await analyzeAlpha(result.image, {
+      dropNeighbourBleed: strictness !== "strict",
+      allowAuxiliaryForegroundComponents: options.allowAuxiliaryForegroundComponents,
+    });
     cleanedSlots.push(analysis.cleanedImage ?? result.image);
     slotWidths.push(right - left);
     slotHeights.push(bottom - top);
@@ -872,6 +951,11 @@ export async function extractPoseBoard(
   // actions are also grounded; jumping preserves only its relative vertical
   // lift/peak/descent while remaining horizontally centred.
   const preserveVerticalTravel = options.allowVerticalTravel === true;
+  const jumpingTargetHeight = options.jumpingTargetHeight;
+  if (jumpingTargetHeight !== undefined
+    && (!preserveVerticalTravel || !Number.isFinite(jumpingTargetHeight) || jumpingTargetHeight < 1)) {
+    throw new Error("jumpingTargetHeight requires vertical travel and must be a positive finite number");
+  }
   const positioned = usedAnalyses.map((analysis, index) => {
     if (!analysis.bounds) return null;
     const bottomGap = usedSlotHeights[index]! - 1 - analysis.bounds.bottom;
@@ -907,12 +991,37 @@ export async function extractPoseBoard(
   // Keep a one-pixel rounding reserve on every side. Sharp rounds resized
   // dimensions while placement rounds coordinates, so using the exact
   // mathematical span can otherwise land an edge one pixel outside padding.
-  const sharedScale = Math.min(
-    (cellWidth - padding * 2 - 2) / sharedWidth,
-    (cellHeight - padding * 2 - 2) / sharedHeight,
+  const horizontalScale = (cellWidth - padding * 2 - 2) / sharedWidth;
+  const jumpTopPadding = 3;
+  const minimumJumpLift = 18;
+  const maximumJumpLift = 24;
+  const groundBaseline = cellHeight - padding - 1;
+  const maximumPoseHeight = placed.length ? Math.max(...placed.map((item) => item.height)) : 1;
+  // Reserve the complete normalized arc before choosing the shared character
+  // scale. Reserving only the minimum lift can leave a tall character with a
+  // 19px peak even though the unchanged body-relative gate requires 23px.
+  const maximumJumpingPoseHeight = groundBaseline - jumpTopPadding + 1 - maximumJumpLift;
+  const sharedScale = jumpingTargetHeight === undefined
+    ? Math.min(horizontalScale, (cellHeight - padding * 2 - 2) / sharedHeight)
+    : Math.min(
+      horizontalScale,
+      Math.min(jumpingTargetHeight, maximumJumpingPoseHeight) / maximumPoseHeight,
+    );
+  const normalizedMaximumPoseHeight = Math.max(
+    1,
+    ...placed.map((item) => Math.max(1, Math.round(item.height * sharedScale))),
   );
+  const compressedJumpLift = jumpingTargetHeight === undefined
+    ? null
+    : Math.min(
+      maximumJumpLift,
+      Math.max(minimumJumpLift, groundBaseline - jumpTopPadding + 1 - normalizedMaximumPoseHeight),
+    );
+  const maximumSourceLift = nonempty.length
+    ? Math.max(...nonempty.map((item) => item.bottomGap - groundGap))
+    : 0;
   const horizontalOrigin = (cellWidth - 1) / 2 - ((minLeft + maxRight) / 2) * sharedScale;
-  const baseline = cellHeight - padding - 1 - maxBottom * sharedScale;
+  const baseline = groundBaseline - maxBottom * sharedScale;
   const frames: Buffer[] = [];
   const diagnostics: FrameDiagnostics[] = [];
   const errors: string[] = [];
@@ -939,6 +1048,7 @@ export async function extractPoseBoard(
       for (const finding of classifyFrameFindings(analysis, usedSlotWidths[index]!, usedSlotHeights[index]!, {
         strictness,
         allowMultipleForegroundComponents: options.allowMultipleForegroundComponents,
+        allowAuxiliaryForegroundComponents: options.allowAuxiliaryForegroundComponents,
         allowTransparentHoles: options.allowTransparentHoles,
         edgeContactCode: "source-touches-slot-edge",
       })) {
@@ -956,17 +1066,26 @@ export async function extractPoseBoard(
       const left = preserveVerticalTravel
         ? Math.round(horizontalOrigin + registration.left * sharedScale)
         : Math.round((cellWidth - targetWidth) / 2);
-      const top = preserveVerticalTravel
-        ? Math.round(baseline + registration.top * sharedScale)
-        : cellHeight - padding - targetHeight;
-      if (left < padding || top < padding || left + targetWidth > cellWidth - padding || top + targetHeight > cellHeight - padding) {
+      const sourceLift = positioned[index] ? positioned[index]!.bottomGap - groundGap : 0;
+      const normalizedJumpLift = compressedJumpLift !== null && maximumSourceLift > 0
+        ? Math.round((sourceLift / maximumSourceLift) * compressedJumpLift)
+        : 0;
+      const top = jumpingTargetHeight !== undefined
+        ? groundBaseline - targetHeight + 1 - normalizedJumpLift
+        : preserveVerticalTravel
+          ? Math.round(baseline + registration.top * sharedScale)
+          : cellHeight - padding - targetHeight;
+      const requiredTopPadding = jumpingTargetHeight === undefined ? padding : jumpTopPadding;
+      if (left < padding || top < requiredTopPadding || left + targetWidth > cellWidth - padding || top + targetHeight > cellHeight - padding) {
         frameErrors.push("normalized-frame-outside-safe-margin");
       }
       frames.push(await sharp({
         create: { width: cellWidth, height: cellHeight, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
       }).composite([{ input: cropped, left, top }]).png().toBuffer());
     }
-    const normalized = await analyzeAlpha(frames[index]!);
+    const normalized = await analyzeAlpha(frames[index]!, {
+      allowAuxiliaryForegroundComponents: options.allowAuxiliaryForegroundComponents,
+    });
     const diagnostic: FrameDiagnostics = {
       index,
       sourceBounds: analysis.bounds,
@@ -1245,7 +1364,9 @@ export async function inspectFrame(
   index = 0,
   options: FrameInspectionOptions = {},
 ): Promise<FrameDiagnostics> {
-  const analysis = await analyzeAlpha(input);
+  const analysis = await analyzeAlpha(input, {
+    allowAuxiliaryForegroundComponents: options.allowAuxiliaryForegroundComponents,
+  });
   const metadata = await sharp(input).metadata();
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -1253,6 +1374,7 @@ export async function inspectFrame(
   for (const finding of classifyFrameFindings(analysis, metadata.width ?? PET_CELL_WIDTH, metadata.height ?? PET_CELL_HEIGHT, {
     strictness: options.frameStrictness ?? DEFAULT_FRAME_STRICTNESS,
     allowMultipleForegroundComponents: options.allowMultipleForegroundComponents,
+    allowAuxiliaryForegroundComponents: options.allowAuxiliaryForegroundComponents,
     allowTransparentHoles: options.allowTransparentHoles,
     edgeContactCode: "touches-cell-edge",
   })) {

@@ -301,6 +301,7 @@ model CodexPetProject {
   name                 String
   description          String             @default("")
   prompt               String             @default("")
+  actionPrompts        Json               @default("{}")
   stylePreset          String             @default("auto")
   styleNotes           String             @default("")
   referenceAssetIds    String[]           @default([])
