@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
-import { requireUser } from "../auth/require-user.js";
+import { requireUser } from "../../auth/require-user.js";
 import type { PrismaClient } from "@prisma/client";
 import { getPrisma } from "@ai-assistant/db";
-import { callImageGeneration, loadImageGenerationConfig } from "./_shared/image-service.js";
+import { callImageGeneration, loadImageGenerationConfig } from "../_shared/image-service.js";
 import { findComicVideoModel, listComicVideoModels } from "./comic-video-models.js";
 import { loadSeedanceConfig, pollSeedanceVideoTask, submitSeedanceVideoTask } from "./comic-video-service.js";
 import { normalizeComicAssetIds } from "./comic-types.js";

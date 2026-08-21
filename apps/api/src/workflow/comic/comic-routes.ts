@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
-import { requireUser } from "../auth/require-user.js";
+import { requireUser } from "../../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import {

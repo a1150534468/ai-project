@@ -6,7 +6,7 @@ import {
   type GeneratedImage,
   type ImageGenerationConfig,
   type StoredImage,
-} from "./_shared/image-service.js";
+} from "../_shared/image-service.js";
 
 export type FetchLike = typeof fetch;
 
