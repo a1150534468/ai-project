@@ -67,10 +67,15 @@ import {
 import {
   CodexPetPackagingDeferredError,
   persistOrResumeCodexPetFinalPackage,
-  type CodexPetDurablePackagingResult,
 } from "./codex-pet-packaging.js";
 
 // === 拆分模块导入（脚本维护，勿手改顺序） ===
+import {
+  continueAfterDurablePackaging,
+  deferRecoveryPackaging,
+  releaseDeferredPackagingLease,
+  resumeDurablePackaging,
+} from "./codex-pet-runner/runner-packaging-resume.js";
 import { completeKnowledgeArchive, releaseDeferredArchiveLease } from "./codex-pet-runner/runner-archive.js";
 import {
   finalizeCancellation,
@@ -184,11 +189,9 @@ export {
   type CodexPetRunnerDeps,
   codexPetStandardRowPromptVersion,
 } from "./codex-pet-runner/runner-types.js";
-
-
-const WORKER_ID = `codex-pet-${process.pid}-${randomUUID().slice(0, 8)}`;
 export { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-board-version.js";
 
+const WORKER_ID = `codex-pet-${process.pid}-${randomUUID().slice(0, 8)}`;
 
 
 
@@ -310,96 +313,10 @@ export { CODEX_PET_BOARD_PROMPT_VERSION } from "./codex-pet-board-version.js";
 
 
 
-async function releaseDeferredPackagingLease(ctx: RunnerContext, error: CodexPetPackagingDeferredError): Promise<boolean> {
-  const released = await ctx.prisma.codexPetRun.updateMany({
-    where: {
-      id: ctx.runId,
-      projectId: ctx.project.id,
-      userId: ctx.project.userId,
-      workerId: ctx.workerId,
-      status: "packaging",
-      cancelRequested: false,
-    },
-    data: {
-      progressStage: "packaging",
-      progressPercent: 94,
-      progressMessage: `最终打包暂时失败，等待重试（${error.attempt}/${error.maxAttempts}）`,
-      error: error.message,
-      workerId: null,
-      heartbeatAt: null,
-    },
-  });
-  return released.count === 1;
-}
-
-async function deferRecoveryPackaging(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
-  const released = await ctx.prisma.$transaction(async (tx) => {
-    const changed = await tx.codexPetRun.updateMany({
-      where: {
-        id: ctx.runId,
-        projectId: ctx.project.id,
-        userId: ctx.project.userId,
-        workerId: ctx.workerId,
-        status: "packaging",
-        billingChargeStatus: "not_required",
-        billingPoints: 0,
-        cancelRequested: false,
-      },
-      data: {
-        progressStage: "packaging",
-        progressPercent: 94,
-        progressMessage: "恢复运行正在等待最终打包 checkpoint",
-        error: null,
-        workerId: null,
-        heartbeatAt: null,
-      },
-    });
-    if (changed.count !== 1) return false;
-    await tx.codexPetProject.updateMany({
-      where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } },
-      data: { status: "packaging" },
-    });
-    return true;
-  });
-  if (!released) throw new CodexPetLeaseLostError();
-  return { status: "packaging", runId: ctx.runId };
-}
-
-async function continueAfterDurablePackaging(
-  ctx: RunnerContext,
-  packaged: CodexPetDurablePackagingResult,
-): Promise<CodexPetExecutionResult> {
-  // The Job, all final artifact ids, validation report and archiving stage are
-  // already committed atomically. Realtime events are a best-effort view of
-  // that database truth and must never downgrade or refund a valid package.
-  await emit(ctx, "package.ready", "packaging", 98, "Codex v2 安装包已生成", {
-    spritesheetArtifactId: packaged.spritesheetArtifactId,
-    packageArtifactId: packaged.packageArtifactId,
-    previewArtifactId: packaged.previewArtifactId,
-    recovered: packaged.recovered,
-  }, "final-package").catch(() => undefined);
-  await emit(ctx, "stage.started", "archiving", 98, "正在归档到 AI 产物知识库", {
-    finalPackageJobId: packaged.jobId,
-  }, "final-package").catch(() => undefined);
-  return completeKnowledgeArchive(ctx);
-}
-
-async function resumeDurablePackaging(ctx: RunnerContext): Promise<CodexPetExecutionResult | null> {
-  const provider = await summarizeProviderUsage(ctx);
-  const packaged = await persistOrResumeCodexPetFinalPackage({
-    prisma: ctx.prisma,
-    artifacts: ctx.artifacts,
-    runId: ctx.runId,
-    projectId: ctx.project.id,
-    userId: ctx.project.userId,
-    workerId: ctx.workerId,
-    displayName: ctx.identity.name,
-    description: ctx.identity.description,
-    chromaKey: ctx.identity.chromaKey,
-    provider,
-  });
-  return packaged ? continueAfterDurablePackaging(ctx, packaged) : null;
-}
+
+
+
+
 
 async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
   let run = await currentRun(ctx);
