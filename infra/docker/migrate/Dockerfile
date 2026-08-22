@@ -27,9 +27,10 @@ RUN npm config set registry "$NPM_CONFIG_REGISTRY" \
  && npm config set fetch-retries 5 \
  && npm config set fetch-retry-maxtimeout 120000 \
  && for attempt in 1 2 3; do \
-      npm i prisma@6.19.3 @prisma/client@6.19.3 --no-audit --no-fund && exit 0; \
+      npm i prisma@6.19.3 --no-audit --no-fund && break; \
       if [ "$attempt" -eq 3 ]; then exit 1; fi; \
       sleep $((attempt * 10)); \
-    done
+    done \
+ && npm cache clean --force
 COPY packages/db/prisma /m/prisma
 CMD ["/m/node_modules/.bin/prisma", "migrate", "deploy", "--schema", "/m/prisma/schema.prisma"]

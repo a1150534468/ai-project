@@ -1,5 +1,6 @@
 # api + worker: 同一镜像、tsx 直跑源码。编译工具只留在 builder。
 FROM gcr.io/distroless/static-debian12:nonroot AS certs
+FROM mwader/static-ffmpeg:7.1@sha256:a8090df5f5608daef387e1b2e93b98aaacb4d92153ad904e7d715c725724fca4 AS ffmpeg
 
 FROM node:24-bookworm-slim AS builder
 ARG USE_CHINA_APT_MIRROR=true
@@ -21,11 +22,15 @@ RUN if [ "$USE_CHINA_APT_MIRROR" = true ]; then \
       sleep $((attempt * 10)); \
     done; \
     rm -rf /var/lib/apt/lists/*
-RUN corepack enable
 ENV npm_config_registry=${NPM_CONFIG_REGISTRY}
 ENV npm_config_fetch_retries=5
 ENV npm_config_fetch_retry_maxtimeout=120000
 ENV PRISMA_ENGINES_MIRROR=${PRISMA_ENGINES_MIRROR}
+RUN for attempt in 1 2 3; do \
+      npm install -g pnpm@10.26.2 --no-audit --no-fund && break; \
+      if [ "$attempt" -eq 3 ]; then exit 1; fi; \
+      sleep $((attempt * 10)); \
+    done
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY packages/article-workflow/package.json packages/article-workflow/package.json
@@ -45,26 +50,28 @@ RUN --mount=type=cache,id=ai-assistant-pnpm,target=/pnpm/store \
 COPY tsconfig.base.json ./
 COPY apps/api apps/api
 COPY packages packages
-RUN for attempt in 1 2 3; do \
-      pnpm --filter @ai-assistant/db exec prisma generate && exit 0; \
+RUN pnpm --filter @ai-assistant/api deploy --prod --legacy /runtime/repo/apps/api \
+ && cd /runtime/repo/apps/api \
+ && for attempt in 1 2 3; do \
+      node_modules/.pnpm/node_modules/.bin/prisma generate \
+        --schema node_modules/@ai-assistant/db/prisma/schema.prisma && exit 0; \
       if [ "$attempt" -eq 3 ]; then exit 1; fi; \
       sleep $((attempt * 10)); \
     done
-RUN cd apps/api && CI=true pnpm prune --prod
-RUN --mount=type=cache,id=ai-assistant-pnpm,target=/pnpm/store \
-    pnpm install --prod --offline --frozen-lockfile --filter @ai-assistant/api...
 
 FROM node:24-bookworm-slim
 ARG USE_CHINA_APT_MIRROR=true
 WORKDIR /repo
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 RUN if [ "$USE_CHINA_APT_MIRROR" = true ]; then \
       printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list; \
       rm -f /etc/apt/sources.list.d/debian.sources; \
     fi; \
     for attempt in 1 2 3; do \
       if apt-get -o Acquire::Retries=5 update \
-        && apt-get -o Acquire::Retries=5 install -y --no-install-recommends openssl ca-certificates ffmpeg fonts-noto-cjk; then \
+        && apt-get -o Acquire::Retries=5 install -y --no-install-recommends openssl ca-certificates fonts-noto-cjk; then \
         break; \
       fi; \
       if [ "$attempt" -eq 3 ]; then exit 1; fi; \
@@ -72,7 +79,7 @@ RUN if [ "$USE_CHINA_APT_MIRROR" = true ]; then \
       sleep $((attempt * 10)); \
     done; \
     rm -rf /var/lib/apt/lists/*
-COPY --from=builder /repo /repo
+COPY --from=builder /runtime/repo /repo
 ENV NODE_ENV=production
 EXPOSE 8090
 CMD ["/repo/apps/api/node_modules/.bin/tsx", "/repo/apps/api/src/server.ts"]
