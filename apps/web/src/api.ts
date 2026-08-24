@@ -1,7 +1,7 @@
 import type { MemoryDraft, MemoryGalaxyData, MemoryNode } from "./memoryTypes";
 import type { NovelRunEvent, NovelRunSnapshot } from "@ai-assistant/novel-workflow/contracts";
 import { ApiError } from "./apiError";
-import { type HttpMethod, request, requestResponse, unwrapData } from "./http";
+import { type HttpMethod, request, requestResponse } from "./http";
 
 export async function register(username: string, password: string, channelCode: string): Promise<string> {
   try {
@@ -1159,114 +1159,59 @@ export type MemorySearchHit = MemoryNode & {
   readonly score: number;
 };
 
-export interface MemorySearchResponse {
-  success: boolean;
-  data: {
-    hits: MemorySearchHit[];
-  };
-}
-
-export interface MemoriesListResponse {
-  success: boolean;
-  data: MemoryNode[];
-}
-
-export interface MemoryGalaxyResponse {
-  success: boolean;
-  data: MemoryGalaxyData;
-}
-
-export interface UpdateMemoryResponse {
-  success: boolean;
-  data: MemoryNode;
-}
-
-export interface MemoryToggleResponse {
-  success: boolean;
-  data: { memoryEnabled?: boolean; enabled?: boolean };
-}
-
 export async function getMemorySettings(token: string): Promise<{ memoryEnabled: boolean }> {
-  const r = await fetch("/api/memory/settings", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  // 后端这个字段历史上两种拼法都出现过，保留双回落。
+  const data = await request<{ memoryEnabled?: boolean; enabled?: boolean }>("/api/memory/settings", {
+    token,
+    fallback: "获取记忆设置失败",
   });
-  if (!r.ok) throw new Error("获取记忆设置失败");
-  const resp = (await r.json()) as MemoryToggleResponse;
-  return { memoryEnabled: resp.data.memoryEnabled ?? resp.data.enabled ?? true };
+  return { memoryEnabled: data.memoryEnabled ?? data.enabled ?? true };
 }
 
 export async function listMemory(token: string): Promise<MemoryNode[]> {
-  const r = await fetch("/api/memory", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取记忆列表失败");
-  const resp = (await r.json()) as MemoriesListResponse;
-  return resp.data;
+  return request<MemoryNode[]>("/api/memory", { token, fallback: "获取记忆列表失败" });
 }
 
 export async function getMemoryGalaxy(token: string): Promise<MemoryGalaxyData> {
-  const r = await fetch("/api/memory/galaxy", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取记忆星河失败");
-  const resp = (await r.json()) as MemoryGalaxyResponse;
-  return resp.data;
+  return request<MemoryGalaxyData>("/api/memory/galaxy", { token, fallback: "获取记忆星河失败" });
 }
 
 export async function searchMemory(token: string, q: string): Promise<MemorySearchHit[]> {
-  const r = await fetch(`/api/memory/search?q=${encodeURIComponent(q)}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const data = await request<{ hits: MemorySearchHit[] }>(`/api/memory/search?q=${encodeURIComponent(q)}`, {
+    token,
+    fallback: "搜索记忆失败",
   });
-  if (!r.ok) throw new Error("搜索记忆失败");
-  const resp = (await r.json()) as MemorySearchResponse;
-  return resp.data.hits;
+  return data.hits;
 }
 
 export async function updateMemory(token: string, id: string, payload: MemoryDraft): Promise<MemoryNode> {
-  const r = await fetch(`/api/memory/${id}`, {
+  return request<MemoryNode>(`/api/memory/${id}`, {
     method: "PATCH",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "保存记忆失败",
   });
-  if (!r.ok) throw new Error("保存记忆失败");
-  const resp = (await r.json()) as UpdateMemoryResponse;
-  return resp.data;
 }
 
 export async function deleteMemory(token: string, id: string): Promise<void> {
-  const r = await fetch(`/api/memory/${id}`, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("删除记忆失败");
+  await request(`/api/memory/${id}`, { method: "DELETE", token, fallback: "删除记忆失败" });
 }
 
 export async function toggleMemory(token: string, enabled: boolean): Promise<void> {
-  const r = await fetch("/api/memory/toggle", {
-    method: "PATCH",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ enabled }),
-  });
-  if (!r.ok) throw new Error("更新记忆设置失败");
+  await request("/api/memory/toggle", { method: "PATCH", token, body: { enabled }, fallback: "更新记忆设置失败" });
 }
 
-export interface MembershipCardResponse {
-  data: Array<{
-    id: number;
-    name: string;
-    priceFen: number;
-    durationDays: number;
-    cadence: string;
-    grantPoints: number;
-    kbQuotaBytes?: number;
-    enabled: boolean;
-    createdAt: string;
-    updatedAt: string;
-  }>;
+export interface MembershipCard {
+  id: number;
+  name: string;
+  priceFen: number;
+  durationDays: number;
+  cadence: string;
+  grantPoints: number;
+  kbQuotaBytes?: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface BuyMembershipResponse {
@@ -1284,49 +1229,22 @@ export interface UserMembership {
   createdAt: string;
 }
 
-export interface MyMembershipsResponse {
-  data: UserMembership[];
-}
-
-export async function listMembershipCards(token: string): Promise<Array<{
-  id: number;
-  name: string;
-  priceFen: number;
-  durationDays: number;
-  cadence: string;
-  grantPoints: number;
-  kbQuotaBytes?: number;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}>> {
-  const r = await fetch("/api/membership/cards", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取月卡列表失败");
-  const resp = (await r.json()) as MembershipCardResponse;
-  return resp.data;
+export async function listMembershipCards(token: string): Promise<MembershipCard[]> {
+  return request<MembershipCard[]>("/api/membership/cards", { token, fallback: "获取月卡列表失败" });
 }
 
 export async function buyMembership(token: string, cardId: number, method: PaymentMethod = "alipay"): Promise<BuyMembershipResponse> {
-  const r = await fetch("/api/membership/buy", {
+  // 这个写接口回的是裸对象（不带 `{ data }` 壳），unwrapData 会原样放行。
+  return request<BuyMembershipResponse>("/api/membership/buy", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ cardId, method }),
+    token,
+    body: { cardId, method },
+    fallback: "购买月卡失败",
   });
-  if (!r.ok) throw new Error("购买月卡失败");
-  return (await r.json()) as BuyMembershipResponse;
 }
 
 export async function myMemberships(token: string): Promise<UserMembership[]> {
-  const r = await fetch("/api/membership/mine", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取我的会员失败");
-  const resp = (await r.json()) as MyMembershipsResponse;
-  return resp.data;
+  return request<UserMembership[]>("/api/membership/mine", { token, fallback: "获取我的会员失败" });
 }
 
 export interface WechatBinding {
@@ -1343,39 +1261,40 @@ export async function createWechatBinding(
   targetId: string,
   model?: string,
 ): Promise<{ id: string }> {
-  const r = await fetch("/api/wechat/bindings", {
+  return request<{ id: string }>("/api/wechat/bindings", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ deviceId, targetType: "agent", targetId, model }),
+    token,
+    body: { deviceId, targetType: "agent", targetId, model },
+    fallback: "绑定失败",
   });
-  if (!r.ok) throw new Error("绑定失败");
-  const resp = (await r.json()) as { data: { id: string } };
-  return resp.data;
 }
 
 export async function listWechatBindings(token: string): Promise<WechatBinding[]> {
-  const r = await fetch("/api/wechat/bindings", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<WechatBinding[] | undefined>("/api/wechat/bindings", {
+    token,
+    fallback: "获取绑定列表失败",
   });
-  if (!r.ok) throw new Error("获取绑定列表失败");
-  const resp = (await r.json()) as { data: WechatBinding[] };
-  return resp.data ?? [];
+  return rows ?? [];
 }
 
 export async function deleteWechatBinding(token: string, id: string): Promise<void> {
-  const r = await fetch(`/api/wechat/bindings/${encodeURIComponent(id)}`, {
+  await request(`/api/wechat/bindings/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
+    token,
+    fallback: "删除绑定失败",
   });
-  if (!r.ok) throw new Error("删除绑定失败");
 }
 
 export async function listModels(): Promise<{ model: string; displayName: string }[]> {
-  const r = await fetch("/api/models");
-  if (!r.ok) return [];
-  const models = ((await r.json()).data ?? []) as { model: string; displayName: string }[];
-  return models.filter((m) => !m.model.toLowerCase().includes("embedding"));
+  // 显式 token: null——这是公开接口，不该带上登录态；服务端报错时静默回空列表，网络异常仍旧抛出。
+  const models = await request<{ model: string; displayName: string }[] | undefined>("/api/models", {
+    token: null,
+    fallback: "获取模型列表失败",
+  }).catch((error) => {
+    if (error instanceof ApiError) return [];
+    throw error;
+  });
+  return (models ?? []).filter((m) => !m.model.toLowerCase().includes("embedding"));
 }
 
 export interface Session {
@@ -1388,13 +1307,8 @@ export interface Session {
 }
 
 export async function listSessions(token: string): Promise<Session[]> {
-  const r = await fetch("/api/sessions", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取会话列表失败");
-  const resp = await r.json();
-  return Array.isArray(resp) ? resp : (resp?.data ?? []);
+  const rows = await request<Session[] | undefined>("/api/sessions", { token, fallback: "获取会话列表失败" });
+  return rows ?? [];
 }
 
 export interface SessionMessage {
@@ -1405,21 +1319,15 @@ export interface SessionMessage {
 }
 
 export async function getSessionMessages(token: string, sessionId: string): Promise<SessionMessage[]> {
-  const r = await fetch(`/api/sessions/${sessionId}/messages`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<SessionMessage[] | undefined>(`/api/sessions/${sessionId}/messages`, {
+    token,
+    fallback: "获取会话消息失败",
   });
-  if (!r.ok) throw new Error("获取会话消息失败");
-  const resp = await r.json();
-  return Array.isArray(resp) ? resp : (resp?.data ?? []);
+  return rows ?? [];
 }
 
 export async function deleteSession(token: string, sessionId: string): Promise<void> {
-  const r = await fetch(`/api/sessions/${sessionId}`, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("删除会话失败");
+  await request(`/api/sessions/${sessionId}`, { method: "DELETE", token, fallback: "删除会话失败" });
 }
 
 export interface AgentOption {
@@ -1442,24 +1350,20 @@ export interface ChatAttachmentPayload {
 }
 
 export async function listAgents(token: string): Promise<{ presets: AgentOption[]; custom: AgentOption[] }> {
-  const r = await fetch("/api/agents", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const data = await request<{ presets: AgentOption[]; custom: AgentOption[] } | undefined>("/api/agents", {
+    token,
+    fallback: "获取智能体失败",
   });
-  if (!r.ok) throw new Error("获取智能体失败");
-  const resp = await r.json();
-  return resp.data ?? { presets: [], custom: [] };
+  return data ?? { presets: [], custom: [] };
 }
 
 export async function generateAgent(token: string, requirement: string): Promise<AgentOption & { modelUsed: string }> {
-  const r = await fetch("/api/agents/generate", {
+  return request<AgentOption & { modelUsed: string }>("/api/agents/generate", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ requirement }),
+    token,
+    body: { requirement },
+    fallback: "创建智能体失败",
   });
-  if (!r.ok) throw new Error("创建智能体失败");
-  const resp = await r.json();
-  return resp.data;
 }
 
 export interface KnowledgeBase {
@@ -1471,47 +1375,31 @@ export interface KnowledgeBase {
   latticeCount?: number;
 }
 
-export interface KnowledgeBasesResponse {
-  success: boolean;
-  data: KnowledgeBase[];
-}
-
 export async function listKb(token: string): Promise<KnowledgeBase[]> {
-  const r = await fetch("/api/kb", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取知识库列表失败");
-  const resp = await r.json();
-  return Array.isArray(resp) ? resp : (resp?.data ?? []);
+  const rows = await request<KnowledgeBase[] | undefined>("/api/kb", { token, fallback: "获取知识库列表失败" });
+  return rows ?? [];
 }
 
 export async function createKb(token: string, name: string, description?: string): Promise<KnowledgeBase> {
-  const r = await fetch("/api/kb", {
+  return request<KnowledgeBase>("/api/kb", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ name, description }),
+    token,
+    body: { name, description },
+    fallback: "创建知识库失败",
   });
-  if (!r.ok) throw new Error("创建知识库失败");
-  const resp = (await r.json()) as KnowledgeBase | { data: KnowledgeBase };
-  return unwrapData(resp);
 }
 
 export async function renameKb(token: string, id: string, name?: string, description?: string): Promise<void> {
-  const r = await fetch(`/api/kb/${id}`, {
+  await request(`/api/kb/${id}`, {
     method: "PATCH",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ name, description }),
+    token,
+    body: { name, description },
+    fallback: "更新知识库失败",
   });
-  if (!r.ok) throw new Error("更新知识库失败");
 }
 
 export async function deleteKb(token: string, id: string): Promise<void> {
-  const r = await fetch(`/api/kb/${id}`, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("删除知识库失败");
+  await request(`/api/kb/${id}`, { method: "DELETE", token, fallback: "删除知识库失败" });
 }
 
 export interface KbDocument {
@@ -1529,77 +1417,46 @@ export interface KbDocument {
   createdAt: string;
 }
 
-export interface KbDocumentsResponse {
-  success: boolean;
-  data: KbDocument[];
-}
-
-export interface KbDocumentResponse {
-  success: boolean;
-  data: KbDocument;
-}
-
 export async function listKbDocuments(token: string, kbId: string): Promise<KbDocument[]> {
-  const r = await fetch(`/api/kb/${kbId}/documents`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取文档列表失败");
-  const resp = (await r.json()) as KbDocument[] | KbDocumentsResponse;
-  return unwrapData(resp);
+  return request<KbDocument[]>(`/api/kb/${kbId}/documents`, { token, fallback: "获取文档列表失败" });
 }
 
 export async function getKbDocument(token: string, kbId: string, docId: string): Promise<KbDocument> {
-  const r = await fetch(`/api/kb/${kbId}/documents/${docId}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取文档信息失败");
-  const resp = (await r.json()) as KbDocument | KbDocumentResponse;
-  return unwrapData(resp);
+  return request<KbDocument>(`/api/kb/${kbId}/documents/${docId}`, { token, fallback: "获取文档信息失败" });
 }
 
 export async function addKbText(token: string, kbId: string, text: string, name?: string): Promise<KbDocument> {
-  const r = await fetch(`/api/kb/${kbId}/documents`, {
+  return request<KbDocument>(`/api/kb/${kbId}/documents`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ text, name }),
+    token,
+    body: { text, name },
+    fallback: "添加文本失败",
   });
-  if (!r.ok) throw new Error("添加文本失败");
-  const resp = (await r.json()) as KbDocument | { data: KbDocument };
-  return unwrapData(resp);
 }
 
 export async function addKbUrl(token: string, kbId: string, url: string): Promise<KbDocument> {
-  const r = await fetch(`/api/kb/${kbId}/documents`, {
+  return request<KbDocument>(`/api/kb/${kbId}/documents`, {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ url }),
+    token,
+    body: { url },
+    fallback: "添加URL失败",
   });
-  if (!r.ok) throw new Error("添加URL失败");
-  const resp = (await r.json()) as KbDocument | { data: KbDocument };
-  return unwrapData(resp);
 }
 
 export async function addKbFile(token: string, kbId: string, file: File): Promise<KbDocument> {
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch(`/api/kb/${kbId}/documents`, {
+  // FormData 不能手写 content-type，统一客户端会自己让 fetch 补 boundary。
+  return request<KbDocument>(`/api/kb/${kbId}/documents`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
     body: fd,
+    fallback: "上传文件失败",
   });
-  if (!r.ok) throw new Error("上传文件失败");
-  const resp = (await r.json()) as KbDocument | { data: KbDocument };
-  return unwrapData(resp);
 }
 
 export async function deleteKbDocument(token: string, kbId: string, docId: string): Promise<void> {
-  const r = await fetch(`/api/kb/${kbId}/documents/${docId}`, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("删除文档失败");
+  await request(`/api/kb/${kbId}/documents/${docId}`, { method: "DELETE", token, fallback: "删除文档失败" });
 }
 
 export interface KbQuotaData {
@@ -1612,57 +1469,41 @@ export interface KbQuotaData {
   };
 }
 
-export interface KbQuotaResponse {
-  success: boolean;
-  data: KbQuotaData;
-}
-
 export async function getKbQuota(token: string): Promise<KbQuotaData> {
-  const r = await fetch("/api/kb/quota", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取配额失败");
-  const resp = (await r.json()) as KbQuotaResponse;
-  return resp.data;
+  return request<KbQuotaData>("/api/kb/quota", { token, fallback: "获取配额失败" });
 }
 
 export async function renameAgent(token: string, id: string, name: string): Promise<void> {
-  const r = await fetch(`/api/agents/${id}`, {
-    method: "PATCH",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ name }),
-  });
-  if (!r.ok) throw new Error("重命名失败");
+  await request(`/api/agents/${id}`, { method: "PATCH", token, body: { name }, fallback: "重命名失败" });
 }
 
 export async function deleteAgent(token: string, id: string): Promise<void> {
-  const r = await fetch(`/api/agents/${id}`, {
-    method: "DELETE",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("删除失败");
+  await request(`/api/agents/${id}`, { method: "DELETE", token, fallback: "删除失败" });
 }
 
 export async function regenerateAgentAvatar(token: string, id: string): Promise<{ avatarSvg: string | null }> {
-  const r = await fetch(`/api/agents/${id}/avatar/regenerate`, {
+  return request<{ avatarSvg: string | null }>(`/api/agents/${id}/avatar/regenerate`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
+    fallback: "生成头像失败",
+  }).catch((error) => {
+    // 限流的提示语要盖掉后端原文。
+    if (error instanceof ApiError && error.status === 429) throw new Error("操作过于频繁，请稍后再试");
+    throw error;
   });
-  if (r.status === 429) throw new Error("操作过于频繁，请稍后再试");
-  if (!r.ok) throw new Error("生成头像失败");
-  return (await r.json()).data;
 }
 
 export async function uploadAgentAvatar(token: string, id: string, file: File): Promise<{ avatarUrl: string }> {
   const form = new FormData();
   form.append("file", file);
-  const r = await fetch(`/api/agents/${id}/avatar/upload`, {
+  return request<{ avatarUrl: string }>(`/api/agents/${id}/avatar/upload`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
     body: form,
+    fallback: "上传失败",
+  }).catch((error) => {
+    // 限流的提示语要盖掉后端原文。
+    if (error instanceof ApiError && error.status === 429) throw new Error("操作过于频繁，请稍后再试");
+    throw error;
   });
-  if (r.status === 429) throw new Error("操作过于频繁，请稍后再试");
-  if (!r.ok) throw new Error(((await r.json().catch(() => ({}))) as { error?: string }).error || "上传失败");
-  return (await r.json()).data;
 }
