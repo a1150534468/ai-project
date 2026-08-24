@@ -457,12 +457,39 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 - `apps/web/src/apiError.ts` 已有 `ApiError`（含 `status` + 结构化 `data`）、`readErrorMessage`、`readErrorBody`
 - 后端响应壳已统一：`{ success: true, data }` 共 243 处，`api.ts:18` 已有 `unwrapData`
 
-- [ ] **Step 1: 建 `apps/web/src/http.ts`**。一个 `request<T>(path, init)`：注入 `authorization`、统一 `content-type`、非 2xx 用**已有的** `readErrorBody` 抛**已有的** `ApiError`、成功走**已有的** `unwrapData`。**不要重新发明这三个** —— 直接 import。
-- [ ] **Step 2: token 来源集中化**。当前 175 个函数收 `token` 参数。**不要一次性改签名**（会波及整个组件树）。先让 `http.ts` 支持"显式传入 token"与"从集中处读取"两种，存量调用保持传参不变；新代码不再传参。签名收敛留作后续独立任务。
-- [ ] **Step 3: 按模块逐个迁移，一模块一提交**。顺序：先挑最小的 `portraitApi.ts`（1 处 fetch）验证封装形状，再 `workflowArticleApi.ts` / `workflowEcomApi.ts` / `workflowComicApi.ts`（各 1 处）→ `codexPetApi.ts`（3）→ `workflowLocalBusinessPromoApi.ts`（3）→ `dubApi.ts`（4）→ `agentTeamApi.ts`（8）→ `videoApi.ts`（9）→ **`api.ts`（75 处，最后做，单独拆多个提交）**。
-- [ ] **Step 4: 注意 SSE / 流式不能走通用封装**。`streamChat`（`api.ts:60` 起）与 codex-pet 的事件流是流式读取，`request<T>()` 的"读完 body 再 JSON.parse"模型不适用。**这些保持裸 `fetch`**，只把 header 构造抽出复用。识别方法：`grep` 含 `getReader()` / `ReadableStream` / `text/event-stream` 的调用。
-- [ ] **验证**：`cd apps/web && pnpm vitest run`（基线 415 passed / 1 failed，P0.1 后应为 416/0）。该模块测试比仅 0.25，**回归信号弱** —— 每迁一个模块建议手动点一遍对应页面。
-- [ ] Commit（多个）`refactor(web): <模块> 迁移到统一 http 客户端`
+- [x] **Step 1: 建 `apps/web/src/http.ts`**。一个 `request<T>(path, init)`：注入 `authorization`、统一 `content-type`、非 2xx 用**已有的** `readErrorBody` 抛**已有的** `ApiError`、成功走**已有的** `unwrapData`。**不要重新发明这三个** —— 直接 import。→ 另配了一个 `requestResponse()`（同鉴权同报错，但不碰 body），给流式与 blob 用；`unwrapData` 按项目所有者要求从 `api.ts` 搬进 `http.ts` 并导出。
+- [x] **Step 2: token 来源集中化**。当前 175 个函数收 `token` 参数。**不要一次性改签名**（会波及整个组件树）。先让 `http.ts` 支持"显式传入 token"与"从集中处读取"两种，存量调用保持传参不变；新代码不再传参。签名收敛留作后续独立任务。→ 三态：省略 = 回落集中存储、`token: "x"` = 显式、`token: null` = 明确不带（登录/注册/公开菜单/模型列表用）。
+- [x] **Step 3: 按模块逐个迁移，一模块一提交**。顺序：先挑最小的 `portraitApi.ts`（1 处 fetch）验证封装形状，再 `workflowArticleApi.ts` / `workflowEcomApi.ts` / `workflowComicApi.ts`（各 1 处）→ `codexPetApi.ts`（3）→ `workflowLocalBusinessPromoApi.ts`（3）→ `dubApi.ts`（4）→ `agentTeamApi.ts`（8）→ `videoApi.ts`（9）→ **`api.ts`（75 处，最后做，单独拆多个提交）**。→ 照此顺序做完，`api.ts` 拆成 3 个提交（账号/聊天流/工具市场/计费 → 小说与生图 → 记忆/会员/会话/智能体/知识库）。
+- [x] **Step 4: 注意 SSE / 流式不能走通用封装**。`streamChat`（`api.ts:60` 起）与 codex-pet 的事件流是流式读取，`request<T>()` 的"读完 body 再 JSON.parse"模型不适用。**这些保持裸 `fetch`**，只把 header 构造抽出复用。识别方法：`grep` 含 `getReader()` / `ReadableStream` / `text/event-stream` 的调用。→ 改成走 `requestResponse()`：鉴权与报错也收敛了，body 原样留给 reader，比"只抽 header"更彻底。
+- [x] **验证**：`cd apps/web && pnpm vitest run`（基线 415 passed / 1 failed，P0.1 后应为 416/0）。该模块测试比仅 0.25，**回归信号弱** —— 每迁一个模块建议手动点一遍对应页面。→ 实测基线已是 85 文件 / 438 passed / 0 failed / 0 skipped（计划里的 415/1 早已过时）；按项目所有者要求**只跑自动化不手点页面**，另给 `http.ts` 补了 10 个单测。
+- [x] Commit（多个）`refactor(web): <模块> 迁移到统一 http 客户端`
+
+### P1.2 执行记录（2026-08-24，9 个提交）
+
+**计划里的数字全部偏低**（计划统计的是 `await fetch(` 之类的窄模式，漏了多行写法与私有 wrapper 内部的调用）：
+
+| 指标 | 计划写的 | 实测（02a6f59） | 完工后 |
+| --- | --- | --- | --- |
+| 非测试代码裸 `fetch(` | 106 | **124** | **4** |
+| 其中 `api.ts` | 75 | **75** ✓ | **0** |
+| 含裸 `fetch` 的文件数 | 13 个模块 | **19 个文件**（13 个 API 模块 + 6 处散落在组件/页面里） | **3** |
+| 手拼 `authorization: Bearer` | 105 | **109** | **1**（`http.ts` 自己那一处） |
+| `token: string` 形参 | 241 | **321** | 未动（Step 2 明确留作后续任务） |
+
+**剩下 3 处裸 `fetch` 是故意留的，不是漏迁**：`components/workflow/imageDownload.ts:54`、`components/workflow/articleWorkflowImageDownload.ts:44`、`components/workflow/ecomWorkflowStitch.ts:51`（`defaultFetchBlob`）。这三处下载的是**对象存储 / CDN 的外站 URL**，走注入 `authorization` 的统一客户端会把 bearer token 送给第三方主机。三处都就地写了注释说明。`ecomWorkflowStitch` 的同源分段 blob 由调用方 `EcomWorkflowStudio` 注入带鉴权的 `fetchBlob`，所以只有兜底路径是裸 `fetch`。
+
+**迁移中踩到 / 提前拦下的三个坑**：
+
+1. **`unwrapData` 会吃掉信封的兄弟字段**。`/api/model-marketplace` 回的是 `{ data: rows, vip }`，`request<T>()` 只会把 `data` 拿出来，`vip` 静默丢失。这一处改用 `requestResponse()` + 手动 `.json()`。全仓扫过，只有它一个是这种形状。
+2. **私有 wrapper 的 body 双重编码**。`novelEngineRequest` 原签名收 `RequestInit`，~30 个调用点自己 `JSON.stringify(...)`；改成收原始对象后必须同步把调用点的 `JSON.stringify` 全脱掉，否则 body 变成 JSON 字符串的 JSON。共脱掉 13 处（其余调用点本来就没有 body）。
+3. **CI 的 lint 门会因为"你碰过这个文件"而追责既有问题**。`biome ci --changed` 对触碰过的文件全量报 `noUnusedImports`，包括迁移前就存在的。`EcomWorkflowStudio.tsx` 的 `createEcomMasterPayload` 属于这类，必须一起删掉才能过门。
+
+**顺手清掉的重复**：`api.ts` 里 11 个只描述 `{ success, data }` 壳的信封 interface（`MemoriesListResponse` / `MemoryGalaxyResponse` / `MemorySearchResponse` / `UpdateMemoryResponse` / `MemoryToggleResponse` / `MembershipCardResponse` / `MyMembershipsResponse` / `KnowledgeBasesResponse` / `KbDocumentsResponse` / `KbDocumentResponse` / `KbQuotaResponse`）在 `unwrapData` 内化之后已无价值，全仓确认无外部引用后删除；月卡列表那个 11 行的匿名行内类型提成 `MembershipCard`。`api.ts` 自带的重复 `ApiError` 也删了 —— 现在全仓只有 `apiError.ts:1` 一个定义，所有 import 都指向它。
+
+**刻意没有"顺手改好"的行为**：登录、注册、`Login.tsx` 三处原本把后端报错吞掉换成固定文案（避免泄露账号是否存在），迁移后仍然 `catch (ApiError)` 覆盖文案，不让统一客户端把后端原文透到界面上。`listModels` 的"服务端报错就回空列表"和两个头像接口的 429 固定提示语，同样按 `ApiError.status` 原样保留。
+
+**验证**：每个提交都过 `npx tsc -p apps/web/tsconfig.json --noEmit` + `npx biome check --formatter-enabled=false <改动文件>`，最后按 origin/main 为 base 跑了一次 `biome ci --changed`（模拟 CI lint 门，23 个文件 0 error）。测试 **85 文件 / 448 passed / 0 failed / 0 skipped**（438 基线 + `http.test.ts` 10 个新增），每个检查点复现一致。
+
 
 ---
 
