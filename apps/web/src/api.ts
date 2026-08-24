@@ -1,7 +1,7 @@
 import type { MemoryDraft, MemoryGalaxyData, MemoryNode } from "./memoryTypes";
 import type { NovelRunEvent, NovelRunSnapshot } from "@ai-assistant/novel-workflow/contracts";
-import { ApiError, readErrorMessage } from "./apiError";
-import { request, requestResponse, unwrapData } from "./http";
+import { ApiError } from "./apiError";
+import { type HttpMethod, request, requestResponse, unwrapData } from "./http";
 
 export async function register(username: string, password: string, channelCode: string): Promise<string> {
   try {
@@ -432,39 +432,34 @@ export interface WorkflowImageState {
 }
 
 export async function listWorkflowImages(token: string): Promise<WorkflowImageAsset[]> {
-  const r = await fetch("/api/workflow/images", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<WorkflowImageAsset[]>("/api/workflow/images", {
+    token,
+    fallback: "获取生图历史失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取生图历史失败"), r.status);
-  const resp = (await r.json()) as { data: WorkflowImageAsset[] };
-  return resp.data ?? [];
+  return rows ?? [];
 }
 
 export async function uploadWorkflowImageReference(
   token: string,
   image: { readonly b64: string; readonly mime?: string },
 ): Promise<WorkflowImageAsset> {
-  const r = await fetch("/api/workflow/images/references", {
+  const data = await request<{ asset: WorkflowImageAsset }>("/api/workflow/images/references", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ image }),
+    token,
+    body: { image },
+    fallback: "上传参考图失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "上传参考图失败"), r.status);
-  const resp = (await r.json()) as { data: { asset: WorkflowImageAsset } };
-  return resp.data.asset;
+  return data.asset;
 }
 
 export async function getWorkflowImageState(token: string): Promise<WorkflowImageState> {
-  const r = await fetch("/api/workflow/images/state", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const data = await request<WorkflowImageState | undefined>("/api/workflow/images/state", {
+    token,
+    fallback: "获取生图任务失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取生图任务失败"), r.status);
-  const resp = (await r.json()) as { data: WorkflowImageState };
   return {
-    images: resp.data?.images ?? [],
-    tasks: resp.data?.tasks ?? [],
+    images: data?.images ?? [],
+    tasks: data?.tasks ?? [],
   };
 }
 
@@ -472,35 +467,30 @@ export async function generateWorkflowImages(
   token: string,
   payload: GenerateWorkflowImagesPayload,
 ): Promise<GenerateWorkflowImagesResult> {
-  const r = await fetch("/api/workflow/images/generate", {
+  return request<GenerateWorkflowImagesResult>("/api/workflow/images/generate", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "生成图片失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "生成图片失败"), r.status);
-  const resp = (await r.json()) as { data: GenerateWorkflowImagesResult };
-  return resp.data;
 }
 
 export async function cancelWorkflowImageTask(token: string, requestId: string): Promise<WorkflowImageTask> {
-  const r = await fetch(`/api/workflow/images/tasks/${encodeURIComponent(requestId)}/cancel`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "取消生图任务失败"), r.status);
-  const resp = (await r.json()) as { data: { task: WorkflowImageTask } };
-  return resp.data.task;
+  const data = await request<{ task: WorkflowImageTask }>(
+    `/api/workflow/images/tasks/${encodeURIComponent(requestId)}/cancel`,
+    { method: "POST", token, fallback: "取消生图任务失败" },
+  );
+  return data.task;
 }
 
 export async function optimizeWorkflowPrompt(token: string, prompt: string): Promise<string> {
-  const r = await fetch("/api/workflow/images/optimize-prompt", {
+  const data = await request<{ prompt: string }>("/api/workflow/images/optimize-prompt", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ prompt }),
+    token,
+    body: { prompt },
+    fallback: "优化提示词失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "优化提示词失败"), r.status);
-  const resp = (await r.json()) as { data: { prompt: string } };
-  return resp.data.prompt;
+  return data.prompt;
 }
 
 export interface NovelWorkflowResourcePrice {
@@ -535,13 +525,7 @@ export async function getImageWorkflowPricing(token: string, model?: string): Pr
   const path = model
     ? `/api/workflow/images/pricing?model=${encodeURIComponent(model)}`
     : "/api/workflow/images/pricing";
-  const r = await fetch(path, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取生图计价失败"), r.status);
-  const resp = (await r.json()) as { data: ImageWorkflowPricing };
-  return resp.data;
+  return request<ImageWorkflowPricing>(path, { token, fallback: "获取生图计价失败" });
 }
 
 export interface NovelProjectSummary {
@@ -687,34 +671,24 @@ export interface CreateNovelProjectPayload {
 }
 
 export async function getNovelWorkflowPricing(token: string): Promise<NovelWorkflowPricing> {
-  const r = await fetch("/api/workflow/novels/pricing", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取小说计价失败"), r.status);
-  const resp = (await r.json()) as { data: NovelWorkflowPricing };
-  return resp.data;
+  return request<NovelWorkflowPricing>("/api/workflow/novels/pricing", { token, fallback: "获取小说计价失败" });
 }
 
 export async function listNovelProjects(token: string): Promise<NovelProjectSummary[]> {
-  const r = await fetch("/api/workflow/novels/projects", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<NovelProjectSummary[]>("/api/workflow/novels/projects", {
+    token,
+    fallback: "获取小说项目失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取小说项目失败"), r.status);
-  const resp = (await r.json()) as { data: NovelProjectSummary[] };
-  return resp.data ?? [];
+  return rows ?? [];
 }
 
 export async function createNovelProject(token: string, payload: CreateNovelProjectPayload): Promise<NovelProjectDetail> {
-  const r = await fetch("/api/workflow/novels/projects", {
+  return request<NovelProjectDetail>("/api/workflow/novels/projects", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "创建小说项目失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "创建小说项目失败"), r.status);
-  const resp = (await r.json()) as { data: NovelProjectDetail };
-  return resp.data;
 }
 
 export type NovelSetupKind = "bible" | "characters" | "locations" | "plot";
@@ -737,12 +711,12 @@ export async function getNovelSetup(token: string, projectId: string): Promise<N
 }
 
 export async function generateNovelSetup(token: string, projectId: string, setupKind: NovelSetupKind, prompt = ""): Promise<NovelTask> {
-  const data = await novelEngineRequest<{ task: NovelTask }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/setup/${setupKind}/generate`, { method: "POST", body: JSON.stringify({ prompt }) });
+  const data = await novelEngineRequest<{ task: NovelTask }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/setup/${setupKind}/generate`, { method: "POST", body: { prompt } });
   return data.task;
 }
 
 export async function saveNovelSetup(token: string, projectId: string, setupKind: NovelSetupKind, data: unknown): Promise<void> {
-  await novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/setup/${setupKind}`, { method: "PUT", body: JSON.stringify({ data }) });
+  await novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/setup/${setupKind}`, { method: "PUT", body: { data } });
 }
 
 export async function completeNovelSetup(token: string, projectId: string): Promise<{ id: string; setupStage: number; setupCompleted: boolean }> {
@@ -751,39 +725,34 @@ export async function completeNovelSetup(token: string, projectId: string): Prom
 }
 
 export async function getNovelProject(token: string, projectId: string): Promise<NovelProjectDetail> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  return request<NovelProjectDetail>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
+    token,
+    fallback: "获取小说项目失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取小说项目失败"), r.status);
-  const resp = (await r.json()) as { data: NovelProjectDetail };
-  return resp.data;
 }
 
 export async function deleteNovelProject(token: string, projectId: string): Promise<void> {
-  const response = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "删除小说项目失败"), response.status);
+  await request(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
+    method: "DELETE",
+    token,
+    fallback: "删除小说项目失败",
+  });
 }
 
 export async function getNovelWorkbench(token: string, projectId: string): Promise<NovelWorkbenchPayload> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/workbench`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  return request<NovelWorkbenchPayload>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/workbench`, {
+    token,
+    fallback: "获取小说工作台失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取小说工作台失败"), r.status);
-  const resp = (await r.json()) as { data: NovelWorkbenchPayload };
-  return resp.data;
 }
 
 export async function updateNovelProject(token: string, projectId: string, payload: { title?: string; genre?: string; writingModel?: string }): Promise<NovelProjectDetail> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
+  return request<NovelProjectDetail>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
     method: "PATCH",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "保存小说项目失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "保存小说项目失败"), r.status);
-  const resp = (await r.json()) as { data: NovelProjectDetail };
-  return resp.data;
 }
 
 export async function generateNovelChapter(
@@ -791,14 +760,11 @@ export async function generateNovelChapter(
   projectId: string,
   payload: { chapterIndex?: number; title: string; summary: string; targetChars: number },
 ): Promise<NovelTask> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/generate`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "创建章节任务失败"), r.status);
-  const resp = (await r.json()) as { data: { task: NovelTask } };
-  return resp.data.task;
+  const data = await request<{ task: NovelTask }>(
+    `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/generate`,
+    { method: "POST", token, body: payload, fallback: "创建章节任务失败" },
+  );
+  return data.task;
 }
 
 export async function saveNovelChapter(
@@ -807,14 +773,11 @@ export async function saveNovelChapter(
   chapterIndex: number,
   payload: { title: string; summary: string; content: string; outline?: string; generationHint?: string },
 ): Promise<NovelChapter> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}`, {
-    method: "PUT",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "保存章节失败"), r.status);
-  const resp = (await r.json()) as { data: { chapter: NovelChapter } };
-  return resp.data.chapter;
+  const data = await request<{ chapter: NovelChapter }>(
+    `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}`,
+    { method: "PUT", token, body: payload, fallback: "保存章节失败" },
+  );
+  return data.chapter;
 }
 
 export async function rewriteNovelChapterSelection(
@@ -823,14 +786,11 @@ export async function rewriteNovelChapterSelection(
   chapterIndex: number,
   payload: { selectedText: string; selectionStart: number; selectionEnd: number; instruction: string },
 ): Promise<NovelTask> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/rewrite`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "创建局部改写任务失败"), r.status);
-  const resp = (await r.json()) as { data: { task: NovelTask } };
-  return resp.data.task;
+  const data = await request<{ task: NovelTask }>(
+    `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/rewrite`,
+    { method: "POST", token, body: payload, fallback: "创建局部改写任务失败" },
+  );
+  return data.task;
 }
 
 export async function saveNovelChapterReview(
@@ -839,34 +799,27 @@ export async function saveNovelChapterReview(
   chapterIndex: number,
   payload: { status?: "pending" | "approved" | "revise"; reviewNotes?: string; regenerateAi?: boolean },
 ): Promise<NovelChapter> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/review`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "保存章节审阅失败"), r.status);
-  const resp = (await r.json()) as { data: { chapter: NovelChapter } };
-  return resp.data.chapter;
+  const data = await request<{ chapter: NovelChapter }>(
+    `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/review`,
+    { method: "POST", token, body: payload, fallback: "保存章节审阅失败" },
+  );
+  return data.chapter;
 }
 
 export async function analyzeNovelChapter(token: string, projectId: string, chapterIndex: number): Promise<NovelChapter> {
-  const r = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/analyze`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "分析章节失败"), r.status);
-  const resp = (await r.json()) as { data: { chapter: NovelChapter } };
-  return resp.data.chapter;
+  const data = await request<{ chapter: NovelChapter }>(
+    `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}/analyze`,
+    { method: "POST", token, fallback: "分析章节失败" },
+  );
+  return data.chapter;
 }
 
 export async function cancelNovelTask(token: string, taskId: string): Promise<NovelTask> {
-  const r = await fetch(`/api/workflow/novels/tasks/${encodeURIComponent(taskId)}/cancel`, {
-    method: "POST",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "取消小说任务失败"), r.status);
-  const resp = (await r.json()) as { data: { task: NovelTask } };
-  return resp.data.task;
+  const data = await request<{ task: NovelTask }>(
+    `/api/workflow/novels/tasks/${encodeURIComponent(taskId)}/cancel`,
+    { method: "POST", token, fallback: "取消小说任务失败" },
+  );
+  return data.task;
 }
 
 export type NovelEngineRun = NovelRunSnapshot;
@@ -898,14 +851,12 @@ export interface NovelEngineStep {
   } | null;
 }
 
-async function novelEngineRequest<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("authorization", `Bearer ${token}`);
-  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  const response = await fetch(path, { ...init, headers });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "小说引擎请求失败"), response.status);
-  const body = await response.json() as { data: T };
-  return body.data;
+async function novelEngineRequest<T>(
+  token: string,
+  path: string,
+  init: { readonly method?: HttpMethod; readonly body?: unknown } = {},
+): Promise<T> {
+  return request<T>(path, { method: init.method, token, body: init.body, fallback: "小说引擎请求失败" });
 }
 
 export async function startNovelAssistedRun(token: string, projectId: string, payload: {
@@ -914,7 +865,7 @@ export async function startNovelAssistedRun(token: string, projectId: string, pa
   summary?: string;
   targetChars: number;
 }): Promise<NovelEngineRun> {
-  const data = await novelEngineRequest<{ run: NovelEngineRun }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/runs/assisted`, { method: "POST", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<{ run: NovelEngineRun }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/runs/assisted`, { method: "POST", body: payload });
   return data.run;
 }
 
@@ -924,7 +875,7 @@ export async function startNovelAutopilotRun(token: string, projectId: string, p
   startChapter?: number;
   autoReview?: boolean;
 }): Promise<NovelEngineRun> {
-  const data = await novelEngineRequest<{ run: NovelEngineRun }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/runs/autopilot`, { method: "POST", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<{ run: NovelEngineRun }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/runs/autopilot`, { method: "POST", body: payload });
   return data.run;
 }
 
@@ -954,11 +905,11 @@ export async function streamNovelEngineEvents(args: {
   signal?: AbortSignal;
   onEvent: (event: NovelEngineEvent) => void;
 }): Promise<void> {
-  const response = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(args.projectId)}/runs/${encodeURIComponent(args.runId)}/events/stream?after=${args.after ?? 0}`, {
-    headers: { authorization: `Bearer ${args.token}` },
-    signal: args.signal,
-  });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "连接小说运行流失败"), response.status);
+  // 不走 request<T>()：SSE 流的 body 要留给下面的 reader。
+  const response = await requestResponse(
+    `/api/workflow/novels/projects/${encodeURIComponent(args.projectId)}/runs/${encodeURIComponent(args.runId)}/events/stream?after=${args.after ?? 0}`,
+    { token: args.token, signal: args.signal, fallback: "连接小说运行流失败" },
+  );
   if (!response.body) throw new Error("小说运行流不可用");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -1016,12 +967,12 @@ export async function getNovelStructure(token: string, projectId: string): Promi
 export type NovelEditableResource = "structure" | "characters" | "locations" | "storylines" | "storyline-milestones" | "props" | "timeline" | "foreshadows" | "narrative-debts";
 
 export async function createNovelResource<T extends Record<string, unknown>>(token: string, projectId: string, resource: NovelEditableResource, payload: Record<string, unknown>): Promise<T> {
-  const data = await novelEngineRequest<Record<string, T>>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/${resource}`, { method: "POST", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<Record<string, T>>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/${resource}`, { method: "POST", body: payload });
   return Object.values(data)[0]!;
 }
 
 export async function updateNovelResource<T extends Record<string, unknown>>(token: string, projectId: string, resource: NovelEditableResource, entityId: string, payload: Record<string, unknown>): Promise<T> {
-  const data = await novelEngineRequest<Record<string, T>>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/${resource}/${encodeURIComponent(entityId)}`, { method: "PATCH", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<Record<string, T>>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/${resource}/${encodeURIComponent(entityId)}`, { method: "PATCH", body: payload });
   return Object.values(data)[0]!;
 }
 
@@ -1030,12 +981,12 @@ export async function deleteNovelResource(token: string, projectId: string, reso
 }
 
 export async function createNovelStorylineMilestone(token: string, projectId: string, storylineId: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const data = await novelEngineRequest<{ milestone: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/storylines/${encodeURIComponent(storylineId)}/milestones`, { method: "POST", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<{ milestone: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/storylines/${encodeURIComponent(storylineId)}/milestones`, { method: "POST", body: payload });
   return data.milestone;
 }
 
 export async function createNovelCharacterRelation(token: string, projectId: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const data = await novelEngineRequest<{ relation: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/character-relations`, { method: "POST", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<{ relation: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/character-relations`, { method: "POST", body: payload });
   return data.relation;
 }
 
@@ -1139,7 +1090,7 @@ export async function listNovelCheckpoints(token: string, projectId: string): Pr
 }
 
 export async function createNovelCheckpoint(token: string, projectId: string, label: string): Promise<Record<string, unknown>> {
-  const data = await novelEngineRequest<{ checkpoint: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/checkpoints`, { method: "POST", body: JSON.stringify({ label, branchName: "main" }) });
+  const data = await novelEngineRequest<{ checkpoint: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/checkpoints`, { method: "POST", body: { label, branchName: "main" } });
   return data.checkpoint;
 }
 
@@ -1148,7 +1099,7 @@ export async function rollbackNovelCheckpoint(token: string, projectId: string, 
 }
 
 export async function createNovelBranch(token: string, projectId: string, checkpointId: string, branchName: string): Promise<Record<string, unknown>> {
-  const data = await novelEngineRequest<{ checkpoint: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/checkpoints/${encodeURIComponent(checkpointId)}/branch`, { method: "POST", body: JSON.stringify({ branchName }) });
+  const data = await novelEngineRequest<{ checkpoint: Record<string, unknown> }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/checkpoints/${encodeURIComponent(checkpointId)}/branch`, { method: "POST", body: { branchName } });
   return data.checkpoint;
 }
 
@@ -1180,23 +1131,26 @@ export async function saveNovelPrompt(token: string, projectId: string, payload:
   temperature?: number;
   changeNote?: string;
 }): Promise<NovelPromptTemplate> {
-  const data = await novelEngineRequest<{ template: NovelPromptTemplate }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/prompts`, { method: "POST", body: JSON.stringify(payload) });
+  const data = await novelEngineRequest<{ template: NovelPromptTemplate }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/prompts`, { method: "POST", body: payload });
   return data.template;
 }
 
 export async function rollbackNovelPrompt(token: string, projectId: string, templateId: string, version: number): Promise<NovelPromptTemplate> {
-  const data = await novelEngineRequest<{ template: NovelPromptTemplate }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/prompts/${encodeURIComponent(templateId)}/rollback`, { method: "POST", body: JSON.stringify({ version }) });
+  const data = await novelEngineRequest<{ template: NovelPromptTemplate }>(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/prompts/${encodeURIComponent(templateId)}/rollback`, { method: "POST", body: { version } });
   return data.template;
 }
 
 export async function exportNovelProject(token: string, projectId: string, format: "markdown" | "docx" | "epub" | "pdf"): Promise<Blob> {
-  const response = await fetch(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/export?format=${format}`, { headers: { authorization: `Bearer ${token}` } });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "导出小说失败"), response.status);
+  // 不走 request<T>()：要的是 blob，不是 JSON。
+  const response = await requestResponse(
+    `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/export?format=${format}`,
+    { token, fallback: "导出小说失败" },
+  );
   return response.blob();
 }
 
 export async function importNovelProject(token: string, projectId: string, payload: { format: "markdown" | "text"; content: string; mode: "replace" | "append"; filename?: string }): Promise<{ importedChapters: number; mode: string; title: string }> {
-  return novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/import`, { method: "POST", body: JSON.stringify(payload) });
+  return novelEngineRequest(token, `/api/workflow/novels/projects/${encodeURIComponent(projectId)}/import`, { method: "POST", body: payload });
 }
 
 export type Memory = MemoryNode;
