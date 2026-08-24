@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { FastifyInstance } from "fastify";
 import { InsufficientBalanceError } from "@ai-assistant/billing";
-import { authUserId } from "../_shared/ecom-route-helpers.js";
+import { authUserId } from "../_shared/route-auth.js";
 import { helpWriteEcomField, type HelpWriteInput } from "./ecom-helpwrite-service.js";
 
 const helpWriteSchema = z.object({

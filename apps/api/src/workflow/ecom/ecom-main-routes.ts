@@ -5,15 +5,15 @@ import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
 import { ecomMainImageResourceKey, ecomMainImageSize, normalizeEcomMainResolution, ECOM_MAIN_RESOLUTIONS, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
 import { ecomModelSizeError } from "./ecom-resolution.js";
 import { deliveredImageResolution, pixelsFromSize } from "../_shared/image-delivered-tier.js";
+import { authUserId } from "../_shared/route-auth.js";
+import { loadOwnedReferenceImages } from "../_shared/reference-image.js";
 import {
   appendBillingOperationId,
-  authUserId,
-  loadOwnedReferenceImages,
   readBillingClientEnv,
   resolveLanguage,
   RefundCompensationError,
   safeErrorMessage,
-} from "../_shared/ecom-route-helpers.js";
+} from "./ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { mainImageParamsSchema, mainImageRequestSchema } from "./ecom-main-route-types.js";
 import { parsePricingModelQuery } from "./ecom-route-types.js";

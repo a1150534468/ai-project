@@ -56,7 +56,7 @@ import {
   serializeArticleWorkflowProject,
   serializeArticleWorkflowProjectSummary,
 } from "./article-workflow-serializer.js";
-import { authUserId } from "../_shared/ecom-route-helpers.js";
+import { authUserId } from "../_shared/route-auth.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {

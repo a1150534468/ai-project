@@ -45,7 +45,7 @@ import {
   type GeneratedImage,
   type ImageGenerationConfig,
 } from "../_shared/image-service.js";
-import { loadOwnedReferenceImages } from "../_shared/ecom-route-helpers.js";
+import { loadOwnedReferenceImages } from "../_shared/reference-image.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 
 const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";

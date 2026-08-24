@@ -1,5 +1,13 @@
-import { ECOM_RESOURCE_KEYS } from "./ecom-route-helpers.js";
 import { imageGenerationResourceKey, imageModelResourceKey, type ImageResolutionLabel } from "./image-upstream-options.js";
+
+/**
+ * 电商长图拼接的计费 key。放在这里而不是 ecom 域：本文件的默认费率表要用它，
+ * 而 ecom 域反过来要用本文件的 `WorkflowResourcePriceRow`，放在域里就成了模块环。
+ */
+export const ECOM_RESOURCE_KEYS = {
+  stitch: "ecom_stitch",
+} as const;
+
 
 export interface WorkflowResourcePriceRow {
   readonly resourceKey: string;

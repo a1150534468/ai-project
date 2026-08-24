@@ -1,12 +1,9 @@
-import { Buffer } from "node:buffer";
 import type { FastifyReply } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
-import { errorMessageOrFallback } from "./error-message.js";
-import { segmentRecordSchema, type InlineImageInput, type ProductInput } from "../ecom/ecom-route-types.js";
-import { WorkflowMutationConflictError } from "../ecom/ecom-route-mutation.js";
-import { getEcomPlatform } from "../ecom/ecom-prompts.js";
-
-const DATA_URL_PATTERN = /^data:(image\/[A-Za-z0-9.+-]+);base64,(.+)$/;
+import { errorMessageOrFallback } from "../_shared/error-message.js";
+import { segmentRecordSchema, type ProductInput } from "./ecom-route-types.js";
+import { WorkflowMutationConflictError } from "./ecom-route-mutation.js";
+import { getEcomPlatform } from "./ecom-prompts.js";
 
 type WorkflowShape = {
   readonly id: string;
@@ -44,10 +41,6 @@ type AssetShape = {
   readonly createdAt: Date;
 };
 
-export const ECOM_RESOURCE_KEYS = {
-  stitch: "ecom_stitch",
-} as const;
-
 type EcomWorkflowRow = NonNullable<Awaited<ReturnType<ReturnType<typeof getPrisma>["ecomWorkflow"]["findFirst"]>>>;
 
 export class RefundCompensationError extends Error {
@@ -58,12 +51,6 @@ export class RefundCompensationError extends Error {
     super(`扣费补偿失败，operationId=${operationId}，${detail}`);
     this.operationId = operationId;
   }
-}
-
-export function authUserId(req: { readonly userId?: string }, reply: FastifyReply): string | null {
-  if (req.userId) return req.userId;
-  reply.code(401).send({ error: "未登录" });
-  return null;
 }
 
 export async function findWorkflowOrReply(
@@ -97,11 +84,6 @@ export function readBillingClientEnv(env: NodeJS.ProcessEnv = process.env) {
   return { baseUrl, token };
 }
 
-export function imageDataUrl(image: InlineImageInput): string {
-  const mime = image.mime?.startsWith("image/") ? image.mime : "image/png";
-  return `data:${mime};base64,${image.b64}`;
-}
-
 export function parseWorkflowProduct(value: unknown): ProductInput {
   return {
     name: typeof value === "object" && value && "name" in value && typeof value.name === "string" ? value.name : "",
@@ -121,11 +103,7 @@ export function safeErrorMessage(error: unknown): string {
   return errorMessageOrFallback(error, "电商长图处理失败");
 }
 
-export function serializeWorkflow(workflow: WorkflowShape) {
-  return serializeWorkflowWithAssets(workflow, null, null);
-}
-
-export function serializeWorkflowWithAssets(
+function serializeWorkflowWithAssets(
   workflow: WorkflowShape,
   masterAsset: AssetShape | null,
   stitchedAsset: AssetShape | null,
@@ -151,10 +129,6 @@ export function serializeWorkflowWithAssets(
     createdAt: workflow.createdAt.toISOString(),
     updatedAt: workflow.updatedAt.toISOString(),
   };
-}
-
-export function serializeWorkflows(workflows: readonly WorkflowShape[]) {
-  return workflows.map(serializeWorkflow);
 }
 
 export async function loadSerializedWorkflow(
@@ -196,37 +170,7 @@ export function serializeAsset(asset: AssetShape) {
   };
 }
 
-export async function loadReferenceImage(
-  asset: Pick<AssetShape, "originalUrl" | "mime">,
-  fetchFn: typeof fetch,
-): Promise<InlineImageInput> {
-  const inline = DATA_URL_PATTERN.exec(asset.originalUrl);
-  if (inline) return { mime: inline[1], b64: inline[2] };
-  const response = await fetchFn(asset.originalUrl, { method: "GET" });
-  if (!response.ok) throw new Error(`reference download ${response.status}`);
-  const mime = response.headers.get("content-type")?.trim() || asset.mime || "image/png";
-  return {
-    mime: mime.startsWith("image/") ? mime : "image/png",
-    b64: Buffer.from(await response.arrayBuffer()).toString("base64"),
-  };
-}
-
-export async function loadOwnedReferenceImages(
-  prisma: ReturnType<typeof getPrisma>,
-  userId: string,
-  assetIds: readonly string[],
-  fetchFn: typeof fetch,
-) {
-  const assets = await prisma.imageAsset.findMany({ where: { userId, id: { in: [...assetIds] } } });
-  if (assets.length !== assetIds.length) throw new Error("reference asset missing");
-  return Promise.all(assetIds.map(async (assetId) => {
-    const asset = assets.find((candidate) => candidate.id === assetId);
-    if (!asset) throw new Error("reference asset missing");
-    return loadReferenceImage(asset, fetchFn);
-  }));
-}
-
-export const BILLING_OPERATION_APPEND_MAX_ATTEMPTS = 5;
+const BILLING_OPERATION_APPEND_MAX_ATTEMPTS = 5;
 
 type BillingOperationRow = { readonly updatedAt: Date; readonly billingOperationIds: readonly string[] };
 

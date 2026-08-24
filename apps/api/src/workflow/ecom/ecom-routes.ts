@@ -5,10 +5,12 @@ import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/bil
 import { buildEcomPrompt, ECOM_PLATFORMS, ECOM_TEMPLATES, getEcomPlatform, getEcomTemplate } from "./ecom-prompts.js";
 import { ecomMasterResourceKey, ecomModelSizeError, ecomSegmentResourceKey, ecomSizeForResolution, normalizeEcomResolution, type EcomResolution } from "./ecom-resolution.js";
 import { deliveredImageResolution, pixelsFromSize } from "../_shared/image-delivered-tier.js";
-import { appendBillingOperationId, authUserId, buildSegmentRecord, ECOM_RESOURCE_KEYS, findCurrentWorkflow, findWorkflowOrReply, listRecentWorkflows, loadOwnedReferenceImages, loadReferenceImage, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "../_shared/ecom-route-helpers.js";
+import { authUserId } from "../_shared/route-auth.js";
+import { loadOwnedReferenceImages, loadReferenceImage } from "../_shared/reference-image.js";
+import { appendBillingOperationId, buildSegmentRecord, findCurrentWorkflow, findWorkflowOrReply, listRecentWorkflows, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "./ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, workflowCreateMutationKey, workflowMutationKey, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { adoptMasterRequestSchema, imageBodySchema, masterRequestSchema, parsePricingModelQuery, segmentParamsSchema, workflowParamsSchema, type EcomRouteDeps } from "./ecom-route-types.js";
-import { ecomMasterPriceFallback, ecomSegmentPriceFallback, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
+import { ecomMasterPriceFallback, ecomSegmentPriceFallback, ECOM_RESOURCE_KEYS, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
 import { callImageEdit as callImageEditService, callImageGeneration as callImageGenerationService, IMAGE_REFERENCE_MAX_BYTES, loadImageGenerationConfig as loadImageGenerationConfigService, loadImageGenerationConfigForModel as loadImageGenerationConfigForModelService, retryUntilSuccess as retryUntilSuccessService, storeWorkflowImage as storeWorkflowImageService } from "../_shared/image-service.js";
 
 const DEFAULT_SIZE = "1024x1024", DEFAULT_ECOM_MAX_ATTEMPTS = 2, REFERENCE_MODEL = "ecom_reference_upload", REFERENCE_PROMPT = "ecom_reference_upload";
