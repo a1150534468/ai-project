@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  ApiError,
   getBalance,
   getMe,
   listSessions,
@@ -13,6 +12,8 @@ import {
   type MeResponse,
   type Session,
 } from "./api";
+import { ApiError } from "./apiError";
+import { AUTH_TOKEN_STORAGE_KEY, setAuthToken } from "./http";
 import Shell, { type ViewType, type WorkflowSubId } from "./components/shell/Shell";
 import { saveSelectedAgentId } from "./shellState";
 import type { WorkflowModuleId } from "./workflowState";
@@ -65,7 +66,7 @@ function sessionAgentOption(session?: Session): AgentOption | null {
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => localStorage.getItem("ai_assistant_token") ?? "");
+  const [token, setToken] = useState(() => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) ?? "");
   const [me, setMe] = useState<MeResponse | null>(null);
   const [authView, setAuthView] = useState<"login" | "register">("login");
   const [view, setView] = useState<ViewType>(() => novelProjectIdFromHash(window.location.hash) ? "workflow" : "chat");
@@ -98,10 +99,12 @@ export default function App() {
     activeSessionKeyRef.current = activeSessionKey;
   }, [activeSessionKey]);
 
-  // 持久化 token：刷新不丢登录态
+  // 持久化 token：刷新不丢登录态；同时同步给 http.ts 的集中处，
+  // 让不再手传 token 的调用方也能拿到（本 effect 声明在拉取数据的 effect 之前，先于它们执行）。
   useEffect(() => {
-    if (token) localStorage.setItem("ai_assistant_token", token);
-    else localStorage.removeItem("ai_assistant_token");
+    setAuthToken(token);
+    if (token) localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
+    else localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   }, [token]);
 
   // 拉取当前账号信息（设置页展示 uid/用户名）；token 失效时清除登录态

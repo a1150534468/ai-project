@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ApiError,
   analyzeNovelChapter,
   createNovelProject,
   deleteNovelProject,
@@ -18,6 +17,7 @@ import {
   type NovelProjectSummary,
   type NovelWorkbenchPayload,
 } from "../../api";
+import { ApiError } from "../../apiError";
 import { createDefaultNovelDraft, novelCreateGenre, novelCreateTitle, type NovelCreateDraft } from "./NovelCreatePage";
 import { NovelLibraryPage } from "../novel/NovelLibraryPage";
 import { NovelSetupWizard } from "../novel/NovelSetupWizard";

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { useToast } from "../motion";
 import {
-  ApiError,
   cancelWorkflowImageTask,
   generateWorkflowImages,
   getImageWorkflowPricing,
@@ -13,6 +12,7 @@ import {
   type WorkflowImageAsset,
   type WorkflowImageTask,
 } from "../api";
+import { ApiError } from "../apiError";
 import { DownloadLinkDialog, type DownloadDialogState } from "../components/ui/DownloadLinkDialog";
 import { CommerceImageStudio } from "../components/workflow/CommerceImageStudio";
 import { ComicWorkflowStudio } from "../components/workflow/ComicWorkflowStudio";

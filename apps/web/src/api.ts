@@ -1,5 +1,7 @@
 import type { MemoryDraft, MemoryGalaxyData, MemoryNode } from "./memoryTypes";
 import type { NovelRunEvent, NovelRunSnapshot } from "@ai-assistant/novel-workflow/contracts";
+import { ApiError, readErrorMessage } from "./apiError";
+import { unwrapData } from "./http";
 
 export async function register(username: string, password: string, channelCode: string): Promise<string> {
   const r = await fetch("/api/auth/register", {
@@ -13,25 +15,6 @@ export async function register(username: string, password: string, channelCode: 
     throw new Error(err.error || "注册失败");
   }
   return (await r.json()).token as string;
-}
-
-function unwrapData<T>(resp: T | { data: T }): T {
-  return resp && typeof resp === "object" && "data" in resp ? resp.data : (resp as T);
-}
-
-export class ApiError extends Error {
-  readonly status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-  }
-}
-
-async function readErrorMessage(response: Response, fallback: string): Promise<string> {
-  const body = await response.json().catch(() => ({})) as { error?: string };
-  return body.error || fallback;
 }
 
 export async function login(identifier: string, password: string): Promise<string> {
