@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import { isObjectLike } from "../../runtime/records.js";
+import { trimTrailingSlash } from "../../runtime/url.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../../storage/public-url.js";
 import { imageResolutionFromSize } from "./image-upstream-options.js";
 import { IMAGE_STREAM_PARTIAL_IMAGES, readImageStream } from "./image-stream.js";
@@ -225,10 +226,6 @@ export function isVerifiedWorkflowImageObjectKeyForUser(value: string, userId: s
   return segments[0] === "workflow"
     && (segments[1] === "images" || segments[1] === "codex-pets")
     && segments[2] === userId;
-}
-
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "");
 }
 
 function endpointFromBase(baseURL: string): string {

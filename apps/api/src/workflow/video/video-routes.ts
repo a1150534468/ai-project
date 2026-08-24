@@ -12,6 +12,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { analyzeMaterials, analyzeReference } from "../_shared/video-analyze-service.js";
 import { generateScript, type ScriptPayload } from "./video-script-service.js";
 import { probeVideoDurationSec } from "../_shared/video-probe.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import {
   AUDIO_REFERENCE_ROLE,
   VIDEO_ASPECT_RATIOS,
@@ -216,7 +217,7 @@ function loadNumber(envKey: string, fallback: number): number {
 }
 
 function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : "视频生成失败";
+  return errorMessageOrFallback(error, "视频生成失败");
 }
 
 function wait(ms: number): Promise<void> {

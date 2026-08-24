@@ -1,8 +1,5 @@
 import type { S3Config } from "./s3.js";
-
-function trimTrailingSlash(s: string): string {
-  return s.replace(/\/+$/, "");
-}
+import { trimTrailingSlash } from "../runtime/url.js";
 
 function encodeObjectKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");

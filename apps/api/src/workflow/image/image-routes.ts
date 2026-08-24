@@ -17,6 +17,7 @@ import {
   normalizeImageSize,
 } from "../_shared/image-upstream-options.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { startImageReaper } from "./image-reaper.js";
 import {
   IMAGE_TASK_STATUS,
@@ -180,26 +181,6 @@ export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env):
 export function loadImageMaxAttempts(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_MAX_ATTEMPTS);
   return Number.isInteger(value) && value > 0 ? Math.min(10, value) : DEFAULT_MAX_ATTEMPTS;
-}
-
-async function fetchWithTimeout(
-  fetchFn: typeof fetch,
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<Response> {
-  const controller = new AbortController();
-  const abort = () => controller.abort();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  if (signal?.aborted) controller.abort();
-  else signal?.addEventListener("abort", abort, { once: true });
-  try {
-    return await fetchFn(url, { ...init, signal: controller.signal });
-  } finally {
-    signal?.removeEventListener("abort", abort);
-    clearTimeout(timer);
-  }
 }
 
 async function callImageGeneration(
@@ -458,7 +439,7 @@ async function updateTask(
 }
 
 function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : "生成失败";
+  return errorMessageOrFallback(error, "生成失败");
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

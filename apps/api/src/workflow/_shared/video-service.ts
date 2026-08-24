@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadS3Config, makeS3, putObject, putObjectFile, type S3Config } from "../../storage/s3.js";
 import { isObjectLike } from "../../runtime/records.js";
+import { trimTrailingSlash } from "../../runtime/url.js";
 import { probeVideoDurationSec, probeVideoDurationSecFromFile } from "./video-probe.js";
 import { loadWorkflowMediaFile } from "./workflow-media-loader.js";
 
@@ -136,10 +137,6 @@ export const VIDEO_ANALYZE_PRICE_CONFIGS = [
   { resourceKey: VIDEO_ANALYZE_IMAGE_RESOURCE_KEY, displayName: "帮我写-图片拆解(按张)" },
   { resourceKey: VIDEO_ANALYZE_VIDEO_SEC_RESOURCE_KEY, displayName: "帮我写-视频拆解(按秒)" },
 ] as const;
-
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "");
-}
 
 function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = trimTrailingSlash(baseUrl.trim() || DEFAULT_VIDEO_BASE_URL);

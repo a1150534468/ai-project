@@ -14,6 +14,7 @@ import { syncNovelContinuityAssetsForChapter } from "../../novel/continuity-asse
 import { syncNovelNarrativeLedgersForChapter } from "../../novel/narrative-ledger.js";
 import { syncNovelSetupAssets } from "../../novel/structured-sync.js";
 import { isPlainObject } from "../../runtime/records.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { findEnabledNovelModel, novelWritingModel, type NovelPlatformModel } from "./novel-models.js";
 
 export interface BillingForNovels {
@@ -49,10 +50,6 @@ class NovelTaskStoppedError extends Error {
     super("任务已取消");
     this.name = "NovelTaskStoppedError";
   }
-}
-
-function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : "生成失败";
 }
 
 function jsonValue(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
@@ -875,7 +872,7 @@ export async function runNovelTask(args: {
       });
       if (requestRecorded) await prisma.novelGenerationRequest.updateMany({ where: { taskId: task.id }, data: { status: "succeeded", error: null } });
     } catch (error) {
-      if (requestRecorded) await prisma.novelGenerationRequest.updateMany({ where: { taskId: task.id }, data: { status: "failed", error: safeErrorMessage(error) } }).catch(() => undefined);
+      if (requestRecorded) await prisma.novelGenerationRequest.updateMany({ where: { taskId: task.id }, data: { status: "failed", error: errorMessageOrFallback(error, "生成失败") } }).catch(() => undefined);
       throw error;
     } finally {
       if (waitTimer) clearInterval(waitTimer);
@@ -910,7 +907,7 @@ export async function runNovelTask(args: {
   } catch (error) {
     await billing.refundResource(args.task.operationId).catch(() => undefined);
     const status = error instanceof NovelTaskStoppedError ? NOVEL_TASK_STATUS.cancelled : NOVEL_TASK_STATUS.failed;
-    const message = status === NOVEL_TASK_STATUS.cancelled ? "用户已取消" : safeErrorMessage(error);
+    const message = status === NOVEL_TASK_STATUS.cancelled ? "用户已取消" : errorMessageOrFallback(error, "生成失败");
     await prisma.novelTask.update({
       where: { id: args.task.id },
       data: {

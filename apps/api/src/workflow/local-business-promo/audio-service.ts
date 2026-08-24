@@ -4,6 +4,7 @@ import { access, readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
+import { trimTrailingSlash } from "../../runtime/url.js";
 import { probeAudioDurationSec } from "./audio-probe.js";
 import type { LocalBusinessPromoMusicPreset } from "./local-business-promo-core.js";
 
@@ -51,10 +52,6 @@ const LOCAL_BUSINESS_PROMO_BGM_PRESET_FILES: Record<Exclude<LocalBusinessPromoMu
   "warm-healing": { filename: "warm-healing.mp3", label: "温暖治愈" },
   "premium-clean": { filename: "premium-clean.mp3", label: "克制高级" },
 };
-
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/, "");
-}
 
 function normalizeBaseUrl(baseUrl: string): string {
   const trimmed = trimTrailingSlash(baseUrl.trim() || DEFAULT_AUDIO_BASE_URL);

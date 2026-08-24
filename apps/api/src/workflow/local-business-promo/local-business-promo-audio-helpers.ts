@@ -17,7 +17,7 @@ import {
   normalizeSettings,
   type LocalBusinessPromoSettings,
 } from "./local-business-promo-core.js";
-import { createTransientAudioAsset, safeErrorMessage } from "./local-business-promo-route-helpers.js";
+import { createTransientAudioAsset } from "./local-business-promo-route-helpers.js";
 import {
   LOCAL_BUSINESS_PROMO_AUDIO_PREVIEW_TEXT,
   PRESET_NARRATION_PREVIEW_CACHE_VERSION,
@@ -244,10 +244,6 @@ export async function findOrCreatePresetNarrationPreviewAsset(args: {
       } as Prisma.InputJsonValue,
     },
   });
-}
-
-export function narrationPreviewErrorMessage(error: unknown, fallback: string): string {
-  return safeErrorMessage(error) || fallback;
 }
 
 export { createTransientAudioAsset };

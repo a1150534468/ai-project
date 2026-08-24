@@ -33,7 +33,7 @@ import { normalizeArticleWorkflowPlan } from "./article-workflow-plan.js";
 import { materializeCaptionArticle } from "./article-workflow-runner-caption.js";
 import { readArticleWorkflowProject } from "./article-workflow-serializer.js";
 import type { ArticleProjectRow, ArticleWorkflowRouteDeps } from "./article-workflow-shared.js";
-import { safeErrorMessage } from "../_shared/ecom-route-helpers.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { finalizeArticleWorkflowProjectState, updateArticleWorkflowProjectState } from "./article-workflow-store.js";
 
 type RunnerDeps = Required<Pick<ArticleWorkflowRouteDeps, "billing" | "llm" | "fetchFn" | "env">> & {
@@ -154,7 +154,7 @@ async function finalizeFailedArticleProject(
     progressStage: "failed",
     progressPercent: 100,
     progressMessage: args.progressMessage,
-    error: safeErrorMessage(args.error),
+    error: errorMessageOrFallback(args.error, "文章生成失败"),
     billingOperationId: null,
   }).catch(() => false);
   if (!committed) {
@@ -585,7 +585,7 @@ export async function runArticleWorkflowMissingImages(
       progressStage: "ready",
       progressPercent: 100,
       progressMessage: "配图生成失败，可重新尝试",
-      error: safeErrorMessage(error),
+      error: errorMessageOrFallback(error, "配图生成失败"),
     }).catch(() => undefined);
   }
 }

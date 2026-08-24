@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
+import { trimTrailingSlash } from "../../runtime/url.js";
 
-function trimTrailingSlash(v: string): string { return v.replace(/\/+$/u, ""); }
 function encodeKey(key: string): string { return key.split("/").map(encodeURIComponent).join("/"); }
 
 export function buildAudioPublicUrl(cfg: S3Config, key: string, env: NodeJS.ProcessEnv = process.env): string {

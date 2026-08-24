@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyReply } from "fastify";
 import type { PrismaClient } from "@prisma/client";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import {
   formatProjectTitle,
   isProgressStage,
@@ -45,7 +46,7 @@ export function authUserId(req: { readonly userId?: string }, reply: FastifyRepl
 }
 
 export function safeErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message.slice(0, 500) : "操作失败";
+  return errorMessageOrFallback(error, "操作失败");
 }
 
 export function serializeVideoAsset(row: NonNullable<VideoAssetRow>, playbackProjectId: string | null = null) {

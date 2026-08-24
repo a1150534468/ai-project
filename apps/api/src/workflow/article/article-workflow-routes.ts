@@ -56,7 +56,8 @@ import {
   serializeArticleWorkflowProject,
   serializeArticleWorkflowProjectSummary,
 } from "./article-workflow-serializer.js";
-import { authUserId, safeErrorMessage } from "../_shared/ecom-route-helpers.js";
+import { authUserId } from "../_shared/ecom-route-helpers.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();
@@ -521,9 +522,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
         progressStage: "ready",
         progressPercent: 100,
         progressMessage: "图片重生失败，可重新尝试",
-        error: safeErrorMessage(error),
+        error: errorMessageOrFallback(error, "图片重生失败"),
       }).catch(() => undefined);
-      return reply.code(502).send({ error: safeErrorMessage(error) });
+      return reply.code(502).send({ error: errorMessageOrFallback(error, "图片重生失败") });
     }
   });
 

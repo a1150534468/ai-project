@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { trimTrailingSlash } from "../../runtime/url.js";
 
 type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
 
@@ -44,10 +45,6 @@ const pollResponseSchema = z.object({
   url: z.string().optional(),
   error: z.string().optional(),
 });
-
-function trimTrailingSlash(value: string): string {
-  return value.replace(/\/+$/u, "");
-}
 
 function normalizeStatus(status: string): SeedanceTaskResult["status"] {
   const normalized = status.trim().toLowerCase();

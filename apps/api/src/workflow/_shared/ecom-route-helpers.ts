@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { FastifyReply } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
+import { errorMessageOrFallback } from "./error-message.js";
 import { segmentRecordSchema, type InlineImageInput, type ProductInput } from "../ecom/ecom-route-types.js";
 import { WorkflowMutationConflictError } from "../ecom/ecom-route-mutation.js";
 import { getEcomPlatform } from "../ecom/ecom-prompts.js";
@@ -117,7 +118,7 @@ export function parseSegments(value: unknown) {
 }
 
 export function safeErrorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : "电商长图处理失败";
+  return errorMessageOrFallback(error, "电商长图处理失败");
 }
 
 export function serializeWorkflow(workflow: WorkflowShape) {

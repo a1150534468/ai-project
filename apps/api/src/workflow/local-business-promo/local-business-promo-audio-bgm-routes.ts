@@ -20,6 +20,7 @@ import {
   serializeAudioTask,
   serializeProjectAudioState,
 } from "./local-business-promo-route-helpers.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import {
   projectParamsSchema,
   type LocalBusinessPromoRouteContext,
@@ -75,7 +76,7 @@ export function registerLocalBusinessPromoBgmRoutes(app: FastifyInstance, ctx: L
       };
     } catch (error) {
       app.log.warn({ err: error, projectId: project.id }, "local business promo bgm preview failed");
-      return reply.code(502).send({ error: safeErrorMessage(error) || "背景音乐试听失败" });
+      return reply.code(502).send({ error: errorMessageOrFallback(error, "背景音乐试听失败") });
     }
   });
 

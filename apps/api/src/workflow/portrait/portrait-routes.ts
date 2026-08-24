@@ -41,6 +41,7 @@ import {
   type WorkflowResourcePriceRow,
 } from "../_shared/workflow-pricing.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
@@ -190,9 +191,8 @@ function nowPlus(ms: number): Date {
 }
 
 function safeErrorMessage(error: unknown): string {
-  if (error instanceof InsufficientBalanceError) return "余额不足，请充值";
-  if (error instanceof Error) return error.message.slice(0, 300);
-  return "人像生成失败";
+  // InsufficientBalanceError 的 message 本身就是「余额不足，请充值」，无需单列分支。
+  return errorMessageOrFallback(error, "人像生成失败", 300);
 }
 
 function portraitBlobSecret(env: NodeJS.ProcessEnv = process.env): string {

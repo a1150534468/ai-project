@@ -14,11 +14,8 @@ import {
   CHUNK_BUDGET,
 } from "./report-service.js";
 import { estimateTextTokens } from "../_shared/token-estimate.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { wrapReportHtml, assembleSectionedBody } from "./report-shell.js";
-
-function safeErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
 
 type PutObjectFn = typeof defaultPutObject;
 type BillingLike = {
@@ -152,7 +149,7 @@ export async function runReportTask(args: RunReportTaskArgs): Promise<void> {
     await args.prisma.reportTask
       .update({
         where: { id: args.taskId },
-        data: { stage: "failed", error: safeErrorMessage(err) },
+        data: { stage: "failed", error: errorMessageOrFallback(err, "报告生成失败") },
       })
       .catch(() => undefined);
   }

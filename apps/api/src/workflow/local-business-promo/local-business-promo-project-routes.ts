@@ -14,6 +14,7 @@ import {
   type LocalBusinessPromoSettings,
 } from "./local-business-promo-core.js";
 import { authUserId, findOwnedProject, nextProjectStatus, projectStateFromRow, reconcileProjectRunState, safeErrorMessage, serializeProjectSummary } from "./local-business-promo-route-helpers.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import {
   PROJECT_KEEP_LIMIT,
   createProjectSchema,
@@ -140,7 +141,7 @@ export function registerLocalBusinessPromoProjectRoutes(app: FastifyInstance, ct
       });
       return { success: true, data: { project: projectStateFromRow(updated) } };
     } catch (error) {
-      return reply.code(502).send({ error: safeErrorMessage(error) || "口播文案生成失败" });
+      return reply.code(502).send({ error: errorMessageOrFallback(error, "口播文案生成失败") });
     }
   });
 

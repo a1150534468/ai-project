@@ -1,13 +1,10 @@
 import { loadS3Config, type S3Config } from "../../storage/s3.js";
+import { trimTrailingSlash } from "../../runtime/url.js";
 import type {
   LocalBusinessPromoMaterial,
   LocalBusinessPromoMaterials,
   LocalBusinessPromoShotPlanEntry,
 } from "./local-business-promo-core.js";
-
-function trimTrailingSlash(value: string) {
-  return value.replace(/\/+$/, "");
-}
 
 function encodeObjectKey(key: string) {
   return key.split("/").map(encodeURIComponent).join("/");

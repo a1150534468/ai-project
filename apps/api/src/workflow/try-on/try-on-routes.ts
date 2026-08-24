@@ -35,6 +35,7 @@ import {
 } from "../_shared/human-image-options.js";
 import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
 import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "../portrait/index.js";
 import { buildTryOnPrompt, TRY_ON_CONSENT_VERSION } from "./try-on-prompts.js";
@@ -202,9 +203,8 @@ function nowPlus(ms: number): Date {
 }
 
 function safeErrorMessage(error: unknown): string {
-  if (error instanceof InsufficientBalanceError) return "余额不足，请充值";
-  if (error instanceof Error) return error.message.slice(0, 300);
-  return "服装试穿生成失败";
+  // InsufficientBalanceError 的 message 本身就是「余额不足，请充值」，无需单列分支。
+  return errorMessageOrFallback(error, "服装试穿生成失败", 300);
 }
 
 function referenceIds(
