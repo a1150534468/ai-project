@@ -1,3 +1,4 @@
+import { request } from "./http";
 import type { ViewType } from "./components/shell/NavRail";
 
 export interface ClientMenuItem {
@@ -85,13 +86,13 @@ export function firstVisibleClientView(visibility: ClientMenuVisibility): ViewTy
 }
 
 export async function getClientMenuVisibility(token?: string): Promise<ClientMenuVisibility> {
-  const headers: Record<string, string> = {};
-  if (token) headers.authorization = `Bearer ${token}`;
-  const response = await fetch("/api/client-menu", { headers });
-  if (!response.ok) throw new Error("菜单配置加载失败");
-  const body = (await response.json()) as { data: ClientMenuItem[] };
+  // 未登录也要能拉菜单，所以显式传 null 而不是让客户端回落到集中 token。
+  const items = await request<ClientMenuItem[]>("/api/client-menu", {
+    token: token ?? null,
+    fallback: "菜单配置加载失败",
+  });
   return {
     ...DEFAULT_CLIENT_MENU_VISIBILITY,
-    ...Object.fromEntries(body.data.map((item) => [item.key, item.visible])),
+    ...Object.fromEntries(items.map((item) => [item.key, item.visible])),
   };
 }

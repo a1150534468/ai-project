@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Icon } from "@iconify/react";
 import { BrandLogo, RippleButton } from "../motion";
+import { ApiError } from "../apiError";
+import { request } from "../http";
 import { ThemeToggle } from "./ThemeToggle";
 
 interface LoginProps {
@@ -26,20 +28,19 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
         return;
       }
 
-      const response = await fetch("/api/auth/login", {
+      // 显式 token: null——登录页不该带上 localStorage 里可能残留的旧 token。
+      const data = await request<{ token: string }>("/api/auth/login", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
+        token: null,
+        body: { identifier, password },
       });
-
-      if (!response.ok) {
+      onLogin(data.token);
+    } catch (err) {
+      // 后端的原始报错不往界面上抛，凭据错误统一提示，避免泄露账号是否存在。
+      if (err instanceof ApiError) {
         setError("登录失败，请检查用户名和密码");
         return;
       }
-
-      const data = (await response.json()) as { token: string };
-      onLogin(data.token);
-    } catch (err) {
       setError(
         err instanceof Error ? err.message : "登录出错，请稍后重试"
       );

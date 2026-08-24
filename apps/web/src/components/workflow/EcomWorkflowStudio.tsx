@@ -12,6 +12,7 @@ import type {
   WorkflowEcomTemplateId,
   WorkflowEcomWorkflow,
 } from "../../workflowEcomApi";
+import { requestResponse } from "../../http";
 import { stitchEcomSegments } from "./ecomWorkflowStitch";
 import {
   ECOM_MAX_REFERENCE_COUNT,
@@ -20,7 +21,6 @@ import {
   ECOM_RESOLUTION_OPTIONS,
   ECOM_SEGMENT_COUNT_OPTIONS,
   canSaveEcomStitchedPreview,
-  createEcomMasterPayload,
   createEcomWorkflowActions,
   describeEcomWorkflowStage,
   formatEcomError,
@@ -336,8 +336,8 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
                 originalUrl: `/api/workflow/ecom/${encodeURIComponent(workflow.id)}/segments/${segment.index}/blob`,
               })),
               fetchBlob: async (url) => {
-                const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-                if (!response.ok) throw new Error("分段图片下载失败");
+                // 不走 request<T>()：要的是 blob，不是 JSON。
+                const response = await requestResponse(url, { token, fallback: "分段图片下载失败" });
                 return response.blob();
               },
             });

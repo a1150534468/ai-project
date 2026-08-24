@@ -42,6 +42,11 @@ export type StitchedEcomImage = {
 
 const SEGMENT_ORDER = [0, 1, 2] as const satisfies readonly WorkflowEcomSegmentIndex[];
 
+/**
+ * 兜底下载器故意保留裸 fetch：segment.originalUrl 可能是对象存储/CDN 的外站地址，
+ * 走注入鉴权头的统一客户端会把 bearer token 带给第三方主机。
+ * 同源 API 的分段 blob 由调用方自己传 fetchBlob（见 EcomWorkflowStudio）。
+ */
 function defaultFetchBlob(url: string): Promise<Blob> {
   return fetch(url).then(async (response) => {
     if (!response.ok) throw new Error("分段图片下载失败");
