@@ -1,30 +1,37 @@
 import type { MemoryDraft, MemoryGalaxyData, MemoryNode } from "./memoryTypes";
 import type { NovelRunEvent, NovelRunSnapshot } from "@ai-assistant/novel-workflow/contracts";
 import { ApiError, readErrorMessage } from "./apiError";
-import { unwrapData } from "./http";
+import { request, requestResponse, unwrapData } from "./http";
 
 export async function register(username: string, password: string, channelCode: string): Promise<string> {
-  const r = await fetch("/api/auth/register", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ username, password, channelCode }),
-  });
-  if (r.status === 409) throw new Error("用户名已被占用");
-  if (!r.ok) {
-    const err = (await r.json()) as { error?: string };
-    throw new Error(err.error || "注册失败");
+  try {
+    // 注册/登录显式传 token: null——这两个页面不该把 localStorage 里可能残留的旧 token 带上。
+    const data = await request<{ token: string }>("/api/auth/register", {
+      method: "POST",
+      token: null,
+      body: { username, password, channelCode },
+      fallback: "注册失败",
+    });
+    return data.token;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 409) throw new Error("用户名已被占用");
+    throw error;
   }
-  return (await r.json()).token as string;
 }
 
 export async function login(identifier: string, password: string): Promise<string> {
-  const r = await fetch("/api/auth/login", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ identifier, password }),
-  });
-  if (!r.ok) throw new Error("登录失败");
-  return (await r.json()).token as string;
+  try {
+    const data = await request<{ token: string }>("/api/auth/login", {
+      method: "POST",
+      token: null,
+      body: { identifier, password },
+    });
+    return data.token;
+  } catch (error) {
+    // 凭据错误统一提示，不把后端原文回显到登录界面。
+    if (error instanceof ApiError) throw new Error("登录失败");
+    throw error;
+  }
 }
 
 export interface MeResponse {
@@ -34,11 +41,7 @@ export interface MeResponse {
 }
 
 export async function getMe(token: string): Promise<MeResponse> {
-  const r = await fetch("/api/auth/me", {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取账号信息失败"), r.status);
-  return (await r.json()) as MeResponse;
+  return request<MeResponse>("/api/auth/me", { token, fallback: "获取账号信息失败" });
 }
 
 export async function streamChat(
@@ -59,15 +62,13 @@ export async function streamChat(
     typeof window !== "undefined"
       ? (window as unknown as { aiAssistantDesktop?: { deviceId?: string } }).aiAssistantDesktop?.deviceId
       : undefined;
-  const r = await fetch("/api/chat", {
+  // 不走 request<T>()：这是 SSE 流，body 要整个留给下面的 reader。
+  const r = await requestResponse("/api/chat", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ message, sessionId, model, agentId, kbIds, attachAllOwn, attachments, toolIds, deviceId }),
+    token,
+    body: { message, sessionId, model, agentId, kbIds, attachAllOwn, attachments, toolIds, deviceId },
+    fallback: "发送失败",
   });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({})) as { error?: string };
-    throw new Error(err.error || "发送失败");
-  }
   if (!r.body) throw new Error("连接失败");
   const reader = r.body.getReader();
   const dec = new TextDecoder();
@@ -138,42 +139,27 @@ function normalizeInstalledTool(tool: InstalledToolPayload): InstalledTool {
 }
 
 export async function listToolMarketCategories(token: string): Promise<ToolMarketCategory[]> {
-  const r = await fetch("/api/tool-market", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取工具市场失败"), r.status);
-  const resp = (await r.json()) as { data: ToolMarketCategory[] };
-  return resp.data ?? [];
+  const rows = await request<ToolMarketCategory[]>("/api/tool-market", { token, fallback: "获取工具市场失败" });
+  return rows ?? [];
 }
 
 export async function listToolMarketSkills(token: string, categoryKey: string): Promise<ToolMarketCategoryDetail> {
-  const r = await fetch(`/api/tool-market/${encodeURIComponent(categoryKey)}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  return request<ToolMarketCategoryDetail>(`/api/tool-market/${encodeURIComponent(categoryKey)}`, {
+    token,
+    fallback: "获取工具列表失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取工具列表失败"), r.status);
-  const resp = (await r.json()) as { data: ToolMarketCategoryDetail };
-  return resp.data;
 }
 
 export async function listInstalledTools(token: string): Promise<InstalledToolsResponse> {
-  const r = await fetch("/api/tools/installed", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "获取已安装工具失败"), r.status);
-  const resp = (await r.json()) as {
-    data?: {
-      currentDeviceOnline?: boolean;
-      builtin?: InstalledToolPayload[];
-      installed?: InstalledToolPayload[];
-    };
-  };
+  const data = await request<{
+    currentDeviceOnline?: boolean;
+    builtin?: InstalledToolPayload[];
+    installed?: InstalledToolPayload[];
+  } | undefined>("/api/tools/installed", { token, fallback: "获取已安装工具失败" });
   return {
-    currentDeviceOnline: resp.data?.currentDeviceOnline ?? false,
-    builtin: (resp.data?.builtin ?? []).map(normalizeInstalledTool),
-    installed: (resp.data?.installed ?? []).map(normalizeInstalledTool),
+    currentDeviceOnline: data?.currentDeviceOnline ?? false,
+    builtin: (data?.builtin ?? []).map(normalizeInstalledTool),
+    installed: (data?.installed ?? []).map(normalizeInstalledTool),
   };
 }
 
@@ -181,14 +167,13 @@ export async function installMarketTool(
   token: string,
   payload: { categoryKey: string; marketId: string },
 ): Promise<InstalledTool> {
-  const r = await fetch("/api/tools/install", {
+  const data = await request<InstalledToolPayload>("/api/tools/install", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "安装工具失败",
   });
-  if (!r.ok) throw new ApiError(await readErrorMessage(r, "安装工具失败"), r.status);
-  const resp = (await r.json()) as { data: InstalledToolPayload };
-  return normalizeInstalledTool(resp.data);
+  return normalizeInstalledTool(data);
 }
 
 export interface TopupResponse {
@@ -322,102 +307,73 @@ export interface PointsDetail {
 }
 
 export async function listRechargePackages(token: string): Promise<RechargePackage[]> {
-  const r = await fetch("/api/billing/recharge-packages", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<RechargePackage[]>("/api/billing/recharge-packages", {
+    token,
+    fallback: "获取充值套餐失败",
   });
-  if (!r.ok) throw new Error("获取充值套餐失败");
-  const resp = (await r.json()) as { data: RechargePackage[] };
-  return resp.data ?? [];
+  return rows ?? [];
 }
 
 export async function getRechargeRatio(token: string): Promise<number> {
-  const r = await fetch("/api/billing/recharge-ratio", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const data = await request<{ ratio: number }>("/api/billing/recharge-ratio", {
+    token,
+    fallback: "获取充值汇率失败",
   });
-  if (!r.ok) throw new Error("获取充值汇率失败");
-  return ((await r.json()) as { ratio: number }).ratio;
+  return data.ratio;
 }
 
 export async function listUsage(token: string, limit = 20): Promise<UsageRow[]> {
-  const r = await fetch(`/api/billing/usage?limit=${limit}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<UsageRow[]>(`/api/billing/usage?limit=${limit}`, {
+    token,
+    fallback: "获取消耗明细失败",
   });
-  if (!r.ok) throw new Error("获取消耗明细失败");
-  const resp = (await r.json()) as { data: UsageRow[] };
-  return resp.data ?? [];
+  return rows ?? [];
 }
 
 export async function topup(
   token: string,
   payload: { amountFen?: number; packageId?: string; method: PaymentMethod; accountType?: "points" | "video" },
 ): Promise<TopupResponse> {
-  const r = await fetch("/api/billing/topup", {
+  return request<TopupResponse>("/api/billing/topup", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "充值失败",
   });
-  if (!r.ok) throw new Error("充值失败");
-  return (await r.json()) as TopupResponse;
 }
 
 export async function getTopupOrder(token: string, tradeNo: string): Promise<TopupOrder> {
-  const r = await fetch(`/api/billing/topup/${encodeURIComponent(tradeNo)}`, {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  return request<TopupOrder>(`/api/billing/topup/${encodeURIComponent(tradeNo)}`, {
+    token,
+    fallback: "获取支付订单失败",
   });
-  if (!r.ok) throw new Error("获取支付订单失败");
-  const resp = (await r.json()) as { data: TopupOrder };
-  return resp.data;
 }
 
 export async function redeem(token: string, code: string): Promise<RedeemResponse> {
-  const r = await fetch("/api/billing/redeem", {
+  return request<RedeemResponse>("/api/billing/redeem", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ code }),
+    token,
+    body: { code },
+    fallback: "兑换失败",
   });
-  if (!r.ok) throw new Error("兑换失败");
-  return (await r.json()) as RedeemResponse;
 }
 
 export async function getBalance(token: string): Promise<BalanceResponse> {
-  const r = await fetch("/api/billing/balance", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取余额失败");
-  return (await r.json()) as BalanceResponse;
+  return request<BalanceResponse>("/api/billing/balance", { token, fallback: "获取余额失败" });
 }
 
 export async function getPointsDetail(token: string): Promise<PointsDetail> {
-  const r = await fetch("/api/billing/points-detail", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取积分详情失败");
-  return (await r.json()) as PointsDetail;
+  return request<PointsDetail>("/api/billing/points-detail", { token, fallback: "获取积分详情失败" });
 }
 
 export async function getVipSummary(token: string): Promise<VipSummary> {
-  const r = await fetch("/api/vip/me", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取 VIP 信息失败");
-  const resp = (await r.json()) as { data: VipSummary };
-  return resp.data;
+  return request<VipSummary>("/api/vip/me", { token, fallback: "获取 VIP 信息失败" });
 }
 
 export async function listModelMarketplace(token: string): Promise<ModelMarketplaceResponse> {
-  const r = await fetch("/api/model-marketplace", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!r.ok) throw new Error("获取模型广场失败");
-  const resp = (await r.json()) as ModelMarketplaceResponse;
+  // 不走 request<T>()：这个接口的 data 旁边还挂着 vip，unwrapData 会把兄弟字段吃掉。
+  const response = await requestResponse("/api/model-marketplace", { token, fallback: "获取模型广场失败" });
+  const resp = (await response.json()) as ModelMarketplaceResponse;
   return { data: resp.data ?? [], vip: resp.vip };
 }
 
