@@ -38,6 +38,7 @@ import {
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
   isRetryableImageGenerationError,
+  loadImageAttemptTimeoutMs,
   loadImageGenerationConfig,
   loadImageGenerationConfigForModel,
   QWEN_IMAGE_MODEL,
@@ -54,7 +55,6 @@ const IMAGE_TASK_KEEP_LIMIT = 12;
 const IMAGE_MAX_COUNT = 8;
 const DEFAULT_RETRY_DELAY_MS = 3000;
 const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
 const IMAGE_BLOB_URL_TTL_MS = 15 * 60_000;
 const ECOM_IMAGE_REQUEST_PREFIX = "ecom-";
 const IMAGE_GENERATION_INTENTS = ["new", "variation", "edit"] as const;
@@ -173,10 +173,9 @@ function tryLoadImageGenerationConfig(model?: string): ImageGenerationConfig | n
   }
 }
 
-export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  const value = Number(env.IMAGE_ATTEMPT_TIMEOUT_MS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_ATTEMPT_TIMEOUT_MS;
-}
+// 与 `_shared/image-service.ts` 的实现逐字节重复（P0.4 记录里标的那处），本次去重后
+// 只保留一份，这里转出去是为了不动 `image-routes.test.ts` 与其他既有引用点。
+export { loadImageAttemptTimeoutMs };
 
 export function loadImageMaxAttempts(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_MAX_ATTEMPTS);
