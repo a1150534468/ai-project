@@ -611,7 +611,7 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 1. **`_shared/` 的判据是实测消费者，不是文件名前缀。** 进 `_shared/` 的条件是「≥2 个域实际 import 且属于基建」（上游客户端、传输管道、ffmpeg/probe、计价 key、通用路由 helper）。域自己的业务逻辑一律留在域内。按这个判据搬进去 30 个文件，顺带消掉两处 `_shared → 域` 的倒挂依赖。
 2. **`audio` 不是独立域。** 计划里把它列成 2 文件的域，但 `audio-service.ts` 导出的全是 `LOCAL_BUSINESS_PROMO_*` 前缀的 BGM/配音能力，且只被 lbp 引用 —— 既不该单独成域也不属于 `_shared/`，直接并入 `local-business-promo/`（该域因此从 52 变 55 个文件）。同理 `try-on` 计划里没列，实际是独立的 4 文件小域，单独建目录。
 3. **门面导出必须按依赖从叶子到入口排。** `workflow/novel ↔ src/novel` 本来就有模块环（`novel-routes → src/novel/outbox → 门面`），而 outbox 在模块求值期就要 `NOVEL_TARGET_KINDS.filter(...)`。第一版 `novel/index.ts` 把 routes 排在类型/常量前面，直接炸出 5 个套件 `TypeError: Cannot read properties of undefined (reading 'filter')`。改成叶子优先后恢复。codex-pet / lbp 的门面按同一规则排，注释里写了原因。
-4. **`_shared/ecom-route-helpers.ts` 不走 ecom 门面，是有意留的例外。** 它混装了通用路由基建（被 article/image/report 共用）和 ecom 专属入参解析，两边都拆不干净；把门面插进已有的 `ecom-route-types → workflow-pricing → ecom-route-helpers` 环里会重演第 3 条的 TDZ。留到 P2.2 Step 4 拆分后这处倒挂自动消失，注释已写在 `ecom/index.ts`。
+4. **`_shared/ecom-route-helpers.ts` 不走 ecom 门面，是有意留的例外。** 它混装了通用路由基建（被 article/image/report 共用）和 ecom 专属入参解析，两边都拆不干净；把门面插进已有的 `ecom-route-types → workflow-pricing → ecom-route-helpers` 环里会重演第 3 条的 TDZ。留到 P2.2 Step 4 拆分后这处倒挂自动消失，注释已写在 `ecom/index.ts`。**（已于 P2.2 Step 4 / commit `75b5597` 拆完：通用部分进 `_shared/route-auth.ts` + `_shared/reference-image.ts`，`ECOM_RESOURCE_KEYS` 进 `_shared/workflow-pricing.ts` 断环，其余进 `ecom/ecom-route-helpers.ts`；`ecom/index.ts` 的例外注释已删。）**
 
 **两类 move 脚本看不见的东西，得手工补**（都在 `.cc-tmp/workflow-split/` 的工具改完之后逐一核对）：
 
@@ -639,12 +639,83 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 | `fetchWithTimeout` | 3 | 超时/中断语义各自实现 |
 | `createPrismaMock` / `createApp` | 各 8 | 测试脚手架 |
 
-- [ ] **Step 1: `estimateInputTokens` 单独先做，当正确性 bug 处理**。6 份实现若口径不一致，等于不同域按不同标准扣费。**先逐份 diff 并把差异表格化写进本文件**，再决定统一口径 —— 如果发现某份是"对的"而其他是"错的"，这已经是计费 bug，需单独提 issue 并评估是否影响已产生的账单。**不要顺手统一成任意一份。**
-- [ ] **Step 2: `isRecord` 逐个调用点核对**。7 份中区分"确实需要排除数组"和"不需要"的调用场景。**不要无脑统一成最严格的版本** —— 那会改变现有行为。做法：统一命名为语义明确的两个函数（`isPlainObject` 排除数组 / `isObjectLike` 不排除），按原行为逐处替换。
-- [ ] **Step 3: 其余机械收敛**。`safeErrorMessage` 统一签名但**保留各域的兜底文案与截断长度作为参数**（文案是用户可见的，不要统一掉）。`trimTrailingSlash` / `fetchWithTimeout` 可直接统一。
-- [ ] **Step 4: 落位**。放 `workflow/_shared/`（若 P2.1 已完成）或 `apps/api/src/shared/`。**明确排除 `packages/llm` 相关符号** —— 既有计划阶段 3 会把 `retry` / `routes` 迁进 `packages/llm`，避免撞车。测试脚手架（`createPrismaMock` / `createApp`）放 `test-support/`。
-- [ ] **验证**：每步 `pnpm typecheck` + 相关域测试。`estimateInputTokens` 那步必须跑所有计费相关测试。
-- [ ] Commit（多个）`refactor(workflow): 收敛 <函数> 重复实现`
+- [x] **Step 1: `estimateInputTokens` 单独先做，当正确性 bug 处理**。6 份实现若口径不一致，等于不同域按不同标准扣费。**先逐份 diff 并把差异表格化写进本文件**，再决定统一口径 —— 如果发现某份是"对的"而其他是"错的"，这已经是计费 bug，需单独提 issue 并评估是否影响已产生的账单。**不要顺手统一成任意一份。**
+- [x] **Step 2: `isRecord` 逐个调用点核对**。7 份中区分"确实需要排除数组"和"不需要"的调用场景。**不要无脑统一成最严格的版本** —— 那会改变现有行为。做法：统一命名为语义明确的两个函数（`isPlainObject` 排除数组 / `isObjectLike` 不排除），按原行为逐处替换。
+- [x] **Step 3: 其余机械收敛**。`safeErrorMessage` 统一签名但**保留各域的兜底文案与截断长度作为参数**（文案是用户可见的，不要统一掉）。`trimTrailingSlash` / `fetchWithTimeout` 可直接统一。
+- [x] **Step 4: 落位**。放 `workflow/_shared/`（若 P2.1 已完成）或 `apps/api/src/shared/`。**明确排除 `packages/llm` 相关符号** —— 既有计划阶段 3 会把 `retry` / `routes` 迁进 `packages/llm`，避免撞车。测试脚手架（`createPrismaMock` / `createApp`）放 `test-support/`。
+- [x] **验证**：每步 `pnpm typecheck` + 相关域测试。`estimateInputTokens` 那步必须跑所有计费相关测试。
+- [x] Commit（多个）`refactor(workflow): 收敛 <函数> 重复实现`
+
+### P2.2 执行记录（2026-08-24，5 个提交 `9754baf..c30ccf2`）
+
+#### 动手前重测：计划表里的数字有一半不准
+
+计划的副本数是 grep 出来的，漏掉跨行调用与私有包装，实测后两项明显缩水：
+
+| 函数 | 计划 | 实测 | 差异原因 |
+|---|---:|---|---|
+| `estimateInputTokens` | 6 | **7 份，口径完全一致** | 全部是 `长度 / 3` 向上取整，没有漂移 |
+| `isRecord` | 7 | **apps/api 7 份**（另有 web 1 / desktop 1） | 计划只数了 apps/api |
+| `safeErrorMessage` | 7 | **8 份，其中 2 份是导出的**（30+ 下游调用点） | 导出副本决定了必须保留各域包装 |
+| `trimTrailingSlash` | 6 | **7 份** | 漏了 `storage/public-url.ts` |
+| `fetchWithTimeout` | 3 | **1 份真在用 + 1 份死代码 + 1 份实现不同** | 「3 份可合 2 份」不成立 |
+
+#### Step 1（`9754baf`）：计费风险被证伪，不需要提 issue
+
+7 份 `estimateInputTokens` 逐字节 diff 后确认除以 3 的口径统一，不存在「某份是对的其他是错的」。因此按计划的风险预案（第 770 行「若确认口径不一致，停下来先报告」）**不触发**，降级为普通去重，落 `workflow/_shared/token-estimate.ts`。
+
+#### Step 2（`43ec2ba`）：拆成两个函数，按原行为逐处替换
+
+新建 `runtime/records.ts` 导出 `isPlainObject`（排除数组）/ `isObjectLike`（不排除），配 4 条测试**钉住「唯一差异就是数组」**，并额外钉住两者都不做原型检查（`new Date()` / `new Error()` 都能通过）—— 防止后人再来一次「统一」。原本排除数组的 3 处（`agent-workflow-plan` / `novel-task-runner` / `novel-billable`）换 `isPlainObject`，原本不排除的 4 处（`fact-extractor` / `image-service` 13 个调用点 / `image-stream` / `video-service`）换 `isObjectLike`。
+
+**`apps/web` 与 `apps/desktop` 的两份故意不动**：为两个 4 行函数拉一个跨包 shared 入口，收益不抵成本。
+
+#### Step 3（`24e862d`）：保留 6 个一行包装，比穿参数到 50 个调用点划算
+
+`_shared/error-message.ts` 的 `errorMessageOrFallback(error, fallback, maxLength = 500)` 是唯一实现，三条口径写进注释：非 Error 一律走兜底（**不再 `String(err)`**）、空白 message 走兜底、截断只作用于 message。各域保留一行包装（`safeErrorMessage(e) => errorMessageOrFallback(e, "视频生成失败")` 之类）——重复的**逻辑**没了，剩下的每域一行是配置而非实现。
+
+三处顺手修掉的真问题：
+
+1. **article 两个文件用错了域的兜底文案**。它们 import 的是 ecom 的 `safeErrorMessage`，非 Error 失败时给用户显示「电商长图处理失败」。已改为直接调 `errorMessageOrFallback` 并传自己的文案。
+2. **local-promo 的 `|| "具体文案"` 差点被新口径吃掉**。核心加了「空白 message → 兜底」后，`safeErrorMessage(e) || "口播试听失败"` 会变成死代码，把 3 处用户可见文案静默降级成「操作失败」。改为把具体文案作为 fallback 参数传进去。
+3. **删掉两处死代码**：`local-business-promo-audio-helpers.ts` 的 `narrationPreviewErrorMessage`（导出，零调用点）、`image-routes.ts` 的 19 行 `fetchWithTimeout`（零调用点）。
+
+`InsufficientBalanceError` 的分支删除做了双向验证才动手：`packages/billing` 里它的 message 本身就是「余额不足，请充值」，且 portrait/try-on 的测试没有像 `kb/routes.test.ts` 那样用空 message mock 这个类 —— 删除是**输出逐字节等价**的。
+
+`fetchWithTimeout` 最终**只删死代码不合并**：`video-service.ts` 那份（AbortController + 外部 signal 转发）是唯一真用户，`image-service.ts` 那份走 `withImageAttemptDeadline` 且多一个 `onRequestSent`，实现目标不同。`runtime/with-timeout.ts` 是 `Promise.race`、不带 abort，也不能替代。
+
+#### Step 4（`75b5597`）：拆 `_shared/ecom-route-helpers.ts`，还掉 P2.1 的账
+
+这是 P2.1 遗留的例外（本文件第 614 行）。判据定为**「有 ecom 域外的 importer 才留在 `_shared`」**：
+
+- 留 `_shared`：`authUserId` → `route-auth.ts`（report/article/ecom 三域用）；`loadReferenceImage` / `loadOwnedReferenceImages` → `reference-image.ts`（image 域也用，参数改成结构化类型，不再 import ecom 的 `InlineImageInput`）
+- `ECOM_RESOURCE_KEYS` 移进 `_shared/workflow-pricing.ts`，**断开真实模块环** `workflow-pricing → ecom-route-helpers → ecom-route-types → workflow-pricing`
+- 其余 16 个符号 + 3 个类型整体搬到 `ecom/ecom-route-helpers.ts`，同目录 import，倒挂消失
+- 顺手删 3 个零调用点导出（`imageDataUrl` / `serializeWorkflows` / `serializeWorkflow`），`serializeWorkflowWithAssets` 与 `BILLING_OPERATION_APPEND_MAX_ATTEMPTS` 收回文件内不再导出
+- `ecom/index.ts` 里那段 P2.1 例外说明删除
+
+**`authUserId` 只搬不合**：`local-business-promo` 域另有一份同名同形的实现，48 个调用点跨 11 个文件，合并是独立改动，注释已写在 `route-auth.ts`，等确认后再动。
+
+#### 补做（`c30ccf2`）：P0.4 记录里挂账到 P2.2 的那处重复
+
+本文件 P0.4 执行记录末尾（「未做（不在范围）」）标了 `loadImageAttemptTimeoutMs` 在 `image-service.ts` 与 `image-routes.ts` 逐字节重复，归属 P2.2。计划的 P2.2 表格里没有这一项，本次一并清掉：两处的 `DEFAULT_ATTEMPT_TIMEOUT_MS` 都是 `600_000`，实现完全一致，删掉 `image-routes.ts` 的副本改为从 `_shared/image-service.js` import 并原名 re-export（`image-routes.test.ts` 三条断言不动）；随之孤立的本地常量一起删。
+
+#### 按约定跳过的部分
+
+**测试脚手架不动**（计划 Step 4 提到的 `test-support/`）：`createPrismaMock` 14 份 / `createApp` 10 份，每个域的 prisma mock 种子形状都不一样，抽公共层等于给每个调用点加一层配置对象，不划算。
+
+**`packages/llm` 相关符号排除**，按计划第 18 行避免与 P3.1 阶段 3 撞车。
+
+同时记录但**明确不在本次范围**：`FetchLike` 在 `_shared/image-service.ts` / `_shared/video-service.ts` / `_shared/vision-client.ts` 定义了三次（后者导出）；`BILLING_BASE_URL` 有约 40 个非测试文件在读，`readBillingClientEnv` 只是其中一个读取方。
+
+#### 验证数字
+
+| 步骤 | typecheck | biome（`--formatter-enabled=false`） | 测试 |
+|---|---|---|---|
+| Step 2 | exit 0 | 9 files clean | `runtime memory agent-teams workflow/novel workflow/_shared`：42 文件通过 / 2 跳过；**271 passed / 0 failed / 9 skipped** |
+| Step 3 | exit 0 | 25 files clean | `runtime storage workflow`：129 文件通过 / 5 跳过；**1102 passed / 0 failed / 16 skipped**（321.81s） |
+| Step 4 | exit 0 | 11 files clean | `workflow/{ecom,image,report,article,_shared}`：42 文件通过 / 1 跳过；**443 passed / 0 failed / 8 skipped** |
+| 补做 | exit 0 | 1 file clean | `workflow/{image,portrait,article}`：20 文件通过 / 0 跳过；**238 passed / 0 failed / 0 skipped** |
 
 ---
 
@@ -767,7 +838,7 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 - **每个任务独立成 commit**，变红即 `git revert` 单个提交。
 - **P0.5（video）是 P0 里唯一有误伤风险的**：把仍在上游正常跑的长任务误判为卡单并退款，比不退款更糟（用户拿到了货还被退了钱）。该任务的上游状态核对逻辑必须有测试覆盖四种分支后才能上线。
-- **P2.2 Step 1（`estimateInputTokens`）可能挖出既存计费 bug**。若确认口径不一致，**停下来先报告**，不要在重构提交里顺手改计费口径。
+- **P2.2 Step 1（`estimateInputTokens`）可能挖出既存计费 bug**。若确认口径不一致，**停下来先报告**，不要在重构提交里顺手改计费口径。**（2026-08-24 已验：7 份实现口径一致，均为 `长度 / 3` 向上取整，此风险未触发。）**
 - **P1.1 / P1.2 改动面极广但机械**：严格一域/一模块一提交，不要图快合并。
 - **前端测试比 0.25、admin 0.11**，回归信号弱。涉及这两处的任务必须人眼验收。
 - **P2.4 批次一与 P3.1 阶段 1 不能并行**：阶段 1 的门面兼容契约把 `codex-pet-worker.ts` / `codex-pet-packaging.ts` / `codex-pet-visual.ts` 等列为"一行都不改"，而批次一要拆它们。推荐先阶段 1(37 步已写好)，再批次一。
