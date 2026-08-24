@@ -9,11 +9,11 @@ import {
   buildDigest,
   splitIntoSheets,
   planChunks,
-  estimateInputTokens,
   DEFAULT_MAX_OUTPUT_TOKENS,
   SINGLE_PASS_BUDGET,
   CHUNK_BUDGET,
 } from "./report-service.js";
+import { estimateTextTokens } from "../_shared/token-estimate.js";
 import { wrapReportHtml, assembleSectionedBody } from "./report-shell.js";
 
 function safeErrorMessage(err: unknown): string {
@@ -74,7 +74,7 @@ async function generateBody(args: RunReportTaskArgs, maxOutputTokens: number): P
     billing: args.billing as never,
   };
 
-  if (args.exhaustive && estimateInputTokens(args.text) > SINGLE_PASS_BUDGET) {
+  if (args.exhaustive && estimateTextTokens(args.text) > SINGLE_PASS_BUDGET) {
     const units = splitIntoSheets(args.text);
     const chunks = planChunks(units, CHUNK_BUDGET);
     const sections: Array<{ title: string; html: string }> = [];

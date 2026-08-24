@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
+import { estimateInputTokens } from "../_shared/token-estimate.js";
 
 const LEGACY_HELP_WRITE_MODEL = "MiniMax-M3";
 const MAX_OUTPUT_TOKENS = 800;
@@ -39,10 +40,6 @@ function buildUser(input: HelpWriteInput): string {
   const points = (input.sellingPoints ?? []).map((p) => p.trim()).filter((p) => p.length > 0);
   if (input.field === "extra" && points.length > 0) lines.push(`已有卖点：${points.join("；")}`);
   return lines.join("\n");
-}
-
-function estimateInputTokens(system: string, user: string): number {
-  return Math.max(1, Math.ceil(`${system}\n\n${user}`.length / 3));
 }
 
 function defaultBilling(): BillingReserveSettle {

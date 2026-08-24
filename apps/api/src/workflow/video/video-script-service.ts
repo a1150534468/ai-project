@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
 import { M3_MODEL, M3_TIMEOUT_MS } from "../_shared/video-multimodal.js";
+import { estimateInputTokens } from "../_shared/token-estimate.js";
 
 const SCRIPT_MAX_TOKENS = 3000;
 const PRICE_MULTIPLIER = 2; // 脚本按模型原价 2 倍计费
@@ -87,10 +88,6 @@ function buildSystem(): string {
     "4) 台词用 {}、音效用 <>、背景音乐用 （）、字幕/标题用 【】；",
     "5) 只输出最终提示词正文本身，禁止输出「优化问题」「相关原则」等分析段落，禁止用 Markdown 代码块或标题包裹，禁止反问。",
   ].join("\n");
-}
-
-function estimateInputTokens(system: string, user: string): number {
-  return Math.max(1, Math.ceil(`${system}\n\n${user}`.length / 3));
 }
 
 export async function generateScript(args: {

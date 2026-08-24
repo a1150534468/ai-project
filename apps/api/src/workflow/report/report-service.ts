@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { estimateTextTokens } from "../_shared/token-estimate.js";
 
 export const DEFAULT_INPUT_TOKEN_BUDGET = 64_000;
 export const MAX_CONTINUE_ROUNDS = 10;
@@ -26,10 +27,6 @@ type BillingReserveSettle = {
     operationId: string; userId: string; model: string; inputTokens: number; outputTokens: number;
   }) => Promise<unknown>;
 };
-
-export function estimateInputTokens(text: string): number {
-  return Math.max(1, Math.ceil(text.length / 3));
-}
 
 export function truncateToTokenBudget(
   text: string,
@@ -189,7 +186,7 @@ async function runGenerationLoop(p: LoopParams): Promise<GenerateReportResult> {
     rounds++;
     const operationId = `${p.opPrefix}:${i}`;
     const serialized = messages.map((m) => (typeof m.content === "string" ? m.content : "")).join("\n");
-    const estIn = estimateInputTokens(`${p.system}\n${serialized}`);
+    const estIn = estimateTextTokens(`${p.system}\n${serialized}`);
     await p.billing.reserve({
       operationId, userId: p.userId, type: "report", model: p.model,
       inputTokens: estIn, maxOutputTokens: p.maxOutputTokens,

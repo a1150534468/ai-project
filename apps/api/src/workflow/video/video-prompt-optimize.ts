@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
+import { estimateInputTokens } from "../_shared/token-estimate.js";
 
 const SKILL_PATH = fileURLToPath(new URL("./video-prompt-skill.md", import.meta.url));
 let skillCache: string | null = null;
@@ -42,10 +43,6 @@ function buildUserMessage(prompt: string, m: { image: number; video: number; aud
     "【用户原始提示词】",
     prompt,
   ].join("\n");
-}
-
-function estimateInputTokens(system: string, userMessage: string): number {
-  return Math.max(1, Math.ceil(`${system}\n\n${userMessage}`.length / 3));
 }
 
 function defaultBilling(): BillingReserveSettle {

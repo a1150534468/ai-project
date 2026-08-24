@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type Anthropic from "@anthropic-ai/sdk";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { createBillingClient as makeBillingClient } from "@ai-assistant/billing";
+import { estimateInputTokens } from "../_shared/token-estimate.js";
 import {
   countLocalBusinessPromoSpeechChars,
   directionLabel,
@@ -49,10 +50,6 @@ export function resolveLocalBusinessPromoScriptModel(
   defaultModel?: string,
 ): string {
   return (env.LOCAL_BUSINESS_PROMO_SCRIPT_MODEL ?? defaultModel ?? "").trim() || "GLM-5.2";
-}
-
-function estimateInputTokens(userMessage: string): number {
-  return Math.max(1, Math.ceil(`${SYSTEM_PROMPT}\n\n${userMessage}`.length / 3));
 }
 
 function buildUserMessage(input: GenerateLocalBusinessPromoScriptInput): string {
@@ -250,7 +247,7 @@ export async function generateLocalBusinessPromoScript(input: GenerateLocalBusin
     userId: input.userId,
     type: "chat",
     model,
-    inputTokens: estimateInputTokens(initialMessage),
+    inputTokens: estimateInputTokens(SYSTEM_PROMPT, initialMessage),
     maxOutputTokens: SCRIPT_MAX_OUTPUT_TOKENS,
   });
 
@@ -275,7 +272,7 @@ export async function generateLocalBusinessPromoScript(input: GenerateLocalBusin
         { timeout: SCRIPT_TIMEOUT_MS },
       );
       const normalized = parseScriptResponse(response);
-      settledInputTokens += normalized.usage?.input_tokens ?? estimateInputTokens(userMessage);
+      settledInputTokens += normalized.usage?.input_tokens ?? estimateInputTokens(SYSTEM_PROMPT, userMessage);
       settledOutputTokens += normalized.usage?.output_tokens ?? 0;
       const text = normalized.content
         .filter((block): block is Anthropic.TextBlock => block.type === "text")

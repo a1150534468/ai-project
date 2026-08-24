@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { M3_MODEL, M3_TIMEOUT_MS } from "../_shared/video-multimodal.js";
+import { estimateInputTokens } from "../_shared/token-estimate.js";
 import { DUB_REWRITE_MAX_TOKENS, DUB_REWRITE_PRICE_MULTIPLIER, DUB_REWRITE_BILLING_TYPE } from "./dub-constants.js";
 
 export interface RewriteBilling {
@@ -35,10 +36,6 @@ export function buildRewritePrompt(input: BuildRewriteInput): string {
   if (input.style?.trim()) lines.push(`【风格要求】${input.style.trim()}`);
   lines.push("请输出改写后的口播文案。");
   return lines.join("\n\n");
-}
-
-function estimateInputTokens(system: string, user: string): number {
-  return Math.max(1, Math.ceil(`${system}\n\n${user}`.length / 3));
 }
 
 export async function rewriteDubScript(args: {
