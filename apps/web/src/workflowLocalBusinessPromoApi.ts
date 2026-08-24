@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 
 export type LocalBusinessPromoDirection = "store-trust" | "service-showcase" | "offer-conversion" | "city-seeding";
 export type LocalBusinessPromoDuration = 25 | 40 | 60;
@@ -212,26 +212,19 @@ export interface LocalBusinessPromoOptions {
   readonly musicPresets: readonly LocalBusinessPromoOption<LocalBusinessPromoMusicPreset>[];
 }
 
-type WorkflowResponse<T> = {
-  readonly data: T;
-};
-
-async function requestLocalBusinessPromo<T>(args: {
+function requestLocalBusinessPromo<T>(args: {
   readonly token: string;
   readonly path: string;
   readonly method: "GET" | "POST" | "PATCH";
   readonly fallback: string;
   readonly body?: unknown;
 }): Promise<T> {
-  const response = await fetch(args.path, {
+  return request<T>(args.path, {
     method: args.method,
-    headers: args.body === undefined
-      ? { authorization: `Bearer ${args.token}` }
-      : { "content-type": "application/json", authorization: `Bearer ${args.token}` },
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+    token: args.token,
+    body: args.body,
+    fallback: args.fallback,
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
-  return ((await response.json()) as WorkflowResponse<T>).data;
 }
 
 export async function getLocalBusinessPromoOptions(token: string): Promise<LocalBusinessPromoOptions> {
@@ -360,17 +353,12 @@ export async function uploadLocalBusinessPromoVoiceSample(
 ): Promise<{ readonly asset: WorkflowAudioAsset; readonly audio: LocalBusinessPromoAudioState }> {
   const form = new FormData();
   form.set("file", file);
-  const response = await fetch(`/api/workflow/local-business-promos/projects/${encodeURIComponent(projectId)}/audio/voice-sample`, {
+  return request(`/api/workflow/local-business-promos/projects/${encodeURIComponent(projectId)}/audio/voice-sample`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
     body: form,
+    fallback: "上传音色样本失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "上传音色样本失败"), response.status);
-  const body = (await response.json()) as WorkflowResponse<{
-    readonly asset: WorkflowAudioAsset;
-    readonly audio: LocalBusinessPromoAudioState;
-  }>;
-  return body.data;
 }
 
 export async function previewLocalBusinessPromoNarration(
@@ -426,17 +414,12 @@ export async function uploadLocalBusinessPromoBgm(
 ): Promise<{ readonly asset: WorkflowAudioAsset; readonly audio: LocalBusinessPromoAudioState }> {
   const form = new FormData();
   form.set("file", file);
-  const response = await fetch(`/api/workflow/local-business-promos/projects/${encodeURIComponent(projectId)}/audio/bgm-upload`, {
+  return request(`/api/workflow/local-business-promos/projects/${encodeURIComponent(projectId)}/audio/bgm-upload`, {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
     body: form,
+    fallback: "上传 BGM 失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "上传 BGM 失败"), response.status);
-  const body = (await response.json()) as WorkflowResponse<{
-    readonly asset: WorkflowAudioAsset;
-    readonly audio: LocalBusinessPromoAudioState;
-  }>;
-  return body.data;
 }
 
 export async function generateLocalBusinessPromoBgm(

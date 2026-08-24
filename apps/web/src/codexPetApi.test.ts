@@ -221,7 +221,8 @@ describe("codex pet API", () => {
     expect(await downloaded.blob.text()).toBe("zip");
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/workflow/codex-pets/projects/project%20%2F%201/download",
-      { headers: { authorization: "Bearer token" } },
+      // 统一 http 客户端会把 method 显式写成 GET，这里只钉住地址与鉴权头。
+      expect.objectContaining({ method: "GET", headers: { authorization: "Bearer token" } }),
     );
   });
 

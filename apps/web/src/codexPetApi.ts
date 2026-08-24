@@ -1,5 +1,5 @@
 import { uploadWorkflowImageReference, type WorkflowImageAsset } from "./api";
-import { ApiError, readErrorBody, readErrorMessage } from "./apiError";
+import { requestResponse, unwrapData } from "./http";
 
 export const CODEX_PET_API_BASE = "/api/workflow/codex-pets";
 
@@ -301,10 +301,6 @@ export interface CodexPetDownload {
 
 type ApiMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-function unwrapData<T>(body: T | { readonly data: T }): T {
-  return body && typeof body === "object" && "data" in body ? body.data : body as T;
-}
-
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
@@ -318,23 +314,16 @@ async function requestCodexPet<T>(args: {
   readonly idempotencyKey?: string;
   readonly signal?: AbortSignal;
 }): Promise<T> {
-  const headers: Record<string, string> = {
-    authorization: `Bearer ${args.token}`,
-  };
-  if (args.body !== undefined) headers["content-type"] = "application/json";
-  if (args.idempotencyKey) headers["idempotency-key"] = args.idempotencyKey;
-  const response = await fetch(`${CODEX_PET_API_BASE}${args.path}`, {
+  // 不走 request<T>()：本域的删除接口回 204，body 是空的，JSON.parse 会炸。
+  // 错误分支（含 409 带的 data.extraCallBudget）由 requestResponse 统一处理。
+  const response = await requestResponse(`${CODEX_PET_API_BASE}${args.path}`, {
     method: args.method ?? "GET",
-    headers,
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+    token: args.token,
+    body: args.body,
+    fallback: args.fallback,
+    headers: args.idempotencyKey ? { "idempotency-key": args.idempotencyKey } : undefined,
     signal: args.signal,
   });
-  if (!response.ok) {
-    // Keep the structured payload: the 409 for an exhausted repair budget carries
-    // `data.extraCallBudget`, which is what the panel needs to explain the refusal.
-    const failure = await readErrorBody(response, args.fallback);
-    throw new ApiError(failure.message, response.status, failure.data);
-  }
   if (response.status === 204) return undefined as T;
   return unwrapData(await response.json() as T | { readonly data: T });
 }
@@ -594,16 +583,13 @@ export async function streamCodexPetEvents(args: {
   readonly onEvent: (event: CodexPetEvent) => void;
 }): Promise<void> {
   const after = Math.max(0, args.after ?? 0);
-  const headers: Record<string, string> = {
-    accept: "text/event-stream",
-    authorization: `Bearer ${args.token}`,
-  };
+  const headers: Record<string, string> = { accept: "text/event-stream" };
   if (after > 0) headers["last-event-id"] = String(after);
-  const response = await fetch(
+  // 流式：只借 requestResponse 的鉴权与错误处理，body 留给下面自己 getReader()。
+  const response = await requestResponse(
     `${CODEX_PET_API_BASE}/projects/${encodeURIComponent(args.projectId)}/runs/${encodeURIComponent(args.runId)}/events/stream?after=${after}`,
-    { headers, signal: args.signal },
+    { token: args.token, headers, signal: args.signal, fallback: "连接桌宠实时进度失败" },
   );
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "连接桌宠实时进度失败"), response.status);
   if (!response.body) throw new Error("桌宠实时进度流不可用");
 
   const reader = response.body.getReader();
@@ -653,10 +639,11 @@ function filenameFromDisposition(disposition: string | null, fallback: string): 
 }
 
 export async function downloadCodexPetPackage(token: string, projectId: string, runId?: string): Promise<CodexPetDownload> {
-  const response = await fetch(`${CODEX_PET_API_BASE}/projects/${encodeURIComponent(projectId)}/download${deliveryRunQuery(runId)}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "下载桌宠兼容包失败"), response.status);
+  // 取 blob 也走 requestResponse：body 不能被提前读掉。
+  const response = await requestResponse(
+    `${CODEX_PET_API_BASE}/projects/${encodeURIComponent(projectId)}/download${deliveryRunQuery(runId)}`,
+    { token, fallback: "下载桌宠兼容包失败" },
+  );
   return {
     blob: await response.blob(),
     filename: filenameFromDisposition(response.headers.get("content-disposition"), "codex-pet.zip"),
