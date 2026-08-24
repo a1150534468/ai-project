@@ -2,47 +2,95 @@
 
 ## 1. Atmosphere & Identity
 
-轻量、克制、可维护的浅色 AI 工作台。核心体验是把复杂 AI 能力收束进清晰的层级中，让品牌青色只在关键交互与状态上发光。记忆管理的签名是“表格优先的信息工作台”：用高信息密度表格承载长期记忆，右侧详情负责编辑与整理。
+轻量、克制、可维护的浅色 AI 工作台，同时提供成对的暗色主题。核心体验是把复杂 AI 能力收束进清晰的层级中，让品牌蓝只在关键交互与状态上发光。记忆管理的签名是“表格优先的信息工作台”：用高信息密度表格承载长期记忆，右侧详情负责编辑与整理。
 
 ## 2. Color
 
+### 唯一来源
+
+色值只在 `apps/web/src/index.css` 的 `:root` / `html[data-theme="dark"]` 里定义为 `--color-*` 的 `R G B` 三元组，
+再由 `apps/web/tailwind.config.js` 暴露成语义类。组件里**只写语义类**（`text-ink`、`border-hairline`、`bg-surface`），
+不写 `text-[#1d1d1f]` 这类字面色值 —— 字面色值不会跟随暗色模式切换。
+
+三元组格式是为了让透明度写法直接可用：`text-ink/70`、`bg-danger/10`、`border-hairline/60`。
+手写 CSS（`index.css` 内部、内联 style）用派生别名 `var(--apple-ink)` 等，值同源。
+
 ### Palette
 
-| Role | Token | Light | Dark | Usage |
-|------|-------|-------|------|-------|
-| Surface/base | `--surface-base` | `#f5f5f7` | n/a | 应用工作台底色 |
-| Surface/panel | `--surface-panel` | `#ffffff` | n/a | 卡片、侧栏、详情面板 |
-| Surface/subtle | `--surface-subtle` | `#f7faf9` | n/a | 次级分组、节点底色 |
-| Surface/tonal | `--surface-tonal` | `#eaf8f6` | n/a | 品牌弱强调背景 |
-| Text/primary | `--text-primary` | `#1d1d1f` | n/a | 标题、正文 |
-| Text/secondary | `--text-secondary` | `#6e6e73` | n/a | 说明文案 |
-| Text/tertiary | `--text-tertiary` | `#8a8a8f` | n/a | 元信息、占位 |
-| Border/default | `--border-default` | `#d2d2d7` | n/a | 面板边框、输入框 |
-| Border/subtle | `--border-subtle` | `#e8e8ed` | n/a | 分隔线、弱轮廓 |
-| Accent/primary | `--accent-primary` | `#00b8a9` | n/a | 主按钮、选中、开关 |
-| Accent/hover | `--accent-hover` | `#00a096` | n/a | 主按钮 hover |
-| Accent/soft | `--accent-soft` | `#e6f7f5` | n/a | 弱强调底色 |
-| Danger | `--danger` | `#dc2626` | n/a | 删除、错误 |
-| Warning | `--warning` | `#d97706` | n/a | 提示、重要度 |
-| Info | `--info` | `#2563eb` | n/a | 搜索命中、辅助状态 |
+| Role | Token | Tailwind 类 | Light | Dark | Usage |
+|------|-------|-------------|-------|------|-------|
+| Brand | `--color-brand` | `brand` | `#0066cc` | `#0066cc` | 品牌蓝，主按钮、链接、选中态 |
+| Brand/soft | `--color-brand-soft` | `brand-soft` | `#e8f3ff` | `#142c46` | 品牌弱强调底色 |
+| Brand/ink | `--color-brand-ink` | `brand-ink` | `#0056b3` | `#5bafff` | 品牌色上的文字、暗色下的品牌文字 |
+| Accent | `--color-accent` | `accent` | `#0066cc` | `#2997ff` | 交互强调：开关、勾选、进度；暗色下提亮 |
+| Text/primary | `--color-ink` | `ink` | `#1d1d1f` | `#f5f5f7` | 标题、正文 |
+| Text/secondary | `--color-ink-secondary` | `ink-secondary` | `#6e6e73` | `#c7c7cc` | 说明文案 |
+| Text/tertiary | `--color-ink-tertiary` | `ink-tertiary` | `#8a8a8f` | `#aeaeb2` | 元信息、占位符 |
+| Text/inverse | `--color-ink-inverse` | `ink-inverse` | `#f5f5f7` | `#1d1d1f` | 深色块上的文字 |
+| Border/default | `--color-hairline` | `hairline` | `#d2d2d7` | `#424245` | 面板边框、输入框 |
+| Border/subtle | `--color-hairline-subtle` | `hairline-subtle` | `#e8e8ed` | `#424245` | 分隔线、弱轮廓 |
+| Surface/canvas | `--color-canvas` | `canvas` | `#f5f5f7` | `#000000` | 应用工作台底色 |
+| Surface/base | `--color-surface` | `surface` | `#ffffff` | `#1d1d1f` | 卡片、侧栏、详情面板 |
+| Surface/subtle | `--color-surface-subtle` | `surface-subtle` | `#f7f8fa` | `#1d1d1f` | 次级分组、节点底色 |
+| Surface/muted | `--color-surface-muted` | `surface-muted` | `#f5f5f7` | `#242426` | 输入框底、禁用态、标签底 |
+| Surface/raised | `--color-surface-raised` | `surface-raised` | `#fafafc` | `#2c2c2e` | 浮层、弹窗、下拉 |
+| Surface/inverse | `--color-surface-inverse` | `surface-inverse` | `#1d1d1f` | `#f5f5f7` | 浅色模式下本身就深的块 |
+| Danger | `--color-danger` | `danger` | `#dc2626` | `#ff453a` | 删除、错误 |
+| Warning | `--color-warning` | `warning` | `#d97706` | `#ff9f0a` | 提示、重要度 |
+| Info | `--color-info` | `info` | `#2563eb` | `#0a84ff` | 搜索命中、辅助状态 |
+| Success | `--color-success` | `success` | `#16a34a` | `#30d158` | 完成、成功反馈 |
+
+已知的两处暗色扁平化，是既有行为不是遗漏：`hairline` 与 `hairline-subtle`、`surface` 与 `surface-subtle`
+在暗色下取同值。要让它们在暗色下也分层属于独立的设计改动。
+
+### 状态色的弱底色
+
+不再单列 `*-soft` token，弱底色统一用透明度写法：`bg-danger/10`、`bg-warning/10`、`bg-info/10`、`bg-success/10`。
+
+### 历史色值归并对照
+
+组件里曾散落 200+ 个手写色值（大量是同一角色的漂移变体，如 `#1d1d1f` / `#303936` / `#26302d` 都是主文字）。
+收敛规则如下，遇到旧代码或旧分支照此对号入座：
+
+| 归并到 | 主要旧色值 | 归并规则 |
+|--------|-----------|---------|
+| `ink` | `#1d1d1f` `#303936` `#26302d` `#202725` `#34343a` `text-gray-900/800/700` | 亮度低于 `#4a4a4a` 的文字 |
+| `ink-secondary` | `#6e6e73` `#424245` `#5a5a60` `#65706c` `text-gray-600/500` | 亮度在 `#4a4a4a`~`#787878` 的文字 |
+| `ink-tertiary` | `#8a8a8f` `#89928f` `#7a8380` `#c7c7cc` `text-gray-400/300` | 亮度高于 `#787878` 的文字 |
+| `hairline` | `#d2d2d7` `#d9dfdd` `#cfd5d3` `#e5e7eb` | 亮度 ≤ `#e0e0e0` 的描边 |
+| `hairline-subtle` | `#e8e8ed` `#e1e6e4` `#ececf0` `#e2e7e5` | 亮度 > `#e0e0e0` 的描边 |
+| `surface` | `#ffffff` `bg-white` | 纯白面 |
+| `surface-subtle` | `#f7faf9` `#f7f8fa` `#f7f7f9` `#fafafa` | 带一点色偏的近白底 |
+| `surface-muted` | `#f5f5f7` `#f5f7fa` `#eef2f0` `bg-gray-100/200` | 比 subtle 更实的灰底 |
+| `surface-inverse` | `#1d1d1f` `#101615` `#111418` `#20252b`（作 bg/border 用时） | 浅色模式下故意深的块，暗色下必须翻转 |
+
+绿偏系（`#f7faf9` `#d9dfdd` `#89928f` `#65706c` …）与中性灰系（`#f5f5f7` `#d2d2d7` `#8a8a8f` `#6e6e73` …）
+是两套漂移出来的家族，**以中性灰系为准** —— 它与 `--color-*` 的现行值一致，且用量占多数。
 
 ### Memory Semantic Palette
 
-| Memory Type | Token | Accent | Soft Surface | Usage |
-|-------------|-------|--------|--------------|-------|
-| Core | `--memory-core` | `amber-500` | `amber-50 / amber-100` | 核心记忆节点、筛选、移动卡片左边线 |
-| Permanent | `--memory-permanent` | `sky-500` | `sky-50 / sky-100` | 常驻记忆节点、筛选、移动卡片左边线 |
-| Temporary | `--memory-temporary` | `teal-500` | `teal-50 / teal-100` | 临时记忆节点、筛选、移动卡片左边线 |
-| Knowledge | `--memory-knowledge` | `violet-500` | `violet-50 / violet-100` | 知识星云节点、筛选、移动卡片左边线 |
-| Other | `--memory-other` | `slate-500` | `slate-50 / slate-100` | 其他记忆节点、筛选、移动卡片左边线 |
-| Table Highlight | `--memory-table-highlight` | `rgba(0,184,169,0.08)` | n/a | 表格选中行、搜索命中 |
+记忆类型色不进 `--color-*`，直接用 Tailwind 调色板类，唯一来源是
+`apps/web/src/components/memory/memoryStyles.ts` 的 `MEMORY_TYPE_STYLES`。
+
+| Memory Type | Accent | Soft Surface | Usage |
+|-------------|--------|--------------|-------|
+| Core | `amber-500` | `amber-50 / amber-100` | 核心记忆节点、筛选、移动卡片左边线 |
+| Permanent | `sky-500` | `sky-50 / sky-100` | 常驻记忆节点、筛选、移动卡片左边线 |
+| Temporary | `brand` | `brand-soft` | 临时记忆节点、筛选、移动卡片左边线 |
+| Knowledge | `violet-500` | `violet-50 / violet-100` | 知识星云节点、筛选、移动卡片左边线 |
+| Other | `slate-500` | `slate-100` | 其他记忆节点、筛选、移动卡片左边线 |
+| Table Highlight | `brand/[0.08]`（选中）/ `brand/5`（命中） | n/a | 表格选中行、搜索命中 |
 
 ### Rules
 
-- 只允许 `brand #00b8a9` 作为主强调色，不引入第二主色系。
+- 只允许 `brand #0066cc` 作为主强调色，不引入第二主色系。
+- **组件里不写字面色值**：不写 `text-[#1d1d1f]`、不写 `border-gray-200`，一律用上表的语义类。
+  唯一例外是插画/渐变装饰这类一次性视觉，需在 PR 里说明。
+- 新增颜色必须先写入本文件、再落到 `index.css` 的 `--color-*` 与 `tailwind.config.js`，最后才进组件。
+- 暗色值与浅色值必须同时给出。只给浅色的色值等于在暗色模式下坏掉。
 - 记忆管理页优先使用表格、筛选条和右侧详情，不使用装饰性可视化背景。
 - 记忆类型色统一来自 `apps/web/src/components/memory/memoryStyles.ts`，组件不得各自复制色板。
-- 新增颜色必须先写入本文件再进入组件。
+
 
 ## 3. Typography
 
@@ -181,10 +229,10 @@
 
 | Level | Value | Usage |
 |------|-------|-------|
-| Border/default | `1px solid #d2d2d7` | 面板、输入、卡片 |
-| Border/subtle | `1px solid #e8e8ed` | 分组与弱分隔 |
+| Border/default | `border-hairline` | 面板、输入、卡片 |
+| Border/subtle | `border-hairline-subtle` | 分组与弱分隔 |
 | Shadow/subtle | `0 10px 30px rgba(15, 23, 42, 0.05)` | 详情面板、移动端底板 |
-| Shadow/hover | `0 12px 32px rgba(0, 184, 169, 0.10)` | 命中节点、主交互卡片 |
+| Shadow/hover | `0 12px 32px rgba(15, 23, 42, 0.15)` | 命中节点、主交互卡片 |
 
 ### Rules
 

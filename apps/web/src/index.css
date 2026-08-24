@@ -2,37 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * 色彩 token —— 全站唯一来源。新增或改动颜色必须先更新 docs/design-system.md，
+ * 这是 DESIGN.md 里的既有约定。
+ *
+ * 值一律写成 `R G B` 三元组，好让 Tailwind 用 `rgb(var(--color-x) / <alpha-value>)`
+ * 取用，于是 `text-ink/70`、`bg-danger/10` 这类透明度写法自动可用。
+ * 手写 CSS 用文件末尾那组 `--apple-*` 别名（等价，只是替你套了 rgb()）。
+ */
 :root {
-  --accent-primary: #0066cc;
+  /* 品牌 */
   --color-brand: 0 102 204;
   --color-brand-soft: 232 243 255;
   --color-brand-ink: 0 86 179;
-  --apple-canvas: #f5f5f7;
-  --apple-surface: #ffffff;
-  --apple-surface-raised: #fafafc;
-  --apple-surface-muted: #f0f0f2;
-  --apple-ink: #1d1d1f;
-  --apple-ink-secondary: #6e6e73;
-  --apple-ink-tertiary: #86868b;
-  --apple-hairline: #d2d2d7;
-  --apple-overlay: rgba(255, 255, 255, 0.82);
+  /* 交互强调色：与 brand 同源，但暗色下提亮，用于按钮/选中/开关 */
+  --color-accent: 0 102 204;
+
+  /* 文字：primary / secondary / tertiary 三档，inverse 用于深色块上的字 */
+  --color-ink: 29 29 31;
+  --color-ink-secondary: 110 110 115;
+  --color-ink-tertiary: 138 138 143;
+  --color-ink-inverse: 245 245 247;
+
+  /* 描边：default 是面板/输入框边框，subtle 是分隔线与弱轮廓 */
+  --color-hairline: 210 210 215;
+  --color-hairline-subtle: 232 232 237;
+
+  /* 面：canvas 是工作台底色，surface 起是层级递进；inverse 是浅色模式下本身就深的块 */
+  --color-canvas: 245 245 247;
+  --color-surface: 255 255 255;
+  --color-surface-subtle: 247 248 250;
+  --color-surface-muted: 245 245 247;
+  --color-surface-raised: 250 250 252;
+  --color-surface-inverse: 29 29 31;
+
+  /* 状态：弱底色用透明度写法（bg-danger/10），不再单列 soft token */
+  --color-danger: 220 38 38;
+  --color-warning: 217 119 6;
+  --color-info: 37 99 235;
+  --color-success: 22 163 74;
+
+  /* 手写 CSS 用的别名，值全部派生自上面，改色只需改上面 */
+  --accent-primary: rgb(var(--color-accent));
+  --apple-canvas: rgb(var(--color-canvas));
+  --apple-surface: rgb(var(--color-surface));
+  --apple-surface-raised: rgb(var(--color-surface-raised));
+  --apple-surface-muted: rgb(var(--color-surface-muted));
+  --apple-ink: rgb(var(--color-ink));
+  --apple-ink-secondary: rgb(var(--color-ink-secondary));
+  --apple-ink-tertiary: rgb(var(--color-ink-tertiary));
+  --apple-hairline: rgb(var(--color-hairline));
+  --apple-overlay: rgb(var(--color-surface) / 0.82);
 }
 
+/*
+ * 暗色只覆盖三元组，别名靠 CSS 变量继承自动跟着变，不需要在这里重复一遍。
+ * hairline / hairline-subtle 与 surface / surface-subtle 在暗色下故意取同值 ——
+ * 这是既有行为（原先那份 html[data-theme="dark"] 白名单就是这么映射的），
+ * 想让它们在暗色下也分层是独立的设计改动，别混在色值收敛里做。
+ */
 html[data-theme="dark"] {
-  --accent-primary: #2997ff;
-  --color-brand: 0 102 204;
   --color-brand-soft: 20 44 70;
   --color-brand-ink: 91 175 255;
-  --apple-canvas: #000000;
-  --apple-surface: #1d1d1f;
-  --apple-surface-raised: #2c2c2e;
-  --apple-surface-muted: #242426;
-  --apple-ink: #f5f5f7;
-  --apple-ink-secondary: #c7c7cc;
-  --apple-ink-tertiary: #aeaeb2;
-  --apple-hairline: #424245;
-  --apple-overlay: rgba(29, 29, 31, 0.82);
+  --color-accent: 41 151 255;
+
+  --color-ink: 245 245 247;
+  --color-ink-secondary: 199 199 204;
+  --color-ink-tertiary: 174 174 178;
+  --color-ink-inverse: 29 29 31;
+
+  --color-hairline: 66 66 69;
+  --color-hairline-subtle: 66 66 69;
+
+  --color-canvas: 0 0 0;
+  --color-surface: 29 29 31;
+  --color-surface-subtle: 29 29 31;
+  --color-surface-muted: 36 36 38;
+  --color-surface-raised: 44 44 46;
+  --color-surface-inverse: 245 245 247;
+
+  --color-danger: 255 69 58;
+  --color-warning: 255 159 10;
+  --color-info: 10 132 255;
+  --color-success: 48 209 88;
 }
+
 
 @layer base {
   html,
