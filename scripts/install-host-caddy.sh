@@ -31,8 +31,12 @@ if ! sudo caddy validate --config "$main_config"; then
 fi
 
 if ! sudo systemctl reload caddy; then
-	sudo cp -a "$backup_dir/Caddyfile" "$main_config"
-	sudo systemctl reload caddy || true
-	exit 1
+	printf 'Caddy reload unavailable; restarting service (the admin API may be disabled)\n' >&2
+	if ! sudo systemctl restart caddy; then
+		printf 'Caddy restart failed; restoring previous configuration\n' >&2
+		sudo cp -a "$backup_dir/Caddyfile" "$main_config"
+		sudo systemctl restart caddy || true
+		exit 1
+	fi
 fi
 printf 'host Caddy updated; backup=%s\n' "$backup_dir"
