@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request, type HttpMethod } from "./http";
 
 export interface PriceRow { rate: number; perUnits: number; enabled: boolean }
 export interface DubPricing { analyzeVideoSec: PriceRow; ttsChar: PriceRow; avatarClone: PriceRow; videoSec: PriceRow; parseVideo: PriceRow }
@@ -25,33 +25,18 @@ export interface DubTask { id: string; kind: string; status: "running" | "comple
 
 const base = "/api/workflow/dub";
 
-function authHeaders(token: string): Record<string, string> {
-  return { authorization: `Bearer ${token}` };
+function getJson<T>(token: string, path: string, fallback: string): Promise<T> {
+  return request<T>(`${base}${path}`, { token, fallback });
 }
 
-async function unwrap<T>(res: Response, fallback: string): Promise<T> {
-  if (!res.ok) throw new ApiError(await readErrorMessage(res, fallback), res.status);
-  const body = (await res.json()) as { data: T };
-  return body.data;
+function sendJson<T>(token: string, path: string, method: HttpMethod, body: unknown, fallback: string): Promise<T> {
+  return request<T>(`${base}${path}`, { method, token, body, fallback });
 }
 
-async function getJson<T>(token: string, path: string, fallback: string): Promise<T> {
-  return unwrap<T>(await fetch(`${base}${path}`, { method: "GET", headers: authHeaders(token) }), fallback);
-}
-
-async function sendJson<T>(token: string, path: string, method: string, body: unknown, fallback: string): Promise<T> {
-  const res = await fetch(`${base}${path}`, {
-    method,
-    headers: { ...authHeaders(token), "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return unwrap<T>(res, fallback);
-}
-
-async function sendForm<T>(token: string, path: string, file: File, fallback: string): Promise<T> {
+function sendForm<T>(token: string, path: string, file: File, fallback: string): Promise<T> {
   const form = new FormData();
   form.set("file", file);
-  return unwrap<T>(await fetch(`${base}${path}`, { method: "POST", headers: authHeaders(token), body: form }), fallback);
+  return request<T>(`${base}${path}`, { method: "POST", token, body: form, fallback });
 }
 
 export const getDubPricing = (t: string) => getJson<DubPricing>(t, "/pricing", "获取价格失败");
@@ -76,8 +61,12 @@ export const favoriteAvatar = (t: string, id: string, favorite: boolean) => send
 export async function createAvatar(token: string, file: File, title: string): Promise<{ taskId: string }> {
   const form = new FormData();
   form.set("file", file);
-  const res = await fetch(`${base}/avatars?title=${encodeURIComponent(title)}`, { method: "POST", headers: authHeaders(token), body: form });
-  return unwrap<{ taskId: string }>(res, "创建数字人失败");
+  return request<{ taskId: string }>(`${base}/avatars?title=${encodeURIComponent(title)}`, {
+    method: "POST",
+    token,
+    body: form,
+    fallback: "创建数字人失败",
+  });
 }
 
 export interface RewriteInput { text: string; kbIds?: string[]; highlights?: string[]; injectHighlights?: boolean; style?: string }
