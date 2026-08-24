@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 import type { ImageModel } from "./workflowState";
 
 export type WorkflowEcomPlatformId = "taobao" | "tmall" | "jd" | "pdd" | "xianyu" | "amazon" | "ebay" | "etsy" | "shopee" | "lazada" | "shopify";
@@ -85,26 +85,19 @@ export type WorkflowEcomMasterPayload = {
   readonly segmentCount: number;
 };
 
-type WorkflowEcomResponse<T> = {
-  readonly data: T;
-};
-
-export async function requestWorkflowEcom<T>(args: {
+export function requestWorkflowEcom<T>(args: {
   readonly token: string;
   readonly path: string;
   readonly method: "GET" | "POST";
   readonly fallback: string;
   readonly body?: unknown;
 }): Promise<T> {
-  const response = await fetch(args.path, {
+  return request<T>(args.path, {
     method: args.method,
-    headers: args.body === undefined
-      ? { authorization: `Bearer ${args.token}` }
-      : { "content-type": "application/json", authorization: `Bearer ${args.token}` },
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+    token: args.token,
+    body: args.body,
+    fallback: args.fallback,
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
-  return ((await response.json()) as WorkflowEcomResponse<T>).data;
 }
 
 export type WorkflowEcomResourcePrice = {

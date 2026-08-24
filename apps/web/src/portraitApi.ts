@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 
 export type PortraitPresetId =
   | "business-elite"
@@ -99,49 +99,30 @@ export type CreatePortraitPayload = {
   readonly consentVersion: string;
 };
 
-async function requestPortrait<T>(args: {
-  readonly token: string;
-  readonly path: string;
-  readonly method?: "GET" | "POST" | "DELETE";
-  readonly body?: unknown;
-  readonly fallback: string;
-}): Promise<T> {
-  const response = await fetch(args.path, {
-    method: args.method ?? "GET",
-    headers: args.body === undefined
-      ? { authorization: `Bearer ${args.token}` }
-      : { authorization: `Bearer ${args.token}`, "content-type": "application/json" },
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
-  });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
-  const payload = await response.json() as { data?: T } & T;
-  return payload.data ?? payload;
-}
-
 export function getPortraitOptions(token: string): Promise<PortraitOptions> {
-  return requestPortrait({ token, path: "/api/workflow/portraits/options", fallback: "获取形象照配置失败" });
+  return request("/api/workflow/portraits/options", { token, fallback: "获取形象照配置失败" });
 }
 
 export function getPortraitState(token: string): Promise<PortraitState> {
-  return requestPortrait({ token, path: "/api/workflow/portraits/state", fallback: "获取形象照任务失败" });
+  return request("/api/workflow/portraits/state", { token, fallback: "获取形象照任务失败" });
 }
 
 export function uploadPortraitReference(token: string, image: { readonly b64: string; readonly mime: string }): Promise<{ readonly asset: PortraitReference }> {
-  return requestPortrait({ token, path: "/api/workflow/portraits/references", method: "POST", body: { image }, fallback: "上传形象参考照失败" });
+  return request("/api/workflow/portraits/references", { method: "POST", token, body: { image }, fallback: "上传形象参考照失败" });
 }
 
 export function deletePortraitReference(token: string, id: string): Promise<{ readonly success: boolean }> {
-  return requestPortrait({ token, path: `/api/workflow/portraits/references/${encodeURIComponent(id)}`, method: "DELETE", fallback: "删除参考照失败" });
+  return request(`/api/workflow/portraits/references/${encodeURIComponent(id)}`, { method: "DELETE", token, fallback: "删除参考照失败" });
 }
 
 export function createPortraitTask(token: string, payload: CreatePortraitPayload): Promise<{ readonly task: PortraitTask }> {
-  return requestPortrait({ token, path: "/api/workflow/portraits/generate", method: "POST", body: payload, fallback: "形象照生成失败" });
+  return request("/api/workflow/portraits/generate", { method: "POST", token, body: payload, fallback: "形象照生成失败" });
 }
 
 export function cancelPortraitTask(token: string, requestId: string): Promise<{ readonly task: PortraitTask }> {
-  return requestPortrait({ token, path: `/api/workflow/portraits/tasks/${encodeURIComponent(requestId)}/cancel`, method: "POST", fallback: "取消形象照任务失败" });
+  return request(`/api/workflow/portraits/tasks/${encodeURIComponent(requestId)}/cancel`, { method: "POST", token, fallback: "取消形象照任务失败" });
 }
 
 export function deletePortraitTask(token: string, requestId: string): Promise<{ readonly success: boolean }> {
-  return requestPortrait({ token, path: `/api/workflow/portraits/tasks/${encodeURIComponent(requestId)}`, method: "DELETE", fallback: "删除形象照任务失败" });
+  return request(`/api/workflow/portraits/tasks/${encodeURIComponent(requestId)}`, { method: "DELETE", token, fallback: "删除形象照任务失败" });
 }

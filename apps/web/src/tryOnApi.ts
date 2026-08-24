@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 
 export type TryOnReferenceKind = "garment_front" | "garment_detail" | "model";
 export type TryOnAspectRatio = "1:1" | "3:4" | "4:3" | "9:16" | "16:9";
@@ -91,24 +91,19 @@ export interface CreateTryOnPayload {
   readonly consentVersion?: string;
 }
 
-async function requestTryOn<T>(args: {
+function requestTryOn<T>(args: {
   readonly token: string;
   readonly path: string;
   readonly method?: "GET" | "POST" | "DELETE";
   readonly body?: unknown;
   readonly fallback: string;
 }): Promise<T> {
-  const response = await fetch(args.path, {
+  return request<T>(args.path, {
     method: args.method ?? "GET",
-    headers:
-      args.body === undefined
-        ? { authorization: `Bearer ${args.token}` }
-        : { authorization: `Bearer ${args.token}`, "content-type": "application/json" },
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+    token: args.token,
+    body: args.body,
+    fallback: args.fallback,
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
-  const payload = (await response.json()) as { data?: T } & T;
-  return payload.data ?? payload;
 }
 
 export function getTryOnOptions(token: string): Promise<TryOnOptions> {

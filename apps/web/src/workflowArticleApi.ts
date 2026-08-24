@@ -10,7 +10,7 @@ import type {
   ArticleWorkflowSourceFormat,
   ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 
 export interface ArticleWorkflowProjectSummary {
   readonly id: string;
@@ -74,27 +74,21 @@ export interface ArticleWorkflowPricing {
   readonly platforms: readonly ArticleWorkflowPlatformPricing[];
 }
 
-type WorkflowResponse<T> = { readonly data: T };
 type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-async function requestArticleWorkflow<T>(args: {
+function requestArticleWorkflow<T>(args: {
   readonly token: string;
   readonly path: string;
   readonly method: RequestMethod;
   readonly fallback: string;
   readonly body?: unknown;
 }): Promise<T> {
-  const response = await fetch(args.path, {
+  return request<T>(args.path, {
     method: args.method,
-    headers:
-      args.body === undefined
-        ? { authorization: `Bearer ${args.token}` }
-        : { "content-type": "application/json", authorization: `Bearer ${args.token}` },
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+    token: args.token,
+    body: args.body,
+    fallback: args.fallback,
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
-  const payload = (await response.json()) as WorkflowResponse<T>;
-  return payload.data;
 }
 
 export function createArticleWorkflowProject(

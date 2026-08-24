@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 
 export type ComicStage = "script" | "assets" | "storyboard" | "render";
 export type ComicAssetType = "character" | "scene" | "prop" | "style";
@@ -103,26 +103,21 @@ export interface ComicRenderManifest {
   }[];
 }
 
-type ComicResponse<T> = { readonly data: T };
 type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
 
-async function requestComic<T>(args: {
+function requestComic<T>(args: {
   readonly token: string;
   readonly path: string;
   readonly method: RequestMethod;
   readonly fallback: string;
   readonly body?: unknown;
 }): Promise<T> {
-  const response = await fetch(args.path, {
+  return request<T>(args.path, {
     method: args.method,
-    headers: args.body === undefined
-      ? { authorization: `Bearer ${args.token}` }
-      : { "content-type": "application/json", authorization: `Bearer ${args.token}` },
-    body: args.body === undefined ? undefined : JSON.stringify(args.body),
+    token: args.token,
+    body: args.body,
+    fallback: args.fallback,
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, args.fallback), response.status);
-  const payload: ComicResponse<T> = await response.json();
-  return payload.data;
 }
 
 export function listComicProjects(token: string): Promise<readonly ComicProjectSummary[]> {
