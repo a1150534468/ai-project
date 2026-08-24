@@ -4,6 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadS3Config, makeS3, putObject, putObjectFile, type S3Config } from "../../storage/s3.js";
+import { isObjectLike } from "../../runtime/records.js";
 import { probeVideoDurationSec, probeVideoDurationSecFromFile } from "./video-probe.js";
 import { loadWorkflowMediaFile } from "./workflow-media-loader.js";
 
@@ -190,10 +191,6 @@ export function buildVideoGenerationPayload(request: VideoGenerationRequest): Re
   return body;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 function stringField(record: Record<string, unknown>, key: string): string | null {
   const value = record[key];
   return typeof value === "string" && value.length > 0 ? value : null;
@@ -214,9 +211,9 @@ function normalizeProviderStatus(status: string): VideoTaskStatus {
 
 function extractResultVideo(payload: Record<string, unknown>): { readonly url: string | null; readonly format: string | null } {
   const result = payload.result;
-  if (!isRecord(result) || !Array.isArray(result.data) || result.data.length === 0) return { url: null, format: null };
+  if (!isObjectLike(result) || !Array.isArray(result.data) || result.data.length === 0) return { url: null, format: null };
   const first = result.data[0];
-  if (!isRecord(first)) return { url: null, format: null };
+  if (!isObjectLike(first)) return { url: null, format: null };
   return {
     url: stringField(first, "url"),
     format: stringField(first, "format"),
@@ -224,7 +221,7 @@ function extractResultVideo(payload: Record<string, unknown>): { readonly url: s
 }
 
 export function extractSubmittedVideoTask(payload: unknown): SubmittedVideoTask {
-  if (!isRecord(payload)) throw new Error("video task response invalid");
+  if (!isObjectLike(payload)) throw new Error("video task response invalid");
   const providerTaskId = stringField(payload, "id");
   if (!providerTaskId) throw new Error("video task response missing id");
   const providerStatus = stringField(payload, "status") ?? "queued";
@@ -238,7 +235,7 @@ export function extractSubmittedVideoTask(payload: unknown): SubmittedVideoTask 
 
 function extractErrorMessage(record: Record<string, unknown>): string | null {
   const errObj = record.error;
-  if (isRecord(errObj)) {
+  if (isObjectLike(errObj)) {
     // 上游失败常返回 { code, message }，两者都保留（code 往往才是真实原因，如 quota_not_enough）
     const code = stringField(errObj, "code");
     const message = stringField(errObj, "message");

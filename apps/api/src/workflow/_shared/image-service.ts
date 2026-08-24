@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
+import { isObjectLike } from "../../runtime/records.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../../storage/public-url.js";
 import { imageResolutionFromSize } from "./image-upstream-options.js";
 import { IMAGE_STREAM_PARTIAL_IMAGES, readImageStream } from "./image-stream.js";
@@ -276,10 +277,6 @@ function usesRequestBoundNativeQwenModel(config: ImageGenerationConfig): boolean
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 function stringField(record: Record<string, unknown>, key: string): string {
   const value = record[key];
   return typeof value === "string" ? value : "";
@@ -336,7 +333,7 @@ const IMAGE_TRANSPORT_CODES = new Set([
 
 /** Keep only low-cardinality transport diagnostics that cannot expose URLs or credentials. */
 export function imageTransportCode(error: unknown): string | null {
-  if (!isRecord(error) || !isRecord(error.cause)) return null;
+  if (!isObjectLike(error) || !isObjectLike(error.cause)) return null;
   const code = stringField(error.cause, "code");
   return IMAGE_TRANSPORT_CODES.has(code) ? code : null;
 }
@@ -389,7 +386,7 @@ function classifyUpstreamFailure(
 }
 
 function errorName(error: unknown): string {
-  return isRecord(error) && typeof error.name === "string" ? error.name : "";
+  return isObjectLike(error) && typeof error.name === "string" ? error.name : "";
 }
 
 export function classifyImageGenerationError(error: unknown): ImageGenerationErrorClassification {
@@ -423,10 +420,10 @@ export function isRetryableImageGenerationError(error: unknown): boolean {
 }
 
 function usageFromPayload(payload: unknown): ImageGenerationUsage | null {
-  if (!isRecord(payload) || !isRecord(payload.usage)) return null;
+  if (!isObjectLike(payload) || !isObjectLike(payload.usage)) return null;
   const usage = payload.usage;
-  const inputDetails = isRecord(usage.input_tokens_details) ? usage.input_tokens_details : {};
-  const outputDetails = isRecord(usage.output_tokens_details) ? usage.output_tokens_details : {};
+  const inputDetails = isObjectLike(usage.input_tokens_details) ? usage.input_tokens_details : {};
+  const outputDetails = isObjectLike(usage.output_tokens_details) ? usage.output_tokens_details : {};
   return {
     inputTokens: numberField(usage, "input_tokens"),
     imageInputTokens: numberField(inputDetails, "image_tokens"),
@@ -456,7 +453,7 @@ async function detailedResult(
   upstreamRequestId: string | null,
   requestBoundModel = false,
 ): Promise<ImageGenerationResult> {
-  const record = isRecord(payload) ? payload : {};
+  const record = isObjectLike(payload) ? payload : {};
   const image = extractGeneratedImage(payload);
   const decodedSize = await decodedImageSize(image);
   return {
@@ -482,7 +479,7 @@ async function upstreamError(response: Response): Promise<ImageGenerationUpstrea
   let detail = text.slice(0, 300);
   try {
     const parsed = JSON.parse(text) as unknown;
-    if (isRecord(parsed) && isRecord(parsed.error)) {
+    if (isObjectLike(parsed) && isObjectLike(parsed.error)) {
       code = stringField(parsed.error, "code") || null;
       type = stringField(parsed.error, "type") || null;
       detail = stringField(parsed.error, "message").slice(0, 300) || detail;
@@ -830,13 +827,13 @@ export function loadImageAttemptTimeoutMs(env: NodeJS.ProcessEnv = process.env):
 }
 
 export function extractGeneratedImage(payload: unknown): GeneratedImage {
-  if (!isRecord(payload)) throw new Error("image response invalid");
+  if (!isObjectLike(payload)) throw new Error("image response invalid");
 
   // Keep accepting the former OpenAI-compatible response so custom relays do not
   // break while deployments migrate to the native Bailian endpoint.
   if (Array.isArray(payload.data) && payload.data.length > 0) {
     const first = payload.data[0];
-    if (!isRecord(first)) throw new Error("image response item invalid");
+    if (!isObjectLike(first)) throw new Error("image response item invalid");
     if (typeof first.url === "string" && first.url.length > 0) return { kind: "url", url: first.url };
     if (typeof first.b64_json === "string" && first.b64_json.length > 0) {
       const mime = typeof first.mime_type === "string" && first.mime_type.startsWith("image/") ? first.mime_type : "image/png";
@@ -845,11 +842,11 @@ export function extractGeneratedImage(payload: unknown): GeneratedImage {
   }
 
   const output = payload.output;
-  if (isRecord(output) && Array.isArray(output.choices)) {
+  if (isObjectLike(output) && Array.isArray(output.choices)) {
     for (const choice of output.choices) {
-      if (!isRecord(choice) || !isRecord(choice.message) || !Array.isArray(choice.message.content)) continue;
+      if (!isObjectLike(choice) || !isObjectLike(choice.message) || !Array.isArray(choice.message.content)) continue;
       for (const content of choice.message.content) {
-        if (isRecord(content) && typeof content.image === "string" && content.image.length > 0) {
+        if (isObjectLike(content) && typeof content.image === "string" && content.image.length > 0) {
           return { kind: "url", url: content.image };
         }
       }

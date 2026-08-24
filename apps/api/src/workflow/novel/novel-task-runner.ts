@@ -13,6 +13,7 @@ import type { NovelForeshadowPayload, NovelKnowledgeFactPayload } from "./novel-
 import { syncNovelContinuityAssetsForChapter } from "../../novel/continuity-assets.js";
 import { syncNovelNarrativeLedgersForChapter } from "../../novel/narrative-ledger.js";
 import { syncNovelSetupAssets } from "../../novel/structured-sync.js";
+import { isPlainObject } from "../../runtime/records.js";
 import { findEnabledNovelModel, novelWritingModel, type NovelPlatformModel } from "./novel-models.js";
 
 export interface BillingForNovels {
@@ -54,17 +55,13 @@ function safeErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : "生成失败";
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function jsonValue(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
   if (value === null || value === undefined) return Prisma.JsonNull;
   return value as Prisma.InputJsonValue;
 }
 
 function taskPayload(task: NovelTaskRow): Record<string, unknown> {
-  return isRecord(task.requestPayload) ? task.requestPayload : {};
+  return isPlainObject(task.requestPayload) ? task.requestPayload : {};
 }
 
 const PROGRESS_PREVIEW_CHARS = 1600;
@@ -145,7 +142,7 @@ function foreshadowStatus(status: string): NovelForeshadowPayload["status"] {
 }
 
 function contextRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function contextString(value: unknown): string {
@@ -519,7 +516,7 @@ async function saveGeneratedResult(args: {
   const project = isChapterTarget ? await prisma.novelProject.findUnique({ where: { id: task.projectId } }) : null;
   if (isChapterTarget && !project) throw new Error("novel project not found");
   const chapterIndex = isChapterTarget ? Number(payload.chapterIndex) || 1 : 0;
-  const generatedTitle = targetKind === "chapter" && isRecord(args.parsed) && typeof args.parsed.title === "string" ? args.parsed.title.trim() : "";
+  const generatedTitle = targetKind === "chapter" && isPlainObject(args.parsed) && typeof args.parsed.title === "string" ? args.parsed.title.trim() : "";
   const requestedTitle = isChapterTarget ? String(payload.title || `第 ${chapterIndex} 章`) : "";
   const title = targetKind === "chapter" ? resolveNovelChapterTitle({ requestedTitle, generatedTitle, content: displayText, chapterIndex }) : requestedTitle;
   const [knownCharacters, knownLocations] = targetKind === "chapter" ? await Promise.all([

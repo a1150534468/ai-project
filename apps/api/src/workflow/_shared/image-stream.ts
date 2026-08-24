@@ -8,6 +8,8 @@
  * 再把 SSE 归一化回既有解析器认识的 `{ data: [{ b64_json }] }` 形状。
  */
 
+import { isObjectLike } from "../../runtime/records.js";
+
 const MAX_STREAM_BYTES = 64 * 1024 * 1024;
 
 export const IMAGE_STREAM_PARTIAL_IMAGES = 1;
@@ -17,10 +19,6 @@ export interface ImageStreamResult {
   readonly payload: unknown;
   /** 收到的 partial_image 事件数，仅用于可观测性 */
   readonly partialCount: number;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function stringField(record: Record<string, unknown>, key: string): string {
@@ -33,7 +31,7 @@ function base64FromEvent(event: Record<string, unknown>): string {
   const direct = stringField(event, "b64_json");
   if (direct) return direct;
   const data = event.data;
-  if (Array.isArray(data) && data.length > 0 && isRecord(data[0])) return stringField(data[0], "b64_json");
+  if (Array.isArray(data) && data.length > 0 && isObjectLike(data[0])) return stringField(data[0], "b64_json");
   return "";
 }
 
@@ -72,8 +70,8 @@ export async function readImageStream(response: Response): Promise<ImageStreamRe
       // 中继偶发心跳/注释行，忽略即可。
       return;
     }
-    if (!isRecord(event)) return;
-    if (isRecord(event.error)) {
+    if (!isObjectLike(event)) return;
+    if (isObjectLike(event.error)) {
       const message = stringField(event.error, "message") || "image stream reported an error";
       throw new Error(message.slice(0, 300));
     }

@@ -1,8 +1,5 @@
+import { isPlainObject } from "../../runtime/records.js";
 import type { NovelTargetKind } from "./novel-types.js";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function jsonFragment(text: string): string {
   const candidate = text.trim();
@@ -73,7 +70,7 @@ export class InvalidGeneratedNovelJsonError extends Error {
 export function parseRequiredGeneratedNovelValue(kind: NovelTargetKind, raw: unknown): unknown {
   const parsed = parseGeneratedNovelValue(raw);
   if (kind === "chapter" && typeof parsed === "string") return parseTitledChapterText(parsed) ?? parsed;
-  if (kind !== "chapter" && kind !== "chapterRewrite" && !isRecord(parsed)) throw new InvalidGeneratedNovelJsonError();
+  if (kind !== "chapter" && kind !== "chapterRewrite" && !isPlainObject(parsed)) throw new InvalidGeneratedNovelJsonError();
   return parsed;
 }
 
@@ -81,12 +78,12 @@ function collectVisibleValues(value: unknown): string[] {
   if (typeof value === "string") return value.trim() ? [value.trim()] : [];
   if (typeof value === "number" || typeof value === "boolean") return [String(value)];
   if (Array.isArray(value)) return value.flatMap(collectVisibleValues);
-  if (isRecord(value)) return Object.values(value).flatMap(collectVisibleValues);
+  if (isPlainObject(value)) return Object.values(value).flatMap(collectVisibleValues);
   return [];
 }
 
 function chapterDisplayText(value: unknown): string {
-  if (isRecord(value) && typeof value.content === "string") return value.content.trim();
+  if (isPlainObject(value) && typeof value.content === "string") return value.content.trim();
   if (typeof value === "string") return value.trim();
   return collectVisibleValues(value).join("\n").trim();
 }

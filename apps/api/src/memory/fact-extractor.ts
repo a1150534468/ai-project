@@ -1,4 +1,5 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { isObjectLike } from "../runtime/records.js";
 import { MEMORY_TYPES, type MemoryType } from "./memory-types.js";
 
 export interface ExistingMemory {
@@ -43,10 +44,6 @@ function isTextBlock(
   block: Anthropic.Messages.RawMessageStreamEvent | Anthropic.TextBlock | Anthropic.ContentBlock,
 ): block is Anthropic.TextBlock {
   return block.type === "text";
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }
 
 function readTrimmedString(value: unknown): string | undefined {
@@ -138,7 +135,7 @@ function parseActions(items: readonly unknown[]): MemoryAction[] {
       continue;
     }
 
-    if (!isRecord(item)) {
+    if (!isObjectLike(item)) {
       continue;
     }
 

@@ -2,6 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { Prisma } from "@prisma/client";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { z } from "zod";
+import { isPlainObject } from "../runtime/records.js";
 import { buildWorkflowPlanPrompt } from "./agent-team-prompts.js";
 import { AGENT_WORKFLOW_MAX_STEPS } from "./agent-team-types.js";
 import { describeTaskContext, type AgentTaskContext } from "./agent-task-context.js";
@@ -63,10 +64,6 @@ function jsonFragment(text: string): string {
   return text.slice(start, end + 1);
 }
 
-function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function primitiveText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" || typeof value === "boolean") return String(value).trim();
@@ -76,7 +73,7 @@ function primitiveText(value: unknown): string {
 function fieldText(value: unknown): string {
   const direct = primitiveText(value);
   if (direct) return direct;
-  if (!isRecord(value)) return "";
+  if (!isPlainObject(value)) return "";
   for (const key of ["name", "title", "role", "id"]) {
     const text = primitiveText(value[key]);
     if (text) return text;
@@ -97,11 +94,11 @@ function trimMax(value: string, max: number): string {
 }
 
 function readMemberNames(teamSnapshot: Prisma.JsonValue | undefined): readonly string[] {
-  if (!isRecord(teamSnapshot)) return [];
+  if (!isPlainObject(teamSnapshot)) return [];
   const members = teamSnapshot.members;
   if (!Array.isArray(members)) return [];
   return members
-    .map((member) => (isRecord(member) ? fieldText(member.name) : ""))
+    .map((member) => (isPlainObject(member) ? fieldText(member.name) : ""))
     .filter((name) => name.length > 0);
 }
 
@@ -111,21 +108,21 @@ function memberNameAt(index: number, memberNames: readonly string[]): string {
 }
 
 function looksLikeStep(value: unknown): value is UnknownRecord {
-  if (!isRecord(value)) return false;
+  if (!isPlainObject(value)) return false;
   return [...TITLE_KEYS, ...GOAL_KEYS, ...MEMBER_KEYS, ...INPUT_KEYS].some((key) => key in value);
 }
 
 function stepCandidatesFromValue(value: unknown): readonly unknown[] {
   if (Array.isArray(value)) return value;
-  if (!isRecord(value)) return [];
+  if (!isPlainObject(value)) return [];
   if (looksLikeStep(value)) return [value];
-  const values = Object.values(value).filter((item) => typeof item === "string" || isRecord(item));
+  const values = Object.values(value).filter((item) => typeof item === "string" || isPlainObject(item));
   return values.length > 0 ? values : [];
 }
 
 function extractPlanSteps(input: unknown, depth = 0): readonly unknown[] {
   if (Array.isArray(input)) return input;
-  if (!isRecord(input) || depth > 3) return [];
+  if (!isPlainObject(input) || depth > 3) return [];
 
   for (const key of STEP_ARRAY_KEYS) {
     const steps = stepCandidatesFromValue(input[key]);
@@ -167,7 +164,7 @@ function toInputJsonObject(value: unknown): Prisma.InputJsonObject {
   if (Array.isArray(value)) {
     return { items: toInputJsonValue(value) };
   }
-  if (!isRecord(value)) {
+  if (!isPlainObject(value)) {
     if (value === null || value === undefined) return {};
     return { value: toInputJsonValue(value) };
   }
@@ -192,7 +189,7 @@ function normalizeWorkflowPlanStep(
   memberNames: readonly string[],
   taskGoal: string,
 ): WorkflowPlanStep {
-  if (isRecord(rawStep)) {
+  if (isPlainObject(rawStep)) {
     const title = firstText(rawStep, TITLE_KEYS) || `步骤 ${index + 1}`;
     const goal = firstText(rawStep, GOAL_KEYS) || title || taskGoal || "完成用户任务";
     const memberName = firstText(rawStep, MEMBER_KEYS) || memberNameAt(index, memberNames);
