@@ -1,4 +1,4 @@
-import { ApiError, readErrorMessage } from "./apiError";
+import { request } from "./http";
 
 export type VideoModel = "seedance-2" | "seedance-2-fast" | "seedance-2-mini";
 export type VideoAspectRatio = "21:9" | "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
@@ -137,64 +137,55 @@ export interface UploadedVideoMaterial {
 }
 
 export async function getWorkflowVideoState(token: string): Promise<WorkflowVideoState> {
-  const response = await fetch("/api/workflow/videos/state", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const data = await request<WorkflowVideoState>("/api/workflow/videos/state", {
+    token,
+    fallback: "获取视频任务失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "获取视频任务失败"), response.status);
-  const body = (await response.json()) as { data: WorkflowVideoState };
   return {
-    videos: body.data?.videos ?? [],
-    tasks: body.data?.tasks ?? [],
+    videos: data?.videos ?? [],
+    tasks: data?.tasks ?? [],
   };
 }
 
 export async function listWorkflowVideoPricing(token: string): Promise<WorkflowVideoPricingRow[]> {
-  const response = await fetch("/api/workflow/videos/pricing", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  const rows = await request<WorkflowVideoPricingRow[]>("/api/workflow/videos/pricing", {
+    token,
+    fallback: "获取视频价格失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "获取视频价格失败"), response.status);
-  const body = (await response.json()) as { data: WorkflowVideoPricingRow[] };
-  return body.data ?? [];
+  return rows ?? [];
 }
 
 export async function generateWorkflowVideo(token: string, payload: GenerateWorkflowVideoPayload): Promise<GenerateWorkflowVideoResult> {
-  const response = await fetch("/api/workflow/videos/generate", {
+  return request<GenerateWorkflowVideoResult>("/api/workflow/videos/generate", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "生成视频失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "生成视频失败"), response.status);
-  const body = (await response.json()) as { data: GenerateWorkflowVideoResult };
-  return body.data;
 }
 
 export async function optimizeWorkflowVideoPrompt(
   token: string,
   payload: { prompt: string; materials?: { image: number; video: number; audio: number } },
 ): Promise<string> {
-  const response = await fetch("/api/workflow/videos/optimize-prompt", {
+  const data = await request<{ optimized: string }>("/api/workflow/videos/optimize-prompt", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "提示词优化失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "提示词优化失败"), response.status);
-  const body = (await response.json()) as { data: { optimized: string } };
-  return body.data.optimized;
+  return data.optimized;
 }
 
 export async function uploadWorkflowVideoMaterial(token: string, file: File): Promise<UploadedVideoMaterial> {
   const form = new FormData();
   form.set("file", file);
-  const response = await fetch("/api/workflow/videos/materials", {
+  return request<UploadedVideoMaterial>("/api/workflow/videos/materials", {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
     body: form,
+    fallback: "上传素材失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "上传素材失败"), response.status);
-  const body = (await response.json()) as { data: UploadedVideoMaterial };
-  return body.data;
 }
 
 // —— 帮我写向导 ——
@@ -232,25 +223,23 @@ export async function analyzeMaterialsApi(
   token: string,
   payload: { requestId: string; materials: Array<{ url: string; mime: string }> },
 ): Promise<MaterialInsight> {
-  const response = await fetch("/api/workflow/videos/analyze-materials", {
+  return request<MaterialInsight>("/api/workflow/videos/analyze-materials", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "素材分析失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "素材分析失败"), response.status);
-  return ((await response.json()) as { data: MaterialInsight }).data;
 }
 
 export async function analyzeReferenceApi(token: string, file: File): Promise<ReferenceBreakdown> {
   const form = new FormData();
   form.set("file", file);
-  const response = await fetch("/api/workflow/videos/analyze-reference", {
+  return request<ReferenceBreakdown>("/api/workflow/videos/analyze-reference", {
     method: "POST",
-    headers: { authorization: `Bearer ${token}` },
+    token,
     body: form,
+    fallback: "参考视频拆解失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "参考视频拆解失败"), response.status);
-  return ((await response.json()) as { data: ReferenceBreakdown }).data;
 }
 
 export interface AnalyzeRate {
@@ -264,20 +253,18 @@ export interface AnalyzePricing {
 }
 
 export async function listAnalyzePricing(token: string): Promise<AnalyzePricing> {
-  const response = await fetch("/api/workflow/videos/analyze-pricing", {
-    method: "GET",
-    headers: { authorization: `Bearer ${token}` },
+  return request<AnalyzePricing>("/api/workflow/videos/analyze-pricing", {
+    token,
+    fallback: "获取拆解价格失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "获取拆解价格失败"), response.status);
-  return ((await response.json()) as { data: AnalyzePricing }).data;
 }
 
 export async function generateScriptApi(token: string, payload: ScriptGenPayload): Promise<string> {
-  const response = await fetch("/api/workflow/videos/generate-script", {
+  const data = await request<{ script: string }>("/api/workflow/videos/generate-script", {
     method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallback: "脚本生成失败",
   });
-  if (!response.ok) throw new ApiError(await readErrorMessage(response, "脚本生成失败"), response.status);
-  return ((await response.json()) as { data: { script: string } }).data.script;
+  return data.script;
 }

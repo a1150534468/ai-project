@@ -1,4 +1,5 @@
 import type { ChatAttachmentPayload } from "./api";
+import { request } from "./http";
 
 export interface AgentTeamMemberDto {
   readonly id?: string;
@@ -78,37 +79,31 @@ export interface AgentTeamTaskOptions {
   readonly attachments?: readonly ChatAttachmentPayload[];
 }
 
-async function readError(response: Response, fallback: string): Promise<Error> {
-  const body = await response.json().catch(() => ({})) as { error?: string };
-  return new Error(body.error ?? fallback);
-}
-
-async function readData<T>(response: Response, fallback: string): Promise<T> {
-  if (!response.ok) throw await readError(response, fallback);
-  const body = await response.json() as { data: T };
-  return body.data;
-}
-
-function authHeaders(token: string): HeadersInit {
-  return { authorization: `Bearer ${token}` };
-}
-
-function jsonHeaders(token: string): HeadersInit {
-  return { "content-type": "application/json", authorization: `Bearer ${token}` };
+/** 任务请求体在推荐团队与直接建任务两处形状一致，抽出来避免两边改漏。 */
+function taskBody(taskGoal: string, options: AgentTeamTaskOptions): Record<string, unknown> {
+  return {
+    taskGoal,
+    model: options.model || undefined,
+    kbIds: options.attachAllOwn ? undefined : options.kbIds ?? [],
+    attachAllOwn: options.attachAllOwn ? true : undefined,
+    attachments: options.attachments ?? [],
+  };
 }
 
 export async function listAgentTeams(token: string): Promise<readonly AgentTeamDto[]> {
-  const response = await fetch("/api/agent-teams", { headers: authHeaders(token) });
-  const data = await readData<{ teams: AgentTeamDto[] }>(response, "获取 Agent 团队失败");
+  const data = await request<{ teams: AgentTeamDto[] }>("/api/agent-teams", {
+    token,
+    fallback: "获取 Agent 团队失败",
+  });
   return data.teams;
 }
 
 export async function deleteAgentTeam(token: string, teamId: string): Promise<void> {
-  const response = await fetch(`/api/agent-teams/${encodeURIComponent(teamId)}`, {
+  await request<{ deletedTeamId: string }>(`/api/agent-teams/${encodeURIComponent(teamId)}`, {
     method: "DELETE",
-    headers: authHeaders(token),
+    token,
+    fallback: "删除 Agent 团队失败",
   });
-  await readData<{ deletedTeamId: string }>(response, "删除 Agent 团队失败");
 }
 
 export async function recommendAgentTeam(
@@ -116,18 +111,12 @@ export async function recommendAgentTeam(
   taskGoal: string,
   options: AgentTeamTaskOptions = {},
 ): Promise<{ recommendation: RecommendedAgentTeam; run: AgentWorkflowRunDto }> {
-  const response = await fetch("/api/agent-teams/recommend", {
+  return request("/api/agent-teams/recommend", {
     method: "POST",
-    headers: jsonHeaders(token),
-    body: JSON.stringify({
-      taskGoal,
-      model: options.model || undefined,
-      kbIds: options.attachAllOwn ? undefined : options.kbIds ?? [],
-      attachAllOwn: options.attachAllOwn ? true : undefined,
-      attachments: options.attachments ?? [],
-    }),
+    token,
+    body: taskBody(taskGoal, options),
+    fallback: "生成 Agent 团队失败",
   });
-  return readData(response, "生成 Agent 团队失败");
 }
 
 export async function confirmAgentTeam(
@@ -135,12 +124,12 @@ export async function confirmAgentTeam(
   runId: string,
   recommendation: RecommendedAgentTeam,
 ): Promise<{ team: AgentTeamDto; run: AgentWorkflowRunDto }> {
-  const response = await fetch(`/api/agent-teams/runs/${encodeURIComponent(runId)}/confirm-team`, {
+  return request(`/api/agent-teams/runs/${encodeURIComponent(runId)}/confirm-team`, {
     method: "POST",
-    headers: jsonHeaders(token),
-    body: JSON.stringify(recommendation),
+    token,
+    body: recommendation,
+    fallback: "确认 Agent 团队失败",
   });
-  return readData(response, "确认 Agent 团队失败");
 }
 
 export async function createRunFromAgentTeam(
@@ -149,42 +138,36 @@ export async function createRunFromAgentTeam(
   taskGoal: string,
   options: AgentTeamTaskOptions = {},
 ): Promise<AgentWorkflowRunDto> {
-  const response = await fetch(`/api/agent-teams/${encodeURIComponent(teamId)}/runs`, {
+  const data = await request<{ run: AgentWorkflowRunDto }>(`/api/agent-teams/${encodeURIComponent(teamId)}/runs`, {
     method: "POST",
-    headers: jsonHeaders(token),
-    body: JSON.stringify({
-      taskGoal,
-      model: options.model || undefined,
-      kbIds: options.attachAllOwn ? undefined : options.kbIds ?? [],
-      attachAllOwn: options.attachAllOwn ? true : undefined,
-      attachments: options.attachments ?? [],
-    }),
+    token,
+    body: taskBody(taskGoal, options),
+    fallback: "创建 Agent 团队任务失败",
   });
-  const data = await readData<{ run: AgentWorkflowRunDto }>(response, "创建 Agent 团队任务失败");
   return data.run;
 }
 
 export async function getAgentWorkflowRun(token: string, runId: string): Promise<AgentWorkflowRunDto> {
-  const response = await fetch(`/api/agent-teams/runs/${encodeURIComponent(runId)}`, {
-    headers: authHeaders(token),
+  const data = await request<{ run: AgentWorkflowRunDto }>(`/api/agent-teams/runs/${encodeURIComponent(runId)}`, {
+    token,
+    fallback: "获取 Agent 团队任务失败",
   });
-  const data = await readData<{ run: AgentWorkflowRunDto }>(response, "获取 Agent 团队任务失败");
   return data.run;
 }
 
 export async function listAgentWorkflowRuns(token: string): Promise<readonly AgentWorkflowRunDto[]> {
-  const response = await fetch("/api/agent-teams/runs", {
-    headers: authHeaders(token),
+  const data = await request<{ runs: AgentWorkflowRunDto[] }>("/api/agent-teams/runs", {
+    token,
+    fallback: "获取 Agent 团队历史记录失败",
   });
-  const data = await readData<{ runs: AgentWorkflowRunDto[] }>(response, "获取 Agent 团队历史记录失败");
   return data.runs;
 }
 
 export async function cancelAgentWorkflowRun(token: string, runId: string): Promise<AgentWorkflowRunDto> {
-  const response = await fetch(`/api/agent-teams/runs/${encodeURIComponent(runId)}/cancel`, {
+  const data = await request<{ run: AgentWorkflowRunDto }>(`/api/agent-teams/runs/${encodeURIComponent(runId)}/cancel`, {
     method: "POST",
-    headers: authHeaders(token),
+    token,
+    fallback: "取消 Agent 团队任务失败",
   });
-  const data = await readData<{ run: AgentWorkflowRunDto }>(response, "取消 Agent 团队任务失败");
   return data.run;
 }
