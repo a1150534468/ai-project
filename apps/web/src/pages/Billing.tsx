@@ -476,7 +476,7 @@ export default function Billing({ token, onBalanceChange }: BillingProps) {
           <div
             className={`rounded-2xl p-4 border ${
               message.includes("失败") || message.includes("错误")
-                ? "bg-red-50 border-red-200 text-red-700"
+                ? "bg-danger/10 border-danger/30 text-danger-ink"
                 : "bg-brand-soft border-brand/30 text-brand-ink"
             }`}
           >

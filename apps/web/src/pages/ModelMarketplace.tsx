@@ -151,7 +151,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
         </div>
 
         {message && (
-          <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className="mb-4 rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">
             {message}
           </div>
         )}
@@ -245,7 +245,7 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
           <h3 className="truncate text-base font-semibold text-ink">{model.displayName || "未命名模型"}</h3>
         </div>
         <span className={`inline-flex flex-none items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-          isImage ? "bg-violet-50 text-violet-700" : openAIOnly ? "bg-amber-50 text-amber-700" : "bg-brand-soft text-brand-ink"
+          openAIOnly ? "bg-warning/10 text-warning-ink" : "bg-brand-soft text-brand-ink"
         }`}>
           <Icon icon={isImage ? "mdi:image-outline" : openAIOnly ? "mdi:api" : "mdi:check-circle-outline"} className="text-sm" aria-hidden />
           {isImage ? "生图可用" : openAIOnly ? "仅 OpenAI 接口" : "对话可用"}
@@ -309,8 +309,8 @@ function ImagePriceBlock({ imagePrice }: { imagePrice: ModelMarketplaceImagePric
   const discounted = imagePrice.discountedPoints;
   const hasDiscount = discounted < Math.ceil(imagePrice.originalPoints);
   return (
-    <div className="mt-5 rounded-xl border border-violet-100 bg-violet-50/60 px-3 py-3">
-      <p className="text-[11px] font-medium text-violet-600">生图（按次计费）</p>
+    <div className="mt-5 rounded-xl border border-brand/10 bg-brand-soft/40 px-3 py-3">
+      <p className="text-[11px] font-medium text-ink-secondary">生图（按次计费）</p>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-bold text-ink">{formatPoints(discounted)}</span>
         <span className="text-[10px] text-ink-tertiary">点 / 张 · {imagePrice.resolution}</span>

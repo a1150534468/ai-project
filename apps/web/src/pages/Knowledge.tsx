@@ -74,8 +74,8 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
   const getStatusPill = (status: string) => {
     const statusMap: Record<string, { bg: string; text: string; icon: string }> = {
       indexed: { bg: "bg-brand-soft", text: "text-brand-ink", icon: "mdi:check-circle" },
-      indexing: { bg: "bg-yellow-50", text: "text-yellow-600", icon: "mdi:loading" },
-      failed: { bg: "bg-red-50", text: "text-red-600", icon: "mdi:alert-circle" },
+      indexing: { bg: "bg-warning/10", text: "text-warning-ink", icon: "mdi:loading" },
+      failed: { bg: "bg-danger/10", text: "text-danger-ink", icon: "mdi:alert-circle" },
       pending: { bg: "bg-surface-subtle", text: "text-ink-secondary", icon: "mdi:clock-outline" },
     };
     const config = statusMap[status] || statusMap.pending;
@@ -492,7 +492,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                           e.stopPropagation();
                           handleDeleteKb(kb.id);
                         }}
-                        className="text-xs px-2 py-1.5 font-medium bg-red-50 text-red-600 rounded transition-colors"
+                        className="text-xs px-2 py-1.5 font-medium bg-danger/10 text-danger-ink rounded transition-colors"
                       >
                         删除
                       </button>
@@ -524,7 +524,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="text-sm font-semibold text-ink truncate">{kb.name}</p>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-info/15 text-info-ink">
                             官方
                           </span>
                         </div>
@@ -606,11 +606,11 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                       </div>
                     )}
                     {kbUploadFailures.length > 0 && (
-                      <div className="rounded-lg border border-red-100 bg-red-50 p-3">
-                        <p className="text-sm font-semibold text-red-700">失败 {kbUploadFailures.length} 个</p>
+                      <div className="rounded-lg border border-danger/20 bg-danger/10 p-3">
+                        <p className="text-sm font-semibold text-danger-ink">失败 {kbUploadFailures.length} 个</p>
                         <div className="mt-2 space-y-1">
                           {kbUploadFailures.slice(0, 5).map((failure) => (
-                            <p key={failure} className="truncate text-xs text-red-600">
+                            <p key={failure} className="truncate text-xs text-danger-ink">
                               {failure}
                             </p>
                           ))}
@@ -689,7 +689,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                               </div>
                               <button
                                 onClick={() => selectedKbId && handleDeleteDocument(selectedKbId, doc.id)}
-                                className="inline-flex flex-none items-center gap-1 rounded-lg border border-red-100 bg-surface px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors"
+                                className="inline-flex flex-none items-center gap-1 rounded-lg border border-danger/20 bg-surface px-2.5 py-1.5 text-xs font-medium text-danger-ink transition-colors"
                                 title="删除文档"
                               >
                                 <Icon icon="mdi:trash-outline" className="text-base" aria-hidden />
@@ -739,7 +739,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                             </div>
 
                             {doc.error && (
-                              <p className="text-xs text-red-600 bg-red-50 px-2.5 py-1.5 rounded">
+                              <p className="text-xs text-danger-ink bg-danger/10 px-2.5 py-1.5 rounded">
                                 错误: {doc.error}
                               </p>
                             )}

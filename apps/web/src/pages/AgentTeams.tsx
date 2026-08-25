@@ -329,7 +329,7 @@ export default function AgentTeams({ token, selectedModel, preferredModel, onBal
             onSubmit={handleSubmit}
           />
           {notice && <div className="rounded-[10px] border border-brand/10 bg-brand-soft px-4 py-3 text-sm text-brand-ink">{notice}</div>}
-          {error && <div className="rounded-[10px] border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+          {error && <div className="rounded-[10px] border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">{error}</div>}
           <AnimatePresence>
             {(isSubmitting || isActiveRun) && (
               <RunningBanner isSubmitting={isSubmitting} runStatus={activeRun?.status} />

@@ -116,7 +116,7 @@ export function AssistantMessageActions({ content }: AssistantMessageActionsProp
   const colorClass = copyState === "copied"
     ? "text-brand"
     : copyState === "failed"
-      ? "text-red-500"
+      ? "text-danger-ink"
       : "text-ink-secondary ";
   const glyph = copyState === "copied" ? <CheckGlyph /> : copyState === "failed" ? <AlertGlyph /> : <CopyGlyph />;
 

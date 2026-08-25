@@ -127,7 +127,7 @@ export default function MemoryDetailEditor({
       </div>
 
       {formError ? (
-        <div className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger-ink">
           {formError}
         </div>
       ) : null}

@@ -193,7 +193,7 @@ export default function Chat({
   };
   const toolStatusClassName = (status: ToolActivity["status"]) => {
     if (status === "started") return "text-brand-ink";
-    if (status === "failed") return "text-red-600";
+    if (status === "failed") return "text-danger-ink";
     return "text-ink-secondary";
   };
   const isCommandTool = (tool: ToolActivity) => tool.name === "terminal_exec" || tool.label === "执行命令";
@@ -695,7 +695,7 @@ export default function Chat({
                 </span>
               )}
               {(selectedKbIds.length > 0 || attachAllOwn) && (
-                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-medium rounded">
+                <span className="px-2 py-0.5 bg-info/10 text-info-ink text-[10px] font-medium rounded">
                   已挂载 {attachAllOwn ? "全部库" : `${selectedKbIds.length} 库`}
                 </span>
               )}
@@ -716,7 +716,7 @@ export default function Chat({
             <h2 className="text-2xl font-semibold text-ink mb-8 text-center">需要 {agentName} 为您做什么？</h2>
             <div className="w-full max-w-2xl">
               {(error || attachmentError) && (
-                <div className="mb-3 p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+                <div className="mb-3 p-3 bg-danger/10 text-danger-ink text-sm rounded-lg">
                   {error || attachmentError}
                 </div>
               )}
@@ -804,7 +804,7 @@ export default function Chat({
       {messages.length > 0 && (
         <div className="border-t border-hairline-subtle bg-surface px-6 py-5 flex-none">
           {(error || attachmentError) && (
-            <div className="mx-auto mb-3 max-w-5xl p-3 bg-red-50 text-red-700 text-sm rounded-lg">
+            <div className="mx-auto mb-3 max-w-5xl p-3 bg-danger/10 text-danger-ink text-sm rounded-lg">
               {error || attachmentError}
             </div>
           )}
@@ -849,7 +849,7 @@ export default function Chat({
 
             <div className="p-5">
               {toolError && (
-                <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{toolError}</div>
+                <div className="mb-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger-ink">{toolError}</div>
               )}
               {toolLoading ? (
                 <div className="flex min-h-56 items-center justify-center text-sm text-ink-tertiary">
@@ -908,7 +908,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={disableTools}
-                className="px-3 py-2 rounded-lg text-sm text-red-600 "
+                className="px-3 py-2 rounded-lg text-sm text-danger-ink "
               >
                 关闭工具
               </button>
@@ -1021,7 +1021,7 @@ export default function Chat({
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] flex-none ${
                                   isOfficial
-                                    ? "bg-blue-50 text-blue-700"
+                                    ? "bg-info/10 text-info-ink"
                                     : "bg-brand-soft text-brand-ink"
                                 }`}
                               >
@@ -1048,7 +1048,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={disableKnowledge}
-                className="px-3 py-2 rounded-lg text-sm text-red-600 "
+                className="px-3 py-2 rounded-lg text-sm text-danger-ink "
               >
                 关闭知识库
               </button>

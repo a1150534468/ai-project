@@ -161,12 +161,12 @@ export default function MemoryGalaxyCanvas({
 
         {!loading && error ? (
           <div className="absolute inset-0 z-20 flex items-center justify-center p-6">
-            <div className="max-w-sm rounded-[14px] border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            <div className="max-w-sm rounded-[14px] border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger-ink">
               <div className="flex items-start gap-3">
                 <Icon icon="mdi:alert-circle-outline" className="mt-0.5 text-xl" />
                 <div>
                   <p className="font-medium">记忆星河加载失败</p>
-                  <p className="mt-1 text-red-600/90">{error}</p>
+                  <p className="mt-1 text-danger-ink/90">{error}</p>
                 </div>
               </div>
             </div>

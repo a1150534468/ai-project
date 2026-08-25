@@ -247,7 +247,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         )}
 
         {(props.error || props.notice || props.workflowError) && (
-          <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${props.error || props.workflowError ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>
+          <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${props.error || props.workflowError ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}>
             {props.error || props.workflowError || props.notice}
           </p>
         )}

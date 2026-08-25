@@ -8,8 +8,8 @@ const RUNNING_STATUSES = new Set(["team_confirmed", "planning", "running"]);
 
 function statusTone(status: string): string {
   if (SUCCESS_STATUSES.has(status)) return "text-brand-ink";
-  if (FAILED_STATUSES.has(status)) return "text-red-600";
-  if (RUNNING_STATUSES.has(status)) return "text-amber-600";
+  if (FAILED_STATUSES.has(status)) return "text-danger-ink";
+  if (RUNNING_STATUSES.has(status)) return "text-warning-ink";
   return "text-ink";
 }
 

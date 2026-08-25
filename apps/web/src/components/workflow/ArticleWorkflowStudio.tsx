@@ -167,7 +167,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
         {state.error && (
           <p
             role="alert"
-            className="flex-none border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 lg:px-5"
+            className="flex-none border-b border-danger/30 bg-danger/10 px-4 py-2 text-sm text-danger-ink lg:px-5"
           >
             {state.error}
           </p>

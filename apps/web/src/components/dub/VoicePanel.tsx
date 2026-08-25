@@ -170,7 +170,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
         </section>
       )}
 
-      {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置配音价格，暂无法生成。</p>}
+      {!priced && <p className="text-[12px] text-warning-ink">管理员尚未配置配音价格，暂无法生成。</p>}
       {priced && estimate !== null && <p className="text-[12px] text-ink-tertiary">文案 {text.length} 字，预计消耗 {estimate} 算力点。</p>}
 
       <div className="flex items-center gap-3">

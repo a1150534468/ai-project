@@ -122,7 +122,7 @@ export function TaskComposer({
             ))}
           </div>
         )}
-        {attachmentError && <p className="mb-3 px-1 text-xs text-red-600">{attachmentError}</p>}
+        {attachmentError && <p className="mb-3 px-1 text-xs text-danger-ink">{attachmentError}</p>}
 
         <div className="flex flex-col gap-3 border-t border-hairline-subtle pt-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="grid min-w-0 flex-1 gap-2 lg:grid-cols-3">

@@ -95,7 +95,7 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
     <div className="space-y-5">
       {loaded && (!project || project.stage === "draft" || project.stage === "analyzed" || project.stage === "scripted" || project.stage === "voiced") ? (
         <div className="space-y-3 rounded-xl border border-hairline-subtle bg-surface p-5">
-          {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置成片价格，暂无法生成。</p>}
+          {!priced && <p className="text-[12px] text-warning-ink">管理员尚未配置成片价格，暂无法生成。</p>}
           {priced && estimate !== null && (
             <p className="text-[12.5px] text-ink-tertiary">音频约 {audioDurationSec} 秒，预计消耗 {estimate} 视频点，按实际成片时长结算。</p>
           )}
@@ -133,8 +133,8 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
       {dialog && <DownloadLinkDialog dialog={dialog} onClose={() => setDialog(null)} />}
 
       {project?.stage === "failed" && (
-        <div className="space-y-3 rounded-xl border border-red-100 bg-red-50/50 p-5">
-          <p className="text-[13px] text-red-600">{project.error ?? "成片失败"}</p>
+        <div className="space-y-3 rounded-xl border border-danger/20 bg-danger/5 p-5">
+          <p className="text-[13px] text-danger-ink">{project.error ?? "成片失败"}</p>
           {rawUrl && (
             <div className="flex flex-wrap gap-2">
               <button

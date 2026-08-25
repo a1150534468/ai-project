@@ -53,7 +53,7 @@ export function NovelModelSelector({
 
   return (
     <label className="flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-hairline bg-surface-subtle px-2.5 text-[10px] font-semibold text-ink-tertiary transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10" title={title}>
-      <Icon icon={saving ? "mdi:loading" : error ? "mdi:alert-circle-outline" : "mdi:brain"} className={`text-sm ${error ? "text-red-600" : "text-brand-ink"} ${saving ? "animate-spin" : ""}`} />
+      <Icon icon={saving ? "mdi:loading" : error ? "mdi:alert-circle-outline" : "mdi:brain"} className={`text-sm ${error ? "text-danger-ink" : "text-brand-ink"} ${saving ? "animate-spin" : ""}`} />
       <span className="hidden 2xl:inline">写作模型</span>
       <select
         aria-label="写作模型"

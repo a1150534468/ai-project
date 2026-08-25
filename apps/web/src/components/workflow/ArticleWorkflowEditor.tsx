@@ -126,7 +126,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             className="w-full border-0 bg-transparent p-0 text-[24px] font-semibold leading-[1.35] text-ink outline-none placeholder:text-ink-tertiary focus:shadow-none"
             placeholder="输入标题"
           />
-          <span className={`text-xs ${titleOver ? "font-semibold text-red-600" : "text-ink-tertiary"}`}>
+          <span className={`text-xs ${titleOver ? "font-semibold text-danger-ink" : "text-ink-tertiary"}`}>
             标题 {props.titleDraft.trim().length} / {props.platformConfig.titleMaxLength} 字
           </span>
         </div>

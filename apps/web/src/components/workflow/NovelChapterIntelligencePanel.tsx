@@ -72,7 +72,7 @@ export function NovelChapterIntelligencePanel({
       <Panel title="连续性提醒" icon="mdi:alert-circle-outline">
         <div className="grid gap-2">
           {alerts.map((alert, index) => (
-            <p key={`${text(alert.title)}:${index}`} className="break-words rounded-lg bg-amber-50 px-2 py-1.5 text-amber-800">
+            <p key={`${text(alert.title)}:${index}`} className="break-words rounded-lg bg-warning/10 px-2 py-1.5 text-warning-ink">
               {text(alert.title)}：{text(alert.detail)}
             </p>
           ))}

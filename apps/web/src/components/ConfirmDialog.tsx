@@ -67,7 +67,7 @@ export function useConfirm() {
       >
         <div className="flex items-start gap-3 mb-4">
           {dialog.isDangerous && (
-            <Icon icon="mdi:alert-circle" className="text-red-500 text-xl flex-none mt-1" />
+            <Icon icon="mdi:alert-circle" className="text-danger-ink text-xl flex-none mt-1" />
           )}
           <h2 className="text-lg font-semibold text-ink">{dialog.title}</h2>
         </div>
@@ -87,7 +87,7 @@ export function useConfirm() {
             disabled={dialog.loading}
             className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
               dialog.isDangerous
-                ? "bg-red-500 disabled:opacity-50"
+                ? "bg-danger disabled:opacity-50"
                 : "bg-brand disabled:opacity-50"
             }`}
           >

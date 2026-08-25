@@ -193,7 +193,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           </div>
           </div>
           {(error || notice) && (
-            <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
+            <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
           )}
         </div>
         <SubmitCostBar

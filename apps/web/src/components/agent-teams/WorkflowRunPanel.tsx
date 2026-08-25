@@ -63,7 +63,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
           </button>
         </span>
       )}
-      {saveState === "error" && <span className="text-xs text-red-600">保存失败，可改用「下载文档」</span>}
+      {saveState === "error" && <span className="text-xs text-danger-ink">保存失败，可改用「下载文档」</span>}
     </div>
   );
 }
@@ -106,7 +106,7 @@ function WorkflowSteps({ run }: WorkflowStepsProps) {
             <Icon icon={step.status === "succeeded" ? "mdi:check-circle" : step.status === "failed" ? "mdi:alert-circle" : "mdi:progress-clock"} className="mt-0.5 flex-none text-lg text-brand" aria-hidden />
           </div>
           {step.output && <p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-ink-secondary">{step.output}</p>}
-          {step.error && <p className="mt-2 break-words text-xs text-red-600">{step.error}</p>}
+          {step.error && <p className="mt-2 break-words text-xs text-danger-ink">{step.error}</p>}
         </div>
       ))}
       {run.steps.length === 0 && <p className="rounded-[10px] bg-surface-subtle p-4 text-sm text-ink-secondary">团队确认后会自动生成工作流步骤。</p>}

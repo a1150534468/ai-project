@@ -62,14 +62,14 @@ export function NovelLibraryPage({
       </header>
 
       <NovelCreatePage draft={draft} canGoBack={false} isSubmitting={isCreating} onBack={() => undefined} onChange={onDraftChange} onSubmit={onCreate} />
-      {error && <p className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+      {error && <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">{error}</p>}
 
       <section className="grid gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3"><h2 className="text-xl font-semibold text-ink">我的书目</h2><span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-secondary">{visible.length} 本</span></div>
           <div className="flex flex-wrap gap-2">
             <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-hairline bg-surface px-3 text-sm text-ink-secondary shadow-sm transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
-            {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-red-200 bg-surface px-3 text-xs font-semibold text-red-600">删除选中 ({selected.length})</button>}
+            {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-danger/30 bg-surface px-3 text-xs font-semibold text-danger-ink">删除选中 ({selected.length})</button>}
           </div>
         </div>
 

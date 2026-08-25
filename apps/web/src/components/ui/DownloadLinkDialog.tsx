@@ -43,7 +43,7 @@ export function DownloadLinkDialog({
           </button>
         </div>
         {dialog.notice && (
-          <p className="mt-3 flex items-start gap-2 rounded-[10px] bg-amber-50 px-3 py-2 text-[13px] leading-6 text-amber-700">
+          <p className="mt-3 flex items-start gap-2 rounded-[10px] bg-warning/10 px-3 py-2 text-[13px] leading-6 text-warning-ink">
             <Icon icon="mdi:clock-alert-outline" className="mt-[3px] shrink-0 text-base" aria-hidden />
             <span>{dialog.notice}</span>
           </p>

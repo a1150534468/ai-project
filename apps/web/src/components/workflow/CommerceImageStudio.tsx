@@ -199,7 +199,7 @@ export function CommerceImageStudio({
           <textarea value={extra} onChange={(event) => setExtra(event.target.value)} className="min-h-[72px] rounded-lg border border-hairline p-3 text-sm font-normal leading-5" />
         </div>
       </div>
-      {helpWriteError && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{helpWriteError}</p>}
+      {helpWriteError && <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger-ink">{helpWriteError}</p>}
       <div className="mt-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-ink">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
@@ -213,7 +213,7 @@ export function CommerceImageStudio({
           {referenceAssets.map((asset) => <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-14 w-14 rounded-lg border border-hairline object-cover" />)}
           {referenceAssets.length === 0 && <p className="text-xs text-ink-tertiary">暂无参考图</p>}
         </div>
-        {uploadError && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{uploadError}</p>}
+        {uploadError && <p className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger-ink">{uploadError}</p>}
       </div>
     </section>
   );

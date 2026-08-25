@@ -243,7 +243,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
       <div className="min-h-screen bg-surface-muted">
         <div className="container mx-auto px-4 py-12">
           {error && (
-            <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">
+            <div className="mb-6 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger-ink border border-danger/30">
               {error}
             </div>
           )}
@@ -276,10 +276,10 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                 </div>
               )}
 
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="rounded-xl border border-warning/30 bg-warning/10 p-4">
                 <div className="flex gap-3">
-                  <Icon icon="mdi:information" className="text-amber-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-amber-800">
+                  <Icon icon="mdi:information" className="text-warning-ink flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-warning-ink">
                     <p className="font-semibold mb-1">计费说明</p>
                     <ul className="list-disc list-inside space-y-1 text-xs">
                       <li>按所选模型计费</li>
@@ -366,7 +366,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
     <div className="min-h-screen bg-surface-muted">
       <div className="container mx-auto px-4 py-12">
         {error && (
-          <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">
+          <div className="mb-6 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger-ink border border-danger/30">
             {error}
           </div>
         )}
@@ -493,9 +493,9 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                   const canOpen = item.stage === "ready";
                   const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
                     ready: { bg: "bg-brand-soft", text: "text-brand-ink", label: "已完成" },
-                    failed: { bg: "bg-red-50", text: "text-red-600", label: "失败" },
-                    running: { bg: "bg-blue-50", text: "text-blue-600", label: "进行中" },
-                    pending: { bg: "bg-yellow-50", text: "text-yellow-600", label: "排队中" },
+                    failed: { bg: "bg-danger/10", text: "text-danger-ink", label: "失败" },
+                    running: { bg: "bg-info/10", text: "text-info-ink", label: "进行中" },
+                    pending: { bg: "bg-warning/10", text: "text-warning-ink", label: "排队中" },
                   };
                   const config = statusConfig[item.stage] || statusConfig.pending;
 

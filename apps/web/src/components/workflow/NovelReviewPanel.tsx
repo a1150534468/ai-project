@@ -6,8 +6,8 @@ type ReviewPayload = { status?: "pending" | "approved" | "revise"; reviewNotes?:
 
 function statusClass(status: string | undefined): string {
   if (status === "approved") return "bg-brand-soft text-brand-ink";
-  if (status === "revise") return "bg-red-50 text-red-700";
-  return "bg-orange-50 text-orange-700";
+  if (status === "revise") return "bg-danger/10 text-danger-ink";
+  return "bg-warning/10 text-warning-ink";
 }
 
 function statusLabel(status: string | undefined): string {
@@ -68,7 +68,7 @@ export function NovelReviewPanel({
 
       <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <button type="button" disabled={!chapter || isSaving} onClick={() => onSave({ status: "pending", reviewNotes: notes })} className="h-9 rounded-lg border border-hairline px-3 text-xs font-semibold text-ink-secondary disabled:opacity-50">待审</button>
-        <button type="button" disabled={!chapter || isSaving} onClick={() => onSave({ status: "revise", reviewNotes: notes })} className="h-9 rounded-lg border border-red-100 px-3 text-xs font-semibold text-red-700 disabled:opacity-50">需修订</button>
+        <button type="button" disabled={!chapter || isSaving} onClick={() => onSave({ status: "revise", reviewNotes: notes })} className="h-9 rounded-lg border border-danger/20 px-3 text-xs font-semibold text-danger-ink disabled:opacity-50">需修订</button>
         <button type="button" disabled={!chapter || isSaving} onClick={() => onSave({ status: "approved", reviewNotes: notes })} className="h-9 rounded-lg border border-brand/30 px-3 text-xs font-semibold text-brand-ink disabled:opacity-50">通过</button>
         <button type="button" disabled={!chapter || isSaving} onClick={onAnalyze} className="flex h-9 items-center justify-center gap-1 rounded-lg bg-brand px-3 text-xs font-semibold text-white disabled:bg-brand/40">
           <Icon icon="mdi:refresh" aria-hidden />

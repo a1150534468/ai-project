@@ -156,7 +156,7 @@ export function KnowledgePicker({
                             <span className="flex min-w-0 items-center gap-2">
                               <span className="truncate text-sm font-medium">{kb.name}</span>
                               <span className={`flex-none rounded-full px-2 py-0.5 text-[10px] ${
-                                isOfficial ? "bg-blue-50 text-blue-700" : "bg-surface text-brand-ink"
+                                isOfficial ? "bg-info/10 text-info-ink" : "bg-surface text-brand-ink"
                               }`}>
                                 {isOfficial ? "官方" : "我的"}
                               </span>
@@ -176,7 +176,7 @@ export function KnowledgePicker({
             </div>
 
             <div className="flex items-center justify-between gap-3 border-t border-hairline-subtle px-5 py-4">
-              <button type="button" onClick={disableKnowledge} className="rounded-[9px] px-3 py-2 text-sm text-red-600 transition ">
+              <button type="button" onClick={disableKnowledge} className="rounded-[9px] px-3 py-2 text-sm text-danger-ink transition ">
                 关闭知识库
               </button>
               <div className="flex justify-end gap-2">

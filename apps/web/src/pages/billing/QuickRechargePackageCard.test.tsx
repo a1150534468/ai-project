@@ -26,6 +26,6 @@ describe("QuickRechargePackageCard", () => {
     );
 
     expect(html).toContain("活动赠送 60 点");
-    expect(html).toContain("text-red-600");
+    expect(html).toContain("text-danger-ink");
   });
 });

@@ -35,10 +35,14 @@
 | Surface/muted | `--color-surface-muted` | `surface-muted` | `#f5f5f7` | `#242426` | 输入框底、禁用态、标签底 |
 | Surface/raised | `--color-surface-raised` | `surface-raised` | `#fafafc` | `#2c2c2e` | 浮层、弹窗、下拉 |
 | Surface/inverse | `--color-surface-inverse` | `surface-inverse` | `#1d1d1f` | `#f5f5f7` | 浅色模式下本身就深的块 |
-| Danger | `--color-danger` | `danger` | `#dc2626` | `#ff453a` | 删除、错误 |
-| Warning | `--color-warning` | `warning` | `#d97706` | `#ff9f0a` | 提示、重要度 |
-| Info | `--color-info` | `info` | `#2563eb` | `#0a84ff` | 搜索命中、辅助状态 |
+| Danger | `--color-danger` | `danger` | `#dc2626` | `#ff453a` | 删除、错误：实底按钮、图标、状态点 |
+| Danger/ink | `--color-danger-ink` | `danger-ink` | `#b91c1c` | `#ff8a80` | `bg-danger/10` 上的错误文案 |
+| Warning | `--color-warning` | `warning` | `#d97706` | `#ff9f0a` | 提示、重要度、会员金色 |
+| Warning/ink | `--color-warning-ink` | `warning-ink` | `#b45309` | `#ffc46b` | `bg-warning/10` 上的提示文案 |
+| Info | `--color-info` | `info` | `#2563eb` | `#0a84ff` | 进行中、辅助状态 |
+| Info/ink | `--color-info-ink` | `info-ink` | `#1d4ed8` | `#7ab8ff` | `bg-info/10` 上的状态文案 |
 | Success | `--color-success` | `success` | `#16a34a` | `#30d158` | 完成、成功反馈 |
+| Success/ink | `--color-success-ink` | `success-ink` | `#15803d` | `#6ee7a0` | `bg-success/10` 上的完成文案 |
 | Scrim | `--color-scrim` | `scrim` | `#101615` | 同浅色 | 模态遮罩，用 `bg-scrim/25`~`/55` |
 | Console | `--color-console` | `console` | `#111418` | 同浅色 | 固定深色面板：流式输出、脚本预览、视频信箱底 |
 | Console/ink | `--color-console-ink` | `console-ink` | `#d7e0e8` | 同浅色 | 深色面板上的字与描边（`/70` 次要、`/15` 描边） |
@@ -50,9 +54,38 @@
 已知的两处暗色扁平化，是既有行为不是遗漏：`hairline` 与 `hairline-subtle`、`surface` 与 `surface-subtle`
 在暗色下取同值。要让它们在暗色下也分层属于独立的设计改动。
 
-### 状态色的弱底色
+### 状态色的三件套
 
-不再单列 `*-soft` token，弱底色统一用透明度写法：`bg-danger/10`、`bg-warning/10`、`bg-info/10`、`bg-success/10`。
+每个状态色都是 `X` / `X/10` / `X-ink` 三件套，和 `brand` / `brand-soft` / `brand-ink` 同一套路：
+
+| 用途 | 写法 | 例 |
+|------|------|----|
+| 实底、图标、状态点 | `X` | `bg-danger`、`text-warning`（会员星标） |
+| 弱底色 | `X/10`（更强用 `/15`，更弱用 `/5`） | `bg-danger/10`、`bg-warning/15` |
+| 描边 | `X/20`~`X/30` | `border-danger/30`、`ring-danger/20` |
+| 弱底上的文字 | `X-ink` | `bg-warning/10 text-warning-ink` |
+
+**不要用 `X` 当弱底上的文字**：`text-warning` 落在 `bg-warning/10` 上只有 2.9:1，`text-danger` 是 4.1:1，都过不了 AA；
+换成 `-ink` 分别是 4.9:1 / 6.0:1。反过来，`X-ink` 当实底也别用 —— 实底上是白字，用 `X` 才够亮。
+
+浅色值刻意对齐 Tailwind 调色板：`X` = 600 档、`X-ink` = 700 档。所以历史代码里
+`text-red-600`→`text-danger`、`text-red-700`→`text-danger-ink` 这类替换在浅色模式下是零漂移的。
+
+### 状态色归并对照
+
+| 归并到 | 旧调色板类 |
+|--------|-----------|
+| `danger` / `danger-ink` | `red-50` `red-100` `red-200` `red-300` `red-400` `red-500` `red-600` `red-700` `red-800` `rose-*` |
+| `warning` / `warning-ink` | `amber-50` `amber-100` `amber-200` `amber-500` `amber-600` `amber-700` `amber-800` `amber-900` `yellow-50` `yellow-600` `orange-50` `orange-700` |
+| `info` / `info-ink` | `blue-50` `blue-100` `blue-200` `blue-600` `blue-700` `blue-800` `sky-100` `sky-700`（非记忆类型色的那些） |
+| `success` / `success-ink` | `emerald-50` `emerald-700` |
+| `ink` / `ink-secondary` / `ink-tertiary` | `gray-300`~`gray-900`、`slate-400`~`slate-900`（非记忆类型色的那些） |
+| `hairline` / `hairline-subtle` | `gray-50`~`gray-300`、`slate-200` `slate-300`（作 border 用时） |
+| `surface-subtle` / `surface-muted` | `gray-50` / `gray-100`（作 bg 用时） |
+
+`indigo` / `violet` / `rose` 三族整族删除：`WorkflowPipeline` 里那份彩虹 `className` 是从没被 render 读过的死数据；
+`ModelMarketplace` 的紫色「生图」标签与生图价格块并回 `brand` 家族（同一张卡上它和 token 价格块互斥出现，
+本来就该长一样）；`CurrentPlanCard` 的紫点是「视频点 · 会员」，跟着会员金色走 `warning`。
 
 ### 历史色值归并对照
 
@@ -109,8 +142,10 @@
 ### Rules
 
 - 只允许 `brand #0066cc` 作为主强调色，不引入第二主色系。
-- **组件里不写字面色值**：不写 `text-[#1d1d1f]`、不写 `border-gray-200`，一律用上表的语义类。
-  唯一例外是下面这份**装饰色白名单**（全站仅 11 处，改动需在 PR 里说明）：
+- **组件里不写字面色值**：不写 `text-[#1d1d1f]`、不写 `border-gray-200`、不写 `bg-red-50`，一律用上表的语义类。
+  Tailwind 自带调色板（gray/slate/red/amber/blue/…）在 `apps/web/src` 里只剩两处合法出口：
+  上面那份 Memory Semantic Palette（唯一来源 `memoryStyles.ts`），以及下面这份**装饰色白名单**
+  （全站仅 11 处，改动需在 PR 里说明）：
 
   | 位置 | 色值 | 是什么 |
   |------|------|--------|

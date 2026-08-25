@@ -397,7 +397,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         />
 
         <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-ink" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
-        {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink">{error}</p>}
         <p className="mt-3 text-[10px] leading-4 text-ink-tertiary">AI 生成内容仅作预览，请勿用于证件、身份核验或未经授权的公开传播。</p>
         </div>
         <SubmitCostBar
@@ -418,7 +418,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-ink-tertiary">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">
-            {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-surface-muted text-ink-secondary"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
+            {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-success/10 text-success-ink" : selectedTask.status === "failed" ? "bg-danger/10 text-danger-ink" : "bg-surface-muted text-ink-secondary"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
             <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-surface px-3 text-xs font-semibold text-ink"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
           </div>
         </header>
@@ -442,7 +442,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
               <p className="mt-2 text-sm text-ink-tertiary">选择模板并提交后，结果将在这里显示</p>
             </div>
           )}
-          {selectedTask?.error && !isActive(selectedTask) && <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-surface/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">{selectedTask.error}</div>}
+          {selectedTask?.error && !isActive(selectedTask) && <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-danger/30 bg-surface/95 px-3 py-2 text-center text-xs text-danger-ink shadow-sm">{selectedTask.error}</div>}
         </div>
         {selectedTask && selectedTask.outputs.length > 0 && (
           <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-surface px-4 py-3">
@@ -487,9 +487,9 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-ink-tertiary">暂无任务</p> : tasks.map((task) => (
                 <article key={task.id} className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle"}`}>
-                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-ink">{presetName(task.presetId)}</span><span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-ink-tertiary">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
+                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-ink">{presetName(task.presetId)}</span><span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-ink-tertiary">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-danger-ink">{task.error}</span>}</button>
                   <div className="flex gap-2 px-3 pb-3">
-                    {isActive(task) ? <button type="button" onClick={() => handleCancel(task)} disabled={busyTaskId === task.id} className="h-7 rounded-lg border border-red-200 px-2 text-xs font-semibold text-red-600 disabled:opacity-50">取消任务</button> : <button type="button" onClick={() => handleDeleteTask(task)} disabled={busyTaskId === task.id} className="inline-flex h-7 items-center gap-1 rounded-lg border border-hairline px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"><Icon icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"} className={busyTaskId === task.id ? "animate-spin" : ""} aria-hidden />删除</button>}
+                    {isActive(task) ? <button type="button" onClick={() => handleCancel(task)} disabled={busyTaskId === task.id} className="h-7 rounded-lg border border-danger/30 px-2 text-xs font-semibold text-danger-ink disabled:opacity-50">取消任务</button> : <button type="button" onClick={() => handleDeleteTask(task)} disabled={busyTaskId === task.id} className="inline-flex h-7 items-center gap-1 rounded-lg border border-hairline px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"><Icon icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"} className={busyTaskId === task.id ? "animate-spin" : ""} aria-hidden />删除</button>}
                   </div>
                 </article>
               ))}

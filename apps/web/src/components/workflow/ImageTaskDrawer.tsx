@@ -83,7 +83,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                     >
                       <span className="flex items-start justify-between gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{task.prompt}</span>
-                        <span className={`flex-none text-[11px] font-semibold ${task.status === "failed" ? "text-red-600" : active ? "text-brand-ink" : "text-ink-secondary"}`}>
+                        <span className={`flex-none text-[11px] font-semibold ${task.status === "failed" ? "text-danger-ink" : active ? "text-brand-ink" : "text-ink-secondary"}`}>
                           {task.status === "running" && task.error ? "正在重试" : STATUS_LABELS[task.status]}
                         </span>
                       </span>
@@ -93,14 +93,14 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                           <span className="block h-full rounded-full bg-brand" style={{ width: `${task.status === "running" ? Math.max(progress, 8) : progress}%` }} />
                         </span>
                       )}
-                      {task.error && !compact && <span className="mt-2 block text-xs leading-5 text-red-600">{task.error}</span>}
+                      {task.error && !compact && <span className="mt-2 block text-xs leading-5 text-danger-ink">{task.error}</span>}
                     </button>
                     {active && (
                       <button
                         type="button"
                         onClick={() => props.onCancelTask(task)}
                         disabled={cancelling.has(task.id)}
-                        className="mb-3 ml-3 inline-flex h-7 items-center rounded-lg border border-red-200 px-2 text-xs font-semibold text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                        className="mb-3 ml-3 inline-flex h-7 items-center rounded-lg border border-danger/30 px-2 text-xs font-semibold text-danger-ink disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {cancelling.has(task.id) ? "取消中" : "取消任务"}
                       </button>

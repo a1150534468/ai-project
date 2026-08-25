@@ -116,7 +116,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         </button>
         <input ref={inputRef} type="file" accept="video/*" className="hidden" onChange={(e) => void pick(e.target.files?.[0] ?? null)} />
 
-        {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置建形象价格，暂无法新建。</p>}
+        {!priced && <p className="text-[12px] text-warning-ink">管理员尚未配置建形象价格，暂无法新建。</p>}
         {priced && estimate !== null && <p className="text-[12px] text-ink-tertiary">新建一次消耗 {estimate} 视频点。</p>}
       </div>
     </div>

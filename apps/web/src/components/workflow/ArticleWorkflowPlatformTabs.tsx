@@ -38,7 +38,7 @@ export function ArticleWorkflowPlatformTabs(props: ArticleWorkflowPlatformTabsPr
             <span className="truncate">{shortPlatformLabel(row.platform)}</span>
             {busy && <Icon icon="mdi:loading" className="shrink-0 animate-spin text-brand" aria-label="生成中" />}
             {!busy && row.status === "failed" && (
-              <Icon icon="mdi:alert-circle-outline" className="shrink-0 text-red-500" aria-label="生成失败" />
+              <Icon icon="mdi:alert-circle-outline" className="shrink-0 text-danger-ink" aria-label="生成失败" />
             )}
             {!busy && props.dirtyPlatforms.includes(row.platform) && (
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-label="待保存" />

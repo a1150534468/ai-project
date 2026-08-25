@@ -30,10 +30,24 @@ export default {
           raised: "rgb(var(--color-surface-raised) / <alpha-value>)",
           inverse: "rgb(var(--color-surface-inverse) / <alpha-value>)",
         },
-        danger: "rgb(var(--color-danger) / <alpha-value>)",
-        warning: "rgb(var(--color-warning) / <alpha-value>)",
-        info: "rgb(var(--color-info) / <alpha-value>)",
-        success: "rgb(var(--color-success) / <alpha-value>)",
+        // 每个状态色都是「填充 X / 弱底 X/10 / 底上文字 X-ink」三件套，和 brand 一致。
+        // X 本身当文字放在 X/10 上只有 3~4:1，不够 AA，所以文字必须用 X-ink。
+        danger: {
+          DEFAULT: "rgb(var(--color-danger) / <alpha-value>)",
+          ink: "rgb(var(--color-danger-ink) / <alpha-value>)",
+        },
+        warning: {
+          DEFAULT: "rgb(var(--color-warning) / <alpha-value>)",
+          ink: "rgb(var(--color-warning-ink) / <alpha-value>)",
+        },
+        info: {
+          DEFAULT: "rgb(var(--color-info) / <alpha-value>)",
+          ink: "rgb(var(--color-info-ink) / <alpha-value>)",
+        },
+        success: {
+          DEFAULT: "rgb(var(--color-success) / <alpha-value>)",
+          ink: "rgb(var(--color-success-ink) / <alpha-value>)",
+        },
         // 两个「不随主题翻转」的角色：遮罩恒深，控制台面板恒深。
         scrim: "rgb(var(--color-scrim) / <alpha-value>)",
         console: {

@@ -39,7 +39,7 @@ export function QuickRechargePackageCard({
       <p className="text-2xl font-bold text-ink">{pkg.points.toLocaleString()}</p>
       <p className="text-[11px] text-ink-tertiary mt-0.5">算力点</p>
       {bonusPoints > 0 && (
-        <p className="mt-2 inline-flex rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-semibold text-red-600 ring-1 ring-red-100">
+        <p className="mt-2 inline-flex rounded-full bg-danger/10 px-2.5 py-1 text-[10px] font-semibold text-danger-ink ring-1 ring-danger/20">
           活动赠送 {bonusPoints.toLocaleString()} 点
         </p>
       )}

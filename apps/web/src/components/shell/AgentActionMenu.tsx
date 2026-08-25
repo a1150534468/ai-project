@@ -74,7 +74,7 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
 
       <div className="my-1 h-px bg-surface-muted" />
 
-      <button type="button" className={`${row} text-red-600 `} disabled={busy} onClick={onDelete}>
+      <button type="button" className={`${row} text-danger-ink `} disabled={busy} onClick={onDelete}>
         <Icon icon="mdi:trash-can-outline" className="flex-none text-base" aria-hidden />
         <span>删除 Agent</span>
       </button>

@@ -212,8 +212,8 @@ export default function WechatBind({ token }: WechatBindProps) {
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="mb-6 p-4 bg-danger/10 border border-danger/30 rounded-lg">
+            <p className="text-sm text-danger-ink">{error}</p>
           </div>
         )}
 
@@ -243,11 +243,11 @@ export default function WechatBind({ token }: WechatBindProps) {
                   {/* Status Display */}
                   <div className="text-center">
                     <p className="text-sm text-ink-secondary mb-3">状态：</p>
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-full">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-info/10 border border-info/30 rounded-full">
                       <Icon
                         icon="mdi:check-circle"
                         className={`text-lg ${
-                          bindingState === "confirmed" ? "text-brand-ink" : "text-blue-600"
+                          bindingState === "confirmed" ? "text-brand-ink" : "text-info-ink"
                         }`}
                       />
                       <span className="text-sm font-medium text-ink">
@@ -383,7 +383,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                         </div>
                         <button
                           onClick={() => handleUnbind(binding.id)}
-                          className="text-xs text-red-600 font-medium flex-none"
+                          className="text-xs text-danger-ink font-medium flex-none"
                         >
                           解绑
                         </button>

@@ -68,7 +68,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
     <div className="min-w-0">
       <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-ink-secondary">
         <span className="truncate">{props.label}</span>
-        <span className={props.required ? "text-red-500" : "text-ink-tertiary"}>{props.required ? "*" : "可选"}</span>
+        <span className={props.required ? "text-danger-ink" : "text-ink-tertiary"}>{props.required ? "*" : "可选"}</span>
       </div>
       <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-hairline bg-surface-subtle">
         {props.reference ? (
@@ -499,7 +499,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </label>
             )}
             {error && (
-              <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink">
                 {error}
               </p>
             )}
@@ -530,7 +530,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             <div className="flex items-center gap-2">
               {selectedTask && (
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-surface-muted text-ink-secondary"}`}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-success/10 text-success-ink" : selectedTask.status === "failed" ? "bg-danger/10 text-danger-ink" : "bg-surface-muted text-ink-secondary"}`}
                 >
                   {STATUS_LABEL[selectedTask.status]}
                 </span>
@@ -589,7 +589,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </div>
             )}
             {selectedTask?.error && !isActive(selectedTask) && (
-              <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-surface/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">
+              <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-danger/30 bg-surface/95 px-3 py-2 text-center text-xs text-danger-ink shadow-sm">
                 {selectedTask.error}
               </div>
             )}
@@ -700,7 +700,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                       <span className="mt-1 block text-[11px] text-ink-tertiary">
                         {task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}
                       </span>
-                      {task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}
+                      {task.error && <span className="mt-2 block text-xs text-danger-ink">{task.error}</span>}
                     </button>
                     <div className="flex gap-2 px-3 pb-3">
                       {isActive(task) ? (
@@ -708,7 +708,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                           type="button"
                           onClick={() => handleCancel(task)}
                           disabled={busyTaskId === task.id}
-                          className="h-7 rounded-lg border border-red-200 px-2 text-xs font-semibold text-red-600 disabled:opacity-50"
+                          className="h-7 rounded-lg border border-danger/30 px-2 text-xs font-semibold text-danger-ink disabled:opacity-50"
                         >
                           取消任务
                         </button>

@@ -327,7 +327,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   {!pricing ? (
                     <p className="text-[13px] text-ink-tertiary">加载价格中…</p>
                   ) : !priceReady ? (
-                    <p className="rounded-[10px] bg-amber-50 px-3 py-2.5 text-[13px] leading-6 text-amber-700">拆解价格未配置或未启用，请联系管理员在后台设置并启用「帮我写-图片拆解 / 视频拆解」价格后再试。</p>
+                    <p className="rounded-[10px] bg-warning/10 px-3 py-2.5 text-[13px] leading-6 text-warning-ink">拆解价格未配置或未启用，请联系管理员在后台设置并启用「帮我写-图片拆解 / 视频拆解」价格后再试。</p>
                   ) : (
                     <div className="text-[13px] leading-7 text-ink-secondary">
                       {imageCount > 0 && <p>图片拆解：{imageCount} 张 × {pricing.image.rate} = <b className="text-ink">{imageCost}</b> 算力点</p>}

@@ -96,7 +96,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
         </div>
 
         {error && (
-          <div className="mx-5 mt-4 px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">
+          <div className="mx-5 mt-4 px-3 py-2 rounded-lg bg-danger/10 text-danger-ink text-sm">
             {error}
           </div>
         )}

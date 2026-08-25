@@ -60,7 +60,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
     <section className="flex-none border-b border-hairline-subtle bg-surface" aria-label="当前平台工具">
       <div className="flex min-h-11 items-center justify-between gap-3 px-4 lg:px-5">
         <div className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${failed ? "bg-red-500" : "bg-brand"}`} aria-hidden />
+          <span className={`h-2 w-2 shrink-0 rounded-full ${failed ? "bg-danger" : "bg-brand"}`} aria-hidden />
           <span className="truncate">{formatArticleWorkflowStatus(props.project.status)}</span>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -129,19 +129,19 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
       </div>
 
       {(failed || hasProjectError) && (
-        <div role="alert" className="flex flex-col gap-3 border-t border-red-200 bg-red-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-5">
+        <div role="alert" className="flex flex-col gap-3 border-t border-danger/30 bg-danger/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between lg:px-5">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-red-700">
+            <p className="text-xs font-semibold text-danger-ink">
               {failed ? `${props.platformConfig.label}生成失败` : "配图生成失败"}
             </p>
-            <p className="mt-0.5 break-words text-[11px] leading-5 text-red-600">{props.project.error || "未知原因"}</p>
+            <p className="mt-0.5 break-words text-[11px] leading-5 text-danger-ink">{props.project.error || "未知原因"}</p>
           </div>
           {failed && (
             <button
               type="button"
               onClick={() => props.onRetry(props.project.id)}
               disabled={retrying}
-              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 text-xs font-semibold text-white disabled:bg-red-300"
+              className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-danger px-3 text-xs font-semibold text-white disabled:bg-danger/40"
             >
               <Icon icon={retrying ? "mdi:loading" : "mdi:refresh"} className={retrying ? "animate-spin" : ""} aria-hidden />
               {retrying ? "提交中" : "重新生成"}

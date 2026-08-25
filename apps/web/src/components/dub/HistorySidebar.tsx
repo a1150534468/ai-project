@@ -6,10 +6,10 @@ const STAGE_LABEL: Record<string, { text: string; cls: string }> = {
   analyzed: { text: "已拆解", cls: "bg-surface-muted text-ink-tertiary" },
   scripted: { text: "已洗稿", cls: "bg-surface-muted text-ink-tertiary" },
   voiced: { text: "已配音", cls: "bg-brand/10 text-brand" },
-  generating: { text: "成片中", cls: "bg-amber-50 text-amber-600" },
-  mixing: { text: "配乐中", cls: "bg-amber-50 text-amber-600" },
+  generating: { text: "成片中", cls: "bg-warning/10 text-warning-ink" },
+  mixing: { text: "配乐中", cls: "bg-warning/10 text-warning-ink" },
   done: { text: "已完成", cls: "bg-brand text-white" },
-  failed: { text: "失败", cls: "bg-red-50 text-red-500" },
+  failed: { text: "失败", cls: "bg-danger/10 text-danger-ink" },
 };
 
 export interface HistorySidebarProps {

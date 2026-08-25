@@ -207,7 +207,7 @@ export default function Membership({ token }: MembershipProps) {
                         <div className="flex items-center gap-2 mb-2">
                           <Icon
                             icon="mdi:crown"
-                            className={`text-lg ${isActive ? "text-amber-500" : "text-ink-tertiary"}`}
+                            className={`text-lg ${isActive ? "text-warning" : "text-ink-tertiary"}`}
                           />
                           <span className="text-sm font-semibold text-ink">会员卡 #{membership.cardId}</span>
                           <span
@@ -265,7 +265,7 @@ export default function Membership({ token }: MembershipProps) {
           <div
             className={`mt-6 rounded-2xl p-4 border ${
               message.includes("失败") || message.includes("错误")
-                ? "bg-red-50 border-red-200 text-red-700"
+                ? "bg-danger/10 border-danger/30 text-danger-ink"
                 : "bg-brand-soft border-brand/30 text-brand-ink"
             }`}
           >

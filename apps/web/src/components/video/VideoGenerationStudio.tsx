@@ -352,7 +352,7 @@ export function VideoGenerationStudio({
         </div>
 
         <div className="shrink-0 border-t border-hairline-subtle p-3">
-        {error && <p className="mb-2 rounded-[9px] bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+        {error && <p className="mb-2 rounded-[9px] bg-danger/10 px-3 py-2 text-sm text-danger-ink">{error}</p>}
         <RippleButton
           type="button"
           onClick={() => setConfirmOpen(true)}
@@ -475,7 +475,7 @@ export function VideoGenerationStudio({
                     </div>
                     <p className="mt-2 line-clamp-2 text-xs text-ink-secondary">{task.prompt}</p>
                     <p className="mt-2 text-[11px] text-ink-tertiary">{task.resolution} · {task.durationSec}s · {formatTime(task.createdAt)}</p>
-                    {task.error && <p className="mt-2 text-xs leading-5 text-red-600">{friendlyTaskError(task.error)}</p>}
+                    {task.error && <p className="mt-2 text-xs leading-5 text-danger-ink">{friendlyTaskError(task.error)}</p>}
                   </motion.div>
                 </StaggerItem>
               ))}

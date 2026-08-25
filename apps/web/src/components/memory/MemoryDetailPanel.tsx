@@ -248,7 +248,7 @@ export default function MemoryDetailPanel({
           type="button"
           onClick={() => void onDelete()}
           disabled={saving || deleting}
-          className="inline-flex items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className="inline-flex items-center gap-2 rounded-full border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-medium text-danger-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30 disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Icon
             icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"}

@@ -22,7 +22,7 @@ function statusLabel(status: string): string {
 
 function statusTone(status: string): string {
   if (status === "succeeded") return "bg-brand-soft text-brand-ink";
-  if (status === "failed" || status === "cancelled") return "bg-red-50 text-red-700";
+  if (status === "failed" || status === "cancelled") return "bg-danger/10 text-danger-ink";
   return "bg-surface-subtle text-ink-secondary";
 }
 

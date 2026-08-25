@@ -76,15 +76,15 @@ export function TeamCardGrid({
                   aria-label={`删除团队 ${team.name}`}
                   disabled={deleting}
                   onClick={() => onRequestDelete(team.id)}
-                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-red-100 bg-surface text-red-600 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-danger/20 bg-surface text-danger-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className="text-base" aria-hidden />
                   <span className="sr-only">删除团队</span>
                 </button>
               </div>
               {pendingDelete && (
-                <div className="mt-4 rounded-[10px] border border-red-100 bg-red-50 p-3">
-                  <p className="text-xs leading-5 text-red-700">确认删除该团队？历史任务会保留，但这个团队不能再复用。</p>
+                <div className="mt-4 rounded-[10px] border border-danger/20 bg-danger/10 p-3">
+                  <p className="text-xs leading-5 text-danger-ink">确认删除该团队？历史任务会保留，但这个团队不能再复用。</p>
                   <div className="mt-3 flex items-center justify-end gap-2">
                     <button
                       type="button"
@@ -98,7 +98,7 @@ export function TeamCardGrid({
                       type="button"
                       onClick={() => onConfirmDelete(team.id)}
                       disabled={deleting}
-                      className="rounded-[8px] bg-red-600 px-3 py-1.5 text-xs font-medium text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-[8px] bg-danger px-3 py-1.5 text-xs font-medium text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {deleting ? "删除中" : "确认删除"}
                     </button>

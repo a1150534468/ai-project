@@ -246,7 +246,7 @@ export default function SettingsPage({
           </p>
           <RippleButton
             onClick={handleLogout}
-            className="w-full px-4 py-2.5 bg-red-50 text-red-600 rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+            className="w-full px-4 py-2.5 bg-danger/10 text-danger-ink rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
           >
             <Icon icon="mdi:logout-variant" />
             登出登录

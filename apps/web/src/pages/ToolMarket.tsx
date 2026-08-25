@@ -273,7 +273,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
           <div
             className={`rounded-lg border px-4 py-3 text-sm ${
               notice.type === "error"
-                ? "border-red-100 bg-red-50 text-red-700"
+                ? "border-danger/20 bg-danger/10 text-danger-ink"
                 : "border-brand/30 bg-brand-soft text-brand-ink"
             }`}
           >
@@ -357,7 +357,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                             currentAvailable
                               ? "bg-brand/10 text-brand-ink"
                               : accountInstalled
-                                ? "bg-amber-50 text-amber-700"
+                                ? "bg-warning/10 text-warning-ink"
                                 : "bg-surface-subtle text-ink-secondary"
                           }`}
                         >

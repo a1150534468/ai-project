@@ -109,8 +109,8 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
 
       <div className="min-h-0 flex-1">
         {displayImages.length === 0 && loadingCount === 0 ? (
-          <div className={`grid h-full min-h-[340px] place-items-center rounded-lg border border-dashed px-6 text-center ${isFailed ? "border-red-200 bg-red-50" : "border-hairline bg-surface-subtle"}`}>
-            <div className={isFailed ? "text-red-700" : "text-ink-secondary"}>
+          <div className={`grid h-full min-h-[340px] place-items-center rounded-lg border border-dashed px-6 text-center ${isFailed ? "border-danger/30 bg-danger/10" : "border-hairline bg-surface-subtle"}`}>
+            <div className={isFailed ? "text-danger-ink" : "text-ink-secondary"}>
               <Icon icon={isFailed ? "mdi:alert-circle-outline" : "mdi:image-plus-outline"} className="mx-auto mb-3 text-4xl" aria-hidden />
               <p className="text-sm font-semibold">{isFailed ? "生成失败" : "填写左侧提示词后开始生成"}</p>
               {isFailed && props.task?.error && <p className="mt-2 max-w-md text-xs leading-5">{props.task.error}</p>}

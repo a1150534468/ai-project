@@ -8,8 +8,8 @@ const NODE_LABELS: Record<string, string> = { book: "书", volume: "卷", act: "
 function chapterState(chapter: NovelChapter | undefined): { label: string; className: string } {
   if (!chapter?.content) return { label: "待写", className: "bg-surface-muted text-ink-tertiary" };
   if (chapter.reviewStatus === "approved") return { label: "定稿", className: "bg-brand-soft text-brand-ink" };
-  if (chapter.reviewStatus === "revise") return { label: "修订", className: "bg-amber-100 text-amber-700" };
-  return { label: "草稿", className: "bg-sky-100 text-sky-700" };
+  if (chapter.reviewStatus === "revise") return { label: "修订", className: "bg-warning/15 text-warning-ink" };
+  return { label: "草稿", className: "bg-info/15 text-info-ink" };
 }
 
 export function NovelStructureSidebar({

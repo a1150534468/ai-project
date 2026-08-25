@@ -24,7 +24,7 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
   return (
     <Modal open={open} onClose={onCancel} className="mx-4 w-full max-w-sm rounded-2xl bg-surface p-6 shadow-lg">
       <div className="mb-4 flex items-start gap-3">
-        <Icon icon="mdi:alert-circle" className="mt-1 flex-none text-xl text-red-500" />
+        <Icon icon="mdi:alert-circle" className="mt-1 flex-none text-xl text-danger-ink" />
         <h2 className="text-lg font-semibold text-ink">删除「{agentName}」？</h2>
       </div>
 
@@ -41,7 +41,7 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={agentName}
-            className="h-10 w-full rounded-lg border border-hairline-subtle px-3 text-sm outline-none focus:border-red-400"
+            className="h-10 w-full rounded-lg border border-hairline-subtle px-3 text-sm outline-none focus:border-danger"
           />
         </label>
       )}
@@ -54,7 +54,7 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
           type="button"
           onClick={onConfirm}
           disabled={!canDelete}
-          className="flex-1 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           删除
         </button>

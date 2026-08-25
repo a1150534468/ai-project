@@ -335,7 +335,7 @@ function StatusPill({ status }: { readonly status: string }) {
   const failed = status === "failed" || status === "cancelled";
   return (
     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-      complete ? "bg-brand-soft text-brand-ink" : failed ? "bg-red-50 text-red-700" : "bg-brand-soft text-brand-ink"
+      complete ? "bg-brand-soft text-brand-ink" : failed ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"
     }`}>
       {codexPetStatusLabel(status)}
     </span>
@@ -354,7 +354,7 @@ function PrimaryButton(props: {
   const colors = kind === "primary"
     ? "bg-brand text-white "
     : kind === "danger"
-      ? "border border-red-200 bg-surface text-red-600 "
+      ? "border border-danger/30 bg-surface text-danger-ink "
       : "border border-hairline-subtle bg-surface text-ink ";
   return (
     <button
@@ -1172,7 +1172,7 @@ export function CodexPetStudio({
       </div>
 
       {error && (
-        <div role="alert" className="flex items-start gap-2 rounded-[12px] border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+        <div role="alert" className="flex items-start gap-2 rounded-[12px] border border-danger/30 bg-danger/10 px-3 py-2.5 text-sm text-danger-ink">
           <Icon icon="mdi:alert-circle-outline" className="mt-0.5 flex-none text-base" aria-hidden />
           <span>{error}</span>
         </div>
@@ -1248,7 +1248,7 @@ export function CodexPetStudio({
                     title="从历史中删除"
                     disabled={interactionLocked}
                     onClick={() => handleDeleteProject(project)}
-                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-ink-tertiary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-45"
+                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-ink-tertiary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <Icon
                       icon={deletingProjectId === project.id ? "mdi:loading" : "mdi:trash-can-outline"}
@@ -1270,7 +1270,7 @@ export function CodexPetStudio({
             <div className="space-y-3 p-4">
               {loadingDetail && <p className="text-xs text-ink-tertiary">正在恢复项目输入...</p>}
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">桌宠名称 <span className="text-red-500">*</span></span>
+                <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">桌宠名称 <span className="text-danger-ink">*</span></span>
                 <input
                   value={draft.name}
                   disabled={!canEdit || interactionLocked}
@@ -1593,14 +1593,14 @@ export function CodexPetStudio({
               )}
 
               {latestRun && ["awaiting_direction_review", "awaiting_regeneration_approval"].includes(latestRun.status) && (
-                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-3">
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-amber-900">{latestRun.status === "awaiting_regeneration_approval" ? "额外真实生图等待批准" : "下一张真实生图已暂停"}</p>
-                    <p className="mt-0.5 text-[10px] leading-4 text-amber-800">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，额外调用单独计费，失败后不会自动重画。</p>
+                    <p className="text-xs font-semibold text-warning-ink">{latestRun.status === "awaiting_regeneration_approval" ? "额外真实生图等待批准" : "下一张真实生图已暂停"}</p>
+                    <p className="mt-0.5 text-[10px] leading-4 text-warning-ink">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，额外调用单独计费，失败后不会自动重画。</p>
                     {/* Show the cap before the click. Users used to learn it only
                         from a refusal, which is the moment it helps least. */}
                     {extraCallBudget && (
-                      <p className="mt-0.5 text-[10px] font-semibold leading-4 text-amber-900" data-testid="codex-pet-extra-call-budget">
+                      <p className="mt-0.5 text-[10px] font-semibold leading-4 text-warning-ink" data-testid="codex-pet-extra-call-budget">
                         {extraCallBudgetExhausted
                           ? `付费重画次数已用尽（本动作 ${extraCallBudget.jobUsed}/${extraCallBudget.jobLimit} · 本次运行 ${extraCallBudget.runUsed}/${extraCallBudget.runLimit}），请先取消本次运行，再复制为新项目重跑。`
                           : `付费重画次数：本动作 ${extraCallBudget.jobUsed}/${extraCallBudget.jobLimit} · 本次运行 ${extraCallBudget.runUsed}/${extraCallBudget.runLimit}`}
@@ -1880,7 +1880,7 @@ export function CodexPetStudio({
                     <span className="text-[9px] text-ink-tertiary">{job.attempt}/{job.maxAttempts}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1 text-[9px] text-ink-tertiary">
-                    <span className={`size-1.5 rounded-full ${job.status === "completed" ? "bg-brand" : job.status === "failed" ? "bg-red-500" : "bg-brand"}`} />
+                    <span className={`size-1.5 rounded-full ${job.status === "completed" ? "bg-brand" : job.status === "failed" ? "bg-danger" : "bg-brand"}`} />
                     {job.status}{job.error ? ` · ${job.error}` : ""}
                   </div>
                 </div>
@@ -1942,7 +1942,7 @@ export function CodexPetStudio({
                       ? "来源不一致 · 已阻止交付"
                       : "等待实际模型来源"}
                   {modelContractState === "invalid" && (
-                    <span role="alert" className="mt-1 block font-semibold text-red-700">
+                    <span role="alert" className="mt-1 block font-semibold text-danger-ink">
                       接口返回的模型或路由与项目启动时冻结的选择不一致。
                     </span>
                   )}
@@ -1979,7 +1979,7 @@ export function CodexPetStudio({
           </Card>
 
           {latestRun?.error && (
-            <div className="rounded-[12px] border border-red-200 bg-red-50 px-3 py-2.5 text-xs leading-5 text-red-700">
+            <div className="rounded-[12px] border border-danger/30 bg-danger/10 px-3 py-2.5 text-xs leading-5 text-danger-ink">
               <strong className="block">运行诊断</strong>
               {latestRun.error}
             </div>

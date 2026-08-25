@@ -68,7 +68,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
                 </span>
               </span>
               <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ink-tertiary">
-                <span className={item.status === "failed" ? "font-semibold text-red-600" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
+                <span className={item.status === "failed" ? "font-semibold text-danger-ink" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
                 <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
               </span>
             </button>
@@ -82,7 +82,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
                 : props.deletingBatchKey
                   ? "正在删除其他项目"
                   : `删除 ${title}`}
-              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-ink-tertiary disabled:hover:bg-transparent"
+              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary hover:bg-danger/10 hover:text-danger-ink disabled:cursor-not-allowed disabled:text-ink-tertiary disabled:hover:bg-transparent"
             >
               <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className={`text-base ${deleting ? "animate-spin" : ""}`} aria-hidden />
             </button>

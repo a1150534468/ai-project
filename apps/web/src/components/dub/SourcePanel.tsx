@@ -92,7 +92,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
               placeholder="粘贴抖音等分享文案或链接，例如：0.76 复制打开抖音…… https://v.douyin.com/xxxx/"
               className="w-full rounded-xl border border-hairline-subtle p-3 text-[13.5px] outline-none focus:border-brand"
             />
-            {!parsePriced && <p className="text-[12px] text-amber-600">管理员尚未配置解析价格，暂无法解析。</p>}
+            {!parsePriced && <p className="text-[12px] text-warning-ink">管理员尚未配置解析价格，暂无法解析。</p>}
             {parsePriced && parseEstimate !== null && (
               <p className="text-[12px] text-ink-tertiary">解析预计消耗约 {parseEstimate} 算力点/次（拆解按视频时长另计）。</p>
             )}
@@ -116,7 +116,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
           </button>
           <input ref={inputRef} type="file" accept="video/*" className="hidden" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
 
-          {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置视频拆解价格，暂无法拆解。</p>}
+          {!priced && <p className="text-[12px] text-warning-ink">管理员尚未配置视频拆解价格，暂无法拆解。</p>}
           {priced && estimate !== null && (
             <p className="text-[12px] text-ink-tertiary">预计消耗约 {estimate} 算力点（60 秒视频），按实际时长结算。</p>
           )}
