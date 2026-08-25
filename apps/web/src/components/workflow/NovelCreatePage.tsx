@@ -152,7 +152,7 @@ export function NovelCreatePage({
 
       <div className="grid gap-6 p-5 sm:p-7">
         <label className="grid gap-2">
-          <span className="flex items-center justify-between gap-3 text-sm font-semibold text-ink"><span>故事梗概</span><span className="text-xs font-normal text-[#929996]">{draft.premise.length}/2000</span></span>
+          <span className="flex items-center justify-between gap-3 text-sm font-semibold text-ink"><span>故事梗概</span><span className="text-xs font-normal text-ink-tertiary">{draft.premise.length}/2000</span></span>
           <textarea
             value={draft.premise}
             onChange={(event) => update({ premise: event.currentTarget.value.slice(0, 2000) })}

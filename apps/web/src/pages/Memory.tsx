@@ -173,7 +173,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
                 exit="exit"
               >
                 <div className="flex max-h-[82vh] min-h-0 flex-col rounded-t-[20px] border border-b-0 border-hairline bg-white px-3 pb-3 pt-2 shadow-[0_-14px_36px_rgba(15,23,42,0.12)]">
-                  <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d2d2d7]" />
+                  <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-hairline" />
                   <div className="min-h-0 flex-1 overflow-hidden">
                     <MemoryDetailPanel
                       node={selectedNode}

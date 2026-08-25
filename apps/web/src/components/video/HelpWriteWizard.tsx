@@ -70,7 +70,7 @@ function StepRail({ active }: { active: number }) {
           const on = i === active;
           return (
             <li key={step.title} className="flex gap-3">
-              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${on ? "bg-[#1d1d1f] text-white" : done ? "bg-[#1d1d1f] text-white" : "bg-[#e6e6ea] text-ink-tertiary"}`}>
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${on ? "bg-[#1d1d1f] text-white" : done ? "bg-[#1d1d1f] text-white" : "bg-surface-muted text-ink-tertiary"}`}>
                 {done ? <Icon icon="mdi:check" className="text-sm" aria-hidden /> : i + 1}
               </span>
               <span className="min-w-0">
@@ -111,7 +111,7 @@ function WizardLoader({ messages, hint, icon = "mdi:auto-fix" }: { messages: str
   return (
     <div className="flex h-full flex-col items-center justify-center gap-6">
       <div className="relative grid h-[132px] w-[132px] place-items-center">
-        <span className="absolute inset-0 rounded-full border-[7px] border-[#eef0f3]" />
+        <span className="absolute inset-0 rounded-full border-[7px] border-hairline-subtle" />
         <span className="absolute inset-0 animate-spin rounded-full border-[7px] border-transparent border-t-brand" style={{ animationDuration: "1s" }} />
         <span className="absolute inset-[10px] animate-spin rounded-full border-[3px] border-transparent border-b-brand/35" style={{ animationDuration: "1.6s", animationDirection: "reverse" }} />
         <Icon icon={icon} className="animate-pulse text-3xl text-brand" aria-hidden />
@@ -134,7 +134,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
     setDraft("");
   };
   return (
-    <div className="rounded-[14px] border border-[#ececef] bg-surface-subtle p-3.5">
+    <div className="rounded-[14px] border border-hairline-subtle bg-surface-subtle p-3.5">
       <div className="mb-2.5 flex items-center gap-2">
         <span className="h-3.5 w-[3px] rounded-full bg-brand" aria-hidden />
         <p className="text-[13px] font-semibold text-ink">{title}</p>
@@ -142,7 +142,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
       </div>
       <div className="grid gap-1.5">
         {items.map((item, i) => (
-          <div key={`${item}-${i}`} className="group flex items-center gap-2 rounded-[8px] border border-[#e2e2e8] bg-white px-3 py-2 transition focus-within:border-brand">
+          <div key={`${item}-${i}`} className="group flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-white px-3 py-2 transition focus-within:border-brand">
             <input
               value={item}
               onChange={(e) => onChange(items.map((it, idx) => (idx === i ? e.target.value : it)))}
@@ -156,7 +156,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
         <button
           type="button"
           onClick={add}
-          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-[#e2e2e8] px-3 py-2 text-left text-[13px] text-ink-tertiary transition "
+          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-hairline-subtle px-3 py-2 text-left text-[13px] text-ink-tertiary transition "
         >
           <Icon icon="mdi:plus" className="text-base" aria-hidden />
           <input
@@ -369,12 +369,12 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                     <label className="grid gap-1.5">
                       <span className="text-[11px] font-medium text-ink-tertiary">商品名称</span>
                       <input value={insight.insight.productName} onChange={(e) => setInsightField("productName", e.target.value)}
-                        className="rounded-[8px] border border-[#e2e2e8] px-3.5 py-2.5 text-[13px] text-ink outline-none transition focus:border-brand" />
+                        className="rounded-[8px] border border-hairline-subtle px-3.5 py-2.5 text-[13px] text-ink outline-none transition focus:border-brand" />
                     </label>
                     <label className="grid gap-1.5">
                       <span className="text-[11px] font-medium text-ink-tertiary">商品类目</span>
                       <input value={insight.insight.category} onChange={(e) => setInsightField("category", e.target.value)}
-                        className="rounded-[8px] border border-[#e2e2e8] px-3.5 py-2.5 text-[13px] text-ink outline-none transition focus:border-brand" />
+                        className="rounded-[8px] border border-hairline-subtle px-3.5 py-2.5 text-[13px] text-ink outline-none transition focus:border-brand" />
                     </label>
                   </div>
                   <div className="mt-4 grid grid-cols-2 gap-4">
@@ -440,7 +440,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       <span className="text-[13px] text-ink-secondary">补充说明</span>
                       <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
                         placeholder="可选：可补充商品卖点、使用场景、目标人群、脚本风格、结尾引导等"
-                        className="min-h-[110px] resize-none rounded-[8px] border border-hairline-subtle p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
+                        className="min-h-[110px] resize-none rounded-[8px] border border-hairline-subtle p-3 text-[13px] leading-6 text-ink outline-none focus:border-hairline" />
                     </label>
                   </section>
                 ) : (
@@ -461,7 +461,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                         <p className="mb-2 mt-3 text-[12px] font-semibold text-ink-secondary">参考视频要求</p>
                         <div className="grid gap-2">
                           {REF_REQUIREMENTS.map((r) => (
-                            <div key={r.title} className="flex items-center gap-2.5 rounded-[9px] border border-[#f0f0f3] px-2.5 py-2">
+                            <div key={r.title} className="flex items-center gap-2.5 rounded-[9px] border border-hairline-subtle px-2.5 py-2">
                               <Icon icon={r.icon} className="shrink-0 text-base text-ink-tertiary" aria-hidden />
                               <span className="text-[12px] font-medium text-ink">{r.title}</span>
                               <span className="text-[11px] text-ink-tertiary">{r.desc}</span>
@@ -480,7 +480,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       <span className="text-[13px] text-ink-secondary">补充说明</span>
                       <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
                         placeholder="可选：可补充商品卖点、使用场景、目标人群、脚本风格、结尾引导等"
-                        className="min-h-[90px] resize-none rounded-[8px] border border-hairline-subtle p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
+                        className="min-h-[90px] resize-none rounded-[8px] border border-hairline-subtle p-3 text-[13px] leading-6 text-ink outline-none focus:border-hairline" />
                     </label>
                   </section>
                 )}

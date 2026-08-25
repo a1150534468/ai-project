@@ -52,7 +52,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
             onClick={(event) => event.stopPropagation()}
             className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]"
           >
-            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
+            <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div>
                 <p className="text-xs font-semibold text-ink-secondary">任务状态</p>
                 <h2 className="text-base font-semibold text-ink">任务队列</h2>
@@ -73,7 +73,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                   <article
                     key={task.id}
                     className={`mb-2 w-full rounded-lg border ${
-                      props.selectedRequestId === task.id ? "border-brand bg-brand-soft" : "border-[#e5e7eb] bg-white"
+                      props.selectedRequestId === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-white"
                     }`}
                   >
                     <button
@@ -89,7 +89,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                       </span>
                       <span className="mt-1 block text-[11px] text-ink-tertiary">{compact ? `${done} 张 · ` : `${task.size} · ${done}/${task.count} 张 · `}{formatTime(task.createdAt)}</span>
                       {active && (
-                        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-[#e8e8ed]">
+                        <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-hairline-subtle">
                           <span className="block h-full rounded-full bg-brand" style={{ width: `${task.status === "running" ? Math.max(progress, 8) : progress}%` }} />
                         </span>
                       )}

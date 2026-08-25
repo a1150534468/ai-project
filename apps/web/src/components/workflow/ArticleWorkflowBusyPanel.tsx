@@ -29,7 +29,7 @@ function PlatformProgressList(props: ArticleWorkflowBusyPanelProps) {
       {props.batchProjects.map((row) => {
         const busy = isBusyArticleWorkflowStatus(row.status);
         return (
-          <li key={row.id} className="flex items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white px-3 py-2.5">
+          <li key={row.id} className="flex items-center gap-3 rounded-lg border border-hairline-subtle bg-white px-3 py-2.5">
             <Icon
               icon={row.status === "failed" ? "mdi:alert-circle-outline" : busy ? "mdi:loading" : "mdi:check-circle"}
               className={`shrink-0 text-lg ${row.status === "failed" ? "text-red-500" : busy ? "animate-spin text-brand" : "text-brand"}`}
@@ -65,7 +65,7 @@ export function ArticleWorkflowBusyPanel(props: ArticleWorkflowBusyPanelProps) {
             已完成 {props.batchProgress.completed} / {props.batchProgress.total} 个平台
           </p>
         )}
-        <div className="mx-auto mt-6 h-2 max-w-[420px] overflow-hidden rounded-full bg-[#e8e8ed]">
+        <div className="mx-auto mt-6 h-2 max-w-[420px] overflow-hidden rounded-full bg-hairline-subtle">
           <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${progressValue(props)}%` }} />
         </div>
         <div className="mx-auto mt-6 max-w-[480px]">

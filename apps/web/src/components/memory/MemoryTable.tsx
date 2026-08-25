@@ -82,7 +82,7 @@ export default function MemoryTable({
               <th className="w-[7%] whitespace-nowrap px-3 py-3 text-right">操作</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#eef0f2]">
+          <tbody className="divide-y divide-hairline-subtle">
             {nodes.map((node, index) => {
               const typeStyle = MEMORY_TYPE_STYLES[node.type];
               const selected = node.id === selectedId;

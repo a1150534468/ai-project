@@ -91,7 +91,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
           const [width, height] = size.split("x");
           if (gallery) {
             return (
-              <article key={image.slot} className="min-w-0 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+              <article key={image.slot} className="min-w-0 overflow-hidden rounded-lg border border-hairline-subtle bg-white">
                 <div
                   className="flex max-h-[520px] items-center justify-center bg-surface-muted"
                   style={{ aspectRatio: `${width} / ${height}` }}
@@ -106,7 +106,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
                     <div className="grid h-full w-full place-items-center text-sm text-ink-tertiary">待生成</div>
                   )}
                 </div>
-                <div className="flex min-w-0 items-center gap-3 border-t border-[#e5e7eb] px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-3 border-t border-hairline-subtle px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs font-semibold text-ink">{image.alt || "未设置描述"}</div>
                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
@@ -126,7 +126,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
             );
           }
           return (
-            <div key={image.slot} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white p-2">
+            <div key={image.slot} className="flex min-w-0 items-center gap-3 rounded-lg border border-hairline-subtle bg-white p-2">
               <div className="h-14 w-[72px] shrink-0 overflow-hidden rounded-md bg-surface-muted">
                 {image.thumbnailUrl || image.imageUrl ? (
                   <img

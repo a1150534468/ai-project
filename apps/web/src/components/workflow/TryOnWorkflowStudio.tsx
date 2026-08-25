@@ -70,7 +70,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
         <span className="truncate">{props.label}</span>
         <span className={props.required ? "text-red-500" : "text-ink-tertiary"}>{props.required ? "*" : "可选"}</span>
       </div>
-      <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-[#c7c7cc] bg-surface-subtle">
+      <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-hairline bg-surface-subtle">
         {props.reference ? (
           <>
             <img src={props.reference.previewUrl} alt={props.label} className="h-full w-full object-cover" />
@@ -397,7 +397,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   return (
     <section data-testid="try-on-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-white xl:h-full">
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-        <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+        <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
             <div className="flex items-center justify-between">
               <div>
@@ -483,7 +483,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             />
 
             {modelReference && (
-              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
                 <input
                   aria-label="试穿模特授权确认"
                   type="checkbox"
@@ -517,7 +517,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
         </aside>
 
         <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
-          <header className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4">
+          <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4">
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white">
                 <Icon icon="mdi:tshirt-crew-outline" className="text-lg" aria-hidden />
@@ -581,7 +581,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </div>
             ) : (
               <div className="grid max-w-sm place-items-center text-center">
-                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-[#c7c7cc] bg-white/70">
+                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-white/70">
                   <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-ink-tertiary" aria-hidden />
                 </span>
                 <p className="mt-5 text-base font-semibold text-ink-secondary">试穿效果预览</p>
@@ -595,7 +595,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             )}
           </div>
           {selectedTask && selectedTask.outputs.length > 0 && (
-            <footer className="flex flex-none items-center gap-3 border-t border-[#e5e7eb] bg-white px-4 py-3">
+            <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-white px-4 py-3">
               <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
                 {selectedTask.outputs.map((output, index) => (
                   <button
@@ -660,7 +660,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             onClick={(event) => event.stopPropagation()}
             className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]"
           >
-            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
+            <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div>
                 <p className="text-xs font-semibold text-ink-secondary">任务状态</p>
                 <h2 className="text-base font-semibold text-ink">服装试穿任务</h2>
@@ -681,7 +681,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 tasks.map((task) => (
                   <article
                     key={task.id}
-                    className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-[#e5e7eb]"}`}
+                    className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle"}`}
                   >
                     <button
                       type="button"

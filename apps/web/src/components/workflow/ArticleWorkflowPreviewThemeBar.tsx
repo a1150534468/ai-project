@@ -70,7 +70,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-30 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-[#e5e7eb] bg-white p-3 shadow-xl">
+        <div className="absolute right-0 top-10 z-30 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-hairline-subtle bg-white p-3 shadow-xl">
           <div className="grid max-h-[280px] grid-cols-4 gap-2 overflow-y-auto pr-1">
             {NON_AUTO_THEMES.map((key) => {
               const theme = ARTICLE_WORKFLOW_THEME_MAP[key];
@@ -86,7 +86,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                   className={`min-w-0 overflow-hidden rounded-lg border p-1.5 text-left transition ${
                     effectiveTheme === key
                       ? "border-brand ring-1 ring-brand/20"
-                      : "border-hairline-subtle hover:border-[#cbd3d0]"
+                      : "border-hairline-subtle hover:border-hairline"
                   }`}
                 >
                   <span className="pointer-events-none block h-16 overflow-hidden rounded-md bg-white" aria-hidden>
@@ -103,7 +103,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
           </div>
 
           {effectiveTheme !== "auto" && (
-            <div className="mt-3 space-y-2 border-t border-[#e5e7eb] pt-3">
+            <div className="mt-3 space-y-2 border-t border-hairline-subtle pt-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-ink">主色</span>
                 <input
@@ -119,7 +119,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-semibold text-ink">配图排列</span>
-                <div className="inline-grid flex-1 grid-cols-3 rounded-lg bg-[#ececf0] p-1">
+                <div className="inline-grid flex-1 grid-cols-3 rounded-lg bg-surface-muted p-1">
                   {GALLERY_MODE_OPTIONS.map((option) => (
                     <button
                       key={option.key}
@@ -139,7 +139,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
             </div>
           )}
 
-          <div className="mt-3 flex items-center justify-end gap-2 border-t border-[#e5e7eb] pt-3">
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-hairline-subtle pt-3">
             {dirty && (
               <button
                 type="button"

@@ -50,10 +50,10 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
     >
       <div className={panel
         ? "flex items-center justify-between gap-3"
-        : "flex h-12 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4 lg:px-5"}
+        : "flex h-12 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4 lg:px-5"}
       >
         <span className="text-xs font-semibold text-ink">创作方式</span>
-        <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1" role="tablist" aria-label="创作方式">
+        <div className="grid grid-cols-2 rounded-lg bg-surface-muted p-1" role="tablist" aria-label="创作方式">
           {(["source", "topic"] as const).map((mode) => (
             <button
               key={mode}
@@ -95,7 +95,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
 
             <fieldset>
               <legend className="mb-2 text-xs font-semibold text-ink">文案风格</legend>
-              <div className="grid grid-cols-3 rounded-lg bg-[#ececf0] p-1" role="tablist" aria-label="文案风格来源">
+              <div className="grid grid-cols-3 rounded-lg bg-surface-muted p-1" role="tablist" aria-label="文案风格来源">
                 {STYLE_SOURCES.map((item) => (
                   <button
                     key={item.key}
@@ -145,7 +145,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
               )}
             </fieldset>
 
-            <details className="group border-t border-[#e5e7eb] pt-4">
+            <details className="group border-t border-hairline-subtle pt-4">
               <summary className="cursor-pointer list-none text-xs font-semibold text-ink-secondary marker:content-none">
                 更多设置
               </summary>

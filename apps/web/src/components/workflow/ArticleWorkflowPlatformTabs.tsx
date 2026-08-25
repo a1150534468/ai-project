@@ -17,7 +17,7 @@ export function ArticleWorkflowPlatformTabs(props: ArticleWorkflowPlatformTabsPr
 
   return (
     <div
-      className="grid w-full rounded-[10px] bg-[#ececf0] p-1"
+      className="grid w-full rounded-[10px] bg-surface-muted p-1"
       style={{ gridTemplateColumns: `repeat(${props.projects.length}, minmax(0, 1fr))` }}
       role="tablist"
     >

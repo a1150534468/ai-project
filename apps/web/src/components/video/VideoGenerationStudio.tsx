@@ -329,7 +329,7 @@ export function VideoGenerationStudio({
           maxLength={2000}
           onChange={(event) => onPromptChange(event.target.value)}
           placeholder="描述场景、镜头运动、主体动作、风格和声音氛围，或点「帮我写」自动生成脚本"
-          className="w-full flex-1 min-h-[112px] resize-none rounded-[12px] border border-hairline-subtle p-3 text-sm leading-6 text-ink outline-none focus:border-[#c3c3cc]"
+          className="w-full flex-1 min-h-[112px] resize-none rounded-[12px] border border-hairline-subtle p-3 text-sm leading-6 text-ink outline-none focus:border-hairline"
         />
         <p className="mt-1 text-right text-[11px] font-medium text-ink-tertiary">{prompt.length} / 2000</p>
 

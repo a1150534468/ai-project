@@ -88,7 +88,7 @@ export function KnowledgePicker({
             className="w-full max-w-md overflow-hidden rounded-[14px] border border-hairline-subtle bg-white shadow-[0_28px_70px_rgba(15,23,42,0.20)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-[#f0f0f3] px-5 py-4">
+            <div className="flex items-start justify-between gap-4 border-b border-hairline-subtle px-5 py-4">
               <div>
                 <h3 className="text-base font-bold text-ink">挂载知识库</h3>
                 <p className="mt-1 text-xs text-ink-secondary">全库仅检索我的库；指定知识库可包含官方库。</p>
@@ -148,7 +148,7 @@ export function KnowledgePicker({
                           }`}
                         >
                           <span className={`flex h-4 w-4 flex-none items-center justify-center rounded border ${
-                            checked ? "border-brand bg-brand text-white" : "border-[#c7c7cc]"
+                            checked ? "border-brand bg-brand text-white" : "border-hairline"
                           }`}>
                             {checked && <Icon icon="mdi:check" className="text-xs" aria-hidden />}
                           </span>
@@ -175,7 +175,7 @@ export function KnowledgePicker({
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 border-t border-[#f0f0f3] px-5 py-4">
+            <div className="flex items-center justify-between gap-3 border-t border-hairline-subtle px-5 py-4">
               <button type="button" onClick={disableKnowledge} className="rounded-[9px] px-3 py-2 text-sm text-red-600 transition ">
                 关闭知识库
               </button>

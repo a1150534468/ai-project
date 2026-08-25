@@ -43,7 +43,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
       </button>
       {open && (
         <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[12px] border border-hairline-subtle bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
-          <div className="border-b border-[#f0f0f3] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-secondary">
+          <div className="border-b border-hairline-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-secondary">
             {label}
           </div>
           <div className="max-h-64 overflow-y-auto p-1.5" role="listbox">

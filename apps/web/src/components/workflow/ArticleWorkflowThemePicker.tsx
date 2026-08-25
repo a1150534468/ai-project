@@ -61,7 +61,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
 
       {activeConfig && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-xl border border-[#e5e7eb] bg-surface-subtle px-3 py-2">
+          <div className="flex items-center gap-3 rounded-xl border border-hairline-subtle bg-surface-subtle px-3 py-2">
             <span className="text-xs font-semibold text-ink">主色</span>
             <input
               type="color"
@@ -84,7 +84,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
 
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-ink">配图排列</span>
-            <div className="inline-grid flex-1 grid-cols-3 rounded-lg bg-[#ececf0] p-1">
+            <div className="inline-grid flex-1 grid-cols-3 rounded-lg bg-surface-muted p-1">
               {GALLERY_MODE_OPTIONS.map((option) => (
                 <button
                   key={option.key}
@@ -122,7 +122,7 @@ function ThemeCard(props: {
       aria-checked={props.selected}
       onClick={props.onClick}
       className={`min-w-0 overflow-hidden rounded-xl border p-2 text-left transition ${
-        props.selected ? "border-brand ring-1 ring-brand/20" : "border-hairline-subtle hover:border-[#cbd3d0]"
+        props.selected ? "border-brand ring-1 ring-brand/20" : "border-hairline-subtle hover:border-hairline"
       }`}
     >
       {props.placeholder ? (

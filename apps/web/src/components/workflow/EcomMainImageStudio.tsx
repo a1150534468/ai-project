@@ -143,7 +143,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
 
   return (
     <section className="grid min-h-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
           {controlsHeader}
           <div className="pt-5">
@@ -225,7 +225,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             ? Array.from({ length: count }).map((_, skeletonIndex) => (
                 <article key={`skeleton-${skeletonIndex}`} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
                   <div className="relative grid aspect-square place-items-center overflow-hidden bg-surface-muted">
-                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#f5f5f7] via-[#f7f8fa] to-[#f5f5f7]" />
+                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-muted via-surface-subtle to-surface-muted" />
                     <Icon icon="mdi:image-outline" className="relative animate-pulse text-3xl text-ink-tertiary" aria-hidden />
                   </div>
                   <div className="grid gap-2 p-3">

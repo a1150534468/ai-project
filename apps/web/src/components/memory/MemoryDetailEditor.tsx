@@ -100,7 +100,7 @@ export default function MemoryDetailEditor({
           max={100}
           value={importance}
           onChange={(event) => onImportanceChange(Number(event.target.value))}
-          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-[#e8e8ed]"
+          className="h-2 w-full cursor-pointer appearance-none rounded-full bg-hairline-subtle"
         />
       </div>
 

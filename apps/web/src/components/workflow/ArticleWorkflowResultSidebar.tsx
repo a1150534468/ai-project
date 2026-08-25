@@ -57,7 +57,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
   const hasProjectError = Boolean(props.project.error);
 
   return (
-    <section className="flex-none border-b border-[#e5e7eb] bg-white" aria-label="当前平台工具">
+    <section className="flex-none border-b border-hairline-subtle bg-white" aria-label="当前平台工具">
       <div className="flex min-h-11 items-center justify-between gap-3 px-4 lg:px-5">
         <div className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
           <span className={`h-2 w-2 shrink-0 rounded-full ${failed ? "bg-red-500" : "bg-brand"}`} aria-hidden />
@@ -151,7 +151,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
       )}
 
       {!captionPlatform && activeSection === "images" && (
-        <div className="max-h-[360px] overflow-y-auto border-t border-[#e5e7eb] px-4 py-4 [scrollbar-width:thin] lg:px-5 xl:hidden">
+        <div className="max-h-[360px] overflow-y-auto border-t border-hairline-subtle px-4 py-4 [scrollbar-width:thin] lg:px-5 xl:hidden">
           <div className="mx-auto max-w-[980px]">
             <ArticleWorkflowImageAssetPanel
               imageManifest={props.project.imageManifestJson}
@@ -164,7 +164,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
       )}
 
       {activeSection === "rewrite" && (
-        <div className="border-t border-[#e5e7eb] px-4 py-4 lg:px-5">
+        <div className="border-t border-hairline-subtle px-4 py-4 lg:px-5">
           <div className="mx-auto grid max-w-[980px] gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
             <div>
               <div className="flex items-start justify-between gap-3">
@@ -193,7 +193,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
 
             <div className="flex flex-col justify-end">
               {!captionPlatform && (
-                <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">
+                <div className="mb-3 grid grid-cols-2 rounded-lg bg-surface-muted p-1">
                   {REWRITE_MODES.map((item) => (
                     <button
                       key={item.key}

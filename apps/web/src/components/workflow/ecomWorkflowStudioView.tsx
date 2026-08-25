@@ -129,7 +129,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
 
   return (
     <section className="grid min-h-0 min-w-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         {props.controlsHeader}
         <div className="flex items-start justify-between gap-4">
@@ -308,7 +308,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
 
       <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
         <div className="min-h-0 flex-1 overflow-y-auto">
-        <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
+        <section className="border-b border-hairline-subtle bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-ink-secondary">任务阶段</p>
@@ -330,7 +330,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           )}
         </section>
 
-        <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
+        <section className="border-b border-hairline-subtle bg-white px-4 py-5 lg:px-6">
           <p className="text-xs font-semibold text-ink-secondary">分段</p>
           <h3 className="mt-1 text-base font-semibold text-ink">分段预览</h3>
           <Stagger className="mt-4 grid gap-4 lg:grid-cols-3">

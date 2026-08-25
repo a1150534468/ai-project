@@ -67,7 +67,7 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
               </p>
               {period ? (
                 <>
-                  <div className="mt-2 h-1.5 rounded-full bg-[#e2efed] overflow-hidden"><div className="h-full bg-brand rounded-full" style={{ width: `${100 - usedPct}%` }} /></div>
+                  <div className="mt-2 h-1.5 rounded-full bg-hairline-subtle overflow-hidden"><div className="h-full bg-brand rounded-full" style={{ width: `${100 - usedPct}%` }} /></div>
                   <p className="text-[11px] text-gray-500 mt-1.5">本期发放 {period.granted.toLocaleString()} · 已用 {period.used.toLocaleString()}</p>
                   <p className="text-[11px] text-[#c2620a] mt-0.5">{formatDate(period.expiresAt)} 到期清零</p>
                 </>

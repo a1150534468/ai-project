@@ -674,7 +674,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
           )}
           {isImageHub && imageTabs.length > 1 && (
             <div className="flex-none px-4 pt-3 lg:px-6">
-              <div className="inline-flex rounded-[10px] bg-[#ececf0] p-1">
+              <div className="inline-flex rounded-[10px] bg-surface-muted p-1">
                 {imageTabs.map((tab) => (
                   <button
                     key={tab.id}

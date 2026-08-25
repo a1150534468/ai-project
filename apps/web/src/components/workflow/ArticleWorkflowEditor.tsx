@@ -116,14 +116,14 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   };
 
   const editorHeader = (
-    <div className="border-b border-[#e5e7eb] px-5 py-4 sm:px-6">
+    <div className="border-b border-hairline-subtle px-5 py-4 sm:px-6">
       <div className="grid gap-4">
         <div className="grid gap-1">
           <input
             aria-label="图文标题"
             value={props.titleDraft}
             onChange={(event) => props.onTitleChange(event.target.value)}
-            className="w-full border-0 bg-transparent p-0 text-[24px] font-semibold leading-[1.35] text-ink outline-none placeholder:text-[#b2b2b7] focus:shadow-none"
+            className="w-full border-0 bg-transparent p-0 text-[24px] font-semibold leading-[1.35] text-ink outline-none placeholder:text-ink-tertiary focus:shadow-none"
             placeholder="输入标题"
           />
           <span className={`text-xs ${titleOver ? "font-semibold text-red-600" : "text-ink-tertiary"}`}>
@@ -175,7 +175,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             : "px-5 py-6"
         }`}
       >
-        {previewScale === "mobile" && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />}
+        {previewScale === "mobile" && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-hairline" aria-hidden />}
         <h1 className="text-[24px] font-semibold leading-[1.4] text-ink">{props.titleDraft || "未命名图文"}</h1>
         <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-ink">{props.captionDraft}</p>
         {props.tagsDraft.length > 0 && (
@@ -218,7 +218,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
 
   return (
     <section className="flex min-h-full flex-col bg-surface-subtle">
-      <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-6">
+      <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-hairline-subtle bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 sm:block">
             <div className="flex flex-wrap items-center gap-2">
@@ -240,7 +240,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
               最近更新 {formatArticleWorkflowTime(props.project.updatedAt)}
             </p>
           </div>
-          <div className="inline-grid shrink-0 grid-cols-3 rounded-lg bg-[#ececf0] p-1">
+          <div className="inline-grid shrink-0 grid-cols-3 rounded-lg bg-surface-muted p-1">
             {CANVAS_MODES.map((item) => (
               <button
                 key={item.key}
@@ -327,7 +327,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
       </div>
 
       {canvasMode === "split" ? (
-        <div className="grid h-[72vh] min-h-[560px] grid-cols-1 lg:grid-cols-2 lg:divide-x lg:divide-[#e5e7eb]">
+        <div className="grid h-[72vh] min-h-[560px] grid-cols-1 lg:grid-cols-2 lg:divide-x lg:divide-hairline-subtle">
           <div ref={editScrollRef} onScroll={syncPreviewScroll} className="min-h-0 overflow-y-auto bg-white">
             {editorHeader}
             {editorBody}
@@ -338,7 +338,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         </div>
       ) : (
         <div className="p-4 lg:p-6">
-          <section className="mx-auto max-w-[980px] overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
+          <section className="mx-auto max-w-[980px] overflow-hidden rounded-lg border border-hairline-subtle bg-white">
             {canvasMode === "edit" && (
               <>
                 {editorHeader}

@@ -320,7 +320,7 @@ function Card({ children, className = "", ariaLabel }: {
 
 function CardTitle({ icon, title, aside }: { readonly icon: string; readonly title: string; readonly aside?: ReactNode }) {
   return (
-    <div className="flex items-center gap-2 border-b border-[#eef0f3] px-4 py-3">
+    <div className="flex items-center gap-2 border-b border-hairline-subtle px-4 py-3">
       <span className="grid size-7 place-items-center rounded-[8px] bg-brand-soft text-brand-ink">
         <Icon icon={icon} className="text-base" aria-hidden />
       </span>
@@ -372,7 +372,7 @@ function PrimaryButton(props: {
 
 function ImagePlaceholder({ text }: { readonly text: string }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-[#d9dce3] bg-surface-subtle px-5 text-center text-xs leading-5 text-ink-tertiary">
+    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-hairline bg-surface-subtle px-5 text-center text-xs leading-5 text-ink-tertiary">
       {text}
     </div>
   );
@@ -1344,7 +1344,7 @@ export function CodexPetStudio({
                   {draft.referenceAssets.map((asset) => {
                     const url = asset.thumbnailUrl || asset.originalUrl;
                     return (
-                      <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-[9px] border border-[#e1e3e8] bg-surface-subtle">
+                      <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-[9px] border border-hairline-subtle bg-surface-subtle">
                         {url ? <img src={url} alt={asset.name || "桌宠参考图"} className="size-full object-cover" /> : (
                           <span className="grid size-full place-items-center text-[10px] text-ink-tertiary">已上传</span>
                         )}
@@ -1363,7 +1363,7 @@ export function CodexPetStudio({
                     );
                   })}
                   {draft.referenceAssets.length < CODEX_PET_MAX_REFERENCES && (
-                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-surface-subtle text-center text-[10px] text-ink-tertiary transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
+                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-hairline bg-surface-subtle text-center text-[10px] text-ink-tertiary transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
                       <span><Icon icon={busyAction === "uploading" ? "mdi:loading" : "mdi:image-plus-outline"} className={`mx-auto mb-1 text-lg ${busyAction === "uploading" ? "animate-spin" : ""}`} aria-hidden />上传参考图</span>
                       <input
                         type="file"
@@ -1381,13 +1381,13 @@ export function CodexPetStudio({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
                   <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">生图模型</span>
-                  <div className="rounded-[10px] border border-hairline-subtle bg-surface-subtle px-3 py-2 text-sm text-[#424249]">
+                  <div className="rounded-[10px] border border-hairline-subtle bg-surface-subtle px-3 py-2 text-sm text-ink-secondary">
                     {readOnlyArchive
                       ? "历史项目，已归档为只读"
                       : historicalImageModel ? `历史模型 ${historicalImageModel}，已停止新运行` : "GPT Image 2 · Pixel"}
                   </div>
                 </div>
-                <label className="flex min-h-10 items-center justify-between gap-3 rounded-[10px] border border-hairline-subtle px-3 py-2 text-sm text-[#424249]">
+                <label className="flex min-h-10 items-center justify-between gap-3 rounded-[10px] border border-hairline-subtle px-3 py-2 text-sm text-ink-secondary">
                   <span>AI 质检</span>
                   <input
                     aria-label="AI 质检"
@@ -1427,7 +1427,7 @@ export function CodexPetStudio({
                       className={`rounded-[9px] border px-2 py-1.5 text-left text-[11px] transition ${
                         draft.stylePreset === option.value
                           ? "border-brand/40 bg-brand-soft font-semibold text-brand-ink"
-                          : "border-[#e2e3e8] bg-white text-ink-secondary "
+                          : "border-hairline-subtle bg-white text-ink-secondary "
                       }`}
                     >
                       {option.label}
@@ -1447,7 +1447,7 @@ export function CodexPetStudio({
                 />
               </label>
 
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#e5e7eb] bg-surface-subtle p-3">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-hairline-subtle bg-surface-subtle p-3">
                 <input
                   type="checkbox"
                   checked={draft.autoContinue}
@@ -1484,7 +1484,7 @@ export function CodexPetStudio({
               </div>
 
               {detail && (
-                <div className="flex gap-2 border-t border-[#eceef1] pt-3">
+                <div className="flex gap-2 border-t border-hairline-subtle pt-3">
                   {runIsCancellable && (
                     <PrimaryButton kind="secondary" icon="mdi:stop-circle-outline" disabled={interactionLocked} onClick={handleCancelRun}>
                       取消运行
@@ -1649,7 +1649,7 @@ export function CodexPetStudio({
                         <figure
                           key={state.id}
                           data-testid={`codex-pet-animation-${state.id}`}
-                          className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
+                          className="overflow-hidden rounded-[10px] border border-hairline-subtle bg-white"
                         >
                           <div className="aspect-[3/2] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:12px_12px]">
                             {url ? (
@@ -1716,7 +1716,7 @@ export function CodexPetStudio({
                         <img
                           src={codexPetArtifactUrl(finalContactSheet)}
                           alt="最终 Codex v2 Contact Sheet"
-                          className="max-h-72 w-full rounded-[8px] border border-[#e7e8ec] bg-surface-subtle object-contain"
+                          className="max-h-72 w-full rounded-[8px] border border-hairline-subtle bg-surface-subtle object-contain"
                         />
                       ) : (
                         <ImagePlaceholder text="最终 Contact Sheet 已生成，正在刷新预览地址" />
@@ -1750,7 +1750,7 @@ export function CodexPetStudio({
               )}
 
               {latestRun && runIsTerminal && !deliveryReady && (
-                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-hairline-subtle bg-[#f8f9fb] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-hairline-subtle bg-surface-subtle px-3 py-2.5">
                   <p className="text-[10px] leading-4 text-ink-secondary">
                     {canContinueFailedBase
                       ? "候选 1 已成功保存；可在本项目中只重试因 429 失败的候选 2。"
@@ -1776,7 +1776,7 @@ export function CodexPetStudio({
 
               {latestRun && (
                 <details
-                  className="rounded-[12px] border border-hairline-subtle bg-[#f8f9fb] px-3 py-2"
+                  className="rounded-[12px] border border-hairline-subtle bg-surface-subtle px-3 py-2"
                   data-testid="codex-pet-process-artifacts"
                 >
                   <summary className="cursor-pointer text-[10px] font-semibold text-ink-secondary">
@@ -1795,7 +1795,7 @@ export function CodexPetStudio({
                           <figure
                             key={artifact.id}
                             data-testid={`codex-pet-process-artifact-${artifact.kind}`}
-                            className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
+                            className="overflow-hidden rounded-[10px] border border-hairline-subtle bg-white"
                           >
                             {url ? (
                               <img src={url} alt={codexPetProcessArtifactLabel(artifact)} className="max-h-40 w-full bg-surface-muted object-contain" />
@@ -1822,7 +1822,7 @@ export function CodexPetStudio({
             <CardTitle
               icon="mdi:progress-clock"
               title="阶段进度"
-              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-brand-ink" : "text-ink-tertiary"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-brand" : "bg-[#a8a8af]"}`} />{streamLabel}</span>}
+              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-brand-ink" : "text-ink-tertiary"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-brand" : "bg-ink-tertiary"}`} />{streamLabel}</span>}
             />
             <div className="space-y-3 p-4">
               <div>
@@ -1830,7 +1830,7 @@ export function CodexPetStudio({
                   <span className="font-semibold text-ink">{latestRun ? codexPetStatusLabel(latestRun.status) : "等待开始"}</span>
                   <span className="font-semibold text-brand-ink">{progress}%</span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-[#eceef1]">
+                <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
                   <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${progress}%` }} />
                 </div>
                 <p className="mt-1.5 text-[10px] leading-4 text-ink-tertiary">{latestRun?.progressMessage || lastEvent?.message || "提交后会显示当前子任务"}</p>
@@ -1841,7 +1841,7 @@ export function CodexPetStudio({
                   const active = progress >= step.start && progress < step.end;
                   return (
                     <li key={step.id} className="flex items-center gap-2">
-                      <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-[#eceef1] text-ink-tertiary"}`}>
+                      <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-surface-muted text-ink-tertiary"}`}>
                         {complete ? <Icon icon="mdi:check" aria-hidden /> : CODEX_PET_PROGRESS_STEPS.findIndex((item) => item.id === step.id) + 1}
                       </span>
                       <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-ink" : "text-ink-secondary"}`}>{step.label}</span>
@@ -1851,7 +1851,7 @@ export function CodexPetStudio({
                 })}
               </ol>
               {latestRun && (
-                <div className="grid grid-cols-3 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
+                <div className="grid grid-cols-3 gap-2 border-t border-hairline-subtle pt-3 text-[10px]">
                   <div className="rounded-[9px] bg-surface-subtle p-2">
                     <span className="block text-ink-tertiary">当前子任务</span>
                     <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-ink-secondary">{currentSubtask}</span>
@@ -1874,7 +1874,7 @@ export function CodexPetStudio({
             <div className="max-h-44 space-y-1.5 overflow-y-auto p-3">
               {(detail?.jobs.length ?? 0) === 0 && <p className="py-3 text-center text-[10px] text-ink-tertiary">运行后显示动作组与重试次数</p>}
               {detail?.jobs.slice().reverse().slice(0, 12).map((job) => (
-                <div key={job.id} className="rounded-[9px] border border-[#eceef1] px-2.5 py-2">
+                <div key={job.id} className="rounded-[9px] border border-hairline-subtle px-2.5 py-2">
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-ink-secondary">{job.key}</span>
                     <span className="text-[9px] text-ink-tertiary">{job.attempt}/{job.maxAttempts}</span>
@@ -1949,7 +1949,7 @@ export function CodexPetStudio({
                 </div>
               )}
               {detail?.imageCalls && detail.imageCalls.length > 0 && (
-                <div className="max-h-28 space-y-1 overflow-y-auto rounded-[9px] border border-[#eceef1] p-2 text-[10px] text-[#62626a]" aria-label="生图调用账本">
+                <div className="max-h-28 space-y-1 overflow-y-auto rounded-[9px] border border-hairline-subtle p-2 text-[10px] text-ink-secondary" aria-label="生图调用账本">
                   {detail.imageCalls.map((call) => (
                     <div key={call.id} className="flex items-center justify-between gap-2">
                       <span className="min-w-0 truncate">{call.jobKey} · {call.callKind}</span>
@@ -1966,7 +1966,7 @@ export function CodexPetStudio({
             <ol className="max-h-72 space-y-0 overflow-y-auto p-3" aria-label="桌宠实时事件列表">
               {events.length === 0 && <li className="py-5 text-center text-[10px] text-ink-tertiary">事件会先持久化，再通过 SSE 实时推送</li>}
               {events.slice().reverse().map((event) => (
-                <li key={event.sequence} className="relative border-l border-[#dde1e6] pb-3 pl-3 last:pb-0">
+                <li key={event.sequence} className="relative border-l border-hairline pb-3 pl-3 last:pb-0">
                   <span className="absolute -left-[3px] top-1 size-[5px] rounded-full bg-brand" />
                   <div className="flex items-start gap-2">
                     <span className="min-w-0 flex-1 text-[10px] font-semibold leading-4 text-ink-secondary">{eventTitle(event)}</span>

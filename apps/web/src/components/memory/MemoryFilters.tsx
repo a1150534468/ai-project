@@ -88,7 +88,7 @@ export default function MemoryFilters({
               </span>
               <span
                 className={`relative inline-flex h-6 w-11 flex-none rounded-full transition ${
-                  enabled ? "bg-brand" : "bg-[#d2d2d7]"
+                  enabled ? "bg-brand" : "bg-hairline"
                 }`}
               >
                 <span

@@ -52,7 +52,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
             className={`group relative mb-1.5 w-full rounded-lg border transition ${
               selected
                 ? "border-brand/40 bg-brand-soft"
-                : "border-transparent bg-white hover:border-[#e5e7eb] hover:bg-surface-subtle"
+                : "border-transparent bg-white hover:border-hairline-subtle hover:bg-surface-subtle"
             }`}
           >
             <button
@@ -110,7 +110,7 @@ function NewProjectButton({ onClick, ariaLabel }: { readonly onClick: () => void
 export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) {
   return (
     <section className="flex min-h-0 min-w-0 flex-col bg-white" aria-label="图文项目历史">
-      <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-3">
+      <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle px-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-ink">项目历史</h2>
           <p className="mt-0.5 text-[10px] text-ink-tertiary">{props.batches.length} 个生成批次</p>
@@ -144,7 +144,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
             onClick={(event) => event.stopPropagation()}
             className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[360px]"
           >
-            <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-4">
+            <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle px-4">
               <div>
                 <h2 className="text-sm font-semibold text-ink">项目历史</h2>
                 <p className="mt-0.5 text-[10px] text-ink-tertiary">{props.batches.length} 个生成批次</p>

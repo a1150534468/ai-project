@@ -50,7 +50,7 @@ export function WorkflowPipeline({ moduleId }: { readonly moduleId: WorkflowModu
             <span className="grid h-6 w-6 flex-none place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">
               {index + 1}
             </span>
-            {index < steps.length - 1 && <span className="my-0.5 w-px flex-1 bg-[#e8e8ed]" />}
+            {index < steps.length - 1 && <span className="my-0.5 w-px flex-1 bg-hairline-subtle" />}
           </div>
           <div className="flex items-center gap-1.5 pb-3 pt-0.5">
             <Icon icon={step.icon} className="flex-none text-base text-ink-tertiary" aria-hidden />

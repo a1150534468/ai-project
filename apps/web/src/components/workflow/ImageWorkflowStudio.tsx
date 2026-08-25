@@ -116,7 +116,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
       />
 
       <div className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
-        <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
+        <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4 lg:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
               {mode === "comparing" ? "版本对比" : selectedTask?.prompt ?? "通用生图工作台"}

@@ -26,7 +26,7 @@ export function ArticleWorkflowPreviewScaleToggle(props: {
   readonly onChange: (scale: ArticleWorkflowPreviewScale) => void;
 }) {
   return (
-    <div className="inline-grid grid-cols-3 rounded-lg bg-[#ececf0] p-1" role="tablist" aria-label="预览比例">
+    <div className="inline-grid grid-cols-3 rounded-lg bg-surface-muted p-1" role="tablist" aria-label="预览比例">
       {SCALE_OPTIONS.map((option) => (
         <button
           key={option.key}
@@ -77,7 +77,7 @@ export function ArticleWorkflowPreview({
           mobile ? "overflow-hidden rounded-[32px] border-[8px] border-[#1d1d1f] px-4 py-4" : "px-5 py-6"
         }`}
       >
-        {mobile && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />}
+        {mobile && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-hairline" aria-hidden />}
         <header className="mb-6 border-b border-hairline-subtle pb-5">
           <h1 className="text-[24px] font-semibold leading-[1.4] text-ink">{title || "未命名图文"}</h1>
           {summary && <p className="mt-2 text-sm leading-6 text-ink-secondary">{summary}</p>}

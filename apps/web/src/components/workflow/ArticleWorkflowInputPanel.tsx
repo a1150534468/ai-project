@@ -57,7 +57,7 @@ const PLATFORM_ICONS: Record<ArticleWorkflowPlatform, string> = {
 export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps) {
   return (
     <section className="flex h-full min-h-0 flex-col bg-white" aria-label="图文生成配置">
-      <div className="flex h-14 flex-none items-center justify-between gap-2 border-b border-[#e5e7eb] px-4">
+      <div className="flex h-14 flex-none items-center justify-between gap-2 border-b border-hairline-subtle px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand-ink">
             <Icon icon="mdi:tune-variant" className="text-lg" aria-hidden />
@@ -87,7 +87,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           variant="panel"
         />
 
-        <fieldset className="mt-5 border-t border-[#e5e7eb] pt-4">
+        <fieldset className="mt-5 border-t border-hairline-subtle pt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <legend className="text-xs font-semibold text-ink">发布平台</legend>
             <span className="text-[10px] text-ink-tertiary">可多选</span>
@@ -106,11 +106,11 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                     checked
                       ? "border-brand bg-brand-soft ring-1 ring-brand/20"
-                      : "border-hairline-subtle bg-white hover:border-[#cbd3d0]"
+                      : "border-hairline-subtle bg-white hover:border-hairline"
                   }`}
                 >
                   <span
-                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-surface-muted text-[#6e7673]"}`}
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-surface-muted text-ink-secondary"}`}
                   >
                     <Icon icon={PLATFORM_ICONS[platform]} className="text-lg" aria-hidden />
                   </span>
@@ -120,7 +120,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   </span>
                   <Icon
                     icon={checked ? "mdi:check-circle" : "mdi:circle-outline"}
-                    className={`shrink-0 text-lg ${checked ? "text-brand" : "text-[#cbd3d0]"}`}
+                    className={`shrink-0 text-lg ${checked ? "text-brand" : "text-hairline"}`}
                     aria-hidden
                   />
                 </button>
@@ -129,7 +129,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           </div>
         </fieldset>
 
-        <label className="mt-4 flex items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4">
+        <label className="mt-4 flex items-center justify-between gap-4 border-t border-hairline-subtle pt-4">
           <span className="min-w-0">
             <span className="block text-xs font-semibold text-ink">同时生成配图</span>
             <span className="mt-1 block text-[10px] text-ink-tertiary">
@@ -146,7 +146,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
               className="peer absolute inset-0 cursor-pointer opacity-0"
             />
             <span
-              className="h-6 w-10 rounded-full bg-[#d2d2d7] transition peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30"
+              className="h-6 w-10 rounded-full bg-hairline transition peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30"
               aria-hidden
             />
             <span
@@ -159,7 +159,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
         {props.creationDraft.mode === "source" && props.selectedPlatforms.includes("wechat") && (
           <fieldset className="mt-4">
             <legend className="mb-2 text-xs font-semibold text-ink">公众号生成方式</legend>
-            <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">
+            <div className="grid grid-cols-2 rounded-lg bg-surface-muted p-1">
               {MODE_OPTIONS.map((option) => (
                 <button
                   key={option.key}
@@ -179,7 +179,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
         )}
 
         {props.selectedPlatforms.includes("wechat") && (
-          <fieldset className="mt-4 border-t border-[#e5e7eb] pt-4">
+          <fieldset className="mt-4 border-t border-hairline-subtle pt-4">
             <legend className="mb-2 text-xs font-semibold text-ink">排版主题</legend>
             <ArticleWorkflowThemePicker
               selectedTheme={props.selectedTheme}
@@ -192,7 +192,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           </fieldset>
         )}
 
-        <details className="group mt-4 border-t border-[#e5e7eb] pt-3">
+        <details className="group mt-4 border-t border-hairline-subtle pt-3">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ink-secondary marker:content-none">
             <span>计费规则</span>
             <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />

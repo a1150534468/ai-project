@@ -52,7 +52,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
   const supportsReferenceImages = IMAGE_MODEL_OPTIONS.find((option) => option.value === props.model)?.supportsReferenceImages ?? false;
 
   return (
-    <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+    <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -101,7 +101,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
             type="button"
             onClick={() => referenceInputRef.current?.click()}
             disabled={!supportsReferenceImages || props.isUploadingReference || props.referenceImages.length >= 3}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary"
           >
             <Icon icon={props.isUploadingReference ? "mdi:loading" : "mdi:plus"} className={`text-base ${props.isUploadingReference ? "animate-spin" : ""}`} aria-hidden />
             {props.isUploadingReference

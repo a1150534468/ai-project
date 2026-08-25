@@ -45,7 +45,7 @@ export function ImageCompareView(props: ImageCompareViewProps) {
         <h2 className="mt-1 text-base font-semibold text-ink">选择更符合预期的结果</h2>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#ececf0] p-1 md:hidden">
+      <div className="mb-3 grid grid-cols-2 rounded-lg bg-surface-muted p-1 md:hidden">
         <button type="button" onClick={() => setMobileVersion("original")} className={`h-9 rounded-lg text-sm font-semibold ${mobileVersion === "original" ? "bg-white shadow-sm" : "text-ink-secondary"}`}>原图</button>
         <button type="button" onClick={() => setMobileVersion("new")} className={`h-9 rounded-lg text-sm font-semibold ${mobileVersion === "new" ? "bg-white shadow-sm" : "text-ink-secondary"}`}>新版本</button>
       </div>

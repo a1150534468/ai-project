@@ -75,7 +75,7 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
               type="button"
               disabled={props.disabled}
               onClick={() => props.onCountChange(value)}
-              className={`h-9 border-r border-[#e5e7eb] text-sm font-semibold last:border-r-0 disabled:opacity-50 ${props.count === value ? "bg-brand-soft text-brand-ink" : "bg-white text-ink-secondary"}`}
+              className={`h-9 border-r border-hairline-subtle text-sm font-semibold last:border-r-0 disabled:opacity-50 ${props.count === value ? "bg-brand-soft text-brand-ink" : "bg-white text-ink-secondary"}`}
             >
               {value}
             </button>
