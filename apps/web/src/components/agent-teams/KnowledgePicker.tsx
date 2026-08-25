@@ -128,7 +128,7 @@ export function KnowledgePicker({
               <div>
                 <div className="mb-3 flex items-center gap-3">
                   <div className="h-px flex-1 bg-[#f0f0f3]" />
-                  <span className="text-xs font-medium text-[#8a8a8f]">或指定知识库</span>
+                  <span className="text-xs font-medium text-ink-tertiary">或指定知识库</span>
                   <div className="h-px flex-1 bg-[#f0f0f3]" />
                 </div>
                 {knowledgeBases.length > 0 ? (
@@ -168,7 +168,7 @@ export function KnowledgePicker({
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-[10px] border border-dashed border-[#d2d2d7] py-6 text-center text-xs text-[#8a8a8f]">
+                  <div className="rounded-[10px] border border-dashed border-[#d2d2d7] py-6 text-center text-xs text-ink-tertiary">
                     暂无可选知识库
                   </div>
                 )}

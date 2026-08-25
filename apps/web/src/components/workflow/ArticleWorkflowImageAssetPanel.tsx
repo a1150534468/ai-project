@@ -74,12 +74,12 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
     <section>
       <div className="mb-2 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-ink">配图素材</h3>
-        <span className="text-xs text-[#8a8a8f]">{props.imageManifest.length} 张</span>
+        <span className="text-xs text-ink-tertiary">{props.imageManifest.length} 张</span>
       </div>
 
       <div className={gallery ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-2"}>
         {props.imageManifest.length === 0 && (
-          <div className="rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-3 py-5 text-center text-sm text-[#8a8a8f]">
+          <div className="rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-3 py-5 text-center text-sm text-ink-tertiary">
             暂无配图
           </div>
         )}
@@ -103,13 +103,13 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
                       className="h-full w-full object-contain"
                     />
                   ) : (
-                    <div className="grid h-full w-full place-items-center text-sm text-[#8a8a8f]">待生成</div>
+                    <div className="grid h-full w-full place-items-center text-sm text-ink-tertiary">待生成</div>
                   )}
                 </div>
                 <div className="flex min-w-0 items-center gap-3 border-t border-[#e5e7eb] px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs font-semibold text-ink">{image.alt || "未设置描述"}</div>
-                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-[#8a8a8f]">
+                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
                       <span className="truncate">{image.slot}</span>
                       {ratio && <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5">{ratio}</span>}
                     </div>
@@ -135,11 +135,11 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="grid h-full place-items-center text-xs text-[#8a8a8f]">待生成</div>
+                  <div className="grid h-full place-items-center text-xs text-ink-tertiary">待生成</div>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-[11px] text-[#8a8a8f]">
+                <div className="flex items-center gap-1.5 text-[11px] text-ink-tertiary">
                   <span className="truncate">{image.slot}</span>
                   {ratio && <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5">{ratio}</span>}
                 </div>

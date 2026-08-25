@@ -68,7 +68,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
     <div className="min-w-0">
       <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-ink-secondary">
         <span className="truncate">{props.label}</span>
-        <span className={props.required ? "text-red-500" : "text-[#8a8a8f]"}>{props.required ? "*" : "可选"}</span>
+        <span className={props.required ? "text-red-500" : "text-ink-tertiary"}>{props.required ? "*" : "可选"}</span>
       </div>
       <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-[#c7c7cc] bg-[#fafafa]">
         {props.reference ? (
@@ -404,7 +404,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
                 <h2 className="mt-1 text-base font-semibold text-ink">服装试穿设置</h2>
               </div>
-              <Icon icon="mdi:tshirt-crew-outline" className="text-xl text-[#86868b]" aria-hidden />
+              <Icon icon="mdi:tshirt-crew-outline" className="text-xl text-ink-tertiary" aria-hidden />
             </div>
 
             <div className="mt-5">
@@ -442,17 +442,17 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                   onDelete={handleDeleteReference}
                 />
               </div>
-              <p className="mt-2 text-[11px] leading-4 text-[#86868b]">
+              <p className="mt-2 text-[11px] leading-4 text-ink-tertiary">
                 服装正面清晰、无遮挡效果最佳；模特图不上传时由 AI 生成模特。
               </p>
-              <p className="mt-1 flex items-center gap-1 text-[11px] text-[#86868b]">
+              <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-tertiary">
                 <Icon icon="mdi:shield-lock-outline" aria-hidden />
                 私有存储，任务结束 24 小时后自动清理输入素材
               </p>
             </div>
 
             <label className="mt-5 grid gap-2 text-sm font-semibold text-ink">
-              补充描述 <span className="text-xs font-normal text-[#8a8a8f]">可选</span>
+              补充描述 <span className="text-xs font-normal text-ink-tertiary">可选</span>
               <textarea
                 aria-label="试穿补充描述"
                 value={description}
@@ -465,7 +465,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 placeholder="模特特征、场景、姿势或拍摄风格"
                 className="min-h-[92px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5 disabled:bg-[#f5f5f7]"
               />
-              <span className="text-right text-[10px] font-normal text-[#8a8a8f]">{description.length}/1200</span>
+              <span className="text-right text-[10px] font-normal text-ink-tertiary">{description.length}/1200</span>
             </label>
 
             <HumanImageGenerationFields
@@ -503,7 +503,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 {error}
               </p>
             )}
-            {isBootstrapping && !error && <p className="mt-3 text-xs text-[#8a8a8f]">正在加载试穿配置…</p>}
+            {isBootstrapping && !error && <p className="mt-3 text-xs text-ink-tertiary">正在加载试穿配置…</p>}
           </div>
           <SubmitCostBar
             estimatedPointCost={pointCost}
@@ -524,7 +524,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </span>
               <div className="min-w-0">
                 <h2 className="truncate text-sm font-semibold text-ink">服装试穿</h2>
-                <p className="text-[11px] text-[#86868b]">AI 生成预览</p>
+                <p className="text-[11px] text-ink-tertiary">AI 生成预览</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -582,10 +582,10 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             ) : (
               <div className="grid max-w-sm place-items-center text-center">
                 <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-[#c7c7cc] bg-white/70">
-                  <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-[#86868b]" aria-hidden />
+                  <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-ink-tertiary" aria-hidden />
                 </span>
                 <p className="mt-5 text-base font-semibold text-ink-secondary">试穿效果预览</p>
-                <p className="mt-2 text-sm text-[#86868b]">上传服装正面图并提交后，结果将在这里显示</p>
+                <p className="mt-2 text-sm text-ink-tertiary">上传服装正面图并提交后，结果将在这里显示</p>
               </div>
             )}
             {selectedTask?.error && !isActive(selectedTask) && (
@@ -676,7 +676,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {tasks.length === 0 ? (
-                <p className="grid min-h-48 place-items-center text-sm text-[#8a8a8f]">暂无任务</p>
+                <p className="grid min-h-48 place-items-center text-sm text-ink-tertiary">暂无任务</p>
               ) : (
                 tasks.map((task) => (
                   <article
@@ -697,7 +697,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                         </span>
                         <span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span>
                       </span>
-                      <span className="mt-1 block text-[11px] text-[#8a8a8f]">
+                      <span className="mt-1 block text-[11px] text-ink-tertiary">
                         {task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}
                       </span>
                       {task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}

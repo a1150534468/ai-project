@@ -111,7 +111,7 @@ export default function MemoryMobileList({
                 </div>
               </div>
 
-              <Icon icon="mdi:chevron-right" className="mt-1 text-lg text-[#b0b0b5]" />
+              <Icon icon="mdi:chevron-right" className="mt-1 text-lg text-ink-tertiary" />
             </div>
           </button>
         );

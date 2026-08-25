@@ -211,7 +211,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                   ))}
                 </div>
               )}
-              <p className="mb-2 text-[10px] leading-4 text-[#8a8a8f]">
+              <p className="mb-2 text-[10px] leading-4 text-ink-tertiary">
                 文本 {articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")} · 图片 {articleWorkflowPricingText(props.pricing?.image1k, "按 1K 生图价格")}
               </p>
               <RippleButton

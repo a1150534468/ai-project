@@ -40,7 +40,7 @@ export function ArticleWorkflowCaptionEditor(props: ArticleWorkflowCaptionEditor
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="article-caption-text" className="text-sm font-semibold text-ink">正文文案</label>
-          <span className={`text-xs ${captionOver ? "font-semibold text-red-600" : "text-[#8a8f98]"}`}>
+          <span className={`text-xs ${captionOver ? "font-semibold text-red-600" : "text-ink-tertiary"}`}>
             {captionLength}{captionMax > 0 ? ` / ${captionMax}` : ""} 字
           </span>
         </div>
@@ -57,7 +57,7 @@ export function ArticleWorkflowCaptionEditor(props: ArticleWorkflowCaptionEditor
       <div className="grid gap-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="article-caption-tags" className="text-sm font-semibold text-ink">标签</label>
-          <span className={`text-xs ${tagsOver || tagsShort ? "font-semibold text-red-600" : "text-[#8a8f98]"}`}>
+          <span className={`text-xs ${tagsOver || tagsShort ? "font-semibold text-red-600" : "text-ink-tertiary"}`}>
             {props.tagsDraft.length} / {props.platformConfig.minTags}-{props.platformConfig.maxTags} 个
           </span>
         </div>

@@ -70,7 +70,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
               onChange={(event) => props.onThemeColorChange(event.target.value)}
               className="h-8 w-12 cursor-pointer rounded border border-[#d2d2d7] bg-white p-0.5"
             />
-            <span className="font-mono text-[11px] text-[#8a8a8f]">{effectiveColor}</span>
+            <span className="font-mono text-[11px] text-ink-tertiary">{effectiveColor}</span>
             {props.selectedThemeColor && (
               <button
                 type="button"

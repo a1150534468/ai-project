@@ -60,7 +60,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                       {formatLocalBusinessPromoProjectStatus(item.status)}
                     </span>
                   </span>
-                  <span className="mt-5 flex items-center justify-between gap-3 text-xs text-[#8a8a8f]">
+                  <span className="mt-5 flex items-center justify-between gap-3 text-xs text-ink-tertiary">
                     <span>{item.latestRunId ? "已有生成记录" : "待开始制作"}</span>
                     <span className="flex items-center gap-1 font-semibold text-brand-ink">
                       {opening ? "进入中" : "进入工作台"}

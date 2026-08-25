@@ -36,7 +36,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
       )}
 
       {!props.bootstrapping && props.batches.length === 0 && (
-        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-4 text-center text-xs leading-5 text-[#8a8a8f]">
+        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-4 text-center text-xs leading-5 text-ink-tertiary">
           还没有生成过图文
         </div>
       )}
@@ -67,7 +67,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
                   {item.platforms.map(shortPlatformLabel).join(" · ")}
                 </span>
               </span>
-              <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-[#8a8a8f]">
+              <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ink-tertiary">
                 <span className={item.status === "failed" ? "font-semibold text-red-600" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
                 <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
               </span>
@@ -82,7 +82,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
                 : props.deletingBatchKey
                   ? "正在删除其他项目"
                   : `删除 ${title}`}
-              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-[#8a8a8f] hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-[#c7c7cc] disabled:hover:bg-transparent"
+              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:text-ink-tertiary disabled:hover:bg-transparent"
             >
               <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className={`text-base ${deleting ? "animate-spin" : ""}`} aria-hidden />
             </button>
@@ -113,7 +113,7 @@ export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) 
       <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-3">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-ink">项目历史</h2>
-          <p className="mt-0.5 text-[10px] text-[#8a8a8f]">{props.batches.length} 个生成批次</p>
+          <p className="mt-0.5 text-[10px] text-ink-tertiary">{props.batches.length} 个生成批次</p>
         </div>
         <NewProjectButton onClick={props.onNewProject} ariaLabel="新建项目" />
       </div>
@@ -147,7 +147,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
             <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-4">
               <div>
                 <h2 className="text-sm font-semibold text-ink">项目历史</h2>
-                <p className="mt-0.5 text-[10px] text-[#8a8a8f]">{props.batches.length} 个生成批次</p>
+                <p className="mt-0.5 text-[10px] text-ink-tertiary">{props.batches.length} 个生成批次</p>
               </div>
               <div className="flex items-center gap-1">
                 <NewProjectButton onClick={props.onNewProject} ariaLabel="新建图文" />

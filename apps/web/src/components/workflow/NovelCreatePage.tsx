@@ -158,12 +158,12 @@ export function NovelCreatePage({
             onChange={(event) => update({ premise: event.currentTarget.value.slice(0, 2000) })}
             placeholder="用一段话写清主角、核心困境、主线目标与爽点预期……\n\n例如：被逐出宗门的阵法师发现自己能听见古阵残响，他必须在王朝封锁前修复失落阵图，也逐渐发现师门覆灭与皇室气运有关。"
             rows={6}
-            className="w-full resize-y rounded-2xl border border-[#d9dfdd] bg-[#fbfcfc] p-4 text-sm leading-7 text-ink outline-none transition placeholder:text-[#a4aaa8] focus:border-brand/60 focus:bg-white focus:ring-4 focus:ring-brand/10"
+            className="w-full resize-y rounded-2xl border border-[#d9dfdd] bg-[#fbfcfc] p-4 text-sm leading-7 text-ink outline-none transition placeholder:text-ink-tertiary focus:border-brand/60 focus:bg-white focus:ring-4 focus:ring-brand/10"
           />
         </label>
 
         <div className="grid gap-3">
-          <div><p className="text-sm font-semibold text-ink">市场分区</p><p className="mt-1 text-xs text-[#818986]">大类 → 细分主题；选择后自动推导世界、结构、节奏与文风，后续都可修改。</p></div>
+          <div><p className="text-sm font-semibold text-ink">市场分区</p><p className="mt-1 text-xs text-ink-tertiary">大类 → 细分主题；选择后自动推导世界、结构、节奏与文风，后续都可修改。</p></div>
           <div className="flex flex-wrap gap-2">
             {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-[#d9dfdd] bg-white text-ink-secondary "}`}><Icon icon={item.icon} />{item.label}</button>)}
           </div>
@@ -174,9 +174,9 @@ export function NovelCreatePage({
 
         {!showAdvanced ? (
           <div className="grid gap-3">
-            <div><p className="text-sm font-semibold text-ink">目标篇幅</p><p className="mt-1 text-xs text-[#818986]">按网文常用节奏推导章数与单章字数。</p></div>
+            <div><p className="text-sm font-semibold text-ink">目标篇幅</p><p className="mt-1 text-xs text-ink-tertiary">按网文常用节奏推导章数与单章字数。</p></div>
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-              {LENGTH_TIERS.map((option) => <button key={option.value} type="button" onClick={() => chooseLength(option.value)} className={`rounded-xl border p-3 text-left transition ${draft.lengthTier === option.value ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white "}`}><span className="block text-sm font-semibold text-ink">{option.title}</span><span className="mt-1 block text-xs text-[#7a8380]">{option.hint}</span></button>)}
+              {LENGTH_TIERS.map((option) => <button key={option.value} type="button" onClick={() => chooseLength(option.value)} className={`rounded-xl border p-3 text-left transition ${draft.lengthTier === option.value ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-[#e1e5e3] bg-white "}`}><span className="block text-sm font-semibold text-ink">{option.title}</span><span className="mt-1 block text-xs text-ink-tertiary">{option.hint}</span></button>)}
             </div>
           </div>
         ) : (
@@ -197,7 +197,7 @@ export function NovelCreatePage({
         </details>
 
         <div className="flex flex-col gap-3 border-t border-[#edf0ef] pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-5 text-[#818986]"><Icon icon="mdi:shield-check-outline" className="mr-1 inline text-brand-ink" />创建后先进入可修改的设置向导，不会直接开始整书生成。</p>
+          <p className="text-xs leading-5 text-ink-tertiary"><Icon icon="mdi:shield-check-outline" className="mr-1 inline text-brand-ink" />创建后先进入可修改的设置向导，不会直接开始整书生成。</p>
           <button type="button" onClick={onSubmit} disabled={!ready || isSubmitting} className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45"><Icon icon={isSubmitting ? "mdi:loading" : "mdi:creation-outline"} className={isSubmitting ? "animate-spin" : ""} />{isSubmitting ? "正在建档" : "建档并进入设置向导"}</button>
         </div>
       </div>

@@ -48,7 +48,7 @@ export function AnalysisPanel({ analysis, spokenScript, onSpokenScriptChange }: 
               ))}
             </div>
           ) : (
-            <p className="text-[12.5px] text-[#8a8a8f]">—</p>
+            <p className="text-[12.5px] text-ink-tertiary">—</p>
           )}
         </Card>
       </div>

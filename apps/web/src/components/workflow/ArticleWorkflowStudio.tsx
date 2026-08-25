@@ -26,7 +26,7 @@ function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boo
         <h2 className="mt-5 text-base font-semibold text-ink">
           {creating ? "正在建立生成任务" : "实时输出 / 预览"}
         </h2>
-        <p className="mt-2 text-sm leading-6 text-[#7d8582]">
+        <p className="mt-2 text-sm leading-6 text-ink-tertiary">
           {creating ? "正在准备多平台内容，稍候即可查看结果" : "在左侧填写素材或主题，生成后在这里预览与编辑"}
         </p>
       </div>
@@ -113,7 +113,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
         >
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">{workspaceTitle}</p>
-            <p className="mt-0.5 truncate text-[10px] text-[#8a8a8f]">{workspaceMeta}</p>
+            <p className="mt-0.5 truncate text-[10px] text-ink-tertiary">{workspaceMeta}</p>
           </div>
 
           {state.project && (
@@ -156,7 +156,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
                 onClick={() => setRightPanelOpen((value) => !value)}
                 aria-pressed={rightPanelOpen}
                 title={rightPanelOpen ? "收起配图素材" : "展开配图素材"}
-                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightPanelOpen ? "bg-[#eef2f0] text-brand-ink" : "text-[#7c8582]"}`}
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightPanelOpen ? "bg-[#eef2f0] text-brand-ink" : "text-ink-tertiary"}`}
               >
                 <Icon icon="mdi:dock-right" className="text-base" aria-hidden />
               </button>
@@ -211,7 +211,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
         <div className="min-h-0 flex-1 xl:flex xl:flex-row">
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             {state.bootstrapping ? (
-              <div className="grid h-full min-h-[440px] place-items-center text-sm text-[#8a8a8f]">
+              <div className="grid h-full min-h-[440px] place-items-center text-sm text-ink-tertiary">
                 正在准备内容工作区...
               </div>
             ) : !state.project ? (

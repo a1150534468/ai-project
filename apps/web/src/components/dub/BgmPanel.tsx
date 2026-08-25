@@ -55,7 +55,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
       <section>
         <h3 className="mb-2 text-[13px] font-semibold text-ink">预制配乐</h3>
         {presets.length === 0 ? (
-          <p className="text-[12.5px] text-[#b6b6bd]">暂无预制配乐</p>
+          <p className="text-[12.5px] text-ink-tertiary">暂无预制配乐</p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
             {presets.map((b) => (
@@ -78,7 +78,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
         <button
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed py-8 text-[#8a8a8f] disabled:opacity-40 ${bgmObjectKey ? "border-brand/50" : "border-gray-200"}`}
+          className={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed py-8 text-ink-tertiary disabled:opacity-40 ${bgmObjectKey ? "border-brand/50" : "border-gray-200"}`}
         >
           <Icon icon="mdi:music-note-plus" className="text-2xl" />
           <span className="text-[13px]">{bgmObjectKey ? `已上传：${uploadedName || "自定义配乐"}` : "点击上传配乐（≤20MB，mp3/wav）"}</span>

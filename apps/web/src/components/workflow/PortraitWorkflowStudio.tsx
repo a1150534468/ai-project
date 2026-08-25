@@ -349,7 +349,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
       <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
-        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-ink-secondary">生成配置</p><h2 className="mt-1 text-base font-semibold text-ink">创作设置</h2></div><Icon icon="mdi:tune-variant" className="text-xl text-[#86868b]" aria-hidden /></div>
+        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-ink-secondary">生成配置</p><h2 className="mt-1 text-base font-semibold text-ink">创作设置</h2></div><Icon icon="mdi:tune-variant" className="text-xl text-ink-tertiary" aria-hidden /></div>
 
         <div className="mt-5">
           <p className="mb-2 text-sm font-semibold text-ink">参考人物 ({references.length}/{MAX_REFERENCE_COUNT})</p>
@@ -363,7 +363,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             {references.length < MAX_REFERENCE_COUNT && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#fafafa] text-ink-secondary disabled:opacity-50" aria-label="上传人物参考照"><Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={`text-2xl ${isUploading ? "animate-spin" : ""}`} aria-hidden /><span className="mt-1 text-[11px]">{isUploading ? "上传中" : "添加"}</span></button>}
           </div>
           <input ref={fileInputRef} data-testid="portrait-file-input" type="file" multiple accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif" className="hidden" onChange={(event) => handleFiles(event.target.files)} />
-          <p className="mt-2 flex items-center gap-1 text-[11px] text-[#86868b]"><Icon icon="mdi:shield-lock-outline" aria-hidden />私有存储，任务结束 24 小时后自动清理</p>
+          <p className="mt-2 flex items-center gap-1 text-[11px] text-ink-tertiary"><Icon icon="mdi:shield-lock-outline" aria-hidden />私有存储，任务结束 24 小时后自动清理</p>
         </div>
 
         <div className="mt-5 border-t border-[#e8e8ed] pt-4">
@@ -398,7 +398,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
 
         <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-ink-secondary"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
         {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        <p className="mt-3 text-[10px] leading-4 text-[#86868b]">AI 生成内容仅作预览，请勿用于证件、身份核验或未经授权的公开传播。</p>
+        <p className="mt-3 text-[10px] leading-4 text-ink-tertiary">AI 生成内容仅作预览，请勿用于证件、身份核验或未经授权的公开传播。</p>
         </div>
         <SubmitCostBar
           estimatedPointCost={pointCost}
@@ -415,7 +415,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         <header className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>
-            <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-[#86868b]">AI 生成预览</p></div>
+            <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-ink-tertiary">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">
             {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-ink-secondary"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
@@ -437,9 +437,9 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             </div>
           ) : (
             <div className="grid max-w-sm place-items-center text-center">
-              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-[#c7c7cc] bg-white/70"><Icon icon="mdi:account-star-outline" className="text-4xl text-[#86868b]" aria-hidden /></span>
+              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-[#c7c7cc] bg-white/70"><Icon icon="mdi:account-star-outline" className="text-4xl text-ink-tertiary" aria-hidden /></span>
               <p className="mt-5 text-base font-semibold text-ink-secondary">形象照预览</p>
-              <p className="mt-2 text-sm text-[#86868b]">选择模板并提交后，结果将在这里显示</p>
+              <p className="mt-2 text-sm text-ink-tertiary">选择模板并提交后，结果将在这里显示</p>
             </div>
           )}
           {selectedTask?.error && !isActive(selectedTask) && <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-white/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">{selectedTask.error}</div>}
@@ -485,9 +485,9 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           <aside role="dialog" aria-modal="true" aria-label="形象照任务队列" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4"><div><p className="text-xs font-semibold text-ink-secondary">任务状态</p><h2 className="text-base font-semibold text-ink">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-[#8a8a8f]">暂无任务</p> : tasks.map((task) => (
+              {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-ink-tertiary">暂无任务</p> : tasks.map((task) => (
                 <article key={task.id} className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-[#e5e7eb]"}`}>
-                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-ink">{presetName(task.presetId)}</span><span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-[#8a8a8f]">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
+                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-ink">{presetName(task.presetId)}</span><span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-ink-tertiary">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
                   <div className="flex gap-2 px-3 pb-3">
                     {isActive(task) ? <button type="button" onClick={() => handleCancel(task)} disabled={busyTaskId === task.id} className="h-7 rounded-lg border border-red-200 px-2 text-xs font-semibold text-red-600 disabled:opacity-50">取消任务</button> : <button type="button" onClick={() => handleDeleteTask(task)} disabled={busyTaskId === task.id} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"><Icon icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"} className={busyTaskId === task.id ? "animate-spin" : ""} aria-hidden />删除</button>}
                   </div>

@@ -31,7 +31,7 @@ export function SubmitCostBar(props: SubmitCostBarProps) {
         <span className="inline-flex items-center gap-1 text-ink">
           <Icon icon="mdi:diamond-stone" className="text-sm text-brand-ink" aria-hidden />
           {props.costValue ?? (props.estimatedPointCost === null ? "--" : `${props.estimatedPointCost} 算力点`)}
-          {props.costDetail ? <span className="font-normal text-[#8a8a8f]">（{props.costDetail}）</span> : null}
+          {props.costDetail ? <span className="font-normal text-ink-tertiary">（{props.costDetail}）</span> : null}
         </span>
       </div>
       {props.children}

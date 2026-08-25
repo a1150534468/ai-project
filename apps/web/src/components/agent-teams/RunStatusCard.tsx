@@ -52,7 +52,7 @@ export function RunStatusCard({ run }: RunStatusCardProps) {
           <div key={metric.label} className="flex items-center gap-2.5 rounded-[10px] bg-[#f7f7f9] px-3 py-2.5">
             <Icon icon={metric.icon} className="flex-none text-base text-ink-secondary" aria-hidden />
             <div className="min-w-0">
-              <p className="text-[11px] text-[#a1a1a6]">{metric.label}</p>
+              <p className="text-[11px] text-ink-tertiary">{metric.label}</p>
               <p className={`truncate text-[13px] font-semibold ${metric.tone}`}>{metric.value}</p>
             </div>
           </div>

@@ -15,7 +15,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
     <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-3">
         <span className="rounded-full bg-[#1d1d1f] px-2 py-1 text-xs font-semibold text-white">{label}</span>
-        {image && <span className="truncate text-xs text-[#8a8a8f]">{image.size}</span>}
+        {image && <span className="truncate text-xs text-ink-tertiary">{image.size}</span>}
       </div>
       {image ? (
         <div className="grid min-h-[300px] place-items-center overflow-hidden rounded-lg bg-[#f5f5f7]">
@@ -27,7 +27,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
         </div>
       )}
       <div className="mt-3">
-        <p className="text-xs font-semibold text-[#8a8a8f]">{label === "V1 原图" ? "原始提示词" : "新提示词"}</p>
+        <p className="text-xs font-semibold text-ink-tertiary">{label === "V1 原图" ? "原始提示词" : "新提示词"}</p>
         <p className="mt-1 text-sm leading-6 text-ink">{image?.prompt ?? "--"}</p>
       </div>
     </div>

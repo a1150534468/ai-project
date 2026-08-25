@@ -92,7 +92,7 @@ export function TaskComposer({
           value={taskGoal}
           onChange={(event) => onTaskGoalChange(event.target.value)}
           placeholder="用大白话描述任务目标，例如：帮我审查一份采购合同，识别潜在法律风险，并给出修改建议..."
-          className="min-h-[132px] w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-ink outline-none placeholder:text-[#8a8a8f]"
+          className="min-h-[132px] w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-ink outline-none placeholder:text-ink-tertiary"
         />
 
         {attachments.length > 0 && (
@@ -108,12 +108,12 @@ export function TaskComposer({
                 )}
                 <span className="min-w-0">
                   <span className="block truncate text-xs font-medium text-ink-secondary">{attachment.name}</span>
-                  <span className="block text-[10px] text-[#8a8a8f]">{formatSize(attachment.sizeBytes)}</span>
+                  <span className="block text-[10px] text-ink-tertiary">{formatSize(attachment.sizeBytes)}</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(attachment.id)}
-                  className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] text-[#8a8a8f] transition "
+                  className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px] text-ink-tertiary transition "
                   aria-label="移除附件"
                 >
                   <Icon icon="mdi:close" className="text-sm" aria-hidden />

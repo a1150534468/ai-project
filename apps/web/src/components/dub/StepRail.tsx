@@ -38,7 +38,7 @@ export function StepRail({ active, busy = false, onSelect }: StepRailProps) {
                     ? "bg-brand text-white"
                     : on
                       ? "bg-brand text-white ring-2 ring-brand/40 ring-offset-1"
-                      : "bg-gray-100 text-[#b6b6bd]"
+                      : "bg-gray-100 text-ink-tertiary"
                 }`}
               >
                 {done ? (
@@ -51,10 +51,10 @@ export function StepRail({ active, busy = false, onSelect }: StepRailProps) {
               </span>
             </span>
             <span>
-              <span className={`block text-[13px] font-semibold transition-colors ${on || done ? "text-ink" : "text-[#b6b6bd]"}`}>
+              <span className={`block text-[13px] font-semibold transition-colors ${on || done ? "text-ink" : "text-ink-tertiary"}`}>
                 {step.title}
               </span>
-              <span className={`block text-[11px] transition-colors ${on || done ? "text-[#8a8a8f]" : "text-[#c7c7cc]"}`}>
+              <span className={`block text-[11px] transition-colors ${on || done ? "text-ink-tertiary" : "text-ink-tertiary"}`}>
                 {step.sub}
               </span>
             </span>

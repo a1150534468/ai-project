@@ -227,7 +227,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           <div className="mt-4 rounded-lg border border-[#e8e8ed] bg-[#f7faf9] p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-ink">参考图 ({props.referenceAssets.length + props.remoteReferenceCount}/{ECOM_MAX_REFERENCE_COUNT})</p>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:text-ink-tertiary">
                 {props.isUploadingReference ? "上传中" : "上传参考图"}
               </button>
             </div>
@@ -241,7 +241,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                 <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-lg border border-[#d2d2d7] object-cover" />
               ))}
               {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-lg border border-dashed border-[#d2d2d7] px-3 text-center text-xs text-ink-secondary">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
-              {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-4 text-xs text-[#8a8a8f]">上传后会展示本地缩略图。</div>}
+              {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-4 text-xs text-ink-tertiary">上传后会展示本地缩略图。</div>}
             </div>
           </div>
         )}
@@ -255,7 +255,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         <div className="mt-4 grid gap-2 text-sm font-semibold text-ink">
           从主图选母版
           {(props.mainImages?.length ?? 0) === 0 ? (
-            <p className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-3 text-xs font-normal text-[#8a8a8f]">先在「商品主图」生成主图，即可选一张作为母版（省一次母版出图）。</p>
+            <p className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-3 text-xs font-normal text-ink-tertiary">先在「商品主图」生成主图，即可选一张作为母版（省一次母版出图）。</p>
           ) : (
             <>
               <div className="flex flex-wrap gap-2">
@@ -292,13 +292,13 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
                 {props.isSubmittingMaster ? "生成中" : "生成母版"}
               </RippleButton>
-              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
+              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary">
                 {props.isRetryingMaster ? "重试中" : "重试主图"}
               </RippleButton>
-              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
+              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary">
                 {props.isConfirmingSegments ? "确认中" : "确认分段"}
               </RippleButton>
-              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]">
+              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary">
                 {props.isStitchingPreview ? "拼接中" : "浏览器拼接长图"}
               </RippleButton>
             </div>
@@ -345,7 +345,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                   >
                     <div className="flex items-center justify-between gap-3">
                       <h4 className="text-sm font-semibold text-ink">第 {index + 1} 段</h4>
-                      <RippleButton type="button" onClick={() => props.onRedrawSegment(index)} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+                      <RippleButton type="button" onClick={() => props.onRedrawSegment(index)} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-ink-tertiary">
                         {props.redrawingIndexes.includes(index) ? "重绘中" : `重绘第 ${index + 1} 段`}
                       </RippleButton>
                     </div>
@@ -360,7 +360,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                         <p className="line-clamp-3 text-xs leading-5 text-ink-secondary">{segment.prompt}</p>
                       </div>
                     ) : (
-                      <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-white text-center text-xs text-[#8a8a8f]">
+                      <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-white text-center text-xs text-ink-tertiary">
                         {props.stageLabel === "segments_running" ? (
                           <span className="grid place-items-center gap-2">
                             <span className="h-5 w-5 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
@@ -419,7 +419,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               )}
             </div>
           ) : (
-            <div className="mt-4 rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-4 py-6 text-sm text-[#8a8a8f]">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
+            <div className="mt-4 rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-4 py-6 text-sm text-ink-tertiary">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
           )}
         </section>
 

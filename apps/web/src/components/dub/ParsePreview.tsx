@@ -30,7 +30,7 @@ function DownloadRow({ label, url, onErr }: { label: string; url: string; onErr:
   if (!url) return null;
   return (
     <div className="flex items-center gap-2">
-      <span className="w-12 shrink-0 text-[12px] text-[#8a8a8f]">{label}</span>
+      <span className="w-12 shrink-0 text-[12px] text-ink-tertiary">{label}</span>
       <input readOnly value={url} className="min-w-0 flex-1 truncate bg-transparent text-[12px] text-ink-secondary outline-none" />
       <button
         onClick={async () => { const ok = await copyText(url); if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); } else onErr("复制失败，请手动选择链接"); }}
@@ -62,13 +62,13 @@ export function ParsePreview({ token, pricing, result, busy, setBusy, onAnalyzed
       </div>
 
       <div className="space-y-2 rounded-xl bg-gray-50 p-3">
-        <p className="text-[12px] text-[#8a8a8f]">如需保存到本地，复制链接到浏览器地址栏即可下载：</p>
+        <p className="text-[12px] text-ink-tertiary">如需保存到本地，复制链接到浏览器地址栏即可下载：</p>
         <DownloadRow label="视频" url={result.video.url} onErr={onErr} />
         <DownloadRow label="封面" url={result.cover.url} onErr={onErr} />
       </div>
 
       {priced && estimate !== null && (
-        <p className="text-[12px] text-[#8a8a8f]">拆解预计消耗约 {estimate} 算力点（{result.video.durationSec} 秒）。</p>
+        <p className="text-[12px] text-ink-tertiary">拆解预计消耗约 {estimate} 算力点（{result.video.durationSec} 秒）。</p>
       )}
       <button
         disabled={busy || !priced}

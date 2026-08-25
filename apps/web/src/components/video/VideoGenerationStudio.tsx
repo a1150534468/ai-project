@@ -116,9 +116,9 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
         onClick={toggle}
         className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}
       >
-        {!compact && <span className="text-xs text-[#8a8a8f]">{ariaLabel}</span>}
+        {!compact && <span className="text-xs text-ink-tertiary">{ariaLabel}</span>}
         <span className={`truncate text-sm font-medium text-ink ${compact ? "" : "ml-auto"}`}>{current?.label ?? value}</span>
-        <Icon icon="mdi:chevron-down" className={`shrink-0 text-base text-[#b6b6bd] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+        <Icon icon="mdi:chevron-down" className={`shrink-0 text-base text-ink-tertiary transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open && (
         <div className={`absolute z-30 max-h-[230px] overflow-auto rounded-[12px] border border-[#e3e3e8] bg-white p-1.5 shadow-[0_12px_32px_rgba(20,20,45,0.14)] ${wideMenu ? "left-0 w-[calc(200%+0.5rem)]" : "left-0 right-0"} ${dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"}`}>
@@ -133,7 +133,7 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
               >
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-sm ${on ? "font-semibold text-ink" : "text-ink"}`}>{c.label}</span>
-                  {c.desc && <span className="block truncate text-[11px] text-[#8a8a8f]">{c.desc}</span>}
+                  {c.desc && <span className="block truncate text-[11px] text-ink-tertiary">{c.desc}</span>}
                 </span>
                 {on && <Icon icon="mdi:check" className="shrink-0 text-sm text-ink" aria-hidden />}
               </button>
@@ -269,7 +269,7 @@ export function VideoGenerationStudio({
             <Icon icon="mdi:tray-arrow-up" className="text-base text-ink" aria-hidden />
           </span>
           <span className="text-[13px] font-medium text-ink">拖入或点击上传</span>
-          <span className="text-[11px] text-[#8a8a8f]">支持 图片 / 视频 / 音频</span>
+          <span className="text-[11px] text-ink-tertiary">支持 图片 / 视频 / 音频</span>
           <input type="file" accept="image/*,video/*,audio/*" className="sr-only" onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) onUploadMaterial(file);
@@ -281,7 +281,7 @@ export function VideoGenerationStudio({
             const full = materialCounts[k] >= VIDEO_MATERIAL_LIMITS[k];
             return (
               <div key={k} className="rounded-[9px] bg-[#f6f6f8] px-2 py-1.5">
-                <span className="text-[13px] font-semibold text-ink">{materialCounts[k]}<span className={full ? "text-[#c7c7cc]" : "text-[#8a8a8f]"}> / {VIDEO_MATERIAL_LIMITS[k]}</span></span>
+                <span className="text-[13px] font-semibold text-ink">{materialCounts[k]}<span className={full ? "text-ink-tertiary" : "text-ink-tertiary"}> / {VIDEO_MATERIAL_LIMITS[k]}</span></span>
                 <span className="block text-[11px] text-ink-secondary">{KIND_META[k].label}</span>
               </div>
             );
@@ -300,9 +300,9 @@ export function VideoGenerationStudio({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-[12.5px] font-medium text-ink">{m.name}</span>
-                    <span className="block text-[10.5px] text-[#8a8a8f]">{meta.label}{m.durationSec > 0 ? ` · ${m.durationSec}s` : ""}</span>
+                    <span className="block text-[10.5px] text-ink-tertiary">{meta.label}{m.durationSec > 0 ? ` · ${m.durationSec}s` : ""}</span>
                   </span>
-                  <button type="button" aria-label={`移除 ${m.name}`} onClick={() => onRemoveMaterial(m.url)} className="px-1 text-[#b7b7bf] transition ">
+                  <button type="button" aria-label={`移除 ${m.name}`} onClick={() => onRemoveMaterial(m.url)} className="px-1 text-ink-tertiary transition ">
                     <Icon icon="mdi:close" className="text-base" aria-hidden />
                   </button>
                 </div>
@@ -331,7 +331,7 @@ export function VideoGenerationStudio({
           placeholder="描述场景、镜头运动、主体动作、风格和声音氛围，或点「帮我写」自动生成脚本"
           className="w-full flex-1 min-h-[112px] resize-none rounded-[12px] border border-[#e3e3e8] p-3 text-sm leading-6 text-ink outline-none focus:border-[#c3c3cc]"
         />
-        <p className="mt-1 text-right text-[11px] font-medium text-[#8a8a8f]">{prompt.length} / 2000</p>
+        <p className="mt-1 text-right text-[11px] font-medium text-ink-tertiary">{prompt.length} / 2000</p>
 
         {/* 配置：模型 + 视频设置（合并弹窗） */}
         <p className="mt-4 mb-2 text-xs font-semibold text-ink-secondary">配置</p>
@@ -417,12 +417,12 @@ export function VideoGenerationStudio({
             {displayedVideo ? (
               <video key={displayedVideo.id} src={displayedVideo.originalUrl} controls className="max-h-full max-w-full rounded-[10px] bg-black object-contain" />
             ) : selectedTask ? (
-              <div className="grid place-items-center gap-3 text-center text-[#8a8a8f]">
+              <div className="grid place-items-center gap-3 text-center text-ink-tertiary">
                 <Icon icon={selectedTask.status === "running" ? "mdi:progress-clock" : "mdi:alert-circle-outline"} className="text-6xl" aria-hidden />
                 <p className="text-sm font-medium">{selectedTask.status === "failed" ? "该任务生成失败" : selectedTask.status === "running" ? "该任务生成中…" : "视频未成功保存，请重新生成"}</p>
               </div>
             ) : (
-              <div className="grid place-items-center gap-3 text-center text-[#8a8a8f]">
+              <div className="grid place-items-center gap-3 text-center text-ink-tertiary">
                 <Icon icon="mdi:video-outline" className="text-6xl" aria-hidden />
                 <p className="text-sm font-medium">暂无视频</p>
               </div>
@@ -449,7 +449,7 @@ export function VideoGenerationStudio({
       <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-3">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink">任务队列</h2>
-          <span className="text-xs text-[#8a8a8f]">生成中 {runningCount}</span>
+          <span className="text-xs text-ink-tertiary">生成中 {runningCount}</span>
         </div>
         <div className="grid gap-2">
           {tasks.length > 0 ? (
@@ -474,14 +474,14 @@ export function VideoGenerationStudio({
                       </motion.span>
                     </div>
                     <p className="mt-2 line-clamp-2 text-xs text-ink-secondary">{task.prompt}</p>
-                    <p className="mt-2 text-[11px] text-[#8a8a8f]">{task.resolution} · {task.durationSec}s · {formatTime(task.createdAt)}</p>
+                    <p className="mt-2 text-[11px] text-ink-tertiary">{task.resolution} · {task.durationSec}s · {formatTime(task.createdAt)}</p>
                     {task.error && <p className="mt-2 text-xs leading-5 text-red-600">{friendlyTaskError(task.error)}</p>}
                   </motion.div>
                 </StaggerItem>
               ))}
             </Stagger>
           ) : (
-            <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-[#8a8a8f]">暂无任务</p>
+            <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-ink-tertiary">暂无任务</p>
           )}
         </div>
       </aside>

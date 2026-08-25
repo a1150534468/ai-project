@@ -64,14 +64,14 @@ export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, ac
         {action}
       </div>
       {groups.length === 0 ? (
-        <p className="py-3 text-sm text-[#8a8a8f]">{emptyText}</p>
+        <p className="py-3 text-sm text-ink-tertiary">{emptyText}</p>
       ) : (
         <div className="flex gap-5 overflow-x-auto pb-2 [scrollbar-width:thin]">
           {groups.map((group) => (
             <div key={group.id} className="min-w-max border-r border-[#ececf0] pr-5 last:border-r-0 last:pr-0">
               <div className="mb-2 flex max-w-[360px] items-center justify-between gap-3 text-xs">
                 <p className="max-w-[220px] truncate font-semibold text-ink" title={group.title}>{group.title}</p>
-                {group.meta && <span className="flex-none text-[#8a8a8f]">{group.meta}</span>}
+                {group.meta && <span className="flex-none text-ink-tertiary">{group.meta}</span>}
               </div>
               <div className="flex min-h-[72px] gap-2">
                 {group.items.map((item) => (
@@ -81,7 +81,7 @@ export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, ac
                     onClick={item.onSelect}
                     aria-pressed={item.selected}
                     title={item.alt}
-                    className={`relative grid h-[72px] w-[72px] flex-none place-items-center overflow-hidden rounded-lg border-2 bg-[#f5f5f7] text-[#8a8a8f] outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${item.selected ? "border-brand" : "border-transparent"}`}
+                    className={`relative grid h-[72px] w-[72px] flex-none place-items-center overflow-hidden rounded-lg border-2 bg-[#f5f5f7] text-ink-tertiary outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${item.selected ? "border-brand" : "border-transparent"}`}
                   >
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.alt} className="h-full w-full object-cover" loading="lazy" />
@@ -112,7 +112,7 @@ export function ImageHistoryStrip(props: ImageHistoryStripProps) {
           type="button"
           onClick={props.onDownloadAll}
           disabled={props.images.length === 0}
-          className="inline-flex h-8 items-center gap-1 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-[#8a8a8f]"
+          className="inline-flex h-8 items-center gap-1 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-ink-tertiary"
         >
           <Icon icon="mdi:download-multiple" className="text-base" aria-hidden />
           全部原图链接

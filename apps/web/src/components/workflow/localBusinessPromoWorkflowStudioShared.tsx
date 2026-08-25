@@ -77,7 +77,7 @@ export function AudioAssetPanel(props: {
           <audio className="mt-3 w-full" controls src={props.asset.originalUrl} />
         </div>
       ) : (
-        <p className="mt-2 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-[12px] leading-5 text-[#8a8a8f]">{props.emptyText}</p>
+        <p className="mt-2 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-[12px] leading-5 text-ink-tertiary">{props.emptyText}</p>
       )}
     </div>
   );
@@ -99,7 +99,7 @@ export function AudioHistoryList(props: {
     <div className={props.className}>
       <div className="flex items-center justify-between">
         <p className="text-[12px] font-semibold text-ink-secondary">{props.title}</p>
-        <span className="text-[11px] text-[#8a8a8f]">{props.assets.length} 条</span>
+        <span className="text-[11px] text-ink-tertiary">{props.assets.length} 条</span>
       </div>
       <div className={`mt-2 grid gap-2 ${props.gridClassName ?? ""}`}>
         {props.assets.length > 0 ? props.assets.map((asset) => {
@@ -131,7 +131,7 @@ export function AudioHistoryList(props: {
             </div>
           );
         }) : (
-          <p className="rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-[12px] leading-5 text-[#8a8a8f]">{props.emptyText}</p>
+          <p className="rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-[12px] leading-5 text-ink-tertiary">{props.emptyText}</p>
         )}
       </div>
     </div>

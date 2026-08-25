@@ -73,7 +73,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
         <div>
           <p className="mb-2 text-[12.5px] font-medium text-ink-secondary">挂载知识库（可选，改写时可引用其中事实）</p>
           {kbs.length === 0 ? (
-            <p className="text-[12px] text-[#b6b6bd]">暂无知识库</p>
+            <p className="text-[12px] text-ink-tertiary">暂无知识库</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {kbs.map((k) => (
@@ -110,7 +110,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
         >
           {busy ? (<span className="flex items-center gap-1.5"><Icon icon="mdi:loading" className="animate-spin" />洗稿中…</span>) : "洗稿"}
         </button>
-        <p className="text-[11.5px] text-[#8a8a8f]">洗稿按模型用量计费（算力点）。也可跳过本步，直接用原稿配音。</p>
+        <p className="text-[11.5px] text-ink-tertiary">洗稿按模型用量计费（算力点）。也可跳过本步，直接用原稿配音。</p>
       </div>
     </div>
   );

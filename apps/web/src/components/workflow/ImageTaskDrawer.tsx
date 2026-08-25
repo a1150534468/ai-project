@@ -63,7 +63,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3 [scrollbar-width:thin]">
               {tasks.length === 0 ? (
-                <p className="grid min-h-48 place-items-center text-sm text-[#8a8a8f]">暂无生图任务</p>
+                <p className="grid min-h-48 place-items-center text-sm text-ink-tertiary">暂无生图任务</p>
               ) : tasks.map((task) => {
                 const active = task.status === "running" || task.status === "queued";
                 const compact = task.status === "completed";
@@ -87,7 +87,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                           {task.status === "running" && task.error ? "正在重试" : STATUS_LABELS[task.status]}
                         </span>
                       </span>
-                      <span className="mt-1 block text-[11px] text-[#8a8a8f]">{compact ? `${done} 张 · ` : `${task.size} · ${done}/${task.count} 张 · `}{formatTime(task.createdAt)}</span>
+                      <span className="mt-1 block text-[11px] text-ink-tertiary">{compact ? `${done} 张 · ` : `${task.size} · ${done}/${task.count} 张 · `}{formatTime(task.createdAt)}</span>
                       {active && (
                         <span className="mt-2 block h-1.5 overflow-hidden rounded-full bg-[#e8e8ed]">
                           <span className="block h-full rounded-full bg-brand" style={{ width: `${task.status === "running" ? Math.max(progress, 8) : progress}%` }} />

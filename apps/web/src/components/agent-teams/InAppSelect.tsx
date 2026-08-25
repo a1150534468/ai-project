@@ -39,7 +39,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
       >
         <Icon icon={icon} className="flex-none text-lg text-ink-secondary" aria-hidden />
         <span className="min-w-0 flex-1 truncate">{selected?.label ?? label}</span>
-        <Icon icon="mdi:chevron-down" className="flex-none text-lg text-[#8a8a8f]" aria-hidden />
+        <Icon icon="mdi:chevron-down" className="flex-none text-lg text-ink-tertiary" aria-hidden />
       </button>
       {open && (
         <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[12px] border border-[#e8e8ed] bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
@@ -77,7 +77,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
                 </button>
               );
             })}
-            {options.length === 0 && <div className="px-3 py-6 text-center text-xs text-[#8a8a8f]">暂无可选项</div>}
+            {options.length === 0 && <div className="px-3 py-6 text-center text-xs text-ink-tertiary">暂无可选项</div>}
           </div>
         </div>
       )}

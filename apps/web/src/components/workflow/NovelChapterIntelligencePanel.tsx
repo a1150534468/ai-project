@@ -66,7 +66,7 @@ export function NovelChapterIntelligencePanel({
               <p className="break-words">{text(beat.objective)}</p>
             </div>
           ))}
-          {microBeats.length === 0 && <p className="text-[#8a8a8f]">暂无节拍</p>}
+          {microBeats.length === 0 && <p className="text-ink-tertiary">暂无节拍</p>}
         </div>
       </Panel>
       <Panel title="连续性提醒" icon="mdi:alert-circle-outline">
@@ -76,7 +76,7 @@ export function NovelChapterIntelligencePanel({
               {text(alert.title)}：{text(alert.detail)}
             </p>
           ))}
-          {alerts.length === 0 && <p className="text-[#8a8a8f]">暂无提醒</p>}
+          {alerts.length === 0 && <p className="text-ink-tertiary">暂无提醒</p>}
         </div>
       </Panel>
       <Panel title="稳定事实" icon="mdi:database-check-outline">
@@ -84,7 +84,7 @@ export function NovelChapterIntelligencePanel({
           {facts.map((fact, index) => (
             <p key={`${text(fact.subject)}:${index}`} className="break-words">{text(fact.subject)} {text(fact.predicate)} {text(fact.object)}</p>
           ))}
-          {facts.length === 0 && <p className="text-[#8a8a8f]">暂无事实</p>}
+          {facts.length === 0 && <p className="text-ink-tertiary">暂无事实</p>}
         </div>
       </Panel>
       <Panel title="伏笔账本" icon="mdi:book-open-variant-outline">
@@ -92,7 +92,7 @@ export function NovelChapterIntelligencePanel({
           {foreshadow.map((item, index) => (
             <p key={`${text(item.title)}:${index}`} className="break-words">{text(item.title)} · {text(item.status)} · 第{text(item.expectedPayoffChapter)}章</p>
           ))}
-          {foreshadow.length === 0 && <p className="text-[#8a8a8f]">暂无伏笔</p>}
+          {foreshadow.length === 0 && <p className="text-ink-tertiary">暂无伏笔</p>}
         </div>
       </Panel>
       <Panel title="质量诊断" icon="mdi:chart-box-outline">

@@ -46,7 +46,7 @@ export default function MemoryFilters({
             <div className="relative min-w-0 flex-1">
               <Icon
                 icon="mdi:magnify"
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-[#8a8a8f]"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lg text-ink-tertiary"
                 aria-hidden
               />
               <input

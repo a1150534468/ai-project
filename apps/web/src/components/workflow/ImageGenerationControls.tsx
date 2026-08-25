@@ -86,7 +86,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
           type="button"
           onClick={props.onOptimizePrompt}
           disabled={props.isOptimizingPrompt}
-          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary"
         >
           <Icon icon={props.isOptimizingPrompt ? "mdi:loading" : "mdi:magic-staff"} className={props.isOptimizingPrompt ? "animate-spin text-base" : "text-base"} aria-hidden />
           {props.isOptimizingPrompt ? "优化中" : "优化提示词"}
@@ -95,13 +95,13 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
         <div className="mt-5 grid gap-2">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-ink">参考图</p>
-            <span className="text-xs text-[#8a8a8f]">{props.referenceImages.length}/3</span>
+            <span className="text-xs text-ink-tertiary">{props.referenceImages.length}/3</span>
           </div>
           <button
             type="button"
             onClick={() => referenceInputRef.current?.click()}
             disabled={!supportsReferenceImages || props.isUploadingReference || props.referenceImages.length >= 3}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary"
           >
             <Icon icon={props.isUploadingReference ? "mdi:loading" : "mdi:plus"} className={`text-base ${props.isUploadingReference ? "animate-spin" : ""}`} aria-hidden />
             {props.isUploadingReference

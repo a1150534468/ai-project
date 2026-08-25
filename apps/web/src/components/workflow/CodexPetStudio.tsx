@@ -372,7 +372,7 @@ function PrimaryButton(props: {
 
 function ImagePlaceholder({ text }: { readonly text: string }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-[#d9dce3] bg-[#fafafd] px-5 text-center text-xs leading-5 text-[#888891]">
+    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-[#d9dce3] bg-[#fafafd] px-5 text-center text-xs leading-5 text-ink-tertiary">
       {text}
     </div>
   );
@@ -1248,7 +1248,7 @@ export function CodexPetStudio({
                     title="从历史中删除"
                     disabled={interactionLocked}
                     onClick={() => handleDeleteProject(project)}
-                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-[#86868b] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-45"
+                    className="grid size-8 shrink-0 place-items-center rounded-[8px] text-ink-tertiary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <Icon
                       icon={deletingProjectId === project.id ? "mdi:loading" : "mdi:trash-can-outline"}
@@ -1268,7 +1268,7 @@ export function CodexPetStudio({
               aside={detail && <StatusPill status={detail.project.status} />}
             />
             <div className="space-y-3 p-4">
-              {loadingDetail && <p className="text-xs text-[#8b8b94]">正在恢复项目输入...</p>}
+              {loadingDetail && <p className="text-xs text-ink-tertiary">正在恢复项目输入...</p>}
               <label className="block">
                 <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">桌宠名称 <span className="text-red-500">*</span></span>
                 <input
@@ -1279,7 +1279,7 @@ export function CodexPetStudio({
                   placeholder="例如：码仔"
                   className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                 />
-                <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.name).length}/30</span>
+                <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.name).length}/30</span>
               </label>
               <label className="block">
                 <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">一句话描述</span>
@@ -1302,7 +1302,7 @@ export function CodexPetStudio({
                   rows={5}
                   className="w-full resize-y rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                 />
-                <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.prompt).length}/4000</span>
+                <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.prompt).length}/4000</span>
               </label>
 
               <div className="grid gap-2 sm:grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)]">
@@ -1331,14 +1331,14 @@ export function CodexPetStudio({
                     rows={3}
                     className="w-full resize-y rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                   />
-                  <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.actionPrompts[selectedActionPrompt] ?? "").length}/{CODEX_PET_ACTION_PROMPT_MAX_LENGTH}</span>
+                  <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.actionPrompts[selectedActionPrompt] ?? "").length}/{CODEX_PET_ACTION_PROMPT_MAX_LENGTH}</span>
                 </label>
               </div>
 
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-ink-secondary">参考图</span>
-                  <span className="text-[10px] text-[#9a9aa2]">{draft.referenceAssets.length}/3 · 每张 10MB</span>
+                  <span className="text-[10px] text-ink-tertiary">{draft.referenceAssets.length}/3 · 每张 10MB</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   {draft.referenceAssets.map((asset) => {
@@ -1346,7 +1346,7 @@ export function CodexPetStudio({
                     return (
                       <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-[9px] border border-[#e1e3e8] bg-[#f6f6f8]">
                         {url ? <img src={url} alt={asset.name || "桌宠参考图"} className="size-full object-cover" /> : (
-                          <span className="grid size-full place-items-center text-[10px] text-[#9a9aa2]">已上传</span>
+                          <span className="grid size-full place-items-center text-[10px] text-ink-tertiary">已上传</span>
                         )}
                         {canEdit && (
                           <button
@@ -1363,7 +1363,7 @@ export function CodexPetStudio({
                     );
                   })}
                   {draft.referenceAssets.length < CODEX_PET_MAX_REFERENCES && (
-                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-[#fafafd] text-center text-[10px] text-[#7d7d86] transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
+                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-[#fafafd] text-center text-[10px] text-ink-tertiary transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
                       <span><Icon icon={busyAction === "uploading" ? "mdi:loading" : "mdi:image-plus-outline"} className={`mx-auto mb-1 text-lg ${busyAction === "uploading" ? "animate-spin" : ""}`} aria-hidden />上传参考图</span>
                       <input
                         type="file"
@@ -1457,7 +1457,7 @@ export function CodexPetStudio({
                 />
                 <span>
                   <span className="block text-xs font-semibold text-ink">主形象生成后自动继续</span>
-                  <span className="mt-0.5 block text-[10px] leading-4 text-[#85858d]">关闭时会停下来让你从 2 个候选中选择；开启后由视觉质检自动选优。</span>
+                  <span className="mt-0.5 block text-[10px] leading-4 text-ink-tertiary">关闭时会停下来让你从 2 个候选中选择；开启后由视觉质检自动选优。</span>
                 </span>
               </label>
 
@@ -1521,7 +1521,7 @@ export function CodexPetStudio({
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h3 className="text-xs font-semibold text-ink">主形象候选</h3>
-                      <p className="mt-0.5 text-[10px] text-[#898991]">选中的形象会成为所有动作与方向的身份基准。</p>
+                      <p className="mt-0.5 text-[10px] text-ink-tertiary">选中的形象会成为所有动作与方向的身份基准。</p>
                     </div>
                     {latestRun.status === "awaiting_base_review" && (
                       <div className="flex flex-wrap gap-1.5">
@@ -1559,7 +1559,7 @@ export function CodexPetStudio({
                         >
                           <div className="aspect-[3/2] bg-[#f5f5f7]">
                             {url ? <img src={url} alt={`主形象候选 ${index + 1}`} className="size-full object-contain" /> : (
-                              <span className="grid size-full place-items-center text-xs text-[#92929a]">候选 {index + 1} 已生成</span>
+                              <span className="grid size-full place-items-center text-xs text-ink-tertiary">候选 {index + 1} 已生成</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 px-3 py-2">
@@ -1636,9 +1636,9 @@ export function CodexPetStudio({
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h3 className="text-xs font-semibold text-ink">9 组标准动画</h3>
-                      <p className="mt-0.5 text-[10px] text-[#898991]">透明背景 · 192×208 单格 · 生成过程中逐个亮起</p>
+                      <p className="mt-0.5 text-[10px] text-ink-tertiary">透明背景 · 192×208 单格 · 生成过程中逐个亮起</p>
                     </div>
-                    <span className="text-[10px] font-semibold text-[#8b8b94]" data-testid="codex-pet-animation-progress">
+                    <span className="text-[10px] font-semibold text-ink-tertiary" data-testid="codex-pet-animation-progress">
                       已完成 {readyStandardAnimationCount}/{CODEX_PET_STANDARD_STATES.length}
                     </span>
                   </div>
@@ -1655,7 +1655,7 @@ export function CodexPetStudio({
                             {url ? (
                               <img src={url} alt={`${state.label}动画预览`} className="size-full object-contain" />
                             ) : (
-                              <span className="grid size-full place-items-center px-2 text-center text-[10px] text-[#9a9aa2]">{state.label}预览处理中</span>
+                              <span className="grid size-full place-items-center px-2 text-center text-[10px] text-ink-tertiary">{state.label}预览处理中</span>
                             )}
                           </div>
                           <figcaption className="px-2 py-1.5 text-[10px] font-semibold text-ink-secondary">{state.label}</figcaption>
@@ -1671,7 +1671,7 @@ export function CodexPetStudio({
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
                       <h3 className="text-xs font-semibold text-ink">最终 Codex v2 精灵图</h3>
-                      <p className="mt-0.5 text-[10px] text-[#898991]">1536×2288 · 8 列 × 11 行 · 透明背景 · spriteVersionNumber 2</p>
+                      <p className="mt-0.5 text-[10px] text-ink-tertiary">1536×2288 · 8 列 × 11 行 · 透明背景 · spriteVersionNumber 2</p>
                     </div>
                     <button
                       type="button"
@@ -1710,7 +1710,7 @@ export function CodexPetStudio({
                     <div className="rounded-[10px] border border-brand/30 bg-white p-2.5" data-testid="codex-pet-final-contact-sheet">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
                         <h4 className="text-[11px] font-semibold text-ink-secondary">最终 Contact Sheet</h4>
-                        <span className="text-[9px] text-[#8b8b94]">完整 v2 预览 · 非单组动画</span>
+                        <span className="text-[9px] text-ink-tertiary">完整 v2 预览 · 非单组动画</span>
                       </div>
                       {codexPetArtifactUrl(finalContactSheet) ? (
                         <img
@@ -1782,11 +1782,11 @@ export function CodexPetStudio({
                   <summary className="cursor-pointer text-[10px] font-semibold text-ink-secondary">
                     过程产物（内部诊断 · {processArtifacts.length} 项）
                   </summary>
-                  <p className="mt-1.5 text-[9px] leading-4 text-[#8d8d95]">
+                  <p className="mt-1.5 text-[9px] leading-4 text-ink-tertiary">
                     姿势板、方向盲测图等中间产物仅保留 7 天，用于排查与定向续跑，不是交付内容。过期后此处为空属正常。
                   </p>
                   {processArtifacts.length === 0 ? (
-                    <p className="mt-2 text-[10px] text-[#97979f]">本次运行没有仍在保留期内的过程产物。</p>
+                    <p className="mt-2 text-[10px] text-ink-tertiary">本次运行没有仍在保留期内的过程产物。</p>
                   ) : (
                     <div className="mt-2 grid gap-2 sm:grid-cols-2">
                       {processArtifacts.map((artifact) => {
@@ -1800,7 +1800,7 @@ export function CodexPetStudio({
                             {url ? (
                               <img src={url} alt={codexPetProcessArtifactLabel(artifact)} className="max-h-40 w-full bg-[#f4f4f6] object-contain" />
                             ) : (
-                              <span className="grid h-20 w-full place-items-center bg-[#f4f4f6] px-2 text-center text-[9px] text-[#9a9aa2]">无可预览图像</span>
+                              <span className="grid h-20 w-full place-items-center bg-[#f4f4f6] px-2 text-center text-[9px] text-ink-tertiary">无可预览图像</span>
                             )}
                             <figcaption className="flex items-center justify-between gap-2 px-2 py-1.5 text-[9px] text-ink-secondary">
                               <span className="min-w-0 truncate font-semibold text-ink-secondary">{codexPetProcessArtifactLabel(artifact)}</span>
@@ -1822,7 +1822,7 @@ export function CodexPetStudio({
             <CardTitle
               icon="mdi:progress-clock"
               title="阶段进度"
-              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-brand-ink" : "text-[#85858d]"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-brand" : "bg-[#a8a8af]"}`} />{streamLabel}</span>}
+              aside={<span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${streamState === "live" ? "text-brand-ink" : "text-ink-tertiary"}`}><span className={`size-1.5 rounded-full ${streamState === "live" ? "animate-pulse bg-brand" : "bg-[#a8a8af]"}`} />{streamLabel}</span>}
             />
             <div className="space-y-3 p-4">
               <div>
@@ -1833,7 +1833,7 @@ export function CodexPetStudio({
                 <div className="h-2 overflow-hidden rounded-full bg-[#eceef1]">
                   <div className="h-full rounded-full bg-brand transition-[width] duration-500" style={{ width: `${progress}%` }} />
                 </div>
-                <p className="mt-1.5 text-[10px] leading-4 text-[#7f7f87]">{latestRun?.progressMessage || lastEvent?.message || "提交后会显示当前子任务"}</p>
+                <p className="mt-1.5 text-[10px] leading-4 text-ink-tertiary">{latestRun?.progressMessage || lastEvent?.message || "提交后会显示当前子任务"}</p>
               </div>
               <ol className="space-y-2">
                 {CODEX_PET_PROGRESS_STEPS.map((step) => {
@@ -1841,11 +1841,11 @@ export function CodexPetStudio({
                   const active = progress >= step.start && progress < step.end;
                   return (
                     <li key={step.id} className="flex items-center gap-2">
-                      <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-[#eceef1] text-[#9898a0]"}`}>
+                      <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-[#eceef1] text-ink-tertiary"}`}>
                         {complete ? <Icon icon="mdi:check" aria-hidden /> : CODEX_PET_PROGRESS_STEPS.findIndex((item) => item.id === step.id) + 1}
                       </span>
                       <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-ink" : "text-ink-secondary"}`}>{step.label}</span>
-                      <span className="text-[9px] text-[#a0a0a7]">{step.range}</span>
+                      <span className="text-[9px] text-ink-tertiary">{step.range}</span>
                     </li>
                   );
                 })}
@@ -1853,15 +1853,15 @@ export function CodexPetStudio({
               {latestRun && (
                 <div className="grid grid-cols-3 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
-                    <span className="block text-[#919198]">当前子任务</span>
+                    <span className="block text-ink-tertiary">当前子任务</span>
                     <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-ink-secondary">{currentSubtask}</span>
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
-                    <span className="block text-[#919198]">成功图片</span>
+                    <span className="block text-ink-tertiary">成功图片</span>
                     <span className="mt-0.5 block font-semibold text-ink-secondary">{latestRun.hasSuccessfulImage ? "已有" : "暂无"}</span>
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
-                    <span className="block text-[#919198]">真实生图调用</span>
+                    <span className="block text-ink-tertiary">真实生图调用</span>
                     <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-ink-secondary">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT}</span>
                   </div>
                 </div>
@@ -1870,16 +1870,16 @@ export function CodexPetStudio({
           </Card>
 
           <Card ariaLabel="运行任务与重试">
-            <CardTitle icon="mdi:graph-outline" title="视觉任务" aside={<span className="text-[10px] text-[#8d8d95]">并行上限 3</span>} />
+            <CardTitle icon="mdi:graph-outline" title="视觉任务" aside={<span className="text-[10px] text-ink-tertiary">并行上限 3</span>} />
             <div className="max-h-44 space-y-1.5 overflow-y-auto p-3">
-              {(detail?.jobs.length ?? 0) === 0 && <p className="py-3 text-center text-[10px] text-[#97979f]">运行后显示动作组与重试次数</p>}
+              {(detail?.jobs.length ?? 0) === 0 && <p className="py-3 text-center text-[10px] text-ink-tertiary">运行后显示动作组与重试次数</p>}
               {detail?.jobs.slice().reverse().slice(0, 12).map((job) => (
                 <div key={job.id} className="rounded-[9px] border border-[#eceef1] px-2.5 py-2">
                   <div className="flex items-center gap-2">
                     <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-ink-secondary">{job.key}</span>
-                    <span className="text-[9px] text-[#85858d]">{job.attempt}/{job.maxAttempts}</span>
+                    <span className="text-[9px] text-ink-tertiary">{job.attempt}/{job.maxAttempts}</span>
                   </div>
-                  <div className="mt-1 flex items-center gap-1 text-[9px] text-[#96969d]">
+                  <div className="mt-1 flex items-center gap-1 text-[9px] text-ink-tertiary">
                     <span className={`size-1.5 rounded-full ${job.status === "completed" ? "bg-brand" : job.status === "failed" ? "bg-red-500" : "bg-brand"}`} />
                     {job.status}{job.error ? ` · ${job.error}` : ""}
                   </div>
@@ -1892,7 +1892,7 @@ export function CodexPetStudio({
             <CardTitle icon="mdi:database-check-outline" title="计费与归档" />
             <div className="space-y-2.5 p-4 text-[11px]">
               <div className="flex items-center justify-between">
-                <span className="text-[#777780]">已预留积分</span>
+                <span className="text-ink-tertiary">已预留积分</span>
                 <span className="font-semibold text-ink">
                   {/* Never restate the planned-call count locally: it is a backend
                       constant served with the price, and a stale copy here would
@@ -1901,11 +1901,11 @@ export function CodexPetStudio({
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#777780]">已结算积分</span>
+                <span className="text-ink-tertiary">已结算积分</span>
                 <span className="font-semibold text-ink">{latestRun ? `${latestRun.billingSettledPoints ?? 0} 积分` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#777780]">预计退回</span>
+                <span className="text-ink-tertiary">预计退回</span>
                 {/* Settlement happens once, at the end. Before that `settled` is 0,
                     so `reserved - settled` reads as a full refund even though every
                     dispatched planned call will be charged. Project from the ledger
@@ -1913,20 +1913,20 @@ export function CodexPetStudio({
                 <span className="font-semibold text-ink">{latestRun ? `${projectedRefundPoints ?? 0} 积分${latestRun.billingSettlementStatus === "settled" ? "" : "（预估）"}` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[#777780]">知识库</span>
-                <span className={`font-semibold ${latestRun?.knowledgeDocumentId ? "text-brand-ink" : latestRun?.status === "archiving" ? "text-brand-ink" : "text-[#8d8d95]"}`}>
+                <span className="text-ink-tertiary">知识库</span>
+                <span className={`font-semibold ${latestRun?.knowledgeDocumentId ? "text-brand-ink" : latestRun?.status === "archiving" ? "text-brand-ink" : "text-ink-tertiary"}`}>
                   {latestRun?.knowledgeDocumentId ? "AI 产物 · 已归档" : latestRun?.status === "archiving" ? "正在归档" : "等待最终产物"}
                 </span>
               </div>
               {packageArtifact && (
                 <div className="flex items-center justify-between">
-                  <span className="text-[#777780]">兼容包大小</span>
+                  <span className="text-ink-tertiary">兼容包大小</span>
                   <span className="font-semibold text-ink">{formatBytes(packageArtifact.sizeBytes)}</span>
                 </div>
               )}
               {latestRun?.usage?.totalTokens !== undefined && (
                 <div className="flex items-center justify-between">
-                  <span className="text-[#777780]">模型 token</span>
+                  <span className="text-ink-tertiary">模型 token</span>
                   <span className="font-semibold text-ink">{latestRun.usage.totalTokens.toLocaleString()}</span>
                 </div>
               )}
@@ -1962,17 +1962,17 @@ export function CodexPetStudio({
           </Card>
 
           <Card ariaLabel="实时事件">
-            <CardTitle icon="mdi:message-flash-outline" title="实时事件" aside={<span className="text-[10px] text-[#8d8d95]">游标 {eventCursorRef.current}</span>} />
+            <CardTitle icon="mdi:message-flash-outline" title="实时事件" aside={<span className="text-[10px] text-ink-tertiary">游标 {eventCursorRef.current}</span>} />
             <ol className="max-h-72 space-y-0 overflow-y-auto p-3" aria-label="桌宠实时事件列表">
-              {events.length === 0 && <li className="py-5 text-center text-[10px] text-[#97979f]">事件会先持久化，再通过 SSE 实时推送</li>}
+              {events.length === 0 && <li className="py-5 text-center text-[10px] text-ink-tertiary">事件会先持久化，再通过 SSE 实时推送</li>}
               {events.slice().reverse().map((event) => (
                 <li key={event.sequence} className="relative border-l border-[#dde1e6] pb-3 pl-3 last:pb-0">
                   <span className="absolute -left-[3px] top-1 size-[5px] rounded-full bg-brand" />
                   <div className="flex items-start gap-2">
                     <span className="min-w-0 flex-1 text-[10px] font-semibold leading-4 text-ink-secondary">{eventTitle(event)}</span>
-                    <span className="flex-none text-[8px] text-[#a0a0a7]">#{event.sequence}</span>
+                    <span className="flex-none text-[8px] text-ink-tertiary">#{event.sequence}</span>
                   </div>
-                  <p className="mt-0.5 text-[9px] text-[#92929a]">{event.stage ? codexPetStatusLabel(event.stage) : event.type} · {shortDate(event.createdAt)}</p>
+                  <p className="mt-0.5 text-[9px] text-ink-tertiary">{event.stage ? codexPetStatusLabel(event.stage) : event.type} · {shortDate(event.createdAt)}</p>
                 </li>
               ))}
             </ol>

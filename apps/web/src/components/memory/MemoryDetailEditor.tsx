@@ -38,7 +38,7 @@ export default function MemoryDetailEditor({
   return (
     <div className="space-y-4">
       <div>
-        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
           标题
         </label>
         <input
@@ -47,14 +47,14 @@ export default function MemoryDetailEditor({
           className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm text-ink"
         />
         {showGeneratedTitleHint ? (
-          <p className="mt-2 text-xs text-[#8a8a8f]">
+          <p className="mt-2 text-xs text-ink-tertiary">
             已根据内容生成建议标题，可编辑后保存
           </p>
         ) : null}
       </div>
 
       <div>
-        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
           内容
         </label>
         <textarea
@@ -66,7 +66,7 @@ export default function MemoryDetailEditor({
       </div>
 
       <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
           记忆类型
         </p>
         <div className="flex flex-wrap gap-2">
@@ -89,7 +89,7 @@ export default function MemoryDetailEditor({
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             重要度
           </label>
           <span className="text-sm font-medium text-ink">{importance}</span>
@@ -105,7 +105,7 @@ export default function MemoryDetailEditor({
       </div>
 
       <div>
-        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
           标签
         </label>
         <input

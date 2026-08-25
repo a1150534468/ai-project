@@ -96,8 +96,8 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
                     <span className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-medium ${statusTone(run.status)}`}>
                       {statusLabel(run.status)}
                     </span>
-                    {time && <span className="text-xs text-[#8a8a8f]">{time}</span>}
-                    <Icon icon="mdi:chevron-right" className="text-lg text-[#8a8a8f]" aria-hidden />
+                    {time && <span className="text-xs text-ink-tertiary">{time}</span>}
+                    <Icon icon="mdi:chevron-right" className="text-lg text-ink-tertiary" aria-hidden />
                   </div>
                 </div>
               </button>

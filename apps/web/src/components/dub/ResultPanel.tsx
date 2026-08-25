@@ -97,7 +97,7 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
         <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-5">
           {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置成片价格，暂无法生成。</p>}
           {priced && estimate !== null && (
-            <p className="text-[12.5px] text-[#8a8a8f]">音频约 {audioDurationSec} 秒，预计消耗 {estimate} 视频点，按实际成片时长结算。</p>
+            <p className="text-[12.5px] text-ink-tertiary">音频约 {audioDurationSec} 秒，预计消耗 {estimate} 视频点，按实际成片时长结算。</p>
           )}
           <button
             disabled={starting || !priced}

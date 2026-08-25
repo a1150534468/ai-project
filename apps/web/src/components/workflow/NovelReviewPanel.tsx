@@ -43,7 +43,7 @@ export function NovelReviewPanel({
             <Icon icon="mdi:clipboard-check-outline" aria-hidden />
             审阅
           </h3>
-          <p className="mt-1 text-xs text-[#8a8a8f]">修改率 {chapter?.modificationRate ?? 0}%</p>
+          <p className="mt-1 text-xs text-ink-tertiary">修改率 {chapter?.modificationRate ?? 0}%</p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(chapter?.reviewStatus)}`}>{statusLabel(chapter?.reviewStatus)}</span>
       </div>
@@ -57,7 +57,7 @@ export function NovelReviewPanel({
         <p className="text-xs font-semibold text-ink">行动项</p>
         <div className="mt-2 grid gap-1 text-xs leading-5 text-ink-secondary">
           {actionItems.map((item, index) => <p key={`${item}:${index}`} className="break-words">- {item}</p>)}
-          {actionItems.length === 0 && <p className="text-[#8a8a8f]">暂无行动项</p>}
+          {actionItems.length === 0 && <p className="text-ink-tertiary">暂无行动项</p>}
         </div>
       </div>
 

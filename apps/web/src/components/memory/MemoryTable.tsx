@@ -71,7 +71,7 @@ export default function MemoryTable({
     <div className="h-full min-h-0 overflow-hidden rounded-[14px] border border-[#e8e8ed] bg-white">
       <div className="max-h-full overflow-auto">
         <table className="min-w-[820px] w-full table-fixed border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-[#f7faf9] text-[11px] font-semibold uppercase text-[#8a8a8f]">
+          <thead className="sticky top-0 z-10 bg-[#f7faf9] text-[11px] font-semibold uppercase text-ink-tertiary">
             <tr>
               <th className="w-[34%] whitespace-nowrap px-4 py-3">记忆内容</th>
               <th className="w-[13%] whitespace-nowrap px-3 py-3">类型</th>
@@ -139,7 +139,7 @@ export default function MemoryTable({
                           </span>
                         ))
                       ) : (
-                        <span className="text-xs text-[#8a8a8f]">暂无</span>
+                        <span className="text-xs text-ink-tertiary">暂无</span>
                       )}
                     </div>
                   </td>
@@ -152,7 +152,7 @@ export default function MemoryTable({
                   <td className="px-3 py-4 text-right align-top">
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-[#8a8a8f] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-ink-tertiary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                       aria-label={`查看记忆：${title}`}
                       onClick={(event) => {
                         event.stopPropagation();

@@ -86,16 +86,16 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
               <span className="truncate text-[13px] font-medium text-ink">{a.title}</span>
             </button>
             <div className="mt-2 flex gap-2 text-[11px]">
-              <button onClick={() => void star(a)} className="text-[#8a8a8f] ">
+              <button onClick={() => void star(a)} className="text-ink-tertiary ">
                 <Icon icon={a.isFavorite ? "mdi:star" : "mdi:star-outline"} className="text-base" />
               </button>
-              <button onClick={() => void remove(a.id)} className="text-[#8a8a8f] ">
+              <button onClick={() => void remove(a.id)} className="text-ink-tertiary ">
                 <Icon icon="mdi:trash-can-outline" className="text-base" />
               </button>
             </div>
           </div>
         ))}
-        {avatars.length === 0 && <p className="text-[12.5px] text-[#b6b6bd]">还没有数字人形象，先新建一个。</p>}
+        {avatars.length === 0 && <p className="text-[12.5px] text-ink-tertiary">还没有数字人形象，先新建一个。</p>}
       </div>
 
       <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-4">
@@ -109,7 +109,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         <button
           disabled={busy || !priced}
           onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-[#8a8a8f] disabled:opacity-40"
+          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-ink-tertiary disabled:opacity-40"
         >
           <Icon icon={cloning ? "mdi:loading" : "mdi:video-account"} className={`text-2xl ${cloning ? "animate-spin text-brand" : ""}`} />
           <span className="text-[13px]">{cloning ? "克隆中，请稍候…" : "上传无配音的场景视频（≤100MB）"}</span>
@@ -117,7 +117,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         <input ref={inputRef} type="file" accept="video/*" className="hidden" onChange={(e) => void pick(e.target.files?.[0] ?? null)} />
 
         {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置建形象价格，暂无法新建。</p>}
-        {priced && estimate !== null && <p className="text-[12px] text-[#8a8a8f]">新建一次消耗 {estimate} 视频点。</p>}
+        {priced && estimate !== null && <p className="text-[12px] text-ink-tertiary">新建一次消耗 {estimate} 视频点。</p>}
       </div>
     </div>
   );

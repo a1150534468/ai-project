@@ -38,7 +38,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
       </div>
 
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
           标签
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
@@ -52,14 +52,14 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
               </span>
             ))
           ) : (
-            <span className="text-sm text-[#8a8a8f]">暂无标签</span>
+            <span className="text-sm text-ink-tertiary">暂无标签</span>
           )}
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="rounded-[10px] border border-[#e8e8ed] bg-white p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             创建时间
           </p>
           <p className="mt-2 text-sm text-ink">
@@ -67,7 +67,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
           </p>
         </div>
         <div className="rounded-[10px] border border-[#e8e8ed] bg-white p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             最近使用
           </p>
           <p className="mt-2 text-sm text-ink">{formatDate(node.lastUsedAt)}</p>

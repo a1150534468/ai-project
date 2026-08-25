@@ -149,7 +149,7 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
           <h1 className="flex items-center gap-2 text-[18px] font-semibold text-ink">
             <Icon icon="mdi:account-voice" className="text-brand" /> 数字人口播
           </h1>
-          <p className="mt-1 text-[12.5px] text-[#8a8a8f]">上传参考视频，自动拆解文案 → 洗稿 → 配音 → 数字人对口型成片。</p>
+          <p className="mt-1 text-[12.5px] text-ink-tertiary">上传参考视频，自动拆解文案 → 洗稿 → 配音 → 数字人对口型成片。</p>
         </header>
 
         <StepRail active={stageIndex(stage)} busy={busy} onSelect={(i) => setStage(STAGES[i].id)} />
@@ -227,7 +227,7 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
           >
             上一步
           </button>
-          <span className="text-[12px] text-[#b6b6bd]">第 {stageIndex(stage) + 1} / {STAGES.length} 步 · 可点击上方步骤条自由切换</span>
+          <span className="text-[12px] text-ink-tertiary">第 {stageIndex(stage) + 1} / {STAGES.length} 步 · 可点击上方步骤条自由切换</span>
           <button
             disabled={stage === "result" || !canNext || busy}
             onClick={goNext}
@@ -242,5 +242,5 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center text-[13px] text-[#b6b6bd]">{text}</div>;
+  return <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center text-[13px] text-ink-tertiary">{text}</div>;
 }

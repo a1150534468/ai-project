@@ -61,7 +61,7 @@ export function ArticleWorkflowBusyPanel(props: ArticleWorkflowBusyPanelProps) {
         </h2>
         <p className="mt-2 text-sm leading-6 text-ink-secondary">{props.project.progressMessage || "请稍候..."}</p>
         {multi && (
-          <p className="mt-1 text-xs text-[#8a8a8f]">
+          <p className="mt-1 text-xs text-ink-tertiary">
             已完成 {props.batchProgress.completed} / {props.batchProgress.total} 个平台
           </p>
         )}

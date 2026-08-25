@@ -117,7 +117,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
               <Icon icon={v.gender === "female" ? "mdi:face-woman-outline" : "mdi:face-man-outline"} className="text-lg text-brand" />
               <span>
                 <span className="block text-[13px] font-medium text-ink">{v.label}</span>
-                <span className="block text-[11px] text-[#8a8a8f]">{v.lang === "zh" ? "中文" : "英文"}</span>
+                <span className="block text-[11px] text-ink-tertiary">{v.lang === "zh" ? "中文" : "英文"}</span>
               </span>
             </button>
           ))}
@@ -138,7 +138,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
         <div>
           <button
             onClick={() => refInput.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-[#8a8a8f] "
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-ink-tertiary "
           >
             <Icon icon="mdi:microphone-outline" className="text-2xl" />
             <span className="text-[13px]">{refFile ? refFile.name : "上传参考音频复刻音色（≤10MB，mp3/wav）"}</span>
@@ -171,7 +171,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
       )}
 
       {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置配音价格，暂无法生成。</p>}
-      {priced && estimate !== null && <p className="text-[12px] text-[#8a8a8f]">文案 {text.length} 字，预计消耗 {estimate} 算力点。</p>}
+      {priced && estimate !== null && <p className="text-[12px] text-ink-tertiary">文案 {text.length} 字，预计消耗 {estimate} 算力点。</p>}
 
       <div className="flex items-center gap-3">
         <button

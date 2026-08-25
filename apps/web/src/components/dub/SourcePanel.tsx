@@ -94,7 +94,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
             />
             {!parsePriced && <p className="text-[12px] text-amber-600">管理员尚未配置解析价格，暂无法解析。</p>}
             {parsePriced && parseEstimate !== null && (
-              <p className="text-[12px] text-[#8a8a8f]">解析预计消耗约 {parseEstimate} 算力点/次（拆解按视频时长另计）。</p>
+              <p className="text-[12px] text-ink-tertiary">解析预计消耗约 {parseEstimate} 算力点/次（拆解按视频时长另计）。</p>
             )}
             <button
               disabled={!shareText.trim() || busy || !parsePriced}
@@ -109,7 +109,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
         <div className="space-y-3">
           <button
             onClick={() => inputRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-10 text-[#8a8a8f] "
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-10 text-ink-tertiary "
           >
             <Icon icon="mdi:cloud-upload-outline" className="text-3xl" />
             <span className="text-[13px]">{file ? file.name : "点击选择参考视频（≤50MB）"}</span>
@@ -118,7 +118,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
 
           {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置视频拆解价格，暂无法拆解。</p>}
           {priced && estimate !== null && (
-            <p className="text-[12px] text-[#8a8a8f]">预计消耗约 {estimate} 算力点（60 秒视频），按实际时长结算。</p>
+            <p className="text-[12px] text-ink-tertiary">预计消耗约 {estimate} 算力点（60 秒视频），按实际时长结算。</p>
           )}
 
           <button

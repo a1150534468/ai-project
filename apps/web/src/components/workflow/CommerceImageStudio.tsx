@@ -161,7 +161,7 @@ export function CommerceImageStudio({
     <section className="border-b border-[#ececf0] pb-5">
       <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
       <h2 className="mt-1 text-base font-semibold text-ink">产品资料</h2>
-      <p className="mt-1 text-xs leading-5 text-[#8a8a8f]">主图与详情图共用。</p>
+      <p className="mt-1 text-xs leading-5 text-ink-tertiary">主图与详情图共用。</p>
       <div className="mt-4 grid gap-3">
         <div className="grid gap-2 text-sm font-semibold text-ink">
           平台
@@ -203,7 +203,7 @@ export function CommerceImageStudio({
       <div className="mt-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-semibold text-ink">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-ink-tertiary">
             <Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={isUploading ? "animate-spin" : ""} aria-hidden />
             {isUploading ? "上传中" : "上传"}
           </button>
@@ -211,7 +211,7 @@ export function CommerceImageStudio({
         <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) handleUpload(file); event.currentTarget.value = ""; }} />
         <div className="mt-3 flex flex-wrap gap-2">
           {referenceAssets.map((asset) => <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-14 w-14 rounded-lg border border-[#d2d2d7] object-cover" />)}
-          {referenceAssets.length === 0 && <p className="text-xs text-[#8a8a8f]">暂无参考图</p>}
+          {referenceAssets.length === 0 && <p className="text-xs text-ink-tertiary">暂无参考图</p>}
         </div>
         {uploadError && <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{uploadError}</p>}
       </div>
@@ -245,28 +245,28 @@ export function CommerceImageStudio({
             </div>
             <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
           <div className="rounded-[11px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
-            <p className="text-[11px] font-semibold text-[#8a8a8f]">当前视图</p>
+            <p className="text-[11px] font-semibold text-ink-tertiary">当前视图</p>
             <p className="mt-1 text-sm font-semibold text-ink">{tab === "main" ? "商品主图" : "商品详情图"}</p>
           </div>
           <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
-            <p className="text-[11px] font-semibold text-[#8a8a8f]">平台</p>
+            <p className="text-[11px] font-semibold text-ink-tertiary">平台</p>
             <p className="mt-1 truncate text-sm font-semibold text-ink">{platforms.find((p) => p.id === platformId)?.name ?? platformId}</p>
           </div>
           <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
-            <p className="text-[11px] font-semibold text-[#8a8a8f]">商品名称</p>
+            <p className="text-[11px] font-semibold text-ink-tertiary">商品名称</p>
             <p className="mt-1 truncate text-sm font-semibold text-ink">{productName.trim() || "未填写"}</p>
           </div>
           <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
-            <p className="text-[11px] font-semibold text-[#8a8a8f]">商品类目</p>
+            <p className="text-[11px] font-semibold text-ink-tertiary">商品类目</p>
             <p className="mt-1 truncate text-sm font-semibold text-ink">{effectiveCategory || "未选择"}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
-              <p className="text-[11px] font-semibold text-[#8a8a8f]">卖点</p>
+              <p className="text-[11px] font-semibold text-ink-tertiary">卖点</p>
               <p className="mt-1 text-sm font-semibold text-ink">{sellingPointsInput.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0).length} 条</p>
             </div>
             <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
-              <p className="text-[11px] font-semibold text-[#8a8a8f]">参考图</p>
+              <p className="text-[11px] font-semibold text-ink-tertiary">参考图</p>
               <p className="mt-1 text-sm font-semibold text-ink">{referenceAssets.length} 张</p>
             </div>
           </div>

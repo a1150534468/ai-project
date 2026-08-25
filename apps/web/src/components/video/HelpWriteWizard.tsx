@@ -70,12 +70,12 @@ function StepRail({ active }: { active: number }) {
           const on = i === active;
           return (
             <li key={step.title} className="flex gap-3">
-              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${on ? "bg-[#1d1d1f] text-white" : done ? "bg-[#1d1d1f] text-white" : "bg-[#e6e6ea] text-[#8a8a8f]"}`}>
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${on ? "bg-[#1d1d1f] text-white" : done ? "bg-[#1d1d1f] text-white" : "bg-[#e6e6ea] text-ink-tertiary"}`}>
                 {done ? <Icon icon="mdi:check" className="text-sm" aria-hidden /> : i + 1}
               </span>
               <span className="min-w-0">
-                <span className={`block text-[13.5px] font-semibold ${on || done ? "text-ink" : "text-[#b6b6bd]"}`}>{step.title}</span>
-                <span className={`block text-[11.5px] ${on || done ? "text-[#8a8a8f]" : "text-[#c7c7cc]"}`}>{step.sub}</span>
+                <span className={`block text-[13.5px] font-semibold ${on || done ? "text-ink" : "text-ink-tertiary"}`}>{step.title}</span>
+                <span className={`block text-[11.5px] ${on || done ? "text-ink-tertiary" : "text-ink-tertiary"}`}>{step.sub}</span>
               </span>
             </li>
           );
@@ -118,7 +118,7 @@ function WizardLoader({ messages, hint, icon = "mdi:auto-fix" }: { messages: str
       </div>
       <div className="text-center">
         <p className="text-[15px] font-medium text-ink">{msg}</p>
-        <p className="mt-1.5 text-xs text-[#8a8a8f]">已用时 {elapsed}s · {hint}</p>
+        <p className="mt-1.5 text-xs text-ink-tertiary">已用时 {elapsed}s · {hint}</p>
       </div>
     </div>
   );
@@ -138,7 +138,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
       <div className="mb-2.5 flex items-center gap-2">
         <span className="h-3.5 w-[3px] rounded-full bg-brand" aria-hidden />
         <p className="text-[13px] font-semibold text-ink">{title}</p>
-        <span className="ml-auto text-[11px] font-medium text-[#c0c0c7]">{items.length}</span>
+        <span className="ml-auto text-[11px] font-medium text-ink-tertiary">{items.length}</span>
       </div>
       <div className="grid gap-1.5">
         {items.map((item, i) => (
@@ -148,7 +148,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
               onChange={(e) => onChange(items.map((it, idx) => (idx === i ? e.target.value : it)))}
               className="min-w-0 flex-1 rounded-none border-0 bg-transparent text-[13px] leading-5 text-ink outline-none"
             />
-            <button type="button" aria-label={`删除 ${item}`} onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="shrink-0 text-[#cfcfd6] opacity-100 transition group-focus-within:opacity-100">
+            <button type="button" aria-label={`删除 ${item}`} onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="shrink-0 text-ink-tertiary opacity-100 transition group-focus-within:opacity-100">
               <Icon icon="mdi:close" className="text-sm" aria-hidden />
             </button>
           </div>
@@ -156,7 +156,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
         <button
           type="button"
           onClick={add}
-          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-[#e2e2e8] px-3 py-2 text-left text-[13px] text-[#a0a0a8] transition "
+          className="flex items-center gap-1.5 rounded-[8px] border border-dashed border-[#e2e2e8] px-3 py-2 text-left text-[13px] text-ink-tertiary transition "
         >
           <Icon icon="mdi:plus" className="text-base" aria-hidden />
           <input
@@ -165,7 +165,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
             placeholder="添加一项"
-            className="min-w-0 flex-1 rounded-none border-0 bg-transparent leading-5 text-ink outline-none placeholder:text-[#b6b6bd]"
+            className="min-w-0 flex-1 rounded-none border-0 bg-transparent leading-5 text-ink outline-none placeholder:text-ink-tertiary"
           />
         </button>
       </div>
@@ -292,7 +292,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#ececf0] px-5">
             <span className="text-[15px] font-semibold text-ink">{STEPS[active].title}</span>
-            <button type="button" aria-label="关闭" onClick={onClose} className="text-[#b6b6bd] transition ">
+            <button type="button" aria-label="关闭" onClick={onClose} className="text-ink-tertiary transition ">
               <Icon icon="mdi:close" className="text-xl" aria-hidden />
             </button>
           </header>
@@ -303,7 +303,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 <section className="rounded-[14px] border border-[#ececf0] p-4">
                   <p className="mb-3 text-sm font-semibold text-ink">待分析素材（{materials.length}）</p>
                   {materials.length === 0 ? (
-                    <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-[#8a8a8f]">请先在左侧上传素材，再使用「帮我写」。</p>
+                    <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-ink-tertiary">请先在左侧上传素材，再使用「帮我写」。</p>
                   ) : (
                     <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-5">
                       {materials.map((m, i) => (
@@ -325,7 +325,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 <section className="rounded-[14px] border border-[#ececf0] p-4">
                   <p className="mb-2 text-sm font-semibold text-ink">预计消耗</p>
                   {!pricing ? (
-                    <p className="text-[13px] text-[#8a8a8f]">加载价格中…</p>
+                    <p className="text-[13px] text-ink-tertiary">加载价格中…</p>
                   ) : !priceReady ? (
                     <p className="rounded-[10px] bg-amber-50 px-3 py-2.5 text-[13px] leading-6 text-amber-700">拆解价格未配置或未启用，请联系管理员在后台设置并启用「帮我写-图片拆解 / 视频拆解」价格后再试。</p>
                   ) : (
@@ -367,12 +367,12 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   <p className="mb-4 text-sm font-semibold text-ink">商品洞察</p>
                   <div className="grid grid-cols-2 gap-4">
                     <label className="grid gap-1.5">
-                      <span className="text-[11px] font-medium text-[#8a8a8f]">商品名称</span>
+                      <span className="text-[11px] font-medium text-ink-tertiary">商品名称</span>
                       <input value={insight.insight.productName} onChange={(e) => setInsightField("productName", e.target.value)}
                         className="rounded-[8px] border border-[#e2e2e8] px-3.5 py-2.5 text-[13px] text-ink outline-none transition focus:border-brand" />
                     </label>
                     <label className="grid gap-1.5">
-                      <span className="text-[11px] font-medium text-[#8a8a8f]">商品类目</span>
+                      <span className="text-[11px] font-medium text-ink-tertiary">商品类目</span>
                       <input value={insight.insight.category} onChange={(e) => setInsightField("category", e.target.value)}
                         className="rounded-[8px] border border-[#e2e2e8] px-3.5 py-2.5 text-[13px] text-ink outline-none transition focus:border-brand" />
                     </label>
@@ -407,7 +407,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                           <span className="flex items-center gap-2 text-[13.5px] font-semibold text-ink">
                             <Icon icon={icon} className="text-base" aria-hidden />{title}
                           </span>
-                          <span className="mt-1.5 block text-[11.5px] leading-5 text-[#8a8a8f]">{desc}</span>
+                          <span className="mt-1.5 block text-[11.5px] leading-5 text-ink-tertiary">{desc}</span>
                           {on && <Icon icon="mdi:check-circle" className="absolute right-2.5 top-2.5 text-base text-ink" aria-hidden />}
                         </button>
                       );
@@ -428,7 +428,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                         </button>
                       );
                     })}
-                    <span className="ml-1 text-[11px] text-[#8a8a8f]">有旁白时脚本按约每秒 2-3 字生成口播词</span>
+                    <span className="ml-1 text-[11px] text-ink-tertiary">有旁白时脚本按约每秒 2-3 字生成口播词</span>
                   </div>
                 </section>
 
@@ -451,20 +451,20 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                           <Icon icon="mdi:tray-arrow-up" className="text-xl text-ink" aria-hidden />
                         </span>
                         <span className="text-[13px] font-medium text-ink">{busy ? "分析中…" : "点击上传参考视频"}</span>
-                        <span className="max-w-[220px] text-[11.5px] leading-5 text-[#8a8a8f]">支持上传 30 秒以内视频，系统将分析结构、节奏和表达亮点，生成新的脚本灵感</span>
+                        <span className="max-w-[220px] text-[11.5px] leading-5 text-ink-tertiary">支持上传 30 秒以内视频，系统将分析结构、节奏和表达亮点，生成新的脚本灵感</span>
                         <input type="file" accept="video/*" disabled={busy} className="sr-only"
                           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReferenceUpload(f); e.target.value = ""; }} />
                       </label>
                       <div className="rounded-[14px] border border-[#ececf0] p-4">
                         <p className="text-[13px] font-semibold text-ink">上传后将为你分析</p>
-                        <p className="mt-1 text-[11.5px] leading-5 text-[#8a8a8f]">系统会从参考视频中提取结构、节奏和创意亮点，生成更贴合当前商品的新脚本。</p>
+                        <p className="mt-1 text-[11.5px] leading-5 text-ink-tertiary">系统会从参考视频中提取结构、节奏和创意亮点，生成更贴合当前商品的新脚本。</p>
                         <p className="mb-2 mt-3 text-[12px] font-semibold text-ink-secondary">参考视频要求</p>
                         <div className="grid gap-2">
                           {REF_REQUIREMENTS.map((r) => (
                             <div key={r.title} className="flex items-center gap-2.5 rounded-[9px] border border-[#f0f0f3] px-2.5 py-2">
-                              <Icon icon={r.icon} className="shrink-0 text-base text-[#8a8a8f]" aria-hidden />
+                              <Icon icon={r.icon} className="shrink-0 text-base text-ink-tertiary" aria-hidden />
                               <span className="text-[12px] font-medium text-ink">{r.title}</span>
-                              <span className="text-[11px] text-[#8a8a8f]">{r.desc}</span>
+                              <span className="text-[11px] text-ink-tertiary">{r.desc}</span>
                             </div>
                           ))}
                         </div>
@@ -500,7 +500,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
           <footer className="flex h-16 shrink-0 items-center justify-between border-t border-[#ececf0] px-5">
             {stage === "confirm" && (
               <>
-                <button type="button" onClick={onClose} className="text-[13px] font-medium text-[#8a8a8f] ">取消</button>
+                <button type="button" onClick={onClose} className="text-[13px] font-medium text-ink-tertiary ">取消</button>
                 <button type="button" onClick={() => void startAnalyze()} disabled={!canAnalyze}
                   className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[#c7c7cc]">
                   {materials.length === 0 ? "请先上传素材" : estimatedCost > 0 ? `开始分析 · 预计 ${estimatedCost} 点` : "开始分析"}
@@ -509,25 +509,25 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
             )}
             {stage === "insight" && (
               <>
-                <button type="button" onClick={onClose} className="text-[13px] font-medium text-[#8a8a8f] ">重新分析</button>
+                <button type="button" onClick={onClose} className="text-[13px] font-medium text-ink-tertiary ">重新分析</button>
                 <button type="button" onClick={() => setStage("creating")} disabled={!insight}
                   className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">下一步</button>
               </>
             )}
             {stage === "creating" && (
               <>
-                <button type="button" onClick={() => setStage("insight")} className="text-[13px] font-medium text-[#8a8a8f] ">返回上一步</button>
+                <button type="button" onClick={() => setStage("insight")} className="text-[13px] font-medium text-ink-tertiary ">返回上一步</button>
                 {mode === "config" ? (
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
                     className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">生成脚本</button>
                 ) : (
-                  <span className="text-[12px] text-[#8a8a8f]">{busy ? "分析并生成中…" : "上传参考视频后自动分析并生成脚本"}</span>
+                  <span className="text-[12px] text-ink-tertiary">{busy ? "分析并生成中…" : "上传参考视频后自动分析并生成脚本"}</span>
                 )}
               </>
             )}
             {stage === "preview" && (
               <>
-                <button type="button" onClick={() => setStage("creating")} className="text-[13px] font-medium text-[#8a8a8f] ">返回上一步</button>
+                <button type="button" onClick={() => setStage("creating")} className="text-[13px] font-medium text-ink-tertiary ">返回上一步</button>
                 <div className="flex gap-2.5">
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
                     className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-ink transition disabled:opacity-50">重新生成脚本</button>

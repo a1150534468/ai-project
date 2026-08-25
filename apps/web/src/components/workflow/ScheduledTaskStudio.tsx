@@ -150,7 +150,7 @@ export function ScheduledTaskStudio({ token }: Props) {
             </div>
             {openRuns[t.id] && (
               <div className="mt-3 space-y-2 border-t border-[#e8e8ed] pt-3">
-                {openRuns[t.id].length === 0 && <p className="text-xs text-[#8a8a8f]">暂无运行记录</p>}
+                {openRuns[t.id].length === 0 && <p className="text-xs text-ink-tertiary">暂无运行记录</p>}
                 {openRuns[t.id].map((run) => (
                   <details key={run.id} className="text-xs">
                     <summary className="cursor-pointer text-ink-secondary">

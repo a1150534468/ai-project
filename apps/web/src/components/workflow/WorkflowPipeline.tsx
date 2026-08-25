@@ -53,7 +53,7 @@ export function WorkflowPipeline({ moduleId }: { readonly moduleId: WorkflowModu
             {index < steps.length - 1 && <span className="my-0.5 w-px flex-1 bg-[#e8e8ed]" />}
           </div>
           <div className="flex items-center gap-1.5 pb-3 pt-0.5">
-            <Icon icon={step.icon} className="flex-none text-base text-[#a1a1a6]" aria-hidden />
+            <Icon icon={step.icon} className="flex-none text-base text-ink-tertiary" aria-hidden />
             <p className="text-[13px] text-ink-secondary">{step.label}</p>
           </div>
         </li>

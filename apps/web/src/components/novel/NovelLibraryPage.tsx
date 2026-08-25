@@ -55,9 +55,9 @@ export function NovelLibraryPage({
           <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">从故事种子、世界与人物，到章节生产、叙事治理和全托管运行，都在同一个作品空间完成。</p>
         </div>
         <div className="grid grid-cols-3 gap-2 rounded-2xl border border-[#e1e5e3] bg-white p-2 text-center shadow-sm">
-          <div className="px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.length}</p><p className="text-[10px] text-[#8a928f]">作品</p></div>
-          <div className="border-x border-[#edf0ef] px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.filter((project) => project.status === "active").length}</p><p className="text-[10px] text-[#8a928f]">创作中</p></div>
-          <div className="px-3 py-1"><p className="text-lg font-semibold text-brand-ink">AI</p><p className="text-[10px] text-[#8a928f]">协同</p></div>
+          <div className="px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.length}</p><p className="text-[10px] text-ink-tertiary">作品</p></div>
+          <div className="border-x border-[#edf0ef] px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.filter((project) => project.status === "active").length}</p><p className="text-[10px] text-ink-tertiary">创作中</p></div>
+          <div className="px-3 py-1"><p className="text-lg font-semibold text-brand-ink">AI</p><p className="text-[10px] text-ink-tertiary">协同</p></div>
         </div>
       </header>
 
@@ -75,9 +75,9 @@ export function NovelLibraryPage({
 
         {loading && <div className="grid min-h-52 place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white"><p className="flex items-center gap-2 text-sm font-semibold text-ink-secondary"><Icon icon="mdi:loading" className="animate-spin text-xl text-brand-ink" />加载书目中</p></div>}
 
-        {!loading && projects.length === 0 && <div className="grid min-h-60 place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white px-6 text-center"><div><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink"><Icon icon="mdi:book-plus-outline" /></div><h3 className="mt-4 text-base font-semibold text-ink">还没有书目</h3><p className="mt-2 text-sm text-[#7d8582]">在上方写下故事创意，创建第一本书。</p></div></div>}
+        {!loading && projects.length === 0 && <div className="grid min-h-60 place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white px-6 text-center"><div><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink"><Icon icon="mdi:book-plus-outline" /></div><h3 className="mt-4 text-base font-semibold text-ink">还没有书目</h3><p className="mt-2 text-sm text-ink-tertiary">在上方写下故事创意，创建第一本书。</p></div></div>}
 
-        {!loading && projects.length > 0 && visible.length === 0 && <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white text-center"><div><Icon icon="mdi:book-search-outline" className="mx-auto text-4xl text-[#a3aaa7]" /><p className="mt-2 text-sm text-[#7d8582]">没有找到匹配“{query}”的书目</p><button type="button" onClick={() => setQuery("")} className="mt-3 text-xs font-semibold text-brand-ink">清除搜索</button></div></div>}
+        {!loading && projects.length > 0 && visible.length === 0 && <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white text-center"><div><Icon icon="mdi:book-search-outline" className="mx-auto text-4xl text-ink-tertiary" /><p className="mt-2 text-sm text-ink-tertiary">没有找到匹配“{query}”的书目</p><button type="button" onClick={() => setQuery("")} className="mt-3 text-xs font-semibold text-brand-ink">清除搜索</button></div></div>}
 
         {!loading && visible.length > 0 && (
           <div className="flex snap-x gap-4 overflow-x-auto pb-3 [scrollbar-width:thin]">
@@ -95,8 +95,8 @@ export function NovelLibraryPage({
                       <button type="button" onClick={() => onOpenProject(project.id)} className="mt-4 block w-full text-left"><h3 className="truncate text-lg font-semibold text-ink">{project.title}</h3><p className="mt-2 truncate text-sm text-ink-secondary">{project.genre || "未设置题材"}</p></button>
                     </div>
                     <div className="mt-8 flex items-end justify-between gap-3 border-t border-[#edf0ef] pt-4">
-                      <p className="text-[11px] leading-5 text-[#8b9390]">最近更新<br />{formatUpdate(project.updatedAt)}</p>
-                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-[#9ca29f] opacity-100 transition " aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-[#f1f6f4] px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
+                      <p className="text-[11px] leading-5 text-ink-tertiary">最近更新<br />{formatUpdate(project.updatedAt)}</p>
+                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary opacity-100 transition " aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-[#f1f6f4] px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
                     </div>
                   </div>
                 </article>

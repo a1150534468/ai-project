@@ -90,7 +90,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
         <fieldset className="mt-5 border-t border-[#e5e7eb] pt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <legend className="text-xs font-semibold text-ink">发布平台</legend>
-            <span className="text-[10px] text-[#8a8a8f]">可多选</span>
+            <span className="text-[10px] text-ink-tertiary">可多选</span>
           </div>
           <div className="grid gap-2">
             {ARTICLE_WORKFLOW_PLATFORMS.map((platform) => {
@@ -116,7 +116,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-ink">{config.label}</span>
-                    <span className="mt-0.5 block text-[11px] text-[#8a8a8f]">{PLATFORM_HINTS[platform]}</span>
+                    <span className="mt-0.5 block text-[11px] text-ink-tertiary">{PLATFORM_HINTS[platform]}</span>
                   </span>
                   <Icon
                     icon={checked ? "mdi:check-circle" : "mdi:circle-outline"}
@@ -132,7 +132,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
         <label className="mt-4 flex items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4">
           <span className="min-w-0">
             <span className="block text-xs font-semibold text-ink">同时生成配图</span>
-            <span className="mt-1 block text-[10px] text-[#8a8a8f]">
+            <span className="mt-1 block text-[10px] text-ink-tertiary">
               {props.generateImages ? "文案与配图一起完成" : "先确认文案，再生成配图"}
             </span>
           </span>
@@ -197,7 +197,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
             <span>计费规则</span>
             <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
           </summary>
-          <p className="mt-2 text-[11px] leading-5 text-[#8a8a8f]">
+          <p className="mt-2 text-[11px] leading-5 text-ink-tertiary">
             文本 {articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}；配图{" "}
             {articleWorkflowPricingText(props.pricing?.image1k, "按 1K 生图价格")}。失败任务自动退费。
           </p>

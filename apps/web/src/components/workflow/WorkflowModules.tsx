@@ -26,12 +26,12 @@ export function WorkflowModules({ modules, activeModuleId, onSelectModule }: Wor
                 ? "bg-brand-soft font-semibold text-brand-ink"
                 : available
                   ? "text-ink-secondary "
-                  : "cursor-not-allowed text-[#a1a1a6]"
+                  : "cursor-not-allowed text-ink-tertiary"
             }`}
           >
             <Icon icon={module.icon} className="flex-none text-lg" aria-hidden />
             <span className="truncate">{module.title}</span>
-            {!available && <span className="ml-auto flex-none text-[10px] font-medium text-[#a1a1a6]">开发中</span>}
+            {!available && <span className="ml-auto flex-none text-[10px] font-medium text-ink-tertiary">开发中</span>}
           </button>
         );
       })}

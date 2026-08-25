@@ -146,7 +146,7 @@ export default function MemoryDetailPanel({
     >
       <div className="flex items-start justify-between gap-3 border-b border-[#e8e8ed] px-5 py-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             记忆详情
           </p>
           <h2
@@ -271,7 +271,7 @@ export default function MemoryDetailPanel({
             保存修改
           </button>
         ) : (
-          <div className="text-xs text-[#8a8a8f]">
+          <div className="text-xs text-ink-tertiary">
             支持编辑标题、内容、类型、重要度与标签
           </div>
         )}

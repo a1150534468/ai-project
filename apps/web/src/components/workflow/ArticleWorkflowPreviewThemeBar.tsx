@@ -113,7 +113,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                   onChange={(event) => props.onPreviewThemeColor(event.target.value)}
                   className="h-7 w-10 cursor-pointer rounded border border-[#d2d2d7] bg-white p-0.5"
                 />
-                <span className="font-mono text-[11px] text-[#8a8a8f]">
+                <span className="font-mono text-[11px] text-ink-tertiary">
                   {effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary}
                 </span>
               </div>
