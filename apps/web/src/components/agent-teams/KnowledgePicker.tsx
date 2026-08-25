@@ -81,7 +81,7 @@ export function KnowledgePicker({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#1d1d1f]/25 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/25 p-4"
           onClick={() => setOpen(false)}
         >
           <div

@@ -39,6 +39,13 @@
 | Warning | `--color-warning` | `warning` | `#d97706` | `#ff9f0a` | 提示、重要度 |
 | Info | `--color-info` | `info` | `#2563eb` | `#0a84ff` | 搜索命中、辅助状态 |
 | Success | `--color-success` | `success` | `#16a34a` | `#30d158` | 完成、成功反馈 |
+| Scrim | `--color-scrim` | `scrim` | `#101615` | 同浅色 | 模态遮罩，用 `bg-scrim/25`~`/55` |
+| Console | `--color-console` | `console` | `#111418` | 同浅色 | 固定深色面板：流式输出、脚本预览、视频信箱底 |
+| Console/ink | `--color-console-ink` | `console-ink` | `#d7e0e8` | 同浅色 | 深色面板上的字与描边（`/70` 次要、`/15` 描边） |
+
+`scrim` / `console` / `console-ink` 是三个**故意不随主题翻转**的角色，所以暗色块里不重新声明：
+遮罩的职责是压暗背后内容，两种模式下都该压暗；控制台面板是一套自洽的深色配色，翻成浅色就不是控制台了。
+反过来说，**深色块只要内容会跟着主题翻，就不能用它们** —— 那种块用 `surface-inverse` + `ink-inverse`。
 
 已知的两处暗色扁平化，是既有行为不是遗漏：`hairline` 与 `hairline-subtle`、`surface` 与 `surface-subtle`
 在暗色下取同值。要让它们在暗色下也分层属于独立的设计改动。
@@ -103,7 +110,16 @@
 
 - 只允许 `brand #0066cc` 作为主强调色，不引入第二主色系。
 - **组件里不写字面色值**：不写 `text-[#1d1d1f]`、不写 `border-gray-200`，一律用上表的语义类。
-  唯一例外是插画/渐变装饰这类一次性视觉，需在 PR 里说明。
+  唯一例外是下面这份**装饰色白名单**（全站仅 11 处，改动需在 PR 里说明）：
+
+  | 位置 | 色值 | 是什么 |
+  |------|------|--------|
+  | `HelpWriteWizard.tsx` | `bg-[#20202a]`、`from-[#3a3a44] to-[#20202a]` | 素材占位缩略图（恒深底 + 白图标） |
+  | `VideoGenerationStudio.tsx` | `from-[#3a3a44] to-[#20202a]`、`from-[#7d8ea8] to-[#5c6b84]`、`from-[#caa46a] to-[#a8823f]` | 视频/图片/音频三类任务的品类渐变 |
+  | `NovelLibraryPage.tsx` | `bg-[#557b95]`、`bg-[#8a7297]` | 书脊色带（与 `bg-brand` 三色轮换） |
+
+  判断标准：**它是不是在表达某个语义角色**。是（文字/描边/面/状态）就必须用 token；
+  纯装饰、且两种主题下都该保持原样的一次性视觉，才进这份白名单。
 - 新增颜色必须先写入本文件、再落到 `index.css` 的 `--color-*` 与 `tailwind.config.js`，最后才进组件。
 - 暗色值与浅色值必须同时给出。只给浅色的色值等于在暗色模式下坏掉。
 - 记忆管理页优先使用表格、筛选条和右侧详情，不使用装饰性可视化背景。

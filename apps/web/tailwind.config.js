@@ -34,6 +34,12 @@ export default {
         warning: "rgb(var(--color-warning) / <alpha-value>)",
         info: "rgb(var(--color-info) / <alpha-value>)",
         success: "rgb(var(--color-success) / <alpha-value>)",
+        // 两个「不随主题翻转」的角色：遮罩恒深，控制台面板恒深。
+        scrim: "rgb(var(--color-scrim) / <alpha-value>)",
+        console: {
+          DEFAULT: "rgb(var(--color-console) / <alpha-value>)",
+          ink: "rgb(var(--color-console-ink) / <alpha-value>)",
+        },
       },
       fontFamily: {
         sans: [

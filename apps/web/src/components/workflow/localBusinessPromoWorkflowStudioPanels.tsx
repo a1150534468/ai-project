@@ -583,7 +583,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             </div>
 
             {derived.previewUrl ? (
-              <div className="overflow-hidden rounded-[12px] border border-hairline-subtle bg-[#0f1720]">
+              <div className="overflow-hidden rounded-[12px] border border-hairline-subtle bg-console">
                 <div className={`mx-auto w-full ${previewFrameWidthClass(derived.previewAspectRatio)}`} style={{ aspectRatio: previewAspectRatioValue(derived.previewAspectRatio) }}>
                   <video key={derived.previewUrl} src={derived.previewUrl} controls className="h-full w-full bg-black object-contain" />
                 </div>
