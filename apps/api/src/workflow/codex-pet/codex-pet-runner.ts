@@ -91,6 +91,8 @@ import {
   requireApprovedRegisteredRow,
   reviewFirstLookRow,
   reviewSecondLookRow,
+  type FirstLookRowGate,
+  type SecondLookRowGate,
 } from "./codex-pet-runner/runner-direction.js";
 import { deriveRunningLeft, runStandardRow, storeStandardAtlas } from "./codex-pet-runner/runner-standard-rows.js";
 import {
@@ -150,6 +152,8 @@ import {
   CodexPetStandardAtlasStructureError,
   type FinalRepairRow,
   INTERMEDIATE_TTL_MS,
+  type LookBReferenceState,
+  type LookRowState,
   type RunnerContext,
   type StandardRepairRow,
 } from "./codex-pet-runner/runner-types.js";
@@ -551,7 +555,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       });
   let lookAAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-a", ctx.identity.chromaKey);
   let lookBAnchorStoryboard = await createLookAnchorStoryboard(cardinalAnchor.buffer, "look-b", ctx.identity.chromaKey);
-  let lookA = await runBoardJob(ctx, {
+  const initialLookA = await runBoardJob(ctx, {
     key: "look-a",
     kind: "look_row",
     dependencies: ["look-cardinals"],
@@ -575,33 +579,39 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     animationDurations: petRowSpec("look-a").durations,
   });
   let neutralDirectionFrame = { artifact: idle.frameArtifacts[0]!, buffer: idle.frames[0]! };
-  let registeredLookA = await registerDirectionRow(ctx, {
+  const initialRegisteredLookA = await registerDirectionRow(ctx, {
     row: "look-a",
-    source: lookA,
+    source: initialLookA,
     neutral: neutralDirectionFrame,
     progress: 73,
   });
-  let firstLookGate = await reviewFirstLookRow(ctx, { look: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+  // 三份 look 修复循环读写的是同一组「生成结果 / 注册结果 / 门禁结论」，
+  // 收进一个对象后修复循环才能提成函数（阶段 2 Task 2.2），闭包也不再需要捕获裸 let。
+  const lookARow: LookRowState<FirstLookRowGate> = {
+    row: initialLookA,
+    registered: initialRegisteredLookA,
+    gate: await reviewFirstLookRow(ctx, { look: initialRegisteredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor }),
+  };
   const firstLookRepairRequirements: string[] = [];
-  while (!firstLookGate.pass) {
-    if (lookA.job.attempt >= lookA.job.maxAttempts) {
-      const message = `方向 000 到 157.5 未通过 row-10 前置门禁：${firstLookGate.failures.join("；") || "方向语义或连续性失败"}`;
+  while (!lookARow.gate.pass) {
+    if (lookARow.row.job.attempt >= lookARow.row.job.maxAttempts) {
+      const message = `方向 000 到 157.5 未通过 row-10 前置门禁：${lookARow.gate.failures.join("；") || "方向语义或连续性失败"}`;
       if (ctx.perImageBilling || ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0") {
         throw new CodexPetImageApprovalRequiredError("look-a", `${message}，需要确认后才能重新生成`);
       }
       throw new Error(message);
     }
     await emit(ctx, "run.repairing", "repairing", 74, "正在修复第一组观察方向，第二组尚未启动", {
-      attempt: lookA.job.attempt,
+      attempt: lookARow.row.job.attempt,
       retryKind: "visual",
-      failures: firstLookGate.failures,
-    }, lookA.job.key);
-    const diagnosticBoard = lookA.board;
+      failures: lookARow.gate.failures,
+    }, lookARow.row.job.key);
+    const diagnosticBoard = lookARow.row.board;
     const cumulativeRepairHint = appendCumulativeRepairRequirement(
       firstLookRepairRequirements,
-      firstLookGate.repairPrompt || firstLookGate.failures.join("；") || "Keep the complete 000 through 157.5 row on one monotonic clockwise screen-right arc.",
+      lookARow.gate.repairPrompt || lookARow.gate.failures.join("；") || "Keep the complete 000 through 157.5 row on one monotonic clockwise screen-right arc.",
     );
-    lookA = await runBoardJob(ctx, {
+    lookARow.row = await runBoardJob(ctx, {
       key: "look-a",
       kind: "look_row",
       dependencies: ["look-cardinals"],
@@ -627,46 +637,48 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       force: true,
       repairHint: cumulativeRepairHint,
     });
-    registeredLookA = await registerDirectionRow(ctx, {
+    lookARow.registered = await registerDirectionRow(ctx, {
       row: "look-a",
-      source: lookA,
+      source: lookARow.row,
       neutral: neutralDirectionFrame,
       progress: 73,
     });
-    firstLookGate = await reviewFirstLookRow(ctx, { look: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+    lookARow.gate = await reviewFirstLookRow(ctx, { look: lookARow.registered, canonical: selected, standardContact: standard.contact, cardinalAnchor });
   }
-  requireApprovedRegisteredRow(registeredLookA, "第一组观察方向");
+  requireApprovedRegisteredRow(lookARow.registered, "第一组观察方向");
   await resumeStageIfRepairing(ctx, "direction_generating", 74, "第一组观察方向已通过门禁，正在生成第二组方向");
   // Persist row 9 as an exact 8x1 atlas strip, but present those same approved
   // cells to GPT edits in the supported 4x2 board geometry. This is a pure
   // rearrangement with no resampling and avoids an unnecessarily extreme
   // 1536x208 reference aspect ratio.
-  let registeredLookAReference = await composeLookSourceBoardReference(registeredLookA.frames, ctx.identity.chromaKey);
-  let lookBScreenLeftTrajectoryReference = await composeLookBScreenLeftTrajectoryReference(
-    registeredLookA.frames,
-    cardinals.frames,
-    ctx.identity.chromaKey,
-  );
+  const lookBRefs: LookBReferenceState = {
+    registeredLookAReference: await composeLookSourceBoardReference(lookARow.registered.frames, ctx.identity.chromaKey),
+    lookBScreenLeftTrajectoryReference: await composeLookBScreenLeftTrajectoryReference(
+      lookARow.registered.frames,
+      cardinals.frames,
+      ctx.identity.chromaKey,
+    ),
+  };
   await emit(ctx, "stage.completed", "direction_generating", 74, "第一组观察方向已完成注册、边缘、语义和连续性门禁", {
     row: 9,
-    registeredRowArtifactId: registeredLookA.registeredRowArtifact.id,
-    registrationManifestArtifactId: registeredLookA.manifestArtifact.id,
+    registeredRowArtifactId: lookARow.registered.registeredRowArtifact.id,
+    registrationManifestArtifactId: lookARow.registered.manifestArtifact.id,
     neutralFrameArtifactId: neutralDirectionFrame.artifact.id,
-    continuityWarnings: firstLookGate.continuity.warnings.map((warning) => warning.message),
-  }, lookA.job.key);
-  let lookB = await runBoardJob(ctx, {
+    continuityWarnings: lookARow.gate.continuity.warnings.map((warning) => warning.message),
+  }, lookARow.row.job.key);
+  const initialLookB = await runBoardJob(ctx, {
     key: "look-b",
     kind: "look_row",
     dependencies: ["look-a-registration"],
-    inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, registeredLookA.registeredRowArtifact.id, registeredLookA.manifestArtifact.id, standard.contactArtifact.id],
+    inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, lookARow.registered.registeredRowArtifact.id, lookARow.registered.manifestArtifact.id, standard.contactArtifact.id],
     prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics),
     references: lookRowReferences({
       row: "look-b",
       anchorStoryboard: lookBAnchorStoryboard,
-      directionArcGuide: lookBScreenLeftTrajectoryReference,
+      directionArcGuide: lookBRefs.lookBScreenLeftTrajectoryReference,
       canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
       cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
-      registeredLookA: registeredLookAReference,
+      registeredLookA: lookBRefs.registeredLookAReference,
       standardContact: standard.contact,
       layout: lookLayout,
     }),
@@ -679,66 +691,70 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     qaContext: "方向 180 到 337.5 连续顺时针观察动作，并与 157.5/000 边界连续",
     animationDurations: petRowSpec("look-b").durations,
   });
-  let registeredLookB = await registerDirectionRow(ctx, {
+  const initialRegisteredLookB = await registerDirectionRow(ctx, {
     row: "look-b",
-    source: lookB,
+    source: initialLookB,
     neutral: neutralDirectionFrame,
-    lockedRow9: registeredLookA,
+    lockedRow9: lookARow.registered,
     progress: 77,
   });
-  let secondLookGate = await reviewSecondLookRow(ctx, { look: registeredLookB, previousLook: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+  const lookBRow: LookRowState<SecondLookRowGate> = {
+    row: initialLookB,
+    registered: initialRegisteredLookB,
+    gate: await reviewSecondLookRow(ctx, { look: initialRegisteredLookB, previousLook: lookARow.registered, canonical: selected, standardContact: standard.contact, cardinalAnchor }),
+  };
   const secondLookRepairRequirements: string[] = [];
-  while (!secondLookGate.pass) {
-    if (lookB.job.attempt >= lookB.job.maxAttempts) {
-      const message = `方向 180 到 337.5 未通过 row-10 前置门禁：${secondLookGate.failures.join("；") || "方向语义或连续性失败"}`;
+  while (!lookBRow.gate.pass) {
+    if (lookBRow.row.job.attempt >= lookBRow.row.job.maxAttempts) {
+      const message = `方向 180 到 337.5 未通过 row-10 前置门禁：${lookBRow.gate.failures.join("；") || "方向语义或连续性失败"}`;
       if (ctx.perImageBilling || ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0") {
         throw new CodexPetImageApprovalRequiredError("look-b", `${message}，需要确认后才能重新生成`);
       }
       throw new Error(message);
     }
     await emit(ctx, "run.repairing", "repairing", 78, "正在修复第二组观察方向，最终组装尚未启动", {
-      attempt: lookB.job.attempt,
+      attempt: lookBRow.row.job.attempt,
       retryKind: "visual",
-      failures: secondLookGate.failures,
-    }, lookB.job.key);
-    const diagnosticBoard = lookB.board;
+      failures: lookBRow.gate.failures,
+    }, lookBRow.row.job.key);
+    const diagnosticBoard = lookBRow.row.board;
     const cumulativeRepairHint = appendCumulativeRepairRequirement(
       secondLookRepairRequirements,
-      secondLookGate.repairPrompt || secondLookGate.failures.join("；") || "Keep the complete 180 through 337.5 row on one monotonic clockwise screen-left arc.",
+      lookBRow.gate.repairPrompt || lookBRow.gate.failures.join("；") || "Keep the complete 180 through 337.5 row on one monotonic clockwise screen-left arc.",
     );
-    lookB = await runBoardJob(ctx, {
-      key: "look-b", kind: "look_row", dependencies: ["look-a-registration"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, registeredLookA.registeredRowArtifact.id, registeredLookA.manifestArtifact.id, standard.contactArtifact.id],
+    lookBRow.row = await runBoardJob(ctx, {
+      key: "look-b", kind: "look_row", dependencies: ["look-a-registration"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, lookARow.registered.registeredRowArtifact.id, lookARow.registered.manifestArtifact.id, standard.contactArtifact.id],
       prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics),
       references: lookRowReferences({
         row: "look-b",
         anchorStoryboard: lookBAnchorStoryboard,
-        directionArcGuide: lookBScreenLeftTrajectoryReference,
+        directionArcGuide: lookBRefs.lookBScreenLeftTrajectoryReference,
         canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
         cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
-        registeredLookA: registeredLookAReference,
+        registeredLookA: lookBRefs.registeredLookAReference,
         standardContact: standard.contact,
         layout: lookLayout,
         diagnosticBoard,
       }),
       columns: 4, rows: 2, frameCount: 8, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT, progress: 78, qaKind: "directions", qaContext: "修复方向 180 到 337.5 的完整连续动作组", animationDurations: petRowSpec("look-b").durations, force: true, repairHint: cumulativeRepairHint,
     });
-    registeredLookB = await registerDirectionRow(ctx, {
+    lookBRow.registered = await registerDirectionRow(ctx, {
       row: "look-b",
-      source: lookB,
+      source: lookBRow.row,
       neutral: neutralDirectionFrame,
-      lockedRow9: registeredLookA,
+      lockedRow9: lookARow.registered,
       progress: 78,
     });
-    secondLookGate = await reviewSecondLookRow(ctx, { look: registeredLookB, previousLook: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+    lookBRow.gate = await reviewSecondLookRow(ctx, { look: lookBRow.registered, previousLook: lookARow.registered, canonical: selected, standardContact: standard.contact, cardinalAnchor });
   }
-  requireApprovedRegisteredRow(registeredLookB, "第二组观察方向");
+  requireApprovedRegisteredRow(lookBRow.registered, "第二组观察方向");
   await resumeStageIfRepairing(ctx, "direction_generating", 79, "第二组观察方向已通过门禁，正在组装 16 方向");
   await emit(ctx, "stage.completed", "direction_generating", 79, "第二组观察方向已完成注册、边缘、语义和连续性门禁", {
     row: 10,
-    registeredRowArtifactId: registeredLookB.registeredRowArtifact.id,
-    registrationManifestArtifactId: registeredLookB.manifestArtifact.id,
-    continuityWarnings: secondLookGate.continuity.warnings.map((warning) => warning.message),
-  }, lookB.job.key);
+    registeredRowArtifactId: lookBRow.registered.registeredRowArtifact.id,
+    registrationManifestArtifactId: lookBRow.registered.manifestArtifact.id,
+    continuityWarnings: lookBRow.gate.continuity.warnings.map((warning) => warning.message),
+  }, lookBRow.row.job.key);
   await emit(ctx, "stage.completed", "direction_generating", 80, "16 个观察方向已完成", {});
 
   await stage(ctx, "validating", 80, "正在组装图集并执行最终质量检查");
@@ -774,13 +790,13 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   // and the 000/360 wrap coherent; no individual direction frame is patched.
   const regenerateDirectionRows = async (repairHint: string): Promise<void> => {
     const lookARequirements: string[] = [];
-    let lookADiagnosticBoard = lookA.board;
+    let lookADiagnosticBoard = lookARow.row.board;
     let lookAHint = appendCumulativeRepairRequirement(
       lookARequirements,
       repairHint || "Rebuild both coherent look rows while preserving the approved cardinal semantics and both row boundaries.",
     );
     for (;;) {
-      lookA = await runBoardJob(ctx, {
+      lookARow.row = await runBoardJob(ctx, {
         key: "look-a", kind: "look_row", dependencies: ["look-cardinals"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, standard.contactArtifact.id],
         prompt: buildLookRowPrompt(ctx.identity, "look-a", mechanics), references: lookRowReferences({
           row: "look-a",
@@ -793,67 +809,67 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
         }),
         columns: 4, rows: 2, frameCount: 8, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT, progress: 84, qaKind: "directions", qaContext: "修复方向 000 到 157.5 的完整连续动作组", workflowStage: "validating", animationDurations: petRowSpec("look-a").durations, force: true, repairHint: lookAHint,
       });
-      registeredLookA = await registerDirectionRow(ctx, {
+      lookARow.registered = await registerDirectionRow(ctx, {
         row: "look-a",
-        source: lookA,
+        source: lookARow.row,
         neutral: neutralDirectionFrame,
         progress: 84,
       });
-      firstLookGate = await reviewFirstLookRow(ctx, { look: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
-      if (firstLookGate.pass) break;
-      if (lookA.job.attempt >= lookA.job.maxAttempts) throw new Error(`修复后的第一组观察方向未通过前置门禁：${firstLookGate.failures.join("；") || "方向语义或连续性失败"}`);
-      lookADiagnosticBoard = lookA.board;
+      lookARow.gate = await reviewFirstLookRow(ctx, { look: lookARow.registered, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+      if (lookARow.gate.pass) break;
+      if (lookARow.row.job.attempt >= lookARow.row.job.maxAttempts) throw new Error(`修复后的第一组观察方向未通过前置门禁：${lookARow.gate.failures.join("；") || "方向语义或连续性失败"}`);
+      lookADiagnosticBoard = lookARow.row.board;
       lookAHint = appendCumulativeRepairRequirement(
         lookARequirements,
-        firstLookGate.repairPrompt || firstLookGate.failures.join("；") || "Keep row A monotonic across the top-to-bottom row boundary between chronological cells 4 and 5.",
+        lookARow.gate.repairPrompt || lookARow.gate.failures.join("；") || "Keep row A monotonic across the top-to-bottom row boundary between chronological cells 4 and 5.",
       );
     }
-    requireApprovedRegisteredRow(registeredLookA, "修复后的第一组观察方向");
-    registeredLookAReference = await composeLookSourceBoardReference(registeredLookA.frames, ctx.identity.chromaKey);
-    lookBScreenLeftTrajectoryReference = await composeLookBScreenLeftTrajectoryReference(
-      registeredLookA.frames,
+    requireApprovedRegisteredRow(lookARow.registered, "修复后的第一组观察方向");
+    lookBRefs.registeredLookAReference = await composeLookSourceBoardReference(lookARow.registered.frames, ctx.identity.chromaKey);
+    lookBRefs.lookBScreenLeftTrajectoryReference = await composeLookBScreenLeftTrajectoryReference(
+      lookARow.registered.frames,
       cardinals.frames,
       ctx.identity.chromaKey,
     );
     const lookBRequirements: string[] = [];
-    let lookBDiagnosticBoard = lookB.board;
+    let lookBDiagnosticBoard = lookBRow.row.board;
     let lookBHint = appendCumulativeRepairRequirement(
       lookBRequirements,
       repairHint || "Rebuild both coherent look rows while preserving the approved cardinal semantics and both row boundaries.",
     );
     for (;;) {
-      lookB = await runBoardJob(ctx, {
-        key: "look-b", kind: "look_row", dependencies: ["look-a-registration"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, registeredLookA.registeredRowArtifact.id, registeredLookA.manifestArtifact.id, standard.contactArtifact.id],
+      lookBRow.row = await runBoardJob(ctx, {
+        key: "look-b", kind: "look_row", dependencies: ["look-a-registration"], inputArtifactIds: [selected.artifact.id, cardinalAnchor.artifact.id, lookARow.registered.registeredRowArtifact.id, lookARow.registered.manifestArtifact.id, standard.contactArtifact.id],
         prompt: buildLookRowPrompt(ctx.identity, "look-b", mechanics), references: lookRowReferences({
           row: "look-b",
           anchorStoryboard: lookBAnchorStoryboard,
-          directionArcGuide: lookBScreenLeftTrajectoryReference,
+          directionArcGuide: lookBRefs.lookBScreenLeftTrajectoryReference,
           canonical: { buffer: selected.buffer, mime: selected.artifact.mime },
           cardinalAnchor: { buffer: cardinalAnchor.buffer, mime: cardinalAnchor.artifact.mime },
-          registeredLookA: registeredLookAReference,
+          registeredLookA: lookBRefs.registeredLookAReference,
           standardContact: standard.contact,
           layout: lookLayout,
           diagnosticBoard: lookBDiagnosticBoard,
         }),
         columns: 4, rows: 2, frameCount: 8, frameOrder: LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT, progress: 84, qaKind: "directions", qaContext: "修复方向 180 到 337.5 的完整连续动作组", workflowStage: "validating", animationDurations: petRowSpec("look-b").durations, force: true, repairHint: lookBHint,
       });
-      registeredLookB = await registerDirectionRow(ctx, {
+      lookBRow.registered = await registerDirectionRow(ctx, {
         row: "look-b",
-        source: lookB,
+        source: lookBRow.row,
         neutral: neutralDirectionFrame,
-        lockedRow9: registeredLookA,
+        lockedRow9: lookARow.registered,
         progress: 84,
       });
-      secondLookGate = await reviewSecondLookRow(ctx, { look: registeredLookB, previousLook: registeredLookA, canonical: selected, standardContact: standard.contact, cardinalAnchor });
-      if (secondLookGate.pass) break;
-      if (lookB.job.attempt >= lookB.job.maxAttempts) throw new Error(`修复后的第二组观察方向未通过前置门禁：${secondLookGate.failures.join("；") || "方向语义或连续性失败"}`);
-      lookBDiagnosticBoard = lookB.board;
+      lookBRow.gate = await reviewSecondLookRow(ctx, { look: lookBRow.registered, previousLook: lookARow.registered, canonical: selected, standardContact: standard.contact, cardinalAnchor });
+      if (lookBRow.gate.pass) break;
+      if (lookBRow.row.job.attempt >= lookBRow.row.job.maxAttempts) throw new Error(`修复后的第二组观察方向未通过前置门禁：${lookBRow.gate.failures.join("；") || "方向语义或连续性失败"}`);
+      lookBDiagnosticBoard = lookBRow.row.board;
       lookBHint = appendCumulativeRepairRequirement(
         lookBRequirements,
-        secondLookGate.repairPrompt || secondLookGate.failures.join("；") || "Keep row B monotonic across the top-to-bottom row boundary between chronological cells 4 and 5 and both row seams.",
+        lookBRow.gate.repairPrompt || lookBRow.gate.failures.join("；") || "Keep row B monotonic across the top-to-bottom row boundary between chronological cells 4 and 5 and both row seams.",
       );
     }
-    requireApprovedRegisteredRow(registeredLookB, "修复后的第二组观察方向");
+    requireApprovedRegisteredRow(lookBRow.registered, "修复后的第二组观察方向");
     await resumeStageIfRepairing(ctx, "validating", 84, "方向修复已通过，正在继续最终质量检查");
   };
 
@@ -931,31 +947,31 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
 
   const directionMaxAttempts = 3;
   for (let directionAttempt = 1; directionAttempt <= directionMaxAttempts; directionAttempt += 1) {
-    requireApprovedRegisteredRow(registeredLookA, "最终组装第一组观察方向");
-    requireApprovedRegisteredRow(registeredLookB, "最终组装第二组观察方向");
+    requireApprovedRegisteredRow(lookARow.registered, "最终组装第一组观察方向");
+    requireApprovedRegisteredRow(lookBRow.registered, "最终组装第二组观察方向");
     const registrationErrors = [
-      ...registeredLookA.errors,
-      ...registeredLookB.errors,
-      ...(registeredLookA.manifest.transform.scale === registeredLookB.manifest.transform.scale ? [] : ["row-10-registration-scale-changed"]),
-      ...(registeredLookA.manifestArtifact.id === registeredLookB.manifestArtifact.id ? [] : ["row-10-registration-manifest-changed"]),
+      ...lookARow.registered.errors,
+      ...lookBRow.registered.errors,
+      ...(lookARow.registered.manifest.transform.scale === lookBRow.registered.manifest.transform.scale ? [] : ["row-10-registration-scale-changed"]),
+      ...(lookARow.registered.manifestArtifact.id === lookBRow.registered.manifestArtifact.id ? [] : ["row-10-registration-manifest-changed"]),
     ];
     directionRegistration = {
-      ok: registrationErrors.length === 0 && registeredLookA.validation.ok && registeredLookB.validation.ok,
-      sharedScale: registeredLookA.manifest.transform.scale,
-      sourceBoardSizes: [registeredLookA.sourceBoardSize, registeredLookB.sourceBoardSize],
-      diagnosticsByBoard: [registeredLookA.diagnostics, registeredLookB.diagnostics],
-      schemaVersion: registeredLookA.manifest.schemaVersion,
+      ok: registrationErrors.length === 0 && lookARow.registered.validation.ok && lookBRow.registered.validation.ok,
+      sharedScale: lookARow.registered.manifest.transform.scale,
+      sourceBoardSizes: [lookARow.registered.sourceBoardSize, lookBRow.registered.sourceBoardSize],
+      diagnosticsByBoard: [lookARow.registered.diagnostics, lookBRow.registered.diagnostics],
+      schemaVersion: lookARow.registered.manifest.schemaVersion,
       neutralFrameArtifactId: neutralDirectionFrame.artifact.id,
-      target: registeredLookA.manifest.transform.target,
-      registeredRowArtifactIds: [registeredLookA.registeredRowArtifact.id, registeredLookB.registeredRowArtifact.id],
-      manifestArtifactId: registeredLookA.manifestArtifact.id,
+      target: lookARow.registered.manifest.transform.target,
+      registeredRowArtifactIds: [lookARow.registered.registeredRowArtifact.id, lookBRow.registered.registeredRowArtifact.id],
+      manifestArtifactId: lookARow.registered.manifestArtifact.id,
       row9ImmutableDuringRow10Registration: true,
-      neutralValidationByBoard: [registeredLookA.validation, registeredLookB.validation],
+      neutralValidationByBoard: [lookARow.registered.validation, lookBRow.registered.validation],
       errors: registrationErrors,
-      warnings: [...registeredLookA.warnings, ...registeredLookB.warnings],
+      warnings: [...lookARow.registered.warnings, ...lookBRow.registered.warnings],
     };
     await putJsonArtifact(ctx, {
-      jobId: registeredLookB.registrationJob.id,
+      jobId: lookBRow.registered.registrationJob.id,
       kind: "qa_report",
       name: `16 方向中立帧锁定缩放与基线注册 · 第 ${directionAttempt} 次`,
       value: directionRegistration,
@@ -978,8 +994,8 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     // These are loaded from the persisted registered row artifacts. Final
     // assembly never revisits either raw 4x2 board and therefore cannot let a
     // wide row-10 pose recalculate or shrink the approved row 9.
-    frames["look-a"] = registeredLookA.frames;
-    frames["look-b"] = registeredLookB.frames;
+    frames["look-a"] = lookARow.registered.frames;
+    frames["look-b"] = lookBRow.registered.frames;
     const assembled = await assemblePetAtlas(frames, "png");
     const cleaned = await despillChromaEdges(assembled, ctx.identity.chromaKey);
     finalAtlas = cleaned.image;
@@ -1145,10 +1161,10 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   let visualQaActualModels: string[] = [];
   let visualQaRoutes: string[] = [];
   if (ctx.qualityInspectionEnabled) {
-    if (!firstLookGate.visual) throw new Error("row9 前置门禁缺少所选视觉模型证明");
+    if (!lookARow.gate.visual) throw new Error("row9 前置门禁缺少所选视觉模型证明");
     const requiredJobProvenance = await summarizeRequiredVisualJobProvenance(ctx);
-    const row9GateProvenance = assertCodexPetVisualQaProvenance(firstLookGate.visual.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
-    const row10GateProvenance = assertCodexPetVisualQaProvenance(secondLookGate.visual?.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
+    const row9GateProvenance = assertCodexPetVisualQaProvenance(lookARow.gate.visual.modelProvenance, ctx.visualQaModel, "row9-pre-generation-gate");
+    const row10GateProvenance = assertCodexPetVisualQaProvenance(lookBRow.gate.visual?.modelProvenance, ctx.visualQaModel, "row10-pre-generation-gate");
     const finalQaProvenance = assertCodexPetVisualQaProvenance(finalQa.modelProvenance, ctx.visualQaModel, "final-visual-qa");
     const blindQaProvenance = assertCodexPetVisualQaProvenance(blindValidation.modelProvenance, ctx.visualQaModel, "blind-direction-qa");
     const semanticProvenance = semantics.map((item) => (
@@ -1213,21 +1229,21 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
     directionRegistration,
     directionContinuity: continuity,
     row9PreGenerationGate: {
-      passed: firstLookGate.pass,
+      passed: lookARow.gate.pass,
       neutralFrameArtifactId: neutralDirectionFrame.artifact.id,
-      registeredRowArtifactId: registeredLookA.registeredRowArtifact.id,
-      registrationManifestArtifactId: registeredLookA.manifestArtifact.id,
-      neutralGeometryValidation: registeredLookA.validation,
-      deterministicContinuity: firstLookGate.continuity,
+      registeredRowArtifactId: lookARow.registered.registeredRowArtifact.id,
+      registrationManifestArtifactId: lookARow.registered.manifestArtifact.id,
+      neutralGeometryValidation: lookARow.registered.validation,
+      deterministicContinuity: lookARow.gate.continuity,
     },
     row10PreGenerationGate: {
-      passed: secondLookGate.pass,
-      registeredRowArtifactId: registeredLookB.registeredRowArtifact.id,
-      reusedRegistrationManifestArtifactId: registeredLookB.manifestArtifact.id,
-      neutralGeometryValidation: registeredLookB.validation,
-      deterministicContinuity: secondLookGate.continuity,
-      visual: secondLookGate.visual,
-      failures: secondLookGate.failures,
+      passed: lookBRow.gate.pass,
+      registeredRowArtifactId: lookBRow.registered.registeredRowArtifact.id,
+      reusedRegistrationManifestArtifactId: lookBRow.registered.manifestArtifact.id,
+      neutralGeometryValidation: lookBRow.registered.validation,
+      deterministicContinuity: lookBRow.gate.continuity,
+      visual: lookBRow.gate.visual,
+      failures: lookBRow.gate.failures,
     },
     finalRepairHistory,
     blindDirectionValidation: blindValidation,
@@ -1257,8 +1273,8 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
       report,
       inputArtifactIds: [
         standard.atlasArtifact.id,
-        registeredLookA.registeredRowArtifact.id,
-        registeredLookB.registeredRowArtifact.id,
+        lookARow.registered.registeredRowArtifact.id,
+        lookBRow.registered.registeredRowArtifact.id,
       ],
     },
   });

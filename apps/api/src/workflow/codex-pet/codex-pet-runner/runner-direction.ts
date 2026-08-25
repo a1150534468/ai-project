@@ -699,3 +699,10 @@ export async function reviewSecondLookRow(
     repairPrompt,
   };
 }
+
+/**
+ * 两个 row 门禁的返回类型。函数本体是推断返回值，这里名字化后供
+ * `LookRowState<TGate>` 的调用点使用，避免各处重复写 `Awaited<ReturnType<...>>`。
+ */
+export type FirstLookRowGate = Awaited<ReturnType<typeof reviewFirstLookRow>>;
+export type SecondLookRowGate = Awaited<ReturnType<typeof reviewSecondLookRow>>;

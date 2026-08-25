@@ -189,6 +189,29 @@ export interface RegisteredDirectionRowResult {
   readonly warnings: readonly string[];
 }
 
+/**
+ * 一个观察方向行的可变状态：生成结果、注册结果、门禁结论三者始终同步推进。
+ *
+ * 三份 look 修复循环（前置门禁两份 + 校验期重建一份）读写的就是这三样，
+ * 原先是 executeRun 里的裸 `let`，闭包捕获它们导致循环无法提成函数。
+ * `TGate` 由调用点填入（`Awaited<ReturnType<typeof reviewFirstLookRow>>` 等），
+ * 这样 runner-types 不必反向依赖 runner-direction。
+ */
+export interface LookRowState<TGate> {
+  row: BoardJobResult;
+  registered: RegisteredDirectionRowResult;
+  gate: TGate;
+}
+
+/**
+ * 由已批准的 row-9 派生、供 look-b 生成使用的两张参考图。
+ * 修复循环重建 look-a 之后必须整体重算，所以与行状态一样是共享可变状态。
+ */
+export interface LookBReferenceState {
+  registeredLookAReference: Buffer;
+  lookBScreenLeftTrajectoryReference: Buffer;
+}
+
 export class CodexPetCancelledError extends Error {
   constructor() {
     super("用户已取消桌宠制作");
