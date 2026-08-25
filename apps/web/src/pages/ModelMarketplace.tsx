@@ -7,6 +7,7 @@ import {
   type ModelMarketplaceRow,
   type VipSummary,
 } from "../api";
+import { Alert, Badge, badgeClass, buttonClass, cardClass } from "../components/ui";
 
 const CATEGORY_ORDER = ["语言模型", "语音模型", "视觉模型", "向量模型"] as const;
 
@@ -134,11 +135,10 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
                 key={tab}
                 type="button"
                 onClick={() => setActiveCategory(tab)}
-                className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
-                  isActive
-                    ? "border-brand bg-brand text-white shadow-sm"
-                    : "border-hairline-subtle bg-surface text-ink-secondary hover:border-brand/40 hover:text-brand-ink"
-                }`}
+                className={buttonClass({
+                  variant: isActive ? "primary" : "outline",
+                  className: "flex-none",
+                })}
               >
                 <Icon icon={icon} className="text-base" aria-hidden />
                 {tab}
@@ -150,11 +150,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
           })}
         </div>
 
-        {message && (
-          <div className="mb-4 rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">
-            {message}
-          </div>
-        )}
+        {message && <Alert bordered className="mb-4">{message}</Alert>}
 
         {visibleGroups.length > 0 ? (
           visibleGroups.map((group) => (
@@ -163,7 +159,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
                 <div className="mb-4 flex items-center gap-2">
                   <Icon icon={CATEGORY_ICON[group.category] ?? "mdi:shape-outline"} className="text-lg text-brand" aria-hidden />
                   <h2 className="text-base font-semibold text-ink">{group.category}</h2>
-                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{group.rows.length}</span>
+                  <Badge tone="neutral">{group.rows.length}</Badge>
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -239,14 +235,12 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
     .sort((a, b) => Number(b === "free-quota") - Number(a === "free-quota"))
     .slice(0, 5);
   return (
-    <article className="rounded-2xl border border-hairline-subtle bg-surface p-5">
+    <article className={cardClass()}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-ink">{model.displayName || "未命名模型"}</h3>
         </div>
-        <span className={`inline-flex flex-none items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
-          openAIOnly ? "bg-warning/10 text-warning-ink" : "bg-brand-soft text-brand-ink"
-        }`}>
+        <span className={badgeClass({ tone: openAIOnly ? "warning" : "brand", size: "md" })}>
           <Icon icon={isImage ? "mdi:image-outline" : openAIOnly ? "mdi:api" : "mdi:check-circle-outline"} className="text-sm" aria-hidden />
           {isImage ? "生图可用" : openAIOnly ? "仅 OpenAI 接口" : "对话可用"}
         </span>
@@ -255,9 +249,9 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
       {visibleTags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {visibleTags.map((tag) => (
-            <span key={tag} className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-ink-secondary">
+            <Badge key={tag} tone="neutral" size="xs">
               {tagLabels[tag]}
-            </span>
+            </Badge>
           ))}
         </div>
       )}

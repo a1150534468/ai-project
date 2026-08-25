@@ -208,12 +208,18 @@
 
 ### Font Stack
 
-- Primary: `Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
-- Mono: `ui-monospace, "SFMono-Regular", "SF Mono", monospace`
+唯一来源是 `apps/web/tailwind.config.js` 的 `fontFamily.sans`，全部走系统字体，**不加载任何 web font**（仓库里没有 Inter，也没有 `@font-face`）：
+
+```
+SF Pro Text, SF Pro Display, system-ui, -apple-system, BlinkMacSystemFont,
+Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif, Apple Color Emoji, …
+```
+
+- Mono 用 Tailwind 的 `font-mono` 默认栈（`ui-monospace, SFMono-Regular, …`），只在展示 ID / 日志 / 码值时用。
 
 ### Rules
 
-- 以 Inter/system 为唯一正文体系。
+- 以系统字体为唯一正文体系；要换字体改 `tailwind.config.js` 一处，别在组件里写 `style={{ fontFamily }}`。
 - 正文不低于 14px；辅助信息可降到 12px。
 - 标题控制在 2 行内，超出时缩小尺寸或截断。
 
@@ -240,12 +246,61 @@
 - 桌面记忆页使用 `筛选工具栏 + 表格 + 右侧详情` 双栏；表格占据主要宽度。
 - 移动端使用列表 + 底部详情面板，避免横向表格溢出。
 
-### Rules
+### 圆角
 
-- 面板圆角只用 `8 / 10 / 14px` 三档。
+不要在组件里写 `8 / 10 / 14px` 这类具体数值：`.apple-shell` / `.auth-shell` 会**改写** Tailwind 的圆角类（`index.css`），所以同一个类在壳内外不是同一个值。
+
+| 写法 | 壳内实际值 | 用途 |
+|------|-----------|------|
+| `rounded-full` | 9999px | 按钮（`Button` 默认 pill）、Badge、胶囊开关 |
+| `rounded-[10px]` | 10px（不被改写） | 输入控件（base 层已统一）、`Button shape="rounded"`、`Alert size="sm"` |
+| `rounded-xl` | **11px**（Tailwind 原值 12px） | `Card radius="md"`、`Alert size="md"`、列表行 |
+| `rounded-2xl` / `rounded-3xl` | **18px**（原值 16 / 24px） | `Card radius="lg"`（默认）、面板 |
+
+- 只用上表这四种；要改全站圆角观感，改 `.apple-shell` 的改写规则，别去改调用点。
 - 桌面主内容优先 `h-full / min-h-0 / overflow-hidden`，避免整页滚动。
 
 ## 5. Components
+
+### 基元层（`apps/web/src/components/ui/`）
+
+四个高频基元。**真身是 `xxxClass()` 类名工厂，`<Xxx>` 组件只是它 + 对应标签的薄壳** —— 因为站内大量按钮实际是 `motion/RippleButton`（样式全靠 `className` 传入），只给组件不给工厂的话这些地方没法接入；反过来，把动效焊进 `<Button>` 又会让普通按钮被强塞 spring。两种写法等价：
+
+```tsx
+<Button variant="primary">保存</Button>
+<RippleButton className={buttonClass({ variant: "primary" })}>保存</RippleButton>
+```
+
+| 基元 | 参数 | 档位 |
+|------|------|------|
+| `Button` / `buttonClass` | `variant` | `primary`（品牌实底）/ `danger` / `secondary`（弱底）/ `outline` / `ghost` |
+| | `size` | `sm` 32px / `md` 36px（默认）/ `lg` 40px / `xl` 44px |
+| | `shape` | `pill`（默认）/ `rounded`（10px，与输入控件对齐，弹窗用） |
+| | `block` | 撑满父容器 |
+| `Card` / `cardClass` | `padding` | `none` / `sm` 12 / `md` 16 / `lg` 20（默认）/ `xl` 24px |
+| | `tone` | `surface`（默认）/ `subtle` / `muted` / `raised` |
+| | `radius` | `md`（11px）/ `lg`（18px，默认） |
+| | `bordered` | 默认 `true`，走 `hairline-subtle` |
+| `Badge` / `badgeClass` | `tone` | `brand` / `danger` / `warning` / `info` / `success` / `neutral` |
+| | `variant` | `soft`（默认，弱底）/ `solid`（实底）/ `outline` |
+| | `size` | `xs` / `sm` / `md`（默认） |
+| `Alert` / `alertClass` | `tone` | `danger`（默认）/ `warning` / `info` / `success` / `brand` |
+| | `size` | `sm`（10px 圆角）/ `md`（默认） |
+| | `bordered` | 默认 `false`，开了走 `X/20` 描边 |
+
+尺寸档位不是拍的，取的是全站实测最高频值：按钮高度 `h-9` 117 处 / `h-10` 91 / `h-8` 74 / `h-11` 34；`cardClass()` 的默认输出 `rounded-2xl border border-hairline-subtle bg-surface p-5` 正是全站 23 处逐字重复的那串 className。
+
+### 基元层的规则
+
+- **能用参数表达的就用参数，`className` 只加工厂没碰过的属性**（布局、间距、动画）。className 里出现同属性的第二个 utility，谁生效取决于两条规则在**构建产物**里的先后，而那个顺序是 Tailwind 自己排的、跟字符串顺序无关 —— 传 `p-6` 去盖工厂的 `p-4` 属于赌运气。同理 `ui/cx.ts` 故意不做 tailwind-merge 式冲突消解。
+- 颜色只允许出现 §2 的语义 token。`ui.test.tsx` 里 16 条测试会遍历所有 variant × size 组合断言这一点，也断言 `X/10` 弱底必须配 `X-ink` 文字、实底档不拿 `X-ink` 当底色、每个按钮只产出一种圆角。
+- `Button` 的 `BASE` 刻意**不设** `flex-none`：弹窗底部 `flex-1` 平分宽度的按钮行很常见，而产物里 `.flex-1` 排在 `.flex-none` 之前，工厂一设调用方就永远赢不了。需要不收缩时自己加。
+- 实底档（primary / danger）的禁用态用 `bg-hairline` + `ink-tertiary`（灰底灰字 4.6:1）而不是调透明度 —— `bg-brand/50` 上的白字只有 2.2:1，过不了 AA。弱强调三档对比度余量大，继续用 `opacity-50`。
+- hover 用同色 `/90` 而不是换到 `-ink` 档：`-ink` 在暗色下是提亮值（`brand-ink` #5bafff），白字落上去只剩 2.3:1。
+- `Badge variant="solid"` 的 warning / success 用 `text-scrim` 而不是白字（3.1:1 / 3.4:1 不达标），`scrim` 是唯一不随主题翻转的深色 token。
+- 浅色主题下 `surface-muted` 与 `canvas` 同值（`245 245 247`），所以 `Button variant="secondary"` 和 `Badge tone="neutral" variant="soft"` 直接放在页面画布上会「看不见底」—— 它们的位置是卡片（白面）之内。
+- 语义上该是 `<article>` / `<section>` 的地方直接 `className={cardClass(...)}`，别为了用组件把标签改成 `div`。
+- 特殊处理（segmented control、虚线空态、品牌浅色渐变价格块等）保持显式手写，不硬塞进工厂 —— 工厂只覆盖默认情形。
 
 ### Shell Sidebar Item
 
@@ -325,16 +380,18 @@
 
 ### Strategy
 
-`mixed`，以 **边框 + tonal surface** 为主，阴影只用于轻微悬浮提示。
+`mixed`，以 **边框 + tonal surface** 为主。**壳内没有阴影**：`index.css` 的 `.apple-shell [class*="shadow-"] { box-shadow: none !important; }` 把主应用里所有 `shadow-*` 都清掉了，所以 `shadow-sm` 之类写在壳内的组件上是死样式（能编译、不生效）。
 
 | Level | Value | Usage |
 |------|-------|-------|
 | Border/default | `border-hairline` | 面板、输入、卡片 |
-| Border/subtle | `border-hairline-subtle` | 分组与弱分隔 |
-| Shadow/subtle | `0 10px 30px rgba(15, 23, 42, 0.05)` | 详情面板、移动端底板 |
-| Shadow/hover | `0 12px 32px rgba(15, 23, 42, 0.15)` | 命中节点、主交互卡片 |
+| Border/subtle | `border-hairline-subtle` | 分组与弱分隔（`Card` 默认） |
+| Surface 层叠 | `surface` → `surface-subtle` / `surface-muted` / `surface-raised` | 壳内表达「浮起」的唯一手段 |
+| Shadow/subtle | `0 10px 30px rgba(15, 23, 42, 0.05)` | 仅壳外可用（登录页 `auth-shell` 之类） |
+| Shadow/hover | `0 12px 32px rgba(15, 23, 42, 0.15)` | 仅壳外可用 |
 
 ### Rules
 
-- 阴影要轻，不能抢掉浅色 Apple-like 的干净感。
+- 壳内要表达层次，用 `tone`（`Card tone="raised"`）或弱边框，别写 `shadow-*`。
+- 暗色下 `surface` 与 `surface-subtle`、`hairline` 与 `hairline-subtle` 是**故意同值**的（纯黑画布上多一层灰只会显脏），所以层次感在暗色里主要靠 `surface-muted` / `surface-raised` 两档。
 - 记忆管理的层次优先靠表格分组、弱边框和 tonal surface，而不是重阴影。

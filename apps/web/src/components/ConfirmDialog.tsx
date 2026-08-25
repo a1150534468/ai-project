@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { Icon } from "@iconify/react";
 import { Modal, RippleButton } from "../motion";
+import { buttonClass } from "./ui";
 
 interface ConfirmDialogProps {
   title: string;
@@ -78,18 +79,19 @@ export function useConfirm() {
           <RippleButton
             onClick={dialog.onCancel}
             disabled={dialog.loading}
-            className="flex-1 px-4 py-2 border border-hairline-subtle rounded-lg text-sm font-medium text-ink disabled:opacity-50 transition-colors"
+            className={buttonClass({ variant: "outline", size: "lg", shape: "rounded", className: "flex-1" })}
           >
             {dialog.cancelText}
           </RippleButton>
           <RippleButton
             onClick={dialog.onConfirm}
             disabled={dialog.loading}
-            className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
-              dialog.isDangerous
-                ? "bg-danger disabled:opacity-50"
-                : "bg-brand disabled:opacity-50"
-            }`}
+            className={buttonClass({
+              variant: dialog.isDangerous ? "danger" : "primary",
+              size: "lg",
+              shape: "rounded",
+              className: "flex-1",
+            })}
           >
             {dialog.loading ? (
               <Icon icon="mdi:loading" className="inline animate-spin mr-1" />
