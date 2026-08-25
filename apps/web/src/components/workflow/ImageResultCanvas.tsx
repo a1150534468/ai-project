@@ -95,7 +95,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-[#6e6e73]">当前结果</p>
-          <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">
+          <h2 className="mt-1 text-base font-semibold text-ink">
             {props.task ? `${props.task.count} 张 · ${props.task.size}` : "等待开始"}
           </h2>
         </div>

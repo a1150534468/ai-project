@@ -402,13 +402,13 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
-                <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">服装试穿设置</h2>
+                <h2 className="mt-1 text-base font-semibold text-ink">服装试穿设置</h2>
               </div>
               <Icon icon="mdi:tshirt-crew-outline" className="text-xl text-[#86868b]" aria-hidden />
             </div>
 
             <div className="mt-5">
-              <p className="mb-2 text-sm font-semibold text-[#1d1d1f]">试穿素材</p>
+              <p className="mb-2 text-sm font-semibold text-ink">试穿素材</p>
               <div className="grid grid-cols-3 gap-2">
                 <ReferenceSlot
                   kind="garment_front"
@@ -451,7 +451,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </p>
             </div>
 
-            <label className="mt-5 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+            <label className="mt-5 grid gap-2 text-sm font-semibold text-ink">
               补充描述 <span className="text-xs font-normal text-[#8a8a8f]">可选</span>
               <textarea
                 aria-label="试穿补充描述"
@@ -523,7 +523,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 <Icon icon="mdi:tshirt-crew-outline" className="text-lg" aria-hidden />
               </span>
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-[#1d1d1f]">服装试穿</h2>
+                <h2 className="truncate text-sm font-semibold text-ink">服装试穿</h2>
                 <p className="text-[11px] text-[#86868b]">AI 生成预览</p>
               </div>
             </div>
@@ -539,7 +539,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 type="button"
                 onClick={() => setIsTaskDrawerOpen(true)}
                 aria-expanded={isTaskDrawerOpen}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-[#1d1d1f]"
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-ink"
               >
                 <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
                 任务 {tasks.filter(isActive).length}
@@ -566,7 +566,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                   <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-brand-ink" aria-hidden />
                   <span className="absolute inset-0 animate-ping rounded-full border border-brand/30" />
                 </span>
-                <p className="mt-5 text-base font-semibold text-[#1d1d1f]">正在生成试穿图</p>
+                <p className="mt-5 text-base font-semibold text-ink">正在生成试穿图</p>
                 <p className="mt-2 text-sm text-[#6e6e73]">
                   已完成 {selectedTask.completedCount}/{selectedTask.count}
                 </p>
@@ -663,7 +663,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
               <div>
                 <p className="text-xs font-semibold text-[#6e6e73]">任务状态</p>
-                <h2 className="text-base font-semibold text-[#1d1d1f]">服装试穿任务</h2>
+                <h2 className="text-base font-semibold text-ink">服装试穿任务</h2>
               </div>
               <button
                 type="button"
@@ -692,7 +692,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                       className="block w-full p-3 text-left"
                     >
                       <span className="flex justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-[#1d1d1f]">
+                        <span className="truncate text-sm font-semibold text-ink">
                           {task.modelAssetId ? "指定模特试穿" : "AI 模特试穿"}
                         </span>
                         <span className="flex-none text-xs text-[#6e6e73]">{STATUS_LABEL[task.status]}</span>

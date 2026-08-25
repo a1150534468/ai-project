@@ -62,7 +62,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
               aria-label={`打开 ${title}`}
             >
               <span className="block min-w-0">
-                <span className="block truncate text-xs font-semibold text-[#1d1d1f]">{title}</span>
+                <span className="block truncate text-xs font-semibold text-ink">{title}</span>
                 <span className="mt-1 block truncate text-[10px] text-[#6e6e73]">
                   {item.platforms.map(shortPlatformLabel).join(" · ")}
                 </span>
@@ -112,7 +112,7 @@ export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) 
     <section className="flex min-h-0 min-w-0 flex-col bg-white" aria-label="图文项目历史">
       <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-[#1d1d1f]">项目历史</h2>
+          <h2 className="text-sm font-semibold text-ink">项目历史</h2>
           <p className="mt-0.5 text-[10px] text-[#8a8a8f]">{props.batches.length} 个生成批次</p>
         </div>
         <NewProjectButton onClick={props.onNewProject} ariaLabel="新建项目" />
@@ -146,7 +146,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
           >
             <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] px-4">
               <div>
-                <h2 className="text-sm font-semibold text-[#1d1d1f]">项目历史</h2>
+                <h2 className="text-sm font-semibold text-ink">项目历史</h2>
                 <p className="mt-0.5 text-[10px] text-[#8a8a8f]">{props.batches.length} 个生成批次</p>
               </div>
               <div className="flex items-center gap-1">
@@ -155,7 +155,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
                   type="button"
                   onClick={props.onClose}
                   aria-label="关闭项目记录"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]"
                 >
                   <Icon icon="mdi:close" className="text-lg" aria-hidden />
                 </button>

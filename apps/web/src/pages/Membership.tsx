@@ -87,14 +87,14 @@ export default function Membership({ token }: MembershipProps) {
       <div className="max-w-5xl mx-auto p-6">
         {/* 页面标题 */}
         <div className="mb-8">
-          <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight">会员与订阅</h1>
+          <h1 className="text-[28px] font-bold text-ink tracking-tight">会员与订阅</h1>
           <p className="text-sm text-gray-500 mt-1">升级您的订阅计划以获得更多权益</p>
         </div>
 
         <div className="bg-white rounded-2xl p-5 mb-6 border border-gray-50">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h3 className="text-base font-semibold text-[#1d1d1f]">支付方式</h3>
+              <h3 className="text-base font-semibold text-ink">支付方式</h3>
               <p className="text-xs text-gray-400 mt-1">购买会员时使用当前选择的支付方式</p>
             </div>
             <div className="inline-flex rounded-full bg-gray-50 p-1">
@@ -121,7 +121,7 @@ export default function Membership({ token }: MembershipProps) {
 
         {/* 可购月卡列表 */}
         <div className="mb-8">
-          <h3 className="text-base font-semibold text-[#1d1d1f] mb-4">订阅方案</h3>
+          <h3 className="text-base font-semibold text-ink mb-4">订阅方案</h3>
           {cardsLoaded && membershipCards.length > 0 ? (
             <Stagger className="grid grid-cols-3 gap-4">
               {membershipCards.map((card) => {
@@ -134,10 +134,10 @@ export default function Membership({ token }: MembershipProps) {
                       whileHover={{ y: -5 }}
                       transition={spring.snappy}
                     >
-                      <h4 className="text-sm font-semibold text-[#1d1d1f] mb-1">{card.name}</h4>
+                      <h4 className="text-sm font-semibold text-ink mb-1">{card.name}</h4>
                       <p className="text-xs text-gray-400 mb-4">时长: {card.durationDays} 天</p>
 
-                      <p className="text-3xl font-bold text-[#1d1d1f]">
+                      <p className="text-3xl font-bold text-ink">
                         ¥{price.toFixed(2)}
                         <span className="text-base font-normal text-gray-400">/月</span>
                       </p>
@@ -184,7 +184,7 @@ export default function Membership({ token }: MembershipProps) {
         {/* 我的会员 */}
         <div className="bg-white rounded-2xl p-6 border border-gray-50">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-semibold text-[#1d1d1f]">我的会员</h3>
+            <h3 className="text-base font-semibold text-ink">我的会员</h3>
             <span className="text-xs text-gray-400">共 {userMemberships.length} 个</span>
           </div>
 
@@ -209,7 +209,7 @@ export default function Membership({ token }: MembershipProps) {
                             icon="mdi:crown"
                             className={`text-lg ${isActive ? "text-amber-500" : "text-gray-400"}`}
                           />
-                          <span className="text-sm font-semibold text-[#1d1d1f]">会员卡 #{membership.cardId}</span>
+                          <span className="text-sm font-semibold text-ink">会员卡 #{membership.cardId}</span>
                           <span
                             className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
                               isActive

@@ -64,7 +64,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           </span>
           <div className="min-w-0">
             <p className="truncate text-[9px] font-bold uppercase tracking-[0.18em] text-brand-ink">Content Studio</p>
-            <h2 className="truncate text-sm font-semibold text-[#1d1d1f]">多平台图文生成</h2>
+            <h2 className="truncate text-sm font-semibold text-ink">多平台图文生成</h2>
           </div>
         </div>
         {props.onClose && (
@@ -72,7 +72,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
             type="button"
             onClick={props.onClose}
             aria-label="关闭生成配置"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]"
           >
             <Icon icon="mdi:close" className="text-lg" aria-hidden />
           </button>
@@ -89,7 +89,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
 
         <fieldset className="mt-5 border-t border-[#e5e7eb] pt-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <legend className="text-xs font-semibold text-[#1d1d1f]">发布平台</legend>
+            <legend className="text-xs font-semibold text-ink">发布平台</legend>
             <span className="text-[10px] text-[#8a8a8f]">可多选</span>
           </div>
           <div className="grid gap-2">
@@ -115,7 +115,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                     <Icon icon={PLATFORM_ICONS[platform]} className="text-lg" aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-sm font-semibold text-[#1d1d1f]">{config.label}</span>
+                    <span className="block text-sm font-semibold text-ink">{config.label}</span>
                     <span className="mt-0.5 block text-[11px] text-[#8a8a8f]">{PLATFORM_HINTS[platform]}</span>
                   </span>
                   <Icon
@@ -131,7 +131,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
 
         <label className="mt-4 flex items-center justify-between gap-4 border-t border-[#e5e7eb] pt-4">
           <span className="min-w-0">
-            <span className="block text-xs font-semibold text-[#1d1d1f]">同时生成配图</span>
+            <span className="block text-xs font-semibold text-ink">同时生成配图</span>
             <span className="mt-1 block text-[10px] text-[#8a8a8f]">
               {props.generateImages ? "文案与配图一起完成" : "先确认文案，再生成配图"}
             </span>
@@ -158,7 +158,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
 
         {props.creationDraft.mode === "source" && props.selectedPlatforms.includes("wechat") && (
           <fieldset className="mt-4">
-            <legend className="mb-2 text-xs font-semibold text-[#1d1d1f]">公众号生成方式</legend>
+            <legend className="mb-2 text-xs font-semibold text-ink">公众号生成方式</legend>
             <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">
               {MODE_OPTIONS.map((option) => (
                 <button
@@ -168,7 +168,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   aria-checked={props.generationMode === option.key}
                   onClick={() => props.onGenerationModeChange(option.key)}
                   className={`h-9 rounded-md px-2 text-xs font-semibold transition ${
-                    props.generationMode === option.key ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
+                    props.generationMode === option.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
                   }`}
                 >
                   {option.label}
@@ -180,7 +180,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
 
         {props.selectedPlatforms.includes("wechat") && (
           <fieldset className="mt-4 border-t border-[#e5e7eb] pt-4">
-            <legend className="mb-2 text-xs font-semibold text-[#1d1d1f]">排版主题</legend>
+            <legend className="mb-2 text-xs font-semibold text-ink">排版主题</legend>
             <ArticleWorkflowThemePicker
               selectedTheme={props.selectedTheme}
               selectedThemeColor={props.selectedThemeColor}

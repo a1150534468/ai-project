@@ -117,7 +117,7 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
         className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}
       >
         {!compact && <span className="text-xs text-[#8a8a8f]">{ariaLabel}</span>}
-        <span className={`truncate text-sm font-medium text-[#1d1d1f] ${compact ? "" : "ml-auto"}`}>{current?.label ?? value}</span>
+        <span className={`truncate text-sm font-medium text-ink ${compact ? "" : "ml-auto"}`}>{current?.label ?? value}</span>
         <Icon icon="mdi:chevron-down" className={`shrink-0 text-base text-[#b6b6bd] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open && (
@@ -132,10 +132,10 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
                 className={`flex w-full items-center gap-2 rounded-[9px] px-2.5 py-2 text-left transition ${on ? "bg-[#f6f6f8]" : ""}`}
               >
                 <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-sm ${on ? "font-semibold text-[#1d1d1f]" : "text-[#1d1d1f]"}`}>{c.label}</span>
+                  <span className={`block truncate text-sm ${on ? "font-semibold text-ink" : "text-ink"}`}>{c.label}</span>
                   {c.desc && <span className="block truncate text-[11px] text-[#8a8a8f]">{c.desc}</span>}
                 </span>
-                {on && <Icon icon="mdi:check" className="shrink-0 text-sm text-[#1d1d1f]" aria-hidden />}
+                {on && <Icon icon="mdi:check" className="shrink-0 text-sm text-ink" aria-hidden />}
               </button>
             );
           })}
@@ -247,8 +247,8 @@ export function VideoGenerationStudio({
       <aside className="flex flex-col rounded-[14px] border border-[#e8e8ed] bg-white shadow-[0_12px_34px_rgba(15,23,42,0.045)] xl:max-h-[calc(100vh-5.5rem)]">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
         <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-base font-semibold text-[#1d1d1f]">AI 视频</h1>
-          <button type="button" onClick={() => { setSelected(null); onNewTask(); }} className="inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-xs font-semibold text-[#1d1d1f] ">
+          <h1 className="text-base font-semibold text-ink">AI 视频</h1>
+          <button type="button" onClick={() => { setSelected(null); onNewTask(); }} className="inline-flex h-8 items-center gap-1 rounded-[8px] px-2 text-xs font-semibold text-ink ">
             <Icon icon="mdi:plus" className="text-sm" aria-hidden />
             新建
           </button>
@@ -266,9 +266,9 @@ export function VideoGenerationStudio({
           }`}
         >
           <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.07)]">
-            <Icon icon="mdi:tray-arrow-up" className="text-base text-[#1d1d1f]" aria-hidden />
+            <Icon icon="mdi:tray-arrow-up" className="text-base text-ink" aria-hidden />
           </span>
-          <span className="text-[13px] font-medium text-[#1d1d1f]">拖入或点击上传</span>
+          <span className="text-[13px] font-medium text-ink">拖入或点击上传</span>
           <span className="text-[11px] text-[#8a8a8f]">支持 图片 / 视频 / 音频</span>
           <input type="file" accept="image/*,video/*,audio/*" className="sr-only" onChange={(event) => {
             const file = event.target.files?.[0];
@@ -281,7 +281,7 @@ export function VideoGenerationStudio({
             const full = materialCounts[k] >= VIDEO_MATERIAL_LIMITS[k];
             return (
               <div key={k} className="rounded-[9px] bg-[#f6f6f8] px-2 py-1.5">
-                <span className="text-[13px] font-semibold text-[#1d1d1f]">{materialCounts[k]}<span className={full ? "text-[#c7c7cc]" : "text-[#8a8a8f]"}> / {VIDEO_MATERIAL_LIMITS[k]}</span></span>
+                <span className="text-[13px] font-semibold text-ink">{materialCounts[k]}<span className={full ? "text-[#c7c7cc]" : "text-[#8a8a8f]"}> / {VIDEO_MATERIAL_LIMITS[k]}</span></span>
                 <span className="block text-[11px] text-[#6e6e73]">{KIND_META[k].label}</span>
               </div>
             );
@@ -299,7 +299,7 @@ export function VideoGenerationStudio({
                     <Icon icon={meta.icon} className="text-base" aria-hidden />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12.5px] font-medium text-[#1d1d1f]">{m.name}</span>
+                    <span className="block truncate text-[12.5px] font-medium text-ink">{m.name}</span>
                     <span className="block text-[10.5px] text-[#8a8a8f]">{meta.label}{m.durationSec > 0 ? ` · ${m.durationSec}s` : ""}</span>
                   </span>
                   <button type="button" aria-label={`移除 ${m.name}`} onClick={() => onRemoveMaterial(m.url)} className="px-1 text-[#b7b7bf] transition ">
@@ -329,7 +329,7 @@ export function VideoGenerationStudio({
           maxLength={2000}
           onChange={(event) => onPromptChange(event.target.value)}
           placeholder="描述场景、镜头运动、主体动作、风格和声音氛围，或点「帮我写」自动生成脚本"
-          className="w-full flex-1 min-h-[112px] resize-none rounded-[12px] border border-[#e3e3e8] p-3 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-[#c3c3cc]"
+          className="w-full flex-1 min-h-[112px] resize-none rounded-[12px] border border-[#e3e3e8] p-3 text-sm leading-6 text-ink outline-none focus:border-[#c3c3cc]"
         />
         <p className="mt-1 text-right text-[11px] font-medium text-[#8a8a8f]">{prompt.length} / 2000</p>
 
@@ -378,19 +378,19 @@ export function VideoGenerationStudio({
             onClick={() => setConfirmOpen(false)}
           >
             <div className="w-full max-w-[320px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
-              <h3 className="text-[15px] font-semibold text-[#1d1d1f]">确认生成</h3>
+              <h3 className="text-[15px] font-semibold text-ink">确认生成</h3>
               <p className="mt-2.5 text-[13px] leading-6 text-[#6e6e73]">
                 {estimate.auto ? (
-                  <>本次将预扣 <b className="font-semibold text-[#1d1d1f]">{estimate.points} 视频点</b>（按最长 15 秒），生成后按<b className="font-semibold text-[#1d1d1f]">实际时长结算、多退</b>。确认生成？</>
+                  <>本次将预扣 <b className="font-semibold text-ink">{estimate.points} 视频点</b>（按最长 15 秒），生成后按<b className="font-semibold text-ink">实际时长结算、多退</b>。确认生成？</>
                 ) : (
-                  <>本次预计扣除 <b className="font-semibold text-[#1d1d1f]">{estimate.points} 视频点</b>，确认生成？</>
+                  <>本次预计扣除 <b className="font-semibold text-ink">{estimate.points} 视频点</b>，确认生成？</>
                 )}
               </p>
               <div className="mt-4 flex gap-2.5">
                 <button
                   type="button"
                   onClick={() => setConfirmOpen(false)}
-                  className="h-10 flex-1 rounded-[10px] border border-[#e3e3e8] text-[13px] font-semibold text-[#1d1d1f] transition "
+                  className="h-10 flex-1 rounded-[10px] border border-[#e3e3e8] text-[13px] font-semibold text-ink transition "
                 >
                   取消
                 </button>
@@ -408,7 +408,7 @@ export function VideoGenerationStudio({
       </aside>
 
       <main className="flex min-h-[420px] flex-col rounded-[14px] border border-[#e8e8ed] bg-white">
-        <div className="flex h-11 items-center gap-5 border-b border-[#e8e8ed] px-5 text-sm font-semibold text-[#1d1d1f]">
+        <div className="flex h-11 items-center gap-5 border-b border-[#e8e8ed] px-5 text-sm font-semibold text-ink">
           <span>预览</span>
           <span className="border-b-2 border-[#1d1d1f] py-3">收藏</span>
         </div>
@@ -448,7 +448,7 @@ export function VideoGenerationStudio({
 
       <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-3">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#1d1d1f]">任务队列</h2>
+          <h2 className="text-sm font-semibold text-ink">任务队列</h2>
           <span className="text-xs text-[#8a8a8f]">生成中 {runningCount}</span>
         </div>
         <div className="grid gap-2">
@@ -462,7 +462,7 @@ export function VideoGenerationStudio({
                     layout
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-semibold text-[#1d1d1f]">{STATUS_LABELS[task.status]}</span>
+                      <span className="text-xs font-semibold text-ink">{STATUS_LABELS[task.status]}</span>
                       <motion.span
                         className="text-xs font-semibold text-brand-ink"
                         key={task.progress}
@@ -510,17 +510,17 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="w-full max-w-[440px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
-        <h3 className="text-[15px] font-semibold text-[#1d1d1f]">下载视频</h3>
+        <h3 className="text-[15px] font-semibold text-ink">下载视频</h3>
         <p className="mt-2 text-[13px] leading-6 text-[#6e6e73]">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
         <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-[#e8e8ed] bg-[#fafafa] p-2">
-          <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-[12px] text-[#1d1d1f] outline-none" />
+          <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-[12px] text-ink outline-none" />
           <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-2 text-[12px] font-semibold text-white transition ">
             <Icon icon={copied ? "mdi:check" : "mdi:content-copy"} className="text-sm" aria-hidden />
             {copied ? "已复制" : "复制"}
           </button>
         </div>
         <div className="mt-4 flex justify-end">
-          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-[#1d1d1f] transition ">关闭</button>
+          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-ink transition ">关闭</button>
         </div>
       </div>
     </div>

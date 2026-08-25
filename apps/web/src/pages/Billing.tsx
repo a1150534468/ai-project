@@ -86,7 +86,7 @@ export function PaymentStatusPanel({
   const success = state === "success";
   return (
     <div className="bg-white rounded-2xl p-6 border border-gray-50 text-center w-full max-w-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
-      <h3 className="text-base font-semibold text-[#1d1d1f] mb-4">{success ? "支付成功" : "扫码支付"}</h3>
+      <h3 className="text-base font-semibold text-ink mb-4">{success ? "支付成功" : "扫码支付"}</h3>
       <div className="flex justify-center mb-4">
         {success ? (
           <div className="payment-success-ring flex h-32 w-32 items-center justify-center rounded-full bg-brand-soft text-brand-ink">
@@ -400,13 +400,13 @@ export default function Billing({ token, onBalanceChange }: BillingProps) {
       <div className="max-w-5xl mx-auto p-6">
         {/* 标题 + Tab */}
         <div className="mb-5">
-          <h1 className="text-[28px] font-bold text-[#1d1d1f] tracking-tight">会员与充值</h1>
+          <h1 className="text-[28px] font-bold text-ink tracking-tight">会员与充值</h1>
           <div className="flex items-center gap-7 border-b border-gray-100 pb-2.5 mt-4">
             {(["member", "recharge"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className={`relative pb-1 text-base font-semibold transition-colors ${activeTab === t ? "text-[#1d1d1f]" : "text-gray-400 "}`}
+                className={`relative pb-1 text-base font-semibold transition-colors ${activeTab === t ? "text-ink" : "text-gray-400 "}`}
               >
                 {t === "member" ? "会员" : "积分充值"}
                 {activeTab === t && <span className="absolute left-0 right-0 -bottom-[11px] h-0.5 rounded bg-brand" />}

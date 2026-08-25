@@ -48,7 +48,7 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-[11px] text-gray-400 font-medium">合计可用算力点</p>
-              <p className="text-[34px] leading-none font-extrabold text-[#1d1d1f] mt-1">
+              <p className="text-[34px] leading-none font-extrabold text-ink mt-1">
                 {total === null ? "同步中" : <><AnimatedNumber value={total} /> <span className="text-base font-semibold text-gray-400">点</span></>}
               </p>
             </div>
@@ -62,7 +62,7 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
             {/* 临时（套餐） */}
             <div className="rounded-xl border p-3" style={{ borderColor: "#cbeee8", background: "#f5fbfa" }}>
               <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand" />临时算力点 · 套餐</p>
-              <p className="text-xl font-bold text-[#1d1d1f] mt-1">
+              <p className="text-xl font-bold text-ink mt-1">
                 {detail ? detail.membershipPoints.toLocaleString() : "—"} <span className="text-[11px] text-gray-400 font-medium">剩余</span>
               </p>
               {period ? (
@@ -78,14 +78,14 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
             {/* 永久（充值） */}
             <div className="rounded-xl border border-gray-100 bg-[#fafbfc] p-3">
               <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-gray-400" />永久算力点 · 充值</p>
-              <p className="text-xl font-bold text-[#1d1d1f] mt-1">{detail ? detail.permanentPoints.toLocaleString() : (total?.toLocaleString() ?? "—")}</p>
+              <p className="text-xl font-bold text-ink mt-1">{detail ? detail.permanentPoints.toLocaleString() : (total?.toLocaleString() ?? "—")}</p>
               <p className="text-[11px] text-gray-500 mt-2">永不过期</p>
               <p className="text-[11px] text-gray-400 mt-0.5">扣费时临时点优先、永久点保底</p>
             </div>
             {/* 视频点 / VIP */}
             <div className="rounded-xl border border-gray-100 bg-[#fafbfc] p-3">
               <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#a78bfa]" />视频点 · 会员</p>
-              <p className="text-xl font-bold text-[#1d1d1f] mt-1">{video === null ? "同步中" : video.toLocaleString()}</p>
+              <p className="text-xl font-bold text-ink mt-1">{video === null ? "同步中" : video.toLocaleString()}</p>
               <p className="text-[11px] text-gray-500 mt-2">{vip?.levelName ?? "普通会员"}</p>
               <p className="text-[11px] text-brand-ink mt-0.5">消费 {formatVipDiscount(vip?.discountBps)}</p>
             </div>

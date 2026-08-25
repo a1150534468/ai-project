@@ -90,7 +90,7 @@ export function KnowledgePicker({
           >
             <div className="flex items-start justify-between gap-4 border-b border-[#f0f0f3] px-5 py-4">
               <div>
-                <h3 className="text-base font-bold text-[#1d1d1f]">挂载知识库</h3>
+                <h3 className="text-base font-bold text-ink">挂载知识库</h3>
                 <p className="mt-1 text-xs text-[#6e6e73]">全库仅检索我的库；指定知识库可包含官方库。</p>
               </div>
               <button

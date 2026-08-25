@@ -102,7 +102,7 @@ function formattedDate(value: string): string {
 
 function ChoiceField({ label, value, options, onChange }: { readonly label: string; readonly value: string; readonly options: readonly string[]; readonly onChange: (value: string) => void }) {
   return (
-    <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+    <div className="grid gap-2 text-sm font-semibold text-ink">
       <p>{label}</p>
       <InAppSelect
         icon="mdi:tune-variant"
@@ -349,10 +349,10 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
       <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-[#e5e7eb] bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
-        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#6e6e73]">生成配置</p><h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">创作设置</h2></div><Icon icon="mdi:tune-variant" className="text-xl text-[#86868b]" aria-hidden /></div>
+        <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-[#6e6e73]">生成配置</p><h2 className="mt-1 text-base font-semibold text-ink">创作设置</h2></div><Icon icon="mdi:tune-variant" className="text-xl text-[#86868b]" aria-hidden /></div>
 
         <div className="mt-5">
-          <p className="mb-2 text-sm font-semibold text-[#1d1d1f]">参考人物 ({references.length}/{MAX_REFERENCE_COUNT})</p>
+          <p className="mb-2 text-sm font-semibold text-ink">参考人物 ({references.length}/{MAX_REFERENCE_COUNT})</p>
           <div className="grid grid-cols-3 gap-2">
             {references.map((reference, index) => (
               <div key={reference.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f5f5f7]">
@@ -367,7 +367,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         </div>
 
         <div className="mt-5 border-t border-[#e8e8ed] pt-4">
-          <p className="mb-2 text-sm font-semibold text-[#1d1d1f]">形象模板</p>
+          <p className="mb-2 text-sm font-semibold text-ink">形象模板</p>
           <div className="grid grid-cols-2 gap-2">
             {presets.map((preset) => <button key={preset.id} type="button" onClick={() => setPresetId(preset.id)} className={`min-h-[58px] rounded-lg border px-3 py-2 text-left ${presetId === preset.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e5e7eb] text-[#424245]"}`}><span className="block text-sm font-semibold">{preset.name}</span><span className="mt-0.5 block text-[10px] leading-4 opacity-70">{preset.description}</span></button>)}
           </div>
@@ -378,10 +378,10 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           <ChoiceField label="服装" value={promptOptions.outfit} options={OUTFIT_OPTIONS} onChange={(value) => updatePromptOption("outfit", value)} />
           <ChoiceField label="构图" value={promptOptions.composition} options={COMPOSITION_OPTIONS} onChange={(value) => updatePromptOption("composition", value)} />
           <ChoiceField label="表情" value={promptOptions.expression} options={EXPRESSION_OPTIONS} onChange={(value) => updatePromptOption("expression", value)} />
-          <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">发型<input value={promptOptions.hair} onChange={(event) => updatePromptOption("hair", event.target.value)} placeholder="保持参考或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
-          <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">妆容<input value={promptOptions.makeup} onChange={(event) => updatePromptOption("makeup", event.target.value)} placeholder="自然或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
+          <label className="grid gap-2 text-sm font-semibold text-ink">发型<input value={promptOptions.hair} onChange={(event) => updatePromptOption("hair", event.target.value)} placeholder="保持参考或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
+          <label className="grid gap-2 text-sm font-semibold text-ink">妆容<input value={promptOptions.makeup} onChange={(event) => updatePromptOption("makeup", event.target.value)} placeholder="自然或自定义" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal" /></label>
         </div>
-        <label className="mt-3 grid gap-2 text-sm font-semibold text-[#1d1d1f]">补充提示词<textarea aria-label="补充提示词" value={promptOptions.extraPrompt} onChange={(event) => updatePromptOption("extraPrompt", event.target.value)} maxLength={1200} placeholder="光线、氛围、背景细节等" className="min-h-[76px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" /></label>
+        <label className="mt-3 grid gap-2 text-sm font-semibold text-ink">补充提示词<textarea aria-label="补充提示词" value={promptOptions.extraPrompt} onChange={(event) => updatePromptOption("extraPrompt", event.target.value)} maxLength={1200} placeholder="光线、氛围、背景细节等" className="min-h-[76px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" /></label>
 
         <HumanImageGenerationFields
           models={models}
@@ -415,11 +415,11 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         <header className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>
-            <div><h2 className="text-sm font-semibold text-[#1d1d1f]">AI 形象照</h2><p className="text-[11px] text-[#86868b]">AI 生成预览</p></div>
+            <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-[#86868b]">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">
             {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-[#6e6e73]"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
-            <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-[#1d1d1f]"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
+            <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-ink"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
           </div>
         </header>
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5 lg:p-8">
@@ -431,7 +431,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           ) : selectedTask && isActive(selectedTask) ? (
             <div className="grid max-w-sm place-items-center text-center">
               <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"><Icon icon="mdi:creation-outline" className="text-4xl text-brand-ink" aria-hidden /><span className="absolute inset-0 animate-ping rounded-full border border-brand/30" /></span>
-              <p className="mt-5 text-base font-semibold text-[#1d1d1f]">正在生成形象照</p>
+              <p className="mt-5 text-base font-semibold text-ink">正在生成形象照</p>
               <p className="mt-2 text-sm text-[#6e6e73]">已完成 {selectedTask.completedCount}/{selectedTask.count}</p>
               <button type="button" onClick={() => handleCancel(selectedTask)} disabled={busyTaskId === selectedTask.id} className="mt-5 h-9 rounded-[8px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-[#424245]">取消任务</button>
             </div>
@@ -483,11 +483,11 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       {isTaskDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsTaskDrawerOpen(false)}>
           <aside role="dialog" aria-modal="true" aria-label="形象照任务队列" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
-            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4"><div><p className="text-xs font-semibold text-[#6e6e73]">任务状态</p><h2 className="text-base font-semibold text-[#1d1d1f]">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
+            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4"><div><p className="text-xs font-semibold text-[#6e6e73]">任务状态</p><h2 className="text-base font-semibold text-ink">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-[#8a8a8f]">暂无任务</p> : tasks.map((task) => (
                 <article key={task.id} className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-[#e5e7eb]"}`}>
-                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-[#1d1d1f]">{presetName(task.presetId)}</span><span className="flex-none text-xs text-[#6e6e73]">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-[#8a8a8f]">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
+                  <button type="button" onClick={() => { setSelectedTaskId(task.id); setIsTaskDrawerOpen(false); }} className="block w-full p-3 text-left"><span className="flex justify-between gap-2"><span className="truncate text-sm font-semibold text-ink">{presetName(task.presetId)}</span><span className="flex-none text-xs text-[#6e6e73]">{STATUS_LABEL[task.status]}</span></span><span className="mt-1 block text-[11px] text-[#8a8a8f]">{task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}</span>{task.error && <span className="mt-2 block text-xs text-red-600">{task.error}</span>}</button>
                   <div className="flex gap-2 px-3 pb-3">
                     {isActive(task) ? <button type="button" onClick={() => handleCancel(task)} disabled={busyTaskId === task.id} className="h-7 rounded-lg border border-red-200 px-2 text-xs font-semibold text-red-600 disabled:opacity-50">取消任务</button> : <button type="button" onClick={() => handleDeleteTask(task)} disabled={busyTaskId === task.id} className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-[#6e6e73] disabled:opacity-50"><Icon icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"} className={busyTaskId === task.id ? "animate-spin" : ""} aria-hidden />删除</button>}
                   </div>

@@ -51,7 +51,7 @@ export function StepRail({ active, busy = false, onSelect }: StepRailProps) {
               </span>
             </span>
             <span>
-              <span className={`block text-[13px] font-semibold transition-colors ${on || done ? "text-[#1d1d1f]" : "text-[#b6b6bd]"}`}>
+              <span className={`block text-[13px] font-semibold transition-colors ${on || done ? "text-ink" : "text-[#b6b6bd]"}`}>
                 {step.title}
               </span>
               <span className={`block text-[11px] transition-colors ${on || done ? "text-[#8a8a8f]" : "text-[#c7c7cc]"}`}>

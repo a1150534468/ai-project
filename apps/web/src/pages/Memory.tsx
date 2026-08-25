@@ -58,7 +58,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f5f5f7] text-[#1d1d1f]">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f5f5f7] text-ink">
         <div className="flex flex-none flex-col gap-4 px-3 pb-3 pt-4 sm:px-4 lg:px-5 lg:pb-4 lg:pt-5 xl:px-6 xl:pb-5 xl:pt-6">
           <section className="rounded-[14px] border border-[#e8e8ed] bg-white px-4 py-4 sm:px-5 sm:py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -66,7 +66,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
                   Memory Table
                 </p>
-                <h1 className="mt-2 text-[26px] font-bold tracking-[-0.02em] text-[#1d1d1f] sm:text-[30px] sm:tracking-[-0.03em]">
+                <h1 className="mt-2 text-[26px] font-bold tracking-[-0.02em] text-ink sm:text-[30px] sm:tracking-[-0.03em]">
                   记忆管理
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6e73]">
@@ -77,15 +77,15 @@ export default function MemoryPage({ token }: MemoryPageProps) {
               <div className="grid w-full grid-cols-3 gap-2 sm:max-w-[320px] lg:w-[320px]">
                 <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2">
                   <p className="text-[11px] text-[#8a8a8f]">总记忆</p>
-                  <p className="mt-1 text-lg font-semibold text-[#1d1d1f]">{totalCount}</p>
+                  <p className="mt-1 text-lg font-semibold text-ink">{totalCount}</p>
                 </div>
                 <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2">
                   <p className="text-[11px] text-[#8a8a8f]">当前显示</p>
-                  <p className="mt-1 text-lg font-semibold text-[#1d1d1f]">{filteredNodes.length}</p>
+                  <p className="mt-1 text-lg font-semibold text-ink">{filteredNodes.length}</p>
                 </div>
                 <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2">
                   <p className="text-[11px] text-[#8a8a8f]">命中</p>
-                  <p className="mt-1 text-lg font-semibold text-[#1d1d1f]">{highlightedCount}</p>
+                  <p className="mt-1 text-lg font-semibold text-ink">{highlightedCount}</p>
                 </div>
               </div>
             </div>

@@ -60,7 +60,7 @@ export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, ac
   return (
     <section className="flex-none border-t border-[#e5e7eb] bg-white px-4 py-3 lg:px-6" aria-label={ariaLabel}>
       <div className="mb-3 flex min-h-8 items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-[#1d1d1f]">最近生成{summary ? `（${summary}）` : ""}</h2>
+        <h2 className="text-sm font-semibold text-ink">最近生成{summary ? `（${summary}）` : ""}</h2>
         {action}
       </div>
       {groups.length === 0 ? (
@@ -70,7 +70,7 @@ export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, ac
           {groups.map((group) => (
             <div key={group.id} className="min-w-max border-r border-[#ececf0] pr-5 last:border-r-0 last:pr-0">
               <div className="mb-2 flex max-w-[360px] items-center justify-between gap-3 text-xs">
-                <p className="max-w-[220px] truncate font-semibold text-[#1d1d1f]" title={group.title}>{group.title}</p>
+                <p className="max-w-[220px] truncate font-semibold text-ink" title={group.title}>{group.title}</p>
                 {group.meta && <span className="flex-none text-[#8a8a8f]">{group.meta}</span>}
               </div>
               <div className="flex min-h-[72px] gap-2">

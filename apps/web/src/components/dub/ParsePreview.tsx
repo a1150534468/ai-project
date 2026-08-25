@@ -55,7 +55,7 @@ export function ParsePreview({ token, pricing, result, busy, setBusy, onAnalyzed
 
   return (
     <div className="space-y-4">
-      {result.title && <p className="text-[13.5px] font-medium text-[#1d1d1f]">{result.title}</p>}
+      {result.title && <p className="text-[13.5px] font-medium text-ink">{result.title}</p>}
       <div className="grid gap-4 sm:grid-cols-2">
         {result.cover.url && <img src={result.cover.url} alt="封面" className="w-full rounded-xl object-cover" />}
         <video src={result.video.url} controls className="w-full rounded-xl bg-black" />

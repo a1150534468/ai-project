@@ -57,7 +57,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
-            <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">{props.isEditing ? "基于结果修改" : "创建图片"}</h2>
+            <h2 className="mt-1 text-base font-semibold text-ink">{props.isEditing ? "基于结果修改" : "创建图片"}</h2>
           </div>
           {props.isEditing && props.onCancelEditing && (
             <button
@@ -71,7 +71,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
           )}
         </div>
 
-        <label htmlFor="workflow-prompt" className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <label htmlFor="workflow-prompt" className="grid gap-2 text-sm font-semibold text-ink">
           提示词
           <textarea
             id="workflow-prompt"
@@ -86,7 +86,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
           type="button"
           onClick={props.onOptimizePrompt}
           disabled={props.isOptimizingPrompt}
-          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
         >
           <Icon icon={props.isOptimizingPrompt ? "mdi:loading" : "mdi:magic-staff"} className={props.isOptimizingPrompt ? "animate-spin text-base" : "text-base"} aria-hidden />
           {props.isOptimizingPrompt ? "优化中" : "优化提示词"}
@@ -94,14 +94,14 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
 
         <div className="mt-5 grid gap-2">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-[#1d1d1f]">参考图</p>
+            <p className="text-sm font-semibold text-ink">参考图</p>
             <span className="text-xs text-[#8a8a8f]">{props.referenceImages.length}/3</span>
           </div>
           <button
             type="button"
             onClick={() => referenceInputRef.current?.click()}
             disabled={!supportsReferenceImages || props.isUploadingReference || props.referenceImages.length >= 3}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-[#1d1d1f] disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-[#8a8a8f]"
           >
             <Icon icon={props.isUploadingReference ? "mdi:loading" : "mdi:plus"} className={`text-base ${props.isUploadingReference ? "animate-spin" : ""}`} aria-hidden />
             {props.isUploadingReference
@@ -150,7 +150,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
           )}
         </div>
 
-        <div className="mt-5 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="mt-5 grid gap-2 text-sm font-semibold text-ink">
           模型
           <InAppSelect
             icon="mdi:creation-outline"
@@ -164,7 +164,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
         </div>
 
         <div className="mt-5 grid grid-cols-2 gap-3">
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             比例
             <InAppSelect
               icon="mdi:aspect-ratio"
@@ -176,7 +176,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
               }}
             />
           </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             分辨率
             <InAppSelect
               icon="mdi:high-definition"
@@ -191,7 +191,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
         </div>
 
         <div className="mt-5 grid gap-2">
-          <p className="text-sm font-semibold text-[#1d1d1f]">批量数量</p>
+          <p className="text-sm font-semibold text-ink">批量数量</p>
           <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7] bg-white">
             {QUICK_COUNTS.map((count) => (
               <button

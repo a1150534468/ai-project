@@ -44,7 +44,7 @@ function EmptyState() {
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
         <Icon icon="mdi:table-row" className="text-2xl" />
       </div>
-      <p className="mt-4 text-lg font-semibold text-[#1d1d1f]">选择一条记忆</p>
+      <p className="mt-4 text-lg font-semibold text-ink">选择一条记忆</p>
       <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
         在表格中点击任意行，即可查看详情、编辑内容或整理标签。
       </p>
@@ -150,7 +150,7 @@ export default function MemoryDetailPanel({
             记忆详情
           </p>
           <h2
-            className={`mt-1 font-semibold text-[#1d1d1f] ${
+            className={`mt-1 font-semibold text-ink ${
               mobile ? "line-clamp-2 text-base leading-6" : "truncate text-lg"
             }`}
           >
@@ -163,7 +163,7 @@ export default function MemoryDetailPanel({
               type="button"
               onClick={onClose}
               aria-label="关闭记忆详情"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d2d2d7] bg-white text-[#1d1d1f] shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d2d2d7] bg-white text-ink shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -184,7 +184,7 @@ export default function MemoryDetailPanel({
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-[#1d1d1f] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <Icon icon="mdi:pencil-outline" className="text-sm" />
               编辑

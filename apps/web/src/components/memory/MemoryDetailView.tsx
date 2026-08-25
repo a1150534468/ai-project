@@ -32,7 +32,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
             使用 {node.usedCount} 次
           </span>
         </div>
-        <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#1d1d1f]">
+        <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-ink">
           {node.text}
         </p>
       </div>
@@ -62,7 +62,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
             创建时间
           </p>
-          <p className="mt-2 text-sm text-[#1d1d1f]">
+          <p className="mt-2 text-sm text-ink">
             {new Date(node.createdAt).toLocaleString("zh-CN")}
           </p>
         </div>
@@ -70,7 +70,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
             最近使用
           </p>
-          <p className="mt-2 text-sm text-[#1d1d1f]">{formatDate(node.lastUsedAt)}</p>
+          <p className="mt-2 text-sm text-ink">{formatDate(node.lastUsedAt)}</p>
         </div>
       </div>
     </div>

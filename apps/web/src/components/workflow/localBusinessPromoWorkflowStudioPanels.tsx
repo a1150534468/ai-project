@@ -38,7 +38,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
         <div className="min-w-0">
           <p className="text-[12px] font-semibold text-brand-ink">项目工作台</p>
           <div className="mt-1 flex items-center gap-2">
-            <h2 className="truncate text-lg font-semibold text-[#1d1d1f]">{projectTitle(project)}</h2>
+            <h2 className="truncate text-lg font-semibold text-ink">{projectTitle(project)}</h2>
             <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-[#6e6e73]">{derived.selectedProjectStatus}</span>
             {derived.dirty && <span className="rounded-full bg-[#fff4e5] px-2 py-0.5 text-[11px] font-medium text-[#9a5a00]">未保存</span>}
           </div>
@@ -47,7 +47,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
           <button
             type="button"
             onClick={() => void actions.openProjectsPage()}
-            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] "
+            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-ink "
           >
             <Icon icon="mdi:format-list-bulleted" className="text-base" aria-hidden />
             项目列表
@@ -56,7 +56,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             type="button"
             onClick={() => void actions.createProject()}
             disabled={state.isCreatingProject}
-            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-[#1d1d1f] disabled:opacity-50"
+            className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-ink disabled:opacity-50"
           >
             <Icon icon="mdi:plus" className="text-base" aria-hidden />
             新建项目
@@ -81,7 +81,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">1</span>
                   <span>填资料</span>
                 </p>
-                <h3 className="text-sm font-semibold text-[#1d1d1f]">商家基础信息</h3>
+                <h3 className="text-sm font-semibold text-ink">商家基础信息</h3>
               </div>
             </div>
 
@@ -91,7 +91,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   value={project.brief.storeName}
                   onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, brief: { ...current.brief, storeName: event.target.value } }))}
                   placeholder="例如：禾木咖啡、轻氧皮肤管理"
-                  className="h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f] outline-none focus:border-brand/40"
+                  className="h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-ink outline-none focus:border-brand/40"
                 />
               </Field>
               <Field label="行业类型">
@@ -99,7 +99,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   value={project.brief.industry}
                   onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, brief: { ...current.brief, industry: event.target.value } }))}
                   placeholder="例如：精品咖啡、口腔诊所、瑜伽馆"
-                  className="h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f] outline-none focus:border-brand/40"
+                  className="h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-ink outline-none focus:border-brand/40"
                 />
               </Field>
               <Field label="城市/商圈">
@@ -107,7 +107,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   value={project.brief.cityArea}
                   onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, brief: { ...current.brief, cityArea: event.target.value } }))}
                   placeholder="例如：上海静安寺、杭州滨江天街"
-                  className="h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-[#1d1d1f] outline-none focus:border-brand/40"
+                  className="h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-ink outline-none focus:border-brand/40"
                 />
               </Field>
               <Field label="目标客户">
@@ -115,7 +115,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   value={project.brief.targetCustomers}
                   onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, brief: { ...current.brief, targetCustomers: event.target.value } }))}
                   placeholder="例如：周边白领、宝妈、健身人群、学生党"
-                  className="min-h-[84px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-2.5 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand/40"
+                  className="min-h-[84px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                 />
               </Field>
               <Field label="主推服务/产品">
@@ -123,7 +123,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   value={project.brief.mainOffer}
                   onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, brief: { ...current.brief, mainOffer: event.target.value } }))}
                   placeholder="例如：招牌拿铁、暑期矫正套餐、肩颈放松项目"
-                  className="min-h-[84px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-2.5 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand/40"
+                  className="min-h-[84px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                 />
               </Field>
               <Field label="核心卖点">
@@ -131,7 +131,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   value={project.brief.sellingPoints}
                   onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, brief: { ...current.brief, sellingPoints: event.target.value } }))}
                   placeholder="例如：现做出品稳定、环境出片、医生经验足、服务流程细致"
-                  className="min-h-[96px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-2.5 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand/40"
+                  className="min-h-[96px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                 />
               </Field>
             </div>
@@ -153,14 +153,14 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <Icon icon={meta.icon} className="text-base text-[#6e6e73]" aria-hidden />
-                            <p className="text-sm font-semibold text-[#1d1d1f]">{meta.label}</p>
+                            <p className="text-sm font-semibold text-ink">{meta.label}</p>
                           </div>
                           <p className="mt-1 text-[12px] leading-5 text-[#6e6e73]">{meta.hint}</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => actions.openUploadPicker(group)}
-                          className="inline-flex items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 py-2 text-[12px] font-semibold text-[#1d1d1f] "
+                          className="inline-flex items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 py-2 text-[12px] font-semibold text-ink "
                         >
                           <Icon icon={state.uploadingGroup === group ? "mdi:loading" : "mdi:upload"} className={state.uploadingGroup === group ? "animate-spin" : ""} aria-hidden />
                           上传
@@ -172,7 +172,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                             <div key={`${group}:${item.url}`} className="flex items-center gap-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2">
                               <Icon icon={item.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:image-outline"} className="text-base text-[#6e6e73]" aria-hidden />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate text-[12px] font-medium text-[#1d1d1f]">{item.name || item.url}</p>
+                                <p className="truncate text-[12px] font-medium text-ink">{item.name || item.url}</p>
                                 <p className="text-[11px] text-[#8a8a8f]">{item.mime.startsWith("video/") ? `视频 ${item.durationSec || 0}s` : "图片"}</p>
                               </div>
                               <button
@@ -223,7 +223,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">2</span>
                 <span>选方向</span>
               </p>
-              <h3 className="text-sm font-semibold text-[#1d1d1f]">文案与风格配置</h3>
+              <h3 className="text-sm font-semibold text-ink">文案与风格配置</h3>
             </div>
 
             <ControlGroup label="文案方向">
@@ -260,7 +260,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             <div className="mt-5 rounded-[12px] border border-[#ececf0] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-[#1d1d1f]">口播文案</p>
+                  <p className="text-sm font-semibold text-ink">口播文案</p>
                   <p className="text-[12px] text-[#6e6e73]">先生成，再手动编辑，最终作为分段视频输入。</p>
                 </div>
                 <div className="flex gap-2">
@@ -268,7 +268,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     type="button"
                     onClick={() => void actions.generateScript()}
                     disabled={state.isGeneratingScript}
-                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-ink disabled:opacity-50"
                   >
                     <Icon icon={state.isGeneratingScript ? "mdi:loading" : "mdi:auto-fix"} className={state.isGeneratingScript ? "animate-spin" : ""} aria-hidden />
                     {state.isGeneratingScript ? "生成中" : "一键生成"}
@@ -277,7 +277,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     type="button"
                     onClick={() => void actions.saveScript()}
                     disabled={state.isSavingProject || !derived.dirty}
-                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                    className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-ink disabled:opacity-50"
                   >
                     <Icon icon="mdi:content-save-outline" aria-hidden />
                     保存文案
@@ -288,7 +288,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 value={project.scriptDraft}
                 onChange={(event) => actions.setScriptDraft(event.target.value)}
                 placeholder="点击“一键生成”后可在这里人工调整。"
-                className="mt-3 min-h-[240px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-3 text-sm leading-7 text-[#1d1d1f] outline-none focus:border-brand/40"
+                className="mt-3 min-h-[240px] w-full resize-none rounded-[10px] border border-[#d2d2d7] px-3 py-3 text-sm leading-7 text-ink outline-none focus:border-brand/40"
               />
               <p className="mt-2 text-right text-[11px] text-[#8a8a8f]">{project.scriptDraft.length} / 10000</p>
             </div>
@@ -296,7 +296,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             <div className="mt-5 rounded-[12px] border border-[#ececf0] p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-[#1d1d1f]">声音和音乐</p>
+                  <p className="text-sm font-semibold text-ink">声音和音乐</p>
                   <p className="text-[12px] text-[#6e6e73]">旁白支持预制音色、文本定制和音频复刻三种方式。</p>
                 </div>
               </div>
@@ -321,7 +321,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <select
                           value={project.settings.narrationVoice}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, narrationVoice: event.target.value as LocalBusinessPromoSettings["narrationVoice"] } }))}
-                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm text-[#1d1d1f] outline-none focus:border-brand/40"
+                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm text-ink outline-none focus:border-brand/40"
                         >
                           {state.options.narrationVoices.map((voice) => (
                             <option key={voice.value} value={voice.value}>{voice.label}</option>
@@ -346,7 +346,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           value={project.settings.voiceDesignPrompt}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, voiceDesignPrompt: event.target.value } }))}
                           placeholder="例如：一位二十多岁的年轻女性，普通话自然清晰，音色温柔亲切。"
-                          className="mt-1.5 min-h-[96px] w-full resize-none rounded-[10px] border border-[#d2d2d7] bg-white px-3 py-2.5 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand/40"
+                          className="mt-1.5 min-h-[96px] w-full resize-none rounded-[10px] border border-[#d2d2d7] bg-white px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                         />
                       </label>
                       <label className="mt-3 block">
@@ -355,7 +355,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           value={project.settings.voiceStylePrompt}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, voiceStylePrompt: event.target.value } }))}
                           placeholder="例如：语速自然可信，像面对面介绍服务。"
-                          className="mt-1.5 min-h-[84px] w-full resize-none rounded-[10px] border border-[#d2d2d7] bg-white px-3 py-2.5 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand/40"
+                          className="mt-1.5 min-h-[84px] w-full resize-none rounded-[10px] border border-[#d2d2d7] bg-white px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                         />
                       </label>
                     </div>
@@ -372,7 +372,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={actions.openVoiceSamplePicker}
                           disabled={state.isUploadingVoiceSample}
-                          className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                          className="inline-flex h-9 items-center gap-1 rounded-[9px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-ink disabled:opacity-50"
                         >
                           <Icon icon={state.isUploadingVoiceSample ? "mdi:loading" : "mdi:upload"} className={state.isUploadingVoiceSample ? "animate-spin" : ""} aria-hidden />
                           {state.isUploadingVoiceSample ? "上传中" : "上传样本"}
@@ -392,7 +392,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       type="button"
                       onClick={() => void actions.previewNarration()}
                       disabled={!derived.narrationPreviewReady || state.narrationPreviewState === "loading"}
-                      className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                      className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-ink disabled:opacity-50"
                     >
                       <Icon icon={derived.narrationPreviewButtonIcon} className={state.narrationPreviewState === "loading" ? "animate-spin" : ""} aria-hidden />
                       {derived.narrationPreviewButtonLabel}
@@ -468,7 +468,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <select
                           value={project.settings.musicPreset}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, musicPreset: event.target.value as LocalBusinessPromoSettings["musicPreset"] } }))}
-                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm text-[#1d1d1f] outline-none focus:border-brand/40"
+                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm text-ink outline-none focus:border-brand/40"
                         >
                           {state.options.musicPresets.filter((preset) => preset.value !== "no-bgm").map((preset) => (
                             <option key={preset.value} value={preset.value}>{preset.label}</option>
@@ -478,7 +478,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={() => void actions.previewBgm()}
                           disabled={state.isPreviewingBgm}
-                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-ink disabled:opacity-50"
                         >
                           <Icon icon={state.isPreviewingBgm ? "mdi:loading" : "mdi:play-circle-outline"} className={state.isPreviewingBgm ? "animate-spin" : ""} aria-hidden />
                           {state.isPreviewingBgm ? "试听中" : "试听"}
@@ -528,7 +528,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           type="button"
                           onClick={actions.openBgmUploadPicker}
                           disabled={state.isUploadingBgm}
-                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                          className="inline-flex h-10 items-center gap-1 rounded-[10px] border border-[#d2d2d7] px-3 text-[12px] font-semibold text-ink disabled:opacity-50"
                         >
                           <Icon icon={state.isUploadingBgm ? "mdi:loading" : "mdi:upload"} className={state.isUploadingBgm ? "animate-spin" : ""} aria-hidden />
                           {state.isUploadingBgm ? "上传中" : "上传 BGM"}
@@ -579,7 +579,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">3</span>
                 <span>看结果</span>
               </p>
-              <h3 className="text-sm font-semibold text-[#1d1d1f]">成片、任务状态、生成记录</h3>
+              <h3 className="text-sm font-semibold text-ink">成片、任务状态、生成记录</h3>
             </div>
 
             {derived.previewUrl ? (
@@ -592,7 +592,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               <div className="grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-[#d2d2d7] bg-[#fafafa] text-center">
                 <div className="max-w-[280px] px-4">
                   <Icon icon="mdi:movie-open-outline" className="mx-auto text-3xl text-[#8a8a8f]" aria-hidden />
-                  <p className="mt-3 text-sm font-medium text-[#1d1d1f]">成片预览会显示在这里</p>
+                  <p className="mt-3 text-sm font-medium text-ink">成片预览会显示在这里</p>
                   <p className="mt-1 text-[12px] leading-6 text-[#6e6e73]">先填写资料、生成文案并启动多段任务。</p>
                 </div>
               </div>
@@ -600,7 +600,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
 
             <div className="mt-4 rounded-[12px] border border-[#ececf0] p-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-[#1d1d1f]">任务状态</p>
+                <p className="text-sm font-semibold text-ink">任务状态</p>
                 {latestRun && <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-[#6e6e73]">{formatLocalBusinessPromoRunStatus(latestRun.status)}</span>}
               </div>
               {latestRun ? (
@@ -608,10 +608,10 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   <div className="rounded-[10px] bg-[#f7f7f9] px-3 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <p className="text-[12px] font-semibold text-[#1d1d1f]">{formatLocalBusinessPromoProgressStage(latestRun.progressStage)}</p>
+                        <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoProgressStage(latestRun.progressStage)}</p>
                         <p className="mt-1 text-[11px] text-[#6e6e73]">{latestRun.progressMessage || "任务已创建，等待处理"}</p>
                       </div>
-                      <p className="text-[12px] font-semibold text-[#1d1d1f]">{latestRun.progressPercent}%</p>
+                      <p className="text-[12px] font-semibold text-ink">{latestRun.progressPercent}%</p>
                     </div>
                     <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
                       <div
@@ -624,7 +624,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   {latestRun.shotPlan.map((shot, index) => (
                     <div key={`${latestRun.id}:${shot.shotId}:${index}`} className="rounded-[10px] bg-[#f7f7f9] px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="text-[12px] font-semibold text-[#1d1d1f]">{index + 1}. {shot.label}</p>
+                        <p className="text-[12px] font-semibold text-ink">{index + 1}. {shot.label}</p>
                         <span className="text-[11px] text-[#6e6e73]">{formatLocalBusinessPromoShotTaskStatus(shot.taskStatus)}</span>
                       </div>
                       <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#6e6e73]">{shot.scriptLine || "待生成文案"}</p>
@@ -654,14 +654,14 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
 
             <div className="mt-4 rounded-[12px] border border-[#ececf0] p-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-[#1d1d1f]">生成记录</p>
+                <p className="text-sm font-semibold text-ink">生成记录</p>
                 {project.latestRunId && <span className="text-[11px] text-[#8a8a8f]">最近 {state.runs.length} 次</span>}
               </div>
               <div className="mt-3 space-y-2">
                 {state.runs.length > 0 ? state.runs.map((run) => (
                   <div key={run.id} className="rounded-[10px] bg-[#f7f7f9] px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-[12px] font-semibold text-[#1d1d1f]">{formatLocalBusinessPromoRunStatus(run.status)}</p>
+                      <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoRunStatus(run.status)}</p>
                       <span className="text-[11px] text-[#8a8a8f]">{formatLocalBusinessPromoTime(run.createdAt)}</span>
                     </div>
                     <p className="mt-1 text-[12px] text-[#6e6e73]">{run.settingsSnapshot.durationSec} 秒 · {run.settingsSnapshot.aspectRatio} · {run.shotPlan.length} 段 · {run.progressPercent}%</p>

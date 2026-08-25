@@ -10,7 +10,7 @@ function statusTone(status: string): string {
   if (SUCCESS_STATUSES.has(status)) return "text-brand-ink";
   if (FAILED_STATUSES.has(status)) return "text-red-600";
   if (RUNNING_STATUSES.has(status)) return "text-amber-600";
-  return "text-[#1d1d1f]";
+  return "text-ink";
 }
 
 function formatDuration(startIso: string, endIso: string | null): string {
@@ -39,14 +39,14 @@ export function RunStatusCard({ run }: RunStatusCardProps) {
 
   const metrics = [
     { icon: "mdi:progress-check", label: "状态", value: statusLabel(run.status), tone: statusTone(run.status) },
-    { icon: "mdi:clock-outline", label: "耗时", value: duration, tone: "text-[#1d1d1f]" },
-    { icon: "mdi:format-list-checks", label: "步骤", value: `${completedSteps}/${run.steps.length}`, tone: "text-[#1d1d1f]" },
-    { icon: "mdi:text", label: "篇幅", value: wordCount ? `${wordCount} 字` : "—", tone: "text-[#1d1d1f]" },
+    { icon: "mdi:clock-outline", label: "耗时", value: duration, tone: "text-ink" },
+    { icon: "mdi:format-list-checks", label: "步骤", value: `${completedSteps}/${run.steps.length}`, tone: "text-ink" },
+    { icon: "mdi:text", label: "篇幅", value: wordCount ? `${wordCount} 字` : "—", tone: "text-ink" },
   ];
 
   return (
     <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-4">
-      <p className="mb-3 text-sm font-semibold text-[#1d1d1f]">任务状态</p>
+      <p className="mb-3 text-sm font-semibold text-ink">任务状态</p>
       <div className="grid grid-cols-2 gap-2">
         {metrics.map((metric) => (
           <div key={metric.label} className="flex items-center gap-2.5 rounded-[10px] bg-[#f7f7f9] px-3 py-2.5">

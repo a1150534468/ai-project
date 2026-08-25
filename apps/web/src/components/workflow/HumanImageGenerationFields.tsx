@@ -31,7 +31,7 @@ interface HumanImageGenerationFieldsProps {
 export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProps) {
   return (
     <>
-      <div className="mt-4 grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+      <div className="mt-4 grid gap-2 text-sm font-semibold text-ink">
         <p>模型</p>
         <InAppSelect
           icon="mdi:creation-outline"
@@ -43,7 +43,7 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
         />
       </div>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="grid gap-2 text-sm font-semibold text-ink">
           <p>画面比例</p>
           <InAppSelect
             icon="mdi:aspect-ratio"
@@ -54,7 +54,7 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
             onChange={props.onAspectRatioChange}
           />
         </div>
-        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="grid gap-2 text-sm font-semibold text-ink">
           <p>清晰度</p>
           <InAppSelect
             icon="mdi:image-size-select-large"
@@ -67,7 +67,7 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
         </div>
       </div>
       <div className="mt-3">
-        <p className="mb-2 text-sm font-semibold text-[#1d1d1f]">生成张数</p>
+        <p className="mb-2 text-sm font-semibold text-ink">生成张数</p>
         <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7]">
           {[1, 2, 3, 4].map((value) => (
             <button

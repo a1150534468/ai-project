@@ -55,9 +55,9 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
               <div>
                 <p className="text-xs font-semibold text-[#6e6e73]">任务状态</p>
-                <h2 className="text-base font-semibold text-[#1d1d1f]">任务队列</h2>
+                <h2 className="text-base font-semibold text-ink">任务队列</h2>
               </div>
-              <button type="button" onClick={props.onClose} aria-label="关闭任务队列" className="grid h-9 w-9 place-items-center rounded-lg text-[#1d1d1f] hover:bg-[#f5f5f7]">
+              <button type="button" onClick={props.onClose} aria-label="关闭任务队列" className="grid h-9 w-9 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]">
                 <Icon icon="mdi:close" className="text-xl" aria-hidden />
               </button>
             </div>
@@ -82,7 +82,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                       className={`block w-full text-left outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${compact ? "px-3 py-2" : "p-3"}`}
                     >
                       <span className="flex items-start justify-between gap-2">
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#1d1d1f]">{task.prompt}</span>
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{task.prompt}</span>
                         <span className={`flex-none text-[11px] font-semibold ${task.status === "failed" ? "text-red-600" : active ? "text-brand-ink" : "text-[#6e6e73]"}`}>
                           {task.status === "running" && task.error ? "正在重试" : STATUS_LABELS[task.status]}
                         </span>
@@ -109,7 +109,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                       <button
                         type="button"
                         onClick={() => props.onRetryTask(task)}
-                        className="mb-3 ml-3 inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-[#1d1d1f]"
+                        className="mb-3 ml-3 inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-ink"
                       >
                         <Icon icon="mdi:refresh" className="text-sm" aria-hidden />
                         重新提交

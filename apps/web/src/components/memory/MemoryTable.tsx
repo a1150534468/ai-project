@@ -59,7 +59,7 @@ export default function MemoryTable({
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
           <Icon icon="mdi:table-search" className="text-2xl" aria-hidden />
         </div>
-        <p className="mt-4 text-base font-semibold text-[#1d1d1f]">当前筛选下没有记忆</p>
+        <p className="mt-4 text-base font-semibold text-ink">当前筛选下没有记忆</p>
         <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           调整搜索或类型筛选后再查看。
         </p>
@@ -104,7 +104,7 @@ export default function MemoryTable({
                   <td className="px-4 py-4 align-top">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-[#1d1d1f]">{title}</p>
+                        <p className="truncate text-sm font-semibold text-ink">{title}</p>
                         {highlighted ? (
                           <span className="inline-flex flex-none items-center rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
                             命中
@@ -123,7 +123,7 @@ export default function MemoryTable({
                     </span>
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <span className="inline-flex min-w-12 justify-center rounded-full bg-[#f5f5f7] px-2.5 py-1 text-xs font-medium text-[#1d1d1f]">
+                    <span className="inline-flex min-w-12 justify-center rounded-full bg-[#f5f5f7] px-2.5 py-1 text-xs font-medium text-ink">
                       {node.importance}
                     </span>
                   </td>

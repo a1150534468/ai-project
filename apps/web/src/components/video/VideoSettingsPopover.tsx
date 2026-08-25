@@ -94,7 +94,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
       <button type="button" aria-label="视频设置" aria-expanded={open} onClick={toggle}
         className={`flex w-full items-center gap-2 rounded-[10px] border bg-white px-3 py-2.5 text-left transition ${open ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}>
         <span className="shrink-0 text-xs text-[#8a8a8f]">视频设置</span>
-        <span className="ml-auto min-w-0 truncate text-sm font-medium text-[#1d1d1f]">{summary}</span>
+        <span className="ml-auto min-w-0 truncate text-sm font-medium text-ink">{summary}</span>
         <Icon icon="mdi:chevron-down" className={`shrink-0 text-base text-[#b6b6bd] transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open && (
@@ -106,7 +106,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                 const on = a === aspectRatio;
                 return (
                   <button key={a} type="button" onClick={() => props.onAspectRatioChange(a)}
-                    className={`rounded-[8px] border px-1 py-2 text-[11px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
+                    className={`rounded-[8px] border px-1 py-2 text-[11px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
                     {a}
                   </button>
                 );
@@ -120,7 +120,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                 const on = r === resolution;
                 return (
                   <button key={r} type="button" onClick={() => props.onResolutionChange(r)}
-                    className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
+                    className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
                     {RESOLUTION_LABELS[r]}
                   </button>
                 );
@@ -135,7 +135,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                   const on = generateAudio === val;
                   return (
                     <button key={label} type="button" onClick={() => props.onGenerateAudioChange(val)}
-                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
+                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
                       {label}
                     </button>
                   );
@@ -151,7 +151,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                   const on = d.value === durationSec;
                   return (
                     <button key={d.value} type="button" onClick={() => props.onDurationChange(d.value)}
-                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-[#1d1d1f]" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
+                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-[#8a8a8f] "}`}>
                       {d.label}
                     </button>
                   );

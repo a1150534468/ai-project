@@ -80,7 +80,7 @@ export function TaskComposer({
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">Agent 团队</p>
-          <h1 className="mt-1 text-[28px] font-bold leading-tight text-[#1d1d1f]">智能任务发起</h1>
+          <h1 className="mt-1 text-[28px] font-bold leading-tight text-ink">智能任务发起</h1>
         </div>
         <span className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-brand-soft text-brand-ink">
           <Icon icon="mdi:account-group-outline" className="text-2xl" aria-hidden />
@@ -92,7 +92,7 @@ export function TaskComposer({
           value={taskGoal}
           onChange={(event) => onTaskGoalChange(event.target.value)}
           placeholder="用大白话描述任务目标，例如：帮我审查一份采购合同，识别潜在法律风险，并给出修改建议..."
-          className="min-h-[132px] w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-[#1d1d1f] outline-none placeholder:text-[#8a8a8f]"
+          className="min-h-[132px] w-full resize-none border-0 bg-transparent px-2 py-2 text-sm leading-6 text-ink outline-none placeholder:text-[#8a8a8f]"
         />
 
         {attachments.length > 0 && (

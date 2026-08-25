@@ -30,7 +30,7 @@ export function TeamCardGrid({
   return (
     <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-base font-semibold text-[#1d1d1f]">我的 Agent 团队</h2>
+        <h2 className="text-base font-semibold text-ink">我的 Agent 团队</h2>
         <span className="text-xs text-[#6e6e73]">{teams.length} 个团队</span>
       </div>
       <Stagger className={gridClassName}>
@@ -54,7 +54,7 @@ export function TeamCardGrid({
                   className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="truncate text-sm font-semibold text-[#1d1d1f]">{team.name}</h3>
+                    <h3 className="truncate text-sm font-semibold text-ink">{team.name}</h3>
                     <span className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-brand-ink">{team.members.length} 人</span>
                   </div>
                   <p className="mt-2 line-clamp-2 min-h-[40px] text-xs leading-5 text-[#6e6e73]">{team.description || "暂无描述"}</p>

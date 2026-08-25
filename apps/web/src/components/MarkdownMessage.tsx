@@ -10,14 +10,14 @@ interface MarkdownMessageProps {
 export function MarkdownMessage({ content, variant = "chat" }: MarkdownMessageProps) {
   const headingClass = variant === "report"
     ? {
-      h1: "mb-4 text-2xl font-bold leading-tight text-[#1d1d1f]",
-      h2: "mb-3 mt-6 text-xl font-semibold leading-snug text-[#1d1d1f]",
-      h3: "mb-2 mt-5 text-base font-semibold leading-snug text-[#1d1d1f]",
+      h1: "mb-4 text-2xl font-bold leading-tight text-ink",
+      h2: "mb-3 mt-6 text-xl font-semibold leading-snug text-ink",
+      h3: "mb-2 mt-5 text-base font-semibold leading-snug text-ink",
     }
     : {
-      h1: "mb-3 text-xl font-semibold leading-snug text-[#1d1d1f]",
-      h2: "mb-2 mt-4 text-lg font-semibold leading-snug text-[#1d1d1f]",
-      h3: "mb-2 mt-3 text-base font-semibold leading-snug text-[#1d1d1f]",
+      h1: "mb-3 text-xl font-semibold leading-snug text-ink",
+      h2: "mb-2 mt-4 text-lg font-semibold leading-snug text-ink",
+      h3: "mb-2 mt-3 text-base font-semibold leading-snug text-ink",
     };
 
   return (

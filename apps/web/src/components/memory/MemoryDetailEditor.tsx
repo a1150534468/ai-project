@@ -44,7 +44,7 @@ export default function MemoryDetailEditor({
         <input
           value={title}
           onChange={(event) => onTitleChange(event.target.value)}
-          className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm text-[#1d1d1f]"
+          className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm text-ink"
         />
         {showGeneratedTitleHint ? (
           <p className="mt-2 text-xs text-[#8a8a8f]">
@@ -61,7 +61,7 @@ export default function MemoryDetailEditor({
           value={text}
           onChange={(event) => onTextChange(event.target.value)}
           rows={mobile ? 5 : 8}
-          className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm leading-6 text-[#1d1d1f]"
+          className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm leading-6 text-ink"
         />
       </div>
 
@@ -92,7 +92,7 @@ export default function MemoryDetailEditor({
           <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#8a8a8f]">
             重要度
           </label>
-          <span className="text-sm font-medium text-[#1d1d1f]">{importance}</span>
+          <span className="text-sm font-medium text-ink">{importance}</span>
         </div>
         <input
           type="range"
@@ -112,7 +112,7 @@ export default function MemoryDetailEditor({
           value={tagsInput}
           onChange={(event) => onTagsInputChange(event.target.value)}
           placeholder="用逗号分隔，例如：偏好, 项目, 人设"
-          className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm text-[#1d1d1f]"
+          className="w-full rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 py-2.5 text-sm text-ink"
         />
         <div className="mt-2 flex flex-wrap gap-2">
           {tags.map((tag) => (

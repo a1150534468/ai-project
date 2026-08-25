@@ -55,7 +55,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-[#1d1d1f] hover:bg-[#f7f8fa]"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
       >
         <Icon icon="mdi:palette-outline" className="text-base" aria-hidden />
         {themeLabel}
@@ -96,7 +96,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                       dangerouslySetInnerHTML={{ __html: thumbnails.get(key) ?? "" }}
                     />
                   </span>
-                  <span className="mt-1 block truncate text-[10px] font-semibold text-[#1d1d1f]">{theme.name}</span>
+                  <span className="mt-1 block truncate text-[10px] font-semibold text-ink">{theme.name}</span>
                 </button>
               );
             })}
@@ -105,7 +105,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
           {effectiveTheme !== "auto" && (
             <div className="mt-3 space-y-2 border-t border-[#e5e7eb] pt-3">
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-[#1d1d1f]">主色</span>
+                <span className="text-xs font-semibold text-ink">主色</span>
                 <input
                   type="color"
                   aria-label="主色"
@@ -118,7 +118,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-[#1d1d1f]">配图排列</span>
+                <span className="text-xs font-semibold text-ink">配图排列</span>
                 <div className="inline-grid flex-1 grid-cols-3 rounded-lg bg-[#ececf0] p-1">
                   {GALLERY_MODE_OPTIONS.map((option) => (
                     <button
@@ -128,7 +128,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                       aria-checked={effectiveGalleryMode === option.key}
                       onClick={() => props.onPreviewGalleryMode(option.key)}
                       className={`h-7 rounded-md px-2 text-xs font-semibold transition ${
-                        effectiveGalleryMode === option.key ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
+                        effectiveGalleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
                       }`}
                     >
                       {option.label}

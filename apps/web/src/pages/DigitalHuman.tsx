@@ -146,7 +146,7 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
 
       <div className="flex min-w-0 flex-1 flex-col gap-6 overflow-y-auto">
         <header>
-          <h1 className="flex items-center gap-2 text-[18px] font-semibold text-[#1d1d1f]">
+          <h1 className="flex items-center gap-2 text-[18px] font-semibold text-ink">
             <Icon icon="mdi:account-voice" className="text-brand" /> 数字人口播
           </h1>
           <p className="mt-1 text-[12.5px] text-[#8a8a8f]">上传参考视频，自动拆解文案 → 洗稿 → 配音 → 数字人对口型成片。</p>

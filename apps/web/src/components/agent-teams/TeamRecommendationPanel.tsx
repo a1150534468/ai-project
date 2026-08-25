@@ -15,7 +15,7 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">等待确认</p>
-          <h2 className="mt-1 text-lg font-semibold text-[#1d1d1f]">{recommendation.teamName}</h2>
+          <h2 className="mt-1 text-lg font-semibold text-ink">{recommendation.teamName}</h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-[#6e6e73]">{recommendation.teamDescription}</p>
         </div>
         <RippleButton
@@ -36,7 +36,7 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
                 <Icon icon="mdi:robot-outline" className="text-lg" aria-hidden />
               </div>
               <div className="min-w-0">
-                <h3 className="truncate text-sm font-semibold text-[#1d1d1f]">{member.name}</h3>
+                <h3 className="truncate text-sm font-semibold text-ink">{member.name}</h3>
                 <p className="mt-0.5 text-xs text-[#6e6e73]">{member.role}</p>
               </div>
             </div>

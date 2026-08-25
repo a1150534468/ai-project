@@ -258,7 +258,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
     <section className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-[#1d1d1f]">漫剧项目</h2>
+          <h2 className="text-base font-semibold text-ink">漫剧项目</h2>
           <StatusPill>{`${projects.length} 个`}</StatusPill>
         </div>
         <div className="mt-4 space-y-2">
@@ -269,7 +269,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               onClick={() => void refreshProject(item.id)}
               className={`w-full rounded-[10px] border px-3 py-3 text-left transition ${project?.id === item.id ? "border-brand bg-brand-soft" : "border-[#e8e8ed] "}`}
             >
-              <p className="truncate text-sm font-semibold text-[#1d1d1f]">{item.title}</p>
+              <p className="truncate text-sm font-semibold text-ink">{item.title}</p>
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6e6e73]">{item.logline || item.style || "未填写简介"}</p>
             </button>
           ))}
@@ -291,7 +291,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
           <div className="space-y-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-[#1d1d1f]">{project.title}</h2>
+                <h2 className="text-xl font-semibold text-ink">{project.title}</h2>
                 <p className="mt-1 text-sm leading-6 text-[#6e6e73]">{project.logline || project.style || "补充设定后开始制作"}</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -319,7 +319,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                         <button key={episode.id} type="button" onClick={() => setEpisodeId(episode.id)} className={`rounded-[10px] border px-3 py-2 text-sm ${selectedEpisode?.id === episode.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e8e8ed] text-[#6e6e73]"}`}>第 {episode.episodeNo} 集 · {episode.title}</button>
                       ))}
                     </div>
-                    <textarea value={scriptText} onChange={(event) => setScriptText(event.target.value)} placeholder="粘贴或编写本集脚本" className="min-h-[280px] w-full rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
+                    <textarea value={scriptText} onChange={(event) => setScriptText(event.target.value)} placeholder="粘贴或编写本集脚本" className="min-h-[280px] w-full rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-ink" />
                     <RippleButton type="button" onClick={saveScriptAction} disabled={!selectedEpisode || !scriptText.trim() || Boolean(busy)} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">保存并激活脚本</RippleButton>
                   </div>
                 )}
@@ -351,7 +351,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                               transition={spring.smooth}
                             >
                               <div className="aspect-[4/3] overflow-hidden rounded-[8px] bg-[#f5f5f7]">{asset.thumbnailUrl ? <img src={asset.thumbnailUrl} alt={asset.name} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-[#8a8a8f]">未生成图片</div>}</div>
-                              <div className="mt-3 flex items-start justify-between gap-2"><div><p className="font-semibold text-[#1d1d1f]">{asset.name}</p><p className="text-xs text-[#6e6e73]">{asset.type}</p></div><RippleButton type="button" onClick={() => generateAssetImageAction(asset)} className="h-8 rounded-[8px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton></div>
+                              <div className="mt-3 flex items-start justify-between gap-2"><div><p className="font-semibold text-ink">{asset.name}</p><p className="text-xs text-[#6e6e73]">{asset.type}</p></div><RippleButton type="button" onClick={() => generateAssetImageAction(asset)} className="h-8 rounded-[8px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton></div>
                             </motion.article>
                           </StaggerItem>
                         ))}
@@ -374,7 +374,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                               transition={spring.smooth}
                             >
                               <div className="aspect-video overflow-hidden rounded-[8px] bg-[#f5f5f7]">{shot.thumbnailUrl ? <img src={shot.thumbnailUrl} alt={shot.title || `镜头 ${shot.shotNo}`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-[#8a8a8f]">镜头图</div>}</div>
-                              <div className="min-w-0"><p className="font-semibold text-[#1d1d1f]">镜头 {shot.shotNo} {shot.title}</p><p className="mt-1 line-clamp-3 text-sm leading-6 text-[#6e6e73]">{shot.description}</p></div>
+                              <div className="min-w-0"><p className="font-semibold text-ink">镜头 {shot.shotNo} {shot.title}</p><p className="mt-1 line-clamp-3 text-sm leading-6 text-[#6e6e73]">{shot.description}</p></div>
                               <div className="flex gap-2 md:flex-col"><RippleButton type="button" onClick={() => generateShotImageAction(shot)} className="h-9 rounded-[9px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton><RippleButton type="button" onClick={() => generateVideoAction(shot)} disabled={!shot.imageAssetId} className="h-9 rounded-[9px] border border-brand px-3 text-xs font-semibold text-brand-ink disabled:opacity-40">视频</RippleButton></div>
                             </motion.article>
                           </StaggerItem>
@@ -400,7 +400,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                                 whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                                 transition={spring.smooth}
                               >
-                                <div className="min-w-0"><p className="text-sm font-semibold text-[#1d1d1f]">镜头 {shot.shotNo}</p><p className="text-xs text-[#6e6e73]">{shot.videoStatus}{shot.videoUrl ? " · 已有视频" : ""}</p></div>
+                                <div className="min-w-0"><p className="text-sm font-semibold text-ink">镜头 {shot.shotNo}</p><p className="text-xs text-[#6e6e73]">{shot.videoStatus}{shot.videoUrl ? " · 已有视频" : ""}</p></div>
                                 <RippleButton type="button" onClick={() => pollVideoAction(shot)} disabled={!shot.videoTaskId} className="h-9 rounded-[9px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink disabled:opacity-40">刷新</RippleButton>
                               </motion.div>
                             </StaggerItem>
@@ -409,15 +409,15 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                       </Stagger>
                     ) : null}
                     <RippleButton type="button" onClick={renderAction} disabled={!selectedEpisode || Boolean(busy)} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">生成整集清单</RippleButton>
-                    {renderManifest && <pre className="max-h-56 overflow-auto rounded-[10px] bg-[#f7faf9] p-3 text-xs text-[#1d1d1f]">{JSON.stringify(renderManifest, null, 2)}</pre>}
+                    {renderManifest && <pre className="max-h-56 overflow-auto rounded-[10px] bg-[#f7faf9] p-3 text-xs text-ink">{JSON.stringify(renderManifest, null, 2)}</pre>}
                   </div>
                 )}
               </main>
 
               <aside className="space-y-3 rounded-[10px] bg-[#f7faf9] p-3">
-                <h3 className="text-sm font-semibold text-[#1d1d1f]">设定资料</h3>
+                <h3 className="text-sm font-semibold text-ink">设定资料</h3>
                 <div className="space-y-2">
-                  {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-[#e8e8ed] bg-white p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-[#1d1d1f]">{entry.title}</p></div>)}
+                  {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-[#e8e8ed] bg-white p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-ink">{entry.title}</p></div>)}
                 </div>
                 <input value={bibleForm.title} onChange={(event) => setBibleForm({ ...bibleForm, title: event.target.value })} placeholder="设定标题" className="h-10 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
                 <textarea value={bibleForm.content} onChange={(event) => setBibleForm({ ...bibleForm, content: event.target.value })} placeholder="设定内容" className="min-h-24 w-full rounded-[10px] border border-[#d2d2d7] p-3 text-sm" />

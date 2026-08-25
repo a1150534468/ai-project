@@ -68,7 +68,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">历史记录</p>
-          <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">Agent 团队运行历史</h2>
+          <h2 className="mt-1 text-base font-semibold text-ink">Agent 团队运行历史</h2>
         </div>
         <span className="text-xs text-[#6e6e73]">{runs.length} 条</span>
       </div>
@@ -89,7 +89,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h3 className="line-clamp-1 text-sm font-semibold text-[#1d1d1f]">{run.taskGoal}</h3>
+                    <h3 className="line-clamp-1 text-sm font-semibold text-ink">{run.taskGoal}</h3>
                     <p className="mt-1 line-clamp-1 text-xs leading-5 text-[#6e6e73]">{reportPreview(run)}</p>
                   </div>
                   <div className="flex flex-none items-center gap-2">

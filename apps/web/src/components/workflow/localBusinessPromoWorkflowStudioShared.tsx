@@ -68,7 +68,7 @@ export function AudioAssetPanel(props: {
         <div className="mt-2 rounded-[10px] bg-[#f7f7f9] p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[12px] font-semibold text-[#1d1d1f]">{formatLocalBusinessPromoTime(props.asset.createdAt)}</p>
+              <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(props.asset.createdAt)}</p>
               <p className="text-[11px] text-[#6e6e73]">{props.asset.durationSec || 0} 秒 · {props.asset.format.toUpperCase()}</p>
             </div>
             <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[#6e6e73]">{props.asset.providerModel ?? props.asset.source}</span>
@@ -109,7 +109,7 @@ export function AudioHistoryList(props: {
             <div key={asset.id} className={`rounded-[10px] border px-3 py-2 ${active ? "border-brand/30 bg-brand-soft" : "border-[#ececf0] bg-[#fafafa]"}`}>
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[12px] font-semibold text-[#1d1d1f]">{formatLocalBusinessPromoTime(asset.createdAt)}</p>
+                  <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(asset.createdAt)}</p>
                   <p className="text-[11px] text-[#6e6e73]">{asset.durationSec || 0} 秒 · {asset.format.toUpperCase()}</p>
                 </div>
                 {active ? (
@@ -119,7 +119,7 @@ export function AudioHistoryList(props: {
                     type="button"
                     onClick={() => props.onActivate(asset.id)}
                     disabled={pending}
-                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[#d2d2d7] px-2.5 text-[11px] font-semibold text-[#1d1d1f] disabled:opacity-50"
+                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[#d2d2d7] px-2.5 text-[11px] font-semibold text-ink disabled:opacity-50"
                   >
                     <Icon icon={pending ? "mdi:loading" : "mdi:check-circle-outline"} className={pending ? "animate-spin" : ""} aria-hidden />
                     {pending ? "切换中" : props.actionLabel}

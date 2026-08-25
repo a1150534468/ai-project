@@ -51,7 +51,7 @@ export default function MemoryMobileList({
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
           <Icon icon="mdi:atom-variant" className="text-2xl" />
         </div>
-        <p className="mt-4 text-base font-semibold text-[#1d1d1f]">当前筛选下没有记忆</p>
+        <p className="mt-4 text-base font-semibold text-ink">当前筛选下没有记忆</p>
         <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
           调整类型筛选或开始更多对话，让新的内容进入你的长期记忆。
         </p>
@@ -97,7 +97,7 @@ export default function MemoryMobileList({
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-3 text-base font-semibold text-[#1d1d1f]">{displayTitle}</p>
+                <p className="mt-3 text-base font-semibold text-ink">{displayTitle}</p>
                 <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#6e6e73]">{node.text}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {node.tags.slice(0, 3).map((tag) => (

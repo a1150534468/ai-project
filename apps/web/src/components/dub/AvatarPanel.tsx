@@ -83,7 +83,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
           >
             <button onClick={() => onSelect(a.id)} className="flex w-full items-center gap-2 text-left">
               <Icon icon="mdi:account-voice" className="text-xl text-brand" />
-              <span className="truncate text-[13px] font-medium text-[#1d1d1f]">{a.title}</span>
+              <span className="truncate text-[13px] font-medium text-ink">{a.title}</span>
             </button>
             <div className="mt-2 flex gap-2 text-[11px]">
               <button onClick={() => void star(a)} className="text-[#8a8a8f] ">
@@ -99,7 +99,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
       </div>
 
       <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-4">
-        <h3 className="text-[13px] font-semibold text-[#1d1d1f]">新建数字人形象</h3>
+        <h3 className="text-[13px] font-semibold text-ink">新建数字人形象</h3>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}

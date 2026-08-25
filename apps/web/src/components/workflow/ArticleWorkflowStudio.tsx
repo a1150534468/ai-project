@@ -23,7 +23,7 @@ function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boo
             aria-hidden
           />
         </span>
-        <h2 className="mt-5 text-base font-semibold text-[#26302d]">
+        <h2 className="mt-5 text-base font-semibold text-ink">
           {creating ? "正在建立生成任务" : "实时输出 / 预览"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#7d8582]">
@@ -112,7 +112,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           }`}
         >
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#1d1d1f]">{workspaceTitle}</p>
+            <p className="truncate text-sm font-semibold text-ink">{workspaceTitle}</p>
             <p className="mt-0.5 truncate text-[10px] text-[#8a8a8f]">{workspaceMeta}</p>
           </div>
 
@@ -132,7 +132,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               type="button"
               onClick={() => setHistoryOpen(true)}
               aria-expanded={historyOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-[#1d1d1f] hover:bg-[#f7f8fa]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
             >
               <Icon icon="mdi:history" className="text-base" aria-hidden />
               项目历史
@@ -142,7 +142,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               onClick={() => setConfigOpen(true)}
               disabled={state.bootstrapping}
               aria-expanded={configOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-[#1d1d1f] hover:bg-[#f7f8fa] disabled:text-[#b2b2b7]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa] disabled:text-[#b2b2b7]"
             >
               <Icon icon="mdi:tune-variant" className="text-base" aria-hidden />
               生成配置
@@ -302,7 +302,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               aria-label="配图素材"
             >
               <div className="flex h-10 flex-none items-center justify-between border-b border-[#e5e7eb] px-3">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-[#1d1d1f]">
+                <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
                   <Icon icon="mdi:image-outline" className="text-base" aria-hidden />
                   配图素材
                 </span>

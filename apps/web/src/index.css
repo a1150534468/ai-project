@@ -141,7 +141,7 @@ html[data-theme="dark"] {
   }
 
   .btn-secondary {
-    @apply bg-[#f5f5f7] text-[#1d1d1f] rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 border-none cursor-pointer;
+    @apply bg-[#f5f5f7] text-ink rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 border-none cursor-pointer;
   }
 
   .glass-card {
@@ -169,12 +169,12 @@ html[data-theme="dark"] {
   }
 
   .page-title {
-    @apply text-[28px] font-bold text-[#1d1d1f];
+    @apply text-[28px] font-bold text-ink;
     letter-spacing: -0.02em;
   }
 
   .stat-value {
-    @apply text-[32px] font-bold text-[#1d1d1f];
+    @apply text-[32px] font-bold text-ink;
     letter-spacing: -0.03em;
   }
 
@@ -191,7 +191,7 @@ html[data-theme="dark"] {
   }
 
   .sidebar-item.active {
-    @apply bg-[#f5f5f7] text-[#1d1d1f] font-semibold;
+    @apply bg-[#f5f5f7] text-ink font-semibold;
   }
 
   .card-body {
@@ -511,36 +511,7 @@ html[data-theme="dark"] [class~="bg-[#eef1f3]"] {
 
 html[data-theme="dark"] .text-gray-900,
 html[data-theme="dark"] .text-gray-800,
-html[data-theme="dark"] .text-gray-700,
-html[data-theme="dark"] [class~="text-[#1d1d1f]"],
-html[data-theme="dark"] [class~="text-[#14151a]"],
-html[data-theme="dark"] [class~="text-[#252527]"],
-html[data-theme="dark"] [class~="text-[#25302d]"],
-html[data-theme="dark"] [class~="text-[#26302d]"],
-html[data-theme="dark"] [class~="text-[#27312e]"],
-html[data-theme="dark"] [class~="text-[#1d2433]"],
-html[data-theme="dark"] [class~="text-[#202725]"],
-html[data-theme="dark"] [class~="text-[#17201e]"],
-html[data-theme="dark"] [class~="text-[#202825]"],
-html[data-theme="dark"] [class~="text-[#252c2a]"],
-html[data-theme="dark"] [class~="text-[#29332f]"],
-html[data-theme="dark"] [class~="text-[#35403c]"],
-html[data-theme="dark"] [class~="text-[#36403d]"],
-html[data-theme="dark"] [class~="text-[#3c4642]"],
-html[data-theme="dark"] [class~="text-[#3e4945]"],
-html[data-theme="dark"] [class~="text-[#43504b]"],
-html[data-theme="dark"] [class~="text-[#2c3532]"],
-html[data-theme="dark"] [class~="text-[#303936]"],
-html[data-theme="dark"] [class~="text-[#333333]"],
-html[data-theme="dark"] [class~="text-[#343438]"],
-html[data-theme="dark"] [class~="text-[#34343a]"],
-html[data-theme="dark"] [class~="text-[#1f2937]"],
-html[data-theme="dark"] [class~="text-[#28302f]"],
-html[data-theme="dark"] [class~="text-[#29312f]"],
-html[data-theme="dark"] [class~="text-[#2d2d31]"],
-html[data-theme="dark"] [class~="text-[#344054]"],
-html[data-theme="dark"] [class~="text-[#3d3d42]"],
-html[data-theme="dark"] [class~="text-[#3f3f45]"] {
+html[data-theme="dark"] .text-gray-700 {
   color: var(--apple-ink) !important;
 }
 

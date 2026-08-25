@@ -28,7 +28,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
       )}
       <div className="mt-3">
         <p className="text-xs font-semibold text-[#8a8a8f]">{label === "V1 原图" ? "原始提示词" : "新提示词"}</p>
-        <p className="mt-1 text-sm leading-6 text-[#1d1d1f]">{image?.prompt ?? "--"}</p>
+        <p className="mt-1 text-sm leading-6 text-ink">{image?.prompt ?? "--"}</p>
       </div>
     </div>
   );
@@ -42,7 +42,7 @@ export function ImageCompareView(props: ImageCompareViewProps) {
     <section className="flex h-full min-h-[420px] flex-col bg-white px-4 py-4 lg:px-6" aria-label="版本对比">
       <div className="mb-4">
         <p className="text-xs font-semibold text-[#6e6e73]">版本对比</p>
-        <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">选择更符合预期的结果</h2>
+        <h2 className="mt-1 text-base font-semibold text-ink">选择更符合预期的结果</h2>
       </div>
 
       <div className="mb-3 grid grid-cols-2 rounded-lg bg-[#ececf0] p-1 md:hidden">
@@ -63,13 +63,13 @@ export function ImageCompareView(props: ImageCompareViewProps) {
             <button type="button" onClick={() => props.onSetCurrent(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1d1d1f] px-3 text-sm font-semibold text-white">
               <Icon icon="mdi:check" className="text-base" aria-hidden />设为当前版本
             </button>
-            <button type="button" onClick={() => props.onContinueModify(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f]">
+            <button type="button" onClick={() => props.onContinueModify(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-ink">
               <Icon icon="mdi:source-branch" className="text-base" aria-hidden />继续修改
             </button>
           </>
         )}
-        {props.originalImage && <button type="button" onClick={() => props.onDownload(props.originalImage!)} className="h-9 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f]">下载 V1</button>}
-        {props.newImage && <button type="button" onClick={() => props.onDownload(props.newImage!)} className="h-9 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-[#1d1d1f]">下载 V2</button>}
+        {props.originalImage && <button type="button" onClick={() => props.onDownload(props.originalImage!)} className="h-9 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-ink">下载 V1</button>}
+        {props.newImage && <button type="button" onClick={() => props.onDownload(props.newImage!)} className="h-9 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-ink">下载 V2</button>}
       </div>
     </section>
   );

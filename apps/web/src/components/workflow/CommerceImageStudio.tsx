@@ -160,25 +160,25 @@ export function CommerceImageStudio({
   const productControls = (
     <section className="border-b border-[#ececf0] pb-5">
       <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
-      <h2 className="mt-1 text-base font-semibold text-[#1d1d1f]">产品资料</h2>
+      <h2 className="mt-1 text-base font-semibold text-ink">产品资料</h2>
       <p className="mt-1 text-xs leading-5 text-[#8a8a8f]">主图与详情图共用。</p>
       <div className="mt-4 grid gap-3">
-        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="grid gap-2 text-sm font-semibold text-ink">
           平台
           <InAppSelect icon="mdi:storefront-outline" label="平台" value={platformId} options={platforms.map((platform) => ({ value: platform.id, label: platform.name }))} onChange={(value) => setPlatformId(value as WorkflowEcomPlatformId)} />
         </div>
-        <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <label className="grid gap-2 text-sm font-semibold text-ink">
           商品名称
-          <input value={productName} onChange={(event) => setProductName(event.target.value)} className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal text-[#1d1d1f]" />
+          <input value={productName} onChange={(event) => setProductName(event.target.value)} className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal text-ink" />
         </label>
-        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="grid gap-2 text-sm font-semibold text-ink">
           商品类目
           <InAppSelect icon="mdi:shape-outline" label="商品类目" value={categoryChoice} options={CATEGORY_OPTIONS} onChange={setCategoryChoice} />
           {categoryChoice === CATEGORY_OTHER && (
-            <input value={categoryOther} onChange={(event) => setCategoryOther(event.target.value)} placeholder="请填写商品类目" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal text-[#1d1d1f]" />
+            <input value={categoryOther} onChange={(event) => setCategoryOther(event.target.value)} placeholder="请填写商品类目" className="h-10 rounded-lg border border-[#d2d2d7] px-3 text-sm font-normal text-ink" />
           )}
         </div>
-        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="grid gap-2 text-sm font-semibold text-ink">
           <div className="flex items-center justify-between gap-3">
             <span>卖点文案</span>
             <button type="button" onClick={() => handleHelpWrite("sellingPoints")} disabled={helpWriting !== null} className="inline-flex h-8 items-center gap-1 rounded-lg border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50">
@@ -188,7 +188,7 @@ export function CommerceImageStudio({
           </div>
           <textarea value={sellingPointsInput} onChange={(event) => setSellingPointsInput(event.target.value)} placeholder="一行一个卖点" className="min-h-[88px] rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5" />
         </div>
-        <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+        <div className="grid gap-2 text-sm font-semibold text-ink">
           <div className="flex items-center justify-between gap-3">
             <span>额外说明</span>
             <button type="button" onClick={() => handleHelpWrite("extra")} disabled={helpWriting !== null} className="inline-flex h-8 items-center gap-1 rounded-lg border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50">
@@ -202,7 +202,7 @@ export function CommerceImageStudio({
       {helpWriteError && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{helpWriteError}</p>}
       <div className="mt-4">
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-[#1d1d1f]">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
+          <p className="text-sm font-semibold text-ink">参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})</p>
           <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT} className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-[#d2d2d7] px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-[#8a8a8f]">
             <Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={isUploading ? "animate-spin" : ""} aria-hidden />
             {isUploading ? "上传中" : "上传"}
@@ -222,10 +222,10 @@ export function CommerceImageStudio({
     <section className="relative flex min-h-0 flex-col bg-white xl:h-full xl:overflow-hidden">
       <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
         <div className="inline-flex rounded-lg bg-[#f5f5f7] p-1" aria-label="电商图类型">
-          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}>商品主图</RippleButton>
-          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"}`}>商品详情图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"}`}>商品主图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"}`}>商品详情图</RippleButton>
         </div>
-        <button type="button" onClick={() => setIsOverviewOpen(true)} aria-expanded={isOverviewOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-xs font-semibold text-[#1d1d1f]">
+        <button type="button" onClick={() => setIsOverviewOpen(true)} aria-expanded={isOverviewOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-xs font-semibold text-ink">
           <Icon icon="mdi:view-dashboard-outline" className="text-base" aria-hidden />生成概览
         </button>
       </header>
@@ -240,34 +240,34 @@ export function CommerceImageStudio({
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsOverviewOpen(false)}>
           <aside role="dialog" aria-modal="true" aria-label="电商图生成概览" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
-              <div><p className="text-xs font-semibold text-[#6e6e73]">当前配置</p><h2 className="text-base font-semibold text-[#1d1d1f]">生成概览</h2></div>
+              <div><p className="text-xs font-semibold text-[#6e6e73]">当前配置</p><h2 className="text-base font-semibold text-ink">生成概览</h2></div>
               <button type="button" onClick={() => setIsOverviewOpen(false)} aria-label="关闭生成概览" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button>
             </div>
             <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
           <div className="rounded-[11px] border border-[#e8e8ed] bg-[#f7faf9] p-3">
             <p className="text-[11px] font-semibold text-[#8a8a8f]">当前视图</p>
-            <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{tab === "main" ? "商品主图" : "商品详情图"}</p>
+            <p className="mt-1 text-sm font-semibold text-ink">{tab === "main" ? "商品主图" : "商品详情图"}</p>
           </div>
           <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
             <p className="text-[11px] font-semibold text-[#8a8a8f]">平台</p>
-            <p className="mt-1 truncate text-sm font-semibold text-[#1d1d1f]">{platforms.find((p) => p.id === platformId)?.name ?? platformId}</p>
+            <p className="mt-1 truncate text-sm font-semibold text-ink">{platforms.find((p) => p.id === platformId)?.name ?? platformId}</p>
           </div>
           <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
             <p className="text-[11px] font-semibold text-[#8a8a8f]">商品名称</p>
-            <p className="mt-1 truncate text-sm font-semibold text-[#1d1d1f]">{productName.trim() || "未填写"}</p>
+            <p className="mt-1 truncate text-sm font-semibold text-ink">{productName.trim() || "未填写"}</p>
           </div>
           <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
             <p className="text-[11px] font-semibold text-[#8a8a8f]">商品类目</p>
-            <p className="mt-1 truncate text-sm font-semibold text-[#1d1d1f]">{effectiveCategory || "未选择"}</p>
+            <p className="mt-1 truncate text-sm font-semibold text-ink">{effectiveCategory || "未选择"}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
               <p className="text-[11px] font-semibold text-[#8a8a8f]">卖点</p>
-              <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{sellingPointsInput.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0).length} 条</p>
+              <p className="mt-1 text-sm font-semibold text-ink">{sellingPointsInput.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0).length} 条</p>
             </div>
             <div className="rounded-[11px] border border-[#e8e8ed] bg-white p-3">
               <p className="text-[11px] font-semibold text-[#8a8a8f]">参考图</p>
-              <p className="mt-1 text-sm font-semibold text-[#1d1d1f]">{referenceAssets.length} 张</p>
+              <p className="mt-1 text-sm font-semibold text-ink">{referenceAssets.length} 张</p>
             </div>
           </div>
           <p className="rounded-[11px] bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-ink">

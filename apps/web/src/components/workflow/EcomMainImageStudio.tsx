@@ -148,10 +148,10 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           {controlsHeader}
           <div className="pt-5">
             <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
-            <h3 className="mt-1 text-base font-semibold text-[#1d1d1f]">主图设置</h3>
+            <h3 className="mt-1 text-base font-semibold text-ink">主图设置</h3>
           </div>
           <div className="mt-4 grid gap-3">
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             模型
             <InAppSelect icon="mdi:creation-outline" label="模型" value={model} options={IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} onChange={(v) => {
               if (!isImageModel(v)) return;
@@ -160,7 +160,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
               clearFeedback();
             }} />
           </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             图片比例
             <InAppSelect icon="mdi:crop" label="图片比例" value={ratio} options={ECOM_MAIN_RATIO_OPTIONS} onChange={(v) => {
               const nextRatio = v as EcomMainRatio;
@@ -169,25 +169,25 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
               clearFeedback();
             }} />
           </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             清晰度
             <InAppSelect icon="mdi:high-definition" label="清晰度" value={resolution} options={ECOM_MAIN_RESOLUTION_OPTIONS.filter((option) => !isEcomMainResolutionBlocked(model, option.value, ratio))} onChange={(v) => { setResolution(v as EcomMainResolution); clearFeedback(); }} />
           </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             做图风格
             <InAppSelect icon="mdi:palette-outline" label="做图风格" value={style} options={ECOM_MAIN_STYLE_OPTIONS} onChange={(v) => { setStyle(v as EcomMainStyleId); clearFeedback(); }} />
           </div>
           {style === "custom" && (
-            <label className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+            <label className="grid gap-2 text-sm font-semibold text-ink">
               自定义风格描述
-              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-lg border border-[#d2d2d7] p-3 text-sm leading-6 text-[#1d1d1f]" />
+              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-lg border border-[#d2d2d7] p-3 text-sm leading-6 text-ink" />
             </label>
           )}
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             画面文字
             <InAppSelect icon="mdi:format-text" label="画面文字" value={withText ? "with" : "no"} options={ECOM_MAIN_TEXT_OPTIONS} onChange={(v) => { setWithText(v === "with"); clearFeedback(); }} />
           </div>
-          <div className="grid gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <div className="grid gap-2 text-sm font-semibold text-ink">
             生成张数
             <InAppSelect icon="mdi:numeric" label="生成张数" value={String(count)} options={ECOM_MAIN_COUNT_OPTIONS} onChange={(v) => { setCount(Number(v)); clearFeedback(); }} />
           </div>
@@ -210,7 +210,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
       <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
         <div className="flex items-center justify-between gap-3">
-          <div><p className="text-xs font-semibold text-[#6e6e73]">当前结果</p><h3 className="mt-1 text-base font-semibold text-[#1d1d1f]">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
+          <div><p className="text-xs font-semibold text-[#6e6e73]">当前结果</p><h3 className="mt-1 text-base font-semibold text-ink">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
           {isSubmitting && <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink"><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成</span>}
         </div>
         {isSubmitting && (
@@ -251,7 +251,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                     )}
                   </div>
                   <div className="grid gap-2 p-3">
-                    <p className="text-sm font-semibold text-[#1d1d1f] break-words">{image.index === 0 ? "商品图 · 主图" : `商品图 ${image.index + 1}`}</p>
+                    <p className="text-sm font-semibold text-ink break-words">{image.index === 0 ? "商品图 · 主图" : `商品图 ${image.index + 1}`}</p>
                     <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">主题：</span>{image.theme}</p>
                     <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">画面要求：</span>{image.sceneRequirement}</p>
                     <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">文案要求：</span>{image.copyRequirement}</p>

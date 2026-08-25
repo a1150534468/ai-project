@@ -124,7 +124,7 @@ export default function MemoryGalaxyCanvas({
                 className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/88 px-3 py-1.5 text-xs text-[#6e6e73] backdrop-blur"
               >
                 <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
-                <span className="font-medium text-[#1d1d1f]">{meta.label}</span>
+                <span className="font-medium text-ink">{meta.label}</span>
                 <span>{count}</span>
               </div>
             );
@@ -179,7 +179,7 @@ export default function MemoryGalaxyCanvas({
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
                 <Icon icon="mdi:atom-variant" className="text-2xl" />
               </div>
-              <p className="text-lg font-semibold text-[#1d1d1f]">你的星河还没有点亮</p>
+              <p className="text-lg font-semibold text-ink">你的星河还没有点亮</p>
               <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
                 开启长期记忆后，重要对话会沉淀成可检索、可编辑的长期节点。
               </p>
@@ -219,7 +219,7 @@ export default function MemoryGalaxyCanvas({
                     <Icon icon="mdi:star-four-points-circle-outline" />
                   </div>
                   <p
-                    className={`mt-3 line-clamp-2 whitespace-normal text-center font-semibold text-[#1d1d1f] [text-wrap:balance] ${getNodeTitleClass(node.size)}`}
+                    className={`mt-3 line-clamp-2 whitespace-normal text-center font-semibold text-ink [text-wrap:balance] ${getNodeTitleClass(node.size)}`}
                   >
                     {displayTitle}
                   </p>

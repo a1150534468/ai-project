@@ -87,7 +87,7 @@ export function ScheduledTaskStudio({ token }: Props) {
   return (
     <div className="space-y-4">
       <section className={CARD}>
-        <h3 className="mb-3 flex items-center gap-2 font-semibold text-[#1d1d1f]">
+        <h3 className="mb-3 flex items-center gap-2 font-semibold text-ink">
           <Icon icon="mdi:calendar-clock-outline" /> 新建定时任务
         </h3>
         <div className="grid gap-3">
@@ -126,7 +126,7 @@ export function ScheduledTaskStudio({ token }: Props) {
               onChange={(e) => setPreset({ kind: "daily", hour: preset.kind === "daily" ? preset.hour : 8, minute: Number(e.target.value) })} />
             <span className="text-[#6e6e73]">分（{DEFAULT_TZ}）</span>
           </div>
-          <label className="flex items-center gap-2 text-sm text-[#1d1d1f]"><input type="checkbox" checked={oneShot} onChange={(e) => setOneShot(e.target.checked)} /> 仅执行一次</label>
+          <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={oneShot} onChange={(e) => setOneShot(e.target.checked)} /> 仅执行一次</label>
           {err && <p className="text-sm text-[#d4380d]">{err}</p>}
           <button className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand px-4 py-2 font-medium text-white transition disabled:opacity-40" onClick={() => void submit()}>
             <Icon icon="mdi:plus" /> 创建
@@ -139,7 +139,7 @@ export function ScheduledTaskStudio({ token }: Props) {
           <div key={t.id} className={CARD}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1">
-                <p className="font-semibold text-[#1d1d1f]">{t.title}</p>
+                <p className="font-semibold text-ink">{t.title}</p>
                 <p className="text-xs text-[#6e6e73]">{humanizeSchedule(t.cron)}｜下次 {new Date(t.nextRunAt).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2">
@@ -156,7 +156,7 @@ export function ScheduledTaskStudio({ token }: Props) {
                     <summary className="cursor-pointer text-[#6e6e73]">
                       {new Date(run.triggeredAt).toLocaleString()} — {run.status}{run.skipReason ? `（${run.skipReason}）` : ""}｜邮件 {run.emailStatus ?? "-"}
                     </summary>
-                    {run.reportText && <div className="mt-2 rounded-[8px] bg-[#f5f5f7] p-2 text-[#1d1d1f]" dangerouslySetInnerHTML={{ __html: run.reportText }} />}
+                    {run.reportText && <div className="mt-2 rounded-[8px] bg-[#f5f5f7] p-2 text-ink" dangerouslySetInnerHTML={{ __html: run.reportText }} />}
                   </details>
                 ))}
               </div>

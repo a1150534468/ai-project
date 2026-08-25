@@ -32,7 +32,7 @@ export function ArticleWorkflowPlatformTabs(props: ArticleWorkflowPlatformTabsPr
             aria-selected={active}
             onClick={() => props.onSelectPlatform(row.platform)}
             className={`flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-lg px-2 text-sm font-semibold transition ${
-              active ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
+              active ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
             }`}
           >
             <span className="truncate">{shortPlatformLabel(row.platform)}</span>

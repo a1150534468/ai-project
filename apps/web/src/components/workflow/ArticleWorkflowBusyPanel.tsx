@@ -36,7 +36,7 @@ function PlatformProgressList(props: ArticleWorkflowBusyPanelProps) {
               aria-hidden
             />
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold text-[#1d1d1f]">{shortPlatformLabel(row.platform)}</span>
+              <span className="block text-sm font-semibold text-ink">{shortPlatformLabel(row.platform)}</span>
               <span className={`mt-0.5 block truncate text-xs ${row.status === "failed" ? "text-red-600" : "text-[#6e6e73]"}`}>
                 {rowStatusText(row)}
               </span>
@@ -56,7 +56,7 @@ export function ArticleWorkflowBusyPanel(props: ArticleWorkflowBusyPanelProps) {
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-brand-soft text-brand">
           <Icon icon="mdi:loading" className="animate-spin text-[28px]" aria-hidden />
         </div>
-        <h2 className="mt-4 text-xl font-semibold text-[#1d1d1f]">
+        <h2 className="mt-4 text-xl font-semibold text-ink">
           {props.project.status === "revising" ? "AI 正在重新整理文章" : "AI 正在生成多平台图文"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-[#6e6e73]">{props.project.progressMessage || "请稍候..."}</p>

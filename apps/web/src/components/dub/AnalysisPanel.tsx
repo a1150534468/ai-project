@@ -9,7 +9,7 @@ export interface AnalysisPanelProps {
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-xl border border-gray-100 bg-white p-4">
-      <h3 className="mb-2 text-[13px] font-semibold text-[#1d1d1f]">{title}</h3>
+      <h3 className="mb-2 text-[13px] font-semibold text-ink">{title}</h3>
       {children}
     </section>
   );

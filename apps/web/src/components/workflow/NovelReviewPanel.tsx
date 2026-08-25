@@ -39,7 +39,7 @@ export function NovelReviewPanel({
     <section data-testid="novel-review-panel" className="grid min-w-0 content-start gap-3 rounded-lg border border-[#e8e8ed] bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-[#1d1d1f]">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
             <Icon icon="mdi:clipboard-check-outline" aria-hidden />
             审阅
           </h3>
@@ -49,12 +49,12 @@ export function NovelReviewPanel({
       </div>
 
       <div className="rounded-lg bg-[#f7faf9] p-3 text-xs leading-5 text-[#4f4f55]">
-        <p className="font-semibold text-[#1d1d1f]">AI 审阅</p>
+        <p className="font-semibold text-ink">AI 审阅</p>
         <p className="mt-1 whitespace-pre-wrap break-words">{chapter?.aiReview || "暂无 AI 审阅"}</p>
       </div>
 
       <div className="rounded-lg border border-[#e8e8ed] p-3">
-        <p className="text-xs font-semibold text-[#1d1d1f]">行动项</p>
+        <p className="text-xs font-semibold text-ink">行动项</p>
         <div className="mt-2 grid gap-1 text-xs leading-5 text-[#5f6368]">
           {actionItems.map((item, index) => <p key={`${item}:${index}`} className="break-words">- {item}</p>)}
           {actionItems.length === 0 && <p className="text-[#8a8a8f]">暂无行动项</p>}

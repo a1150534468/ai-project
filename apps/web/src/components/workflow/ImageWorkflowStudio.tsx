@@ -118,7 +118,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
       <div className="flex min-h-0 min-w-0 flex-col bg-[#f7f8fa] xl:h-full">
         <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-[#1d1d1f]">
+            <p className="truncate text-sm font-semibold text-ink">
               {mode === "comparing" ? "版本对比" : selectedTask?.prompt ?? "通用生图工作台"}
             </p>
           </div>
@@ -126,7 +126,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
             type="button"
             onClick={props.onOpenTaskDrawer}
             aria-expanded={props.isTaskDrawerOpen ?? false}
-            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-[#1d1d1f]"
+            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-ink"
           >
             <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
             任务列表{runningCount > 0 ? ` · 生成中 ${runningCount}` : ""}

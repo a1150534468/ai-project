@@ -53,7 +53,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
       </button>
 
       <section>
-        <h3 className="mb-2 text-[13px] font-semibold text-[#1d1d1f]">预制配乐</h3>
+        <h3 className="mb-2 text-[13px] font-semibold text-ink">预制配乐</h3>
         {presets.length === 0 ? (
           <p className="text-[12.5px] text-[#b6b6bd]">暂无预制配乐</p>
         ) : (
@@ -63,7 +63,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
                 key={b.id}
                 className={`flex items-center gap-3 rounded-xl border p-3 ${bgmPresetId === b.id ? "border-brand bg-brand/5" : "border-gray-200"}`}
               >
-                <button onClick={() => onChange({ bgmPresetId: b.id, bgmObjectKey: null, bgmVolume })} className="flex-1 text-left text-[13px] font-medium text-[#1d1d1f]">
+                <button onClick={() => onChange({ bgmPresetId: b.id, bgmObjectKey: null, bgmVolume })} className="flex-1 text-left text-[13px] font-medium text-ink">
                   {b.title}
                 </button>
                 <audio controls src={b.url} className="h-8 w-40" />
@@ -74,7 +74,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
       </section>
 
       <section>
-        <h3 className="mb-2 text-[13px] font-semibold text-[#1d1d1f]">上传自己的配乐</h3>
+        <h3 className="mb-2 text-[13px] font-semibold text-ink">上传自己的配乐</h3>
         <button
           disabled={busy}
           onClick={() => inputRef.current?.click()}

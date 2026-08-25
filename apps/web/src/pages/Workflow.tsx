@@ -668,7 +668,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
           {showModuleHeader && (
             <header className="flex-none px-4 pb-3 pt-4 lg:px-6">
               <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
-              <h1 className="page-title text-[24px] text-[#1d1d1f]">{activeModule.title}</h1>
+              <h1 className="page-title text-[24px] text-ink">{activeModule.title}</h1>
               <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
             </header>
           )}
@@ -680,7 +680,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
                     key={tab.id}
                     type="button"
                     onClick={() => setImageSubMode(tab.id)}
-                    className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73] "}`}
+                    className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-white text-ink shadow-sm" : "text-[#6e6e73] "}`}
                   >
                     {tab.label}
                   </button>

@@ -116,7 +116,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
             >
               <Icon icon={v.gender === "female" ? "mdi:face-woman-outline" : "mdi:face-man-outline"} className="text-lg text-brand" />
               <span>
-                <span className="block text-[13px] font-medium text-[#1d1d1f]">{v.label}</span>
+                <span className="block text-[13px] font-medium text-ink">{v.label}</span>
                 <span className="block text-[11px] text-[#8a8a8f]">{v.lang === "zh" ? "中文" : "英文"}</span>
               </span>
             </button>

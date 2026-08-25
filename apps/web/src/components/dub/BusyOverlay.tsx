@@ -29,7 +29,7 @@ export function BusyOverlay({ show, title, hints = [] }: BusyOverlayProps) {
           <span className="absolute inset-0 animate-ping rounded-full bg-brand/25" aria-hidden />
           <Icon icon="mdi:loading" className="relative animate-spin text-[30px] text-brand" />
         </span>
-        <p className="text-[14px] font-semibold text-[#1d1d1f]">{title}</p>
+        <p className="text-[14px] font-semibold text-ink">{title}</p>
         {hint && <p className="max-w-xs text-[12px] text-[#8a8a8f] transition-opacity">{hint}</p>}
         <p className="text-[11px] tabular-nums text-[#c7c7cc]">已用时 {elapsed}s</p>
       </div>

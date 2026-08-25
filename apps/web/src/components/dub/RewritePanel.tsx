@@ -53,12 +53,12 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-gray-100 bg-white p-4">
-          <h3 className="mb-2 text-[13px] font-semibold text-[#1d1d1f]">原始口播文稿</h3>
+          <h3 className="mb-2 text-[13px] font-semibold text-ink">原始口播文稿</h3>
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[#5a5a60]">{spokenScript || "—"}</pre>
         </section>
 
         <section className="rounded-xl border border-gray-100 bg-white p-4">
-          <h3 className="mb-2 text-[13px] font-semibold text-[#1d1d1f]">洗稿结果（可编辑）</h3>
+          <h3 className="mb-2 text-[13px] font-semibold text-ink">洗稿结果（可编辑）</h3>
           <textarea
             value={script}
             onChange={(e) => onScriptChange(e.target.value)}

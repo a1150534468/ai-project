@@ -123,7 +123,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             aria-label="图文标题"
             value={props.titleDraft}
             onChange={(event) => props.onTitleChange(event.target.value)}
-            className="w-full border-0 bg-transparent p-0 text-[24px] font-semibold leading-[1.35] text-[#1d1d1f] outline-none placeholder:text-[#b2b2b7] focus:shadow-none"
+            className="w-full border-0 bg-transparent p-0 text-[24px] font-semibold leading-[1.35] text-ink outline-none placeholder:text-[#b2b2b7] focus:shadow-none"
             placeholder="输入标题"
           />
           <span className={`text-xs ${titleOver ? "font-semibold text-red-600" : "text-[#8a8a8f]"}`}>
@@ -136,7 +136,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             value={props.summaryDraft}
             onChange={(event) => props.onSummaryChange(event.target.value)}
             rows={2}
-            className="w-full resize-none rounded-lg border border-[#d2d2d7] bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-[#1d1d1f] outline-none focus:border-brand focus:bg-white"
+            className="w-full resize-none rounded-lg border border-[#d2d2d7] bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
             placeholder="输入摘要"
           />
         )}
@@ -176,8 +176,8 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         }`}
       >
         {previewScale === "mobile" && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />}
-        <h1 className="text-[24px] font-semibold leading-[1.4] text-[#1d1d1f]">{props.titleDraft || "未命名图文"}</h1>
-        <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-[#1d1d1f]">{props.captionDraft}</p>
+        <h1 className="text-[24px] font-semibold leading-[1.4] text-ink">{props.titleDraft || "未命名图文"}</h1>
+        <p className="mt-5 whitespace-pre-wrap text-[15px] leading-7 text-ink">{props.captionDraft}</p>
         {props.tagsDraft.length > 0 && (
           <div className="mt-5 flex flex-wrap gap-2">
             {props.tagsDraft.map((tag) => (
@@ -248,7 +248,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                 aria-pressed={canvasMode === item.key}
                 onClick={() => setCanvasMode(item.key)}
                 className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
-                  canvasMode === item.key ? "bg-white text-[#1d1d1f] shadow-sm" : "text-[#6e6e73]"
+                  canvasMode === item.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
                 }`}
               >
                 {item.label}
@@ -273,7 +273,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
           </RippleButton>
 
           <details className="group relative">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3.5 text-sm font-semibold text-[#1d1d1f] marker:content-none">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3.5 text-sm font-semibold text-ink marker:content-none">
               <Icon icon="mdi:content-copy" className="text-base" aria-hidden />
               复制
               <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
@@ -284,14 +284,14 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                   <button
                     type="button"
                     onClick={props.onCopyCaption}
-                    className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
                   >
                     复制文案
                   </button>
                   <button
                     type="button"
                     onClick={props.onCopyTags}
-                    className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
                   >
                     复制标签
                   </button>
@@ -301,14 +301,14 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                   <button
                     type="button"
                     onClick={props.onCopyBody}
-                    className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
                   >
                     一键复制到公众号
                   </button>
                   <button
                     type="button"
                     onClick={props.onCopySummary}
-                    className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
                   >
                     复制摘要
                   </button>
@@ -317,7 +317,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
               <button
                 type="button"
                 onClick={props.onCopyTitle}
-                className="rounded-md px-3 py-2 text-left text-sm text-[#1d1d1f] hover:bg-[#f5f5f7]"
+                className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
               >
                 复制标题
               </button>

@@ -17,7 +17,7 @@ function text(value: unknown): string {
 function Panel({ title, icon, children }: { readonly title: string; readonly icon: string; readonly children: ReactNode }) {
   return (
     <section className="rounded-lg border border-[#e8e8ed] bg-white p-3">
-      <h4 className="flex items-center gap-2 text-sm font-semibold text-[#1d1d1f]">
+      <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
         <Icon icon={icon} aria-hidden />
         {title}
       </h4>
@@ -62,7 +62,7 @@ export function NovelChapterIntelligencePanel({
         <div className="grid gap-2">
           {microBeats.map((beat, index) => (
             <div key={`${text(beat.label)}:${index}`} className="rounded-lg bg-[#f7faf9] px-2 py-1.5">
-              <p className="font-semibold text-[#1d1d1f]">{text(beat.index)}. {text(beat.label)} · {text(beat.targetWords)}字</p>
+              <p className="font-semibold text-ink">{text(beat.index)}. {text(beat.label)} · {text(beat.targetWords)}字</p>
               <p className="break-words">{text(beat.objective)}</p>
             </div>
           ))}

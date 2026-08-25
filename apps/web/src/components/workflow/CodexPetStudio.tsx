@@ -324,7 +324,7 @@ function CardTitle({ icon, title, aside }: { readonly icon: string; readonly tit
       <span className="grid size-7 place-items-center rounded-[8px] bg-brand-soft text-brand-ink">
         <Icon icon={icon} className="text-base" aria-hidden />
       </span>
-      <h2 className="text-sm font-semibold text-[#1d1d1f]">{title}</h2>
+      <h2 className="text-sm font-semibold text-ink">{title}</h2>
       {aside && <div className="ml-auto">{aside}</div>}
     </div>
   );
@@ -355,7 +355,7 @@ function PrimaryButton(props: {
     ? "bg-brand text-white "
     : kind === "danger"
       ? "border border-red-200 bg-white text-red-600 "
-      : "border border-[#dfe1e6] bg-white text-[#34343a] ";
+      : "border border-[#dfe1e6] bg-white text-ink ";
   return (
     <button
       type="button"
@@ -1156,7 +1156,7 @@ export function CodexPetStudio({
               <Icon icon="mdi:egg-easter" className="text-xl" aria-hidden />
             </span>
             <div>
-              <h1 className="text-lg font-semibold tracking-tight text-[#1d1d1f]">Codex 桌宠工坊</h1>
+              <h1 className="text-lg font-semibold tracking-tight text-ink">Codex 桌宠工坊</h1>
               <p className="text-xs text-[#71717a]">参考图或文字生成，可直接安装到 Codex</p>
             </div>
           </div>
@@ -1237,7 +1237,7 @@ export function CodexPetStudio({
                     className="min-w-0 flex-1 px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-[#1d1d1f]">{project.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink">{project.name}</span>
                       <StatusPill status={project.status} />
                     </div>
                     <p className="mt-1 truncate text-[10px] text-[#6e6e73]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
@@ -1456,7 +1456,7 @@ export function CodexPetStudio({
                   className="mt-0.5 size-4 accent-[var(--accent-primary)]"
                 />
                 <span>
-                  <span className="block text-xs font-semibold text-[#3d3d42]">主形象生成后自动继续</span>
+                  <span className="block text-xs font-semibold text-ink">主形象生成后自动继续</span>
                   <span className="mt-0.5 block text-[10px] leading-4 text-[#85858d]">关闭时会停下来让你从 2 个候选中选择；开启后由视觉质检自动选优。</span>
                 </span>
               </label>
@@ -1520,7 +1520,7 @@ export function CodexPetStudio({
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-xs font-semibold text-[#34343a]">主形象候选</h3>
+                      <h3 className="text-xs font-semibold text-ink">主形象候选</h3>
                       <p className="mt-0.5 text-[10px] text-[#898991]">选中的形象会成为所有动作与方向的身份基准。</p>
                     </div>
                     {latestRun.status === "awaiting_base_review" && (
@@ -1563,7 +1563,7 @@ export function CodexPetStudio({
                             )}
                           </div>
                           <div className="flex items-center gap-2 px-3 py-2">
-                            <span className="text-xs font-semibold text-[#34343a]">候选 {index + 1}</span>
+                            <span className="text-xs font-semibold text-ink">候选 {index + 1}</span>
                             {selected && <span className="ml-auto text-[10px] font-semibold text-brand-ink">已选择</span>}
                           </div>
                         </button>
@@ -1635,7 +1635,7 @@ export function CodexPetStudio({
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-xs font-semibold text-[#34343a]">9 组标准动画</h3>
+                      <h3 className="text-xs font-semibold text-ink">9 组标准动画</h3>
                       <p className="mt-0.5 text-[10px] text-[#898991]">透明背景 · 192×208 单格 · 生成过程中逐个亮起</p>
                     </div>
                     <span className="text-[10px] font-semibold text-[#8b8b94]" data-testid="codex-pet-animation-progress">
@@ -1670,7 +1670,7 @@ export function CodexPetStudio({
                 <div>
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <h3 className="text-xs font-semibold text-[#34343a]">最终 Codex v2 精灵图</h3>
+                      <h3 className="text-xs font-semibold text-ink">最终 Codex v2 精灵图</h3>
                       <p className="mt-0.5 text-[10px] text-[#898991]">1536×2288 · 8 列 × 11 行 · 透明背景 · spriteVersionNumber 2</p>
                     </div>
                     <button
@@ -1827,7 +1827,7 @@ export function CodexPetStudio({
             <div className="space-y-3 p-4">
               <div>
                 <div className="mb-1.5 flex items-center justify-between text-xs">
-                  <span className="font-semibold text-[#34343a]">{latestRun ? codexPetStatusLabel(latestRun.status) : "等待开始"}</span>
+                  <span className="font-semibold text-ink">{latestRun ? codexPetStatusLabel(latestRun.status) : "等待开始"}</span>
                   <span className="font-semibold text-brand-ink">{progress}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-[#eceef1]">
@@ -1844,7 +1844,7 @@ export function CodexPetStudio({
                       <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-[#eceef1] text-[#9898a0]"}`}>
                         {complete ? <Icon icon="mdi:check" aria-hidden /> : CODEX_PET_PROGRESS_STEPS.findIndex((item) => item.id === step.id) + 1}
                       </span>
-                      <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-[#34343a]" : "text-[#74747c]"}`}>{step.label}</span>
+                      <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-ink" : "text-[#74747c]"}`}>{step.label}</span>
                       <span className="text-[9px] text-[#a0a0a7]">{step.range}</span>
                     </li>
                   );
@@ -1893,7 +1893,7 @@ export function CodexPetStudio({
             <div className="space-y-2.5 p-4 text-[11px]">
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">已预留积分</span>
-                <span className="font-semibold text-[#3f3f45]">
+                <span className="font-semibold text-ink">
                   {/* Never restate the planned-call count locally: it is a backend
                       constant served with the price, and a stale copy here would
                       quote a reservation the user is not actually charged. */}
@@ -1902,7 +1902,7 @@ export function CodexPetStudio({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">已结算积分</span>
-                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${latestRun.billingSettledPoints ?? 0} 积分` : "—"}</span>
+                <span className="font-semibold text-ink">{latestRun ? `${latestRun.billingSettledPoints ?? 0} 积分` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">预计退回</span>
@@ -1910,7 +1910,7 @@ export function CodexPetStudio({
                     so `reserved - settled` reads as a full refund even though every
                     dispatched planned call will be charged. Project from the ledger
                     instead, on the same unit rule the backend settles by. */}
-                <span className="font-semibold text-[#3f3f45]">{latestRun ? `${projectedRefundPoints ?? 0} 积分${latestRun.billingSettlementStatus === "settled" ? "" : "（预估）"}` : "—"}</span>
+                <span className="font-semibold text-ink">{latestRun ? `${projectedRefundPoints ?? 0} 积分${latestRun.billingSettlementStatus === "settled" ? "" : "（预估）"}` : "—"}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[#777780]">知识库</span>
@@ -1921,13 +1921,13 @@ export function CodexPetStudio({
               {packageArtifact && (
                 <div className="flex items-center justify-between">
                   <span className="text-[#777780]">兼容包大小</span>
-                  <span className="font-semibold text-[#3f3f45]">{formatBytes(packageArtifact.sizeBytes)}</span>
+                  <span className="font-semibold text-ink">{formatBytes(packageArtifact.sizeBytes)}</span>
                 </div>
               )}
               {latestRun?.usage?.totalTokens !== undefined && (
                 <div className="flex items-center justify-between">
                   <span className="text-[#777780]">模型 token</span>
-                  <span className="font-semibold text-[#3f3f45]">{latestRun.usage.totalTokens.toLocaleString()}</span>
+                  <span className="font-semibold text-ink">{latestRun.usage.totalTokens.toLocaleString()}</span>
                 </div>
               )}
               {latestRun && (

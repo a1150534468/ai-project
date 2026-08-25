@@ -64,7 +64,7 @@ export function NovelModelSelector({
           const selected = models.find((model) => model.model === next);
           onChange(next, selected?.displayName || selected?.model || "系统默认");
         }}
-        className="max-w-44 border-0 bg-transparent p-0 text-xs font-semibold text-[#35403c] outline-none disabled:cursor-not-allowed disabled:opacity-60"
+        className="max-w-44 border-0 bg-transparent p-0 text-xs font-semibold text-ink outline-none disabled:cursor-not-allowed disabled:opacity-60"
       >
         <option value="">系统默认</option>
         {!selectedKnown && <option value={value}>{value}（已不可选）</option>}
