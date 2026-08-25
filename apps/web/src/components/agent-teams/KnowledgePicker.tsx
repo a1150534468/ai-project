@@ -85,7 +85,7 @@ export function KnowledgePicker({
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-md overflow-hidden rounded-[14px] border border-hairline-subtle bg-white shadow-[0_28px_70px_rgba(15,23,42,0.20)]"
+            className="w-full max-w-md overflow-hidden rounded-[14px] border border-hairline-subtle bg-surface shadow-[0_28px_70px_rgba(15,23,42,0.20)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-hairline-subtle px-5 py-4">
@@ -116,7 +116,7 @@ export function KnowledgePicker({
                     : "border-hairline-subtle text-ink-secondary "
                 }`}
               >
-                <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[10px] bg-white text-brand">
+                <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[10px] bg-surface text-brand">
                   <Icon icon="mdi:creation-outline" className="text-lg" aria-hidden />
                 </span>
                 <span className="min-w-0 flex-1">
@@ -156,7 +156,7 @@ export function KnowledgePicker({
                             <span className="flex min-w-0 items-center gap-2">
                               <span className="truncate text-sm font-medium">{kb.name}</span>
                               <span className={`flex-none rounded-full px-2 py-0.5 text-[10px] ${
-                                isOfficial ? "bg-blue-50 text-blue-700" : "bg-white text-brand-ink"
+                                isOfficial ? "bg-blue-50 text-blue-700" : "bg-surface text-brand-ink"
                               }`}>
                                 {isOfficial ? "官方" : "我的"}
                               </span>

@@ -30,7 +30,7 @@ export default function MemoryTable({
 }: MemoryTableProps) {
   if (loading) {
     return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-[14px] border border-hairline-subtle bg-white">
+      <div className="flex min-h-[360px] items-center justify-center rounded-[14px] border border-hairline-subtle bg-surface">
         <div className="flex items-center gap-3 text-sm text-ink-secondary">
           <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" aria-hidden />
           正在加载记忆表格...
@@ -55,7 +55,7 @@ export default function MemoryTable({
 
   if (nodes.length === 0) {
     return (
-      <div className="rounded-[14px] border border-hairline-subtle bg-white px-5 py-14 text-center">
+      <div className="rounded-[14px] border border-hairline-subtle bg-surface px-5 py-14 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
           <Icon icon="mdi:table-search" className="text-2xl" aria-hidden />
         </div>
@@ -68,7 +68,7 @@ export default function MemoryTable({
   }
 
   return (
-    <div className="h-full min-h-0 overflow-hidden rounded-[14px] border border-hairline-subtle bg-white">
+    <div className="h-full min-h-0 overflow-hidden rounded-[14px] border border-hairline-subtle bg-surface">
       <div className="max-h-full overflow-auto">
         <table className="min-w-[820px] w-full table-fixed border-collapse text-left">
           <thead className="sticky top-0 z-10 bg-surface-subtle text-[11px] font-semibold uppercase text-ink-tertiary">
@@ -133,7 +133,7 @@ export default function MemoryTable({
                         node.tags.slice(0, 2).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full border border-hairline-subtle bg-white px-2 py-0.5 text-[11px] text-ink-secondary"
+                            className="rounded-full border border-hairline-subtle bg-surface px-2 py-0.5 text-[11px] text-ink-secondary"
                           >
                             {tag}
                           </span>

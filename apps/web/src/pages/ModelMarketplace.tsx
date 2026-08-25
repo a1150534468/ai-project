@@ -137,7 +137,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
                 className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
                   isActive
                     ? "border-brand bg-brand text-white shadow-sm"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-brand/40 hover:text-brand"
+                    : "border-gray-200 bg-surface text-gray-600 hover:border-brand/40 hover:text-brand"
                 }`}
               >
                 <Icon icon={icon} className="text-base" aria-hidden />
@@ -174,7 +174,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
             </section>
           ))
         ) : !loading && !message ? (
-          <div className="rounded-xl border border-dashed border-gray-200 bg-white p-8 text-center text-sm text-gray-400">
+          <div className="rounded-xl border border-dashed border-gray-200 bg-surface p-8 text-center text-sm text-gray-400">
             暂无可用模型
           </div>
         ) : null}
@@ -189,7 +189,7 @@ function VipSummaryBadge({ vip }: { vip: VipSummary | null }) {
     : 100;
 
   return (
-    <div className="w-full rounded-2xl border border-brand/10 bg-white p-4 shadow-sm lg:w-[360px]">
+    <div className="w-full rounded-2xl border border-brand/10 bg-surface p-4 shadow-sm lg:w-[360px]">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-brand-soft text-brand-ink">
@@ -239,7 +239,7 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
     .sort((a, b) => Number(b === "free-quota") - Number(a === "free-quota"))
     .slice(0, 5);
   return (
-    <article className="rounded-2xl border border-gray-100 bg-white p-5">
+    <article className="rounded-2xl border border-gray-100 bg-surface p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-ink">{model.displayName || "未命名模型"}</h3>

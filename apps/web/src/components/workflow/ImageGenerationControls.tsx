@@ -52,7 +52,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
   const supportsReferenceImages = IMAGE_MODEL_OPTIONS.find((option) => option.value === props.model)?.supportsReferenceImages ?? false;
 
   return (
-    <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+    <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
@@ -78,7 +78,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
             aria-label="提示词"
             value={props.prompt}
             onChange={(event) => props.onPromptChange(event.target.value)}
-            className="min-h-[132px] resize-y rounded-lg border border-hairline bg-white p-3 leading-6 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
+            className="min-h-[132px] resize-y rounded-lg border border-hairline bg-surface p-3 leading-6 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
         </label>
 
@@ -192,7 +192,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
 
         <div className="mt-5 grid gap-2">
           <p className="text-sm font-semibold text-ink">批量数量</p>
-          <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-hairline bg-white">
+          <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-hairline bg-surface">
             {QUICK_COUNTS.map((count) => (
               <button
                 key={count}

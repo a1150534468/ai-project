@@ -74,7 +74,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
     <Modal
       open={open}
       onClose={onClose}
-      className="w-full max-w-2xl max-h-[86vh] bg-white rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden mx-4"
+      className="w-full max-w-2xl max-h-[86vh] bg-surface rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden mx-4"
     >
         <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
           <div>

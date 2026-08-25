@@ -56,7 +56,7 @@ const PLATFORM_ICONS: Record<ArticleWorkflowPlatform, string> = {
 
 export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps) {
   return (
-    <section className="flex h-full min-h-0 flex-col bg-white" aria-label="图文生成配置">
+    <section className="flex h-full min-h-0 flex-col bg-surface" aria-label="图文生成配置">
       <div className="flex h-14 flex-none items-center justify-between gap-2 border-b border-hairline-subtle px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-soft text-brand-ink">
@@ -106,7 +106,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                     checked
                       ? "border-brand bg-brand-soft ring-1 ring-brand/20"
-                      : "border-hairline-subtle bg-white hover:border-hairline"
+                      : "border-hairline-subtle bg-surface hover:border-hairline"
                   }`}
                 >
                   <span
@@ -168,7 +168,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   aria-checked={props.generationMode === option.key}
                   onClick={() => props.onGenerationModeChange(option.key)}
                   className={`h-9 rounded-md px-2 text-xs font-semibold transition ${
-                    props.generationMode === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
+                    props.generationMode === option.key ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"
                   }`}
                 >
                   {option.label}

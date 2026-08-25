@@ -52,12 +52,12 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
   return (
     <div className="space-y-5">
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-gray-100 bg-white p-4">
+        <section className="rounded-xl border border-gray-100 bg-surface p-4">
           <h3 className="mb-2 text-[13px] font-semibold text-ink">原始口播文稿</h3>
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-[13px] leading-relaxed text-ink-secondary">{spokenScript || "—"}</pre>
         </section>
 
-        <section className="rounded-xl border border-gray-100 bg-white p-4">
+        <section className="rounded-xl border border-gray-100 bg-surface p-4">
           <h3 className="mb-2 text-[13px] font-semibold text-ink">洗稿结果（可编辑）</h3>
           <textarea
             value={script}
@@ -69,7 +69,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
         </section>
       </div>
 
-      <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-4">
+      <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-4">
         <div>
           <p className="mb-2 text-[12.5px] font-medium text-ink-secondary">挂载知识库（可选，改写时可引用其中事实）</p>
           {kbs.length === 0 ? (

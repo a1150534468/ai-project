@@ -63,7 +63,7 @@ export function useConfirm() {
       <Modal
         open={dialog.open}
         onClose={dialog.onCancel}
-        className="bg-white rounded-2xl shadow-lg max-w-sm w-full p-6 mx-4"
+        className="bg-surface rounded-2xl shadow-lg max-w-sm w-full p-6 mx-4"
       >
         <div className="flex items-start gap-3 mb-4">
           {dialog.isDangerous && (

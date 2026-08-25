@@ -345,9 +345,9 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   };
 
   return (
-    <section data-testid="portrait-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-white xl:h-full">
+    <section data-testid="portrait-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-surface xl:h-full">
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+      <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         <div className="flex items-center justify-between"><div><p className="text-xs font-semibold text-ink-secondary">生成配置</p><h2 className="mt-1 text-base font-semibold text-ink">创作设置</h2></div><Icon icon="mdi:tune-variant" className="text-xl text-ink-tertiary" aria-hidden /></div>
 
@@ -412,14 +412,14 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       </aside>
 
       <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
-        <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4">
+        <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-surface-inverse text-ink-inverse"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>
             <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-ink-tertiary">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">
             {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-surface-muted text-ink-secondary"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
-            <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-white px-3 text-xs font-semibold text-ink"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
+            <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-surface px-3 text-xs font-semibold text-ink"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
           </div>
         </header>
         <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5 lg:p-8">
@@ -430,22 +430,22 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             </>
           ) : selectedTask && isActive(selectedTask) ? (
             <div className="grid max-w-sm place-items-center text-center">
-              <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm"><Icon icon="mdi:creation-outline" className="text-4xl text-brand-ink" aria-hidden /><span className="absolute inset-0 animate-ping rounded-full border border-brand/30" /></span>
+              <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-sm"><Icon icon="mdi:creation-outline" className="text-4xl text-brand-ink" aria-hidden /><span className="absolute inset-0 animate-ping rounded-full border border-brand/30" /></span>
               <p className="mt-5 text-base font-semibold text-ink">正在生成形象照</p>
               <p className="mt-2 text-sm text-ink-secondary">已完成 {selectedTask.completedCount}/{selectedTask.count}</p>
-              <button type="button" onClick={() => handleCancel(selectedTask)} disabled={busyTaskId === selectedTask.id} className="mt-5 h-9 rounded-[8px] border border-hairline bg-white px-4 text-sm font-semibold text-ink-secondary">取消任务</button>
+              <button type="button" onClick={() => handleCancel(selectedTask)} disabled={busyTaskId === selectedTask.id} className="mt-5 h-9 rounded-[8px] border border-hairline bg-surface px-4 text-sm font-semibold text-ink-secondary">取消任务</button>
             </div>
           ) : (
             <div className="grid max-w-sm place-items-center text-center">
-              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-white/70"><Icon icon="mdi:account-star-outline" className="text-4xl text-ink-tertiary" aria-hidden /></span>
+              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-surface/70"><Icon icon="mdi:account-star-outline" className="text-4xl text-ink-tertiary" aria-hidden /></span>
               <p className="mt-5 text-base font-semibold text-ink-secondary">形象照预览</p>
               <p className="mt-2 text-sm text-ink-tertiary">选择模板并提交后，结果将在这里显示</p>
             </div>
           )}
-          {selectedTask?.error && !isActive(selectedTask) && <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-white/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">{selectedTask.error}</div>}
+          {selectedTask?.error && !isActive(selectedTask) && <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-surface/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">{selectedTask.error}</div>}
         </div>
         {selectedTask && selectedTask.outputs.length > 0 && (
-          <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-white px-4 py-3">
+          <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-surface px-4 py-3">
             <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
               {selectedTask.outputs.map((output, index) => <button key={output.id} type="button" onClick={() => setSelectedOutputIndex(index)} className={`h-12 w-10 flex-none overflow-hidden rounded-[6px] border-2 ${selectedOutput?.id === output.id ? "border-brand" : "border-transparent"}`}><img src={output.originalUrl} alt={`结果 ${index + 1}`} className="h-full w-full object-cover" /></button>)}
             </div>
@@ -482,7 +482,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
 
       {isTaskDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsTaskDrawerOpen(false)}>
-          <aside role="dialog" aria-modal="true" aria-label="形象照任务队列" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
+          <aside role="dialog" aria-modal="true" aria-label="形象照任务队列" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4"><div><p className="text-xs font-semibold text-ink-secondary">任务状态</p><h2 className="text-base font-semibold text-ink">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-ink-tertiary">暂无任务</p> : tasks.map((task) => (

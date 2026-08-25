@@ -98,7 +98,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         {avatars.length === 0 && <p className="text-[12.5px] text-ink-tertiary">还没有数字人形象，先新建一个。</p>}
       </div>
 
-      <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-4">
+      <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-4">
         <h3 className="text-[13px] font-semibold text-ink">新建数字人形象</h3>
         <input
           value={title}

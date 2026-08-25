@@ -49,7 +49,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
       <button
         type="button"
         onClick={handleDownload}
-        className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-white px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-surface px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
       >
         <Icon icon="mdi:download-outline" className="text-base" aria-hidden />
         下载文档
@@ -97,7 +97,7 @@ function WorkflowSteps({ run }: WorkflowStepsProps) {
   return (
     <div className="space-y-2">
       {run.steps.map((step) => (
-        <div key={step.id} className="rounded-[10px] border border-hairline-subtle bg-white p-3">
+        <div key={step.id} className="rounded-[10px] border border-hairline-subtle bg-surface p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-ink">{step.title}</p>
@@ -135,7 +135,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
   };
 
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">执行记录</p>
@@ -174,7 +174,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
                   aria-expanded={isWorkflowVisible}
                   aria-controls={`agent-workflow-steps-${run.id}`}
                   onClick={toggleWorkflow}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-white px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-surface px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                 >
                   <Icon icon={isWorkflowVisible ? "mdi:chevron-up" : "mdi:source-branch"} className="text-base" aria-hidden />
                   {isWorkflowVisible ? "隐藏工作流" : "查看工作流"}

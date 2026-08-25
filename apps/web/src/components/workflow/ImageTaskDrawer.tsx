@@ -50,7 +50,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 340, damping: 34 }}
             onClick={(event) => event.stopPropagation()}
-            className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]"
+            className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]"
           >
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div>
@@ -73,7 +73,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                   <article
                     key={task.id}
                     className={`mb-2 w-full rounded-lg border ${
-                      props.selectedRequestId === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-white"
+                      props.selectedRequestId === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-surface"
                     }`}
                   >
                     <button

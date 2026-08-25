@@ -395,9 +395,9 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   };
 
   return (
-    <section data-testid="try-on-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-white xl:h-full">
+    <section data-testid="try-on-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-surface xl:h-full">
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-        <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+        <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
             <div className="flex items-center justify-between">
               <div>
@@ -517,7 +517,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
         </aside>
 
         <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
-          <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4">
+          <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4">
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-surface-inverse text-ink-inverse">
                 <Icon icon="mdi:tshirt-crew-outline" className="text-lg" aria-hidden />
@@ -539,7 +539,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 type="button"
                 onClick={() => setIsTaskDrawerOpen(true)}
                 aria-expanded={isTaskDrawerOpen}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-white px-3 text-xs font-semibold text-ink"
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
               >
                 <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
                 任务 {tasks.filter(isActive).length}
@@ -562,7 +562,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </>
             ) : selectedTask && isActive(selectedTask) ? (
               <div className="grid max-w-sm place-items-center text-center">
-                <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-sm">
+                <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-sm">
                   <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-brand-ink" aria-hidden />
                   <span className="absolute inset-0 animate-ping rounded-full border border-brand/30" />
                 </span>
@@ -574,14 +574,14 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                   type="button"
                   onClick={() => handleCancel(selectedTask)}
                   disabled={busyTaskId === selectedTask.id}
-                  className="mt-5 h-9 rounded-[8px] border border-hairline bg-white px-4 text-sm font-semibold text-ink-secondary"
+                  className="mt-5 h-9 rounded-[8px] border border-hairline bg-surface px-4 text-sm font-semibold text-ink-secondary"
                 >
                   取消任务
                 </button>
               </div>
             ) : (
               <div className="grid max-w-sm place-items-center text-center">
-                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-white/70">
+                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-surface/70">
                   <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-ink-tertiary" aria-hidden />
                 </span>
                 <p className="mt-5 text-base font-semibold text-ink-secondary">试穿效果预览</p>
@@ -589,13 +589,13 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               </div>
             )}
             {selectedTask?.error && !isActive(selectedTask) && (
-              <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-white/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">
+              <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-red-200 bg-surface/95 px-3 py-2 text-center text-xs text-red-700 shadow-sm">
                 {selectedTask.error}
               </div>
             )}
           </div>
           {selectedTask && selectedTask.outputs.length > 0 && (
-            <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-white px-4 py-3">
+            <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-surface px-4 py-3">
               <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
                 {selectedTask.outputs.map((output, index) => (
                   <button
@@ -658,7 +658,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             aria-modal="true"
             aria-label="服装试穿任务队列"
             onClick={(event) => event.stopPropagation()}
-            className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]"
+            className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]"
           >
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div>

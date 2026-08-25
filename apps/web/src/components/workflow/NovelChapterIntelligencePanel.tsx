@@ -16,7 +16,7 @@ function text(value: unknown): string {
 
 function Panel({ title, icon, children }: { readonly title: string; readonly icon: string; readonly children: ReactNode }) {
   return (
-    <section className="rounded-lg border border-hairline-subtle bg-white p-3">
+    <section className="rounded-lg border border-hairline-subtle bg-surface p-3">
       <h4 className="flex items-center gap-2 text-sm font-semibold text-ink">
         <Icon icon={icon} aria-hidden />
         {title}

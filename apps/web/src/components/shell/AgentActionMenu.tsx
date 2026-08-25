@@ -27,7 +27,7 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
   const row = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-gray-600 transition-colors  disabled:opacity-40";
 
   return (
-    <div className="min-w-[172px] rounded-xl border border-gray-100 bg-white p-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
+    <div className="min-w-[172px] rounded-xl border border-gray-100 bg-surface p-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
       <div className="flex justify-center py-2">
         <AgentAvatar avatarUrl={agent.avatarUrl} avatarSvg={agent.avatarSvg} icon={agent.icon} size={64} name={agent.name} />
       </div>

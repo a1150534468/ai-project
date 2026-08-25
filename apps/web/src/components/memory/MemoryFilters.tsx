@@ -33,7 +33,7 @@ export default function MemoryFilters({
   highlightedCount,
 }: MemoryFiltersProps) {
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-white p-4">
+    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-4">
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <form
@@ -92,7 +92,7 @@ export default function MemoryFilters({
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-surface shadow-sm transition ${
                     enabled ? "left-[22px]" : "left-0.5"
                   }`}
                 />

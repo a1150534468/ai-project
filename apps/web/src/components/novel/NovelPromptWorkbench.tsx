@@ -83,7 +83,7 @@ export function NovelPromptWorkbench({ token, projectId }: { readonly token: str
   };
 
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-ink">Prompt Studio</p><h3 className="mt-1 text-lg font-semibold text-ink">提示词工作台</h3><p className="mt-1 text-sm text-ink-secondary">项目级覆盖、变量识别、模型绑定、版本和回滚。</p></div><button type="button" onClick={newTemplate} className="h-9 rounded-lg border border-brand/30 px-3 text-xs font-semibold text-brand-ink"><Icon icon="mdi:plus" className="mr-1 inline" />新建模板</button></div>
       <div className="mt-4 grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)_240px]">
         <div className="grid max-h-[480px] content-start gap-2 overflow-y-auto [scrollbar-width:thin]">{templates.map((template) => <button key={template.id} type="button" onClick={() => setSelectedId(template.id)} className={`rounded-lg border p-3 text-left ${selectedId === template.id ? "border-brand/40 bg-brand-soft" : "border-hairline-subtle"}`}><span className="block text-sm font-semibold">{template.name}</span><span className="mt-1 block text-xs text-ink-tertiary">{template.category} · v{template.activeVersion}</span></button>)}{!templates.length && <p className="rounded-lg border border-dashed border-hairline py-8 text-center text-xs text-ink-tertiary">暂无项目提示词</p>}</div>

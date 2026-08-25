@@ -15,7 +15,7 @@ import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
 function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boolean }) {
   return (
     <section className="grid h-full min-h-[440px] place-items-center bg-surface-subtle px-6 py-10" aria-label="实时输出预览">
-      <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-hairline bg-white px-6 py-12 text-center">
+      <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-hairline bg-surface px-6 py-12 text-center">
         <span className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink">
           <Icon
             icon={creating ? "mdi:loading" : "mdi:file-eye-outline"}
@@ -79,9 +79,9 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
   );
 
   return (
-    <section className="relative min-h-0 overflow-hidden bg-white xl:grid xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
+    <section className="relative min-h-0 overflow-hidden bg-surface xl:grid xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
       <aside
-        className="hidden min-h-0 border-r border-hairline-subtle bg-white xl:grid xl:h-full xl:grid-rows-[minmax(120px,1fr)_minmax(0,3fr)] xl:divide-y xl:divide-hairline-subtle"
+        className="hidden min-h-0 border-r border-hairline-subtle bg-surface xl:grid xl:h-full xl:grid-rows-[minmax(120px,1fr)_minmax(0,3fr)] xl:divide-y xl:divide-hairline-subtle"
         aria-label="项目与生成配置"
       >
         <ArticleWorkflowHistoryPanel
@@ -107,7 +107,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
 
       <main className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
         <header
-          className={`flex min-h-14 flex-none flex-col gap-2 border-b border-hairline-subtle bg-white px-4 py-2 xl:items-center xl:px-5 ${
+          className={`flex min-h-14 flex-none flex-col gap-2 border-b border-hairline-subtle bg-surface px-4 py-2 xl:items-center xl:px-5 ${
             state.project ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)_minmax(0,1fr)]" : "xl:flex-row"
           }`}
         >
@@ -132,7 +132,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               type="button"
               onClick={() => setHistoryOpen(true)}
               aria-expanded={historyOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
             >
               <Icon icon="mdi:history" className="text-base" aria-hidden />
               项目历史
@@ -142,7 +142,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               onClick={() => setConfigOpen(true)}
               disabled={state.bootstrapping}
               aria-expanded={configOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle disabled:text-ink-tertiary"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle disabled:text-ink-tertiary"
             >
               <Icon icon="mdi:tune-variant" className="text-base" aria-hidden />
               生成配置
@@ -278,7 +278,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
                 />
                 {state.captionPlatform && (
                   <section
-                    className="border-t border-hairline-subtle bg-white px-4 py-5 lg:px-6 lg:py-6 xl:hidden"
+                    className="border-t border-hairline-subtle bg-surface px-4 py-5 lg:px-6 lg:py-6 xl:hidden"
                     aria-label="平台配图"
                   >
                     <div className="mx-auto max-w-[980px]">
@@ -298,7 +298,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
 
           {state.project && !busy && rightPanelOpen && (
             <aside
-              className="hidden w-[300px] shrink-0 flex-col border-l border-hairline-subtle bg-white xl:flex"
+              className="hidden w-[300px] shrink-0 flex-col border-l border-hairline-subtle bg-surface xl:flex"
               aria-label="配图素材"
             >
               <div className="flex h-10 flex-none items-center justify-between border-b border-hairline-subtle px-3">
@@ -365,7 +365,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               exit={{ x: "100%" }}
               transition={{ type: "spring", stiffness: 340, damping: 34 }}
               onClick={(event) => event.stopPropagation()}
-              className="ml-auto h-full w-full bg-white shadow-2xl sm:w-[360px]"
+              className="ml-auto h-full w-full bg-surface shadow-2xl sm:w-[360px]"
             >
               {inputPanel(() => setConfigOpen(false))}
             </motion.aside>

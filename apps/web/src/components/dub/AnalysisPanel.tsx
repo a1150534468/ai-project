@@ -8,7 +8,7 @@ export interface AnalysisPanelProps {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-gray-100 bg-white p-4">
+    <section className="rounded-xl border border-gray-100 bg-surface p-4">
       <h3 className="mb-2 text-[13px] font-semibold text-ink">{title}</h3>
       {children}
     </section>

@@ -107,9 +107,9 @@ export default function SettingsPage({
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-surface">
       {/* Header */}
-      <div className="border-b border-gray-100 bg-white">
+      <div className="border-b border-gray-100 bg-surface">
         <div className="max-w-6xl mx-auto px-8 py-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">设置</h1>
           <p className="text-gray-500">管理账号信息和偏好设置</p>
@@ -119,7 +119,7 @@ export default function SettingsPage({
       {/* Content */}
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         {/* Account Section */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
+        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:account-circle-outline" className="text-2xl text-brand mr-3" />
             <h2 className="text-lg font-bold text-gray-900">账号信息</h2>
@@ -150,7 +150,7 @@ export default function SettingsPage({
         </div>
 
         {/* Appearance Preference */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm">
+        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm">
           <div className="flex items-center mb-4">
             <Icon icon="mdi:theme-light-dark" className="text-2xl text-brand mr-3" />
             <h2 className="text-lg font-bold text-gray-900">外观</h2>
@@ -179,7 +179,7 @@ export default function SettingsPage({
         </div>
 
         {/* Model Preference */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
+        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:robot-outline" className="text-2xl text-brand mr-3" />
             <h2 className="text-lg font-bold text-gray-900">默认模型</h2>
@@ -235,7 +235,7 @@ export default function SettingsPage({
         </div>
 
         {/* Logout Section */}
-        <div className="bg-white rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
+        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:logout-variant" className="text-2xl text-gray-400 mr-3" />
             <h2 className="text-lg font-bold text-gray-900">登出</h2>

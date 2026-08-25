@@ -71,7 +71,7 @@ export function AudioAssetPanel(props: {
               <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(props.asset.createdAt)}</p>
               <p className="text-[11px] text-ink-secondary">{props.asset.durationSec || 0} 秒 · {props.asset.format.toUpperCase()}</p>
             </div>
-            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{props.asset.providerModel ?? props.asset.source}</span>
+            <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{props.asset.providerModel ?? props.asset.source}</span>
           </div>
           {props.asset.textContent && <p className="mt-2 line-clamp-3 text-[11px] leading-5 text-ink-secondary">{props.asset.textContent}</p>}
           <audio className="mt-3 w-full" controls src={props.asset.originalUrl} />
@@ -113,7 +113,7 @@ export function AudioHistoryList(props: {
                   <p className="text-[11px] text-ink-secondary">{asset.durationSec || 0} 秒 · {asset.format.toUpperCase()}</p>
                 </div>
                 {active ? (
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-brand-ink">当前</span>
+                  <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-medium text-brand-ink">当前</span>
                 ) : (
                   <button
                     type="button"

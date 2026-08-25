@@ -85,7 +85,7 @@ export function PaymentStatusPanel({
   const methodLabel = paymentMethodLabel(method);
   const success = state === "success";
   return (
-    <div className="bg-white rounded-2xl p-6 border border-gray-50 text-center w-full max-w-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+    <div className="bg-surface rounded-2xl p-6 border border-gray-50 text-center w-full max-w-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
       <h3 className="text-base font-semibold text-ink mb-4">{success ? "支付成功" : "扫码支付"}</h3>
       <div className="flex justify-center mb-4">
         {success ? (

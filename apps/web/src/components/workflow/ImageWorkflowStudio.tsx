@@ -85,7 +85,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
   const runningCount = countTasks(props.tasks, "running");
 
   return (
-    <section className="relative min-h-0 overflow-hidden bg-white xl:grid xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
+    <section className="relative min-h-0 overflow-hidden bg-surface xl:grid xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
       <ImageGenerationControls
         prompt={props.prompt}
         model={props.model}
@@ -116,7 +116,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
       />
 
       <div className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
-        <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4 lg:px-6">
+        <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4 lg:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
               {mode === "comparing" ? "版本对比" : selectedTask?.prompt ?? "通用生图工作台"}
@@ -126,7 +126,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
             type="button"
             onClick={props.onOpenTaskDrawer}
             aria-expanded={props.isTaskDrawerOpen ?? false}
-            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-hairline bg-white px-3 text-xs font-semibold text-ink"
+            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
           >
             <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
             任务列表{runningCount > 0 ? ` · 生成中 ${runningCount}` : ""}

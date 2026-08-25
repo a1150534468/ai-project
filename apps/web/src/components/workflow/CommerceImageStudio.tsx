@@ -219,11 +219,11 @@ export function CommerceImageStudio({
   );
 
   return (
-    <section className="relative flex min-h-0 flex-col bg-white xl:h-full xl:overflow-hidden">
-      <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-hairline-subtle bg-white px-4 lg:px-6">
+    <section className="relative flex min-h-0 flex-col bg-surface xl:h-full xl:overflow-hidden">
+      <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-hairline-subtle bg-surface px-4 lg:px-6">
         <div className="inline-flex rounded-lg bg-surface-muted p-1" aria-label="电商图类型">
-          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-ink shadow-sm" : "text-ink-secondary"}`}>商品主图</RippleButton>
-          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-ink shadow-sm" : "text-ink-secondary"}`}>商品详情图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"}`}>商品主图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"}`}>商品详情图</RippleButton>
         </div>
         <button type="button" onClick={() => setIsOverviewOpen(true)} aria-expanded={isOverviewOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-semibold text-ink">
           <Icon icon="mdi:view-dashboard-outline" className="text-base" aria-hidden />生成概览
@@ -238,7 +238,7 @@ export function CommerceImageStudio({
 
       {isOverviewOpen && (
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsOverviewOpen(false)}>
-          <aside role="dialog" aria-modal="true" aria-label="电商图生成概览" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
+          <aside role="dialog" aria-modal="true" aria-label="电商图生成概览" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div><p className="text-xs font-semibold text-ink-secondary">当前配置</p><h2 className="text-base font-semibold text-ink">生成概览</h2></div>
               <button type="button" onClick={() => setIsOverviewOpen(false)} aria-label="关闭生成概览" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button>
@@ -248,24 +248,24 @@ export function CommerceImageStudio({
             <p className="text-[11px] font-semibold text-ink-tertiary">当前视图</p>
             <p className="mt-1 text-sm font-semibold text-ink">{tab === "main" ? "商品主图" : "商品详情图"}</p>
           </div>
-          <div className="rounded-[11px] border border-hairline-subtle bg-white p-3">
+          <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
             <p className="text-[11px] font-semibold text-ink-tertiary">平台</p>
             <p className="mt-1 truncate text-sm font-semibold text-ink">{platforms.find((p) => p.id === platformId)?.name ?? platformId}</p>
           </div>
-          <div className="rounded-[11px] border border-hairline-subtle bg-white p-3">
+          <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
             <p className="text-[11px] font-semibold text-ink-tertiary">商品名称</p>
             <p className="mt-1 truncate text-sm font-semibold text-ink">{productName.trim() || "未填写"}</p>
           </div>
-          <div className="rounded-[11px] border border-hairline-subtle bg-white p-3">
+          <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
             <p className="text-[11px] font-semibold text-ink-tertiary">商品类目</p>
             <p className="mt-1 truncate text-sm font-semibold text-ink">{effectiveCategory || "未选择"}</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-[11px] border border-hairline-subtle bg-white p-3">
+            <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
               <p className="text-[11px] font-semibold text-ink-tertiary">卖点</p>
               <p className="mt-1 text-sm font-semibold text-ink">{sellingPointsInput.split(/\r?\n/).map((s) => s.trim()).filter((s) => s.length > 0).length} 条</p>
             </div>
-            <div className="rounded-[11px] border border-hairline-subtle bg-white p-3">
+            <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
               <p className="text-[11px] font-semibold text-ink-tertiary">参考图</p>
               <p className="mt-1 text-sm font-semibold text-ink">{referenceAssets.length} 张</p>
             </div>

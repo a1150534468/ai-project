@@ -68,7 +68,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
               aria-label="自定义主色"
               value={effectiveColor}
               onChange={(event) => props.onThemeColorChange(event.target.value)}
-              className="h-8 w-12 cursor-pointer rounded border border-hairline bg-white p-0.5"
+              className="h-8 w-12 cursor-pointer rounded border border-hairline bg-surface p-0.5"
             />
             <span className="font-mono text-[11px] text-ink-tertiary">{effectiveColor}</span>
             {props.selectedThemeColor && (
@@ -93,7 +93,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
                   aria-checked={props.galleryMode === option.key}
                   onClick={() => props.onGalleryModeChange(option.key)}
                   className={`h-8 rounded-md px-2 text-xs font-semibold transition ${
-                    props.galleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
+                    props.galleryMode === option.key ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"
                   }`}
                 >
                   {option.label}
@@ -132,7 +132,7 @@ function ThemeCard(props: {
           <span className="mt-1 block h-1 w-5/6 rounded-sm bg-ink opacity-30" />
         </span>
       ) : (
-        <span className="pointer-events-none block h-20 overflow-hidden rounded-lg bg-white" aria-hidden>
+        <span className="pointer-events-none block h-20 overflow-hidden rounded-lg bg-surface" aria-hidden>
           <span
             className="block origin-top-left scale-[0.28]"
             style={{ width: 360 }}

@@ -22,7 +22,7 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
   const canDelete = !needsTyping || typed === agentName;
 
   return (
-    <Modal open={open} onClose={onCancel} className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+    <Modal open={open} onClose={onCancel} className="mx-4 w-full max-w-sm rounded-2xl bg-surface p-6 shadow-lg">
       <div className="mb-4 flex items-start gap-3">
         <Icon icon="mdi:alert-circle" className="mt-1 flex-none text-xl text-red-500" />
         <h2 className="text-lg font-semibold text-gray-900">删除「{agentName}」？</h2>

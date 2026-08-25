@@ -86,7 +86,7 @@ export function AgentRail(props: AgentRailProps) {
         };
 
   return (
-    <section className="hidden w-[220px] flex-none flex-col overflow-hidden border-r border-gray-100 bg-white lg:flex">
+    <section className="hidden w-[220px] flex-none flex-col overflow-hidden border-r border-gray-100 bg-surface lg:flex">
       <AnimatePresence mode="wait">
         {selected === null ? (
           <motion.div key="agents" {...slide(1)} className="flex min-h-0 flex-1 flex-col">
@@ -193,7 +193,7 @@ function SearchInput({ value, onChange, placeholder }: { value: string; onChange
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-9 w-full rounded-lg border border-gray-100 bg-gray-50 pl-9 pr-3 text-xs text-gray-700 outline-none focus:border-brand/40 focus:bg-white"
+        className="h-9 w-full rounded-lg border border-gray-100 bg-gray-50 pl-9 pr-3 text-xs text-gray-700 outline-none focus:border-brand/40 focus:bg-surface"
       />
     </div>
   );

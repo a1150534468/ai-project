@@ -136,7 +136,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             value={props.summaryDraft}
             onChange={(event) => props.onSummaryChange(event.target.value)}
             rows={2}
-            className="w-full resize-none rounded-lg border border-hairline bg-surface-subtle px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
+            className="w-full resize-none rounded-lg border border-hairline bg-surface-subtle px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-surface"
             placeholder="输入摘要"
           />
         )}
@@ -169,7 +169,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         <ArticleWorkflowPreviewScaleToggle scale={previewScale} onChange={setPreviewScale} />
       </div>
       <article
-        className={`mx-auto bg-white ${previewScaleWidthClass(previewScale)} ${
+        className={`mx-auto bg-surface ${previewScaleWidthClass(previewScale)} ${
           previewScale === "mobile"
             ? "overflow-hidden rounded-[32px] border-[8px] border-ink px-4 py-4"
             : "px-5 py-6"
@@ -218,7 +218,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
 
   return (
     <section className="flex min-h-full flex-col bg-surface-subtle">
-      <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-hairline-subtle bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-6">
+      <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-hairline-subtle bg-surface/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 sm:block">
             <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +248,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                 aria-pressed={canvasMode === item.key}
                 onClick={() => setCanvasMode(item.key)}
                 className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
-                  canvasMode === item.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
+                  canvasMode === item.key ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"
                 }`}
               >
                 {item.label}
@@ -273,12 +273,12 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
           </RippleButton>
 
           <details className="group relative">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-hairline bg-white px-3.5 text-sm font-semibold text-ink marker:content-none">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-hairline bg-surface px-3.5 text-sm font-semibold text-ink marker:content-none">
               <Icon icon="mdi:content-copy" className="text-base" aria-hidden />
               复制
               <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
             </summary>
-            <div className="absolute right-0 top-11 z-20 grid w-52 overflow-hidden rounded-lg border border-hairline bg-white p-1 shadow-lg">
+            <div className="absolute right-0 top-11 z-20 grid w-52 overflow-hidden rounded-lg border border-hairline bg-surface p-1 shadow-lg">
               {captionPlatform ? (
                 <>
                   <button
@@ -328,7 +328,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
 
       {canvasMode === "split" ? (
         <div className="grid h-[72vh] min-h-[560px] grid-cols-1 lg:grid-cols-2 lg:divide-x lg:divide-hairline-subtle">
-          <div ref={editScrollRef} onScroll={syncPreviewScroll} className="min-h-0 overflow-y-auto bg-white">
+          <div ref={editScrollRef} onScroll={syncPreviewScroll} className="min-h-0 overflow-y-auto bg-surface">
             {editorHeader}
             {editorBody}
           </div>
@@ -338,7 +338,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         </div>
       ) : (
         <div className="p-4 lg:p-6">
-          <section className="mx-auto max-w-[980px] overflow-hidden rounded-lg border border-hairline-subtle bg-white">
+          <section className="mx-auto max-w-[980px] overflow-hidden rounded-lg border border-hairline-subtle bg-surface">
             {canvasMode === "edit" && (
               <>
                 {editorHeader}

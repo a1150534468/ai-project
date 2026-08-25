@@ -55,7 +55,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
       >
         <Icon icon="mdi:palette-outline" className="text-base" aria-hidden />
         {themeLabel}
@@ -70,7 +70,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-30 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-hairline-subtle bg-white p-3 shadow-xl">
+        <div className="absolute right-0 top-10 z-30 w-[440px] max-w-[calc(100vw-2rem)] rounded-xl border border-hairline-subtle bg-surface p-3 shadow-xl">
           <div className="grid max-h-[280px] grid-cols-4 gap-2 overflow-y-auto pr-1">
             {NON_AUTO_THEMES.map((key) => {
               const theme = ARTICLE_WORKFLOW_THEME_MAP[key];
@@ -89,7 +89,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                       : "border-hairline-subtle hover:border-hairline"
                   }`}
                 >
-                  <span className="pointer-events-none block h-16 overflow-hidden rounded-md bg-white" aria-hidden>
+                  <span className="pointer-events-none block h-16 overflow-hidden rounded-md bg-surface" aria-hidden>
                     <span
                       className="block origin-top-left scale-[0.22]"
                       style={{ width: 360 }}
@@ -111,7 +111,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                   aria-label="主色"
                   value={effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary}
                   onChange={(event) => props.onPreviewThemeColor(event.target.value)}
-                  className="h-7 w-10 cursor-pointer rounded border border-hairline bg-white p-0.5"
+                  className="h-7 w-10 cursor-pointer rounded border border-hairline bg-surface p-0.5"
                 />
                 <span className="font-mono text-[11px] text-ink-tertiary">
                   {effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary}
@@ -128,7 +128,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                       aria-checked={effectiveGalleryMode === option.key}
                       onClick={() => props.onPreviewGalleryMode(option.key)}
                       className={`h-7 rounded-md px-2 text-xs font-semibold transition ${
-                        effectiveGalleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
+                        effectiveGalleryMode === option.key ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"
                       }`}
                     >
                       {option.label}

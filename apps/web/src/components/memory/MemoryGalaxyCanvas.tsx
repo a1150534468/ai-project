@@ -99,7 +99,7 @@ export default function MemoryGalaxyCanvas({
   })).filter((item) => item.count > 0);
 
   return (
-    <section className="relative flex min-h-0 flex-1 overflow-hidden rounded-[14px] border border-hairline bg-white">
+    <section className="relative flex min-h-0 flex-1 overflow-hidden rounded-[14px] border border-hairline bg-surface">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,102,204,0.06),transparent_48%)]" />
       <div
         className="absolute inset-0 opacity-60"
@@ -121,7 +121,7 @@ export default function MemoryGalaxyCanvas({
             return (
               <div
                 key={type}
-                className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/88 px-3 py-1.5 text-xs text-ink-secondary backdrop-blur"
+                className="inline-flex items-center gap-2 rounded-full border border-surface/80 bg-surface/90 px-3 py-1.5 text-xs text-ink-secondary backdrop-blur"
               >
                 <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
                 <span className="font-medium text-ink">{meta.label}</span>
@@ -131,7 +131,7 @@ export default function MemoryGalaxyCanvas({
           })}
         </div>
 
-        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/80 bg-white/88 p-1 backdrop-blur">
+        <div className="inline-flex w-fit items-center gap-2 rounded-full border border-surface/80 bg-surface/90 p-1 backdrop-blur">
           {ZOOM_LEVELS.map((level) => (
             <button
               key={level}
@@ -151,8 +151,8 @@ export default function MemoryGalaxyCanvas({
 
       <div ref={containerRef} className="relative min-h-[520px] flex-1">
         {loading ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85">
-            <div className="flex items-center gap-3 rounded-full border border-hairline-subtle bg-white px-4 py-3 text-sm text-ink-secondary shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-surface/85">
+            <div className="flex items-center gap-3 rounded-full border border-hairline-subtle bg-surface px-4 py-3 text-sm text-ink-secondary shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
               <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
               正在编织记忆星河...
             </div>
@@ -215,7 +215,7 @@ export default function MemoryGalaxyCanvas({
                     transform: `translate(-50%, -50%) scale(${scale})`,
                   }}
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white/78 text-base shadow-sm">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface/80 text-base shadow-sm">
                     <Icon icon="mdi:star-four-points-circle-outline" />
                   </div>
                   <p
@@ -227,7 +227,7 @@ export default function MemoryGalaxyCanvas({
                     {getMemoryTypeMeta(node.type).label}
                   </p>
                   {isHighlighted ? (
-                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-brand">
+                    <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-surface/80 px-2 py-0.5 text-[10px] font-semibold text-brand">
                       <Icon icon="mdi:magnify-scan" className="text-xs" />
                       命中
                     </span>

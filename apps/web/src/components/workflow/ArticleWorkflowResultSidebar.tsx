@@ -57,7 +57,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
   const hasProjectError = Boolean(props.project.error);
 
   return (
-    <section className="flex-none border-b border-hairline-subtle bg-white" aria-label="当前平台工具">
+    <section className="flex-none border-b border-hairline-subtle bg-surface" aria-label="当前平台工具">
       <div className="flex min-h-11 items-center justify-between gap-3 px-4 lg:px-5">
         <div className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
           <span className={`h-2 w-2 shrink-0 rounded-full ${failed ? "bg-red-500" : "bg-brand"}`} aria-hidden />
@@ -90,7 +90,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 </button>
               )}
               {imageMenuOpen && props.batchMissingProjectCount > 1 && (
-                <div className="absolute right-0 top-10 z-30 w-44 rounded-lg border border-hairline bg-white p-1 shadow-lg">
+                <div className="absolute right-0 top-10 z-30 w-44 rounded-lg border border-hairline bg-surface p-1 shadow-lg">
                   <button
                     type="button"
                     onClick={() => {
@@ -186,7 +186,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 value={props.rewriteInstruction}
                 onChange={(event) => props.onRewriteInstructionChange(event.target.value)}
                 rows={4}
-                className="mt-3 w-full resize-none rounded-lg border border-hairline bg-surface-subtle px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
+                className="mt-3 w-full resize-none rounded-lg border border-hairline bg-surface-subtle px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-surface"
                 placeholder="例如：开头更有代入感，整体语气更自然。"
               />
             </div>
@@ -202,7 +202,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                       onClick={() => props.onRewriteGenerationModeChange(item.key)}
                       className={`h-9 rounded-md text-xs font-semibold transition ${
                         props.rewriteGenerationMode === item.key
-                          ? "bg-white text-ink shadow-sm"
+                          ? "bg-surface text-ink shadow-sm"
                           : "text-ink-secondary"
                       }`}
                     >

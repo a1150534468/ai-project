@@ -11,7 +11,7 @@ interface TeamRecommendationPanelProps {
 export function TeamRecommendationPanel({ recommendation, isConfirming, onConfirm }: TeamRecommendationPanelProps) {
   if (!recommendation) return null;
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-5">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">等待确认</p>

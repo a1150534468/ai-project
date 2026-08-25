@@ -720,7 +720,7 @@ export default function App() {
       <Modal
         open={rechargePromptOpen}
         onClose={() => setRechargePromptOpen(false)}
-        className="w-[90vw] max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+        className="w-[90vw] max-w-sm rounded-2xl bg-surface p-6 shadow-xl"
       >
         <div className="flex flex-col items-center text-center">
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-2xl text-brand">

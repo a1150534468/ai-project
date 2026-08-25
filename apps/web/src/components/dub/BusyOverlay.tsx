@@ -23,7 +23,7 @@ export function BusyOverlay({ show, title, hints = [] }: BusyOverlayProps) {
   const hint = hints.length > 0 ? hints[tick % hints.length] : "";
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-white/75 backdrop-blur-[2px]">
+    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-surface/75 backdrop-blur-[2px]">
       <div className="flex flex-col items-center gap-3 px-6 text-center">
         <span className="relative flex h-12 w-12 items-center justify-center">
           <span className="absolute inset-0 animate-ping rounded-full bg-brand/25" aria-hidden />

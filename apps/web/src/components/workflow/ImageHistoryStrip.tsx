@@ -58,7 +58,7 @@ function formatTime(value: string): string {
 
 export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, action }: WorkflowHistoryStripProps) {
   return (
-    <section className="flex-none border-t border-hairline-subtle bg-white px-4 py-3 lg:px-6" aria-label={ariaLabel}>
+    <section className="flex-none border-t border-hairline-subtle bg-surface px-4 py-3 lg:px-6" aria-label={ariaLabel}>
       <div className="mb-3 flex min-h-8 items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-ink">最近生成{summary ? `（${summary}）` : ""}</h2>
         {action}

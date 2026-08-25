@@ -34,7 +34,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
 
   return (
     <>
-      <header className="flex flex-col gap-3 rounded-[14px] border border-hairline-subtle bg-white px-4 py-3 shadow-[0_12px_34px_rgba(15,23,42,0.04)] xl:flex-row xl:items-center xl:justify-between">
+      <header className="flex flex-col gap-3 rounded-[14px] border border-hairline-subtle bg-surface px-4 py-3 shadow-[0_12px_34px_rgba(15,23,42,0.04)] xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0">
           <p className="text-[12px] font-semibold text-brand-ink">项目工作台</p>
           <div className="mt-1 flex items-center gap-2">
@@ -74,7 +74,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
 
       <div className="overflow-x-auto pb-2 [scrollbar-width:thin]">
         <div className="grid min-w-[1244px] grid-cols-[390px_430px_minmax(400px,1fr)] items-start gap-3">
-          <aside className="min-w-0 rounded-[14px] border border-hairline-subtle bg-white p-4 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
+          <aside className="min-w-0 rounded-[14px] border border-hairline-subtle bg-surface p-4 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <p className="flex items-center gap-2 text-xs font-semibold text-brand-ink">
@@ -217,7 +217,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             </div>
           </aside>
 
-          <section className="min-w-0 rounded-[14px] border border-hairline-subtle bg-white p-4 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
+          <section className="min-w-0 rounded-[14px] border border-hairline-subtle bg-surface p-4 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
             <div className="mb-4">
               <p className="flex items-center gap-2 text-xs font-semibold text-brand-ink">
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">2</span>
@@ -321,7 +321,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <select
                           value={project.settings.narrationVoice}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, narrationVoice: event.target.value as LocalBusinessPromoSettings["narrationVoice"] } }))}
-                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-brand/40"
+                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-hairline bg-surface px-3 text-sm text-ink outline-none focus:border-brand/40"
                         >
                           {state.options.narrationVoices.map((voice) => (
                             <option key={voice.value} value={voice.value}>{voice.label}</option>
@@ -346,7 +346,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           value={project.settings.voiceDesignPrompt}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, voiceDesignPrompt: event.target.value } }))}
                           placeholder="例如：一位二十多岁的年轻女性，普通话自然清晰，音色温柔亲切。"
-                          className="mt-1.5 min-h-[96px] w-full resize-none rounded-[10px] border border-hairline bg-white px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
+                          className="mt-1.5 min-h-[96px] w-full resize-none rounded-[10px] border border-hairline bg-surface px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                         />
                       </label>
                       <label className="mt-3 block">
@@ -355,7 +355,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                           value={project.settings.voiceStylePrompt}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, voiceStylePrompt: event.target.value } }))}
                           placeholder="例如：语速自然可信，像面对面介绍服务。"
-                          className="mt-1.5 min-h-[84px] w-full resize-none rounded-[10px] border border-hairline bg-white px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
+                          className="mt-1.5 min-h-[84px] w-full resize-none rounded-[10px] border border-hairline bg-surface px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand/40"
                         />
                       </label>
                     </div>
@@ -468,7 +468,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <select
                           value={project.settings.musicPreset}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, musicPreset: event.target.value as LocalBusinessPromoSettings["musicPreset"] } }))}
-                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-brand/40"
+                          className="h-10 min-w-0 flex-1 rounded-[10px] border border-hairline bg-surface px-3 text-sm text-ink outline-none focus:border-brand/40"
                         >
                           {state.options.musicPresets.filter((preset) => preset.value !== "no-bgm").map((preset) => (
                             <option key={preset.value} value={preset.value}>{preset.label}</option>
@@ -573,7 +573,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             </button>
           </section>
 
-          <section className="min-w-0 rounded-[14px] border border-hairline-subtle bg-white p-4 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
+          <section className="min-w-0 rounded-[14px] border border-hairline-subtle bg-surface p-4 shadow-[0_12px_34px_rgba(15,23,42,0.04)]">
             <div className="mb-4">
               <p className="flex items-center gap-2 text-xs font-semibold text-brand-ink">
                 <span className="grid h-5 w-5 place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand-ink">3</span>
@@ -613,7 +613,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       </div>
                       <p className="text-[12px] font-semibold text-ink">{latestRun.progressPercent}%</p>
                     </div>
-                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
                       <div
                         className="h-full rounded-full bg-brand transition-[width]"
                         style={{ width: `${Math.max(0, Math.min(100, latestRun.progressPercent))}%` }}

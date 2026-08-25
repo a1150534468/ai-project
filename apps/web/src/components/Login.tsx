@@ -61,7 +61,7 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
         </div>
 
         {/* Login Card */}
-        <div className="auth-card bg-white rounded-[18px] p-7 sm:p-8 border border-gray-200">
+        <div className="auth-card bg-surface rounded-[18px] p-7 sm:p-8 border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">登录账户</h2>
 
           {/* Input Fields */}
@@ -82,7 +82,7 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
                   onChange={(e) => setIdentifier(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                   placeholder="输入用户名或 UID"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
@@ -103,7 +103,7 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleLogin()}
                   placeholder="输入密码"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>

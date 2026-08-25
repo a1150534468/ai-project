@@ -36,7 +36,7 @@ export function RechargeTab(p: RechargeTabProps) {
   return (
     <div>
       {/* 精简余额条 */}
-      <div className="bg-white rounded-2xl p-4 mb-5 border border-gray-50 flex flex-wrap items-center gap-x-8 gap-y-3">
+      <div className="bg-surface rounded-2xl p-4 mb-5 border border-gray-50 flex flex-wrap items-center gap-x-8 gap-y-3">
         <div>
           <span className="text-[11px] text-gray-400 font-medium">算力点余额</span>
           <span className="ml-2 text-lg font-extrabold text-ink">{total === null ? "同步中" : total.toLocaleString()}</span>
@@ -53,7 +53,7 @@ export function RechargeTab(p: RechargeTabProps) {
               type="button"
               onClick={() => p.setPaymentMethod(method)}
               disabled={p.loading}
-              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${p.paymentMethod === method ? "bg-white text-brand-ink shadow-sm" : "text-gray-500 "}`}
+              className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${p.paymentMethod === method ? "bg-surface text-brand-ink shadow-sm" : "text-gray-500 "}`}
             >
               <Icon icon={p.paymentMethod === method ? (method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill") : (method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill")} className="text-lg" />
               {paymentMethodLabel(method)}
@@ -72,7 +72,7 @@ export function RechargeTab(p: RechargeTabProps) {
             </StaggerItem>
           ))}
           {p.packages.length === 0 && (
-            <div className="sm:col-span-2 xl:col-span-4 bg-white rounded-2xl p-6 border border-dashed border-gray-200 text-sm text-gray-500">
+            <div className="sm:col-span-2 xl:col-span-4 bg-surface rounded-2xl p-6 border border-dashed border-gray-200 text-sm text-gray-500">
               后台暂未配置算力点快速充值套餐，可使用下方算力点自定义充值。
             </div>
           )}
@@ -81,7 +81,7 @@ export function RechargeTab(p: RechargeTabProps) {
 
       {/* 自定义充值 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-2xl p-6 border border-gray-50">
+        <div className="bg-surface rounded-2xl p-6 border border-gray-50">
           <h3 className="text-base font-semibold text-ink mb-4">算力点自定义充值</h3>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
@@ -97,7 +97,7 @@ export function RechargeTab(p: RechargeTabProps) {
             <span className="px-2.5 py-1 rounded-full bg-brand-soft text-brand-ink font-medium">预计到账 {p.customPreviewPoints.toLocaleString()} 算力点</span>
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-6 border border-gray-50">
+        <div className="bg-surface rounded-2xl p-6 border border-gray-50">
           <h3 className="text-base font-semibold text-ink mb-4">视频点自定义充值</h3>
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1 relative">
@@ -116,7 +116,7 @@ export function RechargeTab(p: RechargeTabProps) {
       </div>
 
       {/* 兑换码 */}
-      <div className="bg-white rounded-2xl p-6 mb-6 border border-gray-50">
+      <div className="bg-surface rounded-2xl p-6 mb-6 border border-gray-50">
         <h3 className="text-base font-semibold text-ink mb-4">兑换码</h3>
         <div className="flex gap-3">
           <input type="text" value={p.redeemCode} onChange={(e) => p.setRedeemCode(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") p.onRedeem(); }}
@@ -126,7 +126,7 @@ export function RechargeTab(p: RechargeTabProps) {
       </div>
 
       {/* 消耗明细 */}
-      <div className="bg-white rounded-2xl p-6 border border-gray-50">
+      <div className="bg-surface rounded-2xl p-6 border border-gray-50">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div>
             <h3 className="text-base font-semibold text-ink">算力点消耗</h3>

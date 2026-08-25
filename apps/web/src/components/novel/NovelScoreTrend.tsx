@@ -23,7 +23,7 @@ export function NovelScoreTrend({ rows, compact = false }: { readonly rows: read
         const quality = percent(chapter.qualityScore);
         return <div key={chapter.chapterIndex} className="relative flex h-full min-w-7 flex-1 flex-col justify-end" title={`第${chapter.chapterIndex}章 · 张力${tension} · 质量${quality}`}>
           <div className="relative flex min-h-0 flex-1 items-end justify-center">
-            <span className="absolute z-10 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-white bg-brand shadow" style={{ bottom: `calc(${quality}% - 5px)`, left: "50%" }} />
+            <span className="absolute z-10 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-brand shadow" style={{ bottom: `calc(${quality}% - 5px)`, left: "50%" }} />
             <div className="w-full max-w-9 rounded-t bg-brand/75" style={{ height: `${tension}%` }} />
           </div>
           <span className="h-5 pt-1 text-center text-[9px] text-ink-tertiary">{chapter.chapterIndex}</span>

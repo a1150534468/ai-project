@@ -397,7 +397,7 @@ export default function Chat({
           e.currentTarget.value = "";
         }}
       />
-      <div className="rounded-2xl border border-gray-200 bg-white shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all focus-within:border-brand/40 focus-within:shadow-[0_12px_32px_rgba(15,23,42,0.09)]">
+      <div className="rounded-2xl border border-gray-200 bg-surface shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all focus-within:border-brand/40 focus-within:shadow-[0_12px_32px_rgba(15,23,42,0.09)]">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -429,10 +429,10 @@ export default function Chat({
                   <img
                     src={attachment.previewUrl}
                     alt=""
-                    className="w-8 h-8 rounded-lg object-cover bg-white flex-none"
+                    className="w-8 h-8 rounded-lg object-cover bg-surface flex-none"
                   />
                 ) : (
-                  <span className="w-8 h-8 rounded-lg bg-white text-gray-500 flex items-center justify-center flex-none">
+                  <span className="w-8 h-8 rounded-lg bg-surface text-gray-500 flex items-center justify-center flex-none">
                     <Icon icon="mdi:file-document-outline" className="text-lg" aria-hidden />
                   </span>
                 )}
@@ -470,7 +470,7 @@ export default function Chat({
               className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
                 attachAllOwn || selectedKbIds.length > 0
                   ? "bg-brand-soft border-brand/20 text-brand-ink"
-                  : "bg-white border-gray-200 text-gray-600 "
+                  : "bg-surface border-gray-200 text-gray-600 "
               }`}
             >
               <Icon icon="mdi:database-search-outline" className="text-base flex-none" aria-hidden />
@@ -482,7 +482,7 @@ export default function Chat({
               className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
                 selectedToolIds.length > 0
                   ? "bg-brand-soft border-brand/30 text-brand-ink"
-                  : "bg-white border-gray-200 text-gray-600 "
+                  : "bg-surface border-gray-200 text-gray-600 "
               }`}
             >
               <Icon icon="mdi:wrench-outline" className="text-base flex-none" aria-hidden />
@@ -503,7 +503,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={() => setModelPickerOpen(true)}
-                className="h-9 max-w-[calc(100vw-10rem)] px-3 rounded-xl border border-gray-200 bg-white text-xs font-medium text-gray-700 flex items-center gap-2 transition-colors sm:max-w-48"
+                className="h-9 max-w-[calc(100vw-10rem)] px-3 rounded-xl border border-gray-200 bg-surface text-xs font-medium text-gray-700 flex items-center gap-2 transition-colors sm:max-w-48"
                 aria-label="选择模型"
               >
                 <Icon icon="mdi:chip" className="text-base text-gray-500 flex-none" aria-hidden />
@@ -511,7 +511,7 @@ export default function Chat({
                 <Icon icon="mdi:chevron-down" className="text-base text-gray-400 flex-none" aria-hidden />
               </button>
               {modelPickerOpen && (
-                <div className="absolute bottom-full right-0 z-50 mb-2 w-72 rounded-xl bg-white border border-gray-100 shadow-xl overflow-hidden">
+                <div className="absolute bottom-full right-0 z-50 mb-2 w-72 rounded-xl bg-surface border border-gray-100 shadow-xl overflow-hidden">
                   <div className="px-4 py-3 border-b border-gray-100">
                     <h4 className="text-sm font-bold text-gray-900">选择模型</h4>
                     <p className="text-xs text-gray-400 mt-0.5">切换后下一条消息生效</p>
@@ -667,7 +667,7 @@ export default function Chat({
     toolActivities.length > 0 && index === messages.length - 1 && message.role === "assistant";
 
   return (
-    <div className="flex flex-col h-full bg-white">
+    <div className="flex flex-col h-full bg-surface">
       {/* Header */}
       <div className="h-16 px-6 border-b border-gray-100 flex items-center justify-between flex-none">
         <div className="flex items-center min-w-0 gap-3">
@@ -764,7 +764,7 @@ export default function Chat({
                           citation.docs.map((doc, didx) => (
                             <div
                               key={`${cidx}-${didx}`}
-                              className="px-2 py-1 bg-white border border-gray-200 rounded-full text-[10px] text-gray-600 flex items-center space-x-1"
+                              className="px-2 py-1 bg-surface border border-gray-200 rounded-full text-[10px] text-gray-600 flex items-center space-x-1"
                             >
                               <Icon icon="mdi:file-document" className="text-sm" />
                               <span>引用 {doc.docName}#{doc.ordinal}</span>
@@ -802,7 +802,7 @@ export default function Chat({
 
       {/* Input */}
       {messages.length > 0 && (
-        <div className="border-t border-gray-100 bg-white px-6 py-5 flex-none">
+        <div className="border-t border-gray-100 bg-surface px-6 py-5 flex-none">
           {(error || attachmentError) && (
             <div className="mx-auto mb-3 max-w-5xl p-3 bg-red-50 text-red-700 text-sm rounded-lg">
               {error || attachmentError}
@@ -818,7 +818,7 @@ export default function Chat({
           onClick={() => setToolPickerOpen(false)}
         >
           <div
-            className="w-full max-w-2xl rounded-xl bg-white border border-gray-100 shadow-xl"
+            className="w-full max-w-2xl rounded-xl bg-surface border border-gray-100 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
@@ -939,7 +939,7 @@ export default function Chat({
           onClick={() => setKbPickerOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl bg-white border border-gray-100 shadow-xl"
+            className="w-full max-w-md rounded-xl bg-surface border border-gray-100 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -976,7 +976,7 @@ export default function Chat({
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span className="text-sm font-semibold">全库智能搜索</span>
-                    <span className="px-2 py-0.5 rounded-full bg-white/70 text-[10px] text-brand-ink border border-brand/10">
+                    <span className="px-2 py-0.5 rounded-full bg-surface/70 text-[10px] text-brand-ink border border-brand/10">
                       仅我的库
                     </span>
                   </span>

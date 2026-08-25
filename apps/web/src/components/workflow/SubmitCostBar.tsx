@@ -25,7 +25,7 @@ export interface SubmitCostBarProps {
 /** 三个生图工作台共用的 sticky 底部「预计消耗 + 提交」栏。 */
 export function SubmitCostBar(props: SubmitCostBarProps) {
   return (
-    <div className="sticky bottom-0 z-10 border-t border-hairline-subtle bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
+    <div className="sticky bottom-0 z-10 border-t border-hairline-subtle bg-surface/95 px-4 py-3 backdrop-blur lg:px-5">
       <div className="mb-2 flex min-h-5 items-center justify-between gap-3 text-xs font-semibold text-ink-secondary">
         <span>{props.costLabel ?? "预计消耗"}</span>
         <span className="inline-flex items-center gap-1 text-ink">

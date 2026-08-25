@@ -91,7 +91,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
   };
 
   return (
-    <section className="flex h-full min-h-[420px] flex-col bg-white px-4 py-4 lg:px-6" aria-label="当前生成结果">
+    <section className="flex h-full min-h-[420px] flex-col bg-surface px-4 py-4 lg:px-6" aria-label="当前生成结果">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-semibold text-ink-secondary">当前结果</p>

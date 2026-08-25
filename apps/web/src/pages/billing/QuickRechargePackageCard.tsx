@@ -26,7 +26,7 @@ export function QuickRechargePackageCard({
 
   return (
     <div
-      className={`bg-white rounded-2xl p-5 border transition-all cursor-pointer ${
+      className={`bg-surface rounded-2xl p-5 border transition-all cursor-pointer ${
         recommended ? "border-brand border-2 shadow-sm relative" : "border-gray-50 "
       }`}
     >

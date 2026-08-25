@@ -73,16 +73,16 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
   };
 
   return (
-    <section className="rounded-lg border border-gray-100 bg-white p-4">
+    <section className="rounded-lg border border-gray-100 bg-surface p-4">
       <div className="relative">
         {edges.left && (
           <>
-            <div className="pointer-events-none absolute inset-y-0 left-0 z-[5] w-12 rounded-l-lg bg-gradient-to-r from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 left-0 z-[5] w-12 rounded-l-lg bg-gradient-to-r from-surface to-transparent" />
             <button
               type="button"
               aria-label="向左滚动分类"
               onClick={() => scrollByStep(-1)}
-              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition "
+              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-surface text-gray-600 shadow-sm transition "
             >
               <Icon icon="mdi:chevron-left" className="text-lg" aria-hidden />
             </button>
@@ -118,12 +118,12 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
         </div>
         {edges.right && (
           <>
-            <div className="pointer-events-none absolute inset-y-0 right-0 z-[5] w-12 rounded-r-lg bg-gradient-to-l from-white to-transparent" />
+            <div className="pointer-events-none absolute inset-y-0 right-0 z-[5] w-12 rounded-r-lg bg-gradient-to-l from-surface to-transparent" />
             <button
               type="button"
               aria-label="向右滚动分类"
               onClick={() => scrollByStep(1)}
-              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-600 shadow-sm transition "
+              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-surface text-gray-600 shadow-sm transition "
             >
               <Icon icon="mdi:chevron-right" className="text-lg" aria-hidden />
             </button>
@@ -244,7 +244,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
   return (
     <div className="min-h-full bg-surface-muted px-4 py-5 lg:px-8 lg:py-7">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <section className="rounded-lg border border-gray-100 bg-white p-5">
+        <section className="rounded-lg border border-gray-100 bg-surface p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
@@ -262,7 +262,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-200 bg-white pl-10 pr-3 text-sm text-gray-800 outline-none transition focus:border-brand/50 focus:ring-2 focus:ring-brand/10"
+                className="h-11 w-full rounded-lg border border-gray-200 bg-surface pl-10 pr-3 text-sm text-gray-800 outline-none transition focus:border-brand/50 focus:ring-2 focus:ring-brand/10"
                 placeholder="搜索当前分类的 skill"
               />
             </div>
@@ -328,7 +328,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                 return (
                   <StaggerItem key={key}>
                     <motion.article
-                      className="flex min-h-52 flex-col rounded-lg border border-gray-100 bg-white p-4 shadow-sm"
+                      className="flex min-h-52 flex-col rounded-lg border border-gray-100 bg-surface p-4 shadow-sm"
                       whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(15, 23, 42, 0.15)" }}
                       transition={{ duration: 0.3, type: "spring", stiffness: 260, damping: 32 }}
                     >
@@ -388,7 +388,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
               })}
             </Stagger>
           ) : (
-            <div className="flex min-h-[28rem] flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-white px-6 text-center">
+            <div className="flex min-h-[28rem] flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-surface px-6 text-center">
               <Icon icon={skillsLoading || pageLoading ? "mdi:loading" : "mdi:database-search-outline"} className={`text-3xl text-gray-300 ${skillsLoading || pageLoading ? "animate-spin" : ""}`} aria-hidden />
               <p className="mt-3 text-sm font-semibold text-gray-900">
                 {skillsLoading || pageLoading ? "正在加载" : "暂无匹配 skill"}

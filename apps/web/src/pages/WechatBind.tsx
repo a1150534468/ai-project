@@ -188,7 +188,7 @@ export default function WechatBind({ token }: WechatBindProps) {
   if (!canBind) {
     return (
       <div className="flex flex-col items-center justify-center min-h-full p-8 bg-surface-muted">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-sm border border-gray-100">
+        <div className="bg-surface rounded-2xl p-8 max-w-md w-full text-center shadow-sm border border-gray-100">
           <Icon icon="mdi:information-outline" className="text-4xl text-gray-400 mb-4 mx-auto" />
           <h2 className="text-lg font-semibold text-gray-900 mb-2">请在桌面客户端使用</h2>
           <p className="text-sm text-gray-600">
@@ -220,7 +220,7 @@ export default function WechatBind({ token }: WechatBindProps) {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* QR Code Section */}
           <div className="lg:col-span-2">
-            <div className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm">
+            <div className="bg-surface rounded-2xl p-8 border border-gray-100 shadow-sm">
               <h2 className="text-lg font-semibold text-gray-900 mb-6">生成二维码</h2>
 
               {qrData ? (
@@ -352,7 +352,7 @@ export default function WechatBind({ token }: WechatBindProps) {
 
           {/* Bindings List */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm h-fit">
+            <div className="bg-surface rounded-2xl p-6 border border-gray-100 shadow-sm h-fit">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">已绑定列表</h3>
 
               {bindings.length > 0 ? (

@@ -28,7 +28,7 @@ export function TeamCardGrid({
 }: TeamCardGridProps) {
   const gridClassName = variant === "column" ? "mt-4 grid gap-3" : "mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3";
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-ink">我的 Agent 团队</h2>
         <span className="text-xs text-ink-secondary">{teams.length} 个团队</span>
@@ -42,7 +42,7 @@ export function TeamCardGrid({
             <StaggerItem key={team.id}>
               <motion.article
                 className={`rounded-[10px] border p-4 transition ${
-                  selected ? "border-brand/50 bg-brand-soft" : "border-hairline-subtle bg-white"
+                  selected ? "border-brand/50 bg-brand-soft" : "border-hairline-subtle bg-surface"
                 }`}
                 whileHover={!selected ? { y: -5 } : undefined}
                 transition={spring.snappy}
@@ -55,7 +55,7 @@ export function TeamCardGrid({
                 >
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="truncate text-sm font-semibold text-ink">{team.name}</h3>
-                    <span className="rounded-full bg-white px-2 py-1 text-[11px] font-medium text-brand-ink">{team.members.length} 人</span>
+                    <span className="rounded-full bg-surface px-2 py-1 text-[11px] font-medium text-brand-ink">{team.members.length} 人</span>
                   </div>
                   <p className="mt-2 line-clamp-2 min-h-[40px] text-xs leading-5 text-ink-secondary">{team.description || "暂无描述"}</p>
                   <div className="mt-4 flex -space-x-2">
@@ -63,7 +63,7 @@ export function TeamCardGrid({
                       <span
                         key={member.name}
                         title={member.name}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-surface-muted text-ink-secondary"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface bg-surface-muted text-ink-secondary"
                       >
                         <Icon icon="mdi:robot-outline" className="text-base" aria-hidden />
                       </span>
@@ -76,7 +76,7 @@ export function TeamCardGrid({
                   aria-label={`删除团队 ${team.name}`}
                   disabled={deleting}
                   onClick={() => onRequestDelete(team.id)}
-                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-red-100 bg-white text-red-600 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] border border-red-100 bg-surface text-red-600 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-200 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className="text-base" aria-hidden />
                   <span className="sr-only">删除团队</span>
@@ -90,7 +90,7 @@ export function TeamCardGrid({
                       type="button"
                       onClick={onCancelDelete}
                       disabled={deleting}
-                      className="rounded-[8px] border border-hairline bg-white px-3 py-1.5 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-[8px] border border-hairline bg-surface px-3 py-1.5 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       取消
                     </button>

@@ -39,15 +39,15 @@ export function ImageCompareView(props: ImageCompareViewProps) {
   const mobileImage = mobileVersion === "original" ? props.originalImage : props.newImage;
 
   return (
-    <section className="flex h-full min-h-[420px] flex-col bg-white px-4 py-4 lg:px-6" aria-label="版本对比">
+    <section className="flex h-full min-h-[420px] flex-col bg-surface px-4 py-4 lg:px-6" aria-label="版本对比">
       <div className="mb-4">
         <p className="text-xs font-semibold text-ink-secondary">版本对比</p>
         <h2 className="mt-1 text-base font-semibold text-ink">选择更符合预期的结果</h2>
       </div>
 
       <div className="mb-3 grid grid-cols-2 rounded-lg bg-surface-muted p-1 md:hidden">
-        <button type="button" onClick={() => setMobileVersion("original")} className={`h-9 rounded-lg text-sm font-semibold ${mobileVersion === "original" ? "bg-white shadow-sm" : "text-ink-secondary"}`}>原图</button>
-        <button type="button" onClick={() => setMobileVersion("new")} className={`h-9 rounded-lg text-sm font-semibold ${mobileVersion === "new" ? "bg-white shadow-sm" : "text-ink-secondary"}`}>新版本</button>
+        <button type="button" onClick={() => setMobileVersion("original")} className={`h-9 rounded-lg text-sm font-semibold ${mobileVersion === "original" ? "bg-surface shadow-sm" : "text-ink-secondary"}`}>原图</button>
+        <button type="button" onClick={() => setMobileVersion("new")} className={`h-9 rounded-lg text-sm font-semibold ${mobileVersion === "new" ? "bg-surface shadow-sm" : "text-ink-secondary"}`}>新版本</button>
       </div>
       <div className="md:hidden">
         <ComparePane label={mobileVersion === "original" ? "V1 原图" : "V2 新版本"} image={mobileImage} missingText="原始图片已不在最近历史中" />

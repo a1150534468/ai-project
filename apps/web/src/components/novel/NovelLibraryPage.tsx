@@ -54,7 +54,7 @@ export function NovelLibraryPage({
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">长篇叙事工作台</h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">从故事种子、世界与人物，到章节生产、叙事治理和全托管运行，都在同一个作品空间完成。</p>
         </div>
-        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-hairline-subtle bg-white p-2 text-center shadow-sm">
+        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-hairline-subtle bg-surface p-2 text-center shadow-sm">
           <div className="px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.length}</p><p className="text-[10px] text-ink-tertiary">作品</p></div>
           <div className="border-x border-hairline-subtle px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.filter((project) => project.status === "active").length}</p><p className="text-[10px] text-ink-tertiary">创作中</p></div>
           <div className="px-3 py-1"><p className="text-lg font-semibold text-brand-ink">AI</p><p className="text-[10px] text-ink-tertiary">协同</p></div>
@@ -68,23 +68,23 @@ export function NovelLibraryPage({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3"><h2 className="text-xl font-semibold text-ink">我的书目</h2><span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-secondary">{visible.length} 本</span></div>
           <div className="flex flex-wrap gap-2">
-            <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-hairline bg-white px-3 text-sm text-ink-secondary shadow-sm transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
-            {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-600">删除选中 ({selected.length})</button>}
+            <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-hairline bg-surface px-3 text-sm text-ink-secondary shadow-sm transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
+            {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-red-200 bg-surface px-3 text-xs font-semibold text-red-600">删除选中 ({selected.length})</button>}
           </div>
         </div>
 
-        {loading && <div className="grid min-h-52 place-items-center rounded-2xl border border-dashed border-hairline bg-white"><p className="flex items-center gap-2 text-sm font-semibold text-ink-secondary"><Icon icon="mdi:loading" className="animate-spin text-xl text-brand-ink" />加载书目中</p></div>}
+        {loading && <div className="grid min-h-52 place-items-center rounded-2xl border border-dashed border-hairline bg-surface"><p className="flex items-center gap-2 text-sm font-semibold text-ink-secondary"><Icon icon="mdi:loading" className="animate-spin text-xl text-brand-ink" />加载书目中</p></div>}
 
-        {!loading && projects.length === 0 && <div className="grid min-h-60 place-items-center rounded-2xl border border-dashed border-hairline bg-white px-6 text-center"><div><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink"><Icon icon="mdi:book-plus-outline" /></div><h3 className="mt-4 text-base font-semibold text-ink">还没有书目</h3><p className="mt-2 text-sm text-ink-tertiary">在上方写下故事创意，创建第一本书。</p></div></div>}
+        {!loading && projects.length === 0 && <div className="grid min-h-60 place-items-center rounded-2xl border border-dashed border-hairline bg-surface px-6 text-center"><div><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink"><Icon icon="mdi:book-plus-outline" /></div><h3 className="mt-4 text-base font-semibold text-ink">还没有书目</h3><p className="mt-2 text-sm text-ink-tertiary">在上方写下故事创意，创建第一本书。</p></div></div>}
 
-        {!loading && projects.length > 0 && visible.length === 0 && <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-hairline bg-white text-center"><div><Icon icon="mdi:book-search-outline" className="mx-auto text-4xl text-ink-tertiary" /><p className="mt-2 text-sm text-ink-tertiary">没有找到匹配“{query}”的书目</p><button type="button" onClick={() => setQuery("")} className="mt-3 text-xs font-semibold text-brand-ink">清除搜索</button></div></div>}
+        {!loading && projects.length > 0 && visible.length === 0 && <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-hairline bg-surface text-center"><div><Icon icon="mdi:book-search-outline" className="mx-auto text-4xl text-ink-tertiary" /><p className="mt-2 text-sm text-ink-tertiary">没有找到匹配“{query}”的书目</p><button type="button" onClick={() => setQuery("")} className="mt-3 text-xs font-semibold text-brand-ink">清除搜索</button></div></div>}
 
         {!loading && visible.length > 0 && (
           <div className="flex snap-x gap-4 overflow-x-auto pb-3 [scrollbar-width:thin]">
             {visible.map((project, index) => {
               const checked = selected.includes(project.id);
               return (
-                <article key={project.id} className={`group relative grid min-h-[218px] w-[310px] flex-none snap-start overflow-hidden rounded-2xl border bg-white shadow-sm transition ${checked ? "border-brand ring-2 ring-brand/10" : "border-hairline-subtle "}`}>
+                <article key={project.id} className={`group relative grid min-h-[218px] w-[310px] flex-none snap-start overflow-hidden rounded-2xl border bg-surface shadow-sm transition ${checked ? "border-brand ring-2 ring-brand/10" : "border-hairline-subtle "}`}>
                   <div className={`h-2 ${index % 3 === 0 ? "bg-brand" : index % 3 === 1 ? "bg-[#557b95]" : "bg-[#8a7297]"}`} />
                   <div className="grid content-between p-5">
                     <div>

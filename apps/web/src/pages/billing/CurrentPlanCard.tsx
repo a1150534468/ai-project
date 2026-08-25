@@ -25,7 +25,7 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
   const usedPct = period && period.granted > 0 ? Math.min(100, Math.round((period.used / period.granted) * 100)) : 0;
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-gray-50 mb-6">
+    <div className="bg-surface rounded-2xl p-5 border border-gray-50 mb-6">
       <div className="flex flex-col lg:flex-row gap-5">
         {/* 品牌块 */}
         <div className="rounded-2xl bg-surface-inverse p-5 text-ink-inverse flex-none w-full lg:w-[260px]">

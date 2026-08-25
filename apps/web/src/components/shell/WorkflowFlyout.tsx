@@ -12,7 +12,7 @@ interface WorkflowFlyoutProps {
 export function WorkflowFlyout({ items, isActive, onSelect }: WorkflowFlyoutProps) {
   const reduce = useReducedMotion();
   return (
-    <div className="min-w-[152px] rounded-xl border border-gray-100 bg-white p-1.5 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
+    <div className="min-w-[152px] rounded-xl border border-gray-100 bg-surface p-1.5 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
       <p className="px-2 pb-1.5 pt-1 text-[10px] font-medium uppercase tracking-wide text-gray-400">工作流</p>
       {items.map((sub, idx) => {
         const active = isActive(sub);

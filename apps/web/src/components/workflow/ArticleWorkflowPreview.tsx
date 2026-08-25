@@ -37,7 +37,7 @@ export function ArticleWorkflowPreviewScaleToggle(props: {
           aria-label={option.label}
           onClick={() => props.onChange(option.key)}
           className={`flex h-8 w-10 items-center justify-center rounded-md transition ${
-            props.scale === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
+            props.scale === option.key ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"
           }`}
         >
           <Icon icon={option.icon} className="text-base" aria-hidden />
@@ -73,7 +73,7 @@ export function ArticleWorkflowPreview({
         <ArticleWorkflowPreviewScaleToggle scale={scale} onChange={setScale} />
       </div>
       <div
-        className={`mx-auto bg-white ${previewScaleWidthClass(scale)} ${
+        className={`mx-auto bg-surface ${previewScaleWidthClass(scale)} ${
           mobile ? "overflow-hidden rounded-[32px] border-[8px] border-ink px-4 py-4" : "px-5 py-6"
         }`}
       >

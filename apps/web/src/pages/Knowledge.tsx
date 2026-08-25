@@ -358,7 +358,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
         <h1 className="text-2xl font-bold text-gray-900">知识库</h1>
         <button
           onClick={() => onViewChange("chat")}
-          className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg "
+          className="px-4 py-2 text-sm font-medium text-gray-700 bg-surface border border-gray-200 rounded-lg "
         >
           返回对话
         </button>
@@ -413,13 +413,13 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                 placeholder="知识库名称"
                 value={kbNewName}
                 onChange={(e) => setKbNewName(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 text-sm placeholder:text-gray-400"
+                className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 text-sm placeholder:text-gray-400"
               />
               <textarea
                 placeholder="描述（可选）"
                 value={kbNewDescription}
                 onChange={(e) => setKbNewDescription(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 text-sm placeholder:text-gray-400 resize-none"
+                className="w-full px-4 py-2.5 bg-surface border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand/20 text-sm placeholder:text-gray-400 resize-none"
                 rows={3}
               />
               <RippleButton
@@ -456,7 +456,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                     className={`p-4 rounded-lg border cursor-pointer transition-all ${
                       selectedKbId === kb.id
                         ? "bg-brand-soft border-brand-soft"
-                        : "bg-white border-gray-200 "
+                        : "bg-surface border-gray-200 "
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
@@ -517,7 +517,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                     className={`p-4 rounded-lg border cursor-pointer transition-all ${
                       selectedKbId === kb.id
                         ? "bg-brand-soft border-brand-soft"
-                        : "bg-white border-gray-200 "
+                        : "bg-surface border-gray-200 "
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -557,7 +557,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                 {!isOfficialKb && !isSystemKb && (
                   <div className="pt-4 space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <label className="block rounded-lg border border-gray-200 bg-white p-4 text-sm">
+                      <label className="block rounded-lg border border-gray-200 bg-surface p-4 text-sm">
                         <span className="mb-2 flex items-center gap-2 font-semibold text-gray-800">
                           <Icon icon="mdi:file-upload-outline" className="text-lg text-brand" aria-hidden />
                           批量选择文件
@@ -572,7 +572,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                           disabled={uploadingKbFiles}
                         />
                       </label>
-                      <label className="block rounded-lg border border-gray-200 bg-white p-4 text-sm">
+                      <label className="block rounded-lg border border-gray-200 bg-surface p-4 text-sm">
                         <span className="mb-2 flex items-center gap-2 font-semibold text-gray-800">
                           <Icon icon="mdi:folder-upload-outline" className="text-lg text-brand" aria-hidden />
                           一次选择文件夹
@@ -689,7 +689,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                               </div>
                               <button
                                 onClick={() => selectedKbId && handleDeleteDocument(selectedKbId, doc.id)}
-                                className="inline-flex flex-none items-center gap-1 rounded-lg border border-red-100 bg-white px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors"
+                                className="inline-flex flex-none items-center gap-1 rounded-lg border border-red-100 bg-surface px-2.5 py-1.5 text-xs font-medium text-red-600 transition-colors"
                                 title="删除文档"
                               >
                                 <Icon icon="mdi:trash-outline" className="text-base" aria-hidden />
@@ -698,7 +698,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                             </div>
 
                             {doc.sourceModule === "codex_pet" && projectId && runId && (
-                              <div className="rounded-lg border border-brand/10 bg-white p-3">
+                              <div className="rounded-lg border border-brand/10 bg-surface p-3">
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                   {petPreviewUrl ? (
                                     <img src={petPreviewUrl} alt={`${doc.name} 桌宠预览`} className="h-24 w-24 rounded-lg border border-gray-100 bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:16px_16px] object-contain [image-rendering:auto]" />

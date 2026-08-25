@@ -253,7 +253,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             <p className="mt-2 text-slate-600">检查您的报告生成配置</p>
 
             <div className="mt-8 space-y-6">
-              <div className="rounded-xl border border-slate-200 bg-white p-6">
+              <div className="rounded-xl border border-slate-200 bg-surface p-6">
                 <h3 className="font-semibold text-slate-900">选择的模型</h3>
                 <div className="mt-2 flex items-center gap-2">
                   <Icon icon="mdi:cube-outline" className="text-brand" />
@@ -354,7 +354,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             title="report-preview"
             src={downloadUrl}
             sandbox="allow-scripts"
-            className="w-full h-[70vh] border border-slate-200 rounded-xl bg-white"
+            className="w-full h-[70vh] border border-slate-200 rounded-xl bg-surface"
           />
         </div>
       </div>
@@ -379,7 +379,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
           <div className="space-y-6">
             {/* 文件选择 */}
-            <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-8">
+            <div className="rounded-xl border-2 border-dashed border-slate-300 bg-surface p-8">
               <label className="flex flex-col items-center gap-4 cursor-pointer">
                 <Icon icon="mdi:cloud-upload-outline" className="text-3xl text-brand" />
                 <div className="text-center">
@@ -413,7 +413,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             <div className="relative">
               <div className="absolute inset-x-0 top-1/2 border-t border-slate-300" />
               <div className="relative flex justify-center">
-                <span className="bg-white px-2 text-sm font-medium text-slate-500">或者</span>
+                <span className="bg-surface px-2 text-sm font-medium text-slate-500">或者</span>
               </div>
             </div>
 
@@ -445,7 +445,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                       className={
                         active
                           ? "rounded-full border border-brand bg-brand/10 px-4 py-2 text-sm font-medium text-brand transition-colors"
-                          : "rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-600 transition-colors"
+                          : "rounded-full border border-slate-300 bg-surface px-4 py-2 text-sm text-slate-600 transition-colors"
                       }
                     >
                       {active && <Icon icon="mdi:check" className="inline-block mr-1 -mt-0.5" />}
@@ -463,7 +463,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.currentTarget.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand bg-white cursor-pointer"
+                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand bg-surface cursor-pointer"
               >
                 {models.map((m) => (
                   <option key={m.model} value={m.model}>

@@ -114,14 +114,14 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
         aria-label={ariaLabel}
         aria-expanded={open}
         onClick={toggle}
-        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-ink" : "border-hairline-subtle "}`}
+        className={`flex w-full items-center gap-2 rounded-[10px] border bg-surface text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-ink" : "border-hairline-subtle "}`}
       >
         {!compact && <span className="text-xs text-ink-tertiary">{ariaLabel}</span>}
         <span className={`truncate text-sm font-medium text-ink ${compact ? "" : "ml-auto"}`}>{current?.label ?? value}</span>
         <Icon icon="mdi:chevron-down" className={`shrink-0 text-base text-ink-tertiary transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open && (
-        <div className={`absolute z-30 max-h-[230px] overflow-auto rounded-[12px] border border-hairline-subtle bg-white p-1.5 shadow-[0_12px_32px_rgba(20,20,45,0.14)] ${wideMenu ? "left-0 w-[calc(200%+0.5rem)]" : "left-0 right-0"} ${dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"}`}>
+        <div className={`absolute z-30 max-h-[230px] overflow-auto rounded-[12px] border border-hairline-subtle bg-surface p-1.5 shadow-[0_12px_32px_rgba(20,20,45,0.14)] ${wideMenu ? "left-0 w-[calc(200%+0.5rem)]" : "left-0 right-0"} ${dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"}`}>
           {choices.map((c) => {
             const on = c.value === value;
             return (
@@ -244,7 +244,7 @@ export function VideoGenerationStudio({
 
   return (
     <section className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-3 bg-surface-muted p-3 xl:grid-cols-[minmax(320px,460px)_minmax(0,1fr)_180px]">
-      <aside className="flex flex-col rounded-[14px] border border-hairline-subtle bg-white shadow-[0_12px_34px_rgba(15,23,42,0.045)] xl:max-h-[calc(100vh-5.5rem)]">
+      <aside className="flex flex-col rounded-[14px] border border-hairline-subtle bg-surface shadow-[0_12px_34px_rgba(15,23,42,0.045)] xl:max-h-[calc(100vh-5.5rem)]">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
         <div className="mb-3 flex items-center justify-between">
           <h1 className="text-base font-semibold text-ink">AI 视频</h1>
@@ -265,7 +265,7 @@ export function VideoGenerationStudio({
             dragActive ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-surface-subtle "
           }`}
         >
-          <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.07)]">
+          <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-surface shadow-[0_1px_3px_rgba(20,20,40,0.07)]">
             <Icon icon="mdi:tray-arrow-up" className="text-base text-ink" aria-hidden />
           </span>
           <span className="text-[13px] font-medium text-ink">拖入或点击上传</span>
@@ -377,7 +377,7 @@ export function VideoGenerationStudio({
             aria-modal="true"
             onClick={() => setConfirmOpen(false)}
           >
-            <div className="w-full max-w-[320px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
+            <div className="w-full max-w-[320px] rounded-[16px] bg-surface p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
               <h3 className="text-[15px] font-semibold text-ink">确认生成</h3>
               <p className="mt-2.5 text-[13px] leading-6 text-ink-secondary">
                 {estimate.auto ? (
@@ -407,7 +407,7 @@ export function VideoGenerationStudio({
         )}
       </aside>
 
-      <main className="flex min-h-[420px] flex-col rounded-[14px] border border-hairline-subtle bg-white">
+      <main className="flex min-h-[420px] flex-col rounded-[14px] border border-hairline-subtle bg-surface">
         <div className="flex h-11 items-center gap-5 border-b border-hairline-subtle px-5 text-sm font-semibold text-ink">
           <span>预览</span>
           <span className="border-b-2 border-ink py-3">收藏</span>
@@ -429,7 +429,7 @@ export function VideoGenerationStudio({
             )}
           </div>
           {(displayedVideo || selectedTask) && displayedPrompt && (
-            <div className="flex items-start gap-2 border-t border-hairline-subtle bg-white px-5 py-3">
+            <div className="flex items-start gap-2 border-t border-hairline-subtle bg-surface px-5 py-3">
               <p className="min-w-0 flex-1 line-clamp-2 text-xs leading-5 text-ink-secondary">{displayedPrompt}</p>
               {displayedVideo && (
                 <button
@@ -446,7 +446,7 @@ export function VideoGenerationStudio({
         </div>
       </main>
 
-      <aside className="rounded-[14px] border border-hairline-subtle bg-white p-3">
+      <aside className="rounded-[14px] border border-hairline-subtle bg-surface p-3">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink">任务队列</h2>
           <span className="text-xs text-ink-tertiary">生成中 {runningCount}</span>
@@ -509,7 +509,7 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="w-full max-w-[440px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
+      <div className="w-full max-w-[440px] rounded-[16px] bg-surface p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
         <h3 className="text-[15px] font-semibold text-ink">下载视频</h3>
         <p className="mt-2 text-[13px] leading-6 text-ink-secondary">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
         <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-surface-subtle p-2">

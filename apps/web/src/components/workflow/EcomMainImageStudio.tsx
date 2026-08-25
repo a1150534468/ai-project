@@ -142,8 +142,8 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   };
 
   return (
-    <section className="grid min-h-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+    <section className="grid min-h-0 bg-surface xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
+      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
           {controlsHeader}
           <div className="pt-5">
@@ -207,7 +207,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
         />
       </aside>
 
-      <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
+      <div className="flex min-h-[420px] min-w-0 flex-col bg-surface xl:h-full">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
         <div className="flex items-center justify-between gap-3">
           <div><p className="text-xs font-semibold text-ink-secondary">当前结果</p><h3 className="mt-1 text-base font-semibold text-ink">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
@@ -245,7 +245,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                       <DownloadOverlayButton onClick={() => onDownloadImage(image.originalUrl!)} />
                     )}
                     {redrawingIndexes.includes(image.index) && (
-                      <div className="absolute inset-0 grid place-items-center bg-white/70">
+                      <div className="absolute inset-0 grid place-items-center bg-surface/70">
                         <Icon icon="mdi:loading" className="animate-spin text-2xl text-brand" aria-hidden />
                       </div>
                     )}

@@ -76,7 +76,7 @@ export function TaskComposer({
       : [];
 
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] sm:p-6">
+    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] sm:p-6">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">Agent 团队</p>
@@ -87,7 +87,7 @@ export function TaskComposer({
         </span>
       </div>
 
-      <div className="rounded-[10px] border border-hairline bg-white p-3 focus-within:border-brand/50">
+      <div className="rounded-[10px] border border-hairline bg-surface p-3 focus-within:border-brand/50">
         <textarea
           value={taskGoal}
           onChange={(event) => onTaskGoalChange(event.target.value)}
@@ -102,7 +102,7 @@ export function TaskComposer({
                 {attachment.previewUrl ? (
                   <img src={attachment.previewUrl} alt="" className="h-8 w-8 flex-none rounded-[8px] object-cover" />
                 ) : (
-                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-white text-ink-secondary">
+                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-surface text-ink-secondary">
                     <Icon icon="mdi:file-document-outline" className="text-lg" aria-hidden />
                   </span>
                 )}
@@ -164,7 +164,7 @@ export function TaskComposer({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-white px-4 text-sm font-semibold text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-surface px-4 text-sm font-semibold text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
             >
               <Icon icon="mdi:paperclip" className="text-lg" aria-hidden />
               上传文件

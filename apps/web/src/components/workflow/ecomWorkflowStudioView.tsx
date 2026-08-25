@@ -128,8 +128,8 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
     : `母版 ${props.masterPointCost ?? 0} + 分段 ${props.segmentPointCost ?? 0} · 拼接免费`;
 
   return (
-    <section className="grid min-h-0 min-w-0 bg-white xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-white xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
+    <section className="grid min-h-0 min-w-0 bg-surface xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
+      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         {props.controlsHeader}
         <div className="flex items-start justify-between gap-4">
@@ -306,9 +306,9 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         />
       </aside>
 
-      <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
+      <div className="flex min-h-[420px] min-w-0 flex-col bg-surface xl:h-full">
         <div className="min-h-0 flex-1 overflow-y-auto">
-        <section className="border-b border-hairline-subtle bg-white px-4 py-5 lg:px-6">
+        <section className="border-b border-hairline-subtle bg-surface px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-ink-secondary">任务阶段</p>
@@ -330,7 +330,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           )}
         </section>
 
-        <section className="border-b border-hairline-subtle bg-white px-4 py-5 lg:px-6">
+        <section className="border-b border-hairline-subtle bg-surface px-4 py-5 lg:px-6">
           <p className="text-xs font-semibold text-ink-secondary">分段</p>
           <h3 className="mt-1 text-base font-semibold text-ink">分段预览</h3>
           <Stagger className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -360,7 +360,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                         <p className="line-clamp-3 text-xs leading-5 text-ink-secondary">{segment.prompt}</p>
                       </div>
                     ) : (
-                      <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-hairline bg-white text-center text-xs text-ink-tertiary">
+                      <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-hairline bg-surface text-center text-xs text-ink-tertiary">
                         {props.stageLabel === "segments_running" ? (
                           <span className="grid place-items-center gap-2">
                             <span className="h-5 w-5 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
@@ -376,7 +376,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           </Stagger>
         </section>
 
-        <section className="bg-white px-4 py-5 lg:px-6">
+        <section className="bg-surface px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-ink-secondary">浏览器拼接</p>

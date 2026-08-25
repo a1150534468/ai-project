@@ -91,7 +91,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
           const [width, height] = size.split("x");
           if (gallery) {
             return (
-              <article key={image.slot} className="min-w-0 overflow-hidden rounded-lg border border-hairline-subtle bg-white">
+              <article key={image.slot} className="min-w-0 overflow-hidden rounded-lg border border-hairline-subtle bg-surface">
                 <div
                   className="flex max-h-[520px] items-center justify-center bg-surface-muted"
                   style={{ aspectRatio: `${width} / ${height}` }}
@@ -126,7 +126,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
             );
           }
           return (
-            <div key={image.slot} className="flex min-w-0 items-center gap-3 rounded-lg border border-hairline-subtle bg-white p-2">
+            <div key={image.slot} className="flex min-w-0 items-center gap-3 rounded-lg border border-hairline-subtle bg-surface p-2">
               <div className="h-14 w-[72px] shrink-0 overflow-hidden rounded-md bg-surface-muted">
                 {image.thumbnailUrl || image.imageUrl ? (
                   <img

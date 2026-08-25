@@ -155,7 +155,7 @@ html[data-theme="dark"] {
   }
 
   .glass-card {
-    @apply bg-white rounded-xl2 border-none shadow-none;
+    @apply bg-surface rounded-xl2 border-none shadow-none;
   }
 
   .badge {
@@ -457,11 +457,6 @@ html[data-theme="dark"] .text-brand {
 
 /* Existing screens use literal light colors. Map those UI surfaces to the
    shared dark palette without changing component behavior or data flow. */
-html[data-theme="dark"] .bg-white,
-html[data-theme="dark"] [class~="bg-white/70"],
-html[data-theme="dark"] [class~="bg-white/78"],
-html[data-theme="dark"] [class~="bg-white/80"],
-html[data-theme="dark"] [class~="bg-white/95"],
 html[data-theme="dark"] [class~="bg-gray-50/50"],
 html[data-theme="dark"] .bg-gray-50 {
   background-color: var(--apple-surface) !important;
@@ -511,10 +506,6 @@ html[data-theme="dark"] .disabled\:bg-gray-300:disabled {
 
 html[data-theme="dark"] .disabled\:text-gray-400:disabled {
   color: var(--apple-ink-tertiary) !important;
-}
-
-html[data-theme="dark"] .focus\:bg-white:focus {
-  background-color: var(--apple-surface) !important;
 }
 
 html[data-theme="dark"] .bg-transparent {

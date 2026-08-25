@@ -142,7 +142,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
       </div>
       <div className="grid gap-1.5">
         {items.map((item, i) => (
-          <div key={`${item}-${i}`} className="group flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-white px-3 py-2 transition focus-within:border-brand">
+          <div key={`${item}-${i}`} className="group flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-surface px-3 py-2 transition focus-within:border-brand">
             <input
               value={item}
               onChange={(e) => onChange(items.map((it, idx) => (idx === i ? e.target.value : it)))}
@@ -287,7 +287,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true">
-      <div className="flex h-[760px] max-h-[90vh] w-full max-w-[1040px] overflow-hidden rounded-[18px] bg-white shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
+      <div className="flex h-[760px] max-h-[90vh] w-full max-w-[1040px] overflow-hidden rounded-[18px] bg-surface shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
         <StepRail active={active} />
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-12 shrink-0 items-center justify-between border-b border-hairline-subtle px-5">
@@ -447,7 +447,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   <section className="grid gap-4">
                     <div className="grid grid-cols-2 gap-3">
                       <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-hairline-subtle bg-surface-subtle "}`}>
-                        <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.08)]">
+                        <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-surface shadow-[0_1px_3px_rgba(20,20,40,0.08)]">
                           <Icon icon="mdi:tray-arrow-up" className="text-xl text-ink" aria-hidden />
                         </span>
                         <span className="text-[13px] font-medium text-ink">{busy ? "分析中…" : "点击上传参考视频"}</span>

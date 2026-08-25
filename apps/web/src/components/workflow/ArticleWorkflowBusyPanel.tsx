@@ -29,7 +29,7 @@ function PlatformProgressList(props: ArticleWorkflowBusyPanelProps) {
       {props.batchProjects.map((row) => {
         const busy = isBusyArticleWorkflowStatus(row.status);
         return (
-          <li key={row.id} className="flex items-center gap-3 rounded-lg border border-hairline-subtle bg-white px-3 py-2.5">
+          <li key={row.id} className="flex items-center gap-3 rounded-lg border border-hairline-subtle bg-surface px-3 py-2.5">
             <Icon
               icon={row.status === "failed" ? "mdi:alert-circle-outline" : busy ? "mdi:loading" : "mdi:check-circle"}
               className={`shrink-0 text-lg ${row.status === "failed" ? "text-red-500" : busy ? "animate-spin text-brand" : "text-brand"}`}
@@ -51,7 +51,7 @@ function PlatformProgressList(props: ArticleWorkflowBusyPanelProps) {
 export function ArticleWorkflowBusyPanel(props: ArticleWorkflowBusyPanelProps) {
   const multi = props.batchProjects.length > 1;
   return (
-    <section className="grid h-full min-h-[480px] place-items-center bg-white px-6 py-10">
+    <section className="grid h-full min-h-[480px] place-items-center bg-surface px-6 py-10">
       <div className="w-full max-w-[560px] text-center">
         <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-brand-soft text-brand">
           <Icon icon="mdi:loading" className="animate-spin text-[28px]" aria-hidden />

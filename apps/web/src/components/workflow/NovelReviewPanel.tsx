@@ -36,7 +36,7 @@ export function NovelReviewPanel({
   const actionItems = chapter?.aiActionItems ?? [];
 
   return (
-    <section data-testid="novel-review-panel" className="grid min-w-0 content-start gap-3 rounded-lg border border-hairline-subtle bg-white p-4">
+    <section data-testid="novel-review-panel" className="grid min-w-0 content-start gap-3 rounded-lg border border-hairline-subtle bg-surface p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">

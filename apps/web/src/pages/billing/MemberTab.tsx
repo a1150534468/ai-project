@@ -42,7 +42,7 @@ export function MemberTab({ detail, balance, videoBalance, vip, membershipCards,
             const isCurrent = currentCardName != null && card.name === currentCardName;
             return (
               <StaggerItem key={card.id}>
-                <div className={`bg-white rounded-2xl p-5 border relative ${isCurrent ? "border-brand ring-2 ring-brand" : "border-gray-50"}`}>
+                <div className={`bg-surface rounded-2xl p-5 border relative ${isCurrent ? "border-brand ring-2 ring-brand" : "border-gray-50"}`}>
                   {isCurrent && <span className="absolute top-4 right-4 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-brand-soft text-brand-ink">当前</span>}
                   <p className="text-sm font-semibold text-ink">{card.name}</p>
                   <div className="mt-2 flex items-baseline gap-1">

@@ -12,7 +12,7 @@ import { presetToCron, humanizeSchedule, draftToFormPatch, type SchedulePreset }
 interface Props { readonly token: string; }
 
 const DEFAULT_TZ = "Asia/Shanghai";
-const CARD = "rounded-[10px] border border-hairline-subtle bg-white p-4";
+const CARD = "rounded-[10px] border border-hairline-subtle bg-surface p-4";
 
 export function ScheduledTaskStudio({ token }: Props) {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -93,7 +93,7 @@ export function ScheduledTaskStudio({ token }: Props) {
         <div className="grid gap-3">
           <div className="flex items-center gap-2 rounded-[8px] border border-dashed border-brand/40 bg-brand/5 p-2">
             <input
-              className="flex-1 rounded-[8px] border border-hairline-subtle bg-white px-3 py-2 text-sm placeholder-ink-tertiary"
+              className="flex-1 rounded-[8px] border border-hairline-subtle bg-surface px-3 py-2 text-sm placeholder-ink-tertiary"
               placeholder="用一句话描述需求，AI 帮你填好"
               value={aiDesc}
               onChange={(e) => setAiDesc(e.target.value)}

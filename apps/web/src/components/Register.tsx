@@ -79,7 +79,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
         </div>
 
         {/* Register Card */}
-        <div className="auth-card bg-white rounded-[18px] p-7 sm:p-8 border border-gray-200">
+        <div className="auth-card bg-surface rounded-[18px] p-7 sm:p-8 border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-6">创建账户</h2>
 
           {/* Input Fields */}
@@ -100,7 +100,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="3-32 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
@@ -122,7 +122,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="2 位大写字母，如 AB"
                   maxLength={2}
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
@@ -143,7 +143,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="至少 8 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
@@ -164,7 +164,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="再输入一遍密码"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-white"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>

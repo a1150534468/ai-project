@@ -52,18 +52,18 @@ export function MarkdownMessage({ content, variant = "chat" }: MarkdownMessagePr
               return <code className={className}>{children}</code>;
             }
             return (
-              <code className="rounded bg-white px-1.5 py-0.5 text-[0.92em] text-gray-800 border border-gray-200">
+              <code className="rounded bg-surface px-1.5 py-0.5 text-[0.92em] text-gray-800 border border-gray-200">
                 {children}
               </code>
             );
           },
           pre: ({ children }) => (
-            <pre className="mb-2 overflow-x-auto rounded-lg border border-gray-200 bg-white p-3 text-xs leading-5 text-gray-800">
+            <pre className="mb-2 overflow-x-auto rounded-lg border border-gray-200 bg-surface p-3 text-xs leading-5 text-gray-800">
               {children}
             </pre>
           ),
           table: ({ children }) => (
-            <div className="mb-2 overflow-x-auto rounded-lg border border-gray-200 bg-white">
+            <div className="mb-2 overflow-x-auto rounded-lg border border-gray-200 bg-surface">
               <table className="min-w-full border-collapse text-xs">{children}</table>
             </div>
           ),

@@ -42,7 +42,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
         <Icon icon="mdi:chevron-down" className="flex-none text-lg text-ink-tertiary" aria-hidden />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[12px] border border-hairline-subtle bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[12px] border border-hairline-subtle bg-surface shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
           <div className="border-b border-hairline-subtle px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-secondary">
             {label}
           </div>

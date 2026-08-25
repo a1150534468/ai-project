@@ -256,7 +256,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
 
   return (
     <section className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="rounded-[14px] border border-hairline-subtle bg-white p-4">
+      <aside className="rounded-[14px] border border-hairline-subtle bg-surface p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-ink">漫剧项目</h2>
           <StatusPill>{`${projects.length} 个`}</StatusPill>
@@ -284,7 +284,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
         </div>
       </aside>
 
-      <div className="min-w-0 rounded-[14px] border border-hairline-subtle bg-white p-4 lg:p-5">
+      <div className="min-w-0 rounded-[14px] border border-hairline-subtle bg-surface p-4 lg:p-5">
         {!project ? (
           <div className="grid min-h-[360px] place-items-center text-sm text-ink-secondary">选择或新建一个漫剧项目</div>
         ) : (
@@ -417,7 +417,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               <aside className="space-y-3 rounded-[10px] bg-surface-subtle p-3">
                 <h3 className="text-sm font-semibold text-ink">设定资料</h3>
                 <div className="space-y-2">
-                  {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-hairline-subtle bg-white p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-ink">{entry.title}</p></div>)}
+                  {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-hairline-subtle bg-surface p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-ink">{entry.title}</p></div>)}
                 </div>
                 <input value={bibleForm.title} onChange={(event) => setBibleForm({ ...bibleForm, title: event.target.value })} placeholder="设定标题" className="h-10 w-full rounded-[10px] border border-hairline px-3 text-sm" />
                 <textarea value={bibleForm.content} onChange={(event) => setBibleForm({ ...bibleForm, content: event.target.value })} placeholder="设定内容" className="min-h-24 w-full rounded-[10px] border border-hairline p-3 text-sm" />

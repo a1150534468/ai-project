@@ -40,7 +40,7 @@ function getEditableTitle(node: MemoryNode): string {
 
 function EmptyState() {
   return (
-    <aside className="flex h-full min-h-[320px] flex-col justify-center rounded-[14px] border border-hairline-subtle bg-white p-6 text-center">
+    <aside className="flex h-full min-h-[320px] flex-col justify-center rounded-[14px] border border-hairline-subtle bg-surface p-6 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
         <Icon icon="mdi:table-row" className="text-2xl" />
       </div>
@@ -138,7 +138,7 @@ export default function MemoryDetailPanel({
 
   return (
     <motion.aside
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-hairline-subtle bg-white"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-hairline-subtle bg-surface"
       variants={msgIn}
       initial="initial"
       animate="animate"
@@ -163,7 +163,7 @@ export default function MemoryDetailPanel({
               type="button"
               onClick={onClose}
               aria-label="关闭记忆详情"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-hairline bg-white text-ink shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-hairline bg-surface text-ink shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <svg
                 viewBox="0 0 24 24"

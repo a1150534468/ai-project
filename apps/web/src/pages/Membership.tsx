@@ -91,7 +91,7 @@ export default function Membership({ token }: MembershipProps) {
           <p className="text-sm text-gray-500 mt-1">升级您的订阅计划以获得更多权益</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-5 mb-6 border border-gray-50">
+        <div className="bg-surface rounded-2xl p-5 mb-6 border border-gray-50">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-base font-semibold text-ink">支付方式</h3>
@@ -107,7 +107,7 @@ export default function Membership({ token }: MembershipProps) {
                     onClick={() => setPaymentMethod(method)}
                     disabled={loading}
                     className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
-                      active ? "bg-white text-brand-ink shadow-sm" : "text-gray-500 "
+                      active ? "bg-surface text-brand-ink shadow-sm" : "text-gray-500 "
                     }`}
                   >
                     <Icon icon={method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill"} className="text-lg" />
@@ -130,7 +130,7 @@ export default function Membership({ token }: MembershipProps) {
                 return (
                   <StaggerItem key={card.id}>
                     <motion.div
-                      className="bg-white rounded-2xl p-6 border border-gray-50 transition-all"
+                      className="bg-surface rounded-2xl p-6 border border-gray-50 transition-all"
                       whileHover={{ y: -5 }}
                       transition={spring.snappy}
                     >
@@ -182,7 +182,7 @@ export default function Membership({ token }: MembershipProps) {
         </div>
 
         {/* 我的会员 */}
-        <div className="bg-white rounded-2xl p-6 border border-gray-50">
+        <div className="bg-surface rounded-2xl p-6 border border-gray-50">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-ink">我的会员</h3>
             <span className="text-xs text-gray-400">共 {userMemberships.length} 个</span>
