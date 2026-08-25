@@ -723,12 +723,91 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 `components/ui/` **只有 2 个文件 198 行**，对着 28,721 行组件 —— **没有基础组件层**，每个 Studio 自己手搓按钮/卡片/输入框。设计 token 建了（`text-brand-ink` / `bg-brand`）但被绕过：`text-[#1d1d1f]` **266 次**、`border-[#d2d2d7]` **150**、`text-[#6e6e73]` **110**、`border-[#e8e8ed]` 78、`text-[#8a8a8f]` 65。
 
-- [ ] **Step 1: 先补 token 再动组件**。按 `docs/design-system.md`（192 行，已有规范）把上述高频硬编码色值映射为 token。`DESIGN.md` 明确要求"新增颜色/动效 token 必须先更新规范再进组件"——**遵守这条既有约定**。
-- [ ] **Step 2: 机械替换色值**。一次一个色值、一个提交，`sed` 后 `pnpm typecheck` + 视觉抽查。266 处那个先做。
-- [ ] **Step 3: 抽 3-5 个真正高频的基础组件**（Button / Card / Input / Modal 已有 `motion/Modal`）。**不要一次建完整组件库** —— 从实际重复最多的开始，YAGNI。
-- [ ] **Step 4: 前端大文件拆分不在本任务范围**，见 P2.4（按测试厚度分批,前端需先补测试）。
-- [ ] **验证**：`pnpm vitest run` + 手动过一遍主要页面（测试薄，必须人眼确认）。
-- [ ] Commit（多个）`style(web): <色值/组件> 收敛到设计 token`
+- [x] **Step 1: 先补 token 再动组件**。按 `docs/design-system.md`（192 行，已有规范）把上述高频硬编码色值映射为 token。`DESIGN.md` 明确要求"新增颜色/动效 token 必须先更新规范再进组件"——**遵守这条既有约定**。
+- [x] **Step 2: 机械替换色值**。一次一个色值、一个提交，`sed` 后 `pnpm typecheck` + 视觉抽查。266 处那个先做。
+- [x] **Step 3: 抽 3-5 个真正高频的基础组件**（Button / Card / Input / Modal 已有 `motion/Modal`）。**不要一次建完整组件库** —— 从实际重复最多的开始，YAGNI。
+- [x] **Step 4: 前端大文件拆分不在本任务范围**，见 P2.4（按测试厚度分批,前端需先补测试）。
+- [x] **验证**：`pnpm vitest run` + 手动过一遍主要页面（测试薄，必须人眼确认）。
+- [x] Commit（多个）`style(web): <色值/组件> 收敛到设计 token`
+
+### P2.3 执行记录（2026-08-25，20 个提交 `e161d99..45a4dd6`，137 文件 +3174/-2790）
+
+范围按用户确认扩大了两处：**以代码现状的颜色为准**（`#0066cc` 品牌蓝），把 `docs/design-system.md` §2 里那套从未落地的愿景色板整段删掉；**顺带修掉从来没做过暗色处理的颜色**（接受暗色下的可见变化）。
+
+#### 分成 5 步做（比上面的勾选项更细的一层拆解），顺序是 `DESIGN.md` 规定的：规范 → token → 组件 → 组件库
+
+| 步 | 内容 | 结果 |
+|----|------|------|
+| 1 | 文档 §2 重写 + `index.css` 建 `--color-*` + `tailwind.config.js` 暴露 | 50 个 token |
+| 2 | 按**角色**逐个替换手写色值，一个角色一个提交 | ink / ink-secondary / ink-tertiary / hairline / surface-subtle / surface-muted 共 232 处 |
+| 3 | 补齐**从未做过暗色处理**的 74 个颜色 / 238 处用法 | 新增 `scrim` / `console` / `console-ink` 三个不翻转角色 |
+| 4 | 4a `white`→surface 444 处、4b gray/slate→语义 token 611 处、4c 状态色 292 处、4d 压暗层→`scrim`、4e 删 brand `!important` 覆盖块 | 暗色白名单 60 条 + `!important` 块 40 条全删 |
+| 5 | 抽 Button / Card / Badge / Alert 四个基元 | `components/ui/` 新增 6 文件 317 行 + 16 条测试 |
+
+#### token 层的形状：暗色只靠翻三元组，一个 `dark:` 都不写
+
+`--color-*` 存 `R G B` 三元组（`:root` 与 `html[data-theme="dark"]` 各一份），Tailwind 侧写成 `"rgb(var(--color-x) / <alpha-value>)"`，于是 `bg-danger/10` 这种带透明度的写法能直接用。`--apple-*` 是派生别名，不需要重复声明暗色。
+
+**收尾数字**：`dark:` 变体 **0** 个；暗色白名单 **0** 条；brand `!important` 覆盖块 **0** 条。
+
+#### 刻意留下的两处例外（不是漏改）
+
+- **11 处装饰性渐变端点色**（`components/video/*` 的会员等级金/银/深灰渐变、`novel/NovelLibraryPage` 的书脊色）—— 它们是插画性质的具体色，不承担语义角色，塞进 token 只会让 token 表变成色号仓库。
+- **60 处记忆类型色阶**（全部集中在 `components/memory/memoryStyles.ts`）—— 这是文档 §2 里独立记录的 `Memory Semantic Palette`（CORE / PERMANENT / TEMPORARY / KNOWLEDGE / OTHER），本来就是「集中在一个文件里的第二套语义色板」，符合规范。
+
+#### 三个可访问性判断（都是算完对比度才定的，不是审美）
+
+1. 实底按钮禁用态**不能用透明度**：`bg-brand/50` 上白字只有 **2.2:1**。改成 `bg-hairline` + `ink-tertiary`（灰底灰字 **4.6:1**）。
+2. hover **不能换到 `-ink` 档**：`brand-ink` 在暗色下是提亮值 `#5bafff`，白字落上去 **2.3:1**。改用同色 `/90`，两套主题都在 5:1 以上。
+3. `Badge variant="solid"` 的 warning / success **不能配白字**（**3.1:1 / 3.4:1**，过不了 AA）。改 `text-scrim`（**5.5:1**）—— 动手前先 grep 确认全站原本 0 处 `bg-warning|success|info` + `text-white`，所以这个决定不改变任何既有观感。
+
+#### Step 4e 删掉 `!important` 块，顺带修好了一个没人报的 bug
+
+那 40 条 `html[data-theme="dark"] .bg-brand { background: … !important }` 压过了 `disabled:` 变体，导致**暗色下禁用的品牌按钮仍然是亮蓝色、看起来可点**。删掉 `!important` 后 `disabled:bg-hairline` 才生效（`disabled:` 是 Tailwind 核心变体里排最后的一个，天然赢过 `hover:` 和裸 utility）。`probe-before.png` / `probe-after.png` 是这处的前后对照。
+
+#### 基元层为什么是「类名工厂 + 薄壳」而不是组件优先
+
+站内大量按钮实际是 `motion/RippleButton`（样式全靠 `className` 传入）。只给 `<Button>` 组件的话这些点接不进来；把动效焊进 `<Button>` 又会让普通按钮被强塞 spring。所以真身是 `buttonClass()` / `cardClass()` / `badgeClass()` / `alertClass()`，组件只是「工厂 + 标签」。
+
+档位取全站实测最高频值：按钮高度 `h-9` 117 处 / `h-10` 91 / `h-8` 74 / `h-11` 34；圆角从 **13 个值**收成 2 档；禁用态从 **4 种写法**收成 1 档；`cardClass()` 的默认输出正是全站 **23 处逐字重复**的那串 className；Alert 覆盖 66 处弱底提示条里的 **11 种** danger 横幅漂移。
+
+#### 一个真会咬人的坑：className 顺序不决定胜负
+
+同属性的第二个 utility 谁生效，取决于两条规则在**构建产物**里的先后，而那个顺序是 Tailwind 自己排的。实测两例：`.flex-1` 排在 `.flex-none` 之前 —— 所以 `Button` 的 `BASE` **刻意不设 `flex-none`**，否则弹窗底部 `flex-1` 平分宽度的按钮行永远赢不了（已加回归测试）；`disabled:` 排在所有核心变体之后 —— 这正是上面那个 bug 的解释。因此 `ui/cx.ts` 故意不做 tailwind-merge 式冲突消解，约定是「能用参数表达的就用参数，`className` 只加工厂没碰过的属性」。
+
+早期尺寸档太粗（`px-6 py-2.5` 的 CTA、`p-6` 的面板、`text-[10px]` 的 chip 都得靠 className 覆盖，正好踩这个坑），改法是**加档**而不是允许覆盖：Button `xl: h-11 px-6`、Card `xl: p-6`、Badge `xs: px-2 py-0.5 text-[10px]`。
+
+#### 把规范写成可执行断言，而不是写成文档里的一句话
+
+`ui.test.tsx` 16 条测试遍历所有 variant × size 组合，断言：零字面色值 / 零调色板色阶、`X/10` 弱底必配 `X-ink` 文字、实底档不拿 `X-ink` 当底色、每个按钮只产出一种圆角、实底档禁用态换灰底灰字、`BASE` 不含 `flex` 系、`cardClass()` 默认输出等于那 23 处的原串、`<Button>` 默认 `type=button`、`<Alert tone="danger">` 用 `role=alert` 其余 `role=status`。
+
+#### 人眼确认这一关做了防作弊
+
+测试薄的地方靠目视，但**「没样式」在截图里和「样式对」长得一样**（Tailwind JIT 不生成没出现在 `content` 里的类）。所以三道独立校验：① 预览页手抄的 class 串与工厂输出逐字比对（临时 vitest 文件，跑完即删）；② 预览页每个 class 都存在于**真实构建产物** `app.css`（90/0、95/0 缺失）；③ `src` 全量 token 类的产物覆盖（163 类 / 0 缺失）。之后才用 headless Chrome 按 `--force-device-scale-factor=2` 出浅色 + 暗色两套截图逐档看。
+
+#### 转换点刻意收窄
+
+只转了 3 个可读性好的调用点（`ConfirmDialog` / `ModelMarketplace` / `billing/RechargeTab`）来验证工厂够用。`components/novel/*` 那种一行超长 JSX 的文件、以及真正的特殊处理（segmented control、虚线空态、品牌浅色渐变价格块）保持显式手写 —— **工厂只覆盖默认情形**，特殊处理留在原地比塞进参数表更好维护。
+
+#### 顺带修掉 `design-system.md` 三处与代码相反的描述
+
+| 位置 | 文档原话 | 代码实际 |
+|------|---------|---------|
+| §4 | 面板圆角只用 `8 / 10 / 14px` 三档 | `.apple-shell` **改写**了圆角类：`rounded-xl`→11px、`rounded-2xl`/`3xl`→18px |
+| §3 | 字体栈以 `Inter` 起头 | 仓库里没有 Inter、没有 `@font-face`，实际是 `SF Pro Text` 起头的纯系统栈 |
+| §7 | 两个 shadow token 用于详情面板/悬浮 | `.apple-shell [class*="shadow-"]{box-shadow:none!important}` 已让它们在壳内彻底失效，是死样式 |
+
+#### 验证数字
+
+- `pnpm build` ✓ 2.70s；`tsc --noEmit` ✓；`biome ci src --formatter-enabled=false` ✓ 286 文件
+- `vitest run`（`apps/web`，已 `source .env`）= **86 文件 / 464 passed / 0 failed / 0 skipped**
+- 浅色 + 暗色两套基元总览截图 + 全站色板前后截图 + `!important` 块删除前后对照，已交付人眼确认
+
+#### 未纳入本次范围
+
+- `components/novel/*` 等密集单行 JSX 文件的基元转换 —— 等 P2.4 前端批次先补测试。
+- Input / Modal 基元：`index.css` base 层已统一输入控件（`rounded-[10px]` + token 色），`motion/Modal` 已存在，按 YAGNI 不重复造。
+
 
 ---
 
