@@ -52,17 +52,35 @@
 组件里曾散落 200+ 个手写色值（大量是同一角色的漂移变体，如 `#1d1d1f` / `#303936` / `#26302d` 都是主文字）。
 收敛规则如下，遇到旧代码或旧分支照此对号入座：
 
-| 归并到 | 主要旧色值 | 归并规则 |
-|--------|-----------|---------|
-| `ink` | `#1d1d1f` `#303936` `#26302d` `#202725` `#34343a` `text-gray-900/800/700` | 亮度低于 `#4a4a4a` 的文字 |
-| `ink-secondary` | `#6e6e73` `#424245` `#5a5a60` `#65706c` `text-gray-600/500` | 亮度在 `#4a4a4a`~`#787878` 的文字 |
-| `ink-tertiary` | `#8a8a8f` `#89928f` `#7a8380` `#c7c7cc` `text-gray-400/300` | 亮度高于 `#787878` 的文字 |
-| `hairline` | `#d2d2d7` `#d9dfdd` `#cfd5d3` `#e5e7eb` | 亮度 ≤ `#e0e0e0` 的描边 |
-| `hairline-subtle` | `#e8e8ed` `#e1e6e4` `#ececf0` `#e2e7e5` | 亮度 > `#e0e0e0` 的描边 |
-| `surface` | `#ffffff` `bg-white` | 纯白面 |
-| `surface-subtle` | `#f7faf9` `#f7f8fa` `#f7f7f9` `#fafafa` | 带一点色偏的近白底 |
-| `surface-muted` | `#f5f5f7` `#f5f7fa` `#eef2f0` `bg-gray-100/200` | 比 subtle 更实的灰底 |
-| `surface-inverse` | `#1d1d1f` `#101615` `#111418` `#20252b`（作 bg/border 用时） | 浅色模式下故意深的块，暗色下必须翻转 |
+| 归并到 | 主要旧色值 |
+|--------|-----------|
+| `ink` | `#1d1d1f` `#303936` `#26302d` `#202725` `#34343a` `#25302d` `#3f3f45` |
+| `ink-secondary` | `#6e6e73` `#424245` `#5a5a60` `#65706c` `#4b4b52` `#4b5652` |
+| `ink-tertiary` | `#8a8a8f` `#89928f` `#7a8380` `#86868b` `#b6b6bd` `#c7c7cc` |
+| `hairline` | `#d2d2d7` `#d9dfdd` `#cfd5d3` |
+| `hairline-subtle` | `#e8e8ed` `#e1e6e4` `#ececf0` `#e2e7e5` `#dfe1e6` `#e1e5e3` `#e5e7eb` |
+| `surface` | `#ffffff` `bg-white` |
+| `surface-subtle` | `#f7faf9` `#f7f8fa` `#f7f7f9` `#fafafa` `#fafbfb` `#fbfcfc` |
+| `surface-muted` | `#f5f5f7` `#f5f7fa` `#eef2f0` `#f5f7f6` `#f1f3f2` |
+| `surface-inverse` | `#1d1d1f` `#101615` `#111418` `#20252b`（作 bg/border 用时） |
+
+归并依据是 `index.css` 里那份 `html[data-theme="dark"]` 白名单 —— 它记录了每个旧色值当初被当作哪个角色，
+是暗色行为的既有真相，不是我重新分类的。两处是按亮度补拆的：描边以 `#e0e0e0`（luma 224）为界拆成
+`hairline` / `hairline-subtle`，近白面把纯白留给 `surface`、带色偏的归 `surface-subtle`。
+这两拆在暗色下同值，所以不改变任何既有表现。
+
+新增颜色挑 token 时**先按用途分家族**（文字 / 描边 / 面），再按 luma（`0.2126R + 0.7152G + 0.0722B`）落档。
+下面的区间是从 203 个活跃旧色值实测出来的，不是拍的：
+
+| 家族 | Token | 实测 luma 区间 |
+|------|-------|---------------|
+| 文字 | `ink` / `ink-secondary` / `ink-tertiary` | 29~77 / 66~122 / 120~208 |
+| 描边 | `hairline` / `hairline-subtle` | 210~222 / 225~240 |
+| 面 | `surface-muted` / `surface-subtle` / `surface` | 229~247 / 245~252 / 255 |
+
+`canvas`（工作台底）与 `surface-raised`（浮层、弹窗）按用途选，跟亮度无关。
+文字三档的边界有重叠（`#3f3f45` luma 63 归 `ink`，`#424245` luma 66 归 `ink-secondary`），
+这是白名单当初的分法，旧代码照抄；新色落在重叠区时按语义选，别按数字硬套。
 
 绿偏系（`#f7faf9` `#d9dfdd` `#89928f` `#65706c` …）与中性灰系（`#f5f5f7` `#d2d2d7` `#8a8a8f` `#6e6e73` …）
 是两套漂移出来的家族，**以中性灰系为准** —— 它与 `--color-*` 的现行值一致，且用量占多数。
