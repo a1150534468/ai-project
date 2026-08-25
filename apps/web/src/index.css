@@ -353,134 +353,23 @@ html[data-theme="dark"] {
   box-shadow: none !important;
 }
 
-/* Keep brand utilities theme-aware even while a running Vite process still
-   has Tailwind's pre-theme colors cached. */
-.bg-brand {
-  background-color: rgb(var(--color-brand)) !important;
-}
-
-.bg-brand-soft {
-  background-color: rgb(var(--color-brand-soft)) !important;
-}
-
-[class~="bg-brand-soft/40"] {
-  background-color: rgb(var(--color-brand-soft) / 0.4) !important;
-}
-
-[class~="bg-brand-soft/50"] {
-  background-color: rgb(var(--color-brand-soft) / 0.5) !important;
-}
-
-.text-brand {
-  color: rgb(var(--color-brand)) !important;
-}
-
-.text-brand-ink {
-  color: rgb(var(--color-brand-ink)) !important;
-}
-
-html[data-theme="dark"] .text-brand {
-  color: rgb(var(--color-brand-ink)) !important;
-}
-
-[class~="bg-brand/5"] {
-  background-color: rgb(var(--color-brand) / 0.05) !important;
-}
-
-[class~="bg-brand/10"] {
-  background-color: rgb(var(--color-brand) / 0.1) !important;
-}
-
-[class~="bg-brand/15"] {
-  background-color: rgb(var(--color-brand) / 0.15) !important;
-}
-
-[class~="bg-brand/20"] {
-  background-color: rgb(var(--color-brand) / 0.2) !important;
-}
-
-[class~="bg-brand/25"] {
-  background-color: rgb(var(--color-brand) / 0.25) !important;
-}
-
-[class~="bg-brand/30"] {
-  background-color: rgb(var(--color-brand) / 0.3) !important;
-}
-
-[class~="bg-brand/40"] {
-  background-color: rgb(var(--color-brand) / 0.4) !important;
-}
-
-[class~="bg-brand/75"] {
-  background-color: rgb(var(--color-brand) / 0.75) !important;
-}
-
-[class~="text-brand-ink/70"],
-[class~="text-brand-ink/75"],
-[class~="text-brand-ink/80"] {
-  color: rgb(var(--color-brand-ink)) !important;
-}
-
-.border-brand {
-  border-color: rgb(var(--color-brand)) !important;
-}
-
-[class~="border-brand-soft"] {
-  border-color: rgb(var(--color-brand-soft)) !important;
-}
-
-[class~="border-brand/10"] {
-  border-color: rgb(var(--color-brand) / 0.1) !important;
-}
-
-[class~="border-brand/15"] {
-  border-color: rgb(var(--color-brand) / 0.15) !important;
-}
-
-[class~="border-brand/20"],
-[class~="border-brand/25"],
-[class~="border-brand/30"],
-[class~="border-brand/40"],
-[class~="border-brand/45"],
-[class~="border-brand/50"],
-[class~="border-brand/60"],
-[class~="border-brand/70"] {
-  border-color: rgb(var(--color-brand) / 0.45) !important;
-}
-
-.ring-brand {
-  --tw-ring-color: rgb(var(--color-brand)) !important;
-}
-
-[class~="ring-brand/10"] {
-  --tw-ring-color: rgb(var(--color-brand) / 0.1) !important;
-}
-
-[class~="ring-brand/15"] {
-  --tw-ring-color: rgb(var(--color-brand) / 0.15) !important;
-}
-
-[class~="ring-brand/20"] {
-  --tw-ring-color: rgb(var(--color-brand) / 0.2) !important;
-}
-
-[class~="ring-brand/25"] {
-  --tw-ring-color: rgb(var(--color-brand) / 0.25) !important;
-}
-
-[class~="ring-brand/30"] {
-  --tw-ring-color: rgb(var(--color-brand) / 0.3) !important;
-}
-
-[class~="ring-brand/40"] {
-  --tw-ring-color: rgb(var(--color-brand) / 0.4) !important;
-}
-
 /*
- * 这里曾是一份 60 多条的暗色白名单（html[data-theme="dark"] .bg-white / .bg-gray-100 / …），
- * 靠逐个字面色值改写来伪造暗色模式。P2.3 把组件里的字面色值全换成语义 token 之后，
- * 那些规则的选择器已经没有元素能匹配，整段删掉。剩下这三条不是白名单：
- * 它们改的是没有 class 可挂的原生伪元素/元素，以及外壳底色的刻意覆盖。
+ * 这里曾是两段东西，都是「在 token 之外再改一次颜色」的补丁，现在都删了：
+ *
+ * 1. 一份 60 多条的暗色白名单（html[data-theme="dark"] .bg-white / .bg-gray-100 / …），
+ *    靠逐个字面色值改写来伪造暗色模式。组件里的字面色值全换成语义 token 之后，
+ *    那些选择器已经没有元素能匹配。
+ * 2. 一份 40 多条的 brand 工具类覆盖（.bg-brand / [class~="border-brand/20"] / … 全带 !important），
+ *    注释说是为了绕过 Vite 缓存里 Tailwind 的旧色值。tailwind.config.js 现在直接读 --color-*，
+ *    这份覆盖不但多余，还在实际改变渲染结果：
+ *      - .bg-brand 的 !important 压过了同一元素上的 disabled: 变体，
+ *        全站 14 个主按钮（10 处 disabled:bg-brand/40 + 4 处 disabled:bg-hairline）禁用态和可用态一个样；
+ *      - border-brand/20|25|30|40|45|50|60|70 共 93 处被一律改写成 0.45，组件写的档位全部失效；
+ *      - text-brand-ink/70|80 被改成不透明。
+ *    删掉之后这些写法各自生效，颜色仍然只有 --color-* 一个来源。
+ *
+ * 下面剩的才是真正需要手写的：没有 class 可挂的原生伪元素/元素，
+ * 加上 text-brand 在暗色下的语义换档（#0066cc 落在暗色面上只有 2.6:1，读不了）。
  */
 html[data-theme="dark"] input::placeholder,
 html[data-theme="dark"] textarea::placeholder {
@@ -492,9 +381,8 @@ html[data-theme="dark"] option {
   color: var(--apple-ink);
 }
 
-html[data-theme="dark"] .apple-shell,
-html[data-theme="dark"] .auth-shell {
-  background: var(--apple-canvas) !important;
+html[data-theme="dark"] .text-brand {
+  color: rgb(var(--color-brand-ink));
 }
 
 /* 全局无障碍：尊重「减弱动态效果」偏好。

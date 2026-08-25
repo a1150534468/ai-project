@@ -137,7 +137,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
                 className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
                   isActive
                     ? "border-brand bg-brand text-white shadow-sm"
-                    : "border-hairline-subtle bg-surface text-ink-secondary hover:border-brand/40 hover:text-brand"
+                    : "border-hairline-subtle bg-surface text-ink-secondary hover:border-brand/40 hover:text-brand-ink"
                 }`}
               >
                 <Icon icon={icon} className="text-base" aria-hidden />

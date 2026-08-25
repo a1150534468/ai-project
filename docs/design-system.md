@@ -21,8 +21,19 @@
 `[class~="bg-white"]` 只匹配裸类名，`hover:` / `disabled:` / `group-hover:` 变体从来没被覆盖；
 以及任何新写的字面色值默认就在暗色下坏掉，除非有人记得回去加一行。现在白名单已清空。
 
+同期删掉的还有另一份补丁：`index.css` 里 40 多条 brand 工具类覆盖
+（`.bg-brand`、`[class~="border-brand/20"]` …… 全带 `!important`），注释说是为了绕过 Vite 缓存里 Tailwind 的旧色值。
+`tailwind.config.js` 现在直接读 `--color-*`，这份覆盖不但多余，还在偷偷改渲染结果：
+`.bg-brand` 的 `!important` 压过同一元素上的 `disabled:` 变体，14 个主按钮的禁用态和可用态长得一样；
+`border-brand/20`~`/70` 共 93 处被一律改写成 `0.45`，组件写的档位全部失效；`text-brand-ink/70|80` 被改成不透明。
+**结论是一条规则：组件里写的档位就是最终值，不要在 `index.css` 里再加一层覆盖，更不要用 `!important` 改颜色。**
+
 **不要新增 `dark:` 变体。** 全站 0 处 `dark:`，主题切换完全由三元组承担；
 需要在暗色下换个值，就去 `html[data-theme="dark"]` 改 token，而不是在组件里写第二套类。
+`index.css` 末尾剩三条手写暗色规则，都不是白名单：`input/textarea::placeholder` 与 `option`
+是没有 class 可挂的原生元素；`html[data-theme="dark"] .text-brand` 是唯一一条类级换档
+—— `text-brand` 当文字用时，`#0066cc` 落在暗色面上只有 2.6:1，在暗色下取 `brand-ink`。
+新写代码请直接用 `text-brand-ink` 表达「品牌色的文字」，别依赖这条兜底。
 
 ### Palette
 
@@ -147,6 +158,10 @@
 | Knowledge | `violet-500` | `violet-50 / violet-100` | 知识星云节点、筛选、移动卡片左边线 |
 | Other | `slate-500` | `slate-100` | 其他记忆节点、筛选、移动卡片左边线 |
 | Table Highlight | `brand/[0.08]`（选中）/ `brand/5`（命中） | n/a | 表格选中行、搜索命中 |
+
+这几档**不随主题翻转**（暗色下仍是浅底 + 深字的高对比药丸），这是既有行为：
+旧白名单里从来没有 `amber-*` / `sky-*` / `violet-*` / `slate-*`，删白名单没有改变它们的表现。
+要让记忆类型色也跟着暗色走，属于独立的设计改动，得先在这张表里定暗色值。
 
 ### Rules
 
