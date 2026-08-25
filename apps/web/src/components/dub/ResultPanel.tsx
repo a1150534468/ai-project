@@ -94,7 +94,7 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
   return (
     <div className="space-y-5">
       {loaded && (!project || project.stage === "draft" || project.stage === "analyzed" || project.stage === "scripted" || project.stage === "voiced") ? (
-        <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-5">
+        <div className="space-y-3 rounded-xl border border-hairline-subtle bg-surface p-5">
           {!priced && <p className="text-[12px] text-amber-600">管理员尚未配置成片价格，暂无法生成。</p>}
           {priced && estimate !== null && (
             <p className="text-[12.5px] text-ink-tertiary">音频约 {audioDurationSec} 秒，预计消耗 {estimate} 视频点，按实际成片时长结算。</p>
@@ -110,14 +110,14 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
       ) : null}
 
       {running && (
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-surface p-5 text-[13px] text-ink-secondary">
+        <div className="flex items-center gap-3 rounded-xl border border-hairline-subtle bg-surface p-5 text-[13px] text-ink-secondary">
           <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
           正在对口型合成，通常需要几分钟，可稍后回来查看。
         </div>
       )}
 
       {project?.stage === "done" && finalUrl && (
-        <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-5">
+        <div className="space-y-3 rounded-xl border border-hairline-subtle bg-surface p-5">
           <video controls src={finalUrl} className="w-full rounded-lg" />
           <button
             type="button"
@@ -140,7 +140,7 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
               <button
                 type="button"
                 onClick={() => openDownload(rawUrl, "下载无配乐版本")}
-                className="rounded-lg border border-gray-200 bg-surface px-4 py-2 text-[13px] text-ink-secondary"
+                className="rounded-lg border border-hairline-subtle bg-surface px-4 py-2 text-[13px] text-ink-secondary"
               >
                 下载无配乐版本
               </button>

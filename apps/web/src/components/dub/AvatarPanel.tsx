@@ -79,7 +79,7 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         {avatars.map((a) => (
           <div
             key={a.id}
-            className={`rounded-xl border p-3 ${selectedAvatarId === a.id ? "border-brand bg-brand/5" : "border-gray-200"}`}
+            className={`rounded-xl border p-3 ${selectedAvatarId === a.id ? "border-brand bg-brand/5" : "border-hairline-subtle"}`}
           >
             <button onClick={() => onSelect(a.id)} className="flex w-full items-center gap-2 text-left">
               <Icon icon="mdi:account-voice" className="text-xl text-brand" />
@@ -98,18 +98,18 @@ export function AvatarPanel({ token, pricing, selectedAvatarId, onSelect, busy, 
         {avatars.length === 0 && <p className="text-[12.5px] text-ink-tertiary">还没有数字人形象，先新建一个。</p>}
       </div>
 
-      <div className="space-y-3 rounded-xl border border-gray-100 bg-surface p-4">
+      <div className="space-y-3 rounded-xl border border-hairline-subtle bg-surface p-4">
         <h3 className="text-[13px] font-semibold text-ink">新建数字人形象</h3>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="形象名称，如：我的口播分身"
-          className="w-full rounded-lg border border-gray-200 px-3 py-2 text-[13px] outline-none focus:border-brand"
+          className="w-full rounded-lg border border-hairline-subtle px-3 py-2 text-[13px] outline-none focus:border-brand"
         />
         <button
           disabled={busy || !priced}
           onClick={() => inputRef.current?.click()}
-          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-ink-tertiary disabled:opacity-40"
+          className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-hairline-subtle py-8 text-ink-tertiary disabled:opacity-40"
         >
           <Icon icon={cloning ? "mdi:loading" : "mdi:video-account"} className={`text-2xl ${cloning ? "animate-spin text-brand" : ""}`} />
           <span className="text-[13px]">{cloning ? "克隆中，请稍候…" : "上传无配音的场景视频（≤100MB）"}</span>

@@ -44,7 +44,7 @@ export function MarkdownMessage({ content, variant = "chat" }: MarkdownMessagePr
           ol: ({ children }) => <ol className="mb-2 ml-5 list-decimal space-y-1">{children}</ol>,
           li: ({ children }) => <li className="pl-1">{children}</li>,
           blockquote: ({ children }) => (
-            <blockquote className="mb-2 border-l-4 border-brand/30 pl-3 text-gray-600">{children}</blockquote>
+            <blockquote className="mb-2 border-l-4 border-brand/30 pl-3 text-ink-secondary">{children}</blockquote>
           ),
           code: ({ className, children }) => {
             const isBlock = Boolean(className);
@@ -52,24 +52,24 @@ export function MarkdownMessage({ content, variant = "chat" }: MarkdownMessagePr
               return <code className={className}>{children}</code>;
             }
             return (
-              <code className="rounded bg-surface px-1.5 py-0.5 text-[0.92em] text-gray-800 border border-gray-200">
+              <code className="rounded bg-surface px-1.5 py-0.5 text-[0.92em] text-ink border border-hairline-subtle">
                 {children}
               </code>
             );
           },
           pre: ({ children }) => (
-            <pre className="mb-2 overflow-x-auto rounded-lg border border-gray-200 bg-surface p-3 text-xs leading-5 text-gray-800">
+            <pre className="mb-2 overflow-x-auto rounded-lg border border-hairline-subtle bg-surface p-3 text-xs leading-5 text-ink">
               {children}
             </pre>
           ),
           table: ({ children }) => (
-            <div className="mb-2 overflow-x-auto rounded-lg border border-gray-200 bg-surface">
+            <div className="mb-2 overflow-x-auto rounded-lg border border-hairline-subtle bg-surface">
               <table className="min-w-full border-collapse text-xs">{children}</table>
             </div>
           ),
-          th: ({ children }) => <th className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-left font-semibold">{children}</th>,
-          td: ({ children }) => <td className="border-t border-gray-100 px-3 py-2 align-top">{children}</td>,
-          hr: () => <hr className="my-3 border-gray-200" />,
+          th: ({ children }) => <th className="border-b border-hairline-subtle bg-surface-subtle px-3 py-2 text-left font-semibold">{children}</th>,
+          td: ({ children }) => <td className="border-t border-hairline-subtle px-3 py-2 align-top">{children}</td>,
+          hr: () => <hr className="my-3 border-hairline-subtle" />,
         }}
       >
         {content}

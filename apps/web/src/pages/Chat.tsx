@@ -55,20 +55,20 @@ function TypingIndicator({ agentIcon, agentAvatarSvg, agentAvatarUrl, agentName 
       className="flex items-start space-x-3"
     >
       <AgentAvatar avatarUrl={agentAvatarUrl} avatarSvg={agentAvatarSvg} icon={agentIcon} size={40} name={agentName} />
-      <div className="rounded-2xl rounded-tl-none p-4 bg-gray-50 border border-gray-100">
+      <div className="rounded-2xl rounded-tl-none p-4 bg-surface-subtle border border-hairline-subtle">
         <div className="flex space-x-1">
           <motion.span
-            className="w-2 h-2 bg-gray-400 rounded-full"
+            className="w-2 h-2 bg-ink-tertiary rounded-full"
             animate={reduced ? undefined : { y: [0, -3, 0] }}
             transition={reduced ? undefined : { duration: 0.6, repeat: Infinity, ease: "easeInOut" }}
           />
           <motion.span
-            className="w-2 h-2 bg-gray-400 rounded-full"
+            className="w-2 h-2 bg-ink-tertiary rounded-full"
             animate={reduced ? undefined : { y: [0, -3, 0] }}
             transition={reduced ? undefined : { duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0.2 }}
           />
           <motion.span
-            className="w-2 h-2 bg-gray-400 rounded-full"
+            className="w-2 h-2 bg-ink-tertiary rounded-full"
             animate={reduced ? undefined : { y: [0, -3, 0] }}
             transition={reduced ? undefined : { duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: 0.4 }}
           />
@@ -194,7 +194,7 @@ export default function Chat({
   const toolStatusClassName = (status: ToolActivity["status"]) => {
     if (status === "started") return "text-brand-ink";
     if (status === "failed") return "text-red-600";
-    return "text-gray-500";
+    return "text-ink-secondary";
   };
   const isCommandTool = (tool: ToolActivity) => tool.name === "terminal_exec" || tool.label === "执行命令";
   const stripToolDetailPrefix = (detail: string) =>
@@ -397,7 +397,7 @@ export default function Chat({
           e.currentTarget.value = "";
         }}
       />
-      <div className="rounded-2xl border border-gray-200 bg-surface shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all focus-within:border-brand/40 focus-within:shadow-[0_12px_32px_rgba(15,23,42,0.09)]">
+      <div className="rounded-2xl border border-hairline-subtle bg-surface shadow-[0_8px_24px_rgba(15,23,42,0.06)] transition-all focus-within:border-brand/40 focus-within:shadow-[0_12px_32px_rgba(15,23,42,0.09)]">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -415,7 +415,7 @@ export default function Chat({
             }
           }}
           placeholder="输入问题..."
-          className="block w-full min-h-[78px] max-h-36 resize-none rounded-t-2xl border-0 bg-transparent px-4 pt-4 pb-2 text-sm leading-6 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-0"
+          className="block w-full min-h-[78px] max-h-36 resize-none rounded-t-2xl border-0 bg-transparent px-4 pt-4 pb-2 text-sm leading-6 text-ink placeholder:text-ink-tertiary focus:outline-none focus:ring-0"
         />
 
         {attachments.length > 0 && (
@@ -423,7 +423,7 @@ export default function Chat({
             {attachments.map((attachment) => (
               <div
                 key={attachment.id}
-                className="h-11 max-w-60 rounded-xl border border-gray-200 bg-gray-50 px-2 py-1.5 flex items-center gap-2"
+                className="h-11 max-w-60 rounded-xl border border-hairline-subtle bg-surface-subtle px-2 py-1.5 flex items-center gap-2"
               >
                 {attachment.previewUrl ? (
                   <img
@@ -432,18 +432,18 @@ export default function Chat({
                     className="w-8 h-8 rounded-lg object-cover bg-surface flex-none"
                   />
                 ) : (
-                  <span className="w-8 h-8 rounded-lg bg-surface text-gray-500 flex items-center justify-center flex-none">
+                  <span className="w-8 h-8 rounded-lg bg-surface text-ink-secondary flex items-center justify-center flex-none">
                     <Icon icon="mdi:file-document-outline" className="text-lg" aria-hidden />
                   </span>
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block text-xs font-medium text-gray-700 truncate">{attachment.name}</span>
-                  <span className="block text-[10px] text-gray-400">{Math.ceil(attachment.sizeBytes / 1024)} KB</span>
+                  <span className="block text-xs font-medium text-ink truncate">{attachment.name}</span>
+                  <span className="block text-[10px] text-ink-tertiary">{Math.ceil(attachment.sizeBytes / 1024)} KB</span>
                 </span>
                 <button
                   type="button"
                   onClick={() => removeAttachment(attachment.id)}
-                  className="w-6 h-6 rounded-md text-gray-400 flex items-center justify-center flex-none"
+                  className="w-6 h-6 rounded-md text-ink-tertiary flex items-center justify-center flex-none"
                   aria-label="移除附件"
                 >
                   <Icon icon="mdi:close" className="text-sm" aria-hidden />
@@ -458,7 +458,7 @@ export default function Chat({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-9 h-9 flex-none rounded-full text-gray-500 flex items-center justify-center transition-colors"
+              className="w-9 h-9 flex-none rounded-full text-ink-secondary flex items-center justify-center transition-colors"
               aria-label="添加附件"
               title="添加附件"
             >
@@ -470,7 +470,7 @@ export default function Chat({
               className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
                 attachAllOwn || selectedKbIds.length > 0
                   ? "bg-brand-soft border-brand/20 text-brand-ink"
-                  : "bg-surface border-gray-200 text-gray-600 "
+                  : "bg-surface border-hairline-subtle text-ink-secondary "
               }`}
             >
               <Icon icon="mdi:database-search-outline" className="text-base flex-none" aria-hidden />
@@ -482,7 +482,7 @@ export default function Chat({
               className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
                 selectedToolIds.length > 0
                   ? "bg-brand-soft border-brand/30 text-brand-ink"
-                  : "bg-surface border-gray-200 text-gray-600 "
+                  : "bg-surface border-hairline-subtle text-ink-secondary "
               }`}
             >
               <Icon icon="mdi:wrench-outline" className="text-base flex-none" aria-hidden />
@@ -503,18 +503,18 @@ export default function Chat({
               <button
                 type="button"
                 onClick={() => setModelPickerOpen(true)}
-                className="h-9 max-w-[calc(100vw-10rem)] px-3 rounded-xl border border-gray-200 bg-surface text-xs font-medium text-gray-700 flex items-center gap-2 transition-colors sm:max-w-48"
+                className="h-9 max-w-[calc(100vw-10rem)] px-3 rounded-xl border border-hairline-subtle bg-surface text-xs font-medium text-ink flex items-center gap-2 transition-colors sm:max-w-48"
                 aria-label="选择模型"
               >
-                <Icon icon="mdi:chip" className="text-base text-gray-500 flex-none" aria-hidden />
+                <Icon icon="mdi:chip" className="text-base text-ink-secondary flex-none" aria-hidden />
                 <span className="truncate">{selectedModelLabel}</span>
-                <Icon icon="mdi:chevron-down" className="text-base text-gray-400 flex-none" aria-hidden />
+                <Icon icon="mdi:chevron-down" className="text-base text-ink-tertiary flex-none" aria-hidden />
               </button>
               {modelPickerOpen && (
-                <div className="absolute bottom-full right-0 z-50 mb-2 w-72 rounded-xl bg-surface border border-gray-100 shadow-xl overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-100">
-                    <h4 className="text-sm font-bold text-gray-900">选择模型</h4>
-                    <p className="text-xs text-gray-400 mt-0.5">切换后下一条消息生效</p>
+                <div className="absolute bottom-full right-0 z-50 mb-2 w-72 rounded-xl bg-surface border border-hairline-subtle shadow-xl overflow-hidden">
+                  <div className="px-4 py-3 border-b border-hairline-subtle">
+                    <h4 className="text-sm font-bold text-ink">选择模型</h4>
+                    <p className="text-xs text-ink-tertiary mt-0.5">切换后下一条消息生效</p>
                   </div>
                   <div className="p-2 max-h-72 overflow-y-auto">
                     {models.map((m) => {
@@ -530,11 +530,11 @@ export default function Chat({
                           className={`w-full px-3 py-2.5 rounded-lg text-left flex items-center gap-3 transition-colors ${
                             checked
                               ? "bg-brand-soft text-brand-ink"
-                              : "text-gray-700 "
+                              : "text-ink "
                           }`}
                         >
                           <span className={`w-5 h-5 rounded-full flex items-center justify-center flex-none ${
-                            checked ? "bg-brand text-white" : "border border-gray-200 text-transparent"
+                            checked ? "bg-brand text-white" : "border border-hairline-subtle text-transparent"
                           }`}>
                             <Icon icon="mdi:check" className="text-sm" aria-hidden />
                           </span>
@@ -545,7 +545,7 @@ export default function Chat({
                       );
                     })}
                     {models.length === 0 && (
-                      <div className="px-3 py-6 text-center text-xs text-gray-400">暂无可用模型</div>
+                      <div className="px-3 py-6 text-center text-xs text-ink-tertiary">暂无可用模型</div>
                     )}
                   </div>
                 </div>
@@ -554,7 +554,7 @@ export default function Chat({
             <RippleButton
               onClick={handleSend}
               disabled={isLoading || (!input.trim() && attachments.length === 0)}
-              className="w-10 h-10 flex-none rounded-full bg-brand text-white disabled:bg-gray-200 disabled:text-gray-400 flex items-center justify-center transition-colors"
+              className="w-10 h-10 flex-none rounded-full bg-brand text-white disabled:bg-hairline-subtle disabled:text-ink-tertiary flex items-center justify-center transition-colors"
               aria-label="发送"
             >
               <Icon icon="mdi:arrow-up" className="text-xl" aria-hidden />
@@ -579,13 +579,13 @@ export default function Chat({
         <button
           type="button"
           onClick={() => setToolGroupExpanded((prev) => !prev)}
-          className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-medium text-gray-500 transition-colors "
+          className="inline-flex max-w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-xs font-medium text-ink-secondary transition-colors "
         >
-          <Icon icon="mdi:console-line" className="text-sm flex-none text-gray-400" aria-hidden />
+          <Icon icon="mdi:console-line" className="text-sm flex-none text-ink-tertiary" aria-hidden />
           <span className="truncate">{toolGroupVerb} {toolActivities.length} {toolGroupUnit}</span>
           <Icon
             icon={toolGroupExpanded ? "mdi:chevron-down" : "mdi:chevron-right"}
-            className="text-sm flex-none text-gray-400"
+            className="text-sm flex-none text-ink-tertiary"
             aria-hidden
           />
         </button>
@@ -611,14 +611,14 @@ export default function Chat({
                   <button
                     type="button"
                     onClick={() => canExpand && toggleExpandedTool(tool.id)}
-                    className={`flex w-full min-w-0 items-start justify-between gap-2 rounded-md px-1 py-0.5 text-left text-xs leading-5 text-gray-500 transition-colors ${
+                    className={`flex w-full min-w-0 items-start justify-between gap-2 rounded-md px-1 py-0.5 text-left text-xs leading-5 text-ink-secondary transition-colors ${
                       canExpand ? " " : "cursor-default"
                     }`}
                   >
                     <span className="min-w-0 flex-1 truncate">
                       {toolStatusVerb(tool.status)} {toolCommandText(tool)}
                     </span>
-                    <span className="flex items-center gap-1 flex-none text-[11px] text-gray-400">
+                    <span className="flex items-center gap-1 flex-none text-[11px] text-ink-tertiary">
                       {duration && <span>{duration}</span>}
                       {canExpand && (
                         <Icon
@@ -631,16 +631,16 @@ export default function Chat({
                   </button>
 
                   {expanded && (
-                    <div className="mt-1 rounded-lg bg-gray-100 px-3 py-2.5 text-xs shadow-inner">
-                      <div className="mb-2 text-[11px] font-medium text-gray-500">
+                    <div className="mt-1 rounded-lg bg-surface-muted px-3 py-2.5 text-xs shadow-inner">
+                      <div className="mb-2 text-[11px] font-medium text-ink-secondary">
                         {isCommandTool(tool) ? "Shell" : tool.label || tool.name}
                       </div>
-                      <div className="font-mono text-[11px] leading-5 text-gray-800">
+                      <div className="font-mono text-[11px] leading-5 text-ink">
                         {isCommandTool(tool) && (
                           <div className="whitespace-pre-wrap break-words">$ {toolCommandText(tool)}</div>
                         )}
                         {tool.outputPreview && (
-                          <div className="mt-1 whitespace-pre-wrap break-words text-gray-500">{tool.outputPreview}</div>
+                          <div className="mt-1 whitespace-pre-wrap break-words text-ink-secondary">{tool.outputPreview}</div>
                         )}
                       </div>
                       <div className={`mt-2 flex items-center justify-end gap-1 text-[11px] ${toolStatusClassName(tool.status)}`}>
@@ -669,24 +669,24 @@ export default function Chat({
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Header */}
-      <div className="h-16 px-6 border-b border-gray-100 flex items-center justify-between flex-none">
+      <div className="h-16 px-6 border-b border-hairline-subtle flex items-center justify-between flex-none">
         <div className="flex items-center min-w-0 gap-3">
           {onToggleAgentPanel && (
             <button
               type="button"
               onClick={onToggleAgentPanel}
               aria-label={agentPanelCollapsed ? "展开对话列表" : "收起对话列表"}
-              className="flex-none w-9 h-9 rounded-lg text-gray-400 flex items-center justify-center transition-colors"
+              className="flex-none w-9 h-9 rounded-lg text-ink-tertiary flex items-center justify-center transition-colors"
             >
               <Icon icon="mdi:dock-left" className="text-xl" aria-hidden />
             </button>
           )}
           <div className="min-w-0">
-            <h3 className="text-sm font-bold text-gray-800">
+            <h3 className="text-sm font-bold text-ink">
               {sessionId ? (sessionTitle?.trim() || "对话") : "新对话"}
             </h3>
             <div className="flex items-center space-x-2 mt-1">
-              <span className="px-2 py-0.5 bg-gray-50 text-gray-600 text-[10px] font-medium rounded">
+              <span className="px-2 py-0.5 bg-surface-subtle text-ink-secondary text-[10px] font-medium rounded">
                 {agentName}
               </span>
               {selectedModel && (
@@ -713,7 +713,7 @@ export default function Chat({
       <div ref={messagesScrollRef} className="flex-1 overflow-y-auto p-6">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center px-6">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-8 text-center">需要 {agentName} 为您做什么？</h2>
+            <h2 className="text-2xl font-semibold text-ink mb-8 text-center">需要 {agentName} 为您做什么？</h2>
             <div className="w-full max-w-2xl">
               {(error || attachmentError) && (
                 <div className="mb-3 p-3 bg-red-50 text-red-700 text-sm rounded-lg">
@@ -745,7 +745,7 @@ export default function Chat({
                       className={`rounded-2xl p-4 ${
                         msg.role === "user"
                           ? "bg-brand text-white rounded-tr-none"
-                          : "bg-gray-50 text-gray-800 border border-gray-100 rounded-tl-none"
+                          : "bg-surface-subtle text-ink border border-hairline-subtle rounded-tl-none"
                       }`}
                     >
                       {msg.role === "assistant" ? (
@@ -764,7 +764,7 @@ export default function Chat({
                           citation.docs.map((doc, didx) => (
                             <div
                               key={`${cidx}-${didx}`}
-                              className="px-2 py-1 bg-surface border border-gray-200 rounded-full text-[10px] text-gray-600 flex items-center space-x-1"
+                              className="px-2 py-1 bg-surface border border-hairline-subtle rounded-full text-[10px] text-ink-secondary flex items-center space-x-1"
                             >
                               <Icon icon="mdi:file-document" className="text-sm" />
                               <span>引用 {doc.docName}#{doc.ordinal}</span>
@@ -780,8 +780,8 @@ export default function Chat({
                   </div>
 
                   {msg.role === "user" && (
-                    <div className="w-8 h-8 rounded-lg bg-gray-200 flex items-center justify-center flex-none">
-                      <Icon icon="mdi:account-outline" className="text-lg text-gray-600" aria-hidden />
+                    <div className="w-8 h-8 rounded-lg bg-hairline-subtle flex items-center justify-center flex-none">
+                      <Icon icon="mdi:account-outline" className="text-lg text-ink-secondary" aria-hidden />
                     </div>
                   )}
                   </div>
@@ -802,7 +802,7 @@ export default function Chat({
 
       {/* Input */}
       {messages.length > 0 && (
-        <div className="border-t border-gray-100 bg-surface px-6 py-5 flex-none">
+        <div className="border-t border-hairline-subtle bg-surface px-6 py-5 flex-none">
           {(error || attachmentError) && (
             <div className="mx-auto mb-3 max-w-5xl p-3 bg-red-50 text-red-700 text-sm rounded-lg">
               {error || attachmentError}
@@ -814,17 +814,17 @@ export default function Chat({
 
       {toolPickerOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/20 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/20 p-4"
           onClick={() => setToolPickerOpen(false)}
         >
           <div
-            className="w-full max-w-2xl rounded-xl bg-surface border border-gray-100 shadow-xl"
+            className="w-full max-w-2xl rounded-xl bg-surface border border-hairline-subtle shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+            <div className="px-5 py-4 border-b border-hairline-subtle flex items-center justify-between gap-4">
               <div>
-                <h4 className="text-base font-bold text-gray-900">挂载工具</h4>
-                <p className="text-xs text-gray-500 mt-1">
+                <h4 className="text-base font-bold text-ink">挂载工具</h4>
+                <p className="text-xs text-ink-secondary mt-1">
                   {draftSelectedToolIds.length} 个已选择，{installedToolCount} 个可挂载
                 </p>
               </div>
@@ -832,14 +832,14 @@ export default function Chat({
                 <button
                   type="button"
                   onClick={openMarketFromPicker}
-                  className="h-8 rounded-lg border border-gray-200 px-3 text-xs font-medium text-gray-700 "
+                  className="h-8 rounded-lg border border-hairline-subtle px-3 text-xs font-medium text-ink "
                 >
                   工具市场
                 </button>
                 <button
                   type="button"
                   onClick={() => setToolPickerOpen(false)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-secondary"
                   aria-label="关闭"
                 >
                   <Icon icon="mdi:close" className="text-lg" />
@@ -852,7 +852,7 @@ export default function Chat({
                 <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{toolError}</div>
               )}
               {toolLoading ? (
-                <div className="flex min-h-56 items-center justify-center text-sm text-gray-400">
+                <div className="flex min-h-56 items-center justify-center text-sm text-ink-tertiary">
                   <Icon icon="mdi:loading" className="mr-2 text-lg animate-spin" aria-hidden />
                   正在加载已安装工具
                 </div>
@@ -868,35 +868,35 @@ export default function Chat({
                         className={`w-full rounded-lg border px-3 py-3 text-left transition-colors flex items-start gap-3 ${
                           checked
                             ? "border-brand/30 bg-brand-soft text-brand-ink"
-                            : "border-gray-100 text-gray-700 "
+                            : "border-hairline-subtle text-ink "
                         }`}
                       >
                         <span
                           className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center flex-none ${
-                            checked ? "bg-brand border-brand text-white" : "border-gray-300"
+                            checked ? "bg-brand border-brand text-white" : "border-hairline"
                           }`}
                         >
                           {checked && <Icon icon="mdi:check" className="text-xs" aria-hidden />}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-sm font-medium">{tool.name}</span>
-                          <span className="mt-1 block line-clamp-2 text-xs leading-5 text-gray-400">{tool.description}</span>
+                          <span className="mt-1 block line-clamp-2 text-xs leading-5 text-ink-tertiary">{tool.description}</span>
                         </span>
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 px-6 text-center">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-gray-50 text-gray-500">
+                <div className="flex min-h-56 flex-col items-center justify-center rounded-xl border border-dashed border-hairline-subtle px-6 text-center">
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-surface-subtle text-ink-secondary">
                     <Icon icon="mdi:toolbox-outline" className="text-xl" aria-hidden />
                   </div>
-                  <p className="text-sm font-semibold text-gray-900">暂无已安装工具</p>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">先到工具市场安装 skill，再回到对话中挂载使用。</p>
+                  <p className="text-sm font-semibold text-ink">暂无已安装工具</p>
+                  <p className="mt-1 text-xs leading-5 text-ink-secondary">先到工具市场安装 skill，再回到对话中挂载使用。</p>
                   <button
                     type="button"
                     onClick={openMarketFromPicker}
-                    className="mt-4 h-9 rounded-lg bg-gray-900 px-4 text-xs font-medium text-white "
+                    className="mt-4 h-9 rounded-lg bg-surface-inverse px-4 text-xs font-medium text-ink-inverse "
                   >
                     打开工具市场
                   </button>
@@ -904,7 +904,7 @@ export default function Chat({
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+            <div className="px-5 py-4 border-t border-hairline-subtle flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={disableTools}
@@ -916,7 +916,7 @@ export default function Chat({
                 <button
                   type="button"
                   onClick={() => setToolPickerOpen(false)}
-                  className="px-4 py-2 rounded-lg text-sm text-gray-600 "
+                  className="px-4 py-2 rounded-lg text-sm text-ink-secondary "
                 >
                   取消
                 </button>
@@ -935,22 +935,22 @@ export default function Chat({
 
       {kbPickerOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/20 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/20 p-4"
           onClick={() => setKbPickerOpen(false)}
         >
           <div
-            className="w-full max-w-md rounded-xl bg-surface border border-gray-100 shadow-xl"
+            className="w-full max-w-md rounded-xl bg-surface border border-hairline-subtle shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-hairline-subtle flex items-center justify-between">
               <div>
-                <h4 className="text-base font-bold text-gray-900">选择知识库</h4>
-                <p className="text-xs text-gray-500 mt-1">全库只检索我的库；指定知识库可包含官方库</p>
+                <h4 className="text-base font-bold text-ink">选择知识库</h4>
+                <p className="text-xs text-ink-secondary mt-1">全库只检索我的库；指定知识库可包含官方库</p>
               </div>
               <button
                 type="button"
                 onClick={() => setKbPickerOpen(false)}
-                className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-secondary"
                 aria-label="关闭"
               >
                 <Icon icon="mdi:close" className="text-lg" />
@@ -967,7 +967,7 @@ export default function Chat({
                 className={`w-full p-4 rounded-xl border text-left transition-colors flex items-start gap-3 ${
                   draftAttachAllOwn
                     ? "border-brand/30 bg-brand-soft text-brand-ink"
-                    : "border-gray-100 text-gray-700"
+                    : "border-hairline-subtle text-ink"
                 }`}
               >
                 <span className="mt-0.5 w-7 h-7 rounded-lg bg-brand/10 text-brand flex items-center justify-center flex-none">
@@ -988,9 +988,9 @@ export default function Chat({
 
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="h-px bg-gray-100 flex-1" />
-                  <p className="text-xs font-medium text-gray-400">或指定知识库</p>
-                  <div className="h-px bg-gray-100 flex-1" />
+                  <div className="h-px bg-surface-muted flex-1" />
+                  <p className="text-xs font-medium text-ink-tertiary">或指定知识库</p>
+                  <div className="h-px bg-surface-muted flex-1" />
                 </div>
                 {kbList.length > 0 ? (
                   <div className="max-h-56 overflow-y-auto space-y-2">
@@ -1004,13 +1004,13 @@ export default function Chat({
                           onClick={() => toggleDraftKb(kb.id)}
                           className={`w-full px-3 py-2.5 rounded-lg border text-left flex items-center gap-3 transition-colors ${
                             checked
-                              ? "bg-surface-muted text-gray-900 border-gray-200"
-                              : "text-gray-700 border-gray-100"
+                              ? "bg-surface-muted text-ink border-hairline-subtle"
+                              : "text-ink border-hairline-subtle"
                           }`}
                         >
                           <span
                             className={`w-4 h-4 rounded border flex items-center justify-center flex-none ${
-                              checked ? "bg-brand border-brand text-white" : "border-gray-300"
+                              checked ? "bg-brand border-brand text-white" : "border-hairline"
                             }`}
                           >
                             {checked && <Icon icon="mdi:check" className="text-xs" aria-hidden />}
@@ -1029,7 +1029,7 @@ export default function Chat({
                               </span>
                             </span>
                             {kb.description && (
-                              <span className="block text-xs text-gray-400 truncate mt-0.5">{kb.description}</span>
+                              <span className="block text-xs text-ink-tertiary truncate mt-0.5">{kb.description}</span>
                             )}
                           </span>
                         </button>
@@ -1037,14 +1037,14 @@ export default function Chat({
                     })}
                   </div>
                 ) : (
-                  <div className="py-6 text-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-lg">
+                  <div className="py-6 text-center text-xs text-ink-tertiary border border-dashed border-hairline-subtle rounded-lg">
                     暂无可选知识库
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
+            <div className="px-5 py-4 border-t border-hairline-subtle flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={disableKnowledge}
@@ -1056,7 +1056,7 @@ export default function Chat({
               <button
                 type="button"
                 onClick={() => setKbPickerOpen(false)}
-                className="px-4 py-2 rounded-lg text-sm text-gray-600 "
+                className="px-4 py-2 rounded-lg text-sm text-ink-secondary "
               >
                 取消
               </button>

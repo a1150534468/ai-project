@@ -74,25 +74,25 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
           <div className="flex justify-center mb-5">
             <BrandLogo size={52} />
           </div>
-          <h1 className="text-[34px] font-semibold leading-tight text-gray-900 mb-2">AI 助手</h1>
-          <p className="text-gray-500 text-[15px]">您的全能 AI 助手</p>
+          <h1 className="text-[34px] font-semibold leading-tight text-ink mb-2">AI 助手</h1>
+          <p className="text-ink-secondary text-[15px]">您的全能 AI 助手</p>
         </div>
 
         {/* Register Card */}
-        <div className="auth-card bg-surface rounded-[18px] p-7 sm:p-8 border border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">创建账户</h2>
+        <div className="auth-card bg-surface rounded-[18px] p-7 sm:p-8 border border-hairline-subtle">
+          <h2 className="text-xl font-semibold text-ink mb-6">创建账户</h2>
 
           {/* Input Fields */}
           <div className="space-y-4 mb-6">
             {/* Username Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-ink mb-2">
                 用户名
               </label>
               <div className="relative">
                 <Icon
                   icon="mdi:account-outline"
-                  className="absolute left-3 top-3.5 text-gray-400"
+                  className="absolute left-3 top-3.5 text-ink-tertiary"
                 />
                 <input
                   type="text"
@@ -100,20 +100,20 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="3-32 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
 
             {/* Channel Code Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-ink mb-2">
                 注册码
               </label>
               <div className="relative">
                 <Icon
                   icon="mdi:key-outline"
-                  className="absolute left-3 top-3.5 text-gray-400"
+                  className="absolute left-3 top-3.5 text-ink-tertiary"
                 />
                 <input
                   type="text"
@@ -122,20 +122,20 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="2 位大写字母，如 AB"
                   maxLength={2}
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
 
             {/* Password Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-ink mb-2">
                 密码
               </label>
               <div className="relative">
                 <Icon
                   icon="mdi:lock-outline"
-                  className="absolute left-3 top-3.5 text-gray-400"
+                  className="absolute left-3 top-3.5 text-ink-tertiary"
                 />
                 <input
                   type="password"
@@ -143,20 +143,20 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="至少 8 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
 
             {/* Confirm Password Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-ink mb-2">
                 确认密码
               </label>
               <div className="relative">
                 <Icon
                   icon="mdi:lock-check-outline"
-                  className="absolute left-3 top-3.5 text-gray-400"
+                  className="absolute left-3 top-3.5 text-ink-tertiary"
                 />
                 <input
                   type="password"
@@ -164,7 +164,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="再输入一遍密码"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-gray-200 focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
+                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>
             </div>
@@ -184,7 +184,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
           <RippleButton
             onClick={handleRegister}
             disabled={isLoading}
-            className="w-full bg-brand disabled:bg-gray-300 text-white font-normal py-3 rounded-full transition-transform active:scale-[0.98] disabled:shadow-none"
+            className="w-full bg-brand disabled:bg-hairline disabled:text-ink-tertiary text-white font-normal py-3 rounded-full transition-transform active:scale-[0.98] disabled:shadow-none"
           >
             {isLoading ? (
               <span className="flex items-center justify-center">
@@ -197,7 +197,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
           </RippleButton>
 
           {/* Footer */}
-          <p className="text-xs text-gray-500 text-center mt-6">
+          <p className="text-xs text-ink-secondary text-center mt-6">
             已有账户？{" "}
             <button
               onClick={onSwitchToLogin}

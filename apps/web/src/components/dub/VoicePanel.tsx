@@ -99,7 +99,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
           <button
             key={t.id}
             onClick={() => setMode(t.id)}
-            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === t.id ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary"}`}
+            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === t.id ? "bg-brand text-white" : "bg-surface-muted text-ink-secondary"}`}
           >
             {t.label}
           </button>
@@ -112,7 +112,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
             <button
               key={v.id}
               onClick={() => setVoice(v.id)}
-              className={`flex items-center gap-2 rounded-xl border p-3 text-left ${voice === v.id ? "border-brand bg-brand/5" : "border-gray-200"}`}
+              className={`flex items-center gap-2 rounded-xl border p-3 text-left ${voice === v.id ? "border-brand bg-brand/5" : "border-hairline-subtle"}`}
             >
               <Icon icon={v.gender === "female" ? "mdi:face-woman-outline" : "mdi:face-man-outline"} className="text-lg text-brand" />
               <span>
@@ -130,7 +130,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
           onChange={(e) => setDescription(e.target.value)}
           rows={4}
           placeholder="用文字描述你想要的音色，如：一位年迈的老先生，带北方口音，语速缓慢沉稳，嗓音略带沙哑与沧桑。"
-          className="w-full rounded-xl border border-gray-200 p-3 text-[13.5px] outline-none focus:border-brand"
+          className="w-full rounded-xl border border-hairline-subtle p-3 text-[13.5px] outline-none focus:border-brand"
         />
       )}
 
@@ -138,7 +138,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
         <div>
           <button
             onClick={() => refInput.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-8 text-ink-tertiary "
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-hairline-subtle py-8 text-ink-tertiary "
           >
             <Icon icon="mdi:microphone-outline" className="text-2xl" />
             <span className="text-[13px]">{refFile ? refFile.name : "上传参考音频复刻音色（≤10MB，mp3/wav）"}</span>
@@ -159,7 +159,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
                   type="button"
                   onClick={() => setStyleId(on ? null : p.id)}
                   title={p.prompt}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${on ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary "}`}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${on ? "bg-brand text-white" : "bg-surface-muted text-ink-secondary "}`}
                 >
                   <Icon icon={p.icon} className="text-[15px]" />
                   {p.label}

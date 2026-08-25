@@ -86,11 +86,11 @@ export function AgentRail(props: AgentRailProps) {
         };
 
   return (
-    <section className="hidden w-[220px] flex-none flex-col overflow-hidden border-r border-gray-100 bg-surface lg:flex">
+    <section className="hidden w-[220px] flex-none flex-col overflow-hidden border-r border-hairline-subtle bg-surface lg:flex">
       <AnimatePresence mode="wait">
         {selected === null ? (
           <motion.div key="agents" {...slide(1)} className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-none border-b border-gray-100 p-4">
+            <div className="flex-none border-b border-hairline-subtle p-4">
               <button
                 onClick={props.onOpenAgentPicker}
                 className="flex w-full items-center justify-center space-x-2 rounded-full bg-brand px-4 py-2.5 text-sm font-medium text-white transition-all "
@@ -119,12 +119,12 @@ export function AgentRail(props: AgentRailProps) {
                 setPendingDelete={setPendingDelete}
                 token={props.token}
               />
-              {allItems.length === 0 && <p className="mt-12 text-center text-xs text-gray-400">还没有 Agent</p>}
+              {allItems.length === 0 && <p className="mt-12 text-center text-xs text-ink-tertiary">还没有 Agent</p>}
             </div>
           </motion.div>
         ) : (
           <motion.div key="sessions" {...slide(-1)} className="flex min-h-0 flex-1 flex-col">
-            <div className="flex-none border-b border-gray-100 p-4">
+            <div className="flex-none border-b border-hairline-subtle p-4">
               <button
                 onClick={backToAgents}
                 aria-label="返回 Agent 列表"
@@ -138,7 +138,7 @@ export function AgentRail(props: AgentRailProps) {
                   size={24}
                   name={selected.name}
                 />
-                <span className="truncate text-sm font-semibold text-gray-800">{selected.name}</span>
+                <span className="truncate text-sm font-semibold text-ink">{selected.name}</span>
               </button>
               <button
                 onClick={() => props.onNewSession?.(selected.id)}
@@ -188,12 +188,12 @@ export function AgentRail(props: AgentRailProps) {
 function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
   return (
     <div className="relative mt-3">
-      <Icon icon="mdi:magnify" className="absolute left-3 top-1/2 -translate-y-1/2 text-base text-gray-400" aria-hidden />
+      <Icon icon="mdi:magnify" className="absolute left-3 top-1/2 -translate-y-1/2 text-base text-ink-tertiary" aria-hidden />
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-9 w-full rounded-lg border border-gray-100 bg-gray-50 pl-9 pr-3 text-xs text-gray-700 outline-none focus:border-brand/40 focus:bg-surface"
+        className="h-9 w-full rounded-lg border border-hairline-subtle bg-surface-subtle pl-9 pr-3 text-xs text-ink outline-none focus:border-brand/40 focus:bg-surface"
       />
     </div>
   );
@@ -214,7 +214,7 @@ function SessionList({
   onSelectSession?: (id: string) => void;
   onDeleteSession?: (id: string) => void;
 }) {
-  if (sessions.length === 0) return <p className="mt-12 text-center text-xs text-gray-400">暂无对话</p>;
+  if (sessions.length === 0) return <p className="mt-12 text-center text-xs text-ink-tertiary">暂无对话</p>;
   return (
     <div className="space-y-1">
       {sessions.map((session) => (
@@ -233,19 +233,19 @@ function SessionList({
               size={26}
               name={agent.name}
             />
-            <p className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800">{session.title}</p>
+            <p className="min-w-0 flex-1 truncate text-xs font-medium text-ink">{session.title}</p>
             {runningSessionIds.has(session.id) && (
               <Icon icon="mdi:loading" className="flex-none animate-spin text-sm text-brand" aria-label="运行中" />
             )}
           </div>
           <div className="mt-1 flex items-center justify-between gap-2 pl-[34px]">
-            <p className="text-[10px] text-gray-400">{new Date(session.updatedAt).toLocaleDateString("zh-CN")}</p>
+            <p className="text-[10px] text-ink-tertiary">{new Date(session.updatedAt).toLocaleDateString("zh-CN")}</p>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onDeleteSession?.(session.id);
               }}
-              className="text-[10px] text-gray-400 opacity-100 transition-opacity "
+              className="text-[10px] text-ink-tertiary opacity-100 transition-opacity "
             >
               删除
             </button>
@@ -276,7 +276,7 @@ function AgentGroup({
   if (items.length === 0) return null;
   return (
     <div className="mb-4">
-      <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-wide text-gray-400">{title}</p>
+      <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-wide text-ink-tertiary">{title}</p>
       {items.map((agent) => (
         <AgentRow
           key={agent.id}
@@ -318,8 +318,8 @@ function AgentRow({
           name={agent.name}
         />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-medium text-gray-800">{agent.name}</span>
-          <span className="block text-[10px] text-gray-400">{agent.sessionCount} 个对话</span>
+          <span className="block truncate text-xs font-medium text-ink">{agent.name}</span>
+          <span className="block text-[10px] text-ink-tertiary">{agent.sessionCount} 个对话</span>
         </span>
       </button>
       {agent.type === "custom" && (
@@ -337,7 +337,7 @@ function AgentRow({
         >
           <button
             aria-label="更多操作"
-            className="flex-none rounded p-1 text-gray-300 opacity-100 transition-opacity "
+            className="flex-none rounded p-1 text-ink-tertiary opacity-100 transition-opacity "
           >
             <Icon icon="mdi:dots-horizontal" className="text-base" />
           </button>

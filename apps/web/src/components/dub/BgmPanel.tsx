@@ -46,7 +46,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
     <div className="space-y-5">
       <button
         onClick={() => onChange({ bgmPresetId: null, bgmObjectKey: null, bgmVolume })}
-        className={`w-full rounded-xl border p-3 text-left text-[13px] ${none ? "border-brand bg-brand/5" : "border-gray-200"}`}
+        className={`w-full rounded-xl border p-3 text-left text-[13px] ${none ? "border-brand bg-brand/5" : "border-hairline-subtle"}`}
       >
         <Icon icon="mdi:music-note-off-outline" className="mr-2 inline text-lg text-brand" />
         不加配乐
@@ -61,7 +61,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
             {presets.map((b) => (
               <div
                 key={b.id}
-                className={`flex items-center gap-3 rounded-xl border p-3 ${bgmPresetId === b.id ? "border-brand bg-brand/5" : "border-gray-200"}`}
+                className={`flex items-center gap-3 rounded-xl border p-3 ${bgmPresetId === b.id ? "border-brand bg-brand/5" : "border-hairline-subtle"}`}
               >
                 <button onClick={() => onChange({ bgmPresetId: b.id, bgmObjectKey: null, bgmVolume })} className="flex-1 text-left text-[13px] font-medium text-ink">
                   {b.title}
@@ -78,7 +78,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
         <button
           disabled={busy}
           onClick={() => inputRef.current?.click()}
-          className={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed py-8 text-ink-tertiary disabled:opacity-40 ${bgmObjectKey ? "border-brand/50" : "border-gray-200"}`}
+          className={`flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed py-8 text-ink-tertiary disabled:opacity-40 ${bgmObjectKey ? "border-brand/50" : "border-hairline-subtle"}`}
         >
           <Icon icon="mdi:music-note-plus" className="text-2xl" />
           <span className="text-[13px]">{bgmObjectKey ? `已上传：${uploadedName || "自定义配乐"}` : "点击上传配乐（≤20MB，mp3/wav）"}</span>

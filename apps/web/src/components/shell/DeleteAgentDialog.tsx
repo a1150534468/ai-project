@@ -25,10 +25,10 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
     <Modal open={open} onClose={onCancel} className="mx-4 w-full max-w-sm rounded-2xl bg-surface p-6 shadow-lg">
       <div className="mb-4 flex items-start gap-3">
         <Icon icon="mdi:alert-circle" className="mt-1 flex-none text-xl text-red-500" />
-        <h2 className="text-lg font-semibold text-gray-900">删除「{agentName}」？</h2>
+        <h2 className="text-lg font-semibold text-ink">删除「{agentName}」？</h2>
       </div>
 
-      <p className="mb-4 text-sm text-gray-600">
+      <p className="mb-4 text-sm text-ink-secondary">
         {needsTyping
           ? `将同时永久删除该 Agent 下的 ${sessionCount} 个对话及其全部消息，无法恢复。`
           : "该 Agent 还没有任何对话。删除后无法恢复。"}
@@ -36,18 +36,18 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
 
       {needsTyping && (
         <label className="mb-6 block">
-          <span className="mb-1.5 block text-xs text-gray-500">请输入 Agent 名称以确认</span>
+          <span className="mb-1.5 block text-xs text-ink-secondary">请输入 Agent 名称以确认</span>
           <input
             value={typed}
             onChange={(e) => setTyped(e.target.value)}
             placeholder={agentName}
-            className="h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-red-400"
+            className="h-10 w-full rounded-lg border border-hairline-subtle px-3 text-sm outline-none focus:border-red-400"
           />
         </label>
       )}
 
       <div className="flex gap-3">
-        <RippleButton onClick={onCancel} className="flex-1 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors ">
+        <RippleButton onClick={onCancel} className="flex-1 rounded-lg border border-hairline-subtle px-4 py-2 text-sm font-medium text-ink transition-colors ">
           取消
         </RippleButton>
         <button

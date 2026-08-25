@@ -457,55 +457,12 @@ html[data-theme="dark"] .text-brand {
 
 /* Existing screens use literal light colors. Map those UI surfaces to the
    shared dark palette without changing component behavior or data flow. */
-html[data-theme="dark"] [class~="bg-gray-50/50"],
-html[data-theme="dark"] .bg-gray-50 {
-  background-color: var(--apple-surface) !important;
-}
-
-html[data-theme="dark"] .bg-gray-100,
-html[data-theme="dark"] .bg-gray-200,
-html[data-theme="dark"] .bg-gray-300 {
-  background-color: var(--apple-surface-muted) !important;
-}
-
-html[data-theme="dark"] .text-gray-900,
-html[data-theme="dark"] .text-gray-800,
-html[data-theme="dark"] .text-gray-700 {
-  color: var(--apple-ink) !important;
-}
-
-html[data-theme="dark"] .text-gray-600,
-html[data-theme="dark"] .text-gray-500 {
-  color: var(--apple-ink-secondary) !important;
-}
-
-html[data-theme="dark"] .text-gray-400,
-html[data-theme="dark"] .text-gray-300 {
-  color: var(--apple-ink-tertiary) !important;
-}
-
-html[data-theme="dark"] .border-gray-50,
-html[data-theme="dark"] .border-gray-100,
-html[data-theme="dark"] .border-gray-200,
-html[data-theme="dark"] .border-gray-300 {
-  border-color: var(--apple-hairline) !important;
-}
-
 html[data-theme="dark"] .bg-red-50 {
   background-color: rgba(255, 69, 58, 0.12) !important;
 }
 
 html[data-theme="dark"] .bg-blue-50 {
   background-color: rgb(var(--color-brand) / 0.12) !important;
-}
-
-html[data-theme="dark"] .disabled\:bg-gray-200:disabled,
-html[data-theme="dark"] .disabled\:bg-gray-300:disabled {
-  background-color: var(--apple-surface-raised) !important;
-}
-
-html[data-theme="dark"] .disabled\:text-gray-400:disabled {
-  color: var(--apple-ink-tertiary) !important;
 }
 
 html[data-theme="dark"] .bg-transparent {

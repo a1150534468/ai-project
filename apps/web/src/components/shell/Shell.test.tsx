@@ -55,7 +55,7 @@ describe("Shell", () => {
     );
 
     expect(html).toContain("模型广场");
-    expect(html).toContain("text-gray-900 font-600");
+    expect(html).toContain("text-ink font-600");
   });
 
   it("hides configured main and workflow menu entries", () => {

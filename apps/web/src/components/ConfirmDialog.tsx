@@ -69,16 +69,16 @@ export function useConfirm() {
           {dialog.isDangerous && (
             <Icon icon="mdi:alert-circle" className="text-red-500 text-xl flex-none mt-1" />
           )}
-          <h2 className="text-lg font-semibold text-gray-900">{dialog.title}</h2>
+          <h2 className="text-lg font-semibold text-ink">{dialog.title}</h2>
         </div>
 
-        <p className="text-sm text-gray-600 mb-6">{dialog.message}</p>
+        <p className="text-sm text-ink-secondary mb-6">{dialog.message}</p>
 
         <div className="flex gap-3">
           <RippleButton
             onClick={dialog.onCancel}
             disabled={dialog.loading}
-            className="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 disabled:opacity-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-hairline-subtle rounded-lg text-sm font-medium text-ink disabled:opacity-50 transition-colors"
           >
             {dialog.cancelText}
           </RippleButton>

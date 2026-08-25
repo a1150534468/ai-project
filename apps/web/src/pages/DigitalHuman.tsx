@@ -219,11 +219,11 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
             : <Empty text="请先完成配音与数字人形象，再来这一步成片。" />)}
         </main>
 
-        <footer className="flex items-center justify-between border-t border-gray-100 pt-4">
+        <footer className="flex items-center justify-between border-t border-hairline-subtle pt-4">
           <button
             disabled={stage === "source" || busy}
             onClick={() => setStage(prevStage(stage))}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] text-ink-secondary disabled:opacity-40"
+            className="rounded-lg border border-hairline-subtle px-4 py-2 text-[13px] text-ink-secondary disabled:opacity-40"
           >
             上一步
           </button>
@@ -242,5 +242,5 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-xl border border-dashed border-gray-200 p-10 text-center text-[13px] text-ink-tertiary">{text}</div>;
+  return <div className="rounded-xl border border-dashed border-hairline-subtle p-10 text-center text-[13px] text-ink-tertiary">{text}</div>;
 }

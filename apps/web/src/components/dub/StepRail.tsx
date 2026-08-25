@@ -38,7 +38,7 @@ export function StepRail({ active, busy = false, onSelect }: StepRailProps) {
                     ? "bg-brand text-white"
                     : on
                       ? "bg-brand text-white ring-2 ring-brand/40 ring-offset-1"
-                      : "bg-gray-100 text-ink-tertiary"
+                      : "bg-surface-muted text-ink-tertiary"
                 }`}
               >
                 {done ? (

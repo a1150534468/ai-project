@@ -109,51 +109,51 @@ export default function SettingsPage({
   return (
     <div className="min-h-screen bg-surface">
       {/* Header */}
-      <div className="border-b border-gray-100 bg-surface">
+      <div className="border-b border-hairline-subtle bg-surface">
         <div className="max-w-6xl mx-auto px-8 py-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">设置</h1>
-          <p className="text-gray-500">管理账号信息和偏好设置</p>
+          <h1 className="text-3xl font-bold text-ink mb-2">设置</h1>
+          <p className="text-ink-secondary">管理账号信息和偏好设置</p>
         </div>
       </div>
 
       {/* Content */}
       <div className="max-w-3xl mx-auto px-8 py-8 space-y-6">
         {/* Account Section */}
-        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
+        <div className="bg-surface rounded-xl2 border border-hairline-subtle p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:account-circle-outline" className="text-2xl text-brand mr-3" />
-            <h2 className="text-lg font-bold text-gray-900">账号信息</h2>
+            <h2 className="text-lg font-bold text-ink">账号信息</h2>
           </div>
 
           <div className="space-y-4">
             {/* User ID */}
-            <div className="pb-4 border-b border-gray-100 last:border-0">
-              <p className="text-xs text-gray-500 uppercase font-medium mb-2">用户 ID</p>
-              <p className="text-sm font-mono text-gray-900">{uid}</p>
+            <div className="pb-4 border-b border-hairline-subtle last:border-0">
+              <p className="text-xs text-ink-secondary uppercase font-medium mb-2">用户 ID</p>
+              <p className="text-sm font-mono text-ink">{uid}</p>
             </div>
 
             {/* User Name */}
-            <div className="pb-4 border-b border-gray-100 last:border-0">
-              <p className="text-xs text-gray-500 uppercase font-medium mb-2">用户名</p>
-              <p className="text-sm text-gray-900">{userName}</p>
+            <div className="pb-4 border-b border-hairline-subtle last:border-0">
+              <p className="text-xs text-ink-secondary uppercase font-medium mb-2">用户名</p>
+              <p className="text-sm text-ink">{userName}</p>
             </div>
 
             {/* Balance */}
-            <div className="pb-4 border-b border-gray-100 last:border-0">
-              <p className="text-xs text-gray-500 uppercase font-medium mb-2">算力点余额</p>
+            <div className="pb-4 border-b border-hairline-subtle last:border-0">
+              <p className="text-xs text-ink-secondary uppercase font-medium mb-2">算力点余额</p>
               <div className="flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-brand">{formatBalanceLabel(balance)}</span>
               </div>
-              <p className="text-xs text-gray-400 mt-2">1 RMB = 100 点</p>
+              <p className="text-xs text-ink-tertiary mt-2">1 RMB = 100 点</p>
             </div>
           </div>
         </div>
 
         {/* Appearance Preference */}
-        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm">
+        <div className="bg-surface rounded-xl2 border border-hairline-subtle p-6 shadow-sm">
           <div className="flex items-center mb-4">
             <Icon icon="mdi:theme-light-dark" className="text-2xl text-brand mr-3" />
-            <h2 className="text-lg font-bold text-gray-900">外观</h2>
+            <h2 className="text-lg font-bold text-ink">外观</h2>
           </div>
 
           <button
@@ -161,14 +161,14 @@ export default function SettingsPage({
             role="switch"
             aria-checked={themePreference === "system"}
             onClick={handleSystemThemeChange}
-            className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg border border-gray-100 px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-brand/30"
+            className="flex min-h-14 w-full items-center justify-between gap-4 rounded-lg border border-hairline-subtle px-4 py-3 text-left focus-visible:ring-2 focus-visible:ring-brand/30"
           >
             <span className="min-w-0">
-              <span className="block text-sm font-medium text-gray-900">跟随系统</span>
-              <span className="mt-1 block text-xs text-gray-500">使用设备或浏览器的显示模式</span>
+              <span className="block text-sm font-medium text-ink">跟随系统</span>
+              <span className="mt-1 block text-xs text-ink-secondary">使用设备或浏览器的显示模式</span>
             </span>
             <span
-              className={`relative h-6 w-[42px] flex-none rounded-full transition-colors ${themePreference === "system" ? "bg-brand" : "bg-gray-300"}`}
+              className={`relative h-6 w-[42px] flex-none rounded-full transition-colors ${themePreference === "system" ? "bg-brand" : "bg-hairline"}`}
               aria-hidden
             >
               <span
@@ -179,10 +179,10 @@ export default function SettingsPage({
         </div>
 
         {/* Model Preference */}
-        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
+        <div className="bg-surface rounded-xl2 border border-hairline-subtle p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
             <Icon icon="mdi:robot-outline" className="text-2xl text-brand mr-3" />
-            <h2 className="text-lg font-bold text-gray-900">默认模型</h2>
+            <h2 className="text-lg font-bold text-ink">默认模型</h2>
           </div>
 
           {models.length > 0 ? (
@@ -190,7 +190,7 @@ export default function SettingsPage({
               {models.map((model) => (
                 <motion.label
                   key={model.model}
-                  className="flex items-center p-4 border border-gray-100 rounded-lg cursor-pointer transition-colors"
+                  className="flex items-center p-4 border border-hairline-subtle rounded-lg cursor-pointer transition-colors"
                 >
                   <motion.div
                     initial={false}
@@ -207,7 +207,7 @@ export default function SettingsPage({
                     />
                   </motion.div>
                   <div className="ml-3 flex-1">
-                    <p className="text-sm font-medium text-gray-900">{model.displayName}</p>
+                    <p className="text-sm font-medium text-ink">{model.displayName}</p>
                   </div>
                   {selectedModel === model.model && (
                     <motion.div
@@ -221,13 +221,13 @@ export default function SettingsPage({
                   )}
                 </motion.label>
               ))}
-              <p className="text-xs text-gray-500 mt-4">
+              <p className="text-xs text-ink-secondary mt-4">
                 <Icon icon="mdi:information-outline" className="inline mr-1" />
                 所选模型已保存到本地，用于新对话时的默认选择
               </p>
             </div>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-ink-secondary">
               <Icon icon="mdi:loading" className="text-2xl mx-auto mb-2 animate-spin" />
               <p className="text-sm">加载模型列表中...</p>
             </div>
@@ -235,13 +235,13 @@ export default function SettingsPage({
         </div>
 
         {/* Logout Section */}
-        <div className="bg-surface rounded-xl2 border border-gray-100 p-6 shadow-sm transition-shadow">
+        <div className="bg-surface rounded-xl2 border border-hairline-subtle p-6 shadow-sm transition-shadow">
           <div className="flex items-center mb-6">
-            <Icon icon="mdi:logout-variant" className="text-2xl text-gray-400 mr-3" />
-            <h2 className="text-lg font-bold text-gray-900">登出</h2>
+            <Icon icon="mdi:logout-variant" className="text-2xl text-ink-tertiary mr-3" />
+            <h2 className="text-lg font-bold text-ink">登出</h2>
           </div>
 
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-ink-secondary mb-4">
             登出后需要重新输入用户名和密码才能登录
           </p>
           <RippleButton
@@ -255,7 +255,7 @@ export default function SettingsPage({
 
         {/* Message Toast */}
         {message && (
-          <div className="fixed bottom-8 left-8 right-8 max-w-sm mx-auto bg-gray-900 text-white px-6 py-3 rounded-lg text-sm font-medium shadow-lg">
+          <div className="fixed bottom-8 left-8 right-8 max-w-sm mx-auto bg-surface-inverse text-ink-inverse px-6 py-3 rounded-lg text-sm font-medium shadow-lg">
             {message}
           </div>
         )}

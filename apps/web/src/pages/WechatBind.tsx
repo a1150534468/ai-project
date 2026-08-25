@@ -188,10 +188,10 @@ export default function WechatBind({ token }: WechatBindProps) {
   if (!canBind) {
     return (
       <div className="flex flex-col items-center justify-center min-h-full p-8 bg-surface-muted">
-        <div className="bg-surface rounded-2xl p-8 max-w-md w-full text-center shadow-sm border border-gray-100">
-          <Icon icon="mdi:information-outline" className="text-4xl text-gray-400 mb-4 mx-auto" />
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">请在桌面客户端使用</h2>
-          <p className="text-sm text-gray-600">
+        <div className="bg-surface rounded-2xl p-8 max-w-md w-full text-center shadow-sm border border-hairline-subtle">
+          <Icon icon="mdi:information-outline" className="text-4xl text-ink-tertiary mb-4 mx-auto" />
+          <h2 className="text-lg font-semibold text-ink mb-2">请在桌面客户端使用</h2>
+          <p className="text-sm text-ink-secondary">
             微信接入功能仅在桌面客户端中可用，请在 AI 助手桌面应用中打开本页面。
           </p>
         </div>
@@ -204,8 +204,8 @@ export default function WechatBind({ token }: WechatBindProps) {
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">微信接入</h1>
-          <p className="text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-ink mb-2">微信接入</h1>
+          <p className="text-sm text-ink-secondary">
             将您的微信与 AI 助手绑定，实现便捷的微信对接。
           </p>
         </div>
@@ -220,8 +220,8 @@ export default function WechatBind({ token }: WechatBindProps) {
         <div className="grid lg:grid-cols-3 gap-6">
           {/* QR Code Section */}
           <div className="lg:col-span-2">
-            <div className="bg-surface rounded-2xl p-8 border border-gray-100 shadow-sm">
-              <h2 className="text-lg font-semibold text-gray-900 mb-6">生成二维码</h2>
+            <div className="bg-surface rounded-2xl p-8 border border-hairline-subtle shadow-sm">
+              <h2 className="text-lg font-semibold text-ink mb-6">生成二维码</h2>
 
               {qrData ? (
                 <div className="space-y-6">
@@ -231,7 +231,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                       <img
                         src={qrData.qrUrl}
                         alt="WeChat QR Code"
-                        className="w-64 h-64 border border-gray-200 rounded-lg"
+                        className="w-64 h-64 border border-hairline-subtle rounded-lg"
                       />
                     ) : (
                       <div className="flex justify-center items-center">
@@ -242,7 +242,7 @@ export default function WechatBind({ token }: WechatBindProps) {
 
                   {/* Status Display */}
                   <div className="text-center">
-                    <p className="text-sm text-gray-600 mb-3">状态：</p>
+                    <p className="text-sm text-ink-secondary mb-3">状态：</p>
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 rounded-full">
                       <Icon
                         icon="mdi:check-circle"
@@ -250,7 +250,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                           bindingState === "confirmed" ? "text-brand-ink" : "text-blue-600"
                         }`}
                       />
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="text-sm font-medium text-ink">
                         {stateLabel[bindingState]}
                       </span>
                     </div>
@@ -258,14 +258,14 @@ export default function WechatBind({ token }: WechatBindProps) {
 
                   {/* Agent Selection - Only show after confirmed */}
                   {bindingState === "confirmed" && (
-                    <div className="space-y-3 pt-4 border-t border-gray-100">
-                      <label className="block text-sm font-medium text-gray-900">
+                    <div className="space-y-3 pt-4 border-t border-hairline-subtle">
+                      <label className="block text-sm font-medium text-ink">
                         选择 Agent
                       </label>
                       <select
                         value={selectedAgentId}
                         onChange={(e) => setSelectedAgentId(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        className="w-full px-4 py-2.5 border border-hairline-subtle rounded-lg text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
                         <option value="">-- 请选择 --</option>
                         {agents.map((agent) => (
@@ -274,13 +274,13 @@ export default function WechatBind({ token }: WechatBindProps) {
                           </option>
                         ))}
                       </select>
-                      <label className="block text-sm font-medium text-gray-900 pt-1">
+                      <label className="block text-sm font-medium text-ink pt-1">
                         回复模型
                       </label>
                       <select
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        className="w-full px-4 py-2.5 border border-hairline-subtle rounded-lg text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
                         {models.length === 0 && (
                           <option value={DEFAULT_WECHAT_MODEL}>{DEFAULT_WECHAT_MODEL}</option>
@@ -291,11 +291,11 @@ export default function WechatBind({ token }: WechatBindProps) {
                           </option>
                         ))}
                       </select>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-ink-secondary">
                         发图片/文件时若所选模型不支持，会自动用 MiniMax-M3 回复
                       </p>
                       {agents.length === 0 && (
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-ink-secondary">
                           暂无 Agent，请先在主界面创建
                         </p>
                       )}
@@ -303,7 +303,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                   )}
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4 border-t border-gray-100">
+                  <div className="flex gap-3 pt-4 border-t border-hairline-subtle">
                     <button
                       onClick={() => {
                         stopPolling();
@@ -311,7 +311,7 @@ export default function WechatBind({ token }: WechatBindProps) {
                         setBindingState("disconnected");
                         setSelectedAgentId("");
                       }}
-                      className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+                      className="flex-1 px-4 py-2.5 border border-hairline-subtle rounded-lg text-sm font-medium text-ink transition-colors"
                     >
                       取消
                     </button>
@@ -331,8 +331,8 @@ export default function WechatBind({ token }: WechatBindProps) {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <Icon icon="mdi:qrcode" className="text-6xl text-gray-300 mb-4 mx-auto" />
-                  <p className="text-sm text-gray-600 mb-6">
+                  <Icon icon="mdi:qrcode" className="text-6xl text-ink-tertiary mb-4 mx-auto" />
+                  <p className="text-sm text-ink-secondary mb-6">
                     点击下方按钮生成微信二维码，使用个人微信扫描
                   </p>
                   <button
@@ -352,31 +352,31 @@ export default function WechatBind({ token }: WechatBindProps) {
 
           {/* Bindings List */}
           <div className="lg:col-span-1">
-            <div className="bg-surface rounded-2xl p-6 border border-gray-100 shadow-sm h-fit">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">已绑定列表</h3>
+            <div className="bg-surface rounded-2xl p-6 border border-hairline-subtle shadow-sm h-fit">
+              <h3 className="text-lg font-semibold text-ink mb-4">已绑定列表</h3>
 
               {bindings.length > 0 ? (
                 <div className="space-y-3">
                   {bindings.map((binding) => (
                     <div
                       key={binding.id}
-                      className="p-3 bg-gray-50 rounded-lg border border-gray-100"
+                      className="p-3 bg-surface-subtle rounded-lg border border-hairline-subtle"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-gray-900 truncate">
+                          <p className="text-xs font-medium text-ink truncate">
                             {binding.targetId}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <p className="text-xs text-ink-secondary mt-1">
                             Device: {binding.deviceId.slice(0, 8)}...
                           </p>
                           <div className="flex items-center gap-1 mt-2">
                             <div
                               className={`w-2 h-2 rounded-full ${
-                                binding.online ? "bg-brand" : "bg-gray-400"
+                                binding.online ? "bg-brand" : "bg-ink-tertiary"
                               }`}
                             />
-                            <span className="text-xs text-gray-600">
+                            <span className="text-xs text-ink-secondary">
                               {binding.online ? "在线" : "离线"}
                             </span>
                           </div>
@@ -393,8 +393,8 @@ export default function WechatBind({ token }: WechatBindProps) {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Icon icon="mdi:link-off" className="text-3xl text-gray-300 mb-2 mx-auto" />
-                  <p className="text-xs text-gray-500">暂无绑定</p>
+                  <Icon icon="mdi:link-off" className="text-3xl text-ink-tertiary mb-2 mx-auto" />
+                  <p className="text-xs text-ink-secondary">暂无绑定</p>
                 </div>
               )}
             </div>

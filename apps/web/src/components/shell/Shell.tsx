@@ -84,7 +84,7 @@ export default function Shell({
       <motion.aside
         animate={{ width: collapsed ? 56 : 240 }}
         transition={reduceMotion ? { duration: 0 } : spring.smooth}
-        className="apple-sidebar hidden flex-none flex-col overflow-hidden border-r border-gray-100 bg-surface lg:flex"
+        className="apple-sidebar hidden flex-none flex-col overflow-hidden border-r border-hairline-subtle bg-surface lg:flex"
       >
         <NavRail
           currentView={currentView}
@@ -116,7 +116,7 @@ export default function Shell({
       )}
 
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <nav className="apple-mobile-nav border-b border-gray-100 bg-surface px-3 py-2.5 lg:hidden">
+        <nav className="apple-mobile-nav border-b border-hairline-subtle bg-surface px-3 py-2.5 lg:hidden">
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto py-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {visibleNavItems.flatMap((item) =>

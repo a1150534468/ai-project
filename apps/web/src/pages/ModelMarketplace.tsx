@@ -107,15 +107,15 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="text-[28px] font-bold tracking-tight text-ink">模型广场</h1>
-            <p className="mt-1 text-sm text-gray-500">查看当前账号可用模型、适用场景与计价（按类型分组展示）</p>
+            <p className="mt-1 text-sm text-ink-secondary">查看当前账号可用模型、适用场景与计价（按类型分组展示）</p>
           </div>
           <VipSummaryBadge vip={vip} />
         </div>
 
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-gray-400">{models.length} 个模型可用 · {groups.length} 个分类</p>
+          <p className="text-xs text-ink-tertiary">{models.length} 个模型可用 · {groups.length} 个分类</p>
           {loading && (
-            <span className="inline-flex items-center gap-2 text-xs text-gray-400">
+            <span className="inline-flex items-center gap-2 text-xs text-ink-tertiary">
               <Icon icon="mdi:loading" className="animate-spin text-sm" aria-hidden />
               加载中
             </span>
@@ -137,13 +137,13 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
                 className={`inline-flex flex-none items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
                   isActive
                     ? "border-brand bg-brand text-white shadow-sm"
-                    : "border-gray-200 bg-surface text-gray-600 hover:border-brand/40 hover:text-brand"
+                    : "border-hairline-subtle bg-surface text-ink-secondary hover:border-brand/40 hover:text-brand"
                 }`}
               >
                 <Icon icon={icon} className="text-base" aria-hidden />
                 {tab}
                 <span className={`ml-0.5 rounded-full px-1.5 text-[11px] ${
-                  isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-500"
+                  isActive ? "bg-white/20 text-white" : "bg-surface-muted text-ink-secondary"
                 }`}>{count}</span>
               </button>
             );
@@ -163,7 +163,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
                 <div className="mb-4 flex items-center gap-2">
                   <Icon icon={CATEGORY_ICON[group.category] ?? "mdi:shape-outline"} className="text-lg text-brand" aria-hidden />
                   <h2 className="text-base font-semibold text-ink">{group.category}</h2>
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-500">{group.rows.length}</span>
+                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{group.rows.length}</span>
                 </div>
               )}
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -174,7 +174,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
             </section>
           ))
         ) : !loading && !message ? (
-          <div className="rounded-xl border border-dashed border-gray-200 bg-surface p-8 text-center text-sm text-gray-400">
+          <div className="rounded-xl border border-dashed border-hairline-subtle bg-surface p-8 text-center text-sm text-ink-tertiary">
             暂无可用模型
           </div>
         ) : null}
@@ -197,7 +197,7 @@ function VipSummaryBadge({ vip }: { vip: VipSummary | null }) {
           </div>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">{vip?.levelName ?? "VIP 信息同步中"}</p>
-            <p className="mt-0.5 text-xs text-gray-400">当前消费折扣：{formatVipDiscount(vip?.discountBps)}</p>
+            <p className="mt-0.5 text-xs text-ink-tertiary">当前消费折扣：{formatVipDiscount(vip?.discountBps)}</p>
           </div>
         </div>
         <span className="rounded-full bg-brand px-3 py-1 text-xs font-semibold text-white">
@@ -205,11 +205,11 @@ function VipSummaryBadge({ vip }: { vip: VipSummary | null }) {
         </span>
       </div>
       <div className="mt-4">
-        <div className="mb-1 flex justify-between text-[11px] text-gray-400">
+        <div className="mb-1 flex justify-between text-[11px] text-ink-tertiary">
           <span>{vip?.growthPoints.toLocaleString() ?? "0"} 成长点</span>
           <span>{vip?.highestLevel ? "已满级" : `距 ${vip?.nextLevelName ?? "下一级"} ${vip?.pointsToNextLevel.toLocaleString() ?? "-"}`}</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+        <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
           <div className="h-full rounded-full bg-brand" style={{ width: `${nextProgress}%` }} />
         </div>
       </div>
@@ -239,7 +239,7 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
     .sort((a, b) => Number(b === "free-quota") - Number(a === "free-quota"))
     .slice(0, 5);
   return (
-    <article className="rounded-2xl border border-gray-100 bg-surface p-5">
+    <article className="rounded-2xl border border-hairline-subtle bg-surface p-5">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h3 className="truncate text-base font-semibold text-ink">{model.displayName || "未命名模型"}</h3>
@@ -255,23 +255,23 @@ export function ModelCard({ model }: { model: ModelMarketplaceRow }) {
       {visibleTags.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-1.5">
           {visibleTags.map((tag) => (
-            <span key={tag} className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-medium text-gray-500">
+            <span key={tag} className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-ink-secondary">
               {tagLabels[tag]}
             </span>
           ))}
         </div>
       )}
 
-      <p className="mt-4 min-h-10 text-sm leading-5 text-gray-600">
+      <p className="mt-4 min-h-10 text-sm leading-5 text-ink-secondary">
         {model.description || "该模型暂未配置介绍"}
       </p>
 
-      <div className="mt-4 rounded-xl bg-gray-50 px-3 py-2 text-xs">
-        <div className="mb-1 flex items-center gap-1.5 text-[11px] text-gray-400">
+      <div className="mt-4 rounded-xl bg-surface-subtle px-3 py-2 text-xs">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
           <Icon icon="mdi:target" className="text-sm" aria-hidden />
           适用场景
         </div>
-        <p className="truncate font-medium text-gray-700">{model.useCases || "通用"}</p>
+        <p className="truncate font-medium text-ink">{model.useCases || "通用"}</p>
       </div>
 
       {model.imagePrice ? (
@@ -292,13 +292,13 @@ function PriceBlock({ title, price, muted = false }: { title: string; price: Mod
   const discounted = price.discounted;
   const hasDiscount = discounted < Math.ceil(price.original);
   return (
-    <div className={`rounded-xl border px-3 py-3 ${muted ? "border-gray-100 bg-gray-50/50" : "border-brand/10 bg-brand-soft/40"}`}>
-      <p className="text-[11px] font-medium text-gray-500">{title}</p>
+    <div className={`rounded-xl border px-3 py-3 ${muted ? "border-hairline-subtle bg-surface-subtle/50" : "border-brand/10 bg-brand-soft/40"}`}>
+      <p className="text-[11px] font-medium text-ink-secondary">{title}</p>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-bold text-ink">{formatPoints(discounted)}</span>
-        <span className="text-[10px] text-gray-400">点 / 100W token</span>
+        <span className="text-[10px] text-ink-tertiary">点 / 100W token</span>
       </div>
-      <p className="mt-1 text-[10px] text-gray-400">
+      <p className="mt-1 text-[10px] text-ink-tertiary">
         {hasDiscount ? <>原价 <span className="line-through">{formatPoints(price.original)}</span> 点</> : <>原价 {formatPoints(price.original)} 点</>}
       </p>
     </div>
@@ -313,9 +313,9 @@ function ImagePriceBlock({ imagePrice }: { imagePrice: ModelMarketplaceImagePric
       <p className="text-[11px] font-medium text-violet-600">生图（按次计费）</p>
       <div className="mt-1 flex items-baseline gap-2">
         <span className="text-lg font-bold text-ink">{formatPoints(discounted)}</span>
-        <span className="text-[10px] text-gray-400">点 / 张 · {imagePrice.resolution}</span>
+        <span className="text-[10px] text-ink-tertiary">点 / 张 · {imagePrice.resolution}</span>
       </div>
-      <p className="mt-1 text-[10px] text-gray-400">
+      <p className="mt-1 text-[10px] text-ink-tertiary">
         {hasDiscount ? <>原价 <span className="line-through">{formatPoints(imagePrice.originalPoints)}</span> 点</> : <>原价 {formatPoints(imagePrice.originalPoints)} 点</>}
       </p>
     </div>

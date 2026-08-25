@@ -85,7 +85,7 @@ export function PaymentStatusPanel({
   const methodLabel = paymentMethodLabel(method);
   const success = state === "success";
   return (
-    <div className="bg-surface rounded-2xl p-6 border border-gray-50 text-center w-full max-w-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
+    <div className="bg-surface rounded-2xl p-6 border border-hairline-subtle text-center w-full max-w-sm shadow-[0_24px_60px_rgba(15,23,42,0.18)]">
       <h3 className="text-base font-semibold text-ink mb-4">{success ? "支付成功" : "扫码支付"}</h3>
       <div className="flex justify-center mb-4">
         {success ? (
@@ -96,12 +96,12 @@ export function PaymentStatusPanel({
           <QRCodeSVG value={payUrl} size={256} level="H" includeMargin={true} />
         )}
       </div>
-      <p className="text-sm text-gray-600 mb-4">
+      <p className="text-sm text-ink-secondary mb-4">
         {success ? paymentSuccessMessage(order) : `请使用${methodLabel}扫描二维码完成支付`}
       </p>
       <button
         onClick={onClose}
-        className="px-6 py-2 bg-gray-50 text-gray-600 text-sm font-medium rounded-full transition-all"
+        className="px-6 py-2 bg-surface-subtle text-ink-secondary text-sm font-medium rounded-full transition-all"
       >
         {success ? "知道了" : "关闭二维码"}
       </button>
@@ -401,12 +401,12 @@ export default function Billing({ token, onBalanceChange }: BillingProps) {
         {/* 标题 + Tab */}
         <div className="mb-5">
           <h1 className="text-[28px] font-bold text-ink tracking-tight">会员与充值</h1>
-          <div className="flex items-center gap-7 border-b border-gray-100 pb-2.5 mt-4">
+          <div className="flex items-center gap-7 border-b border-hairline-subtle pb-2.5 mt-4">
             {(["member", "recharge"] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setActiveTab(t)}
-                className={`relative pb-1 text-base font-semibold transition-colors ${activeTab === t ? "text-ink" : "text-gray-400 "}`}
+                className={`relative pb-1 text-base font-semibold transition-colors ${activeTab === t ? "text-ink" : "text-ink-tertiary "}`}
               >
                 {t === "member" ? "会员" : "积分充值"}
                 {activeTab === t && <span className="absolute left-0 right-0 -bottom-[11px] h-0.5 rounded bg-brand" />}

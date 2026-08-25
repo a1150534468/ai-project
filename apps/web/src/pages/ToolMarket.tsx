@@ -73,7 +73,7 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
   };
 
   return (
-    <section className="rounded-lg border border-gray-100 bg-surface p-4">
+    <section className="rounded-lg border border-hairline-subtle bg-surface p-4">
       <div className="relative">
         {edges.left && (
           <>
@@ -82,7 +82,7 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
               type="button"
               aria-label="向左滚动分类"
               onClick={() => scrollByStep(-1)}
-              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-surface text-gray-600 shadow-sm transition "
+              className="absolute left-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-hairline-subtle bg-surface text-ink-secondary shadow-sm transition "
             >
               <Icon icon="mdi:chevron-left" className="text-lg" aria-hidden />
             </button>
@@ -99,18 +99,18 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
               onClick={() => onSelect(category.key)}
               className={`h-9 flex-none rounded-full px-4 text-xs font-medium transition ${
                 activeKey === category.key
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-50 text-gray-600 "
+                  ? "bg-surface-inverse text-ink-inverse"
+                  : "bg-surface-subtle text-ink-secondary "
               }`}
             >
               {category.label}
-              <span className={`ml-2 ${activeKey === category.key ? "text-white/70" : "text-gray-400"}`}>
+              <span className={`ml-2 ${activeKey === category.key ? "text-ink-inverse/70" : "text-ink-tertiary"}`}>
                 {category.total.toLocaleString()}
               </span>
             </button>
           ))}
           {loading && (
-            <div className="flex h-9 items-center gap-2 px-2 text-xs text-gray-400">
+            <div className="flex h-9 items-center gap-2 px-2 text-xs text-ink-tertiary">
               <Icon icon="mdi:loading" className="text-base animate-spin" aria-hidden />
               加载分类
             </div>
@@ -123,7 +123,7 @@ function CategoryTabs({ categories, activeKey, onSelect, loading }: CategoryTabs
               type="button"
               aria-label="向右滚动分类"
               onClick={() => scrollByStep(1)}
-              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-gray-200 bg-surface text-gray-600 shadow-sm transition "
+              className="absolute right-0 top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border border-hairline-subtle bg-surface text-ink-secondary shadow-sm transition "
             >
               <Icon icon="mdi:chevron-right" className="text-lg" aria-hidden />
             </button>
@@ -244,25 +244,25 @@ export default function ToolMarket({ token }: ToolMarketProps) {
   return (
     <div className="min-h-full bg-surface-muted px-4 py-5 lg:px-8 lg:py-7">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <section className="rounded-lg border border-gray-100 bg-surface p-5">
+        <section className="rounded-lg border border-hairline-subtle bg-surface p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-600">
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-hairline-subtle bg-surface-subtle px-3 py-1 text-xs font-medium text-ink-secondary">
                 <Icon icon="mdi:toolbox-outline" className="text-base" aria-hidden />
                 {categories.length.toLocaleString()} 个分类 · {installedTools.length.toLocaleString()} 个账号已安装 ·{" "}
                 {currentAvailableCount.toLocaleString()} 个当前电脑可用
               </div>
-              <h1 className="text-2xl font-bold tracking-normal text-gray-900">工具市场</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-500">
+              <h1 className="text-2xl font-bold tracking-normal text-ink">工具市场</h1>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">
                 账号安装记录会保存在云端；skill 包体需要同步到当前电脑，可用后才会出现在对话输入框的工具按钮里。内置工具不在这里展示。
               </p>
             </div>
             <div className="relative w-full lg:w-96">
-              <Icon icon="mdi:magnify" className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-gray-400" aria-hidden />
+              <Icon icon="mdi:magnify" className="absolute left-3 top-1/2 -translate-y-1/2 text-lg text-ink-tertiary" aria-hidden />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="h-11 w-full rounded-lg border border-gray-200 bg-surface pl-10 pr-3 text-sm text-gray-800 outline-none transition focus:border-brand/50 focus:ring-2 focus:ring-brand/10"
+                className="h-11 w-full rounded-lg border border-hairline-subtle bg-surface pl-10 pr-3 text-sm text-ink outline-none transition focus:border-brand/50 focus:ring-2 focus:ring-brand/10"
                 placeholder="搜索当前分类的 skill"
               />
             </div>
@@ -294,14 +294,14 @@ export default function ToolMarket({ token }: ToolMarketProps) {
         <section className="min-h-[32rem]">
           <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">{activeCategory?.label || "技能列表"}</h2>
-              <p className="mt-1 text-xs text-gray-500">
+              <h2 className="text-base font-semibold text-ink">{activeCategory?.label || "技能列表"}</h2>
+              <p className="mt-1 text-xs text-ink-secondary">
                 已显示 {visibleSkills.length.toLocaleString()} 个
                 {hiddenMatchCount > 0 ? `，继续搜索可缩小 ${hiddenMatchCount.toLocaleString()} 个未显示项` : ""}
               </p>
             </div>
             {skillsLoading && (
-              <div className="flex items-center gap-2 text-xs text-gray-400">
+              <div className="flex items-center gap-2 text-xs text-ink-tertiary">
                 <Icon icon="mdi:loading" className="text-base animate-spin" aria-hidden />
                 加载 skill
               </div>
@@ -328,26 +328,26 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                 return (
                   <StaggerItem key={key}>
                     <motion.article
-                      className="flex min-h-52 flex-col rounded-lg border border-gray-100 bg-surface p-4 shadow-sm"
+                      className="flex min-h-52 flex-col rounded-lg border border-hairline-subtle bg-surface p-4 shadow-sm"
                       whileHover={{ y: -4, boxShadow: "0 12px 32px rgba(15, 23, 42, 0.15)" }}
                       transition={{ duration: 0.3, type: "spring", stiffness: 260, damping: 32 }}
                     >
                       <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-gray-50 text-gray-600">
+                        <div className="flex h-10 w-10 flex-none items-center justify-center rounded-lg bg-surface-subtle text-ink-secondary">
                           <Icon icon="mdi:hammer-wrench" className="text-xl" aria-hidden />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="truncate text-sm font-semibold text-gray-900">{skill.name}</h3>
-                          <p className="mt-1 text-xs text-gray-400">#{skill.id}</p>
+                          <h3 className="truncate text-sm font-semibold text-ink">{skill.name}</h3>
+                          <p className="mt-1 text-xs text-ink-tertiary">#{skill.id}</p>
                         </div>
                       </div>
-                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-gray-500">
+                      <p className="mt-4 line-clamp-3 text-sm leading-6 text-ink-secondary">
                         {skillDescription(skill, activeCategory?.label || "工具")}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs ${
-                            accountInstalled ? "bg-brand-soft text-brand-ink" : "bg-gray-50 text-gray-500"
+                            accountInstalled ? "bg-brand-soft text-brand-ink" : "bg-surface-subtle text-ink-secondary"
                           }`}
                         >
                           {accountInstalled ? "账号已安装" : "账号未安装"}
@@ -358,14 +358,14 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                               ? "bg-brand/10 text-brand-ink"
                               : accountInstalled
                                 ? "bg-amber-50 text-amber-700"
-                                : "bg-gray-50 text-gray-500"
+                                : "bg-surface-subtle text-ink-secondary"
                           }`}
                         >
                           {currentAvailable ? "当前电脑可用" : accountInstalled ? "当前电脑缺包" : "当前电脑未安装"}
                         </span>
                       </div>
                       <div className="mt-auto flex items-center justify-between gap-3 pt-4">
-                        <span className="min-w-0 truncate rounded-full bg-gray-50 px-2.5 py-1 text-xs text-gray-500">
+                        <span className="min-w-0 truncate rounded-full bg-surface-subtle px-2.5 py-1 text-xs text-ink-secondary">
                           {activeCategory?.label || "工具"}
                         </span>
                         <RippleButton
@@ -376,7 +376,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
                           className={`h-9 min-w-32 rounded-lg px-3 text-xs font-medium transition ${
                             currentAvailable
                               ? "bg-brand-soft text-brand-ink"
-                              : "bg-gray-900 text-white disabled:bg-gray-200 disabled:text-gray-400"
+                              : "bg-surface-inverse text-ink-inverse disabled:bg-hairline-subtle disabled:text-ink-tertiary"
                           }`}
                         >
                           {actionText}
@@ -388,13 +388,13 @@ export default function ToolMarket({ token }: ToolMarketProps) {
               })}
             </Stagger>
           ) : (
-            <div className="flex min-h-[28rem] flex-col items-center justify-center rounded-lg border border-dashed border-gray-200 bg-surface px-6 text-center">
-              <Icon icon={skillsLoading || pageLoading ? "mdi:loading" : "mdi:database-search-outline"} className={`text-3xl text-gray-300 ${skillsLoading || pageLoading ? "animate-spin" : ""}`} aria-hidden />
-              <p className="mt-3 text-sm font-semibold text-gray-900">
+            <div className="flex min-h-[28rem] flex-col items-center justify-center rounded-lg border border-dashed border-hairline-subtle bg-surface px-6 text-center">
+              <Icon icon={skillsLoading || pageLoading ? "mdi:loading" : "mdi:database-search-outline"} className={`text-3xl text-ink-tertiary ${skillsLoading || pageLoading ? "animate-spin" : ""}`} aria-hidden />
+              <p className="mt-3 text-sm font-semibold text-ink">
                 {skillsLoading || pageLoading ? "正在加载" : "暂无匹配 skill"}
               </p>
               {!skillsLoading && !pageLoading && (
-                <p className="mt-1 text-xs text-gray-500">换一个关键词或分类再试。</p>
+                <p className="mt-1 text-xs text-ink-secondary">换一个关键词或分类再试。</p>
               )}
             </div>
           )}

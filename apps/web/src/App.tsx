@@ -726,12 +726,12 @@ export default function App() {
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-brand/10 text-2xl text-brand">
             ⚡
           </div>
-          <h3 className="text-lg font-bold text-gray-900">余额不足</h3>
-          <p className="mt-2 text-sm text-gray-500">当前算力点余额不足以发起本次对话，请充值算力点后重试。</p>
+          <h3 className="text-lg font-bold text-ink">余额不足</h3>
+          <p className="mt-2 text-sm text-ink-secondary">当前算力点余额不足以发起本次对话，请充值算力点后重试。</p>
           <div className="mt-6 flex w-full gap-3">
             <button
               onClick={() => setRechargePromptOpen(false)}
-              className="flex-1 rounded-full border border-gray-200 py-2.5 text-sm font-medium text-gray-600 transition-colors "
+              className="flex-1 rounded-full border border-hairline-subtle py-2.5 text-sm font-medium text-ink-secondary transition-colors "
             >
               稍后再说
             </button>

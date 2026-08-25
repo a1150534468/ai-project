@@ -143,7 +143,7 @@ export function NavRail({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Brand */}
-      <div className={`flex flex-none items-center border-b border-gray-100 transition-all ${
+      <div className={`flex flex-none items-center border-b border-hairline-subtle transition-all ${
         collapsed ? "justify-center p-3" : "space-x-3 p-6"
       }`}>
         <BrandLogo size={40} />
@@ -157,8 +157,8 @@ export function NavRail({
               transition={{ duration: 0.2 }}
               className="flex-1"
             >
-              <p className="font-bold leading-tight text-gray-900">AI 助手</p>
-              <p className="text-xs text-gray-500">您的全能 AI 助手</p>
+              <p className="font-bold leading-tight text-ink">AI 助手</p>
+              <p className="text-xs text-ink-secondary">您的全能 AI 助手</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -172,7 +172,7 @@ export function NavRail({
               animate={{ opacity: 1, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.2 }}
-              className="text-gray-400 "
+              className="text-ink-tertiary "
               aria-label="折叠侧边栏"
             >
               <Icon icon="mdi:chevron-double-left" className="text-base" />
@@ -212,8 +212,8 @@ export function NavRail({
                       collapsed ? "justify-center px-0 py-2.5" : "space-x-3 px-4 py-3"
                     } ${
                       workflowGroupActive
-                        ? "text-gray-900 font-600"
-                        : "text-gray-500 "
+                        ? "text-ink font-600"
+                        : "text-ink-secondary "
                     }`}
                   >
                     <Icon icon={item.icon} className="relative z-10 text-xl flex-none" />
@@ -222,7 +222,7 @@ export function NavRail({
                         <span className="relative z-10 flex-1 text-sm font-medium">{item.label}</span>
                         <Icon
                           icon="mdi:chevron-down"
-                          className={`relative z-10 flex-none text-base text-gray-400 transition-transform ${
+                          className={`relative z-10 flex-none text-base text-ink-tertiary transition-transform ${
                             workflowOpen ? "" : "-rotate-90"
                           }`}
                           aria-hidden
@@ -239,7 +239,7 @@ export function NavRail({
                     transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                     className="overflow-hidden"
                   >
-                    <div className="ml-4 space-y-0.5 border-l border-gray-100 pl-3">
+                    <div className="ml-4 space-y-0.5 border-l border-hairline-subtle pl-3">
                       {visibleWorkflowSubItems.map((sub, idx) => {
                         const active = isWorkflowSubActive(currentView, workflowModule, sub);
                         return (
@@ -254,10 +254,10 @@ export function NavRail({
                             transition={{ delay: reduce ? 0 : idx * 0.035, duration: 0.16 }}
                             className={`relative w-full flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-left text-sm transition-colors ${
                               active
-                                ? "text-gray-900 font-semibold"
+                                ? "text-ink font-semibold"
                                 : sub.developing
-                                  ? "cursor-not-allowed text-gray-300"
-                                  : "text-gray-500 "
+                                  ? "cursor-not-allowed text-ink-tertiary"
+                                  : "text-ink-secondary "
                             }`}
                           >
                             {active && (
@@ -271,7 +271,7 @@ export function NavRail({
                             <Icon icon={sub.icon} className="relative z-10 flex-none text-lg" aria-hidden />
                             <span className="relative z-10 flex-1 truncate">{sub.label}</span>
                             {sub.developing && (
-                              <span className="relative z-10 flex-none text-[10px] text-gray-300">开发中</span>
+                              <span className="relative z-10 flex-none text-[10px] text-ink-tertiary">开发中</span>
                             )}
                           </motion.button>
                         );
@@ -289,7 +289,7 @@ export function NavRail({
               key={item.id}
               disabled={!collapsed}
               content={
-                <div className="whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] text-white shadow-lg">
+                <div className="whitespace-nowrap rounded-md bg-surface-inverse px-2.5 py-1.5 text-[11px] text-ink-inverse shadow-lg">
                   {navLabel}
                 </div>
               }
@@ -300,8 +300,8 @@ export function NavRail({
                   collapsed ? "justify-center px-0 py-2.5" : "space-x-3 px-4 py-3"
                 } ${
                   currentView === item.id
-                    ? "text-gray-900 font-600"
-                    : "text-gray-500 "
+                    ? "text-ink font-600"
+                    : "text-ink-secondary "
                 }`}
               >
                 {currentView === item.id && (
@@ -332,7 +332,7 @@ export function NavRail({
               animate={{ opacity: 1, scale: 1 }}
               exit={reduce ? undefined : { opacity: 0, scale: 0.8 }}
               transition={{ duration: 0.2 }}
-              className="w-full flex justify-center py-2.5 text-gray-500 transition-colors"
+              className="w-full flex justify-center py-2.5 text-ink-secondary transition-colors"
               aria-label="展开侧边栏"
             >
               <Icon icon="mdi:chevron-double-right" className="text-base" />
@@ -342,15 +342,15 @@ export function NavRail({
       </nav>
 
       {/* Bottom Card + Logout */}
-      <div className="flex-none border-t border-gray-100">
-        <div className={`border-b border-gray-100 ${collapsed ? "flex justify-center py-2.5" : "px-3 py-2"}`}>
+      <div className="flex-none border-t border-hairline-subtle">
+        <div className={`border-b border-hairline-subtle ${collapsed ? "flex justify-center py-2.5" : "px-3 py-2"}`}>
           <ThemeToggle compact={collapsed} />
         </div>
         {/* Balance Card */}
         <HoverPopover
           disabled={!collapsed}
           content={
-            <div className="whitespace-nowrap rounded-md bg-gray-900 px-2.5 py-1.5 text-[11px] text-white shadow-lg">
+            <div className="whitespace-nowrap rounded-md bg-surface-inverse px-2.5 py-1.5 text-[11px] text-ink-inverse shadow-lg">
               {balance === null ? "同步中" : `${balance.toLocaleString("zh-CN")} 点 · 充值 ›`}
             </div>
           }
@@ -358,7 +358,7 @@ export function NavRail({
           {collapsed ? (
             <button
               type="button"
-              className="w-full flex justify-center py-3 text-gray-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="w-full flex justify-center py-3 text-ink-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
               onClick={() => onViewChange("billing")}
               aria-label="充值算力点"
             >
@@ -376,13 +376,13 @@ export function NavRail({
                   <Icon icon="mdi:lightning-bolt-outline" className="text-lg" aria-hidden />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div ref={balanceElementRef} className="truncate text-sm font-medium text-gray-800">
+                  <div ref={balanceElementRef} className="truncate text-sm font-medium text-ink">
                     {balance === null ? "同步中" : <><AnimatedNumber value={balance} /> 点</>}
                   </div>
-                  <p className="text-xs text-gray-500">算力点</p>
+                  <p className="text-xs text-ink-secondary">算力点</p>
                 </div>
                 <span className="flex-none text-xs font-medium text-brand">充值</span>
-                <Icon icon="mdi:chevron-right" className="flex-none text-sm text-gray-300" aria-hidden />
+                <Icon icon="mdi:chevron-right" className="flex-none text-sm text-ink-tertiary" aria-hidden />
               </div>
             </button>
           )}
@@ -392,10 +392,10 @@ export function NavRail({
         <SpendBurst amount={burstAmount} originX={burstOriginX} originY={burstOriginY} active={burstActive} />
 
         {/* Logout Button */}
-        <div className={`flex-none border-t border-gray-100 ${collapsed ? "flex justify-center py-3" : "p-4"}`}>
+        <div className={`flex-none border-t border-hairline-subtle ${collapsed ? "flex justify-center py-3" : "p-4"}`}>
           <button
             onClick={onLogout}
-            className={`text-gray-500 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
+            className={`text-ink-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
               collapsed ? "text-lg" : "w-full text-xs"
             }`}
             title={collapsed ? "登出" : undefined}

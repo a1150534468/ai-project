@@ -27,7 +27,7 @@ export function QuickRechargePackageCard({
   return (
     <div
       className={`bg-surface rounded-2xl p-5 border transition-all cursor-pointer ${
-        recommended ? "border-brand border-2 shadow-sm relative" : "border-gray-50 "
+        recommended ? "border-brand border-2 shadow-sm relative" : "border-hairline-subtle "
       }`}
     >
       {recommended && (
@@ -35,16 +35,16 @@ export function QuickRechargePackageCard({
           推荐
         </span>
       )}
-      <p className="text-xs font-medium text-gray-500 mb-2 truncate">{pkg.name}</p>
+      <p className="text-xs font-medium text-ink-secondary mb-2 truncate">{pkg.name}</p>
       <p className="text-2xl font-bold text-ink">{pkg.points.toLocaleString()}</p>
-      <p className="text-[11px] text-gray-400 mt-0.5">算力点</p>
+      <p className="text-[11px] text-ink-tertiary mt-0.5">算力点</p>
       {bonusPoints > 0 && (
         <p className="mt-2 inline-flex rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-semibold text-red-600 ring-1 ring-red-100">
           活动赠送 {bonusPoints.toLocaleString()} 点
         </p>
       )}
       <p className="text-lg font-semibold text-ink mt-3">¥{(pkg.amountFen / 100).toFixed(2)}</p>
-      <p className={`text-[10px] mt-0.5 ${recommended ? "text-brand-ink" : "text-gray-400"}`}>
+      <p className={`text-[10px] mt-0.5 ${recommended ? "text-brand-ink" : "text-ink-tertiary"}`}>
         约 {(pkg.amountFen / 100 / pkg.points).toFixed(4)} 元/点
       </p>
       <button
@@ -54,7 +54,7 @@ export function QuickRechargePackageCard({
         className={`w-full mt-3 py-2 text-xs font-medium rounded-full transition-all ${
           recommended
             ? "bg-brand text-white disabled:opacity-50"
-            : "bg-gray-50 text-gray-600 disabled:opacity-50"
+            : "bg-surface-subtle text-ink-secondary disabled:opacity-50"
         }`}
       >
         {loading ? "处理中..." : "立即购买"}

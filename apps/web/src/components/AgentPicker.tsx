@@ -74,21 +74,21 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
     <Modal
       open={open}
       onClose={onClose}
-      className="w-full max-w-2xl max-h-[86vh] bg-surface rounded-2xl shadow-xl border border-gray-100 flex flex-col overflow-hidden mx-4"
+      className="w-full max-w-2xl max-h-[86vh] bg-surface rounded-2xl shadow-xl border border-hairline-subtle flex flex-col overflow-hidden mx-4"
     >
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="px-5 py-4 border-b border-hairline-subtle flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-gray-900">
+            <h3 className="text-base font-bold text-ink">
               {mode === "create" ? "创建智能体" : mode === "creating" ? "正在创建智能体" : mode === "success" ? "创建成功" : "选择 Agent"}
             </h3>
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-ink-tertiary mt-1">
               {mode === "list" ? "选择后将开启一段新的对话" : "生成过程会自动使用备用模型兜底"}
             </p>
           </div>
           <RippleButton
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-secondary"
             aria-label="关闭"
           >
             <Icon icon="mdi:close" className="text-lg" />
@@ -105,24 +105,24 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
           <>
             <div className="p-5 pb-3">
               <div className="relative">
-                <Icon icon="mdi:magnify" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-lg" />
+                <Icon icon="mdi:magnify" className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-tertiary text-lg" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="搜索 Agent"
-                  className="w-full h-10 pl-10 pr-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-brand"
+                  className="w-full h-10 pl-10 pr-3 border border-hairline-subtle rounded-xl text-sm focus:outline-none focus:border-brand"
                 />
               </div>
             </div>
 
             <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-4">
               {loading ? (
-                <div className="py-16 text-center text-sm text-gray-400">加载中...</div>
+                <div className="py-16 text-center text-sm text-ink-tertiary">加载中...</div>
               ) : (
                 <div className="space-y-5">
                   {custom.length > 0 && (
                     <section>
-                      <p className="text-xs font-medium text-gray-400 mb-2">我的智能体</p>
+                      <p className="text-xs font-medium text-ink-tertiary mb-2">我的智能体</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {custom.map((agent) => (
                           <AgentCard key={agent.id} agent={agent} onClick={() => choose(agent)} />
@@ -132,21 +132,21 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
                   )}
 
                   <section>
-                    <p className="text-xs font-medium text-gray-400 mb-2">预设 Agent</p>
+                    <p className="text-xs font-medium text-ink-tertiary mb-2">预设 Agent</p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {visiblePresets.map((agent) => (
                         <AgentCard key={agent.id} agent={agent} onClick={() => choose(agent)} />
                       ))}
                     </div>
                     {visiblePresets.length === 0 && (
-                      <div className="py-10 text-center text-sm text-gray-400">没有匹配的 Agent</div>
+                      <div className="py-10 text-center text-sm text-ink-tertiary">没有匹配的 Agent</div>
                     )}
                   </section>
                 </div>
               )}
             </div>
 
-            <div className="p-5 border-t border-gray-100">
+            <div className="p-5 border-t border-hairline-subtle">
               <RippleButton
                 type="button"
                 onClick={() => {
@@ -160,7 +160,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
                 </span>
                 <span>
                   <span className="block text-sm font-semibold text-brand-ink">创建智能体</span>
-                  <span className="block text-xs text-gray-500 mt-0.5">根据你的描述生成新的专属 Agent</span>
+                  <span className="block text-xs text-ink-secondary mt-0.5">根据你的描述生成新的专属 Agent</span>
                 </span>
               </RippleButton>
             </div>
@@ -173,10 +173,10 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
               value={requirement}
               onChange={(e) => setRequirement(e.target.value)}
               placeholder="例如：帮我创建一个能做项目复盘、拆解风险、输出下一步行动清单的智能体"
-              className="w-full h-40 rounded-xl border border-gray-200 p-4 text-sm resize-none focus:outline-none focus:border-brand"
+              className="w-full h-40 rounded-xl border border-hairline-subtle p-4 text-sm resize-none focus:outline-none focus:border-brand"
             />
             <div className="flex justify-end gap-2">
-              <RippleButton type="button" onClick={() => setMode("list")} className="px-4 py-2 rounded-lg text-sm text-gray-600 ">
+              <RippleButton type="button" onClick={() => setMode("list")} className="px-4 py-2 rounded-lg text-sm text-ink-secondary ">
                 返回
               </RippleButton>
               <RippleButton type="button" onClick={createAgent} className="px-4 py-2 rounded-lg text-sm bg-brand text-white">
@@ -189,8 +189,8 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
         {mode === "creating" && (
           <div className="p-8 min-h-72 flex flex-col items-center justify-center text-center">
             <div className="w-12 h-12 rounded-full border-4 border-brand/20 border-t-brand animate-spin" />
-            <p className="text-sm font-semibold text-gray-900 mt-5">正在创建智能体</p>
-            <p className="text-xs text-gray-400 mt-2">如果主模型不可用，会自动切换备用模型</p>
+            <p className="text-sm font-semibold text-ink mt-5">正在创建智能体</p>
+            <p className="text-xs text-ink-tertiary mt-2">如果主模型不可用，会自动切换备用模型</p>
           </div>
         )}
 
@@ -199,8 +199,8 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
             <div className="w-12 h-12 rounded-full bg-brand-soft text-brand flex items-center justify-center">
               <Icon icon="mdi:check" className="text-2xl" />
             </div>
-            <p className="text-base font-bold text-gray-900 mt-5">{created.name}</p>
-            <p className="text-sm text-gray-500 mt-2 max-w-md">{created.description || "智能体已创建完成"}</p>
+            <p className="text-base font-bold text-ink mt-5">{created.name}</p>
+            <p className="text-sm text-ink-secondary mt-2 max-w-md">{created.description || "智能体已创建完成"}</p>
             <RippleButton
               type="button"
               onClick={() => choose(created)}
@@ -219,15 +219,15 @@ function AgentCard({ agent, onClick }: { agent: AgentOption; onClick: () => void
     <button
       type="button"
       onClick={onClick}
-      className="p-3 rounded-xl border border-gray-100 text-left transition-colors"
+      className="p-3 rounded-xl border border-hairline-subtle text-left transition-colors"
     >
       <div className="flex items-start gap-3">
         <span className="w-8 h-8 rounded-lg bg-brand-soft text-brand flex items-center justify-center flex-none">
           <Icon icon={agent.icon || (agent.type === "custom" ? "mdi:account-star-outline" : "mdi:robot-outline")} className="text-lg" />
         </span>
         <span className="min-w-0">
-          <span className="block text-sm font-semibold text-gray-900 truncate">{agent.name}</span>
-          <span className="block text-xs text-gray-400 mt-1 line-clamp-2">{agent.description || "通用智能体"}</span>
+          <span className="block text-sm font-semibold text-ink truncate">{agent.name}</span>
+          <span className="block text-xs text-ink-tertiary mt-1 line-clamp-2">{agent.description || "通用智能体"}</span>
         </span>
       </div>
     </button>

@@ -61,7 +61,7 @@ export function ParsePreview({ token, pricing, result, busy, setBusy, onAnalyzed
         <video src={result.video.url} controls className="w-full rounded-xl bg-black" />
       </div>
 
-      <div className="space-y-2 rounded-xl bg-gray-50 p-3">
+      <div className="space-y-2 rounded-xl bg-surface-subtle p-3">
         <p className="text-[12px] text-ink-tertiary">如需保存到本地，复制链接到浏览器地址栏即可下载：</p>
         <DownloadRow label="视频" url={result.video.url} onErr={onErr} />
         <DownloadRow label="封面" url={result.cover.url} onErr={onErr} />

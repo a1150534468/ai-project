@@ -88,16 +88,16 @@ export default function Membership({ token }: MembershipProps) {
         {/* 页面标题 */}
         <div className="mb-8">
           <h1 className="text-[28px] font-bold text-ink tracking-tight">会员与订阅</h1>
-          <p className="text-sm text-gray-500 mt-1">升级您的订阅计划以获得更多权益</p>
+          <p className="text-sm text-ink-secondary mt-1">升级您的订阅计划以获得更多权益</p>
         </div>
 
-        <div className="bg-surface rounded-2xl p-5 mb-6 border border-gray-50">
+        <div className="bg-surface rounded-2xl p-5 mb-6 border border-hairline-subtle">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h3 className="text-base font-semibold text-ink">支付方式</h3>
-              <p className="text-xs text-gray-400 mt-1">购买会员时使用当前选择的支付方式</p>
+              <p className="text-xs text-ink-tertiary mt-1">购买会员时使用当前选择的支付方式</p>
             </div>
-            <div className="inline-flex rounded-full bg-gray-50 p-1">
+            <div className="inline-flex rounded-full bg-surface-subtle p-1">
               {(["alipay", "wxpay"] as PaymentMethod[]).map((method) => {
                 const active = paymentMethod === method;
                 return (
@@ -107,7 +107,7 @@ export default function Membership({ token }: MembershipProps) {
                     onClick={() => setPaymentMethod(method)}
                     disabled={loading}
                     className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
-                      active ? "bg-surface text-brand-ink shadow-sm" : "text-gray-500 "
+                      active ? "bg-surface text-brand-ink shadow-sm" : "text-ink-secondary "
                     }`}
                   >
                     <Icon icon={method === "wxpay" ? "ri:wechat-pay-fill" : "ri:alipay-fill"} className="text-lg" />
@@ -130,30 +130,30 @@ export default function Membership({ token }: MembershipProps) {
                 return (
                   <StaggerItem key={card.id}>
                     <motion.div
-                      className="bg-surface rounded-2xl p-6 border border-gray-50 transition-all"
+                      className="bg-surface rounded-2xl p-6 border border-hairline-subtle transition-all"
                       whileHover={{ y: -5 }}
                       transition={spring.snappy}
                     >
                       <h4 className="text-sm font-semibold text-ink mb-1">{card.name}</h4>
-                      <p className="text-xs text-gray-400 mb-4">时长: {card.durationDays} 天</p>
+                      <p className="text-xs text-ink-tertiary mb-4">时长: {card.durationDays} 天</p>
 
                       <p className="text-3xl font-bold text-ink">
                         ¥{price.toFixed(2)}
-                        <span className="text-base font-normal text-gray-400">/月</span>
+                        <span className="text-base font-normal text-ink-tertiary">/月</span>
                       </p>
-                      <p className="text-[10px] text-gray-400 mt-1">约 {pricePerDay} 元/天</p>
+                      <p className="text-[10px] text-ink-tertiary mt-1">约 {pricePerDay} 元/天</p>
 
-                      <div className="mt-4 pt-4 border-t border-gray-50">
+                      <div className="mt-4 pt-4 border-t border-hairline-subtle">
                         <ul className="space-y-2">
-                          <li className="flex items-center text-xs text-gray-600">
+                          <li className="flex items-center text-xs text-ink-secondary">
                             <Icon icon="mdi:check-circle" className="text-brand mr-2 flex-none" />
                             每周期 {card.grantPoints.toLocaleString()} 积分
                           </li>
-                          <li className="flex items-center text-xs text-gray-600">
+                          <li className="flex items-center text-xs text-ink-secondary">
                             <Icon icon="mdi:check-circle" className="text-brand mr-2 flex-none" />
                             周期: {card.cadence}
                           </li>
-                          <li className="flex items-center text-xs text-gray-600">
+                          <li className="flex items-center text-xs text-ink-secondary">
                             <Icon icon="mdi:check-circle" className="text-brand mr-2 flex-none" />
                             自动续费
                           </li>
@@ -173,19 +173,19 @@ export default function Membership({ token }: MembershipProps) {
               })}
             </Stagger>
           ) : cardsLoaded ? (
-            <p className="text-gray-500 col-span-3 text-center py-8">暂无可用月卡</p>
+            <p className="text-ink-secondary col-span-3 text-center py-8">暂无可用月卡</p>
           ) : (
             <div className="col-span-3 text-center py-8">
-              <p className="text-gray-500 mb-4">正在加载月卡列表...</p>
+              <p className="text-ink-secondary mb-4">正在加载月卡列表...</p>
             </div>
           )}
         </div>
 
         {/* 我的会员 */}
-        <div className="bg-surface rounded-2xl p-6 border border-gray-50">
+        <div className="bg-surface rounded-2xl p-6 border border-hairline-subtle">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-base font-semibold text-ink">我的会员</h3>
-            <span className="text-xs text-gray-400">共 {userMemberships.length} 个</span>
+            <span className="text-xs text-ink-tertiary">共 {userMemberships.length} 个</span>
           </div>
 
           {myMembershipsLoaded && userMemberships.length > 0 ? (
@@ -207,14 +207,14 @@ export default function Membership({ token }: MembershipProps) {
                         <div className="flex items-center gap-2 mb-2">
                           <Icon
                             icon="mdi:crown"
-                            className={`text-lg ${isActive ? "text-amber-500" : "text-gray-400"}`}
+                            className={`text-lg ${isActive ? "text-amber-500" : "text-ink-tertiary"}`}
                           />
                           <span className="text-sm font-semibold text-ink">会员卡 #{membership.cardId}</span>
                           <span
                             className={`px-2 py-0.5 text-[10px] font-medium rounded-full ${
                               isActive
                                 ? "bg-brand-soft text-brand-ink"
-                                : "bg-gray-100 text-gray-600"
+                                : "bg-surface-muted text-ink-secondary"
                             }`}
                           >
                             {isActive ? "活跃" : "已过期"}
@@ -222,22 +222,22 @@ export default function Membership({ token }: MembershipProps) {
                         </div>
                         <div className="grid grid-cols-3 gap-4 mt-3">
                           <div>
-                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1">开始日期</p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-[10px] text-ink-secondary font-medium uppercase tracking-wide mb-1">开始日期</p>
+                            <p className="text-sm font-medium text-ink">
                               {startDate.toLocaleDateString("zh-CN")}
                             </p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1">过期日期</p>
-                            <p className="text-sm font-medium text-gray-700">
+                            <p className="text-[10px] text-ink-secondary font-medium uppercase tracking-wide mb-1">过期日期</p>
+                            <p className="text-sm font-medium text-ink">
                               {expiresDate.toLocaleDateString("zh-CN")}
                             </p>
                           </div>
                           <div>
-                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-wide mb-1">
+                            <p className="text-[10px] text-ink-secondary font-medium uppercase tracking-wide mb-1">
                               剩余天数
                             </p>
-                            <p className={`text-sm font-medium ${isActive ? "text-brand-ink" : "text-gray-500"}`}>
+                            <p className={`text-sm font-medium ${isActive ? "text-brand-ink" : "text-ink-secondary"}`}>
                               {isActive ? `${daysLeft} 天` : "已过期"}
                             </p>
                           </div>
@@ -250,12 +250,12 @@ export default function Membership({ token }: MembershipProps) {
             </div>
           ) : myMembershipsLoaded ? (
             <div className="text-center py-8">
-              <Icon icon="mdi:information-outline" className="text-4xl text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">暂无会员卡，立即购买享受特权</p>
+              <Icon icon="mdi:information-outline" className="text-4xl text-ink-tertiary mx-auto mb-3" />
+              <p className="text-ink-secondary">暂无会员卡，立即购买享受特权</p>
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-gray-500">正在加载会员信息...</p>
+              <p className="text-ink-secondary">正在加载会员信息...</p>
             </div>
           )}
         </div>

@@ -65,7 +65,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
           <button
             key={m}
             onClick={() => setMode(m)}
-            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === m ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary"}`}
+            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === m ? "bg-brand text-white" : "bg-surface-muted text-ink-secondary"}`}
           >
             {m === "link" ? "粘贴链接" : m === "upload" ? "上传参考视频" : "直接写文案"}
           </button>
@@ -90,7 +90,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
               onChange={(e) => setShareText(e.target.value)}
               rows={5}
               placeholder="粘贴抖音等分享文案或链接，例如：0.76 复制打开抖音…… https://v.douyin.com/xxxx/"
-              className="w-full rounded-xl border border-gray-200 p-3 text-[13.5px] outline-none focus:border-brand"
+              className="w-full rounded-xl border border-hairline-subtle p-3 text-[13.5px] outline-none focus:border-brand"
             />
             {!parsePriced && <p className="text-[12px] text-amber-600">管理员尚未配置解析价格，暂无法解析。</p>}
             {parsePriced && parseEstimate !== null && (
@@ -109,7 +109,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
         <div className="space-y-3">
           <button
             onClick={() => inputRef.current?.click()}
-            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-gray-200 py-10 text-ink-tertiary "
+            className="flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed border-hairline-subtle py-10 text-ink-tertiary "
           >
             <Icon icon="mdi:cloud-upload-outline" className="text-3xl" />
             <span className="text-[13px]">{file ? file.name : "点击选择参考视频（≤50MB）"}</span>
@@ -136,7 +136,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
             onChange={(e) => setManual(e.target.value)}
             rows={10}
             placeholder="直接粘贴或撰写口播文案，可跳过视频拆解"
-            className="w-full rounded-xl border border-gray-200 p-3 text-[13.5px] outline-none focus:border-brand"
+            className="w-full rounded-xl border border-hairline-subtle p-3 text-[13.5px] outline-none focus:border-brand"
           />
           <button
             disabled={!manual.trim()}

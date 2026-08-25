@@ -56,10 +56,10 @@ export function LoadingReport({ stage }: LoadingReportProps) {
       <div className="text-xs font-medium text-brand bg-brand/5 px-3 py-1 rounded-full">
         {stage === "pending" ? "排队中" : "生成中"}
       </div>
-      <div className="text-slate-600 text-sm transition-opacity duration-500 min-h-[1.5rem]">
+      <div className="text-ink-secondary text-sm transition-opacity duration-500 min-h-[1.5rem]">
         {list[i]}
       </div>
-      <p className="text-xs text-slate-400">报告较复杂时可能需要一会儿，请勿关闭页面</p>
+      <p className="text-xs text-ink-tertiary">报告较复杂时可能需要一会儿，请勿关闭页面</p>
     </div>
   );
 }

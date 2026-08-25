@@ -249,15 +249,15 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
           )}
 
           <div className="mx-auto max-w-2xl">
-            <h1 className="text-3xl font-bold text-slate-900">确认信息</h1>
-            <p className="mt-2 text-slate-600">检查您的报告生成配置</p>
+            <h1 className="text-3xl font-bold text-ink">确认信息</h1>
+            <p className="mt-2 text-ink-secondary">检查您的报告生成配置</p>
 
             <div className="mt-8 space-y-6">
-              <div className="rounded-xl border border-slate-200 bg-surface p-6">
-                <h3 className="font-semibold text-slate-900">选择的模型</h3>
+              <div className="rounded-xl border border-hairline-subtle bg-surface p-6">
+                <h3 className="font-semibold text-ink">选择的模型</h3>
                 <div className="mt-2 flex items-center gap-2">
                   <Icon icon="mdi:cube-outline" className="text-brand" />
-                  <span className="text-slate-700">{modelDisplay}</span>
+                  <span className="text-ink">{modelDisplay}</span>
                 </div>
               </div>
 
@@ -294,7 +294,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
               <div className="flex gap-3">
                 <button
                   onClick={handleBack}
-                  className="flex-1 rounded-lg border border-slate-300 px-4 py-3 font-semibold text-slate-700 transition-colors"
+                  className="flex-1 rounded-lg border border-hairline px-4 py-3 font-semibold text-ink transition-colors"
                 >
                   <Icon icon="mdi:arrow-left" className="inline mr-2" />
                   返回
@@ -327,15 +327,15 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
         <div className="container mx-auto px-4 py-8">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900">报告预览</h1>
-              <p className="mt-1 text-slate-600">
+              <h1 className="text-3xl font-bold text-ink">报告预览</h1>
+              <p className="mt-1 text-ink-secondary">
                 来源: {currentTask?.sourceName || (currentTask?.sourceType === "text" ? "粘贴文本" : "文件")}
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleDownload}
-                className="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition-colors flex items-center gap-2"
+                className="rounded-lg border border-hairline px-4 py-2 font-semibold text-ink transition-colors flex items-center gap-2"
               >
                 <Icon icon="mdi:download" />
                 下载 HTML
@@ -354,7 +354,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             title="report-preview"
             src={downloadUrl}
             sandbox="allow-scripts"
-            className="w-full h-[70vh] border border-slate-200 rounded-xl bg-surface"
+            className="w-full h-[70vh] border border-hairline-subtle rounded-xl bg-surface"
           />
         </div>
       </div>
@@ -373,18 +373,18 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
         <div className="mx-auto max-w-3xl">
           <div className="mb-12">
-            <h1 className="text-3xl font-bold text-slate-900">AI 智能报告</h1>
-            <p className="mt-2 text-slate-600">上传或粘贴文本生成专业的数据报告</p>
+            <h1 className="text-3xl font-bold text-ink">AI 智能报告</h1>
+            <p className="mt-2 text-ink-secondary">上传或粘贴文本生成专业的数据报告</p>
           </div>
 
           <div className="space-y-6">
             {/* 文件选择 */}
-            <div className="rounded-xl border-2 border-dashed border-slate-300 bg-surface p-8">
+            <div className="rounded-xl border-2 border-dashed border-hairline bg-surface p-8">
               <label className="flex flex-col items-center gap-4 cursor-pointer">
                 <Icon icon="mdi:cloud-upload-outline" className="text-3xl text-brand" />
                 <div className="text-center">
-                  <p className="font-semibold text-slate-900">选择文件上传</p>
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="font-semibold text-ink">选择文件上传</p>
+                  <p className="text-xs text-ink-secondary mt-1">
                     支持 txt, md, csv, pdf, docx, xlsx, xls, pptx
                   </p>
                 </div>
@@ -398,11 +398,11 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
               {selectedFile && (
                 <div className="mt-4 flex items-center gap-2 bg-brand/5 rounded-lg p-3">
                   <Icon icon="mdi:file-check" className="text-brand" />
-                  <span className="text-sm font-medium text-slate-700">{selectedFile.name}</span>
+                  <span className="text-sm font-medium text-ink">{selectedFile.name}</span>
                   <button
                     type="button"
                     onClick={() => setSelectedFile(null)}
-                    className="ml-auto text-slate-400 "
+                    className="ml-auto text-ink-tertiary "
                   >
                     <Icon icon="mdi:close" />
                   </button>
@@ -411,27 +411,27 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
             </div>
 
             <div className="relative">
-              <div className="absolute inset-x-0 top-1/2 border-t border-slate-300" />
+              <div className="absolute inset-x-0 top-1/2 border-t border-hairline" />
               <div className="relative flex justify-center">
-                <span className="bg-surface px-2 text-sm font-medium text-slate-500">或者</span>
+                <span className="bg-surface px-2 text-sm font-medium text-ink-secondary">或者</span>
               </div>
             </div>
 
             {/* 文本粘贴 */}
             <div>
-              <label className="block text-sm font-semibold text-slate-900 mb-2">粘贴长文字</label>
+              <label className="block text-sm font-semibold text-ink mb-2">粘贴长文字</label>
               <textarea
                 value={textInput}
                 onChange={handlePasteText}
                 placeholder="粘贴你的数据、文本或报告内容…"
                 rows={6}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-900 placeholder-slate-500 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
+                className="w-full rounded-lg border border-hairline px-4 py-3 text-sm text-ink placeholder-ink-tertiary focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand"
               />
             </div>
 
             {/* 意图（可选，多选预设） */}
             <div>
-              <label className="block text-sm font-semibold text-slate-900 mb-2">
+              <label className="block text-sm font-semibold text-ink mb-2">
                 生成意图（可选，可多选）
               </label>
               <div className="flex flex-wrap gap-2">
@@ -445,7 +445,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                       className={
                         active
                           ? "rounded-full border border-brand bg-brand/10 px-4 py-2 text-sm font-medium text-brand transition-colors"
-                          : "rounded-full border border-slate-300 bg-surface px-4 py-2 text-sm text-slate-600 transition-colors"
+                          : "rounded-full border border-hairline bg-surface px-4 py-2 text-sm text-ink-secondary transition-colors"
                       }
                     >
                       {active && <Icon icon="mdi:check" className="inline-block mr-1 -mt-0.5" />}
@@ -454,16 +454,16 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                   );
                 })}
               </div>
-              <p className="mt-2 text-xs text-slate-400">不选则由 AI 自动决定报告的重点与形式。</p>
+              <p className="mt-2 text-xs text-ink-tertiary">不选则由 AI 自动决定报告的重点与形式。</p>
             </div>
 
             {/* 模型选择 */}
             <div>
-              <label className="block text-sm font-semibold text-slate-900 mb-2">选择模型</label>
+              <label className="block text-sm font-semibold text-ink mb-2">选择模型</label>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.currentTarget.value)}
-                className="w-full rounded-lg border border-slate-300 px-4 py-3 text-sm text-slate-900 focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand bg-surface cursor-pointer"
+                className="w-full rounded-lg border border-hairline px-4 py-3 text-sm text-ink focus:border-brand focus:outline-none focus:ring-1 focus:ring-brand bg-surface cursor-pointer"
               >
                 {models.map((m) => (
                   <option key={m.model} value={m.model}>
@@ -486,8 +486,8 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
           {/* 历史列表 */}
           {history.length > 0 && (
-            <div className="mt-12 pt-8 border-t border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900 mb-4">最近报告</h2>
+            <div className="mt-12 pt-8 border-t border-hairline-subtle">
+              <h2 className="text-lg font-semibold text-ink mb-4">最近报告</h2>
               <div className="space-y-2">
                 {history.map((item) => {
                   const canOpen = item.stage === "ready";
@@ -504,7 +504,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                       key={item.id}
                       onClick={() => handleHistoryClick(item)}
                       disabled={!canOpen}
-                      className={`w-full rounded-lg border border-slate-200 px-4 py-3 text-left transition-colors ${
+                      className={`w-full rounded-lg border border-hairline-subtle px-4 py-3 text-left transition-colors ${
                         canOpen
                           ? " cursor-pointer"
                           : "opacity-60 cursor-not-allowed"
@@ -512,10 +512,10 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-medium text-slate-900">
+                          <p className="font-medium text-ink">
                             {item.sourceName || (item.sourceType === "text" ? "粘贴文本" : "文件")}
                           </p>
-                          <p className="text-xs text-slate-500">
+                          <p className="text-xs text-ink-secondary">
                             {new Date(item.createdAt).toLocaleString()}
                           </p>
                         </div>

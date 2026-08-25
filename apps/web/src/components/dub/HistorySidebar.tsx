@@ -2,9 +2,9 @@ import { Icon } from "@iconify/react";
 import type { DubProject } from "../../dubApi";
 
 const STAGE_LABEL: Record<string, { text: string; cls: string }> = {
-  draft: { text: "草稿", cls: "bg-gray-100 text-ink-tertiary" },
-  analyzed: { text: "已拆解", cls: "bg-gray-100 text-ink-tertiary" },
-  scripted: { text: "已洗稿", cls: "bg-gray-100 text-ink-tertiary" },
+  draft: { text: "草稿", cls: "bg-surface-muted text-ink-tertiary" },
+  analyzed: { text: "已拆解", cls: "bg-surface-muted text-ink-tertiary" },
+  scripted: { text: "已洗稿", cls: "bg-surface-muted text-ink-tertiary" },
   voiced: { text: "已配音", cls: "bg-brand/10 text-brand" },
   generating: { text: "成片中", cls: "bg-amber-50 text-amber-600" },
   mixing: { text: "配乐中", cls: "bg-amber-50 text-amber-600" },
@@ -22,7 +22,7 @@ export interface HistorySidebarProps {
 
 export function HistorySidebar({ projects, activeId, onSelect, onCreate, onDelete }: HistorySidebarProps) {
   return (
-    <aside className="flex w-60 shrink-0 flex-col gap-3 border-r border-gray-100 pr-4">
+    <aside className="flex w-60 shrink-0 flex-col gap-3 border-r border-hairline-subtle pr-4">
       <button
         onClick={onCreate}
         className="flex items-center justify-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-[13px] font-medium text-white "

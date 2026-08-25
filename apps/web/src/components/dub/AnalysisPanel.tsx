@@ -8,7 +8,7 @@ export interface AnalysisPanelProps {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-gray-100 bg-surface p-4">
+    <section className="rounded-xl border border-hairline-subtle bg-surface p-4">
       <h3 className="mb-2 text-[13px] font-semibold text-ink">{title}</h3>
       {children}
     </section>
@@ -23,7 +23,7 @@ export function AnalysisPanel({ analysis, spokenScript, onSpokenScriptChange }: 
           value={spokenScript}
           onChange={(e) => onSpokenScriptChange(e.target.value)}
           rows={12}
-          className="w-full rounded-lg border border-gray-200 p-3 text-[13.5px] leading-relaxed outline-none focus:border-brand"
+          className="w-full rounded-lg border border-hairline-subtle p-3 text-[13.5px] leading-relaxed outline-none focus:border-brand"
         />
       </Card>
 

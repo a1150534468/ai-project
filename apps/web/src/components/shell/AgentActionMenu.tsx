@@ -24,10 +24,10 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
     setRenaming(false);
   };
 
-  const row = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-gray-600 transition-colors  disabled:opacity-40";
+  const row = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-ink-secondary transition-colors  disabled:opacity-40";
 
   return (
-    <div className="min-w-[172px] rounded-xl border border-gray-100 bg-surface p-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
+    <div className="min-w-[172px] rounded-xl border border-hairline-subtle bg-surface p-2 shadow-[0_8px_28px_rgba(0,0,0,0.13)]">
       <div className="flex justify-center py-2">
         <AgentAvatar avatarUrl={agent.avatarUrl} avatarSvg={agent.avatarSvg} icon={agent.icon} size={64} name={agent.name} />
       </div>
@@ -40,10 +40,10 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
           onBlur={submitRename}
           onKeyDown={(e) => { if (e.key === "Enter") submitRename(); if (e.key === "Escape") setRenaming(false); }}
           maxLength={40}
-          className="mb-1 h-8 w-full rounded-md border border-gray-200 px-2 text-xs outline-none focus:border-brand"
+          className="mb-1 h-8 w-full rounded-md border border-hairline-subtle px-2 text-xs outline-none focus:border-brand"
         />
       ) : (
-        <p className="mb-1 truncate px-2 text-center text-xs font-semibold text-gray-800">{agent.name}</p>
+        <p className="mb-1 truncate px-2 text-center text-xs font-semibold text-ink">{agent.name}</p>
       )}
 
       <button type="button" className={row} disabled={busy} onClick={onRegenerate}>
@@ -72,7 +72,7 @@ export function AgentActionMenu({ agent, busy, onRegenerate, onUpload, onRename,
         <span>重命名</span>
       </button>
 
-      <div className="my-1 h-px bg-gray-100" />
+      <div className="my-1 h-px bg-surface-muted" />
 
       <button type="button" className={`${row} text-red-600 `} disabled={busy} onClick={onDelete}>
         <Icon icon="mdi:trash-can-outline" className="flex-none text-base" aria-hidden />
