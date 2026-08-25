@@ -70,7 +70,7 @@ function StepRail({ active }: { active: number }) {
           const on = i === active;
           return (
             <li key={step.title} className="flex gap-3">
-              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${on ? "bg-[#1d1d1f] text-white" : done ? "bg-[#1d1d1f] text-white" : "bg-surface-muted text-ink-tertiary"}`}>
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-xs font-semibold ${on ? "bg-surface-inverse text-ink-inverse" : done ? "bg-surface-inverse text-ink-inverse" : "bg-surface-muted text-ink-tertiary"}`}>
                 {done ? <Icon icon="mdi:check" className="text-sm" aria-hidden /> : i + 1}
               </span>
               <span className="min-w-0">
@@ -181,7 +181,7 @@ function PillGroup({ label, options, value, onChange }: { label: string; options
         const on = opt === value;
         return (
           <button key={opt} type="button" onClick={() => onChange(opt)}
-            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-secondary "}`}>
+            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-ink font-semibold text-ink" : "border-hairline-subtle text-ink-secondary "}`}>
             {opt}
             {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-ink" aria-hidden />}
           </button>
@@ -403,7 +403,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       const on = mode === m;
                       return (
                         <button key={m} type="button" onClick={() => setMode(m)}
-                          className={`relative rounded-[8px] border p-3.5 text-left transition ${on ? "border-[#1d1d1f]" : "border-hairline-subtle "}`}>
+                          className={`relative rounded-[8px] border p-3.5 text-left transition ${on ? "border-ink" : "border-hairline-subtle "}`}>
                           <span className="flex items-center gap-2 text-[13.5px] font-semibold text-ink">
                             <Icon icon={icon} className="text-base" aria-hidden />{title}
                           </span>
@@ -422,7 +422,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       const on = hasNarration === val;
                       return (
                         <button key={label} type="button" onClick={() => setHasNarration(val)}
-                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-secondary "}`}>
+                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-ink font-semibold text-ink" : "border-hairline-subtle text-ink-secondary "}`}>
                           {label}
                           {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-ink" aria-hidden />}
                         </button>
@@ -502,7 +502,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
               <>
                 <button type="button" onClick={onClose} className="text-[13px] font-medium text-ink-tertiary ">取消</button>
                 <button type="button" onClick={() => void startAnalyze()} disabled={!canAnalyze}
-                  className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[#c7c7cc]">
+                  className="h-10 rounded-[10px] bg-surface-inverse px-6 text-[13px] font-semibold text-ink-inverse transition disabled:cursor-not-allowed disabled:bg-hairline disabled:text-ink-tertiary">
                   {materials.length === 0 ? "请先上传素材" : estimatedCost > 0 ? `开始分析 · 预计 ${estimatedCost} 点` : "开始分析"}
                 </button>
               </>
@@ -511,7 +511,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
               <>
                 <button type="button" onClick={onClose} className="text-[13px] font-medium text-ink-tertiary ">重新分析</button>
                 <button type="button" onClick={() => setStage("creating")} disabled={!insight}
-                  className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">下一步</button>
+                  className="h-10 rounded-[10px] bg-surface-inverse px-6 text-[13px] font-semibold text-ink-inverse transition disabled:bg-hairline disabled:text-ink-tertiary">下一步</button>
               </>
             )}
             {stage === "creating" && (
@@ -519,7 +519,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 <button type="button" onClick={() => setStage("insight")} className="text-[13px] font-medium text-ink-tertiary ">返回上一步</button>
                 {mode === "config" ? (
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
-                    className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">生成脚本</button>
+                    className="h-10 rounded-[10px] bg-surface-inverse px-6 text-[13px] font-semibold text-ink-inverse transition disabled:bg-hairline disabled:text-ink-tertiary">生成脚本</button>
                 ) : (
                   <span className="text-[12px] text-ink-tertiary">{busy ? "分析并生成中…" : "上传参考视频后自动分析并生成脚本"}</span>
                 )}
@@ -532,7 +532,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
                     className="h-10 rounded-[10px] border border-hairline-subtle px-5 text-[13px] font-semibold text-ink transition disabled:opacity-50">重新生成脚本</button>
                   <button type="button" onClick={() => { onApply(script, { hasNarration }); onClose(); }} disabled={!script}
-                    className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">应用脚本</button>
+                    className="h-10 rounded-[10px] bg-surface-inverse px-6 text-[13px] font-semibold text-ink-inverse transition disabled:bg-hairline disabled:text-ink-tertiary">应用脚本</button>
                 </div>
               </>
             )}

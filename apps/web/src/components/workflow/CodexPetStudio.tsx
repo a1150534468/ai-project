@@ -1165,7 +1165,7 @@ export function CodexPetStudio({
           <span className="rounded-full border border-brand/30 bg-white px-3 py-1.5 text-brand-ink">
             GPT Image 2 · Pixel · AI 质检{draft.qualityInspectionEnabled ? "已开启" : "关闭"}
           </span>
-          <span className="rounded-full bg-[#1d1d1f] px-3 py-1.5 font-semibold text-white">
+          <span className="rounded-full bg-surface-inverse px-3 py-1.5 font-semibold text-ink-inverse">
             {pricing ? `最多 ${plannedCallLimit} 次计划内调用 · ${pricing.rate} 积分/次 · 预留 ${reservedPointsQuote}` : "调用价格加载中"}
           </span>
         </div>

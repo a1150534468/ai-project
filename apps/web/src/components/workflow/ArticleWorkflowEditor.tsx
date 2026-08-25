@@ -171,7 +171,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
       <article
         className={`mx-auto bg-white ${previewScaleWidthClass(previewScale)} ${
           previewScale === "mobile"
-            ? "overflow-hidden rounded-[32px] border-[8px] border-[#1d1d1f] px-4 py-4"
+            ? "overflow-hidden rounded-[32px] border-[8px] border-ink px-4 py-4"
             : "px-5 py-6"
         }`}
       >

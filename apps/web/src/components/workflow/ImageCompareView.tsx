@@ -14,7 +14,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="rounded-full bg-[#1d1d1f] px-2 py-1 text-xs font-semibold text-white">{label}</span>
+        <span className="rounded-full bg-surface-inverse px-2 py-1 text-xs font-semibold text-ink-inverse">{label}</span>
         {image && <span className="truncate text-xs text-ink-tertiary">{image.size}</span>}
       </div>
       {image ? (
@@ -60,7 +60,7 @@ export function ImageCompareView(props: ImageCompareViewProps) {
       <div className="mt-5 flex flex-wrap gap-2 border-t border-hairline-subtle pt-3">
         {props.newImage && (
           <>
-            <button type="button" onClick={() => props.onSetCurrent(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1d1d1f] px-3 text-sm font-semibold text-white">
+            <button type="button" onClick={() => props.onSetCurrent(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-surface-inverse px-3 text-sm font-semibold text-ink-inverse">
               <Icon icon="mdi:check" className="text-base" aria-hidden />设为当前版本
             </button>
             <button type="button" onClick={() => props.onContinueModify(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline px-3 text-sm font-semibold text-ink">

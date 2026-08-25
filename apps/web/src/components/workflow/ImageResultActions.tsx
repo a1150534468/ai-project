@@ -32,7 +32,7 @@ export function ImageResultActions(props: ImageResultActionsProps) {
           type="button"
           onClick={() => handlers[action.key](props.image)}
           className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold ${
-            action.key === "modify" ? "bg-[#1d1d1f] text-white" : "border border-hairline bg-white text-ink"
+            action.key === "modify" ? "bg-surface-inverse text-ink-inverse" : "border border-hairline bg-white text-ink"
           }`}
         >
           <Icon icon={action.icon} className="text-base" aria-hidden />

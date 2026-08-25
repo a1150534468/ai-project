@@ -396,7 +396,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           onCountChange={setCount}
         />
 
-        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-ink" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
         {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         <p className="mt-3 text-[10px] leading-4 text-ink-tertiary">AI 生成内容仅作预览，请勿用于证件、身份核验或未经授权的公开传播。</p>
         </div>
@@ -414,7 +414,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
         <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-surface-inverse text-ink-inverse"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>
             <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-ink-tertiary">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">

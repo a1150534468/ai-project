@@ -114,7 +114,7 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
         aria-label={ariaLabel}
         aria-expanded={open}
         onClick={toggle}
-        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-[#1d1d1f]" : "border-hairline-subtle "}`}
+        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white text-left transition ${compact ? "px-3 py-2.5 justify-between" : "px-3 py-2.5"} ${open ? "border-ink" : "border-hairline-subtle "}`}
       >
         {!compact && <span className="text-xs text-ink-tertiary">{ariaLabel}</span>}
         <span className={`truncate text-sm font-medium text-ink ${compact ? "" : "ml-auto"}`}>{current?.label ?? value}</span>
@@ -357,7 +357,7 @@ export function VideoGenerationStudio({
           type="button"
           onClick={() => setConfirmOpen(true)}
           disabled={isSubmitting || !prompt.trim() || estimate === null}
-          className="z-10 h-11 w-full rounded-[9px] bg-[#1d1d1f] text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-[#c7c7cc]"
+          className="z-10 h-11 w-full rounded-[9px] bg-surface-inverse text-sm font-semibold text-ink-inverse transition disabled:cursor-not-allowed disabled:bg-hairline disabled:text-ink-tertiary"
         >
           {isSubmitting ? "提交中" : "立即生成视频"}
           <span className="ml-3 text-xs font-medium opacity-80">
@@ -397,7 +397,7 @@ export function VideoGenerationStudio({
                 <button
                   type="button"
                   onClick={() => { setConfirmOpen(false); setSelected(undefined); onSubmit(); }}
-                  className="h-10 flex-1 rounded-[10px] bg-[#1d1d1f] text-[13px] font-semibold text-white transition "
+                  className="h-10 flex-1 rounded-[10px] bg-surface-inverse text-[13px] font-semibold text-ink-inverse transition "
                 >
                   确认生成
                 </button>
@@ -410,7 +410,7 @@ export function VideoGenerationStudio({
       <main className="flex min-h-[420px] flex-col rounded-[14px] border border-hairline-subtle bg-white">
         <div className="flex h-11 items-center gap-5 border-b border-hairline-subtle px-5 text-sm font-semibold text-ink">
           <span>预览</span>
-          <span className="border-b-2 border-[#1d1d1f] py-3">收藏</span>
+          <span className="border-b-2 border-ink py-3">收藏</span>
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-subtle">
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5">
@@ -435,7 +435,7 @@ export function VideoGenerationStudio({
                 <button
                   type="button"
                   onClick={() => setDownloadOpen(true)}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-1.5 text-xs font-semibold text-white transition "
+                  className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-surface-inverse px-3 py-1.5 text-xs font-semibold text-ink-inverse transition "
                 >
                   <Icon icon="mdi:download" className="text-sm" aria-hidden />
                   下载
@@ -458,7 +458,7 @@ export function VideoGenerationStudio({
                 <StaggerItem key={task.id}>
                   <motion.div
                     onClick={() => setSelected(task.requestId)}
-                    className={`cursor-pointer rounded-[10px] border p-3 transition ${selected === task.requestId ? "border-[#1d1d1f] bg-surface-subtle" : "border-hairline-subtle"}`}
+                    className={`cursor-pointer rounded-[10px] border p-3 transition ${selected === task.requestId ? "border-ink bg-surface-subtle" : "border-hairline-subtle"}`}
                     layout
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -514,7 +514,7 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
         <p className="mt-2 text-[13px] leading-6 text-ink-secondary">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
         <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-surface-subtle p-2">
           <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-[12px] text-ink outline-none" />
-          <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-2 text-[12px] font-semibold text-white transition ">
+          <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-surface-inverse px-3 py-2 text-[12px] font-semibold text-ink-inverse transition ">
             <Icon icon={copied ? "mdi:check" : "mdi:content-copy"} className="text-sm" aria-hidden />
             {copied ? "已复制" : "复制"}
           </button>

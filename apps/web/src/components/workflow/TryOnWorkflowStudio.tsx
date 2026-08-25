@@ -493,7 +493,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                     setAuthorizationAccepted(event.target.checked);
                     setError("");
                   }}
-                  className="mt-0.5 h-4 w-4 accent-[#1d1d1f]"
+                  className="mt-0.5 h-4 w-4 accent-ink"
                 />
                 <span>我确认模特图为本人，或已获得本人明确授权，并同意用于本次 AI 服装试穿生成。</span>
               </label>
@@ -519,7 +519,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
         <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
           <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-white px-4">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white">
+              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-surface-inverse text-ink-inverse">
                 <Icon icon="mdi:tshirt-crew-outline" className="text-lg" aria-hidden />
               </span>
               <div className="min-w-0">

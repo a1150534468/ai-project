@@ -74,7 +74,7 @@ export function ArticleWorkflowPreview({
       </div>
       <div
         className={`mx-auto bg-white ${previewScaleWidthClass(scale)} ${
-          mobile ? "overflow-hidden rounded-[32px] border-[8px] border-[#1d1d1f] px-4 py-4" : "px-5 py-6"
+          mobile ? "overflow-hidden rounded-[32px] border-[8px] border-ink px-4 py-4" : "px-5 py-6"
         }`}
       >
         {mobile && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-hairline" aria-hidden />}

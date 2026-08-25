@@ -28,18 +28,18 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
     <div className="bg-white rounded-2xl p-5 border border-gray-50 mb-6">
       <div className="flex flex-col lg:flex-row gap-5">
         {/* 品牌块 */}
-        <div className="rounded-2xl bg-[#1d1d1f] p-5 text-white flex-none w-full lg:w-[260px]">
-          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/15">
+        <div className="rounded-2xl bg-surface-inverse p-5 text-ink-inverse flex-none w-full lg:w-[260px]">
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-ink-inverse/15">
             ● {membership ? "生效中" : "未开通"}
           </span>
           <div className="mt-6 text-xl font-bold">{membership?.cardName || "普通会员"}</div>
           {membership ? (
             <>
-              <div className="mt-1 text-[12px] text-white/70">买断到期 {formatDate(membership.expiresAt)}</div>
-              <div className="mt-4 text-[12px] text-white/60">{cadenceLabel(membership.cadence)}刷新临时点 · 到期清零</div>
+              <div className="mt-1 text-[12px] text-ink-inverse/70">买断到期 {formatDate(membership.expiresAt)}</div>
+              <div className="mt-4 text-[12px] text-ink-inverse/60">{cadenceLabel(membership.cadence)}刷新临时点 · 到期清零</div>
             </>
           ) : (
-            <div className="mt-4 text-[12px] text-white/60">购买会员可获得每期临时算力点</div>
+            <div className="mt-4 text-[12px] text-ink-inverse/60">购买会员可获得每期临时算力点</div>
           )}
         </div>
 

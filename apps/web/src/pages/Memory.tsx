@@ -197,7 +197,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
               className={`rounded-full px-4 py-2 text-sm font-medium shadow-[0_10px_28px_rgba(15,23,42,0.12)] ${
                 notice.tone === "error"
                   ? "bg-red-600 text-white"
-                  : "bg-[#1d1d1f] text-white"
+                  : "bg-surface-inverse text-ink-inverse"
               }`}
             >
               {notice.text}
