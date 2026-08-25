@@ -128,7 +128,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                       aria-checked={effectiveGalleryMode === option.key}
                       onClick={() => props.onPreviewGalleryMode(option.key)}
                       className={`h-7 rounded-md px-2 text-xs font-semibold transition ${
-                        effectiveGalleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
+                        effectiveGalleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
                       }`}
                     >
                       {option.label}
@@ -144,7 +144,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
               <button
                 type="button"
                 onClick={props.onReset}
-                className="h-8 rounded-lg px-3 text-xs font-semibold text-[#6e6e73] hover:bg-[#f5f5f7]"
+                className="h-8 rounded-lg px-3 text-xs font-semibold text-ink-secondary hover:bg-[#f5f5f7]"
               >
                 重置
               </button>

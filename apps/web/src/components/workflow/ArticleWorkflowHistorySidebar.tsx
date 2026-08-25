@@ -32,7 +32,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-width:thin]">
       {props.bootstrapping && (
-        <div className="px-3 py-5 text-center text-xs text-[#6e6e73]">正在加载项目...</div>
+        <div className="px-3 py-5 text-center text-xs text-ink-secondary">正在加载项目...</div>
       )}
 
       {!props.bootstrapping && props.batches.length === 0 && (
@@ -63,7 +63,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
             >
               <span className="block min-w-0">
                 <span className="block truncate text-xs font-semibold text-ink">{title}</span>
-                <span className="mt-1 block truncate text-[10px] text-[#6e6e73]">
+                <span className="mt-1 block truncate text-[10px] text-ink-secondary">
                   {item.platforms.map(shortPlatformLabel).join(" · ")}
                 </span>
               </span>

@@ -12,7 +12,7 @@ function percent(value: number): number {
 export function NovelScoreTrend({ rows, compact = false }: { readonly rows: readonly NovelScoreTrendRow[]; readonly compact?: boolean }) {
   if (!rows.length) return <p className="grid h-48 place-items-center text-sm text-[#89928f]">生成章节后显示张力与质量趋势</p>;
   return <div>
-    <div className="mb-3 flex items-center gap-4 text-[10px] font-semibold text-[#68736f]">
+    <div className="mb-3 flex items-center gap-4 text-[10px] font-semibold text-ink-secondary">
       <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-brand/75" />张力</span>
       <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand ring-2 ring-brand/20" />质量</span>
       <span className="ml-auto text-[#9aa29f]">0–100 分</span>

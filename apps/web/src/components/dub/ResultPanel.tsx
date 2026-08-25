@@ -110,7 +110,7 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
       ) : null}
 
       {running && (
-        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-5 text-[13px] text-[#5a5a60]">
+        <div className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-5 text-[13px] text-ink-secondary">
           <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
           正在对口型合成，通常需要几分钟，可稍后回来查看。
         </div>
@@ -140,7 +140,7 @@ export function ResultPanel({ token, projectId, pricing, audioDurationSec, onErr
               <button
                 type="button"
                 onClick={() => openDownload(rawUrl, "下载无配乐版本")}
-                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] text-[#5a5a60]"
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] text-ink-secondary"
               >
                 下载无配乐版本
               </button>

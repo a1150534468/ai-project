@@ -45,7 +45,7 @@ function EmptyState() {
         <Icon icon="mdi:table-row" className="text-2xl" />
       </div>
       <p className="mt-4 text-lg font-semibold text-ink">选择一条记忆</p>
-      <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+      <p className="mt-2 text-sm leading-6 text-ink-secondary">
         在表格中点击任意行，即可查看详情、编辑内容或整理标签。
       </p>
     </aside>
@@ -193,7 +193,7 @@ export default function MemoryDetailPanel({
             <button
               type="button"
               onClick={resetEditor}
-              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-[#6e6e73] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <Icon icon="mdi:close-circle-outline" className="text-sm" />
               取消

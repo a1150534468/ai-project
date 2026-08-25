@@ -26,7 +26,7 @@ export interface SubmitCostBarProps {
 export function SubmitCostBar(props: SubmitCostBarProps) {
   return (
     <div className="sticky bottom-0 z-10 border-t border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur lg:px-5">
-      <div className="mb-2 flex min-h-5 items-center justify-between gap-3 text-xs font-semibold text-[#6e6e73]">
+      <div className="mb-2 flex min-h-5 items-center justify-between gap-3 text-xs font-semibold text-ink-secondary">
         <span>{props.costLabel ?? "预计消耗"}</span>
         <span className="inline-flex items-center gap-1 text-ink">
           <Icon icon="mdi:diamond-stone" className="text-sm text-brand-ink" aria-hidden />

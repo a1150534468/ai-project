@@ -56,14 +56,14 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
+            <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
             <h2 className="mt-1 text-base font-semibold text-ink">{props.isEditing ? "基于结果修改" : "创建图片"}</h2>
           </div>
           {props.isEditing && props.onCancelEditing && (
             <button
               type="button"
               onClick={props.onCancelEditing}
-              className="inline-flex h-9 items-center gap-1 px-2 text-sm font-semibold text-[#6e6e73]"
+              className="inline-flex h-9 items-center gap-1 px-2 text-sm font-semibold text-ink-secondary"
             >
               <Icon icon="mdi:close" className="text-lg" aria-hidden />
               取消编辑
@@ -199,7 +199,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
                 type="button"
                 onClick={() => props.onQuickCountChange(count)}
                 className={`h-9 border-r border-[#e8e8ed] text-sm font-semibold last:border-r-0 ${
-                  props.selectedQuickCount === count ? "bg-brand-soft text-brand-ink" : "text-[#6e6e73]"
+                  props.selectedQuickCount === count ? "bg-brand-soft text-brand-ink" : "text-ink-secondary"
                 }`}
               >
                 {count}

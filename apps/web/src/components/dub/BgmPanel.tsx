@@ -88,7 +88,7 @@ export function BgmPanel({ token, bgmPresetId, bgmObjectKey, bgmVolume, onChange
 
       {!none && (
         <section>
-          <label className="mb-2 block text-[12.5px] text-[#5a5a60]">配乐音量：{Math.round(bgmVolume * 100)}%（人声音量不变）</label>
+          <label className="mb-2 block text-[12.5px] text-ink-secondary">配乐音量：{Math.round(bgmVolume * 100)}%（人声音量不变）</label>
           <input
             type="range" min={0} max={1} step={0.05} value={bgmVolume}
             onChange={(e) => onChange({ bgmPresetId, bgmObjectKey, bgmVolume: Number(e.target.value) })}

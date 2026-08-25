@@ -136,14 +136,14 @@ export function NovelCreatePage({
       <div className="border-b border-[#edf0ef] bg-[#f5f5f7] px-5 py-5 sm:px-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
-            {canGoBack && <button type="button" onClick={onBack} className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d9dfdd] bg-white text-[#50575a]" aria-label="返回书库"><Icon icon="mdi:arrow-left" /></button>}
+            {canGoBack && <button type="button" onClick={onBack} className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#d9dfdd] bg-white text-ink-secondary" aria-label="返回书库"><Icon icon="mdi:arrow-left" /></button>}
             <div>
               <p className="flex items-center gap-2 text-xs font-bold text-brand-ink"><Icon icon="mdi:creation-outline" /> STORY FOUNDRY</p>
               <h2 className="mt-1 text-xl font-semibold text-ink">把一个故事想法，变成长篇叙事工程</h2>
-              <p className="mt-1 text-sm leading-6 text-[#68716f]">先写清主线与读者期待，系统会在设置向导中逐步生成文风、世界、人物、地图和剧情总纲。</p>
+              <p className="mt-1 text-sm leading-6 text-ink-secondary">先写清主线与读者期待，系统会在设置向导中逐步生成文风、世界、人物、地图和剧情总纲。</p>
             </div>
           </div>
-          <button type="button" onClick={() => setShowAdvanced((value) => !value)} className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-[#d9dfdd] bg-white px-3 text-xs font-semibold text-[#4d5755]">
+          <button type="button" onClick={() => setShowAdvanced((value) => !value)} className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-[#d9dfdd] bg-white px-3 text-xs font-semibold text-ink-secondary">
             <Icon icon={showAdvanced ? "mdi:tune-vertical-variant" : "mdi:tune-variant"} />
             {showAdvanced ? "使用篇幅档位" : "高级设置"}
           </button>
@@ -165,10 +165,10 @@ export function NovelCreatePage({
         <div className="grid gap-3">
           <div><p className="text-sm font-semibold text-ink">市场分区</p><p className="mt-1 text-xs text-[#818986]">大类 → 细分主题；选择后自动推导世界、结构、节奏与文风，后续都可修改。</p></div>
           <div className="flex flex-wrap gap-2">
-            {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-[#d9dfdd] bg-white text-[#4c5553] "}`}><Icon icon={item.icon} />{item.label}</button>)}
+            {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-[#d9dfdd] bg-white text-ink-secondary "}`}><Icon icon={item.icon} />{item.label}</button>)}
           </div>
           <div className="flex flex-wrap gap-2 rounded-2xl bg-[#f6f8f7] p-3">
-            {taxonomy.topics.map((topic) => <button key={topic} type="button" onClick={() => update({ subgenre: topic })} className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-white text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-[#626b68] "}`}>{topic}</button>)}
+            {taxonomy.topics.map((topic) => <button key={topic} type="button" onClick={() => update({ subgenre: topic })} className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-white text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-ink-secondary "}`}>{topic}</button>)}
           </div>
         </div>
 
@@ -181,18 +181,18 @@ export function NovelCreatePage({
           </div>
         ) : (
           <div className="grid gap-4 rounded-2xl border border-[#e1e5e3] bg-[#f8faf9] p-4 sm:grid-cols-3">
-            <label className="grid gap-2 text-xs font-semibold text-[#59625f]">书名（可留空由梗概生成）<input value={draft.title} onChange={(event) => update({ title: event.currentTarget.value })} className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" placeholder="未命名新作" /></label>
-            <label className="grid gap-2 text-xs font-semibold text-[#59625f]">章节数<input value={draft.chapterCount} onChange={(event) => update({ chapterCount: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" /></label>
-            <label className="grid gap-2 text-xs font-semibold text-[#59625f]">每章字数<input value={draft.chapterChars} onChange={(event) => update({ chapterChars: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" /></label>
+            <label className="grid gap-2 text-xs font-semibold text-ink-secondary">书名（可留空由梗概生成）<input value={draft.title} onChange={(event) => update({ title: event.currentTarget.value })} className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" placeholder="未命名新作" /></label>
+            <label className="grid gap-2 text-xs font-semibold text-ink-secondary">章节数<input value={draft.chapterCount} onChange={(event) => update({ chapterCount: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" /></label>
+            <label className="grid gap-2 text-xs font-semibold text-ink-secondary">每章字数<input value={draft.chapterChars} onChange={(event) => update({ chapterChars: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-[#d9dfdd] bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" /></label>
           </div>
         )}
 
         <details className="group rounded-2xl border border-[#e1e5e3] bg-white">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-[#4d5755]"><span className="flex items-center gap-2"><Icon icon="mdi:layers-triple-outline" className="text-brand-ink" />查看自动推导的创作约束</span><Icon icon="mdi:chevron-down" className="transition group-open:rotate-180" /></summary>
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink-secondary"><span className="flex items-center gap-2"><Icon icon="mdi:layers-triple-outline" className="text-brand-ink" />查看自动推导的创作约束</span><Icon icon="mdi:chevron-down" className="transition group-open:rotate-180" /></summary>
           <div className="grid gap-3 border-t border-[#edf0ef] p-4 sm:grid-cols-2">
             {([
               ["世界预设", "worldPreset"], ["故事结构", "storyStructure"], ["节奏控制", "pacingControl"], ["写作风格", "writingStyle"], ["特殊要求", "specialRequirements"],
-            ] as const).map(([label, key]) => <label key={key} className={`grid gap-1.5 text-xs font-semibold text-[#68716f] ${key === "specialRequirements" ? "sm:col-span-2" : ""}`}>{label}<textarea value={draft[key]} onChange={(event) => update({ [key]: event.currentTarget.value })} rows={3} className="resize-y rounded-xl border border-[#d9dfdd] bg-[#fbfcfc] p-3 text-sm leading-6 text-ink outline-none focus:border-brand/60" /></label>)}
+            ] as const).map(([label, key]) => <label key={key} className={`grid gap-1.5 text-xs font-semibold text-ink-secondary ${key === "specialRequirements" ? "sm:col-span-2" : ""}`}>{label}<textarea value={draft[key]} onChange={(event) => update({ [key]: event.currentTarget.value })} rows={3} className="resize-y rounded-xl border border-[#d9dfdd] bg-[#fbfcfc] p-3 text-sm leading-6 text-ink outline-none focus:border-brand/60" /></label>)}
           </div>
         </details>
 

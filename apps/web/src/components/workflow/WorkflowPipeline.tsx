@@ -54,7 +54,7 @@ export function WorkflowPipeline({ moduleId }: { readonly moduleId: WorkflowModu
           </div>
           <div className="flex items-center gap-1.5 pb-3 pt-0.5">
             <Icon icon={step.icon} className="flex-none text-base text-[#a1a1a6]" aria-hidden />
-            <p className="text-[13px] text-[#424245]">{step.label}</p>
+            <p className="text-[13px] text-ink-secondary">{step.label}</p>
           </div>
         </li>
       ))}

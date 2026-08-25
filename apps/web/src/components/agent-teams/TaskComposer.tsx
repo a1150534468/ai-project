@@ -102,12 +102,12 @@ export function TaskComposer({
                 {attachment.previewUrl ? (
                   <img src={attachment.previewUrl} alt="" className="h-8 w-8 flex-none rounded-[8px] object-cover" />
                 ) : (
-                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-white text-[#6e6e73]">
+                  <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] bg-white text-ink-secondary">
                     <Icon icon="mdi:file-document-outline" className="text-lg" aria-hidden />
                   </span>
                 )}
                 <span className="min-w-0">
-                  <span className="block truncate text-xs font-medium text-[#424245]">{attachment.name}</span>
+                  <span className="block truncate text-xs font-medium text-ink-secondary">{attachment.name}</span>
                   <span className="block text-[10px] text-[#8a8a8f]">{formatSize(attachment.sizeBytes)}</span>
                 </span>
                 <button
@@ -164,7 +164,7 @@ export function TaskComposer({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-[#424245] transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
             >
               <Icon icon="mdi:paperclip" className="text-lg" aria-hidden />
               上传文件

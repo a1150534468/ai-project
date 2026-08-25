@@ -31,7 +31,7 @@ function DownloadRow({ label, url, onErr }: { label: string; url: string; onErr:
   return (
     <div className="flex items-center gap-2">
       <span className="w-12 shrink-0 text-[12px] text-[#8a8a8f]">{label}</span>
-      <input readOnly value={url} className="min-w-0 flex-1 truncate bg-transparent text-[12px] text-[#5a5a60] outline-none" />
+      <input readOnly value={url} className="min-w-0 flex-1 truncate bg-transparent text-[12px] text-ink-secondary outline-none" />
       <button
         onClick={async () => { const ok = await copyText(url); if (ok) { setCopied(true); setTimeout(() => setCopied(false), 1500); } else onErr("复制失败，请手动选择链接"); }}
         className="shrink-0 rounded-md bg-brand px-2.5 py-1 text-[12px] text-white"

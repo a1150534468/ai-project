@@ -39,7 +39,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
           <p className="text-[12px] font-semibold text-brand-ink">项目工作台</p>
           <div className="mt-1 flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold text-ink">{projectTitle(project)}</h2>
-            <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-[#6e6e73]">{derived.selectedProjectStatus}</span>
+            <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{derived.selectedProjectStatus}</span>
             {derived.dirty && <span className="rounded-full bg-[#fff4e5] px-2 py-0.5 text-[11px] font-medium text-[#9a5a00]">未保存</span>}
           </div>
         </div>
@@ -140,9 +140,9 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               <div className="mb-3 flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold text-brand-ink">素材资料</p>
-                  <p className="text-[12px] text-[#6e6e73]">只支持图片和视频素材分组</p>
+                  <p className="text-[12px] text-ink-secondary">只支持图片和视频素材分组</p>
                 </div>
-                <span className="text-[12px] font-medium text-[#6e6e73]">{countProjectMaterials(project.materials)} 个素材</span>
+                <span className="text-[12px] font-medium text-ink-secondary">{countProjectMaterials(project.materials)} 个素材</span>
               </div>
               <div className="grid gap-3">
                 {(Object.keys(LOCAL_BUSINESS_PROMO_MATERIAL_GROUP_META) as LocalBusinessPromoMaterialGroup[]).map((group) => {
@@ -152,10 +152,10 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <Icon icon={meta.icon} className="text-base text-[#6e6e73]" aria-hidden />
+                            <Icon icon={meta.icon} className="text-base text-ink-secondary" aria-hidden />
                             <p className="text-sm font-semibold text-ink">{meta.label}</p>
                           </div>
-                          <p className="mt-1 text-[12px] leading-5 text-[#6e6e73]">{meta.hint}</p>
+                          <p className="mt-1 text-[12px] leading-5 text-ink-secondary">{meta.hint}</p>
                         </div>
                         <button
                           type="button"
@@ -170,7 +170,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <div className="mt-3 grid gap-2">
                           {project.materials[group].map((item) => (
                             <div key={`${group}:${item.url}`} className="flex items-center gap-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2">
-                              <Icon icon={item.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:image-outline"} className="text-base text-[#6e6e73]" aria-hidden />
+                              <Icon icon={item.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:image-outline"} className="text-base text-ink-secondary" aria-hidden />
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-[12px] font-medium text-ink">{item.name || item.url}</p>
                                 <p className="text-[11px] text-[#8a8a8f]">{item.mime.startsWith("video/") ? `视频 ${item.durationSec || 0}s` : "图片"}</p>
@@ -261,7 +261,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-ink">口播文案</p>
-                  <p className="text-[12px] text-[#6e6e73]">先生成，再手动编辑，最终作为分段视频输入。</p>
+                  <p className="text-[12px] text-ink-secondary">先生成，再手动编辑，最终作为分段视频输入。</p>
                 </div>
                 <div className="flex gap-2">
                   <button
@@ -297,13 +297,13 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-semibold text-ink">声音和音乐</p>
-                  <p className="text-[12px] text-[#6e6e73]">旁白支持预制音色、文本定制和音频复刻三种方式。</p>
+                  <p className="text-[12px] text-ink-secondary">旁白支持预制音色、文本定制和音频复刻三种方式。</p>
                 </div>
               </div>
 
               <div className="mt-3 grid gap-3">
                 <section className="rounded-[10px] border border-[#ececf0] p-3">
-                  <p className="text-[12px] font-semibold text-[#6e6e73]">旁白语音</p>
+                  <p className="text-[12px] font-semibold text-ink-secondary">旁白语音</p>
                   <div className="mt-3">
                     <OptionGrid
                       compact
@@ -316,7 +316,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
 
                   {project.settings.voiceMode === "preset" ? (
                     <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
-                      <p className="text-[12px] font-semibold text-[#6e6e73]">预制音色</p>
+                      <p className="text-[12px] font-semibold text-ink-secondary">预制音色</p>
                       <div className="mt-2 flex items-center gap-2">
                         <select
                           value={project.settings.narrationVoice}
@@ -336,12 +336,12 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
 
                   {project.settings.voiceMode === "design" ? (
                     <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
-                      <p className="text-[12px] font-semibold text-[#6e6e73]">文本定制音色</p>
+                      <p className="text-[12px] font-semibold text-ink-secondary">文本定制音色</p>
                       {derived.designVoiceTemplateExample && (
                         <p className="mt-2 text-[11px] leading-5 text-[#8a8a8f]">示例：{derived.designVoiceTemplateExample}</p>
                       )}
                       <label className="mt-3 block">
-                        <p className="text-[12px] font-semibold text-[#6e6e73]">音色描述</p>
+                        <p className="text-[12px] font-semibold text-ink-secondary">音色描述</p>
                         <textarea
                           value={project.settings.voiceDesignPrompt}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, voiceDesignPrompt: event.target.value } }))}
@@ -350,7 +350,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         />
                       </label>
                       <label className="mt-3 block">
-                        <p className="text-[12px] font-semibold text-[#6e6e73]">播报风格</p>
+                        <p className="text-[12px] font-semibold text-ink-secondary">播报风格</p>
                         <textarea
                           value={project.settings.voiceStylePrompt}
                           onChange={(event) => actions.updateProjectLocal((current) => ({ ...current, settings: { ...current.settings, voiceStylePrompt: event.target.value } }))}
@@ -365,7 +365,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <p className="text-[12px] font-semibold text-[#6e6e73]">音频复刻音色</p>
+                          <p className="text-[12px] font-semibold text-ink-secondary">音频复刻音色</p>
                           <p className="text-[11px] text-[#8a8a8f]">上传 mp3、wav 或 m4a 样本，系统会直接按样本音色复刻口播。</p>
                         </div>
                         <button
@@ -432,7 +432,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 </section>
 
                 <section className="rounded-[10px] border border-[#ececf0] p-3">
-                  <p className="text-[12px] font-semibold text-[#6e6e73]">BGM</p>
+                  <p className="text-[12px] font-semibold text-ink-secondary">BGM</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {[
                       { value: "preset", label: "预制库" },
@@ -521,7 +521,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                          <p className="text-[12px] font-semibold text-[#6e6e73]">自定义 BGM</p>
+                          <p className="text-[12px] font-semibold text-ink-secondary">自定义 BGM</p>
                           <p className="text-[11px] text-[#8a8a8f]">上传后会直接作为当前背景音乐使用。</p>
                         </div>
                         <button
@@ -593,7 +593,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 <div className="max-w-[280px] px-4">
                   <Icon icon="mdi:movie-open-outline" className="mx-auto text-3xl text-[#8a8a8f]" aria-hidden />
                   <p className="mt-3 text-sm font-medium text-ink">成片预览会显示在这里</p>
-                  <p className="mt-1 text-[12px] leading-6 text-[#6e6e73]">先填写资料、生成文案并启动多段任务。</p>
+                  <p className="mt-1 text-[12px] leading-6 text-ink-secondary">先填写资料、生成文案并启动多段任务。</p>
                 </div>
               </div>
             )}
@@ -601,7 +601,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             <div className="mt-4 rounded-[12px] border border-[#ececf0] p-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-ink">任务状态</p>
-                {latestRun && <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-[#6e6e73]">{formatLocalBusinessPromoRunStatus(latestRun.status)}</span>}
+                {latestRun && <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{formatLocalBusinessPromoRunStatus(latestRun.status)}</span>}
               </div>
               {latestRun ? (
                 <div className="mt-3 space-y-2">
@@ -609,7 +609,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoProgressStage(latestRun.progressStage)}</p>
-                        <p className="mt-1 text-[11px] text-[#6e6e73]">{latestRun.progressMessage || "任务已创建，等待处理"}</p>
+                        <p className="mt-1 text-[11px] text-ink-secondary">{latestRun.progressMessage || "任务已创建，等待处理"}</p>
                       </div>
                       <p className="text-[12px] font-semibold text-ink">{latestRun.progressPercent}%</p>
                     </div>
@@ -625,9 +625,9 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     <div key={`${latestRun.id}:${shot.shotId}:${index}`} className="rounded-[10px] bg-[#f7f7f9] px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[12px] font-semibold text-ink">{index + 1}. {shot.label}</p>
-                        <span className="text-[11px] text-[#6e6e73]">{formatLocalBusinessPromoShotTaskStatus(shot.taskStatus)}</span>
+                        <span className="text-[11px] text-ink-secondary">{formatLocalBusinessPromoShotTaskStatus(shot.taskStatus)}</span>
                       </div>
-                      <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#6e6e73]">{shot.scriptLine || "待生成文案"}</p>
+                      <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-ink-secondary">{shot.scriptLine || "待生成文案"}</p>
                       {shot.selectedMaterialName && (
                         <p className="mt-1 text-[11px] text-[#8a8a8f]">
                           已选素材：{shot.selectedMaterialName}
@@ -644,7 +644,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   {latestRun.error && <p className="text-[12px] text-[#c62828]">{latestRun.error}</p>}
                 </div>
               ) : (
-                <p className="mt-3 text-[12px] text-[#6e6e73]">
+                <p className="mt-3 text-[12px] text-ink-secondary">
                   {project.status === "generating"
                     ? "任务正在启动，等待运行记录同步。若长时间没有出现，请刷新后重试。"
                     : "暂无运行中的任务。"}
@@ -664,7 +664,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoRunStatus(run.status)}</p>
                       <span className="text-[11px] text-[#8a8a8f]">{formatLocalBusinessPromoTime(run.createdAt)}</span>
                     </div>
-                    <p className="mt-1 text-[12px] text-[#6e6e73]">{run.settingsSnapshot.durationSec} 秒 · {run.settingsSnapshot.aspectRatio} · {run.shotPlan.length} 段 · {run.progressPercent}%</p>
+                    <p className="mt-1 text-[12px] text-ink-secondary">{run.settingsSnapshot.durationSec} 秒 · {run.settingsSnapshot.aspectRatio} · {run.shotPlan.length} 段 · {run.progressPercent}%</p>
                     <p className="mt-1 text-[11px] text-[#8a8a8f]">{formatLocalBusinessPromoProgressStage(run.progressStage)}{run.progressMessage ? ` · ${run.progressMessage}` : ""}</p>
                     {run.mergedAsset && (
                       <a href={run.mergedAsset.originalUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-brand-ink">
@@ -675,7 +675,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     {run.error && <p className="mt-1 text-[11px] text-[#c62828]">{run.error}</p>}
                   </div>
                 )) : (
-                  <p className="text-[12px] text-[#6e6e73]">暂无生成记录。</p>
+                  <p className="text-[12px] text-ink-secondary">暂无生成记录。</p>
                 )}
               </div>
             </div>
@@ -685,7 +685,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 {state.error || state.notice}
               </div>
             )}
-            {state.isLoadingProject && <p className="mt-3 text-[12px] text-[#6e6e73]">正在切换项目...</p>}
+            {state.isLoadingProject && <p className="mt-3 text-[12px] text-ink-secondary">正在切换项目...</p>}
           </section>
         </div>
       </div>

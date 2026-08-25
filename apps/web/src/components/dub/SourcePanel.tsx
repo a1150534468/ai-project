@@ -65,7 +65,7 @@ export function SourcePanel({ token, pricing, busy, setBusy, onAnalyzed, onManua
           <button
             key={m}
             onClick={() => setMode(m)}
-            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === m ? "bg-brand text-white" : "bg-gray-100 text-[#5a5a60]"}`}
+            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === m ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary"}`}
           >
             {m === "link" ? "粘贴链接" : m === "upload" ? "上传参考视频" : "直接写文案"}
           </button>

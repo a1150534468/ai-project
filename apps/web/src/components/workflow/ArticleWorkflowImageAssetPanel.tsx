@@ -45,7 +45,7 @@ function ImageActions(props: ImageActionsProps) {
             }),
           });
         }}
-        className="grid h-8 w-8 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7] disabled:opacity-40"
+        className="grid h-8 w-8 place-items-center rounded-lg text-ink-secondary hover:bg-[#f5f5f7] disabled:opacity-40"
       >
         <Icon icon="mdi:download-outline" className="text-base" aria-hidden />
       </button>
@@ -54,7 +54,7 @@ function ImageActions(props: ImageActionsProps) {
         title="重新生成配图"
         aria-label={`重新生成${props.image.alt || props.image.slot}`}
         onClick={() => props.onRegenerateImage(props.image.slot)}
-        className="grid h-8 w-8 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7]"
+        className="grid h-8 w-8 place-items-center rounded-lg text-ink-secondary hover:bg-[#f5f5f7]"
       >
         <Icon
           icon={props.regeneratingSlot === props.image.slot ? "mdi:loading" : "mdi:refresh"}

@@ -46,7 +46,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
         } ${single ? "mx-auto flex h-full max-h-[620px] w-full max-w-[860px] items-center justify-center" : "aspect-square"}`}
       >
         {failed ? (
-          <div className="grid h-full min-h-52 w-full place-items-center px-4 text-center text-sm font-semibold text-[#6e6e73]">
+          <div className="grid h-full min-h-52 w-full place-items-center px-4 text-center text-sm font-semibold text-ink-secondary">
             <div>
               <Icon icon="mdi:image-off-outline" className="mx-auto mb-2 text-3xl" aria-hidden />
               图片加载失败
@@ -94,7 +94,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
     <section className="flex h-full min-h-[420px] flex-col bg-white px-4 py-4 lg:px-6" aria-label="当前生成结果">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold text-[#6e6e73]">当前结果</p>
+          <p className="text-xs font-semibold text-ink-secondary">当前结果</p>
           <h2 className="mt-1 text-base font-semibold text-ink">
             {props.task ? `${props.task.count} 张 · ${props.task.size}` : "等待开始"}
           </h2>
@@ -110,7 +110,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
       <div className="min-h-0 flex-1">
         {displayImages.length === 0 && loadingCount === 0 ? (
           <div className={`grid h-full min-h-[340px] place-items-center rounded-lg border border-dashed px-6 text-center ${isFailed ? "border-red-200 bg-red-50" : "border-[#d2d2d7] bg-[#f7f8fa]"}`}>
-            <div className={isFailed ? "text-red-700" : "text-[#6e6e73]"}>
+            <div className={isFailed ? "text-red-700" : "text-ink-secondary"}>
               <Icon icon={isFailed ? "mdi:alert-circle-outline" : "mdi:image-plus-outline"} className="mx-auto mb-3 text-4xl" aria-hidden />
               <p className="text-sm font-semibold">{isFailed ? "生成失败" : "填写左侧提示词后开始生成"}</p>
               {isFailed && props.task?.error && <p className="mt-2 max-w-md text-xs leading-5">{props.task.error}</p>}

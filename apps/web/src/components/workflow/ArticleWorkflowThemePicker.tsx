@@ -93,7 +93,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
                   aria-checked={props.galleryMode === option.key}
                   onClick={() => props.onGalleryModeChange(option.key)}
                   className={`h-8 rounded-md px-2 text-xs font-semibold transition ${
-                    props.galleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
+                    props.galleryMode === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
                   }`}
                 >
                   {option.label}

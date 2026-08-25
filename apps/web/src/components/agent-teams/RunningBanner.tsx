@@ -53,7 +53,7 @@ export function RunningBanner({ isSubmitting, runStatus }: RunningBannerProps) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold text-brand-ink">{copy.title}</p>
-          <p className="mt-0.5 truncate text-xs text-[#6e6e73]">{copy.subtitle}</p>
+          <p className="mt-0.5 truncate text-xs text-ink-secondary">{copy.subtitle}</p>
         </div>
       </div>
       <div className="h-1 w-full overflow-hidden bg-brand/10">

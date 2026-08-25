@@ -222,7 +222,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 sm:block">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-[#f0f0f2] px-2 py-1 text-[11px] font-semibold text-[#6e6e73]">
+              <span className="rounded-md bg-[#f0f0f2] px-2 py-1 text-[11px] font-semibold text-ink-secondary">
                 {formatArticleWorkflowStatus(props.project.status)}
               </span>
               {props.saving && (
@@ -248,7 +248,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                 aria-pressed={canvasMode === item.key}
                 onClick={() => setCanvasMode(item.key)}
                 className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
-                  canvasMode === item.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
+                  canvasMode === item.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
                 }`}
               >
                 {item.label}

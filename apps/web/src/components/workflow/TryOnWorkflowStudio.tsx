@@ -66,7 +66,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
   const busy = props.isUploading || props.isDeleting;
   return (
     <div className="min-w-0">
-      <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-[#424245]">
+      <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-ink-secondary">
         <span className="truncate">{props.label}</span>
         <span className={props.required ? "text-red-500" : "text-[#8a8a8f]"}>{props.required ? "*" : "可选"}</span>
       </div>
@@ -103,7 +103,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
             onClick={() => inputRef.current?.click()}
             disabled={props.disabled || busy}
             aria-label={`上传${props.label}`}
-            className="flex h-full w-full flex-col items-center justify-center text-[#6e6e73] disabled:opacity-40"
+            className="flex h-full w-full flex-col items-center justify-center text-ink-secondary disabled:opacity-40"
           >
             <Icon
               icon={props.isUploading ? "mdi:loading" : "mdi:plus"}
@@ -401,7 +401,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
+                <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
                 <h2 className="mt-1 text-base font-semibold text-ink">服装试穿设置</h2>
               </div>
               <Icon icon="mdi:tshirt-crew-outline" className="text-xl text-[#86868b]" aria-hidden />
@@ -483,7 +483,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             />
 
             {modelReference && (
-              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-[#424245]">
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-ink-secondary">
                 <input
                   aria-label="试穿模特授权确认"
                   type="checkbox"
@@ -530,7 +530,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             <div className="flex items-center gap-2">
               {selectedTask && (
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-[#6e6e73]"}`}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-ink-secondary"}`}
                 >
                   {STATUS_LABEL[selectedTask.status]}
                 </span>
@@ -567,14 +567,14 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                   <span className="absolute inset-0 animate-ping rounded-full border border-brand/30" />
                 </span>
                 <p className="mt-5 text-base font-semibold text-ink">正在生成试穿图</p>
-                <p className="mt-2 text-sm text-[#6e6e73]">
+                <p className="mt-2 text-sm text-ink-secondary">
                   已完成 {selectedTask.completedCount}/{selectedTask.count}
                 </p>
                 <button
                   type="button"
                   onClick={() => handleCancel(selectedTask)}
                   disabled={busyTaskId === selectedTask.id}
-                  className="mt-5 h-9 rounded-[8px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-[#424245]"
+                  className="mt-5 h-9 rounded-[8px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-ink-secondary"
                 >
                   取消任务
                 </button>
@@ -584,7 +584,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-[#c7c7cc] bg-white/70">
                   <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-[#86868b]" aria-hidden />
                 </span>
-                <p className="mt-5 text-base font-semibold text-[#424245]">试穿效果预览</p>
+                <p className="mt-5 text-base font-semibold text-ink-secondary">试穿效果预览</p>
                 <p className="mt-2 text-sm text-[#86868b]">上传服装正面图并提交后，结果将在这里显示</p>
               </div>
             )}
@@ -662,7 +662,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           >
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
               <div>
-                <p className="text-xs font-semibold text-[#6e6e73]">任务状态</p>
+                <p className="text-xs font-semibold text-ink-secondary">任务状态</p>
                 <h2 className="text-base font-semibold text-ink">服装试穿任务</h2>
               </div>
               <button
@@ -695,7 +695,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                         <span className="truncate text-sm font-semibold text-ink">
                           {task.modelAssetId ? "指定模特试穿" : "AI 模特试穿"}
                         </span>
-                        <span className="flex-none text-xs text-[#6e6e73]">{STATUS_LABEL[task.status]}</span>
+                        <span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span>
                       </span>
                       <span className="mt-1 block text-[11px] text-[#8a8a8f]">
                         {task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}
@@ -717,7 +717,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                           type="button"
                           onClick={() => handleDeleteTask(task)}
                           disabled={busyTaskId === task.id}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-[#6e6e73] disabled:opacity-50"
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"
                         >
                           <Icon
                             icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"}

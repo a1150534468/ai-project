@@ -62,7 +62,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
               aria-selected={draft.mode === mode}
               onClick={() => props.onModeChange(mode)}
               className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
-                draft.mode === mode ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
+                draft.mode === mode ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
               }`}
             >
               {mode === "source" ? "原文改编" : "主题创作"}
@@ -104,7 +104,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
                     aria-selected={draft.style.mode === item.key}
                     onClick={() => updateTopic({ style: nextStyle(item.key) })}
                     className={`h-9 min-w-0 rounded-md px-2 text-xs font-semibold transition ${
-                      draft.style.mode === item.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
+                      draft.style.mode === item.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
                     }`}
                   >
                     <span className="block truncate">{item.label}</span>
@@ -146,7 +146,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
             </fieldset>
 
             <details className="group border-t border-[#e5e7eb] pt-4">
-              <summary className="cursor-pointer list-none text-xs font-semibold text-[#6e6e73] marker:content-none">
+              <summary className="cursor-pointer list-none text-xs font-semibold text-ink-secondary marker:content-none">
                 更多设置
               </summary>
               <div className="mt-4 grid gap-4">

@@ -25,10 +25,10 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
             <span className={`h-2 w-2 rounded-full ${typeStyle.viewDot}`} />
             {getMemoryTypeMeta(node.type).label}
           </span>
-          <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-[#6e6e73]">
+          <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-ink-secondary">
             重要度 {node.importance}
           </span>
-          <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-[#6e6e73]">
+          <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-medium text-ink-secondary">
             使用 {node.usedCount} 次
           </span>
         </div>
@@ -46,7 +46,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
             node.tags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center rounded-full border border-[#d2d2d7] bg-white px-3 py-1 text-xs text-[#6e6e73]"
+                className="inline-flex items-center rounded-full border border-[#d2d2d7] bg-white px-3 py-1 text-xs text-ink-secondary"
               >
                 {tag}
               </span>

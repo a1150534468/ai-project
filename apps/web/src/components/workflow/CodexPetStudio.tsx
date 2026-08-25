@@ -1157,7 +1157,7 @@ export function CodexPetStudio({
             </span>
             <div>
               <h1 className="text-lg font-semibold tracking-tight text-ink">Codex 桌宠工坊</h1>
-              <p className="text-xs text-[#71717a]">参考图或文字生成，可直接安装到 Codex</p>
+              <p className="text-xs text-ink-secondary">参考图或文字生成，可直接安装到 Codex</p>
             </div>
           </div>
         </div>
@@ -1202,9 +1202,9 @@ export function CodexPetStudio({
               )}
             />
             <div className="max-h-56 space-y-1 overflow-y-auto p-2" aria-label="桌宠项目列表">
-              {bootstrapping && <p className="px-2 py-4 text-center text-xs text-[#6e6e73]">正在加载项目...</p>}
+              {bootstrapping && <p className="px-2 py-4 text-center text-xs text-ink-secondary">正在加载项目...</p>}
               {!bootstrapping && projects.length === 0 && (
-                <p className="px-3 py-5 text-center text-xs leading-5 text-[#6e6e73]">还没有桌宠项目，从文字或参考图开始吧。</p>
+                <p className="px-3 py-5 text-center text-xs leading-5 text-ink-secondary">还没有桌宠项目，从文字或参考图开始吧。</p>
               )}
               {projects.map((project) => (
                 <div
@@ -1240,7 +1240,7 @@ export function CodexPetStudio({
                       <span className="min-w-0 flex-1 truncate text-xs font-semibold text-ink">{project.name}</span>
                       <StatusPill status={project.status} />
                     </div>
-                    <p className="mt-1 truncate text-[10px] text-[#6e6e73]">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
+                    <p className="mt-1 truncate text-[10px] text-ink-secondary">{shortDate(project.updatedAt)} · {CODEX_PET_STYLE_OPTIONS.find((item) => item.value === project.stylePreset)?.label}</p>
                   </button>
                   <button
                     type="button"
@@ -1270,7 +1270,7 @@ export function CodexPetStudio({
             <div className="space-y-3 p-4">
               {loadingDetail && <p className="text-xs text-[#8b8b94]">正在恢复项目输入...</p>}
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">桌宠名称 <span className="text-red-500">*</span></span>
+                <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">桌宠名称 <span className="text-red-500">*</span></span>
                 <input
                   value={draft.name}
                   disabled={!canEdit || interactionLocked}
@@ -1282,7 +1282,7 @@ export function CodexPetStudio({
                 <span className="mt-1 block text-right text-[10px] text-[#9a9aa2]">{Array.from(draft.name).length}/30</span>
               </label>
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">一句话描述</span>
+                <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">一句话描述</span>
                 <input
                   value={draft.description}
                   disabled={!canEdit || interactionLocked}
@@ -1292,7 +1292,7 @@ export function CodexPetStudio({
                 />
               </label>
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">角色提示词</span>
+                <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">角色提示词</span>
                 <textarea
                   value={draft.prompt}
                   disabled={!canEdit || interactionLocked}
@@ -1307,7 +1307,7 @@ export function CodexPetStudio({
 
               <div className="grid gap-2 sm:grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)]">
                 <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">定制动作</span>
+                  <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">定制动作</span>
                   <select
                     aria-label="定制动作"
                     value={selectedActionPrompt}
@@ -1321,7 +1321,7 @@ export function CodexPetStudio({
                   </select>
                 </label>
                 <label className="block">
-                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">动作提示词</span>
+                  <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">动作提示词</span>
                   <textarea
                     value={draft.actionPrompts[selectedActionPrompt] ?? ""}
                     disabled={!canEdit || interactionLocked}
@@ -1337,7 +1337,7 @@ export function CodexPetStudio({
 
               <div>
                 <div className="mb-1.5 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-[#4b4b52]">参考图</span>
+                  <span className="text-[11px] font-semibold text-ink-secondary">参考图</span>
                   <span className="text-[10px] text-[#9a9aa2]">{draft.referenceAssets.length}/3 · 每张 10MB</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
@@ -1380,7 +1380,7 @@ export function CodexPetStudio({
 
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
-                  <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">生图模型</span>
+                  <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">生图模型</span>
                   <div className="rounded-[10px] border border-[#dfe1e6] bg-[#f7f7f9] px-3 py-2 text-sm text-[#424249]">
                     {readOnlyArchive
                       ? "历史项目，已归档为只读"
@@ -1400,7 +1400,7 @@ export function CodexPetStudio({
                 </label>
                 {draft.qualityInspectionEnabled && (
                   <label className="block sm:col-span-2">
-                    <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">视觉理解 / 质检模型</span>
+                    <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">视觉理解 / 质检模型</span>
                     <select
                       aria-label="视觉理解 / 质检模型"
                       value={draft.visualQaModel}
@@ -1415,7 +1415,7 @@ export function CodexPetStudio({
               </div>
 
               <fieldset disabled={!canEdit || interactionLocked}>
-                <legend className="mb-1.5 text-[11px] font-semibold text-[#4b4b52]">风格预设</legend>
+                <legend className="mb-1.5 text-[11px] font-semibold text-ink-secondary">风格预设</legend>
                 <div className="grid grid-cols-2 gap-1.5">
                   {CODEX_PET_STYLE_OPTIONS.map((option) => (
                     <button
@@ -1427,7 +1427,7 @@ export function CodexPetStudio({
                       className={`rounded-[9px] border px-2 py-1.5 text-left text-[11px] transition ${
                         draft.stylePreset === option.value
                           ? "border-brand/40 bg-brand-soft font-semibold text-brand-ink"
-                          : "border-[#e2e3e8] bg-white text-[#66666e] "
+                          : "border-[#e2e3e8] bg-white text-ink-secondary "
                       }`}
                     >
                       {option.label}
@@ -1437,7 +1437,7 @@ export function CodexPetStudio({
               </fieldset>
 
               <label className="block">
-                <span className="mb-1 block text-[11px] font-semibold text-[#4b4b52]">风格补充</span>
+                <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">风格补充</span>
                 <input
                   value={draft.styleNotes}
                   disabled={!canEdit || interactionLocked}
@@ -1461,7 +1461,7 @@ export function CodexPetStudio({
                 </span>
               </label>
 
-              <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-[#6f7078]">
+              <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-ink-secondary">
                 正常路径最多 {plannedCallLimit} 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准与计费。上传即表示你拥有参考图与角色的使用权。
               </div>
 
@@ -1658,7 +1658,7 @@ export function CodexPetStudio({
                               <span className="grid size-full place-items-center px-2 text-center text-[10px] text-[#9a9aa2]">{state.label}预览处理中</span>
                             )}
                           </div>
-                          <figcaption className="px-2 py-1.5 text-[10px] font-semibold text-[#55555d]">{state.label}</figcaption>
+                          <figcaption className="px-2 py-1.5 text-[10px] font-semibold text-ink-secondary">{state.label}</figcaption>
                         </figure>
                       );
                     })}
@@ -1676,7 +1676,7 @@ export function CodexPetStudio({
                     <button
                       type="button"
                       onClick={() => setShowActualSize((current) => !current)}
-                      className="rounded-[8px] border border-[#dfe1e6] px-2 py-1 text-[10px] font-semibold text-[#55555d] "
+                      className="rounded-[8px] border border-[#dfe1e6] px-2 py-1 text-[10px] font-semibold text-ink-secondary "
                     >
                       {showActualSize ? "适应窗口" : "1:1 实际尺寸"}
                     </button>
@@ -1709,7 +1709,7 @@ export function CodexPetStudio({
                   {finalContactSheet && (
                     <div className="rounded-[10px] border border-brand/30 bg-white p-2.5" data-testid="codex-pet-final-contact-sheet">
                       <div className="mb-1.5 flex items-center justify-between gap-2">
-                        <h4 className="text-[11px] font-semibold text-[#52525a]">最终 Contact Sheet</h4>
+                        <h4 className="text-[11px] font-semibold text-ink-secondary">最终 Contact Sheet</h4>
                         <span className="text-[9px] text-[#8b8b94]">完整 v2 预览 · 非单组动画</span>
                       </div>
                       {codexPetArtifactUrl(finalContactSheet) ? (
@@ -1724,16 +1724,16 @@ export function CodexPetStudio({
                     </div>
                   )}
                   <div>
-                    <h4 className="mb-1.5 text-[11px] font-semibold text-[#52525a]">16 个观察方向（顺时针）</h4>
+                    <h4 className="mb-1.5 text-[11px] font-semibold text-ink-secondary">16 个观察方向（顺时针）</h4>
                     <div className="grid grid-cols-8 gap-1">
-                      {CODEX_PET_LOOK_DIRECTIONS.map((direction) => <span key={direction} className="rounded-[6px] bg-white px-1 py-1 text-center text-[9px] text-[#6f7078] shadow-sm">{direction}°</span>)}
+                      {CODEX_PET_LOOK_DIRECTIONS.map((direction) => <span key={direction} className="rounded-[6px] bg-white px-1 py-1 text-center text-[9px] text-ink-secondary shadow-sm">{direction}°</span>)}
                     </div>
                   </div>
-                  <div className="rounded-[10px] bg-white px-3 py-2 text-[11px] text-[#5f6068]">
+                  <div className="rounded-[10px] bg-white px-3 py-2 text-[11px] text-ink-secondary">
                     质量报告：{validationSummary(latestRun.validationReport)}
                   </div>
-                  <details className="rounded-[10px] border border-brand/30 bg-white px-3 py-2 text-[10px] text-[#64646c]">
-                    <summary className="cursor-pointer font-semibold text-[#4f5057]">查看完整质量报告</summary>
+                  <details className="rounded-[10px] border border-brand/30 bg-white px-3 py-2 text-[10px] text-ink-secondary">
+                    <summary className="cursor-pointer font-semibold text-ink-secondary">查看完整质量报告</summary>
                     <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#f7f8fa] p-2 font-mono text-[9px] leading-4">
                       {JSON.stringify(latestRun.validationReport, null, 2)}
                     </pre>
@@ -1751,7 +1751,7 @@ export function CodexPetStudio({
 
               {latestRun && runIsTerminal && !deliveryReady && (
                 <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2.5">
-                  <p className="text-[10px] leading-4 text-[#6f7078]">
+                  <p className="text-[10px] leading-4 text-ink-secondary">
                     {canContinueFailedBase
                       ? "候选 1 已成功保存；可在本项目中只重试因 429 失败的候选 2。"
                       : canResumeGateFailure
@@ -1779,7 +1779,7 @@ export function CodexPetStudio({
                   className="rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2"
                   data-testid="codex-pet-process-artifacts"
                 >
-                  <summary className="cursor-pointer text-[10px] font-semibold text-[#6f7078]">
+                  <summary className="cursor-pointer text-[10px] font-semibold text-ink-secondary">
                     过程产物（内部诊断 · {processArtifacts.length} 项）
                   </summary>
                   <p className="mt-1.5 text-[9px] leading-4 text-[#8d8d95]">
@@ -1802,8 +1802,8 @@ export function CodexPetStudio({
                             ) : (
                               <span className="grid h-20 w-full place-items-center bg-[#f4f4f6] px-2 text-center text-[9px] text-[#9a9aa2]">无可预览图像</span>
                             )}
-                            <figcaption className="flex items-center justify-between gap-2 px-2 py-1.5 text-[9px] text-[#6f7078]">
-                              <span className="min-w-0 truncate font-semibold text-[#55555d]">{codexPetProcessArtifactLabel(artifact)}</span>
+                            <figcaption className="flex items-center justify-between gap-2 px-2 py-1.5 text-[9px] text-ink-secondary">
+                              <span className="min-w-0 truncate font-semibold text-ink-secondary">{codexPetProcessArtifactLabel(artifact)}</span>
                               <span className="flex-none">{artifact.width ?? "?"}×{artifact.height ?? "?"}</span>
                             </figcaption>
                           </figure>
@@ -1844,7 +1844,7 @@ export function CodexPetStudio({
                       <span className={`grid size-5 flex-none place-items-center rounded-full text-[10px] font-bold ${complete ? "bg-brand text-white" : active ? "border-2 border-brand bg-white text-brand-ink" : "bg-[#eceef1] text-[#9898a0]"}`}>
                         {complete ? <Icon icon="mdi:check" aria-hidden /> : CODEX_PET_PROGRESS_STEPS.findIndex((item) => item.id === step.id) + 1}
                       </span>
-                      <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-ink" : "text-[#74747c]"}`}>{step.label}</span>
+                      <span className={`min-w-0 flex-1 text-[11px] ${active ? "font-semibold text-ink" : "text-ink-secondary"}`}>{step.label}</span>
                       <span className="text-[9px] text-[#a0a0a7]">{step.range}</span>
                     </li>
                   );
@@ -1854,15 +1854,15 @@ export function CodexPetStudio({
                 <div className="grid grid-cols-3 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">当前子任务</span>
-                    <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-[#52525a]">{currentSubtask}</span>
+                    <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-ink-secondary">{currentSubtask}</span>
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">成功图片</span>
-                    <span className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.hasSuccessfulImage ? "已有" : "暂无"}</span>
+                    <span className="mt-0.5 block font-semibold text-ink-secondary">{latestRun.hasSuccessfulImage ? "已有" : "暂无"}</span>
                   </div>
                   <div className="rounded-[9px] bg-[#f7f8fa] p-2">
                     <span className="block text-[#919198]">真实生图调用</span>
-                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-[#52525a]">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT}</span>
+                    <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-ink-secondary">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT}</span>
                   </div>
                 </div>
               )}
@@ -1876,7 +1876,7 @@ export function CodexPetStudio({
               {detail?.jobs.slice().reverse().slice(0, 12).map((job) => (
                 <div key={job.id} className="rounded-[9px] border border-[#eceef1] px-2.5 py-2">
                   <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-[#505057]">{job.key}</span>
+                    <span className="min-w-0 flex-1 truncate text-[10px] font-semibold text-ink-secondary">{job.key}</span>
                     <span className="text-[9px] text-[#85858d]">{job.attempt}/{job.maxAttempts}</span>
                   </div>
                   <div className="mt-1 flex items-center gap-1 text-[9px] text-[#96969d]">
@@ -1931,7 +1931,7 @@ export function CodexPetStudio({
                 </div>
               )}
               {latestRun && (
-                <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-[#72727a]">
+                <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-ink-secondary">
                   生图请求 {latestRun.requestedModel}<br />
                   生图实际 {latestRun.actualModels?.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}<br />
                   AI 质检 {latestRun.qualityInspectionEnabled ? "已开启" : "关闭"}<br />
@@ -1969,7 +1969,7 @@ export function CodexPetStudio({
                 <li key={event.sequence} className="relative border-l border-[#dde1e6] pb-3 pl-3 last:pb-0">
                   <span className="absolute -left-[3px] top-1 size-[5px] rounded-full bg-brand" />
                   <div className="flex items-start gap-2">
-                    <span className="min-w-0 flex-1 text-[10px] font-semibold leading-4 text-[#52525a]">{eventTitle(event)}</span>
+                    <span className="min-w-0 flex-1 text-[10px] font-semibold leading-4 text-ink-secondary">{eventTitle(event)}</span>
                     <span className="flex-none text-[8px] text-[#a0a0a7]">#{event.sequence}</span>
                   </div>
                   <p className="mt-0.5 text-[9px] text-[#92929a]">{event.stage ? codexPetStatusLabel(event.stage) : event.type} · {shortDate(event.createdAt)}</p>

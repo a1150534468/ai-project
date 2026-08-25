@@ -25,7 +25,7 @@ export function WorkflowModules({ modules, activeModuleId, onSelectModule }: Wor
               active
                 ? "bg-brand-soft font-semibold text-brand-ink"
                 : available
-                  ? "text-[#6e6e73] "
+                  ? "text-ink-secondary "
                   : "cursor-not-allowed text-[#a1a1a6]"
             }`}
           >

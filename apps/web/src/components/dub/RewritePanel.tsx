@@ -54,7 +54,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-gray-100 bg-white p-4">
           <h3 className="mb-2 text-[13px] font-semibold text-ink">原始口播文稿</h3>
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-[13px] leading-relaxed text-[#5a5a60]">{spokenScript || "—"}</pre>
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-[13px] leading-relaxed text-ink-secondary">{spokenScript || "—"}</pre>
         </section>
 
         <section className="rounded-xl border border-gray-100 bg-white p-4">
@@ -71,7 +71,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
 
       <div className="space-y-3 rounded-xl border border-gray-100 bg-white p-4">
         <div>
-          <p className="mb-2 text-[12.5px] font-medium text-[#5a5a60]">挂载知识库（可选，改写时可引用其中事实）</p>
+          <p className="mb-2 text-[12.5px] font-medium text-ink-secondary">挂载知识库（可选，改写时可引用其中事实）</p>
           {kbs.length === 0 ? (
             <p className="text-[12px] text-[#b6b6bd]">暂无知识库</p>
           ) : (
@@ -80,7 +80,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
                 <button
                   key={k.id}
                   onClick={() => toggleKb(k.id)}
-                  className={`rounded-full px-3 py-1 text-[12px] ${kbIds.includes(k.id) ? "bg-brand text-white" : "bg-gray-100 text-[#5a5a60]"}`}
+                  className={`rounded-full px-3 py-1 text-[12px] ${kbIds.includes(k.id) ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary"}`}
                 >
                   {k.name}
                 </button>
@@ -90,7 +90,7 @@ export function RewritePanel({ token, spokenScript, script, highlights, busy, se
         </div>
 
         {highlights.length > 0 && (
-          <label className="flex items-center gap-2 text-[12.5px] text-[#5a5a60]">
+          <label className="flex items-center gap-2 text-[12.5px] text-ink-secondary">
             <input type="checkbox" checked={injectHighlights} onChange={(e) => setInjectHighlights(e.target.checked)} />
             改写时必须保留亮点卖点（{highlights.join("、")}）
           </label>

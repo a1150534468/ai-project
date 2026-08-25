@@ -23,7 +23,7 @@ function statusLabel(status: string): string {
 function statusTone(status: string): string {
   if (status === "succeeded") return "bg-brand-soft text-brand-ink";
   if (status === "failed" || status === "cancelled") return "bg-red-50 text-red-700";
-  return "bg-[#f7faf9] text-[#6e6e73]";
+  return "bg-[#f7faf9] text-ink-secondary";
 }
 
 function formatTime(value: string | null): string {
@@ -70,7 +70,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">历史记录</p>
           <h2 className="mt-1 text-base font-semibold text-ink">Agent 团队运行历史</h2>
         </div>
-        <span className="text-xs text-[#6e6e73]">{runs.length} 条</span>
+        <span className="text-xs text-ink-secondary">{runs.length} 条</span>
       </div>
 
       {runs.length > 0 ? (
@@ -90,7 +90,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <h3 className="line-clamp-1 text-sm font-semibold text-ink">{run.taskGoal}</h3>
-                    <p className="mt-1 line-clamp-1 text-xs leading-5 text-[#6e6e73]">{reportPreview(run)}</p>
+                    <p className="mt-1 line-clamp-1 text-xs leading-5 text-ink-secondary">{reportPreview(run)}</p>
                   </div>
                   <div className="flex flex-none items-center gap-2">
                     <span className={`inline-flex h-7 items-center rounded-full px-2.5 text-[11px] font-medium ${statusTone(run.status)}`}>
@@ -105,7 +105,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
           })}
         </div>
       ) : (
-        <div className="mt-4 rounded-[10px] border border-dashed border-[#d2d2d7] p-6 text-center text-sm text-[#6e6e73]">
+        <div className="mt-4 rounded-[10px] border border-dashed border-[#d2d2d7] p-6 text-center text-sm text-ink-secondary">
           暂无运行历史
         </div>
       )}

@@ -134,9 +134,9 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         {props.controlsHeader}
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold text-[#6e6e73]">电商工作台</p>
+            <p className="text-xs font-semibold text-ink-secondary">电商工作台</p>
             <h2 className="mt-1 text-base font-semibold text-ink">电商长图工作台</h2>
-            <p className="mt-2 text-sm leading-6 text-[#6e6e73]">上传参考图、生成母版、确认分段并在浏览器完成白底纵向拼接。</p>
+            <p className="mt-2 text-sm leading-6 text-ink-secondary">上传参考图、生成母版、确认分段并在浏览器完成白底纵向拼接。</p>
           </div>
           {props.isForeignPlatform && <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">海外平台文案</span>}
         </div>
@@ -240,7 +240,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               {props.referenceAssets.map((asset) => (
                 <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-lg border border-[#d2d2d7] object-cover" />
               ))}
-              {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-lg border border-dashed border-[#d2d2d7] px-3 text-center text-xs text-[#6e6e73]">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
+              {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-lg border border-dashed border-[#d2d2d7] px-3 text-center text-xs text-ink-secondary">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
               {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-lg border border-dashed border-[#d2d2d7] px-3 py-4 text-xs text-[#8a8a8f]">上传后会展示本地缩略图。</div>}
             </div>
           </div>
@@ -311,12 +311,12 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-[#6e6e73]">任务阶段</p>
+              <p className="text-xs font-semibold text-ink-secondary">任务阶段</p>
               <h3 className="mt-1 flex items-center gap-2 text-base font-semibold text-ink">
                 母版与分段状态
                 {props.isServerGenerating && <span aria-label="生成中" className="h-4 w-4 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />}
               </h3>
-              <p className="mt-2 text-sm leading-6 text-[#6e6e73]">{props.stageDescription}</p>
+              <p className="mt-2 text-sm leading-6 text-ink-secondary">{props.stageDescription}</p>
             </div>
             <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">{formatStageLabel(props.stageLabel, props.isServerGenerating)}</span>
           </div>
@@ -331,7 +331,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         </section>
 
         <section className="border-b border-[#e5e7eb] bg-white px-4 py-5 lg:px-6">
-          <p className="text-xs font-semibold text-[#6e6e73]">分段</p>
+          <p className="text-xs font-semibold text-ink-secondary">分段</p>
           <h3 className="mt-1 text-base font-semibold text-ink">分段预览</h3>
           <Stagger className="mt-4 grid gap-4 lg:grid-cols-3">
             <AnimatePresence mode="popLayout">
@@ -357,7 +357,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                             <DownloadOverlayButton onClick={() => props.onDownloadImage?.(segment.originalUrl)} />
                           )}
                         </div>
-                        <p className="line-clamp-3 text-xs leading-5 text-[#6e6e73]">{segment.prompt}</p>
+                        <p className="line-clamp-3 text-xs leading-5 text-ink-secondary">{segment.prompt}</p>
                       </div>
                     ) : (
                       <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-white text-center text-xs text-[#8a8a8f]">
@@ -379,9 +379,9 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         <section className="bg-white px-4 py-5 lg:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold text-[#6e6e73]">浏览器拼接</p>
+              <p className="text-xs font-semibold text-ink-secondary">浏览器拼接</p>
               <h3 className="mt-1 text-base font-semibold text-ink">浏览器白底拼接</h3>
-              <p className="mt-2 text-sm leading-6 text-[#6e6e73]">分段原图齐全后，在浏览器中纵向拼接，再保存回工作流。拼接不消耗算力点。</p>
+              <p className="mt-2 text-sm leading-6 text-ink-secondary">分段原图齐全后，在浏览器中纵向拼接，再保存回工作流。拼接不消耗算力点。</p>
             </div>
             <RippleButton type="button" aria-label="保存拼接长图" onClick={props.onSaveStitched} disabled={!props.canSave || props.isWorkflowMutating} className="h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
               {props.isSavingStitched ? "保存中" : "保存拼接长图"}

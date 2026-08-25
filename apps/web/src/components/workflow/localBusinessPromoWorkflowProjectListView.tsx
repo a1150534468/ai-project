@@ -17,7 +17,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
               本地商家宣传剪辑工作台
             </div>
             <h2 className="mt-2 text-xl font-semibold text-ink">本地商家宣传项目</h2>
-            <p className="mt-1 text-sm leading-6 text-[#6e6e73]">先进入项目，再填写资料、配置口播和 BGM，最后在工作台里看成片结果。</p>
+            <p className="mt-1 text-sm leading-6 text-ink-secondary">先进入项目，再填写资料、配置口播和 BGM，最后在工作台里看成片结果。</p>
           </div>
           <button
             type="button"
@@ -45,7 +45,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                   <span className="flex min-w-0 items-start justify-between gap-3">
                     <span className="min-w-0">
                       <span className="block truncate text-base font-semibold text-ink">{item.title}</span>
-                      <span className="mt-2 block text-sm text-[#6e6e73]">{item.materialCount} 个素材 · 更新于 {formatLocalBusinessPromoTime(item.updatedAt)}</span>
+                      <span className="mt-2 block text-sm text-ink-secondary">{item.materialCount} 个素材 · 更新于 {formatLocalBusinessPromoTime(item.updatedAt)}</span>
                     </span>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
                       item.status === "completed"
@@ -54,7 +54,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                           ? "bg-[#fff4e5] text-[#9a5a00]"
                           : item.status === "failed"
                             ? "bg-[#fff4f4] text-[#c62828]"
-                            : "bg-[#f5f5f7] text-[#6e6e73]"
+                            : "bg-[#f5f5f7] text-ink-secondary"
                     }`}
                     >
                       {formatLocalBusinessPromoProjectStatus(item.status)}
@@ -75,7 +75,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
           <div className="mt-5 grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-4 text-center">
             <div>
               <p className="text-base font-semibold text-ink">还没有项目</p>
-              <p className="mt-2 text-sm text-[#6e6e73]">先新建一个宣传项目，再进入剪辑工作台。</p>
+              <p className="mt-2 text-sm text-ink-secondary">先新建一个宣传项目，再进入剪辑工作台。</p>
               <button
                 type="button"
                 onClick={() => void actions.createProject()}

@@ -21,7 +21,7 @@ function Panel({ title, icon, children }: { readonly title: string; readonly ico
         <Icon icon={icon} aria-hidden />
         {title}
       </h4>
-      <div className="mt-2 min-w-0 text-xs leading-5 text-[#5f6368]">{children}</div>
+      <div className="mt-2 min-w-0 text-xs leading-5 text-ink-secondary">{children}</div>
     </section>
   );
 }

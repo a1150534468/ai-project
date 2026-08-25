@@ -168,7 +168,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   aria-checked={props.generationMode === option.key}
                   onClick={() => props.onGenerationModeChange(option.key)}
                   className={`h-9 rounded-md px-2 text-xs font-semibold transition ${
-                    props.generationMode === option.key ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"
+                    props.generationMode === option.key ? "bg-white text-ink shadow-sm" : "text-ink-secondary"
                   }`}
                 >
                   {option.label}
@@ -193,7 +193,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
         )}
 
         <details className="group mt-4 border-t border-[#e5e7eb] pt-3">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-[#6e6e73] marker:content-none">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ink-secondary marker:content-none">
             <span>计费规则</span>
             <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
           </summary>

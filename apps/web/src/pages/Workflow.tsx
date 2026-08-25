@@ -669,7 +669,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             <header className="flex-none px-4 pb-3 pt-4 lg:px-6">
               <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {activeModule.title}</p>
               <h1 className="page-title text-[24px] text-ink">{activeModule.title}</h1>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-[#6e6e73]">{activeModule.description}</p>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-ink-secondary">{activeModule.description}</p>
             </header>
           )}
           {isImageHub && imageTabs.length > 1 && (
@@ -680,7 +680,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
                     key={tab.id}
                     type="button"
                     onClick={() => setImageSubMode(tab.id)}
-                    className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-white text-ink shadow-sm" : "text-[#6e6e73] "}`}
+                    className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-white text-ink shadow-sm" : "text-ink-secondary "}`}
                   >
                     {tab.label}
                   </button>
@@ -693,7 +693,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
           {isImageHub ? (
             <>
               {imageTabs.length === 0 && (
-                <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-[#6e6e73]">
+                <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-ink-secondary">
                   <Icon icon="mdi:image-off-outline" className="mx-auto mb-3 text-3xl text-[#8a8a8f]" aria-hidden />
                   <p className="text-sm font-semibold">生图模块暂未开放</p>
                 </section>
@@ -815,7 +815,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
         ) : activeModuleId === "scheduled-task" ? (
           <ScheduledTaskStudio token={token} />
         ) : (
-          <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-[#6e6e73]">
+          <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-ink-secondary">
             <Icon icon="mdi:hammer-wrench" className="mx-auto mb-3 text-3xl text-[#8a8a8f]" aria-hidden />
               <p className="text-sm font-semibold">模块开发中</p>
             </section>

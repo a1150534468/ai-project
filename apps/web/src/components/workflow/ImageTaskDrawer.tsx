@@ -54,7 +54,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
           >
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
               <div>
-                <p className="text-xs font-semibold text-[#6e6e73]">任务状态</p>
+                <p className="text-xs font-semibold text-ink-secondary">任务状态</p>
                 <h2 className="text-base font-semibold text-ink">任务队列</h2>
               </div>
               <button type="button" onClick={props.onClose} aria-label="关闭任务队列" className="grid h-9 w-9 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]">
@@ -83,7 +83,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                     >
                       <span className="flex items-start justify-between gap-2">
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">{task.prompt}</span>
-                        <span className={`flex-none text-[11px] font-semibold ${task.status === "failed" ? "text-red-600" : active ? "text-brand-ink" : "text-[#6e6e73]"}`}>
+                        <span className={`flex-none text-[11px] font-semibold ${task.status === "failed" ? "text-red-600" : active ? "text-brand-ink" : "text-ink-secondary"}`}>
                           {task.status === "running" && task.error ? "正在重试" : STATUS_LABELS[task.status]}
                         </span>
                       </span>

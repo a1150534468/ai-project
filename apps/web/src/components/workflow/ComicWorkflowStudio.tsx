@@ -270,7 +270,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               className={`w-full rounded-[10px] border px-3 py-3 text-left transition ${project?.id === item.id ? "border-brand bg-brand-soft" : "border-[#e8e8ed] "}`}
             >
               <p className="truncate text-sm font-semibold text-ink">{item.title}</p>
-              <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6e6e73]">{item.logline || item.style || "未填写简介"}</p>
+              <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-secondary">{item.logline || item.style || "未填写简介"}</p>
             </button>
           ))}
         </div>
@@ -286,17 +286,17 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
 
       <div className="min-w-0 rounded-[14px] border border-[#e8e8ed] bg-white p-4 lg:p-5">
         {!project ? (
-          <div className="grid min-h-[360px] place-items-center text-sm text-[#6e6e73]">选择或新建一个漫剧项目</div>
+          <div className="grid min-h-[360px] place-items-center text-sm text-ink-secondary">选择或新建一个漫剧项目</div>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-ink">{project.title}</h2>
-                <p className="mt-1 text-sm leading-6 text-[#6e6e73]">{project.logline || project.style || "补充设定后开始制作"}</p>
+                <p className="mt-1 text-sm leading-6 text-ink-secondary">{project.logline || project.style || "补充设定后开始制作"}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 {STAGES.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`h-9 rounded-[10px] px-3 text-sm font-semibold ${stage === item.id ? "bg-brand text-white" : "bg-[#f5f5f7] text-[#6e6e73] "}`}>
+                  <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`h-9 rounded-[10px] px-3 text-sm font-semibold ${stage === item.id ? "bg-brand text-white" : "bg-[#f5f5f7] text-ink-secondary "}`}>
                     <Icon icon={item.icon} className="mr-1 inline-block" aria-hidden />{item.label}
                   </button>
                 ))}
@@ -316,7 +316,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                     <button type="button" onClick={createEpisodeAction} disabled={!episodeForm.title.trim() || Boolean(busy)} className="h-10 rounded-[10px] border border-brand px-4 text-sm font-semibold text-brand-ink disabled:opacity-50">创建剧集</button>
                     <div className="flex flex-wrap gap-2">
                       {project.episodes.map((episode) => (
-                        <button key={episode.id} type="button" onClick={() => setEpisodeId(episode.id)} className={`rounded-[10px] border px-3 py-2 text-sm ${selectedEpisode?.id === episode.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e8e8ed] text-[#6e6e73]"}`}>第 {episode.episodeNo} 集 · {episode.title}</button>
+                        <button key={episode.id} type="button" onClick={() => setEpisodeId(episode.id)} className={`rounded-[10px] border px-3 py-2 text-sm ${selectedEpisode?.id === episode.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e8e8ed] text-ink-secondary"}`}>第 {episode.episodeNo} 集 · {episode.title}</button>
                       ))}
                     </div>
                     <textarea value={scriptText} onChange={(event) => setScriptText(event.target.value)} placeholder="粘贴或编写本集脚本" className="min-h-[280px] w-full rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-ink" />
@@ -351,7 +351,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                               transition={spring.smooth}
                             >
                               <div className="aspect-[4/3] overflow-hidden rounded-[8px] bg-[#f5f5f7]">{asset.thumbnailUrl ? <img src={asset.thumbnailUrl} alt={asset.name} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-[#8a8a8f]">未生成图片</div>}</div>
-                              <div className="mt-3 flex items-start justify-between gap-2"><div><p className="font-semibold text-ink">{asset.name}</p><p className="text-xs text-[#6e6e73]">{asset.type}</p></div><RippleButton type="button" onClick={() => generateAssetImageAction(asset)} className="h-8 rounded-[8px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton></div>
+                              <div className="mt-3 flex items-start justify-between gap-2"><div><p className="font-semibold text-ink">{asset.name}</p><p className="text-xs text-ink-secondary">{asset.type}</p></div><RippleButton type="button" onClick={() => generateAssetImageAction(asset)} className="h-8 rounded-[8px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton></div>
                             </motion.article>
                           </StaggerItem>
                         ))}
@@ -374,7 +374,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                               transition={spring.smooth}
                             >
                               <div className="aspect-video overflow-hidden rounded-[8px] bg-[#f5f5f7]">{shot.thumbnailUrl ? <img src={shot.thumbnailUrl} alt={shot.title || `镜头 ${shot.shotNo}`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-[#8a8a8f]">镜头图</div>}</div>
-                              <div className="min-w-0"><p className="font-semibold text-ink">镜头 {shot.shotNo} {shot.title}</p><p className="mt-1 line-clamp-3 text-sm leading-6 text-[#6e6e73]">{shot.description}</p></div>
+                              <div className="min-w-0"><p className="font-semibold text-ink">镜头 {shot.shotNo} {shot.title}</p><p className="mt-1 line-clamp-3 text-sm leading-6 text-ink-secondary">{shot.description}</p></div>
                               <div className="flex gap-2 md:flex-col"><RippleButton type="button" onClick={() => generateShotImageAction(shot)} className="h-9 rounded-[9px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton><RippleButton type="button" onClick={() => generateVideoAction(shot)} disabled={!shot.imageAssetId} className="h-9 rounded-[9px] border border-brand px-3 text-xs font-semibold text-brand-ink disabled:opacity-40">视频</RippleButton></div>
                             </motion.article>
                           </StaggerItem>
@@ -400,7 +400,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                                 whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                                 transition={spring.smooth}
                               >
-                                <div className="min-w-0"><p className="text-sm font-semibold text-ink">镜头 {shot.shotNo}</p><p className="text-xs text-[#6e6e73]">{shot.videoStatus}{shot.videoUrl ? " · 已有视频" : ""}</p></div>
+                                <div className="min-w-0"><p className="text-sm font-semibold text-ink">镜头 {shot.shotNo}</p><p className="text-xs text-ink-secondary">{shot.videoStatus}{shot.videoUrl ? " · 已有视频" : ""}</p></div>
                                 <RippleButton type="button" onClick={() => pollVideoAction(shot)} disabled={!shot.videoTaskId} className="h-9 rounded-[9px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink disabled:opacity-40">刷新</RippleButton>
                               </motion.div>
                             </StaggerItem>

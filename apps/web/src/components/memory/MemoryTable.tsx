@@ -31,7 +31,7 @@ export default function MemoryTable({
   if (loading) {
     return (
       <div className="flex min-h-[360px] items-center justify-center rounded-[14px] border border-[#e8e8ed] bg-white">
-        <div className="flex items-center gap-3 text-sm text-[#6e6e73]">
+        <div className="flex items-center gap-3 text-sm text-ink-secondary">
           <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" aria-hidden />
           正在加载记忆表格...
         </div>
@@ -60,7 +60,7 @@ export default function MemoryTable({
           <Icon icon="mdi:table-search" className="text-2xl" aria-hidden />
         </div>
         <p className="mt-4 text-base font-semibold text-ink">当前筛选下没有记忆</p>
-        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+        <p className="mt-2 text-sm leading-6 text-ink-secondary">
           调整搜索或类型筛选后再查看。
         </p>
       </div>
@@ -111,7 +111,7 @@ export default function MemoryTable({
                           </span>
                         ) : null}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-[#6e6e73]">
+                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-secondary">
                         {node.text}
                       </p>
                     </div>
@@ -133,7 +133,7 @@ export default function MemoryTable({
                         node.tags.slice(0, 2).map((tag) => (
                           <span
                             key={tag}
-                            className="rounded-full border border-[#e8e8ed] bg-white px-2 py-0.5 text-[11px] text-[#6e6e73]"
+                            className="rounded-full border border-[#e8e8ed] bg-white px-2 py-0.5 text-[11px] text-ink-secondary"
                           >
                             {tag}
                           </span>
@@ -143,10 +143,10 @@ export default function MemoryTable({
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-4 align-top text-xs text-[#6e6e73]">
+                  <td className="px-4 py-4 align-top text-xs text-ink-secondary">
                     {node.usedCount} 次
                   </td>
-                  <td className="px-4 py-4 align-top text-xs leading-5 text-[#6e6e73]">
+                  <td className="px-4 py-4 align-top text-xs leading-5 text-ink-secondary">
                     {formatDate(node.createdAt)}
                   </td>
                   <td className="px-3 py-4 text-right align-top">

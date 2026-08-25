@@ -23,7 +23,7 @@ export default function MemoryMobileList({
   if (loading) {
     return (
       <div className="flex min-h-[260px] items-center justify-center rounded-[14px] border border-[#d2d2d7] bg-white px-4 py-8">
-        <div className="flex items-center gap-3 text-sm text-[#6e6e73]">
+        <div className="flex items-center gap-3 text-sm text-ink-secondary">
           <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
           正在加载记忆列表...
         </div>
@@ -52,7 +52,7 @@ export default function MemoryMobileList({
           <Icon icon="mdi:atom-variant" className="text-2xl" />
         </div>
         <p className="mt-4 text-base font-semibold text-ink">当前筛选下没有记忆</p>
-        <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+        <p className="mt-2 text-sm leading-6 text-ink-secondary">
           调整类型筛选或开始更多对话，让新的内容进入你的长期记忆。
         </p>
       </div>
@@ -88,7 +88,7 @@ export default function MemoryMobileList({
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone.mobilePill}`}>
                     {getMemoryTypeMeta(node.type).label}
                   </span>
-                  <span className="rounded-full bg-[#f5f5f7] px-2.5 py-1 text-[11px] font-medium text-[#6e6e73]">
+                  <span className="rounded-full bg-[#f5f5f7] px-2.5 py-1 text-[11px] font-medium text-ink-secondary">
                     重要度 {node.importance}
                   </span>
                   {isHighlighted ? (
@@ -98,12 +98,12 @@ export default function MemoryMobileList({
                   ) : null}
                 </div>
                 <p className="mt-3 text-base font-semibold text-ink">{displayTitle}</p>
-                <p className="mt-2 line-clamp-3 text-sm leading-6 text-[#6e6e73]">{node.text}</p>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-ink-secondary">{node.text}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {node.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-[#e8e8ed] bg-white px-2.5 py-1 text-[11px] text-[#6e6e73]"
+                      className="rounded-full border border-[#e8e8ed] bg-white px-2.5 py-1 text-[11px] text-ink-secondary"
                     >
                       {tag}
                     </span>

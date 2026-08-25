@@ -59,7 +59,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
   return (
     <section className="flex-none border-b border-[#e5e7eb] bg-white" aria-label="当前平台工具">
       <div className="flex min-h-11 items-center justify-between gap-3 px-4 lg:px-5">
-        <div className="flex min-w-0 items-center gap-2 text-xs text-[#6e6e73]">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-ink-secondary">
           <span className={`h-2 w-2 shrink-0 rounded-full ${failed ? "bg-red-500" : "bg-brand"}`} aria-hidden />
           <span className="truncate">{formatArticleWorkflowStatus(props.project.status)}</span>
         </div>
@@ -117,7 +117,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 aria-expanded={active}
                 onClick={() => setActiveSection(active ? null : item.key)}
                 className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
-                  active ? "bg-brand-soft text-brand-ink" : "text-[#6e6e73] hover:bg-[#f5f5f7]"
+                  active ? "bg-brand-soft text-brand-ink" : "text-ink-secondary hover:bg-[#f5f5f7]"
                 }${item.key === "images" ? " xl:hidden" : ""}`}
               >
                 <Icon icon={item.icon} className="text-base" aria-hidden />
@@ -170,9 +170,9 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-xs font-semibold text-ink">AI 重新生成</h3>
-                  <p className="mt-1 text-[11px] leading-5 text-[#6e6e73]">仅调整当前平台版本</p>
+                  <p className="mt-1 text-[11px] leading-5 text-ink-secondary">仅调整当前平台版本</p>
                 </div>
-                <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-[#6e6e73]">
+                <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-secondary">
                   <input
                     type="checkbox"
                     checked={props.rewriteRegenerateImages}
@@ -203,7 +203,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                       className={`h-9 rounded-md text-xs font-semibold transition ${
                         props.rewriteGenerationMode === item.key
                           ? "bg-white text-ink shadow-sm"
-                          : "text-[#6e6e73]"
+                          : "text-ink-secondary"
                       }`}
                     >
                       {item.label}

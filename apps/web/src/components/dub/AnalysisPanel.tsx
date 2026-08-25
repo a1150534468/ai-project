@@ -29,13 +29,13 @@ export function AnalysisPanel({ analysis, spokenScript, onSpokenScriptChange }: 
 
       <div className="space-y-4">
         <Card title="分镜脚本">
-          <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#5a5a60]">
+          <pre className="max-h-40 overflow-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-secondary">
             {analysis.shotScript || "—"}
           </pre>
         </Card>
 
         <Card title="结构拆解">
-          <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-[#5a5a60]">
+          <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-[12.5px] leading-relaxed text-ink-secondary">
             {analysis.structure || "—"}
           </pre>
         </Card>

@@ -55,7 +55,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
         下载文档
       </button>
       {saveState === "saved" && (
-        <span className="inline-flex items-center gap-1.5 text-xs text-[#6e6e73]">
+        <span className="inline-flex items-center gap-1.5 text-xs text-ink-secondary">
           <Icon icon="mdi:check-circle" className="text-sm text-brand" aria-hidden />
           已保存
           <button type="button" onClick={() => void revealDesktopPath(savedPath)} className="font-medium text-brand-ink underline-offset-2 ">
@@ -101,15 +101,15 @@ function WorkflowSteps({ run }: WorkflowStepsProps) {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-ink">{step.title}</p>
-              <p className="mt-1 text-xs text-[#6e6e73]">{step.memberName} · {statusLabel(step.status)}</p>
+              <p className="mt-1 text-xs text-ink-secondary">{step.memberName} · {statusLabel(step.status)}</p>
             </div>
             <Icon icon={step.status === "succeeded" ? "mdi:check-circle" : step.status === "failed" ? "mdi:alert-circle" : "mdi:progress-clock"} className="mt-0.5 flex-none text-lg text-brand" aria-hidden />
           </div>
-          {step.output && <p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-[#424245]">{step.output}</p>}
+          {step.output && <p className="mt-2 line-clamp-3 break-words text-xs leading-5 text-ink-secondary">{step.output}</p>}
           {step.error && <p className="mt-2 break-words text-xs text-red-600">{step.error}</p>}
         </div>
       ))}
-      {run.steps.length === 0 && <p className="rounded-[10px] bg-[#f7faf9] p-4 text-sm text-[#6e6e73]">团队确认后会自动生成工作流步骤。</p>}
+      {run.steps.length === 0 && <p className="rounded-[10px] bg-[#f7faf9] p-4 text-sm text-ink-secondary">团队确认后会自动生成工作流步骤。</p>}
     </div>
   );
 }
@@ -142,7 +142,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
           <h2 className="mt-1 line-clamp-2 text-base font-semibold text-ink">{run.taskGoal}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f7faf9] px-3 text-xs text-[#6e6e73]">
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f7faf9] px-3 text-xs text-ink-secondary">
             <Icon icon={RUNNING_STATUSES.has(run.status) ? "mdi:loading" : "mdi:progress-check"} className={RUNNING_STATUSES.has(run.status) ? "animate-spin" : ""} aria-hidden />
             {statusLabel(run.status)}
           </span>
@@ -151,7 +151,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
               type="button"
               disabled={isCancelling}
               onClick={onCancel}
-              className="h-8 rounded-full border border-[#d2d2d7] px-3 text-xs font-medium text-[#6e6e73] transition disabled:opacity-60"
+              className="h-8 rounded-full border border-[#d2d2d7] px-3 text-xs font-medium text-ink-secondary transition disabled:opacity-60"
             >
               {isCancelling ? "取消中" : "取消"}
             </button>
@@ -181,7 +181,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
                 </button>
               </div>
             </div>
-            <div className="mt-5 max-w-[980px] text-[#424245]">
+            <div className="mt-5 max-w-[980px] text-ink-secondary">
               <MarkdownMessage content={run.finalReport} variant="report" />
             </div>
           </article>
@@ -189,7 +189,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
             <div id={`agent-workflow-steps-${run.id}`} className="rounded-[14px] border border-[#e8e8ed] bg-[#fbfbfc] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-ink">工作流过程</h3>
-                <span className="text-xs text-[#6e6e73]">{run.steps.length} 个步骤</span>
+                <span className="text-xs text-ink-secondary">{run.steps.length} 个步骤</span>
               </div>
               <WorkflowSteps run={run} />
             </div>
@@ -201,11 +201,11 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
           <div className="rounded-[10px] bg-[#f7faf9] p-4">
             <h3 className="text-sm font-semibold text-ink">主 Agent 任务报告</h3>
             {hasFinalReport ? (
-              <div className="mt-3 text-[#424245]">
+              <div className="mt-3 text-ink-secondary">
                 <MarkdownMessage content={run.finalReport} />
               </div>
             ) : (
-              <p className="mt-3 break-words text-sm leading-6 text-[#6e6e73]">{run.error ?? "工作流完成后会在这里生成完整任务报告。"}</p>
+              <p className="mt-3 break-words text-sm leading-6 text-ink-secondary">{run.error ?? "工作流完成后会在这里生成完整任务报告。"}</p>
             )}
           </div>
         </div>

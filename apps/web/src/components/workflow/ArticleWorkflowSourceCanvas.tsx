@@ -29,7 +29,7 @@ export function ArticleWorkflowSourceCanvas(props: ArticleWorkflowSourceCanvasPr
                 className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
                   props.sourceFormat === option.key
                     ? "bg-white text-ink shadow-sm"
-                    : "text-[#6e6e73]"
+                    : "text-ink-secondary"
                 }`}
               >
                 {option.label}
@@ -62,7 +62,7 @@ export function ArticleWorkflowSourceCanvas(props: ArticleWorkflowSourceCanvasPr
               className={`h-8 rounded-md px-3 text-xs font-semibold transition ${
                 props.sourceFormat === option.key
                   ? "bg-white text-ink shadow-sm"
-                  : "text-[#6e6e73]"
+                  : "text-ink-secondary"
               }`}
             >
               {option.label}

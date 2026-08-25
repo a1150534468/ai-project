@@ -99,7 +99,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
           <button
             key={t.id}
             onClick={() => setMode(t.id)}
-            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === t.id ? "bg-brand text-white" : "bg-gray-100 text-[#5a5a60]"}`}
+            className={`rounded-lg px-3.5 py-1.5 text-[13px] font-medium ${mode === t.id ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary"}`}
           >
             {t.label}
           </button>
@@ -149,7 +149,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
 
       {mode !== "design" && (
         <section>
-          <p className="mb-2 text-[12.5px] text-[#5a5a60]">发音风格（可选，再次点击取消）</p>
+          <p className="mb-2 text-[12.5px] text-ink-secondary">发音风格（可选，再次点击取消）</p>
           <div className="flex flex-wrap gap-2">
             {STYLE_PRESETS.map((p) => {
               const on = styleId === p.id;
@@ -159,7 +159,7 @@ export function VoicePanel({ token, text, pricing, audioUrl, busy, setBusy, onVo
                   type="button"
                   onClick={() => setStyleId(on ? null : p.id)}
                   title={p.prompt}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${on ? "bg-brand text-white" : "bg-gray-100 text-[#5a5a60] "}`}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12.5px] transition-colors ${on ? "bg-brand text-white" : "bg-gray-100 text-ink-secondary "}`}
                 >
                   <Icon icon={p.icon} className="text-[15px]" />
                   {p.label}

@@ -159,7 +159,7 @@ export function CommerceImageStudio({
 
   const productControls = (
     <section className="border-b border-[#ececf0] pb-5">
-      <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
+      <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
       <h2 className="mt-1 text-base font-semibold text-ink">产品资料</h2>
       <p className="mt-1 text-xs leading-5 text-[#8a8a8f]">主图与详情图共用。</p>
       <div className="mt-4 grid gap-3">
@@ -222,8 +222,8 @@ export function CommerceImageStudio({
     <section className="relative flex min-h-0 flex-col bg-white xl:h-full xl:overflow-hidden">
       <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
         <div className="inline-flex rounded-lg bg-[#f5f5f7] p-1" aria-label="电商图类型">
-          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"}`}>商品主图</RippleButton>
-          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-ink shadow-sm" : "text-[#6e6e73]"}`}>商品详情图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("main")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-white text-ink shadow-sm" : "text-ink-secondary"}`}>商品主图</RippleButton>
+          <RippleButton type="button" onClick={() => onTabChange("detail")} className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-white text-ink shadow-sm" : "text-ink-secondary"}`}>商品详情图</RippleButton>
         </div>
         <button type="button" onClick={() => setIsOverviewOpen(true)} aria-expanded={isOverviewOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-xs font-semibold text-ink">
           <Icon icon="mdi:view-dashboard-outline" className="text-base" aria-hidden />生成概览
@@ -240,7 +240,7 @@ export function CommerceImageStudio({
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsOverviewOpen(false)}>
           <aside role="dialog" aria-modal="true" aria-label="电商图生成概览" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4">
-              <div><p className="text-xs font-semibold text-[#6e6e73]">当前配置</p><h2 className="text-base font-semibold text-ink">生成概览</h2></div>
+              <div><p className="text-xs font-semibold text-ink-secondary">当前配置</p><h2 className="text-base font-semibold text-ink">生成概览</h2></div>
               <button type="button" onClick={() => setIsOverviewOpen(false)} aria-label="关闭生成概览" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button>
             </div>
             <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">

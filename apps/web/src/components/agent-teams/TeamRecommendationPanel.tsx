@@ -16,7 +16,7 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">等待确认</p>
           <h2 className="mt-1 text-lg font-semibold text-ink">{recommendation.teamName}</h2>
-          <p className="mt-1 max-w-3xl text-sm leading-6 text-[#6e6e73]">{recommendation.teamDescription}</p>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-ink-secondary">{recommendation.teamDescription}</p>
         </div>
         <RippleButton
           type="button"
@@ -37,13 +37,13 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
               </div>
               <div className="min-w-0">
                 <h3 className="truncate text-sm font-semibold text-ink">{member.name}</h3>
-                <p className="mt-0.5 text-xs text-[#6e6e73]">{member.role}</p>
+                <p className="mt-0.5 text-xs text-ink-secondary">{member.role}</p>
               </div>
             </div>
-            <p className="mt-3 line-clamp-3 text-xs leading-5 text-[#424245]">{member.responsibility}</p>
+            <p className="mt-3 line-clamp-3 text-xs leading-5 text-ink-secondary">{member.responsibility}</p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {member.skills.map((skill) => (
-                <span key={skill} className="rounded-full bg-[#f7faf9] px-2 py-1 text-[11px] text-[#6e6e73]">
+                <span key={skill} className="rounded-full bg-[#f7faf9] px-2 py-1 text-[11px] text-ink-secondary">
                   {skill}
                 </span>
               ))}

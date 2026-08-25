@@ -71,7 +71,7 @@ export function KnowledgePicker({
         className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border px-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 ${
           attachAllOwn || selectedKbIds.length > 0
             ? "border-brand/20 bg-brand-soft text-brand-ink"
-            : "border-[#d2d2d7] bg-[#f7faf9] text-[#424245] "
+            : "border-[#d2d2d7] bg-[#f7faf9] text-ink-secondary "
         }`}
       >
         <Icon icon="mdi:database-search-outline" className="flex-none text-lg" aria-hidden />
@@ -91,12 +91,12 @@ export function KnowledgePicker({
             <div className="flex items-start justify-between gap-4 border-b border-[#f0f0f3] px-5 py-4">
               <div>
                 <h3 className="text-base font-bold text-ink">挂载知识库</h3>
-                <p className="mt-1 text-xs text-[#6e6e73]">全库仅检索我的库；指定知识库可包含官方库。</p>
+                <p className="mt-1 text-xs text-ink-secondary">全库仅检索我的库；指定知识库可包含官方库。</p>
               </div>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] text-[#6e6e73] transition "
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px] text-ink-secondary transition "
                 aria-label="关闭知识库选择"
               >
                 <Icon icon="mdi:close" className="text-lg" aria-hidden />
@@ -113,7 +113,7 @@ export function KnowledgePicker({
                 className={`flex w-full items-start gap-3 rounded-[12px] border p-4 text-left transition ${
                   draftAttachAllOwn
                     ? "border-brand/30 bg-brand-soft text-brand-ink"
-                    : "border-[#e8e8ed] text-[#424245] "
+                    : "border-[#e8e8ed] text-ink-secondary "
                 }`}
               >
                 <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[10px] bg-white text-brand">
@@ -144,7 +144,7 @@ export function KnowledgePicker({
                           className={`flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left transition ${
                             checked
                               ? "border-brand/25 bg-brand-soft text-brand-ink"
-                              : "border-[#e8e8ed] text-[#424245] "
+                              : "border-[#e8e8ed] text-ink-secondary "
                           }`}
                         >
                           <span className={`flex h-4 w-4 flex-none items-center justify-center rounded border ${
@@ -180,7 +180,7 @@ export function KnowledgePicker({
                 关闭知识库
               </button>
               <div className="flex justify-end gap-2">
-                <button type="button" onClick={() => setOpen(false)} className="rounded-[9px] px-4 py-2 text-sm text-[#6e6e73] transition ">
+                <button type="button" onClick={() => setOpen(false)} className="rounded-[9px] px-4 py-2 text-sm text-ink-secondary transition ">
                   取消
                 </button>
                 <RippleButton type="button" onClick={apply} className="rounded-[9px] bg-brand px-4 py-2 text-sm font-semibold text-white transition ">

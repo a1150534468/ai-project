@@ -34,11 +34,11 @@ export function DownloadLinkDialog({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-ink">{dialog.title}</h2>
-            <p className="mt-1 text-sm leading-6 text-[#6e6e73]">
+            <p className="mt-1 text-sm leading-6 text-ink-secondary">
               {dialog.description ?? "复制链接到浏览器地址栏打开后保存原图。"}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-[9px] text-[#6e6e73] ">
+          <button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-[9px] text-ink-secondary ">
             <Icon icon="mdi:close" aria-hidden />
           </button>
         </div>

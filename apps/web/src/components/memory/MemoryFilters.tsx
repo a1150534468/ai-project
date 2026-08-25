@@ -72,7 +72,7 @@ export default function MemoryFilters({
           </form>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-nowrap">
-            <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2 text-xs leading-5 text-[#6e6e73]">
+            <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2 text-xs leading-5 text-ink-secondary">
               共 {total} 条，显示 {visibleCount} 条，命中 {highlightedCount} 条
             </div>
             <button

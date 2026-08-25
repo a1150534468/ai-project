@@ -147,7 +147,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
           {controlsHeader}
           <div className="pt-5">
-            <p className="text-xs font-semibold text-[#6e6e73]">生成配置</p>
+            <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
             <h3 className="mt-1 text-base font-semibold text-ink">主图设置</h3>
           </div>
           <div className="mt-4 grid gap-3">
@@ -210,7 +210,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
       <div className="flex min-h-[420px] min-w-0 flex-col bg-white xl:h-full">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
         <div className="flex items-center justify-between gap-3">
-          <div><p className="text-xs font-semibold text-[#6e6e73]">当前结果</p><h3 className="mt-1 text-base font-semibold text-ink">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
+          <div><p className="text-xs font-semibold text-ink-secondary">当前结果</p><h3 className="mt-1 text-base font-semibold text-ink">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
           {isSubmitting && <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink"><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成</span>}
         </div>
         {isSubmitting && (
@@ -219,7 +219,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
           </div>
         )}
-        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-[#8a8a8f]" aria-hidden /><p className="text-sm font-semibold text-[#6e6e73]">填写左侧产品资料后开始生成</p></div></div>}
+        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-[#8a8a8f]" aria-hidden /><p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p></div></div>}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {isSubmitting
             ? Array.from({ length: count }).map((_, skeletonIndex) => (
@@ -252,9 +252,9 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                   </div>
                   <div className="grid gap-2 p-3">
                     <p className="text-sm font-semibold text-ink break-words">{image.index === 0 ? "商品图 · 主图" : `商品图 ${image.index + 1}`}</p>
-                    <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">主题：</span>{image.theme}</p>
-                    <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">画面要求：</span>{image.sceneRequirement}</p>
-                    <p className="text-xs leading-5 text-[#6e6e73] break-words"><span className="font-semibold">文案要求：</span>{image.copyRequirement}</p>
+                    <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">主题：</span>{image.theme}</p>
+                    <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">画面要求：</span>{image.sceneRequirement}</p>
+                    <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">文案要求：</span>{image.copyRequirement}</p>
                     {image.status === "failed" && (
                       <RippleButton type="button" onClick={() => handleRedraw(image.index)} disabled={busy} className="h-9 rounded-[8px] border border-[#d2d2d7] text-xs font-semibold text-brand-ink disabled:text-[#8a8a8f]">
                         {redrawingIndexes.includes(image.index) ? "重绘中…" : "重绘这张"}

@@ -176,12 +176,12 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
 function PillGroup({ label, options, value, onChange }: { label: string; options: string[]; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="w-14 shrink-0 text-[13px] text-[#6e6e73]">{label}</span>
+      <span className="w-14 shrink-0 text-[13px] text-ink-secondary">{label}</span>
       {options.map((opt) => {
         const on = opt === value;
         return (
           <button key={opt} type="button" onClick={() => onChange(opt)}
-            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-[#6e6e73] "}`}>
+            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-secondary "}`}>
             {opt}
             {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-ink" aria-hidden />}
           </button>
@@ -329,7 +329,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   ) : !priceReady ? (
                     <p className="rounded-[10px] bg-amber-50 px-3 py-2.5 text-[13px] leading-6 text-amber-700">拆解价格未配置或未启用，请联系管理员在后台设置并启用「帮我写-图片拆解 / 视频拆解」价格后再试。</p>
                   ) : (
-                    <div className="text-[13px] leading-7 text-[#6e6e73]">
+                    <div className="text-[13px] leading-7 text-ink-secondary">
                       {imageCount > 0 && <p>图片拆解：{imageCount} 张 × {pricing.image.rate} = <b className="text-ink">{imageCost}</b> 算力点</p>}
                       {videoSeconds > 0 && <p>视频拆解：{videoSeconds} 秒 × {pricing.videoSec.rate} = <b className="text-ink">{videoCost}</b> 算力点</p>}
                       <p className="mt-1 text-[14px] text-ink">预计合计 <b className="text-brand-ink">{estimatedCost}</b> 算力点</p>
@@ -355,7 +355,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                             <Icon icon={m.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:music-note-outline"} className="text-2xl" aria-hidden />
                           </span>
                         )}
-                        <p className="flex flex-1 items-center rounded-[8px] bg-[#fafafb] px-3.5 py-2.5 text-[13px] leading-6 text-[#4b4b50]">
+                        <p className="flex flex-1 items-center rounded-[8px] bg-[#fafafb] px-3.5 py-2.5 text-[13px] leading-6 text-ink-secondary">
                           {insight.materials.find((x) => x.index === i + 1)?.description ?? insight.materials[i]?.description ?? "—"}
                         </p>
                       </div>
@@ -417,12 +417,12 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
 
                 <section className="rounded-[14px] border border-[#ececf0] p-4">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="w-14 shrink-0 text-[13px] text-[#6e6e73]">旁白</span>
+                    <span className="w-14 shrink-0 text-[13px] text-ink-secondary">旁白</span>
                     {([[true, "有旁白/口播"], [false, "无旁白"]] as Array<[boolean, string]>).map(([val, label]) => {
                       const on = hasNarration === val;
                       return (
                         <button key={label} type="button" onClick={() => setHasNarration(val)}
-                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-[#6e6e73] "}`}>
+                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-secondary "}`}>
                           {label}
                           {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-ink" aria-hidden />}
                         </button>
@@ -437,7 +437,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                     <PillGroup label="内容类型" options={CONTENT_TYPES} value={contentType} onChange={setContentType} />
                     <PillGroup label="拍摄方式" options={SHOOT_TYPES} value={shootType} onChange={setShootType} />
                     <label className="grid gap-1.5">
-                      <span className="text-[13px] text-[#6e6e73]">补充说明</span>
+                      <span className="text-[13px] text-ink-secondary">补充说明</span>
                       <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
                         placeholder="可选：可补充商品卖点、使用场景、目标人群、脚本风格、结尾引导等"
                         className="min-h-[110px] resize-none rounded-[8px] border border-[#e8e8ed] p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
@@ -458,7 +458,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       <div className="rounded-[14px] border border-[#ececf0] p-4">
                         <p className="text-[13px] font-semibold text-ink">上传后将为你分析</p>
                         <p className="mt-1 text-[11.5px] leading-5 text-[#8a8a8f]">系统会从参考视频中提取结构、节奏和创意亮点，生成更贴合当前商品的新脚本。</p>
-                        <p className="mb-2 mt-3 text-[12px] font-semibold text-[#6e6e73]">参考视频要求</p>
+                        <p className="mb-2 mt-3 text-[12px] font-semibold text-ink-secondary">参考视频要求</p>
                         <div className="grid gap-2">
                           {REF_REQUIREMENTS.map((r) => (
                             <div key={r.title} className="flex items-center gap-2.5 rounded-[9px] border border-[#f0f0f3] px-2.5 py-2">
@@ -468,16 +468,16 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                             </div>
                           ))}
                         </div>
-                        <p className="mb-2 mt-3 text-[12px] font-semibold text-[#6e6e73]">适合上传的视频</p>
+                        <p className="mb-2 mt-3 text-[12px] font-semibold text-ink-secondary">适合上传的视频</p>
                         <div className="flex flex-wrap gap-1.5">
                           {REF_TAGS.map((t) => (
-                            <span key={t} className="rounded-full bg-[#f4f4f6] px-2.5 py-1 text-[11px] text-[#6e6e73]">{t}</span>
+                            <span key={t} className="rounded-full bg-[#f4f4f6] px-2.5 py-1 text-[11px] text-ink-secondary">{t}</span>
                           ))}
                         </div>
                       </div>
                     </div>
                     <label className="grid gap-1.5">
-                      <span className="text-[13px] text-[#6e6e73]">补充说明</span>
+                      <span className="text-[13px] text-ink-secondary">补充说明</span>
                       <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
                         placeholder="可选：可补充商品卖点、使用场景、目标人群、脚本风格、结尾引导等"
                         className="min-h-[90px] resize-none rounded-[8px] border border-[#e8e8ed] p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />

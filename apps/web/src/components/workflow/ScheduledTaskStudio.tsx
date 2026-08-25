@@ -118,13 +118,13 @@ export function ScheduledTaskStudio({ token }: Props) {
           />
           <input className="w-full rounded-[8px] border border-[#e8e8ed] px-3 py-2 text-sm placeholder-[#8a8a8f]" placeholder="收件邮箱" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-[#6e6e73]">每天</span>
+            <span className="text-ink-secondary">每天</span>
             <input type="number" min={0} max={23} className="w-16 rounded-[8px] border border-[#e8e8ed] px-2 py-1 text-center text-sm" value={preset.kind === "daily" ? preset.hour : 8}
               onChange={(e) => setPreset({ kind: "daily", hour: Number(e.target.value), minute: preset.kind === "daily" ? preset.minute : 0 })} />
-            <span className="text-[#6e6e73]">时</span>
+            <span className="text-ink-secondary">时</span>
             <input type="number" min={0} max={59} className="w-16 rounded-[8px] border border-[#e8e8ed] px-2 py-1 text-center text-sm" value={preset.kind === "daily" ? preset.minute : 0}
               onChange={(e) => setPreset({ kind: "daily", hour: preset.kind === "daily" ? preset.hour : 8, minute: Number(e.target.value) })} />
-            <span className="text-[#6e6e73]">分（{DEFAULT_TZ}）</span>
+            <span className="text-ink-secondary">分（{DEFAULT_TZ}）</span>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={oneShot} onChange={(e) => setOneShot(e.target.checked)} /> 仅执行一次</label>
           {err && <p className="text-sm text-[#d4380d]">{err}</p>}
@@ -140,10 +140,10 @@ export function ScheduledTaskStudio({ token }: Props) {
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1">
                 <p className="font-semibold text-ink">{t.title}</p>
-                <p className="text-xs text-[#6e6e73]">{humanizeSchedule(t.cron)}｜下次 {new Date(t.nextRunAt).toLocaleString()}</p>
+                <p className="text-xs text-ink-secondary">{humanizeSchedule(t.cron)}｜下次 {new Date(t.nextRunAt).toLocaleString()}</p>
               </div>
               <div className="flex items-center gap-2">
-                <button className="text-xs text-[#6e6e73] transition " onClick={() => void toggle(t)}>{t.enabled ? "暂停" : "启用"}</button>
+                <button className="text-xs text-ink-secondary transition " onClick={() => void toggle(t)}>{t.enabled ? "暂停" : "启用"}</button>
                 <button className="text-xs text-[#d4380d] transition " onClick={() => void remove(t.id)}>删除</button>
                 <button className="text-xs text-brand transition " onClick={() => void listScheduledTaskRuns(token, t.id).then((r) => setOpenRuns((m) => ({ ...m, [t.id]: r }))).catch((e) => setErr(e instanceof Error ? e.message : "获取运行记录失败"))}>记录</button>
               </div>
@@ -153,7 +153,7 @@ export function ScheduledTaskStudio({ token }: Props) {
                 {openRuns[t.id].length === 0 && <p className="text-xs text-[#8a8a8f]">暂无运行记录</p>}
                 {openRuns[t.id].map((run) => (
                   <details key={run.id} className="text-xs">
-                    <summary className="cursor-pointer text-[#6e6e73]">
+                    <summary className="cursor-pointer text-ink-secondary">
                       {new Date(run.triggeredAt).toLocaleString()} — {run.status}{run.skipReason ? `（${run.skipReason}）` : ""}｜邮件 {run.emailStatus ?? "-"}
                     </summary>
                     {run.reportText && <div className="mt-2 rounded-[8px] bg-[#f5f5f7] p-2 text-ink" dangerouslySetInnerHTML={{ __html: run.reportText }} />}

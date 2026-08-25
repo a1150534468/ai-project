@@ -121,7 +121,7 @@ export default function MemoryGalaxyCanvas({
             return (
               <div
                 key={type}
-                className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/88 px-3 py-1.5 text-xs text-[#6e6e73] backdrop-blur"
+                className="inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/88 px-3 py-1.5 text-xs text-ink-secondary backdrop-blur"
               >
                 <span className={`h-2 w-2 rounded-full ${tone.dot}`} />
                 <span className="font-medium text-ink">{meta.label}</span>
@@ -140,7 +140,7 @@ export default function MemoryGalaxyCanvas({
               className={`rounded-full px-3 py-1.5 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
                 zoom === level
                   ? "bg-brand text-white"
-                  : "text-[#6e6e73] "
+                  : "text-ink-secondary "
               }`}
             >
               {level}%
@@ -152,7 +152,7 @@ export default function MemoryGalaxyCanvas({
       <div ref={containerRef} className="relative min-h-[520px] flex-1">
         {loading ? (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85">
-            <div className="flex items-center gap-3 rounded-full border border-[#e8e8ed] bg-white px-4 py-3 text-sm text-[#6e6e73] shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+            <div className="flex items-center gap-3 rounded-full border border-[#e8e8ed] bg-white px-4 py-3 text-sm text-ink-secondary shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
               <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
               正在编织记忆星河...
             </div>
@@ -180,7 +180,7 @@ export default function MemoryGalaxyCanvas({
                 <Icon icon="mdi:atom-variant" className="text-2xl" />
               </div>
               <p className="text-lg font-semibold text-ink">你的星河还没有点亮</p>
-              <p className="mt-2 text-sm leading-6 text-[#6e6e73]">
+              <p className="mt-2 text-sm leading-6 text-ink-secondary">
                 开启长期记忆后，重要对话会沉淀成可检索、可编辑的长期节点。
               </p>
             </div>

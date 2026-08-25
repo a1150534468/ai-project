@@ -100,7 +100,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
       {open && (
         <div className={`absolute right-0 z-30 grid w-[calc(200%+0.5rem)] gap-3.5 rounded-[14px] border border-[#e3e3e8] bg-white p-3.5 shadow-[0_16px_40px_rgba(20,20,45,0.16)] ${dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"}`}>
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold text-[#6e6e73]">视频比例</p>
+            <p className="mb-1.5 text-[11px] font-semibold text-ink-secondary">视频比例</p>
             <div className="grid grid-cols-6 gap-1.5">
               {ASPECT_OPTIONS.map((a) => {
                 const on = a === aspectRatio;
@@ -114,7 +114,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
             </div>
           </div>
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold text-[#6e6e73]">分辨率</p>
+            <p className="mb-1.5 text-[11px] font-semibold text-ink-secondary">分辨率</p>
             <div className="flex flex-wrap gap-1.5">
               {MODEL_RESOLUTION_OPTIONS[model].map((r) => {
                 const on = r === resolution;
@@ -129,7 +129,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
           </div>
           {!isMini && (
             <div>
-              <p className="mb-1.5 text-[11px] font-semibold text-[#6e6e73]">音频</p>
+              <p className="mb-1.5 text-[11px] font-semibold text-ink-secondary">音频</p>
               <div className="grid grid-cols-2 gap-1.5">
                 {([[true, "含音频"], [false, "静音"]] as Array<[boolean, string]>).map(([val, label]) => {
                   const on = generateAudio === val;
@@ -144,7 +144,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
             </div>
           )}
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold text-[#6e6e73]">时长</p>
+            <p className="mb-1.5 text-[11px] font-semibold text-ink-secondary">时长</p>
             {isMini ? (
               <div className="flex flex-wrap gap-1.5">
                 {MODEL_DURATION_OPTIONS[model].map((d) => {

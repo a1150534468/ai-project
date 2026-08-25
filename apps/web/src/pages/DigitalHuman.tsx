@@ -223,7 +223,7 @@ export default function DigitalHuman({ token, onBalanceRefresh }: DigitalHumanPr
           <button
             disabled={stage === "source" || busy}
             onClick={() => setStage(prevStage(stage))}
-            className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] text-[#5a5a60] disabled:opacity-40"
+            className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] text-ink-secondary disabled:opacity-40"
           >
             上一步
           </button>

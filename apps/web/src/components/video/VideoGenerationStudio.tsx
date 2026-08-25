@@ -255,7 +255,7 @@ export function VideoGenerationStudio({
         </div>
 
         {/* 参考素材 */}
-        <p className="mb-2 text-xs font-semibold text-[#6e6e73]">参考素材</p>
+        <p className="mb-2 text-xs font-semibold text-ink-secondary">参考素材</p>
         <label
           onDragOver={(event) => { event.preventDefault(); if (!dragActive) setDragActive(true); }}
           onDragEnter={(event) => { event.preventDefault(); setDragActive(true); }}
@@ -282,7 +282,7 @@ export function VideoGenerationStudio({
             return (
               <div key={k} className="rounded-[9px] bg-[#f6f6f8] px-2 py-1.5">
                 <span className="text-[13px] font-semibold text-ink">{materialCounts[k]}<span className={full ? "text-[#c7c7cc]" : "text-[#8a8a8f]"}> / {VIDEO_MATERIAL_LIMITS[k]}</span></span>
-                <span className="block text-[11px] text-[#6e6e73]">{KIND_META[k].label}</span>
+                <span className="block text-[11px] text-ink-secondary">{KIND_META[k].label}</span>
               </div>
             );
           })}
@@ -314,7 +314,7 @@ export function VideoGenerationStudio({
 
         {/* 脚本 / 提示词 */}
         <div className="mt-4 mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold text-[#6e6e73]">脚本 / 提示词</p>
+          <p className="text-xs font-semibold text-ink-secondary">脚本 / 提示词</p>
           <button
             type="button"
             onClick={onHelpWrite}
@@ -334,7 +334,7 @@ export function VideoGenerationStudio({
         <p className="mt-1 text-right text-[11px] font-medium text-[#8a8a8f]">{prompt.length} / 2000</p>
 
         {/* 配置：模型 + 视频设置（合并弹窗） */}
-        <p className="mt-4 mb-2 text-xs font-semibold text-[#6e6e73]">配置</p>
+        <p className="mt-4 mb-2 text-xs font-semibold text-ink-secondary">配置</p>
         <div className="grid grid-cols-2 gap-2">
           <Dropdown wideMenu ariaLabel="模型" value={model} choices={modelChoices} onSelect={(v) => onModelChange(v as VideoModel)} />
           <VideoSettingsPopover
@@ -379,7 +379,7 @@ export function VideoGenerationStudio({
           >
             <div className="w-full max-w-[320px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
               <h3 className="text-[15px] font-semibold text-ink">确认生成</h3>
-              <p className="mt-2.5 text-[13px] leading-6 text-[#6e6e73]">
+              <p className="mt-2.5 text-[13px] leading-6 text-ink-secondary">
                 {estimate.auto ? (
                   <>本次将预扣 <b className="font-semibold text-ink">{estimate.points} 视频点</b>（按最长 15 秒），生成后按<b className="font-semibold text-ink">实际时长结算、多退</b>。确认生成？</>
                 ) : (
@@ -430,7 +430,7 @@ export function VideoGenerationStudio({
           </div>
           {(displayedVideo || selectedTask) && displayedPrompt && (
             <div className="flex items-start gap-2 border-t border-[#ececf0] bg-white px-5 py-3">
-              <p className="min-w-0 flex-1 line-clamp-2 text-xs leading-5 text-[#6e6e73]">{displayedPrompt}</p>
+              <p className="min-w-0 flex-1 line-clamp-2 text-xs leading-5 text-ink-secondary">{displayedPrompt}</p>
               {displayedVideo && (
                 <button
                   type="button"
@@ -473,7 +473,7 @@ export function VideoGenerationStudio({
                         {task.progress}%
                       </motion.span>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-xs text-[#6e6e73]">{task.prompt}</p>
+                    <p className="mt-2 line-clamp-2 text-xs text-ink-secondary">{task.prompt}</p>
                     <p className="mt-2 text-[11px] text-[#8a8a8f]">{task.resolution} · {task.durationSec}s · {formatTime(task.createdAt)}</p>
                     {task.error && <p className="mt-2 text-xs leading-5 text-red-600">{friendlyTaskError(task.error)}</p>}
                   </motion.div>
@@ -511,7 +511,7 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="w-full max-w-[440px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
         <h3 className="text-[15px] font-semibold text-ink">下载视频</h3>
-        <p className="mt-2 text-[13px] leading-6 text-[#6e6e73]">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
+        <p className="mt-2 text-[13px] leading-6 text-ink-secondary">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
         <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-[#e8e8ed] bg-[#fafafa] p-2">
           <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-[12px] text-ink outline-none" />
           <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-2 text-[12px] font-semibold text-white transition ">

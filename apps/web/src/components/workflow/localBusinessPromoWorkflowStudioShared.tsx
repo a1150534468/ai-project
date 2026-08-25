@@ -12,7 +12,7 @@ export function Field({
 }) {
   return (
     <label className="block">
-      <p className="text-[12px] font-semibold text-[#6e6e73]">{label}</p>
+      <p className="text-[12px] font-semibold text-ink-secondary">{label}</p>
       <div className="mt-1.5">{children}</div>
     </label>
   );
@@ -21,7 +21,7 @@ export function Field({
 export function ControlGroup({ label, children }: { readonly label: string; readonly children: ReactNode }) {
   return (
     <div className="mt-4">
-      <p className="mb-2 text-[12px] font-semibold text-[#6e6e73]">{label}</p>
+      <p className="mb-2 text-[12px] font-semibold text-ink-secondary">{label}</p>
       {children}
     </div>
   );
@@ -47,7 +47,7 @@ export function OptionGrid<T extends string | number>(props: {
             }`}
           >
             <p className={`text-[12px] ${active ? "font-semibold" : "font-medium"} text-current`}>{option.label}</p>
-            {!props.compact && option.description && <p className="mt-1 text-[11px] leading-5 text-[#6e6e73]">{option.description}</p>}
+            {!props.compact && option.description && <p className="mt-1 text-[11px] leading-5 text-ink-secondary">{option.description}</p>}
           </button>
         );
       })}
@@ -63,17 +63,17 @@ export function AudioAssetPanel(props: {
 }) {
   return (
     <div className={props.className}>
-      <p className="text-[12px] font-semibold text-[#6e6e73]">{props.title}</p>
+      <p className="text-[12px] font-semibold text-ink-secondary">{props.title}</p>
       {props.asset ? (
         <div className="mt-2 rounded-[10px] bg-[#f7f7f9] p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(props.asset.createdAt)}</p>
-              <p className="text-[11px] text-[#6e6e73]">{props.asset.durationSec || 0} 秒 · {props.asset.format.toUpperCase()}</p>
+              <p className="text-[11px] text-ink-secondary">{props.asset.durationSec || 0} 秒 · {props.asset.format.toUpperCase()}</p>
             </div>
-            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-[#6e6e73]">{props.asset.providerModel ?? props.asset.source}</span>
+            <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{props.asset.providerModel ?? props.asset.source}</span>
           </div>
-          {props.asset.textContent && <p className="mt-2 line-clamp-3 text-[11px] leading-5 text-[#6e6e73]">{props.asset.textContent}</p>}
+          {props.asset.textContent && <p className="mt-2 line-clamp-3 text-[11px] leading-5 text-ink-secondary">{props.asset.textContent}</p>}
           <audio className="mt-3 w-full" controls src={props.asset.originalUrl} />
         </div>
       ) : (
@@ -98,7 +98,7 @@ export function AudioHistoryList(props: {
   return (
     <div className={props.className}>
       <div className="flex items-center justify-between">
-        <p className="text-[12px] font-semibold text-[#6e6e73]">{props.title}</p>
+        <p className="text-[12px] font-semibold text-ink-secondary">{props.title}</p>
         <span className="text-[11px] text-[#8a8a8f]">{props.assets.length} 条</span>
       </div>
       <div className={`mt-2 grid gap-2 ${props.gridClassName ?? ""}`}>
@@ -110,7 +110,7 @@ export function AudioHistoryList(props: {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(asset.createdAt)}</p>
-                  <p className="text-[11px] text-[#6e6e73]">{asset.durationSec || 0} 秒 · {asset.format.toUpperCase()}</p>
+                  <p className="text-[11px] text-ink-secondary">{asset.durationSec || 0} 秒 · {asset.format.toUpperCase()}</p>
                 </div>
                 {active ? (
                   <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-brand-ink">当前</span>
@@ -126,7 +126,7 @@ export function AudioHistoryList(props: {
                   </button>
                 )}
               </div>
-              {asset.textContent && <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-[#6e6e73]">{asset.textContent}</p>}
+              {asset.textContent && <p className="mt-1 line-clamp-2 text-[11px] leading-5 text-ink-secondary">{asset.textContent}</p>}
               <audio className="mt-2 w-full" controls src={asset.originalUrl} />
             </div>
           );

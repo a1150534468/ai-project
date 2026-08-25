@@ -69,7 +69,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
                 <h1 className="mt-2 text-[26px] font-bold tracking-[-0.02em] text-ink sm:text-[30px] sm:tracking-[-0.03em]">
                   记忆管理
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6e6e73]">
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">
                   用表格查看、搜索和整理长期记忆，快速定位可编辑内容。
                 </p>
               </div>

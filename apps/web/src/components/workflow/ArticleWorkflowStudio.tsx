@@ -94,7 +94,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           onDeleteBatch={state.handleDeleteBatch}
         />
         {state.bootstrapping ? (
-          <div className="flex min-h-0 items-center justify-center text-sm text-[#6e6e73]">
+          <div className="flex min-h-0 items-center justify-center text-sm text-ink-secondary">
             <span className="inline-flex items-center gap-2">
               <Icon icon="mdi:loading" className="animate-spin text-lg" aria-hidden />
               正在加载配置
@@ -310,7 +310,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
                   type="button"
                   onClick={() => setRightPanelOpen(false)}
                   aria-label="收起配图素材"
-                  className="grid h-7 w-7 place-items-center rounded-lg text-[#6e6e73] hover:bg-[#f5f5f7]"
+                  className="grid h-7 w-7 place-items-center rounded-lg text-ink-secondary hover:bg-[#f5f5f7]"
                 >
                   <Icon icon="mdi:chevron-right" className="text-base" aria-hidden />
                 </button>
