@@ -48,7 +48,7 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
   };
 
   return (
-    <div className="auth-shell min-h-screen bg-[#f5f5f7] flex items-center justify-center p-4">
+    <div className="auth-shell min-h-screen bg-surface-muted flex items-center justify-center p-4">
       <ThemeToggle compact className="fixed right-5 top-5 z-10" />
       <div className="w-full max-w-[420px]">
         {/* Logo & Branding */}

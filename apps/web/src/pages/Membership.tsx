@@ -83,7 +83,7 @@ export default function Membership({ token }: MembershipProps) {
   }, []);
 
   return (
-    <div className="flex-1 overflow-auto bg-[#f5f7fa]">
+    <div className="flex-1 overflow-auto bg-surface-muted">
       <div className="max-w-5xl mx-auto p-6">
         {/* 页面标题 */}
         <div className="mb-8">

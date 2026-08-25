@@ -156,7 +156,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
                 onClick={() => setRightPanelOpen((value) => !value)}
                 aria-pressed={rightPanelOpen}
                 title={rightPanelOpen ? "收起配图素材" : "展开配图素材"}
-                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightPanelOpen ? "bg-[#eef2f0] text-brand-ink" : "text-ink-tertiary"}`}
+                className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightPanelOpen ? "bg-surface-muted text-brand-ink" : "text-ink-tertiary"}`}
               >
                 <Icon icon="mdi:dock-right" className="text-base" aria-hidden />
               </button>
@@ -310,7 +310,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
                   type="button"
                   onClick={() => setRightPanelOpen(false)}
                   aria-label="收起配图素材"
-                  className="grid h-7 w-7 place-items-center rounded-lg text-ink-secondary hover:bg-[#f5f5f7]"
+                  className="grid h-7 w-7 place-items-center rounded-lg text-ink-secondary hover:bg-surface-muted"
                 >
                   <Icon icon="mdi:chevron-right" className="text-base" aria-hidden />
                 </button>

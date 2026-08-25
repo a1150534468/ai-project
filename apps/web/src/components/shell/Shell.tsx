@@ -80,7 +80,7 @@ export default function Shell({
   };
 
   return (
-    <div className="apple-shell flex h-dvh min-h-0 overflow-hidden bg-[#f5f5f7]">
+    <div className="apple-shell flex h-dvh min-h-0 overflow-hidden bg-surface-muted">
       <motion.aside
         animate={{ width: collapsed ? 56 : 240 }}
         transition={reduceMotion ? { duration: 0 } : spring.smooth}

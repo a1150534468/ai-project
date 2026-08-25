@@ -396,7 +396,7 @@ export default function Billing({ token, onBalanceChange }: BillingProps) {
   };
 
   return (
-    <div className="flex-1 overflow-auto bg-[#f5f7fa]">
+    <div className="flex-1 overflow-auto bg-surface-muted">
       <div className="max-w-5xl mx-auto p-6">
         {/* 标题 + Tab */}
         <div className="mb-5">

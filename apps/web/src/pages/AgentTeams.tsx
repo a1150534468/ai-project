@@ -295,7 +295,7 @@ export default function AgentTeams({ token, selectedModel, preferredModel, onBal
   }, [deletingTeamId, refreshRunHistory, selectedTeamId, token]);
 
   return (
-    <div className="min-h-full bg-[#f5f5f7] px-4 py-6 lg:px-6 lg:py-6">
+    <div className="min-h-full bg-surface-muted px-4 py-6 lg:px-6 lg:py-6">
       <div className="mx-auto flex max-w-[1440px] flex-col gap-4 lg:flex-row lg:items-start">
         <aside className="lg:sticky lg:top-6 lg:w-[300px] lg:flex-none">
           <WorkflowRunHistoryPanel runs={runHistory} activeRunId={activeRun?.id} onSelectRun={handleSelectHistoryRun} />

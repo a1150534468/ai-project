@@ -224,20 +224,20 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           {isSubmitting
             ? Array.from({ length: count }).map((_, skeletonIndex) => (
                 <article key={`skeleton-${skeletonIndex}`} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
-                  <div className="relative grid aspect-square place-items-center overflow-hidden bg-[#f5f5f7]">
+                  <div className="relative grid aspect-square place-items-center overflow-hidden bg-surface-muted">
                     <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#f5f5f7] via-[#f7f8fa] to-[#f5f5f7]" />
                     <Icon icon="mdi:image-outline" className="relative animate-pulse text-3xl text-ink-tertiary" aria-hidden />
                   </div>
                   <div className="grid gap-2 p-3">
-                    <div className="h-3 w-1/3 animate-pulse rounded bg-[#f5f5f7]" />
-                    <div className="h-3 w-full animate-pulse rounded bg-[#f5f5f7]" />
-                    <div className="h-3 w-2/3 animate-pulse rounded bg-[#f5f5f7]" />
+                    <div className="h-3 w-1/3 animate-pulse rounded bg-surface-muted" />
+                    <div className="h-3 w-full animate-pulse rounded bg-surface-muted" />
+                    <div className="h-3 w-2/3 animate-pulse rounded bg-surface-muted" />
                   </div>
                 </article>
               ))
             : job?.images.map((image) => (
                 <article key={image.index} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
-                  <div className="group relative grid aspect-square place-items-center bg-[#f5f5f7]">
+                  <div className="group relative grid aspect-square place-items-center bg-surface-muted">
                     {image.originalUrl
                       ? <img src={image.thumbnailUrl || image.originalUrl} alt={`主图 ${image.index + 1}`} className="h-full w-full object-cover" />
                       : <span className="text-xs text-ink-tertiary">{image.status === "failed" ? "生成失败" : "待生成"}</span>}

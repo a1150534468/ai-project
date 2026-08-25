@@ -127,9 +127,9 @@ export function KnowledgePicker({
 
               <div>
                 <div className="mb-3 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-[#f0f0f3]" />
+                  <div className="h-px flex-1 bg-surface-muted" />
                   <span className="text-xs font-medium text-ink-tertiary">或指定知识库</span>
-                  <div className="h-px flex-1 bg-[#f0f0f3]" />
+                  <div className="h-px flex-1 bg-surface-muted" />
                 </div>
                 {knowledgeBases.length > 0 ? (
                   <div className="max-h-60 space-y-2 overflow-y-auto">

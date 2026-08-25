@@ -471,7 +471,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                         <p className="mb-2 mt-3 text-[12px] font-semibold text-ink-secondary">适合上传的视频</p>
                         <div className="flex flex-wrap gap-1.5">
                           {REF_TAGS.map((t) => (
-                            <span key={t} className="rounded-full bg-[#f4f4f6] px-2.5 py-1 text-[11px] text-ink-secondary">{t}</span>
+                            <span key={t} className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] text-ink-secondary">{t}</span>
                           ))}
                         </div>
                       </div>

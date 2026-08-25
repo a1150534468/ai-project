@@ -156,7 +156,7 @@ export function ScheduledTaskStudio({ token }: Props) {
                     <summary className="cursor-pointer text-ink-secondary">
                       {new Date(run.triggeredAt).toLocaleString()} — {run.status}{run.skipReason ? `（${run.skipReason}）` : ""}｜邮件 {run.emailStatus ?? "-"}
                     </summary>
-                    {run.reportText && <div className="mt-2 rounded-[8px] bg-[#f5f5f7] p-2 text-ink" dangerouslySetInnerHTML={{ __html: run.reportText }} />}
+                    {run.reportText && <div className="mt-2 rounded-[8px] bg-surface-muted p-2 text-ink" dangerouslySetInnerHTML={{ __html: run.reportText }} />}
                   </details>
                 ))}
               </div>

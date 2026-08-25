@@ -88,7 +88,7 @@ export default function MemoryMobileList({
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tone.mobilePill}`}>
                     {getMemoryTypeMeta(node.type).label}
                   </span>
-                  <span className="rounded-full bg-[#f5f5f7] px-2.5 py-1 text-[11px] font-medium text-ink-secondary">
+                  <span className="rounded-full bg-surface-muted px-2.5 py-1 text-[11px] font-medium text-ink-secondary">
                     重要度 {node.importance}
                   </span>
                   {isHighlighted ? (

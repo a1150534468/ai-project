@@ -102,7 +102,7 @@ export default function ModelMarketplace({ token }: ModelMarketplaceProps) {
   const visibleGroups = selectVisibleGroups(groups, activeCategory);
 
   return (
-    <div className="flex-1 overflow-auto bg-[#f5f7fa]">
+    <div className="flex-1 overflow-auto bg-surface-muted">
       <div className="mx-auto max-w-6xl p-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>

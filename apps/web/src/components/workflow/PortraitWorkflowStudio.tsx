@@ -355,7 +355,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           <p className="mb-2 text-sm font-semibold text-ink">参考人物 ({references.length}/{MAX_REFERENCE_COUNT})</p>
           <div className="grid grid-cols-3 gap-2">
             {references.map((reference, index) => (
-              <div key={reference.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-[#e5e7eb] bg-[#f5f5f7]">
+              <div key={reference.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-[#e5e7eb] bg-surface-muted">
                 <img src={reference.previewUrl} alt={`人物参考照 ${index + 1}`} className="h-full w-full object-cover" />
                 <button type="button" title="删除参考照" aria-label={`删除参考照 ${index + 1}`} onClick={() => handleDeleteReference(reference)} disabled={deletingReferenceId === reference.id || hasActiveTask} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-100 transition disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100"><Icon icon={deletingReferenceId === reference.id ? "mdi:loading" : "mdi:close"} className={deletingReferenceId === reference.id ? "animate-spin" : ""} aria-hidden /></button>
               </div>
@@ -418,7 +418,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             <div><h2 className="text-sm font-semibold text-ink">AI 形象照</h2><p className="text-[11px] text-ink-tertiary">AI 生成预览</p></div>
           </div>
           <div className="flex items-center gap-2">
-            {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-ink-secondary"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
+            {selectedTask && <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-surface-muted text-ink-secondary"}`}>{STATUS_LABEL[selectedTask.status]}</span>}
             <button type="button" onClick={() => setIsTaskDrawerOpen(true)} aria-expanded={isTaskDrawerOpen} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-white px-3 text-xs font-semibold text-ink"><Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />任务 {tasks.filter(isActive).length}</button>
           </div>
         </header>
@@ -483,7 +483,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       {isTaskDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsTaskDrawerOpen(false)}>
           <aside role="dialog" aria-modal="true" aria-label="形象照任务队列" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-white shadow-2xl sm:w-[320px]">
-            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4"><div><p className="text-xs font-semibold text-ink-secondary">任务状态</p><h2 className="text-base font-semibold text-ink">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
+            <div className="flex h-16 items-center justify-between border-b border-[#e5e7eb] px-4"><div><p className="text-xs font-semibold text-ink-secondary">任务状态</p><h2 className="text-base font-semibold text-ink">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
               {tasks.length === 0 ? <p className="grid min-h-48 place-items-center text-sm text-ink-tertiary">暂无任务</p> : tasks.map((task) => (
                 <article key={task.id} className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-[#e5e7eb]"}`}>

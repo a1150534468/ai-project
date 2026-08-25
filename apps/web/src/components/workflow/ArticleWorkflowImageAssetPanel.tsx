@@ -45,7 +45,7 @@ function ImageActions(props: ImageActionsProps) {
             }),
           });
         }}
-        className="grid h-8 w-8 place-items-center rounded-lg text-ink-secondary hover:bg-[#f5f5f7] disabled:opacity-40"
+        className="grid h-8 w-8 place-items-center rounded-lg text-ink-secondary hover:bg-surface-muted disabled:opacity-40"
       >
         <Icon icon="mdi:download-outline" className="text-base" aria-hidden />
       </button>
@@ -54,7 +54,7 @@ function ImageActions(props: ImageActionsProps) {
         title="重新生成配图"
         aria-label={`重新生成${props.image.alt || props.image.slot}`}
         onClick={() => props.onRegenerateImage(props.image.slot)}
-        className="grid h-8 w-8 place-items-center rounded-lg text-ink-secondary hover:bg-[#f5f5f7]"
+        className="grid h-8 w-8 place-items-center rounded-lg text-ink-secondary hover:bg-surface-muted"
       >
         <Icon
           icon={props.regeneratingSlot === props.image.slot ? "mdi:loading" : "mdi:refresh"}
@@ -93,7 +93,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
             return (
               <article key={image.slot} className="min-w-0 overflow-hidden rounded-lg border border-[#e5e7eb] bg-white">
                 <div
-                  className="flex max-h-[520px] items-center justify-center bg-[#f5f5f7]"
+                  className="flex max-h-[520px] items-center justify-center bg-surface-muted"
                   style={{ aspectRatio: `${width} / ${height}` }}
                 >
                   {image.thumbnailUrl || image.imageUrl ? (
@@ -111,7 +111,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
                     <div className="truncate text-xs font-semibold text-ink">{image.alt || "未设置描述"}</div>
                     <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
                       <span className="truncate">{image.slot}</span>
-                      {ratio && <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5">{ratio}</span>}
+                      {ratio && <span className="rounded bg-surface-muted px-1.5 py-0.5">{ratio}</span>}
                     </div>
                   </div>
                   <ImageActions
@@ -127,7 +127,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
           }
           return (
             <div key={image.slot} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#e5e7eb] bg-white p-2">
-              <div className="h-14 w-[72px] shrink-0 overflow-hidden rounded-md bg-[#f5f5f7]">
+              <div className="h-14 w-[72px] shrink-0 overflow-hidden rounded-md bg-surface-muted">
                 {image.thumbnailUrl || image.imageUrl ? (
                   <img
                     src={image.thumbnailUrl || image.imageUrl}
@@ -141,7 +141,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 text-[11px] text-ink-tertiary">
                   <span className="truncate">{image.slot}</span>
-                  {ratio && <span className="rounded bg-[#f5f5f7] px-1.5 py-0.5">{ratio}</span>}
+                  {ratio && <span className="rounded bg-surface-muted px-1.5 py-0.5">{ratio}</span>}
                 </div>
                 <div className="mt-1 truncate text-xs font-semibold text-ink">{image.alt || "未设置描述"}</div>
               </div>

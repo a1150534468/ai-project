@@ -53,7 +53,7 @@ function DurationSlider({ value, onChange }: { value: number; onChange: (v: numb
       onPointerUp={(e) => { draggingRef.current = false; setDragRatio(null); e.currentTarget.releasePointerCapture(e.pointerId); }}
       onPointerCancel={() => { draggingRef.current = false; setDragRatio(null); }}
     >
-      <div className="absolute left-0 top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full bg-[#f0f0f2]" />
+      <div className="absolute left-0 top-1/2 h-1.5 w-full -translate-y-1/2 rounded-full bg-surface-muted" />
       <div className="absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-[#1d1d1f]" style={{ width: `${ratio * 100}%` }} />
       <div className="absolute top-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-[#1d1d1f] shadow-[0_1px_4px_rgba(0,0,0,0.28)]" style={{ left: `${ratio * 100}%` }} />
     </div>

@@ -97,7 +97,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                       setImageMenuOpen(false);
                       props.onGenerateImages("batch");
                     }}
-                    className="flex h-9 w-full items-center rounded-md px-2.5 text-left text-xs font-semibold text-ink hover:bg-[#f5f5f7]"
+                    className="flex h-9 w-full items-center rounded-md px-2.5 text-left text-xs font-semibold text-ink hover:bg-surface-muted"
                   >
                     生成全部平台配图
                   </button>
@@ -117,7 +117,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 aria-expanded={active}
                 onClick={() => setActiveSection(active ? null : item.key)}
                 className={`inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition ${
-                  active ? "bg-brand-soft text-brand-ink" : "text-ink-secondary hover:bg-[#f5f5f7]"
+                  active ? "bg-brand-soft text-brand-ink" : "text-ink-secondary hover:bg-surface-muted"
                 }${item.key === "images" ? " xl:hidden" : ""}`}
               >
                 <Icon icon={item.icon} className="text-base" aria-hidden />

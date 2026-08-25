@@ -155,7 +155,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
                   type="button"
                   onClick={props.onClose}
                   aria-label="关闭项目记录"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-surface-muted"
                 >
                   <Icon icon="mdi:close" className="text-lg" aria-hidden />
                 </button>

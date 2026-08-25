@@ -133,7 +133,7 @@ export function NovelCreatePage({
 
   return (
     <section className="overflow-hidden rounded-2xl border border-hairline-subtle bg-white shadow-[0_18px_60px_rgba(15,23,42,0.07)]">
-      <div className="border-b border-hairline-subtle bg-[#f5f5f7] px-5 py-5 sm:px-7">
+      <div className="border-b border-hairline-subtle bg-surface-muted px-5 py-5 sm:px-7">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             {canGoBack && <button type="button" onClick={onBack} className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-hairline bg-white text-ink-secondary" aria-label="返回书库"><Icon icon="mdi:arrow-left" /></button>}

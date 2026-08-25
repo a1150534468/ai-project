@@ -39,7 +39,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
           <p className="text-[12px] font-semibold text-brand-ink">项目工作台</p>
           <div className="mt-1 flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold text-ink">{projectTitle(project)}</h2>
-            <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{derived.selectedProjectStatus}</span>
+            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{derived.selectedProjectStatus}</span>
             {derived.dirty && <span className="rounded-full bg-[#fff4e5] px-2 py-0.5 text-[11px] font-medium text-[#9a5a00]">未保存</span>}
           </div>
         </div>
@@ -601,7 +601,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             <div className="mt-4 rounded-[12px] border border-hairline-subtle p-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-semibold text-ink">任务状态</p>
-                {latestRun && <span className="rounded-full bg-[#f5f5f7] px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{formatLocalBusinessPromoRunStatus(latestRun.status)}</span>}
+                {latestRun && <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{formatLocalBusinessPromoRunStatus(latestRun.status)}</span>}
               </div>
               {latestRun ? (
                 <div className="mt-3 space-y-2">

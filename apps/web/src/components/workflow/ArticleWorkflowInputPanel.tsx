@@ -72,7 +72,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
             type="button"
             onClick={props.onClose}
             aria-label="关闭生成配置"
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink hover:bg-surface-muted"
           >
             <Icon icon="mdi:close" className="text-lg" aria-hidden />
           </button>
@@ -110,7 +110,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   }`}
                 >
                   <span
-                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-[#f0f2f1] text-[#6e7673]"}`}
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${checked ? "bg-brand text-white" : "bg-surface-muted text-[#6e7673]"}`}
                   >
                     <Icon icon={PLATFORM_ICONS[platform]} className="text-lg" aria-hidden />
                   </span>

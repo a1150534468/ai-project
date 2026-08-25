@@ -41,7 +41,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
     return (
       <div
         key={image.id}
-        className={`group relative min-w-0 overflow-hidden rounded-lg border-2 bg-[#f5f5f7] text-left ${
+        className={`group relative min-w-0 overflow-hidden rounded-lg border-2 bg-surface-muted text-left ${
           selected ? "border-brand" : "border-transparent"
         } ${single ? "mx-auto flex h-full max-h-[620px] w-full max-w-[860px] items-center justify-center" : "aspect-square"}`}
       >

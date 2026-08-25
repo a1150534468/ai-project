@@ -292,13 +292,13 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
                 {props.isSubmittingMaster ? "生成中" : "生成母版"}
               </RippleButton>
-              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary">
+              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
                 {props.isRetryingMaster ? "重试中" : "重试主图"}
               </RippleButton>
-              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary">
+              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
                 {props.isConfirmingSegments ? "确认中" : "确认分段"}
               </RippleButton>
-              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary">
+              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
                 {props.isStitchingPreview ? "拼接中" : "浏览器拼接长图"}
               </RippleButton>
             </div>

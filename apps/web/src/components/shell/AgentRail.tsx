@@ -222,7 +222,7 @@ function SessionList({
           key={session.id}
           onClick={() => onSelectSession?.(session.id)}
           className={`group cursor-pointer rounded-lg p-2.5 transition-colors ${
-            currentSessionId === session.id ? "bg-[#f5f5f7]" : ""
+            currentSessionId === session.id ? "bg-surface-muted" : ""
           }`}
         >
           <div className="flex items-center gap-2">

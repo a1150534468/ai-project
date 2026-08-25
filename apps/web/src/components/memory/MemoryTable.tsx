@@ -123,7 +123,7 @@ export default function MemoryTable({
                     </span>
                   </td>
                   <td className="px-4 py-4 align-top">
-                    <span className="inline-flex min-w-12 justify-center rounded-full bg-[#f5f5f7] px-2.5 py-1 text-xs font-medium text-ink">
+                    <span className="inline-flex min-w-12 justify-center rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink">
                       {node.importance}
                     </span>
                   </td>

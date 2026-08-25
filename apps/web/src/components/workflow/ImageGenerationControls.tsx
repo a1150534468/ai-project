@@ -86,7 +86,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
           type="button"
           onClick={props.onOptimizePrompt}
           disabled={props.isOptimizingPrompt}
-          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary"
+          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary"
         >
           <Icon icon={props.isOptimizingPrompt ? "mdi:loading" : "mdi:magic-staff"} className={props.isOptimizingPrompt ? "animate-spin text-base" : "text-base"} aria-hidden />
           {props.isOptimizingPrompt ? "优化中" : "优化提示词"}
@@ -101,7 +101,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
             type="button"
             onClick={() => referenceInputRef.current?.click()}
             disabled={!supportsReferenceImages || props.isUploadingReference || props.referenceImages.length >= 3}
-            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary"
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-dashed border-[#b8bdc6] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary"
           >
             <Icon icon={props.isUploadingReference ? "mdi:loading" : "mdi:plus"} className={`text-base ${props.isUploadingReference ? "animate-spin" : ""}`} aria-hidden />
             {props.isUploadingReference
@@ -129,7 +129,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
               {props.referenceImages.map((image, index) => {
                 const locked = image.id === props.lockedReferenceId;
                 return (
-                  <div key={image.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-hairline bg-[#f5f5f7]">
+                  <div key={image.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-hairline bg-surface-muted">
                     <img src={image.thumbnailUrl || image.originalUrl} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
                     {locked ? (
                       <span className="absolute inset-x-0 bottom-0 bg-black/65 py-0.5 text-center text-[10px] font-semibold text-white">来源图</span>

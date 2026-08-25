@@ -58,7 +58,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
 
   return (
     <>
-      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f5f5f7] text-ink">
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface-muted text-ink">
         <div className="flex flex-none flex-col gap-4 px-3 pb-3 pt-4 sm:px-4 lg:px-5 lg:pb-4 lg:pt-5 xl:px-6 xl:pb-5 xl:pt-6">
           <section className="rounded-[14px] border border-hairline-subtle bg-white px-4 py-4 sm:px-5 sm:py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">

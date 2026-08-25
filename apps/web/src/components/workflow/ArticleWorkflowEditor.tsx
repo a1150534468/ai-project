@@ -222,7 +222,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 sm:block">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-[#f0f0f2] px-2 py-1 text-[11px] font-semibold text-ink-secondary">
+              <span className="rounded-md bg-surface-muted px-2 py-1 text-[11px] font-semibold text-ink-secondary">
                 {formatArticleWorkflowStatus(props.project.status)}
               </span>
               {props.saving && (
@@ -284,14 +284,14 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                   <button
                     type="button"
                     onClick={props.onCopyCaption}
-                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-surface-muted"
                   >
                     复制文案
                   </button>
                   <button
                     type="button"
                     onClick={props.onCopyTags}
-                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-surface-muted"
                   >
                     复制标签
                   </button>
@@ -301,14 +301,14 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                   <button
                     type="button"
                     onClick={props.onCopyBody}
-                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-surface-muted"
                   >
                     一键复制到公众号
                   </button>
                   <button
                     type="button"
                     onClick={props.onCopySummary}
-                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
+                    className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-surface-muted"
                   >
                     复制摘要
                   </button>
@@ -317,7 +317,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
               <button
                 type="button"
                 onClick={props.onCopyTitle}
-                className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-[#f5f5f7]"
+                className="rounded-md px-3 py-2 text-left text-sm text-ink hover:bg-surface-muted"
               >
                 复制标题
               </button>

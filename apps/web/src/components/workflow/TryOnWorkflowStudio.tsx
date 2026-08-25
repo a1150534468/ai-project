@@ -463,7 +463,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 disabled={hasActiveTask}
                 maxLength={1200}
                 placeholder="模特特征、场景、姿势或拍摄风格"
-                className="min-h-[92px] resize-y rounded-lg border border-hairline p-3 text-sm font-normal leading-5 disabled:bg-[#f5f5f7]"
+                className="min-h-[92px] resize-y rounded-lg border border-hairline p-3 text-sm font-normal leading-5 disabled:bg-surface-muted"
               />
               <span className="text-right text-[10px] font-normal text-ink-tertiary">{description.length}/1200</span>
             </label>
@@ -530,7 +530,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             <div className="flex items-center gap-2">
               {selectedTask && (
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-[#f5f5f7] text-ink-secondary"}`}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-emerald-50 text-emerald-700" : selectedTask.status === "failed" ? "bg-red-50 text-red-700" : "bg-surface-muted text-ink-secondary"}`}
                 >
                   {STATUS_LABEL[selectedTask.status]}
                 </span>
@@ -669,7 +669,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 type="button"
                 onClick={() => setIsTaskDrawerOpen(false)}
                 aria-label="关闭服装试穿任务队列"
-                className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"
+                className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"
               >
                 <Icon icon="mdi:close" className="text-xl" aria-hidden />
               </button>

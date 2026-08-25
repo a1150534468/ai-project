@@ -66,7 +66,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
   };
 
   return (
-    <div className="auth-shell min-h-screen bg-[#f5f5f7] flex items-center justify-center overflow-y-auto p-4 py-8">
+    <div className="auth-shell min-h-screen bg-surface-muted flex items-center justify-center overflow-y-auto p-4 py-8">
       <ThemeToggle compact className="fixed right-5 top-5 z-10" />
       <div className="w-full max-w-[420px]">
         {/* Logo & Branding */}

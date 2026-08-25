@@ -187,7 +187,7 @@ export default function WechatBind({ token }: WechatBindProps) {
 
   if (!canBind) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-full p-8 bg-[#f5f7fa]">
+      <div className="flex flex-col items-center justify-center min-h-full p-8 bg-surface-muted">
         <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-sm border border-gray-100">
           <Icon icon="mdi:information-outline" className="text-4xl text-gray-400 mb-4 mx-auto" />
           <h2 className="text-lg font-semibold text-gray-900 mb-2">请在桌面客户端使用</h2>
@@ -200,7 +200,7 @@ export default function WechatBind({ token }: WechatBindProps) {
   }
 
   return (
-    <div className="min-h-full p-6 lg:p-8 bg-[#f5f7fa]">
+    <div className="min-h-full p-6 lg:p-8 bg-surface-muted">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">

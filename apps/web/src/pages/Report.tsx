@@ -229,7 +229,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
   if (stage === "loading") {
     return (
-      <div className="min-h-screen bg-[#f5f5f7]">
+      <div className="min-h-screen bg-surface-muted">
         <div className="container mx-auto px-4 py-8">
           <LoadingReport stage={currentTask?.stage === "pending" ? "pending" : "running"} />
         </div>
@@ -240,7 +240,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
   if (stage === "confirm") {
     const modelDisplay = models.find((m) => m.model === selectedModel)?.displayName || selectedModel;
     return (
-      <div className="min-h-screen bg-[#f5f5f7]">
+      <div className="min-h-screen bg-surface-muted">
         <div className="container mx-auto px-4 py-12">
           {error && (
             <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">
@@ -316,7 +316,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
   if (stage === "preview") {
     return (
-      <div className="min-h-screen bg-[#f5f5f7]">
+      <div className="min-h-screen bg-surface-muted">
         {showDownloadDialog && (
           <DownloadLinkDialog
             dialog={{ title: "下载报告", links: [downloadUrl] }}
@@ -363,7 +363,7 @@ export default function Report({ token, onBalanceRefresh }: ReportPageProps) {
 
   // === input 态 ===
   return (
-    <div className="min-h-screen bg-[#f5f5f7]">
+    <div className="min-h-screen bg-surface-muted">
       <div className="container mx-auto px-4 py-12">
         {error && (
           <div className="mb-6 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-600 border border-red-200">

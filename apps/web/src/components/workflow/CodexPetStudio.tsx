@@ -1557,7 +1557,7 @@ export function CodexPetStudio({
                           onClick={() => setSelectedBaseArtifactId(candidate.id)}
                           className={`overflow-hidden rounded-[13px] border-2 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-white "}`}
                         >
-                          <div className="aspect-[3/2] bg-[#f5f5f7]">
+                          <div className="aspect-[3/2] bg-surface-muted">
                             {url ? <img src={url} alt={`主形象候选 ${index + 1}`} className="size-full object-contain" /> : (
                               <span className="grid size-full place-items-center text-xs text-ink-tertiary">候选 {index + 1} 已生成</span>
                             )}
@@ -1798,9 +1798,9 @@ export function CodexPetStudio({
                             className="overflow-hidden rounded-[10px] border border-[#e7e8ec] bg-white"
                           >
                             {url ? (
-                              <img src={url} alt={codexPetProcessArtifactLabel(artifact)} className="max-h-40 w-full bg-[#f4f4f6] object-contain" />
+                              <img src={url} alt={codexPetProcessArtifactLabel(artifact)} className="max-h-40 w-full bg-surface-muted object-contain" />
                             ) : (
-                              <span className="grid h-20 w-full place-items-center bg-[#f4f4f6] px-2 text-center text-[9px] text-ink-tertiary">无可预览图像</span>
+                              <span className="grid h-20 w-full place-items-center bg-surface-muted px-2 text-center text-[9px] text-ink-tertiary">无可预览图像</span>
                             )}
                             <figcaption className="flex items-center justify-between gap-2 px-2 py-1.5 text-[9px] text-ink-secondary">
                               <span className="min-w-0 truncate font-semibold text-ink-secondary">{codexPetProcessArtifactLabel(artifact)}</span>

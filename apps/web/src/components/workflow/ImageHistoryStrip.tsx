@@ -81,7 +81,7 @@ export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, ac
                     onClick={item.onSelect}
                     aria-pressed={item.selected}
                     title={item.alt}
-                    className={`relative grid h-[72px] w-[72px] flex-none place-items-center overflow-hidden rounded-lg border-2 bg-[#f5f5f7] text-ink-tertiary outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${item.selected ? "border-brand" : "border-transparent"}`}
+                    className={`relative grid h-[72px] w-[72px] flex-none place-items-center overflow-hidden rounded-lg border-2 bg-surface-muted text-ink-tertiary outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${item.selected ? "border-brand" : "border-transparent"}`}
                   >
                     {item.imageUrl ? (
                       <img src={item.imageUrl} alt={item.alt} className="h-full w-full object-cover" loading="lazy" />

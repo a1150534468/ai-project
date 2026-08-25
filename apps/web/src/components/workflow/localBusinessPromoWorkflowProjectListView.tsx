@@ -54,7 +54,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                           ? "bg-[#fff4e5] text-[#9a5a00]"
                           : item.status === "failed"
                             ? "bg-[#fff4f4] text-[#c62828]"
-                            : "bg-[#f5f5f7] text-ink-secondary"
+                            : "bg-surface-muted text-ink-secondary"
                     }`}
                     >
                       {formatLocalBusinessPromoProjectStatus(item.status)}

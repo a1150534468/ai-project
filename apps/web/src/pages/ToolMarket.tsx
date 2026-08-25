@@ -242,7 +242,7 @@ export default function ToolMarket({ token }: ToolMarketProps) {
   };
 
   return (
-    <div className="min-h-full bg-[#f5f7fa] px-4 py-5 lg:px-8 lg:py-7">
+    <div className="min-h-full bg-surface-muted px-4 py-5 lg:px-8 lg:py-7">
       <div className="mx-auto flex max-w-7xl flex-col gap-5">
         <section className="rounded-lg border border-gray-100 bg-white p-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">

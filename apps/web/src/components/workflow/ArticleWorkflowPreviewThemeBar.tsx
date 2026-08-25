@@ -144,7 +144,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
               <button
                 type="button"
                 onClick={props.onReset}
-                className="h-8 rounded-lg px-3 text-xs font-semibold text-ink-secondary hover:bg-[#f5f5f7]"
+                className="h-8 rounded-lg px-3 text-xs font-semibold text-ink-secondary hover:bg-surface-muted"
               >
                 重置
               </button>

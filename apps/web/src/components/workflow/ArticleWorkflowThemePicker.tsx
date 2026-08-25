@@ -126,7 +126,7 @@ function ThemeCard(props: {
       }`}
     >
       {props.placeholder ? (
-        <span className="block rounded-lg bg-[#f5f5f7] p-2" aria-hidden>
+        <span className="block rounded-lg bg-surface-muted p-2" aria-hidden>
           <span className="block h-1.5 w-3/4 rounded-sm bg-[#888780]" />
           <span className="mt-1.5 block h-1 w-full rounded-sm bg-[#1d1d1f] opacity-30" />
           <span className="mt-1 block h-1 w-5/6 rounded-sm bg-[#1d1d1f] opacity-30" />

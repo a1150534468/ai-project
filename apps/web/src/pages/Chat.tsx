@@ -1004,7 +1004,7 @@ export default function Chat({
                           onClick={() => toggleDraftKb(kb.id)}
                           className={`w-full px-3 py-2.5 rounded-lg border text-left flex items-center gap-3 transition-colors ${
                             checked
-                              ? "bg-[#f5f5f7] text-gray-900 border-gray-200"
+                              ? "bg-surface-muted text-gray-900 border-gray-200"
                               : "text-gray-700 border-gray-100"
                           }`}
                         >

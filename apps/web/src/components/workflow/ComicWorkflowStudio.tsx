@@ -296,7 +296,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               </div>
               <div className="flex flex-wrap gap-2">
                 {STAGES.map((item) => (
-                  <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`h-9 rounded-[10px] px-3 text-sm font-semibold ${stage === item.id ? "bg-brand text-white" : "bg-[#f5f5f7] text-ink-secondary "}`}>
+                  <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`h-9 rounded-[10px] px-3 text-sm font-semibold ${stage === item.id ? "bg-brand text-white" : "bg-surface-muted text-ink-secondary "}`}>
                     <Icon icon={item.icon} className="mr-1 inline-block" aria-hidden />{item.label}
                   </button>
                 ))}
@@ -350,7 +350,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                               whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                               transition={spring.smooth}
                             >
-                              <div className="aspect-[4/3] overflow-hidden rounded-[8px] bg-[#f5f5f7]">{asset.thumbnailUrl ? <img src={asset.thumbnailUrl} alt={asset.name} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-ink-tertiary">未生成图片</div>}</div>
+                              <div className="aspect-[4/3] overflow-hidden rounded-[8px] bg-surface-muted">{asset.thumbnailUrl ? <img src={asset.thumbnailUrl} alt={asset.name} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-ink-tertiary">未生成图片</div>}</div>
                               <div className="mt-3 flex items-start justify-between gap-2"><div><p className="font-semibold text-ink">{asset.name}</p><p className="text-xs text-ink-secondary">{asset.type}</p></div><RippleButton type="button" onClick={() => generateAssetImageAction(asset)} className="h-8 rounded-[8px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton></div>
                             </motion.article>
                           </StaggerItem>
@@ -373,7 +373,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                               whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                               transition={spring.smooth}
                             >
-                              <div className="aspect-video overflow-hidden rounded-[8px] bg-[#f5f5f7]">{shot.thumbnailUrl ? <img src={shot.thumbnailUrl} alt={shot.title || `镜头 ${shot.shotNo}`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-ink-tertiary">镜头图</div>}</div>
+                              <div className="aspect-video overflow-hidden rounded-[8px] bg-surface-muted">{shot.thumbnailUrl ? <img src={shot.thumbnailUrl} alt={shot.title || `镜头 ${shot.shotNo}`} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-ink-tertiary">镜头图</div>}</div>
                               <div className="min-w-0"><p className="font-semibold text-ink">镜头 {shot.shotNo} {shot.title}</p><p className="mt-1 line-clamp-3 text-sm leading-6 text-ink-secondary">{shot.description}</p></div>
                               <div className="flex gap-2 md:flex-col"><RippleButton type="button" onClick={() => generateShotImageAction(shot)} className="h-9 rounded-[9px] bg-brand-soft px-3 text-xs font-semibold text-brand-ink">生图</RippleButton><RippleButton type="button" onClick={() => generateVideoAction(shot)} disabled={!shot.imageAssetId} className="h-9 rounded-[9px] border border-brand px-3 text-xs font-semibold text-brand-ink disabled:opacity-40">视频</RippleButton></div>
                             </motion.article>

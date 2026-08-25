@@ -63,7 +63,7 @@ export function TeamCardGrid({
                       <span
                         key={member.name}
                         title={member.name}
-                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#f5f5f7] text-ink-secondary"
+                        className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-surface-muted text-ink-secondary"
                       >
                         <Icon icon="mdi:robot-outline" className="text-base" aria-hidden />
                       </span>

@@ -243,7 +243,7 @@ export function VideoGenerationStudio({
   const kinds: MaterialKind[] = ["image", "video", "audio"];
 
   return (
-    <section className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-3 bg-[#f5f7fa] p-3 xl:grid-cols-[minmax(320px,460px)_minmax(0,1fr)_180px]">
+    <section className="grid min-h-[calc(100vh-4rem)] grid-cols-1 gap-3 bg-surface-muted p-3 xl:grid-cols-[minmax(320px,460px)_minmax(0,1fr)_180px]">
       <aside className="flex flex-col rounded-[14px] border border-hairline-subtle bg-white shadow-[0_12px_34px_rgba(15,23,42,0.045)] xl:max-h-[calc(100vh-5.5rem)]">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
         <div className="mb-3 flex items-center justify-between">

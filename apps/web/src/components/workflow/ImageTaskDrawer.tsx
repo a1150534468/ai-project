@@ -57,7 +57,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                 <p className="text-xs font-semibold text-ink-secondary">任务状态</p>
                 <h2 className="text-base font-semibold text-ink">任务队列</h2>
               </div>
-              <button type="button" onClick={props.onClose} aria-label="关闭任务队列" className="grid h-9 w-9 place-items-center rounded-lg text-ink hover:bg-[#f5f5f7]">
+              <button type="button" onClick={props.onClose} aria-label="关闭任务队列" className="grid h-9 w-9 place-items-center rounded-lg text-ink hover:bg-surface-muted">
                 <Icon icon="mdi:close" className="text-xl" aria-hidden />
               </button>
             </div>

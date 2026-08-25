@@ -66,7 +66,7 @@ export function NovelLibraryPage({
 
       <section className="grid gap-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3"><h2 className="text-xl font-semibold text-ink">我的书目</h2><span className="rounded-full bg-[#eaf1ef] px-2.5 py-1 text-xs font-semibold text-ink-secondary">{visible.length} 本</span></div>
+          <div className="flex items-center gap-3"><h2 className="text-xl font-semibold text-ink">我的书目</h2><span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-secondary">{visible.length} 本</span></div>
           <div className="flex flex-wrap gap-2">
             <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-hairline bg-white px-3 text-sm text-ink-secondary shadow-sm transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
             {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-red-200 bg-white px-3 text-xs font-semibold text-red-600">删除选中 ({selected.length})</button>}
@@ -90,7 +90,7 @@ export function NovelLibraryPage({
                     <div>
                       <div className="flex items-start justify-between gap-3">
                         <button type="button" onClick={() => toggleSelected(project.id)} className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-xs ${checked ? "border-brand bg-brand text-white" : "border-hairline text-transparent"}`} aria-label={`选择${project.title}`}><Icon icon="mdi:check" /></button>
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${project.status === "active" ? "bg-brand-soft text-brand-ink" : "bg-[#f0f2f1] text-ink-secondary"}`}>{project.status === "active" ? "创作中" : project.status}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${project.status === "active" ? "bg-brand-soft text-brand-ink" : "bg-surface-muted text-ink-secondary"}`}>{project.status === "active" ? "创作中" : project.status}</span>
                       </div>
                       <button type="button" onClick={() => onOpenProject(project.id)} className="mt-4 block w-full text-left"><h3 className="truncate text-lg font-semibold text-ink">{project.title}</h3><p className="mt-2 truncate text-sm text-ink-secondary">{project.genre || "未设置题材"}</p></button>
                     </div>
