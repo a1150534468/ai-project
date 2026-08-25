@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import {
-  ARTICLE_WORKFLOW_GALLERY_MODES,
   ARTICLE_WORKFLOW_THEME_MAP,
   ARTICLE_WORKFLOW_THEMES,
   type ArticleWorkflowGalleryMode,

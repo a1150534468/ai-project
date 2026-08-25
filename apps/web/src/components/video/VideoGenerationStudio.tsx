@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import { AnimatePresence, motion } from "motion/react";
-import { RippleButton, Stagger, StaggerItem, msgIn, useToast } from "../../motion";
+import { motion } from "motion/react";
+import { RippleButton, Stagger, StaggerItem, useToast } from "../../motion";
 import { VideoSettingsPopover } from "./VideoSettingsPopover";
 import {
   VIDEO_MATERIAL_LIMITS,

@@ -7,7 +7,7 @@ import {
   updateMemory,
 } from "../../api";
 import { MEMORY_TYPE_ORDER } from "../../memoryGalaxy";
-import type { MemoryDraft, MemoryGalaxyData, MemoryNode, MemoryType } from "../../memoryTypes";
+import type { MemoryDraft, MemoryNode, MemoryType } from "../../memoryTypes";
 
 const MEMORY_REFRESH_INTERVAL_MS = 8_000;
 

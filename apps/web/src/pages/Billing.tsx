@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Icon } from "@iconify/react";
-import { formatBalanceLabel, startPaymentBalancePolling } from "../balanceSync";
+import { startPaymentBalancePolling } from "../balanceSync";
 import {
   topup,
   redeem,

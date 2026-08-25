@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
-import { RippleButton, Stagger, StaggerItem, spring, msgIn } from "../../motion";
+import { RippleButton, Stagger, StaggerItem, spring } from "../../motion";
 import {
   activateComicScriptVersion,
   createComicAsset,

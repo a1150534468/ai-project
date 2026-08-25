@@ -1,6 +1,5 @@
 import type { ArticleWorkflowImageAsset } from "@ai-assistant/article-workflow";
 import type {
-  ArticleWorkflowPricing,
   ArticleWorkflowPricingRow,
   ArticleWorkflowProject,
   ArticleWorkflowProjectSummary,

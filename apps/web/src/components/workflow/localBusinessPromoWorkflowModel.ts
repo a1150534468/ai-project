@@ -7,7 +7,6 @@ import type {
   LocalBusinessPromoMaterialGroup,
   LocalBusinessPromoMaterials,
   LocalBusinessPromoMusicPreset,
-  LocalBusinessPromoNarrationVoice,
   LocalBusinessPromoNarrationVoiceOption,
   LocalBusinessPromoOption,
   LocalBusinessPromoProject,

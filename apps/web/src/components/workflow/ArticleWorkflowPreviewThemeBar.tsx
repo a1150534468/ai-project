@@ -1,7 +1,6 @@
 import { Icon } from "@iconify/react";
 import { useMemo, useState } from "react";
 import {
-  ARTICLE_WORKFLOW_GALLERY_MODES,
   ARTICLE_WORKFLOW_THEME_MAP,
   ARTICLE_WORKFLOW_THEMES,
   type ArticleWorkflowGalleryMode,

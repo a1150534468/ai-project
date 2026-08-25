@@ -1,4 +1,3 @@
-import { Icon } from "@iconify/react";
 import { AnimatePresence } from "motion/react";
 import { useConfirm } from "../components/ConfirmDialog";
 import MemoryDetailPanel from "../components/memory/MemoryDetailPanel";

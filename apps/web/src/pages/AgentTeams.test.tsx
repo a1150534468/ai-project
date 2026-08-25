@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AgentTeamDto, AgentWorkflowRunDto } from "../agentTeamApi";
+import type { AgentWorkflowRunDto } from "../agentTeamApi";
 import { AGENT_TEAM_ACTIVE_RUN_STORAGE_KEY } from "../agentTeamRunState";
 import AgentTeams from "./AgentTeams";
 

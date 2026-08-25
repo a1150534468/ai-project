@@ -19,7 +19,6 @@ import {
   type LocalBusinessPromoProject,
   type LocalBusinessPromoProjectSummary,
   type LocalBusinessPromoRun,
-  type LocalBusinessPromoSettings,
   type WorkflowAudioAsset,
   updateLocalBusinessPromoActiveAudio,
   updateLocalBusinessPromoProject,

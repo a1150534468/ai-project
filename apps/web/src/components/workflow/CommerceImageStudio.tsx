@@ -4,7 +4,7 @@ import { RippleButton } from "../../motion";
 import { InAppSelect } from "../agent-teams/InAppSelect";
 import * as workflowEcomApi from "../../workflowEcomApi";
 import type { WorkflowEcomImageAsset, WorkflowEcomPlatform, WorkflowEcomPlatformId, WorkflowEcomWorkflow } from "../../workflowEcomApi";
-import { helpWriteEcom, getCurrentEcomMainJob, listEcomMainHistory, type EcomHelpWriteField, type EcomMainJob } from "../../workflowEcomMainApi";
+import { helpWriteEcom, getCurrentEcomMainJob, type EcomHelpWriteField, type EcomMainJob } from "../../workflowEcomMainApi";
 import { DownloadLinkDialog, type DownloadDialogState } from "../ui/DownloadLinkDialog";
 import { ECOM_MAX_REFERENCE_COUNT, FALLBACK_PLATFORMS, formatEcomError, readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { EcomWorkflowStudio } from "./EcomWorkflowStudio";
