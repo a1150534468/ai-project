@@ -17,7 +17,7 @@ export function SpendBurst({
         initial={{ opacity: 0, y: 6, scale: 0.9 }}
         animate={{ opacity: [0, 1, 0], y: -40, scale: 1 }}
         transition={{ duration: 1 }}
-        style={{ fontWeight: 800, fontSize: 15, color: "#dc2626" }}
+        style={{ fontWeight: 800, fontSize: 15, color: "rgb(var(--color-danger))" }}
       >
         -{amount}
       </motion.div>

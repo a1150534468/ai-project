@@ -80,7 +80,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
               disabled={props.disabled || busy}
               aria-label={`删除${props.label}`}
               title={`删除${props.label}`}
-              className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-black/65 text-white disabled:opacity-40"
+              className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-scrim/65 text-white disabled:opacity-40"
             >
               <Icon
                 icon={props.isDeleting ? "mdi:loading" : "mdi:close"}
@@ -92,7 +92,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={props.disabled || busy}
-              className="absolute inset-x-1 bottom-1 h-7 rounded-[6px] bg-black/65 text-[11px] font-semibold text-white disabled:opacity-40"
+              className="absolute inset-x-1 bottom-1 h-7 rounded-[6px] bg-scrim/65 text-[11px] font-semibold text-white disabled:opacity-40"
             >
               更换
             </button>
@@ -652,7 +652,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
       </div>
 
       {isTaskDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsTaskDrawerOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-scrim/20" onClick={() => setIsTaskDrawerOpen(false)}>
           <aside
             role="dialog"
             aria-modal="true"

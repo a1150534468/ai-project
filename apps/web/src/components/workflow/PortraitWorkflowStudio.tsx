@@ -357,7 +357,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
             {references.map((reference, index) => (
               <div key={reference.id} className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-hairline-subtle bg-surface-muted">
                 <img src={reference.previewUrl} alt={`人物参考照 ${index + 1}`} className="h-full w-full object-cover" />
-                <button type="button" title="删除参考照" aria-label={`删除参考照 ${index + 1}`} onClick={() => handleDeleteReference(reference)} disabled={deletingReferenceId === reference.id || hasActiveTask} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-100 transition disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100"><Icon icon={deletingReferenceId === reference.id ? "mdi:loading" : "mdi:close"} className={deletingReferenceId === reference.id ? "animate-spin" : ""} aria-hidden /></button>
+                <button type="button" title="删除参考照" aria-label={`删除参考照 ${index + 1}`} onClick={() => handleDeleteReference(reference)} disabled={deletingReferenceId === reference.id || hasActiveTask} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-scrim/60 text-white opacity-100 transition disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100"><Icon icon={deletingReferenceId === reference.id ? "mdi:loading" : "mdi:close"} className={deletingReferenceId === reference.id ? "animate-spin" : ""} aria-hidden /></button>
               </div>
             ))}
             {references.length < MAX_REFERENCE_COUNT && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-hairline bg-surface-subtle text-ink-secondary disabled:opacity-50" aria-label="上传人物参考照"><Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={`text-2xl ${isUploading ? "animate-spin" : ""}`} aria-hidden /><span className="mt-1 text-[11px]">{isUploading ? "上传中" : "添加"}</span></button>}
@@ -481,7 +481,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
       </div>
 
       {isTaskDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsTaskDrawerOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-scrim/20" onClick={() => setIsTaskDrawerOpen(false)}>
           <aside role="dialog" aria-modal="true" aria-label="形象照任务队列" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4"><div><p className="text-xs font-semibold text-ink-secondary">任务状态</p><h2 className="text-base font-semibold text-ink">形象照任务</h2></div><button type="button" onClick={() => setIsTaskDrawerOpen(false)} aria-label="关闭形象照任务队列" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button></div>
             <div className="min-h-0 flex-1 overflow-y-auto p-3">

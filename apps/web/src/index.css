@@ -215,6 +215,19 @@ html[data-theme="dark"] {
   .card-body {
     @apply p-6;
   }
+
+  /*
+   * 透明底棋盘格：图片预览用它表示透明像素（桌宠贴图、生图结果）。
+   * 原先是三份逐字重复的 `bg-[linear-gradient(45deg,#eee_25%,…)]`，#eee 在暗色下是一床亮被子。
+   * 格子大小仍由组件上的 `bg-[length:12px_12px]` 控制，这里只管颜色和图案。
+   */
+  .bg-checkerboard {
+    background-image:
+      linear-gradient(45deg, rgb(var(--color-hairline-subtle)) 25%, transparent 25%),
+      linear-gradient(-45deg, rgb(var(--color-hairline-subtle)) 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, rgb(var(--color-hairline-subtle)) 75%),
+      linear-gradient(-45deg, transparent 75%, rgb(var(--color-hairline-subtle)) 75%);
+  }
 }
 
 /* Apple-style shell chrome and the day/night switch. */

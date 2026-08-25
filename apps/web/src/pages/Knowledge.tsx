@@ -701,7 +701,7 @@ export default function Knowledge({ token, onViewChange, initialDocumentId, onOp
                               <div className="rounded-lg border border-brand/10 bg-surface p-3">
                                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                                   {petPreviewUrl ? (
-                                    <img src={petPreviewUrl} alt={`${doc.name} 桌宠预览`} className="h-24 w-24 rounded-lg border border-hairline-subtle bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:16px_16px] object-contain [image-rendering:auto]" />
+                                    <img src={petPreviewUrl} alt={`${doc.name} 桌宠预览`} className="h-24 w-24 rounded-lg border border-hairline-subtle bg-checkerboard bg-[length:16px_16px] object-contain [image-rendering:auto]" />
                                   ) : (
                                     <div className="grid h-24 w-24 place-items-center rounded-lg bg-surface-subtle text-3xl text-ink-tertiary"><Icon icon="mdi:egg-easter" aria-hidden /></div>
                                   )}

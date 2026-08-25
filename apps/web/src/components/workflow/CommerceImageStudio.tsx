@@ -237,7 +237,7 @@ export function CommerceImageStudio({
       </div>
 
       {isOverviewOpen && (
-        <div className="fixed inset-0 z-50 bg-black/20" onClick={() => setIsOverviewOpen(false)}>
+        <div className="fixed inset-0 z-50 bg-scrim/20" onClick={() => setIsOverviewOpen(false)}>
           <aside role="dialog" aria-modal="true" aria-label="电商图生成概览" onClick={(event) => event.stopPropagation()} className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]">
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div><p className="text-xs font-semibold text-ink-secondary">当前配置</p><h2 className="text-base font-semibold text-ink">生成概览</h2></div>

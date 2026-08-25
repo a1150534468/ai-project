@@ -15,6 +15,15 @@
 三元组格式是为了让透明度写法直接可用：`text-ink/70`、`bg-danger/10`、`border-hairline/60`。
 手写 CSS（`index.css` 内部、内联 style）用派生别名 `var(--apple-ink)` 等，值同源。
 
+暗色模式的实现方式：**只翻 `html[data-theme="dark"]` 里的三元组**。P2.3 之前是另一套 ——
+`index.css` 里有一份 60 多条的白名单（`html[data-theme="dark"] .bg-white { … !important }`），
+靠逐个字面色值改写伪造暗色。那份白名单有两个结构性缺陷，也是这次收敛的直接动因：
+`[class~="bg-white"]` 只匹配裸类名，`hover:` / `disabled:` / `group-hover:` 变体从来没被覆盖；
+以及任何新写的字面色值默认就在暗色下坏掉，除非有人记得回去加一行。现在白名单已清空。
+
+**不要新增 `dark:` 变体。** 全站 0 处 `dark:`，主题切换完全由三元组承担；
+需要在暗色下换个值，就去 `html[data-theme="dark"]` 改 token，而不是在组件里写第二套类。
+
 ### Palette
 
 | Role | Token | Tailwind 类 | Light | Dark | Usage |
@@ -43,7 +52,7 @@
 | Info/ink | `--color-info-ink` | `info-ink` | `#1d4ed8` | `#7ab8ff` | `bg-info/10` 上的状态文案 |
 | Success | `--color-success` | `success` | `#16a34a` | `#30d158` | 完成、成功反馈 |
 | Success/ink | `--color-success-ink` | `success-ink` | `#15803d` | `#6ee7a0` | `bg-success/10` 上的完成文案 |
-| Scrim | `--color-scrim` | `scrim` | `#101615` | 同浅色 | 模态遮罩，用 `bg-scrim/25`~`/55` |
+| Scrim | `--color-scrim` | `scrim` | `#101615` | 同浅色 | 压暗层：模态/抽屉遮罩 `bg-scrim/20`~`/30`，图片上的角标 `bg-scrim/55`~`/70` |
 | Console | `--color-console` | `console` | `#111418` | 同浅色 | 固定深色面板：流式输出、脚本预览、视频信箱底 |
 | Console/ink | `--color-console-ink` | `console-ink` | `#d7e0e8` | 同浅色 | 深色面板上的字与描边（`/70` 次要、`/15` 描边） |
 
@@ -104,8 +113,8 @@
 | `surface-muted` | `#f5f5f7` `#f5f7fa` `#eef2f0` `#f5f7f6` `#f1f3f2` |
 | `surface-inverse` | `#1d1d1f` `#101615` `#111418` `#20252b`（作 bg/border 用时） |
 
-归并依据是 `index.css` 里那份 `html[data-theme="dark"]` 白名单 —— 它记录了每个旧色值当初被当作哪个角色，
-是暗色行为的既有真相，不是我重新分类的。两处是按亮度补拆的：描边以 `#e0e0e0`（luma 224）为界拆成
+归并依据是 `index.css` 里那份已被删掉的 `html[data-theme="dark"]` 白名单 —— 它记录了每个旧色值当初被当作哪个角色，
+是暗色行为的既有真相，不是我重新分类的（要考古看 P2.3 之前的 `index.css`）。两处是按亮度补拆的：描边以 `#e0e0e0`（luma 224）为界拆成
 `hairline` / `hairline-subtle`，近白面把纯白留给 `surface`、带色偏的归 `surface-subtle`。
 这两拆在暗色下同值，所以不改变任何既有表现。
 
@@ -155,8 +164,15 @@
 
   判断标准：**它是不是在表达某个语义角色**。是（文字/描边/面/状态）就必须用 token；
   纯装饰、且两种主题下都该保持原样的一次性视觉，才进这份白名单。
+- `text-white` / `bg-black` 是允许的字面色，但只限两种位置：
+  **固定填充上的白字**（`bg-brand`、`bg-danger`、`bg-scrim/65` 上的文字与图标，共 143 处 `text-white`），
+  以及 **`<video>` 的信箱底**（3 处 `bg-black`，视频信箱要真黑，不能用 `#101615` 的 `scrim`）。
+  只要那块底色本身会跟主题翻（浅色下深、暗色下浅），就不能写 `text-white` —— 用 `surface-inverse` + `ink-inverse`。
+- 需要压暗背后内容时一律 `bg-scrim/NN`，不写 `bg-black/NN`。透明底棋盘格用 `index.css` 的 `.bg-checkerboard`，
+  不要再逐处复制那四条 `linear-gradient`。
 - 新增颜色必须先写入本文件、再落到 `index.css` 的 `--color-*` 与 `tailwind.config.js`，最后才进组件。
 - 暗色值与浅色值必须同时给出。只给浅色的色值等于在暗色模式下坏掉。
+  内联 `style` 同样受这条约束：写 `rgb(var(--color-danger))` 或 `var(--apple-ink-secondary)`，别写 `#dc2626`。
 - 记忆管理页优先使用表格、筛选条和右侧详情，不使用装饰性可视化背景。
 - 记忆类型色统一来自 `apps/web/src/components/memory/memoryStyles.ts`，组件不得各自复制色板。
 

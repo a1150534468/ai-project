@@ -60,7 +60,7 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5">
             {/* 临时（套餐） */}
-            <div className="rounded-xl border p-3" style={{ borderColor: "#cbeee8", background: "#f5fbfa" }}>
+            <div className="rounded-xl border border-brand/20 bg-brand-soft/40 p-3">
               <p className="text-[11px] text-ink-secondary font-medium flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-brand" />临时算力点 · 套餐</p>
               <p className="text-xl font-bold text-ink mt-1">
                 {detail ? detail.membershipPoints.toLocaleString() : "—"} <span className="text-[11px] text-ink-tertiary font-medium">剩余</span>

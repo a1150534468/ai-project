@@ -154,7 +154,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
               <motion.button
                 type="button"
                 aria-label="关闭记忆详情"
-                className="fixed inset-0 z-30 bg-black/20 transition-opacity duration-200 xl:hidden"
+                className="fixed inset-0 z-30 bg-scrim/20 transition-opacity duration-200 xl:hidden"
                 onClick={() => setSelectedId(null)}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

@@ -1354,7 +1354,7 @@ export function CodexPetStudio({
                             aria-label={`移除参考图 ${asset.name ?? asset.id}`}
                             disabled={interactionLocked}
                             onClick={() => updateDraft("referenceAssets", draft.referenceAssets.filter((item) => item.id !== asset.id))}
-                            className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-black/65 text-white opacity-90 transition "
+                            className="absolute right-1 top-1 grid size-6 place-items-center rounded-full bg-scrim/65 text-white opacity-90 transition "
                           >
                             <Icon icon="mdi:close" aria-hidden />
                           </button>
@@ -1651,7 +1651,7 @@ export function CodexPetStudio({
                           data-testid={`codex-pet-animation-${state.id}`}
                           className="overflow-hidden rounded-[10px] border border-hairline-subtle bg-surface"
                         >
-                          <div className="aspect-[3/2] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:12px_12px]">
+                          <div className="aspect-[3/2] bg-checkerboard bg-[length:12px_12px]">
                             {url ? (
                               <img src={url} alt={`${state.label}动画预览`} className="size-full object-contain" />
                             ) : (
@@ -1681,7 +1681,7 @@ export function CodexPetStudio({
                       {showActualSize ? "适应窗口" : "1:1 实际尺寸"}
                     </button>
                   </div>
-                  <div className={`overflow-auto rounded-[12px] border border-hairline-subtle bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:20px_20px] ${showActualSize ? "max-h-[560px]" : "p-3"}`}>
+                  <div className={`overflow-auto rounded-[12px] border border-hairline-subtle bg-checkerboard bg-[length:20px_20px] ${showActualSize ? "max-h-[560px]" : "p-3"}`}>
                     {codexPetArtifactUrl(spritesheetArtifact) ? (
                       <img
                         src={codexPetArtifactUrl(spritesheetArtifact)}

@@ -372,7 +372,7 @@ export function VideoGenerationStudio({
 
         {confirmOpen && estimate && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 p-4"
             role="dialog"
             aria-modal="true"
             onClick={() => setConfirmOpen(false)}
@@ -508,7 +508,7 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
     }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 p-4" role="dialog" aria-modal="true" onClick={onClose}>
       <div className="w-full max-w-[440px] rounded-[16px] bg-surface p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
         <h3 className="text-[15px] font-semibold text-ink">下载视频</h3>
         <p className="mt-2 text-[13px] leading-6 text-ink-secondary">复制下方链接，在浏览器地址栏打开即可下载视频。</p>

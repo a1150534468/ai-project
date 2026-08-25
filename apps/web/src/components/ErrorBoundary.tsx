@@ -26,9 +26,9 @@ export default class ErrorBoundary extends Component<Props, State> {
     const { error } = this.state;
     if (!error) return this.props.children;
     return (
-      <div style={{ padding: 24, fontFamily: "system-ui, sans-serif", color: "#b91c1c" }}>
+      <div style={{ padding: 24, fontFamily: "system-ui, sans-serif", color: "rgb(var(--color-danger-ink))" }}>
         <h2 style={{ marginBottom: 8 }}>页面出错了</h2>
-        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "#374151" }}>
+        <pre style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "var(--apple-ink-secondary)" }}>
           {error.message}
         </pre>
         <button

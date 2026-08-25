@@ -127,7 +127,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
     <AnimatePresence>
       {props.open && (
         <motion.div
-          className="fixed inset-0 z-50 bg-black/20 xl:hidden"
+          className="fixed inset-0 z-50 bg-scrim/20 xl:hidden"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

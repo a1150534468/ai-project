@@ -13,7 +13,7 @@ export function DownloadOverlayButton(props: DownloadOverlayButtonProps) {
     <button
       type="button"
       onClick={props.onClick}
-      className={`absolute flex items-center gap-1 rounded-lg bg-black/55 px-2 py-1 text-xs font-semibold text-white transition hover:bg-black/70 ${props.positionClassName ?? "right-2 top-2"}`}
+      className={`absolute flex items-center gap-1 rounded-lg bg-scrim/55 px-2 py-1 text-xs font-semibold text-white transition hover:bg-scrim/70 ${props.positionClassName ?? "right-2 top-2"}`}
     >
       <Icon icon="mdi:download" aria-hidden />
       {props.label ?? "下载原图"}

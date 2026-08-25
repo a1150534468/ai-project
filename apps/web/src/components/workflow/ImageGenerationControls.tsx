@@ -132,13 +132,13 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
                   <div key={image.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-hairline bg-surface-muted">
                     <img src={image.thumbnailUrl || image.originalUrl} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
                     {locked ? (
-                      <span className="absolute inset-x-0 bottom-0 bg-black/65 py-0.5 text-center text-[10px] font-semibold text-white">来源图</span>
+                      <span className="absolute inset-x-0 bottom-0 bg-scrim/65 py-0.5 text-center text-[10px] font-semibold text-white">来源图</span>
                     ) : (
                       <button
                         type="button"
                         aria-label={`移除参考图 ${index + 1}`}
                         onClick={() => props.onRemoveReference(image.id)}
-                        className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/65 text-white"
+                        className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-scrim/65 text-white"
                       >
                         <Icon icon="mdi:close" className="text-sm" aria-hidden />
                       </button>

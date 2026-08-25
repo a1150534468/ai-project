@@ -82,7 +82,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
               <span className="absolute left-2 top-2 rounded-full bg-brand px-2 py-1 text-[11px] font-semibold text-white">当前版本</span>
             )}
             {props.baseImage?.id === image.id && props.isGenerating && (
-              <span className="absolute bottom-2 left-2 rounded-full bg-black/70 px-2 py-1 text-[11px] font-semibold text-white">原图保留中</span>
+              <span className="absolute bottom-2 left-2 rounded-full bg-scrim/70 px-2 py-1 text-[11px] font-semibold text-white">原图保留中</span>
             )}
           </button>
         )}

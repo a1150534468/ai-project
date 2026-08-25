@@ -286,7 +286,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
   const active = stepIndexOf(stage);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-scrim/30 p-4" role="dialog" aria-modal="true">
       <div className="flex h-[760px] max-h-[90vh] w-full max-w-[1040px] overflow-hidden rounded-[18px] bg-surface shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
         <StepRail active={active} />
         <div className="flex min-w-0 flex-1 flex-col">
@@ -315,8 +315,8 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                               <Icon icon={m.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:music-note-outline"} className="text-2xl" aria-hidden />
                             </span>
                           )}
-                          <span className="absolute left-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-black/55 text-[11px] font-semibold text-white">{i + 1}</span>
-                          {m.durationSec > 0 && <span className="absolute bottom-1.5 right-1.5 rounded bg-black/55 px-1 text-[10px] text-white">{Math.ceil(m.durationSec)}s</span>}
+                          <span className="absolute left-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-scrim/55 text-[11px] font-semibold text-white">{i + 1}</span>
+                          {m.durationSec > 0 && <span className="absolute bottom-1.5 right-1.5 rounded bg-scrim/55 px-1 text-[10px] text-white">{Math.ceil(m.durationSec)}s</span>}
                         </div>
                       ))}
                     </div>
