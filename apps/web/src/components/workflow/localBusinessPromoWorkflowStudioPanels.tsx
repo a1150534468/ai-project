@@ -40,7 +40,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
           <div className="mt-1 flex items-center gap-2">
             <h2 className="truncate text-lg font-semibold text-ink">{projectTitle(project)}</h2>
             <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-medium text-ink-secondary">{derived.selectedProjectStatus}</span>
-            {derived.dirty && <span className="rounded-full bg-[#fff4e5] px-2 py-0.5 text-[11px] font-medium text-[#9a5a00]">未保存</span>}
+            {derived.dirty && <span className="rounded-full bg-warning/10 px-2 py-0.5 text-[11px] font-medium text-warning">未保存</span>}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -638,10 +638,10 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                               : ""}
                         </p>
                       )}
-                      {shot.error && <p className="mt-1 text-[11px] text-[#c62828]">{shot.error}</p>}
+                      {shot.error && <p className="mt-1 text-[11px] text-danger">{shot.error}</p>}
                     </div>
                   ))}
-                  {latestRun.error && <p className="text-[12px] text-[#c62828]">{latestRun.error}</p>}
+                  {latestRun.error && <p className="text-[12px] text-danger">{latestRun.error}</p>}
                 </div>
               ) : (
                 <p className="mt-3 text-[12px] text-ink-secondary">
@@ -672,7 +672,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                         <Icon icon="mdi:open-in-new" aria-hidden />
                       </a>
                     )}
-                    {run.error && <p className="mt-1 text-[11px] text-[#c62828]">{run.error}</p>}
+                    {run.error && <p className="mt-1 text-[11px] text-danger">{run.error}</p>}
                   </div>
                 )) : (
                   <p className="text-[12px] text-ink-secondary">暂无生成记录。</p>
@@ -681,7 +681,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
             </div>
 
             {(state.notice || state.error) && (
-              <div className={`mt-4 rounded-[10px] px-3 py-2 text-[12px] ${state.error ? "bg-[#fff4f4] text-[#c62828]" : "bg-brand-soft text-brand-ink"}`}>
+              <div className={`mt-4 rounded-[10px] px-3 py-2 text-[12px] ${state.error ? "bg-danger/10 text-danger" : "bg-brand-soft text-brand-ink"}`}>
                 {state.error || state.notice}
               </div>
             )}

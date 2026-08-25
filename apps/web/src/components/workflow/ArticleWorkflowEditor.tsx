@@ -226,12 +226,12 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
                 {formatArticleWorkflowStatus(props.project.status)}
               </span>
               {props.saving && (
-                <span className="rounded-md bg-[#eef4ff] px-2 py-1 text-[11px] font-semibold text-[#2d63c8]">
+                <span className="rounded-md bg-info/10 px-2 py-1 text-[11px] font-semibold text-info">
                   保存中
                 </span>
               )}
               {!props.saving && props.dirty && (
-                <span className="rounded-md bg-[#fff4e8] px-2 py-1 text-[11px] font-semibold text-[#c26a12]">
+                <span className="rounded-md bg-warning/10 px-2 py-1 text-[11px] font-semibold text-warning">
                   待保存
                 </span>
               )}

@@ -41,7 +41,7 @@ export function ArticleWorkflowPlatformTabs(props: ArticleWorkflowPlatformTabsPr
               <Icon icon="mdi:alert-circle-outline" className="shrink-0 text-red-500" aria-label="生成失败" />
             )}
             {!busy && props.dirtyPlatforms.includes(row.platform) && (
-              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#e08b1c]" aria-label="待保存" />
+              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" aria-label="待保存" />
             )}
           </button>
         );

@@ -127,7 +127,7 @@ export function ScheduledTaskStudio({ token }: Props) {
             <span className="text-ink-secondary">分（{DEFAULT_TZ}）</span>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink"><input type="checkbox" checked={oneShot} onChange={(e) => setOneShot(e.target.checked)} /> 仅执行一次</label>
-          {err && <p className="text-sm text-[#d4380d]">{err}</p>}
+          {err && <p className="text-sm text-danger">{err}</p>}
           <button className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand px-4 py-2 font-medium text-white transition disabled:opacity-40" onClick={() => void submit()}>
             <Icon icon="mdi:plus" /> 创建
           </button>
@@ -144,7 +144,7 @@ export function ScheduledTaskStudio({ token }: Props) {
               </div>
               <div className="flex items-center gap-2">
                 <button className="text-xs text-ink-secondary transition " onClick={() => void toggle(t)}>{t.enabled ? "暂停" : "启用"}</button>
-                <button className="text-xs text-[#d4380d] transition " onClick={() => void remove(t.id)}>删除</button>
+                <button className="text-xs text-danger transition " onClick={() => void remove(t.id)}>删除</button>
                 <button className="text-xs text-brand transition " onClick={() => void listScheduledTaskRuns(token, t.id).then((r) => setOpenRuns((m) => ({ ...m, [t.id]: r }))).catch((e) => setErr(e instanceof Error ? e.message : "获取运行记录失败"))}>记录</button>
               </div>
             </div>

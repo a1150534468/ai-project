@@ -51,9 +51,9 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                       item.status === "completed"
                         ? "bg-brand-soft text-brand-ink"
                         : item.status === "generating"
-                          ? "bg-[#fff4e5] text-[#9a5a00]"
+                          ? "bg-warning/10 text-warning"
                           : item.status === "failed"
-                            ? "bg-[#fff4f4] text-[#c62828]"
+                            ? "bg-danger/10 text-danger"
                             : "bg-surface-muted text-ink-secondary"
                     }`}
                     >
@@ -89,7 +89,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
           </div>
         )}
       </div>
-      {state.error && <p className="rounded-[10px] bg-[#fff4f4] px-3 py-2 text-sm text-[#c62828]">{state.error}</p>}
+      {state.error && <p className="rounded-[10px] bg-danger/10 px-3 py-2 text-sm text-danger">{state.error}</p>}
       {state.notice && !state.error && <p className="rounded-[10px] bg-brand-soft px-3 py-2 text-sm text-brand-ink">{state.notice}</p>}
     </section>
   );
