@@ -10,7 +10,6 @@ export const MEMORY_TYPE_ORDER = [
 
 type MemoryTypeMeta = {
   readonly label: string;
-  readonly colorClass: string;
 };
 
 export type MemoryNodeSize = "sm" | "md" | "lg";
@@ -23,12 +22,14 @@ export type PositionedMemoryNode = MemoryNode & {
 
 export type LayoutMemoryNode = PositionedMemoryNode;
 
+// 只放文案。记忆类型的颜色唯一来源是 components/memory/memoryStyles.ts，
+// 规范见 docs/design-system.md 的 Memory Semantic Palette。
 const MEMORY_TYPE_META = {
-  CORE: { label: "核心记忆", colorClass: "bg-amber-400/15 text-amber-200 ring-amber-300/40" },
-  PERMANENT: { label: "常驻记忆", colorClass: "bg-blue-400/15 text-blue-200 ring-blue-300/40" },
-  TEMPORARY: { label: "临时记忆", colorClass: "bg-brand/15 text-brand-ink ring-brand/30" },
-  KNOWLEDGE: { label: "知识星云", colorClass: "bg-violet-400/15 text-violet-200 ring-violet-300/40" },
-  OTHER: { label: "其他记忆", colorClass: "bg-gray-400/15 text-gray-200 ring-gray-300/40" },
+  CORE: { label: "核心记忆" },
+  PERMANENT: { label: "常驻记忆" },
+  TEMPORARY: { label: "临时记忆" },
+  KNOWLEDGE: { label: "知识星云" },
+  OTHER: { label: "其他记忆" },
 } as const satisfies Record<MemoryType, MemoryTypeMeta>;
 
 function clamp(value: number, min: number, max: number): number {

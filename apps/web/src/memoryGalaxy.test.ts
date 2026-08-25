@@ -99,12 +99,12 @@ describe("memoryGalaxy helpers", () => {
     expect(getMinimumPairDistance(laidOut)).toBeGreaterThanOrEqual(24);
   });
 
-  it("getMemoryTypeMeta maps labels and classes", () => {
+  it("getMemoryTypeMeta maps labels", () => {
     const core = getMemoryTypeMeta("CORE");
     const other = getMemoryTypeMeta("OTHER");
 
     expect(core.label).toBe("核心记忆");
-    expect(other.colorClass).toContain("gray");
+    expect(other.label).toBe("其他记忆");
   });
 
   it("fallbackTitle returns compact text when title is empty", () => {
