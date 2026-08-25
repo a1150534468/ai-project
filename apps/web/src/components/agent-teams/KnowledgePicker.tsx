@@ -71,7 +71,7 @@ export function KnowledgePicker({
         className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border px-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 ${
           attachAllOwn || selectedKbIds.length > 0
             ? "border-brand/20 bg-brand-soft text-brand-ink"
-            : "border-hairline bg-[#f7faf9] text-ink-secondary "
+            : "border-hairline bg-surface-subtle text-ink-secondary "
         }`}
       >
         <Icon icon="mdi:database-search-outline" className="flex-none text-lg" aria-hidden />

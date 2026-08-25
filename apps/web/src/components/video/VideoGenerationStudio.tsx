@@ -129,7 +129,7 @@ function Dropdown({ value, choices, onSelect, ariaLabel, compact, wideMenu }: {
                 key={c.value}
                 type="button"
                 onClick={() => { onSelect(c.value); setOpen(false); }}
-                className={`flex w-full items-center gap-2 rounded-[9px] px-2.5 py-2 text-left transition ${on ? "bg-[#f6f6f8]" : ""}`}
+                className={`flex w-full items-center gap-2 rounded-[9px] px-2.5 py-2 text-left transition ${on ? "bg-surface-subtle" : ""}`}
               >
                 <span className="min-w-0 flex-1">
                   <span className={`block truncate text-sm ${on ? "font-semibold text-ink" : "text-ink"}`}>{c.label}</span>
@@ -262,7 +262,7 @@ export function VideoGenerationStudio({
           onDragLeave={(event) => { event.preventDefault(); if (event.currentTarget === event.target) setDragActive(false); }}
           onDrop={(event) => { event.preventDefault(); handleDropFiles(event.dataTransfer.files); }}
           className={`flex cursor-pointer flex-col items-center gap-1.5 rounded-[13px] border-[1.5px] border-dashed p-4 text-center transition ${
-            dragActive ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-[#f6f6f8] "
+            dragActive ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-surface-subtle "
           }`}
         >
           <span className="grid h-8 w-8 place-items-center rounded-[9px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.07)]">
@@ -280,7 +280,7 @@ export function VideoGenerationStudio({
           {kinds.map((k) => {
             const full = materialCounts[k] >= VIDEO_MATERIAL_LIMITS[k];
             return (
-              <div key={k} className="rounded-[9px] bg-[#f6f6f8] px-2 py-1.5">
+              <div key={k} className="rounded-[9px] bg-surface-subtle px-2 py-1.5">
                 <span className="text-[13px] font-semibold text-ink">{materialCounts[k]}<span className={full ? "text-ink-tertiary" : "text-ink-tertiary"}> / {VIDEO_MATERIAL_LIMITS[k]}</span></span>
                 <span className="block text-[11px] text-ink-secondary">{KIND_META[k].label}</span>
               </div>
@@ -412,7 +412,7 @@ export function VideoGenerationStudio({
           <span>预览</span>
           <span className="border-b-2 border-[#1d1d1f] py-3">收藏</span>
         </div>
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#fafafa]">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-subtle">
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5">
             {displayedVideo ? (
               <video key={displayedVideo.id} src={displayedVideo.originalUrl} controls className="max-h-full max-w-full rounded-[10px] bg-black object-contain" />
@@ -458,7 +458,7 @@ export function VideoGenerationStudio({
                 <StaggerItem key={task.id}>
                   <motion.div
                     onClick={() => setSelected(task.requestId)}
-                    className={`cursor-pointer rounded-[10px] border p-3 transition ${selected === task.requestId ? "border-[#1d1d1f] bg-[#fafafa]" : "border-hairline-subtle"}`}
+                    className={`cursor-pointer rounded-[10px] border p-3 transition ${selected === task.requestId ? "border-[#1d1d1f] bg-surface-subtle" : "border-hairline-subtle"}`}
                     layout
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -481,7 +481,7 @@ export function VideoGenerationStudio({
               ))}
             </Stagger>
           ) : (
-            <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-ink-tertiary">暂无任务</p>
+            <p className="rounded-[10px] bg-surface-subtle px-3 py-8 text-center text-xs text-ink-tertiary">暂无任务</p>
           )}
         </div>
       </aside>
@@ -512,7 +512,7 @@ function DownloadModal({ url, onClose }: { url: string; onClose: () => void }) {
       <div className="w-full max-w-[440px] rounded-[16px] bg-white p-5 shadow-[0_20px_60px_rgba(0,0,0,0.25)]" onClick={(event) => event.stopPropagation()}>
         <h3 className="text-[15px] font-semibold text-ink">下载视频</h3>
         <p className="mt-2 text-[13px] leading-6 text-ink-secondary">复制下方链接，在浏览器地址栏打开即可下载视频。</p>
-        <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-[#fafafa] p-2">
+        <div className="mt-3 flex items-center gap-2 rounded-[8px] border border-hairline-subtle bg-surface-subtle p-2">
           <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} className="min-w-0 flex-1 rounded-none border-0 bg-transparent px-1 text-[12px] text-ink outline-none" />
           <button type="button" onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-[8px] bg-[#1d1d1f] px-3 py-2 text-[12px] font-semibold text-white transition ">
             <Icon icon={copied ? "mdi:check" : "mdi:content-copy"} className="text-sm" aria-hidden />

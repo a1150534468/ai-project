@@ -224,7 +224,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
         )}
 
         {!props.hideProductForm && (
-          <div className="mt-4 rounded-lg border border-hairline-subtle bg-[#f7faf9] p-3">
+          <div className="mt-4 rounded-lg border border-hairline-subtle bg-surface-subtle p-3">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-ink">参考图 ({props.referenceAssets.length + props.remoteReferenceCount}/{ECOM_MAX_REFERENCE_COUNT})</p>
               <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-lg border border-dashed border-hairline px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:text-ink-tertiary">
@@ -339,7 +339,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                 <StaggerItem key={index}>
                   <motion.article
                     layout
-                    className="rounded-lg border border-hairline-subtle bg-[#f7faf9] p-3"
+                    className="rounded-lg border border-hairline-subtle bg-surface-subtle p-3"
                     whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                     transition={spring.smooth}
                   >
@@ -404,7 +404,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                 </div>
               )}
               {props.stitchedAsset && (
-                <div className="grid gap-3 rounded-lg border border-hairline-subtle bg-[#f7faf9] p-3">
+                <div className="grid gap-3 rounded-lg border border-hairline-subtle bg-surface-subtle p-3">
                   <div className="group relative">
                     <img src={props.stitchedAsset.thumbnailUrl || props.stitchedAsset.originalUrl} alt="已保存长图预览" className="max-h-[480px] w-full rounded-lg border border-hairline object-contain" />
                     {props.stitchedAsset.originalUrl && props.onDownloadImage && (
@@ -419,7 +419,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               )}
             </div>
           ) : (
-            <div className="mt-4 rounded-lg border border-dashed border-hairline bg-[#f7faf9] px-4 py-6 text-sm text-ink-tertiary">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
+            <div className="mt-4 rounded-lg border border-dashed border-hairline bg-surface-subtle px-4 py-6 text-sm text-ink-tertiary">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
           )}
         </section>
 

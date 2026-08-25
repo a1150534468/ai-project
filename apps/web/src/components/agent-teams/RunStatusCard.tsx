@@ -49,7 +49,7 @@ export function RunStatusCard({ run }: RunStatusCardProps) {
       <p className="mb-3 text-sm font-semibold text-ink">任务状态</p>
       <div className="grid grid-cols-2 gap-2">
         {metrics.map((metric) => (
-          <div key={metric.label} className="flex items-center gap-2.5 rounded-[10px] bg-[#f7f7f9] px-3 py-2.5">
+          <div key={metric.label} className="flex items-center gap-2.5 rounded-[10px] bg-surface-subtle px-3 py-2.5">
             <Icon icon={metric.icon} className="flex-none text-base text-ink-secondary" aria-hidden />
             <div className="min-w-0">
               <p className="text-[11px] text-ink-tertiary">{metric.label}</p>

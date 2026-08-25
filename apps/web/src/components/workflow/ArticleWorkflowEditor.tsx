@@ -136,7 +136,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             value={props.summaryDraft}
             onChange={(event) => props.onSummaryChange(event.target.value)}
             rows={2}
-            className="w-full resize-none rounded-lg border border-hairline bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
+            className="w-full resize-none rounded-lg border border-hairline bg-surface-subtle px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
             placeholder="输入摘要"
           />
         )}
@@ -164,7 +164,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   );
 
   const previewContent = captionPlatform ? (
-    <section className="min-h-[640px] bg-[#f7f8fa] px-4 py-5 sm:px-6">
+    <section className="min-h-[640px] bg-surface-subtle px-4 py-5 sm:px-6">
       <div className="mx-auto mb-4 flex max-w-[760px] justify-end">
         <ArticleWorkflowPreviewScaleToggle scale={previewScale} onChange={setPreviewScale} />
       </div>
@@ -217,7 +217,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
   );
 
   return (
-    <section className="flex min-h-full flex-col bg-[#f7f8fa]">
+    <section className="flex min-h-full flex-col bg-surface-subtle">
       <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-[#e5e7eb] bg-white/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="hidden min-w-0 sm:block">
@@ -332,7 +332,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             {editorHeader}
             {editorBody}
           </div>
-          <div ref={previewScrollRef} className="min-h-0 overflow-y-auto bg-[#f7f8fa]">
+          <div ref={previewScrollRef} className="min-h-0 overflow-y-auto bg-surface-subtle">
             {previewContent}
           </div>
         </div>

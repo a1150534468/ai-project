@@ -98,7 +98,7 @@ export function TaskComposer({
         {attachments.length > 0 && (
           <div className="mb-3 flex flex-wrap gap-2 px-1">
             {attachments.map((attachment) => (
-              <div key={attachment.id} className="flex max-w-full items-center gap-2 rounded-[10px] bg-[#f7faf9] px-2.5 py-2">
+              <div key={attachment.id} className="flex max-w-full items-center gap-2 rounded-[10px] bg-surface-subtle px-2.5 py-2">
                 {attachment.previewUrl ? (
                   <img src={attachment.previewUrl} alt="" className="h-8 w-8 flex-none rounded-[8px] object-cover" />
                 ) : (

@@ -22,7 +22,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
           <img src={image.originalUrl} alt={`${label} ${image.prompt}`} className="max-h-[56vh] w-full object-contain" />
         </div>
       ) : (
-        <div className="grid min-h-[300px] place-items-center rounded-lg border border-dashed border-hairline bg-[#f7f8fa] p-6 text-center text-sm font-semibold text-ink-secondary">
+        <div className="grid min-h-[300px] place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle p-6 text-center text-sm font-semibold text-ink-secondary">
           <span><Icon icon="mdi:image-off-outline" className="mx-auto mb-2 text-3xl" aria-hidden />{missingText}</span>
         </div>
       )}

@@ -109,7 +109,7 @@ function WorkflowSteps({ run }: WorkflowStepsProps) {
           {step.error && <p className="mt-2 break-words text-xs text-red-600">{step.error}</p>}
         </div>
       ))}
-      {run.steps.length === 0 && <p className="rounded-[10px] bg-[#f7faf9] p-4 text-sm text-ink-secondary">团队确认后会自动生成工作流步骤。</p>}
+      {run.steps.length === 0 && <p className="rounded-[10px] bg-surface-subtle p-4 text-sm text-ink-secondary">团队确认后会自动生成工作流步骤。</p>}
     </div>
   );
 }
@@ -142,7 +142,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
           <h2 className="mt-1 line-clamp-2 text-base font-semibold text-ink">{run.taskGoal}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-[#f7faf9] px-3 text-xs text-ink-secondary">
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-surface-subtle px-3 text-xs text-ink-secondary">
             <Icon icon={RUNNING_STATUSES.has(run.status) ? "mdi:loading" : "mdi:progress-check"} className={RUNNING_STATUSES.has(run.status) ? "animate-spin" : ""} aria-hidden />
             {statusLabel(run.status)}
           </span>
@@ -161,7 +161,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
 
       {isCompletedReport ? (
         <div className="mt-4 space-y-4">
-          <article className="rounded-[14px] border border-brand/15 bg-[#f7faf9] p-5">
+          <article className="rounded-[14px] border border-brand/15 bg-surface-subtle p-5">
             <div className="flex flex-col gap-3 border-b border-hairline-subtle pb-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">任务已完成</p>
@@ -186,7 +186,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
             </div>
           </article>
           {isWorkflowVisible && (
-            <div id={`agent-workflow-steps-${run.id}`} className="rounded-[14px] border border-hairline-subtle bg-[#fbfbfc] p-4">
+            <div id={`agent-workflow-steps-${run.id}`} className="rounded-[14px] border border-hairline-subtle bg-surface-subtle p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-ink">工作流过程</h3>
                 <span className="text-xs text-ink-secondary">{run.steps.length} 个步骤</span>
@@ -198,7 +198,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
       ) : (
         <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
           <WorkflowSteps run={run} />
-          <div className="rounded-[10px] bg-[#f7faf9] p-4">
+          <div className="rounded-[10px] bg-surface-subtle p-4">
             <h3 className="text-sm font-semibold text-ink">主 Agent 任务报告</h3>
             {hasFinalReport ? (
               <div className="mt-3 text-ink-secondary">

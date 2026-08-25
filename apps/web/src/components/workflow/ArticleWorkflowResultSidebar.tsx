@@ -186,7 +186,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 value={props.rewriteInstruction}
                 onChange={(event) => props.onRewriteInstructionChange(event.target.value)}
                 rows={4}
-                className="mt-3 w-full resize-none rounded-lg border border-hairline bg-[#f7f8fa] px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
+                className="mt-3 w-full resize-none rounded-lg border border-hairline bg-surface-subtle px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
                 placeholder="例如：开头更有代入感，整体语气更自然。"
               />
             </div>

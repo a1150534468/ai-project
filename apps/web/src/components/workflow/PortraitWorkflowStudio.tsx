@@ -360,7 +360,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
                 <button type="button" title="删除参考照" aria-label={`删除参考照 ${index + 1}`} onClick={() => handleDeleteReference(reference)} disabled={deletingReferenceId === reference.id || hasActiveTask} className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-100 transition disabled:opacity-30 lg:opacity-0 lg:group-hover:opacity-100"><Icon icon={deletingReferenceId === reference.id ? "mdi:loading" : "mdi:close"} className={deletingReferenceId === reference.id ? "animate-spin" : ""} aria-hidden /></button>
               </div>
             ))}
-            {references.length < MAX_REFERENCE_COUNT && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-hairline bg-[#fafafa] text-ink-secondary disabled:opacity-50" aria-label="上传人物参考照"><Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={`text-2xl ${isUploading ? "animate-spin" : ""}`} aria-hidden /><span className="mt-1 text-[11px]">{isUploading ? "上传中" : "添加"}</span></button>}
+            {references.length < MAX_REFERENCE_COUNT && <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex aspect-[3/4] flex-col items-center justify-center rounded-lg border border-dashed border-hairline bg-surface-subtle text-ink-secondary disabled:opacity-50" aria-label="上传人物参考照"><Icon icon={isUploading ? "mdi:loading" : "mdi:plus"} className={`text-2xl ${isUploading ? "animate-spin" : ""}`} aria-hidden /><span className="mt-1 text-[11px]">{isUploading ? "上传中" : "添加"}</span></button>}
           </div>
           <input ref={fileInputRef} data-testid="portrait-file-input" type="file" multiple accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff,image/gif,image/heic,image/heif" className="hidden" onChange={(event) => handleFiles(event.target.files)} />
           <p className="mt-2 flex items-center gap-1 text-[11px] text-ink-tertiary"><Icon icon="mdi:shield-lock-outline" aria-hidden />私有存储，任务结束 24 小时后自动清理</p>
@@ -396,7 +396,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
           onCountChange={setCount}
         />
 
-        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-ink-secondary"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
+        <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary"><input aria-label="人物授权确认" type="checkbox" checked={authorizationAccepted} onChange={(event) => setAuthorizationAccepted(event.target.checked)} className="mt-0.5 h-4 w-4 accent-[#1d1d1f]" /><span>我确认参考人物为本人，或已获得本人明确授权，并同意用于本次 AI 形象照生成。</span></label>
         {error && <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         <p className="mt-3 text-[10px] leading-4 text-ink-tertiary">AI 生成内容仅作预览，请勿用于证件、身份核验或未经授权的公开传播。</p>
         </div>
@@ -411,7 +411,7 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         />
       </aside>
 
-      <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-[#f7f8fa] xl:h-full">
+      <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
         <header className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white"><Icon icon="mdi:account-box-outline" className="text-lg" aria-hidden /></span>

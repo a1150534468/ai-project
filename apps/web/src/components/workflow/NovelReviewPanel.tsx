@@ -48,7 +48,7 @@ export function NovelReviewPanel({
         <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${statusClass(chapter?.reviewStatus)}`}>{statusLabel(chapter?.reviewStatus)}</span>
       </div>
 
-      <div className="rounded-lg bg-[#f7faf9] p-3 text-xs leading-5 text-ink-secondary">
+      <div className="rounded-lg bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
         <p className="font-semibold text-ink">AI 审阅</p>
         <p className="mt-1 whitespace-pre-wrap break-words">{chapter?.aiReview || "暂无 AI 审阅"}</p>
       </div>

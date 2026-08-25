@@ -67,7 +67,7 @@ export function NovelStructureSidebar({
   const flatChapters = chapters.filter((chapter) => !normalizedQuery || `${chapter.title} ${chapter.summary}`.toLowerCase().includes(normalizedQuery));
 
   return (
-    <aside className="hidden min-h-0 flex-col border-r border-hairline-subtle bg-[#fbfcfc] xl:flex">
+    <aside className="hidden min-h-0 flex-col border-r border-hairline-subtle bg-surface-subtle xl:flex">
       <div className="border-b border-hairline-subtle p-3">
         <div className="flex items-center justify-between gap-2"><div><p className="text-xs font-semibold text-ink">叙事结构</p><p className="mt-0.5 text-[10px] text-ink-tertiary">{chapters.length} 章 · 部卷幕章</p></div><button type="button" onClick={onCreateChapter} className="grid h-8 w-8 place-items-center rounded-lg border border-brand/25 bg-white text-brand-ink" title="新建章节"><Icon icon="mdi:plus" /></button></div>
         <label className="mt-3 flex h-9 items-center gap-2 rounded-lg border border-hairline bg-white px-2.5 text-xs text-ink-tertiary transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索章节或节点" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" /></label>

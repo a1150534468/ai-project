@@ -65,7 +65,7 @@ export function NovelContextInspector({ token, projectId, chapter, workbench, is
   }, [setup?.bible]);
 
   return (
-    <aside className="hidden min-h-0 flex-col border-l border-hairline-subtle bg-[#fbfcfc] xl:flex">
+    <aside className="hidden min-h-0 flex-col border-l border-hairline-subtle bg-surface-subtle xl:flex">
       <div className="border-b border-hairline-subtle px-3 py-2"><div className="flex items-center gap-1">{TABS.map((item) => <button key={item.id} type="button" onClick={() => setTab(item.id)} title={item.label} aria-label={item.label} className={`flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-lg text-[10px] font-semibold transition ${tab === item.id ? "bg-brand-soft px-2 text-brand-ink ring-1 ring-brand/20" : "w-8 px-0 text-ink-tertiary "}`}><Icon icon={item.icon} className="shrink-0" /><span className={tab === item.id ? "whitespace-nowrap" : "sr-only"}>{item.label}</span></button>)}</div></div>
       <div className="min-h-0 flex-1 overscroll-contain overflow-y-auto p-3 [scrollbar-gutter:stable] [scrollbar-width:thin]">
         {tab === "context" && <div className="grid gap-3">

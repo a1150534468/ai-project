@@ -19,7 +19,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-[10px] border border-hairline-subtle bg-[#f7faf9] p-4">
+      <div className="rounded-[10px] border border-hairline-subtle bg-surface-subtle p-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${typeStyle.viewPill}`}>
             <span className={`h-2 w-2 rounded-full ${typeStyle.viewDot}`} />

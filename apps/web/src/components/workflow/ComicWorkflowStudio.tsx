@@ -409,12 +409,12 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                       </Stagger>
                     ) : null}
                     <RippleButton type="button" onClick={renderAction} disabled={!selectedEpisode || Boolean(busy)} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">生成整集清单</RippleButton>
-                    {renderManifest && <pre className="max-h-56 overflow-auto rounded-[10px] bg-[#f7faf9] p-3 text-xs text-ink">{JSON.stringify(renderManifest, null, 2)}</pre>}
+                    {renderManifest && <pre className="max-h-56 overflow-auto rounded-[10px] bg-surface-subtle p-3 text-xs text-ink">{JSON.stringify(renderManifest, null, 2)}</pre>}
                   </div>
                 )}
               </main>
 
-              <aside className="space-y-3 rounded-[10px] bg-[#f7faf9] p-3">
+              <aside className="space-y-3 rounded-[10px] bg-surface-subtle p-3">
                 <h3 className="text-sm font-semibold text-ink">设定资料</h3>
                 <div className="space-y-2">
                   {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-hairline-subtle bg-white p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-ink">{entry.title}</p></div>)}

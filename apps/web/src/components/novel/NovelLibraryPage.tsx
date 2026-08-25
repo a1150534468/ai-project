@@ -96,7 +96,7 @@ export function NovelLibraryPage({
                     </div>
                     <div className="mt-8 flex items-end justify-between gap-3 border-t border-hairline-subtle pt-4">
                       <p className="text-[11px] leading-5 text-ink-tertiary">最近更新<br />{formatUpdate(project.updatedAt)}</p>
-                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary opacity-100 transition " aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-[#f1f6f4] px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
+                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary opacity-100 transition " aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-surface-subtle px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
                     </div>
                   </div>
                 </article>

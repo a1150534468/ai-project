@@ -59,7 +59,7 @@ function stepIndexOf(stage: Stage): number {
 
 function StepRail({ active }: { active: number }) {
   return (
-    <aside className="w-[220px] shrink-0 border-r border-hairline-subtle bg-[#fafafa] p-5">
+    <aside className="w-[220px] shrink-0 border-r border-hairline-subtle bg-surface-subtle p-5">
       <div className="flex items-center gap-2 pb-5">
         <Icon icon="mdi:auto-fix" className="text-lg text-ink" aria-hidden />
         <span className="text-[15px] font-semibold text-ink">帮我写</span>
@@ -134,7 +134,7 @@ function ChipListEditor({ title, items, onChange }: { title: string; items: stri
     setDraft("");
   };
   return (
-    <div className="rounded-[14px] border border-[#ececef] bg-[#fbfbfc] p-3.5">
+    <div className="rounded-[14px] border border-[#ececef] bg-surface-subtle p-3.5">
       <div className="mb-2.5 flex items-center gap-2">
         <span className="h-3.5 w-[3px] rounded-full bg-brand" aria-hidden />
         <p className="text-[13px] font-semibold text-ink">{title}</p>
@@ -303,7 +303,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 <section className="rounded-[14px] border border-hairline-subtle p-4">
                   <p className="mb-3 text-sm font-semibold text-ink">待分析素材（{materials.length}）</p>
                   {materials.length === 0 ? (
-                    <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-ink-tertiary">请先在左侧上传素材，再使用「帮我写」。</p>
+                    <p className="rounded-[10px] bg-surface-subtle px-3 py-8 text-center text-xs text-ink-tertiary">请先在左侧上传素材，再使用「帮我写」。</p>
                   ) : (
                     <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-5">
                       {materials.map((m, i) => (
@@ -355,7 +355,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                             <Icon icon={m.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:music-note-outline"} className="text-2xl" aria-hidden />
                           </span>
                         )}
-                        <p className="flex flex-1 items-center rounded-[8px] bg-[#fafafb] px-3.5 py-2.5 text-[13px] leading-6 text-ink-secondary">
+                        <p className="flex flex-1 items-center rounded-[8px] bg-surface-subtle px-3.5 py-2.5 text-[13px] leading-6 text-ink-secondary">
                           {insight.materials.find((x) => x.index === i + 1)?.description ?? insight.materials[i]?.description ?? "—"}
                         </p>
                       </div>
@@ -446,7 +446,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 ) : (
                   <section className="grid gap-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-hairline-subtle bg-[#f6f6f8] "}`}>
+                      <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-hairline-subtle bg-surface-subtle "}`}>
                         <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.08)]">
                           <Icon icon="mdi:tray-arrow-up" className="text-xl text-ink" aria-hidden />
                         </span>

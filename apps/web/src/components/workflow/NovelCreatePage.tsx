@@ -158,7 +158,7 @@ export function NovelCreatePage({
             onChange={(event) => update({ premise: event.currentTarget.value.slice(0, 2000) })}
             placeholder="用一段话写清主角、核心困境、主线目标与爽点预期……\n\n例如：被逐出宗门的阵法师发现自己能听见古阵残响，他必须在王朝封锁前修复失落阵图，也逐渐发现师门覆灭与皇室气运有关。"
             rows={6}
-            className="w-full resize-y rounded-2xl border border-hairline bg-[#fbfcfc] p-4 text-sm leading-7 text-ink outline-none transition placeholder:text-ink-tertiary focus:border-brand/60 focus:bg-white focus:ring-4 focus:ring-brand/10"
+            className="w-full resize-y rounded-2xl border border-hairline bg-surface-subtle p-4 text-sm leading-7 text-ink outline-none transition placeholder:text-ink-tertiary focus:border-brand/60 focus:bg-white focus:ring-4 focus:ring-brand/10"
           />
         </label>
 
@@ -167,7 +167,7 @@ export function NovelCreatePage({
           <div className="flex flex-wrap gap-2">
             {MARKET_TAXONOMY.map((item) => <button key={item.label} type="button" onClick={() => chooseMarket(item)} className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${draft.market === item.label ? "border-brand bg-brand text-white shadow-sm" : "border-hairline bg-white text-ink-secondary "}`}><Icon icon={item.icon} />{item.label}</button>)}
           </div>
-          <div className="flex flex-wrap gap-2 rounded-2xl bg-[#f6f8f7] p-3">
+          <div className="flex flex-wrap gap-2 rounded-2xl bg-surface-subtle p-3">
             {taxonomy.topics.map((topic) => <button key={topic} type="button" onClick={() => update({ subgenre: topic })} className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-white text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-ink-secondary "}`}>{topic}</button>)}
           </div>
         </div>
@@ -180,7 +180,7 @@ export function NovelCreatePage({
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 rounded-2xl border border-hairline-subtle bg-[#f8faf9] p-4 sm:grid-cols-3">
+          <div className="grid gap-4 rounded-2xl border border-hairline-subtle bg-surface-subtle p-4 sm:grid-cols-3">
             <label className="grid gap-2 text-xs font-semibold text-ink-secondary">书名（可留空由梗概生成）<input value={draft.title} onChange={(event) => update({ title: event.currentTarget.value })} className="h-10 rounded-xl border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" placeholder="未命名新作" /></label>
             <label className="grid gap-2 text-xs font-semibold text-ink-secondary">章节数<input value={draft.chapterCount} onChange={(event) => update({ chapterCount: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" /></label>
             <label className="grid gap-2 text-xs font-semibold text-ink-secondary">每章字数<input value={draft.chapterChars} onChange={(event) => update({ chapterChars: event.currentTarget.value })} inputMode="numeric" className="h-10 rounded-xl border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-brand/60" /></label>
@@ -192,7 +192,7 @@ export function NovelCreatePage({
           <div className="grid gap-3 border-t border-hairline-subtle p-4 sm:grid-cols-2">
             {([
               ["世界预设", "worldPreset"], ["故事结构", "storyStructure"], ["节奏控制", "pacingControl"], ["写作风格", "writingStyle"], ["特殊要求", "specialRequirements"],
-            ] as const).map(([label, key]) => <label key={key} className={`grid gap-1.5 text-xs font-semibold text-ink-secondary ${key === "specialRequirements" ? "sm:col-span-2" : ""}`}>{label}<textarea value={draft[key]} onChange={(event) => update({ [key]: event.currentTarget.value })} rows={3} className="resize-y rounded-xl border border-hairline bg-[#fbfcfc] p-3 text-sm leading-6 text-ink outline-none focus:border-brand/60" /></label>)}
+            ] as const).map(([label, key]) => <label key={key} className={`grid gap-1.5 text-xs font-semibold text-ink-secondary ${key === "specialRequirements" ? "sm:col-span-2" : ""}`}>{label}<textarea value={draft[key]} onChange={(event) => update({ [key]: event.currentTarget.value })} rows={3} className="resize-y rounded-xl border border-hairline bg-surface-subtle p-3 text-sm leading-6 text-ink outline-none focus:border-brand/60" /></label>)}
           </div>
         </details>
 

@@ -75,15 +75,15 @@ export default function MemoryPage({ token }: MemoryPageProps) {
               </div>
 
               <div className="grid w-full grid-cols-3 gap-2 sm:max-w-[320px] lg:w-[320px]">
-                <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2">
+                <div className="rounded-[10px] bg-surface-subtle px-3 py-2">
                   <p className="text-[11px] text-ink-tertiary">总记忆</p>
                   <p className="mt-1 text-lg font-semibold text-ink">{totalCount}</p>
                 </div>
-                <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2">
+                <div className="rounded-[10px] bg-surface-subtle px-3 py-2">
                   <p className="text-[11px] text-ink-tertiary">当前显示</p>
                   <p className="mt-1 text-lg font-semibold text-ink">{filteredNodes.length}</p>
                 </div>
-                <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2">
+                <div className="rounded-[10px] bg-surface-subtle px-3 py-2">
                   <p className="text-[11px] text-ink-tertiary">命中</p>
                   <p className="mt-1 text-lg font-semibold text-ink">{highlightedCount}</p>
                 </div>

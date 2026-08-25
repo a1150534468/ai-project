@@ -45,7 +45,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
 
   return (
     <section
-      className={panel ? "grid gap-4 bg-white" : "flex h-full min-h-[520px] flex-col bg-[#f7f8fa]"}
+      className={panel ? "grid gap-4 bg-white" : "flex h-full min-h-[520px] flex-col bg-surface-subtle"}
       aria-label="创作内容"
     >
       <div className={panel

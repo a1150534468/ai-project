@@ -71,7 +71,7 @@ export default function MemoryTable({
     <div className="h-full min-h-0 overflow-hidden rounded-[14px] border border-hairline-subtle bg-white">
       <div className="max-h-full overflow-auto">
         <table className="min-w-[820px] w-full table-fixed border-collapse text-left">
-          <thead className="sticky top-0 z-10 bg-[#f7faf9] text-[11px] font-semibold uppercase text-ink-tertiary">
+          <thead className="sticky top-0 z-10 bg-surface-subtle text-[11px] font-semibold uppercase text-ink-tertiary">
             <tr>
               <th className="w-[34%] whitespace-nowrap px-4 py-3">记忆内容</th>
               <th className="w-[13%] whitespace-nowrap px-3 py-3">类型</th>

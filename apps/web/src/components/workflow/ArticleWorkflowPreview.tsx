@@ -67,7 +67,7 @@ export function ArticleWorkflowPreview({
   const mobile = scale === "mobile";
 
   return (
-    <section className="min-h-[640px] bg-[#f7f8fa] px-4 py-5 sm:px-6">
+    <section className="min-h-[640px] bg-surface-subtle px-4 py-5 sm:px-6">
       <div className="mx-auto mb-4 flex max-w-[760px] items-center justify-between gap-3">
         {headerExtra}
         <ArticleWorkflowPreviewScaleToggle scale={scale} onChange={setScale} />

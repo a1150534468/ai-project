@@ -453,27 +453,7 @@ html[data-theme="dark"] [class~="bg-white/78"],
 html[data-theme="dark"] [class~="bg-white/80"],
 html[data-theme="dark"] [class~="bg-white/95"],
 html[data-theme="dark"] [class~="bg-gray-50/50"],
-html[data-theme="dark"] .bg-gray-50,
-html[data-theme="dark"] [class~="bg-[#fafafa]"],
-html[data-theme="dark"] [class~="bg-[#fafafc]"],
-html[data-theme="dark"] [class~="bg-[#fafafb]"],
-html[data-theme="dark"] [class~="bg-[#fafafd]"],
-html[data-theme="dark"] [class~="bg-[#fafbfb]"],
-html[data-theme="dark"] [class~="bg-[#fafbfc]"],
-html[data-theme="dark"] [class~="bg-[#fafbfe]"],
-html[data-theme="dark"] [class~="bg-[#fbfbfc]"],
-html[data-theme="dark"] [class~="bg-[#fbfcfc]"],
-html[data-theme="dark"] [class~="bg-[#fbfcff]"],
-html[data-theme="dark"] [class~="bg-[#fbfefd]"],
-html[data-theme="dark"] [class~="bg-[#f7faf9]"],
-html[data-theme="dark"] [class~="bg-[#f7f9f8]"],
-html[data-theme="dark"] [class~="bg-[#f7f8fa]"],
-html[data-theme="dark"] [class~="bg-[#f7f8fb]"],
-html[data-theme="dark"] [class~="bg-[#f7f7f9]"],
-html[data-theme="dark"] [class~="bg-[#f6f6f8]"],
-html[data-theme="dark"] [class~="bg-[#f6f8f7]"],
-html[data-theme="dark"] [class~="bg-[#f1f6f4]"],
-html[data-theme="dark"] [class~="bg-[#f8faf9]"] {
+html[data-theme="dark"] .bg-gray-50 {
   background-color: var(--apple-surface) !important;
 }
 

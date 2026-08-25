@@ -61,7 +61,7 @@ export function NovelChapterIntelligencePanel({
       <Panel title="微节拍" icon="mdi:metronome">
         <div className="grid gap-2">
           {microBeats.map((beat, index) => (
-            <div key={`${text(beat.label)}:${index}`} className="rounded-lg bg-[#f7faf9] px-2 py-1.5">
+            <div key={`${text(beat.label)}:${index}`} className="rounded-lg bg-surface-subtle px-2 py-1.5">
               <p className="font-semibold text-ink">{text(beat.index)}. {text(beat.label)} · {text(beat.targetWords)}字</p>
               <p className="break-words">{text(beat.objective)}</p>
             </div>

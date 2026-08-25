@@ -76,14 +76,14 @@ export function CurrentPlanCard({ detail, balance, videoBalance, vip, onGotoUsag
               )}
             </div>
             {/* 永久（充值） */}
-            <div className="rounded-xl border border-gray-100 bg-[#fafbfc] p-3">
+            <div className="rounded-xl border border-gray-100 bg-surface-subtle p-3">
               <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-gray-400" />永久算力点 · 充值</p>
               <p className="text-xl font-bold text-ink mt-1">{detail ? detail.permanentPoints.toLocaleString() : (total?.toLocaleString() ?? "—")}</p>
               <p className="text-[11px] text-gray-500 mt-2">永不过期</p>
               <p className="text-[11px] text-gray-400 mt-0.5">扣费时临时点优先、永久点保底</p>
             </div>
             {/* 视频点 / VIP */}
-            <div className="rounded-xl border border-gray-100 bg-[#fafbfc] p-3">
+            <div className="rounded-xl border border-gray-100 bg-surface-subtle p-3">
               <p className="text-[11px] text-gray-500 font-medium flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-[#a78bfa]" />视频点 · 会员</p>
               <p className="text-xl font-bold text-ink mt-1">{video === null ? "同步中" : video.toLocaleString()}</p>
               <p className="text-[11px] text-gray-500 mt-2">{vip?.levelName ?? "普通会员"}</p>

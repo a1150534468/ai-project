@@ -43,7 +43,7 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
             <p className="mt-3 line-clamp-3 text-xs leading-5 text-ink-secondary">{member.responsibility}</p>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {member.skills.map((skill) => (
-                <span key={skill} className="rounded-full bg-[#f7faf9] px-2 py-1 text-[11px] text-ink-secondary">
+                <span key={skill} className="rounded-full bg-surface-subtle px-2 py-1 text-[11px] text-ink-secondary">
                   {skill}
                 </span>
               ))}

@@ -65,7 +65,7 @@ export function AudioAssetPanel(props: {
     <div className={props.className}>
       <p className="text-[12px] font-semibold text-ink-secondary">{props.title}</p>
       {props.asset ? (
-        <div className="mt-2 rounded-[10px] bg-[#f7f7f9] p-3">
+        <div className="mt-2 rounded-[10px] bg-surface-subtle p-3">
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(props.asset.createdAt)}</p>
@@ -106,7 +106,7 @@ export function AudioHistoryList(props: {
           const active = asset.id === props.activeAssetId;
           const pending = props.pendingKey === `${props.pendingKeyPrefix}:${asset.id}`;
           return (
-            <div key={asset.id} className={`rounded-[10px] border px-3 py-2 ${active ? "border-brand/30 bg-brand-soft" : "border-hairline-subtle bg-[#fafafa]"}`}>
+            <div key={asset.id} className={`rounded-[10px] border px-3 py-2 ${active ? "border-brand/30 bg-brand-soft" : "border-hairline-subtle bg-surface-subtle"}`}>
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(asset.createdAt)}</p>

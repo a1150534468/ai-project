@@ -72,7 +72,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
             })}
           </div>
         ) : (
-          <div className="mt-5 grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-hairline bg-[#f7faf9] px-4 text-center">
+          <div className="mt-5 grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-hairline bg-surface-subtle px-4 text-center">
             <div>
               <p className="text-base font-semibold text-ink">还没有项目</p>
               <p className="mt-2 text-sm text-ink-secondary">先新建一个宣传项目，再进入剪辑工作台。</p>

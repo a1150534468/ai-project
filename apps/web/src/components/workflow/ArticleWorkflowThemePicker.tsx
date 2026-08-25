@@ -61,7 +61,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
 
       {activeConfig && (
         <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-xl border border-[#e5e7eb] bg-[#f7f8fa] px-3 py-2">
+          <div className="flex items-center gap-3 rounded-xl border border-[#e5e7eb] bg-surface-subtle px-3 py-2">
             <span className="text-xs font-semibold text-ink">主色</span>
             <input
               type="color"

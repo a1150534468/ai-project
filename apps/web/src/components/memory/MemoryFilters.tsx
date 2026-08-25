@@ -54,7 +54,7 @@ export default function MemoryFilters({
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
                 placeholder="搜索标题、内容或标签"
-                className="h-11 w-full rounded-[10px] border border-hairline bg-[#f7faf9] pl-10 pr-3 text-sm text-ink"
+                className="h-11 w-full rounded-[10px] border border-hairline bg-surface-subtle pl-10 pr-3 text-sm text-ink"
               />
             </div>
             <button
@@ -72,7 +72,7 @@ export default function MemoryFilters({
           </form>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:flex-nowrap">
-            <div className="rounded-[10px] bg-[#f7faf9] px-3 py-2 text-xs leading-5 text-ink-secondary">
+            <div className="rounded-[10px] bg-surface-subtle px-3 py-2 text-xs leading-5 text-ink-secondary">
               共 {total} 条，显示 {visibleCount} 条，命中 {highlightedCount} 条
             </div>
             <button
@@ -81,7 +81,7 @@ export default function MemoryFilters({
               aria-checked={enabled}
               onClick={onToggleEnabled}
               disabled={togglePending}
-              className="inline-flex h-11 min-w-0 items-center justify-between gap-3 rounded-[10px] border border-hairline bg-[#f7faf9] px-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-11 min-w-0 items-center justify-between gap-3 rounded-[10px] border border-hairline bg-surface-subtle px-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span className="min-w-0 truncate text-sm font-medium text-ink">
                 {enabled ? "长期记忆已启用" : "长期记忆已关闭"}

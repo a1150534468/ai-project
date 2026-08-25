@@ -115,7 +115,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
         onRemoveReference={props.onRemoveReference}
       />
 
-      <div className="flex min-h-0 min-w-0 flex-col bg-[#f7f8fa] xl:h-full">
+      <div className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
         <div className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4 lg:px-6">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">

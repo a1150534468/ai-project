@@ -55,7 +55,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
       >
         <Icon icon="mdi:palette-outline" className="text-base" aria-hidden />
         {themeLabel}

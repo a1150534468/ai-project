@@ -219,7 +219,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
           </div>
         )}
-        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-hairline bg-[#f7f8fa] px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden /><p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p></div></div>}
+        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden /><p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p></div></div>}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {isSubmitting
             ? Array.from({ length: count }).map((_, skeletonIndex) => (

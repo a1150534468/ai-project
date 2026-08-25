@@ -36,7 +36,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
       )}
 
       {!props.bootstrapping && props.batches.length === 0 && (
-        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-hairline bg-[#f7f8fa] px-4 text-center text-xs leading-5 text-ink-tertiary">
+        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle px-4 text-center text-xs leading-5 text-ink-tertiary">
           还没有生成过图文
         </div>
       )}
@@ -52,7 +52,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
             className={`group relative mb-1.5 w-full rounded-lg border transition ${
               selected
                 ? "border-brand/40 bg-brand-soft"
-                : "border-transparent bg-white hover:border-[#e5e7eb] hover:bg-[#f7f8fa]"
+                : "border-transparent bg-white hover:border-[#e5e7eb] hover:bg-surface-subtle"
             }`}
           >
             <button

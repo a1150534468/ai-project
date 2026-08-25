@@ -14,7 +14,7 @@ import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
 
 function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boolean }) {
   return (
-    <section className="grid h-full min-h-[440px] place-items-center bg-[#f7f8fa] px-6 py-10" aria-label="实时输出预览">
+    <section className="grid h-full min-h-[440px] place-items-center bg-surface-subtle px-6 py-10" aria-label="实时输出预览">
       <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-hairline bg-white px-6 py-12 text-center">
         <span className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink">
           <Icon
@@ -105,7 +105,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
         )}
       </aside>
 
-      <main className="flex min-h-0 min-w-0 flex-col bg-[#f7f8fa] xl:h-full">
+      <main className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
         <header
           className={`flex min-h-14 flex-none flex-col gap-2 border-b border-[#e5e7eb] bg-white px-4 py-2 xl:items-center xl:px-5 ${
             state.project ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)_minmax(0,1fr)]" : "xl:flex-row"
@@ -132,7 +132,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               type="button"
               onClick={() => setHistoryOpen(true)}
               aria-expanded={historyOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
             >
               <Icon icon="mdi:history" className="text-base" aria-hidden />
               项目历史
@@ -142,7 +142,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               onClick={() => setConfigOpen(true)}
               disabled={state.bootstrapping}
               aria-expanded={configOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa] disabled:text-[#b2b2b7]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle disabled:text-[#b2b2b7]"
             >
               <Icon icon="mdi:tune-variant" className="text-base" aria-hidden />
               生成配置

@@ -79,7 +79,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
 
       <div className={gallery ? "grid gap-3 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-2"}>
         {props.imageManifest.length === 0 && (
-          <div className="rounded-lg border border-dashed border-hairline bg-[#f7f8fa] px-3 py-5 text-center text-sm text-ink-tertiary">
+          <div className="rounded-lg border border-dashed border-hairline bg-surface-subtle px-3 py-5 text-center text-sm text-ink-tertiary">
             暂无配图
           </div>
         )}

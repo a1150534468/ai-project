@@ -49,7 +49,7 @@ export function ArticleWorkflowCaptionEditor(props: ArticleWorkflowCaptionEditor
           value={props.captionDraft}
           onChange={(event) => props.onCaptionChange(event.target.value)}
           rows={14}
-          className="min-h-[320px] w-full resize-none whitespace-pre-wrap rounded-lg border border-hairline bg-[#f7f8fa] px-4 py-3 text-sm leading-7 text-ink outline-none transition focus:border-brand focus:bg-white"
+          className="min-h-[320px] w-full resize-none whitespace-pre-wrap rounded-lg border border-hairline bg-surface-subtle px-4 py-3 text-sm leading-7 text-ink outline-none transition focus:border-brand focus:bg-white"
           placeholder="输入正文文案，换行会原样保留"
         />
       </div>
@@ -68,7 +68,7 @@ export function ArticleWorkflowCaptionEditor(props: ArticleWorkflowCaptionEditor
             setTagsText(event.target.value);
             props.onTagsChange(parseArticleWorkflowTagsInput(event.target.value));
           }}
-          className="w-full rounded-lg border border-hairline bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-ink outline-none transition focus:border-brand focus:bg-white"
+          className="w-full rounded-lg border border-hairline bg-surface-subtle px-4 py-3 text-sm leading-6 text-ink outline-none transition focus:border-brand focus:bg-white"
           placeholder="#咖啡机 #居家好物（空格或逗号分隔）"
         />
         {props.tagsDraft.length > 0 && (

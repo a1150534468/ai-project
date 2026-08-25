@@ -169,7 +169,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                       {project.materials[group].length > 0 ? (
                         <div className="mt-3 grid gap-2">
                           {project.materials[group].map((item) => (
-                            <div key={`${group}:${item.url}`} className="flex items-center gap-2 rounded-[10px] bg-[#f7f7f9] px-3 py-2">
+                            <div key={`${group}:${item.url}`} className="flex items-center gap-2 rounded-[10px] bg-surface-subtle px-3 py-2">
                               <Icon icon={item.mime.startsWith("video/") ? "mdi:play-circle-outline" : "mdi:image-outline"} className="text-base text-ink-secondary" aria-hidden />
                               <div className="min-w-0 flex-1">
                                 <p className="truncate text-[12px] font-medium text-ink">{item.name || item.url}</p>
@@ -315,7 +315,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   <p className="mt-2 text-[11px] text-ink-tertiary">{derived.selectedVoiceMode?.description ?? "按当前模式配置旁白音色。"} </p>
 
                   {project.settings.voiceMode === "preset" ? (
-                    <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
+                    <div className="mt-3 rounded-[10px] bg-surface-subtle p-3">
                       <p className="text-[12px] font-semibold text-ink-secondary">预制音色</p>
                       <div className="mt-2 flex items-center gap-2">
                         <select
@@ -335,7 +335,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   ) : null}
 
                   {project.settings.voiceMode === "design" ? (
-                    <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
+                    <div className="mt-3 rounded-[10px] bg-surface-subtle p-3">
                       <p className="text-[12px] font-semibold text-ink-secondary">文本定制音色</p>
                       {derived.designVoiceTemplateExample && (
                         <p className="mt-2 text-[11px] leading-5 text-ink-tertiary">示例：{derived.designVoiceTemplateExample}</p>
@@ -362,7 +362,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   ) : null}
 
                   {project.settings.voiceMode === "clone" ? (
-                    <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
+                    <div className="mt-3 rounded-[10px] bg-surface-subtle p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-[12px] font-semibold text-ink-secondary">音频复刻音色</p>
@@ -463,7 +463,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   </p>
 
                   {state.bgmMode === "preset" && (
-                    <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
+                    <div className="mt-3 rounded-[10px] bg-surface-subtle p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <select
                           value={project.settings.musicPreset}
@@ -518,7 +518,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                   )}
 
                   {state.bgmMode === "upload" && (
-                    <div className="mt-3 rounded-[10px] bg-[#f7f7f9] p-3">
+                    <div className="mt-3 rounded-[10px] bg-surface-subtle p-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-[12px] font-semibold text-ink-secondary">自定义 BGM</p>
@@ -589,7 +589,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                 </div>
               </div>
             ) : (
-              <div className="grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-hairline bg-[#fafafa] text-center">
+              <div className="grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-hairline bg-surface-subtle text-center">
                 <div className="max-w-[280px] px-4">
                   <Icon icon="mdi:movie-open-outline" className="mx-auto text-3xl text-ink-tertiary" aria-hidden />
                   <p className="mt-3 text-sm font-medium text-ink">成片预览会显示在这里</p>
@@ -605,7 +605,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               </div>
               {latestRun ? (
                 <div className="mt-3 space-y-2">
-                  <div className="rounded-[10px] bg-[#f7f7f9] px-3 py-3">
+                  <div className="rounded-[10px] bg-surface-subtle px-3 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoProgressStage(latestRun.progressStage)}</p>
@@ -622,7 +622,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
                     <p className="mt-2 text-[11px] text-ink-tertiary">已完成 {derived.latestRunCompletedShots}/{latestRun.shotPlan.length} 段镜头</p>
                   </div>
                   {latestRun.shotPlan.map((shot, index) => (
-                    <div key={`${latestRun.id}:${shot.shotId}:${index}`} className="rounded-[10px] bg-[#f7f7f9] px-3 py-2">
+                    <div key={`${latestRun.id}:${shot.shotId}:${index}`} className="rounded-[10px] bg-surface-subtle px-3 py-2">
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-[12px] font-semibold text-ink">{index + 1}. {shot.label}</p>
                         <span className="text-[11px] text-ink-secondary">{formatLocalBusinessPromoShotTaskStatus(shot.taskStatus)}</span>
@@ -659,7 +659,7 @@ export function LocalBusinessPromoStudioPanels({ studio }: { readonly studio: Lo
               </div>
               <div className="mt-3 space-y-2">
                 {state.runs.length > 0 ? state.runs.map((run) => (
-                  <div key={run.id} className="rounded-[10px] bg-[#f7f7f9] px-3 py-2">
+                  <div key={run.id} className="rounded-[10px] bg-surface-subtle px-3 py-2">
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoRunStatus(run.status)}</p>
                       <span className="text-[11px] text-ink-tertiary">{formatLocalBusinessPromoTime(run.createdAt)}</span>

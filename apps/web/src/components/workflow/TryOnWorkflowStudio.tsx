@@ -70,7 +70,7 @@ function ReferenceSlot(props: ReferenceSlotProps) {
         <span className="truncate">{props.label}</span>
         <span className={props.required ? "text-red-500" : "text-ink-tertiary"}>{props.required ? "*" : "可选"}</span>
       </div>
-      <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-[#c7c7cc] bg-[#fafafa]">
+      <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-[#c7c7cc] bg-surface-subtle">
         {props.reference ? (
           <>
             <img src={props.reference.previewUrl} alt={props.label} className="h-full w-full object-cover" />
@@ -483,7 +483,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             />
 
             {modelReference && (
-              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-[#f7f8fa] p-3 text-xs leading-5 text-ink-secondary">
+              <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-[#e5e7eb] bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
                 <input
                   aria-label="试穿模特授权确认"
                   type="checkbox"
@@ -516,7 +516,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           />
         </aside>
 
-        <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-[#f7f8fa] xl:h-full">
+        <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
           <header className="flex h-14 flex-none items-center justify-between border-b border-[#e5e7eb] bg-white px-4">
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-[#1d1d1f] text-white">

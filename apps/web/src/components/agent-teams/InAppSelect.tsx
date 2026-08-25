@@ -33,7 +33,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border border-hairline bg-[#f7faf9] px-3 text-left text-sm text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border border-hairline bg-surface-subtle px-3 text-left text-sm text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={open}
       >

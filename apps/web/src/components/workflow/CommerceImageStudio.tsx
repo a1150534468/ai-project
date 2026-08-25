@@ -244,7 +244,7 @@ export function CommerceImageStudio({
               <button type="button" onClick={() => setIsOverviewOpen(false)} aria-label="关闭生成概览" className="grid h-9 w-9 place-items-center rounded-lg hover:bg-[#f5f5f7]"><Icon icon="mdi:close" className="text-xl" aria-hidden /></button>
             </div>
             <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
-          <div className="rounded-[11px] border border-hairline-subtle bg-[#f7faf9] p-3">
+          <div className="rounded-[11px] border border-hairline-subtle bg-surface-subtle p-3">
             <p className="text-[11px] font-semibold text-ink-tertiary">当前视图</p>
             <p className="mt-1 text-sm font-semibold text-ink">{tab === "main" ? "商品主图" : "商品详情图"}</p>
           </div>

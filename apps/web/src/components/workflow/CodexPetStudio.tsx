@@ -372,7 +372,7 @@ function PrimaryButton(props: {
 
 function ImagePlaceholder({ text }: { readonly text: string }) {
   return (
-    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-[#d9dce3] bg-[#fafafd] px-5 text-center text-xs leading-5 text-ink-tertiary">
+    <div className="grid min-h-40 place-items-center rounded-[12px] border border-dashed border-[#d9dce3] bg-surface-subtle px-5 text-center text-xs leading-5 text-ink-tertiary">
       {text}
     </div>
   );
@@ -1277,7 +1277,7 @@ export function CodexPetStudio({
                   maxLength={30}
                   onChange={(event) => updateDraft("name", event.target.value)}
                   placeholder="例如：码仔"
-                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-surface-subtle"
                 />
                 <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.name).length}/30</span>
               </label>
@@ -1288,7 +1288,7 @@ export function CodexPetStudio({
                   disabled={!canEdit || interactionLocked}
                   onChange={(event) => updateDraft("description", event.target.value)}
                   placeholder="它是谁、有什么性格"
-                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-surface-subtle"
                 />
               </label>
               <label className="block">
@@ -1300,7 +1300,7 @@ export function CodexPetStudio({
                   onChange={(event) => updateDraft("prompt", event.target.value)}
                   placeholder="描述角色外形、配色、材质、标志性配件和气质；也可以只上传参考图。"
                   rows={5}
-                  className="w-full resize-y rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full resize-y rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-surface-subtle"
                 />
                 <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.prompt).length}/4000</span>
               </label>
@@ -1313,7 +1313,7 @@ export function CodexPetStudio({
                     value={selectedActionPrompt}
                     disabled={!canEdit || interactionLocked}
                     onChange={(event) => setSelectedActionPrompt(event.currentTarget.value as CodexPetActionPromptKey)}
-                    className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                    className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-surface-subtle"
                   >
                     {CODEX_PET_ACTION_PROMPT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -1329,7 +1329,7 @@ export function CodexPetStudio({
                     onChange={(event) => updateActionPrompt(event.currentTarget.value)}
                     placeholder="可选：描述这个动作的表情、幅度、节奏或已有肢体和配件如何运动。"
                     rows={3}
-                    className="w-full resize-y rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                    className="w-full resize-y rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-surface-subtle"
                   />
                   <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.actionPrompts[selectedActionPrompt] ?? "").length}/{CODEX_PET_ACTION_PROMPT_MAX_LENGTH}</span>
                 </label>
@@ -1344,7 +1344,7 @@ export function CodexPetStudio({
                   {draft.referenceAssets.map((asset) => {
                     const url = asset.thumbnailUrl || asset.originalUrl;
                     return (
-                      <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-[9px] border border-[#e1e3e8] bg-[#f6f6f8]">
+                      <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-[9px] border border-[#e1e3e8] bg-surface-subtle">
                         {url ? <img src={url} alt={asset.name || "桌宠参考图"} className="size-full object-cover" /> : (
                           <span className="grid size-full place-items-center text-[10px] text-ink-tertiary">已上传</span>
                         )}
@@ -1363,7 +1363,7 @@ export function CodexPetStudio({
                     );
                   })}
                   {draft.referenceAssets.length < CODEX_PET_MAX_REFERENCES && (
-                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-[#fafafd] text-center text-[10px] text-ink-tertiary transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
+                    <label className={`grid aspect-square cursor-pointer place-items-center rounded-[9px] border border-dashed border-[#cfd3da] bg-surface-subtle text-center text-[10px] text-ink-tertiary transition ${!canEdit || interactionLocked ? "pointer-events-none opacity-50" : ""}`}>
                       <span><Icon icon={busyAction === "uploading" ? "mdi:loading" : "mdi:image-plus-outline"} className={`mx-auto mb-1 text-lg ${busyAction === "uploading" ? "animate-spin" : ""}`} aria-hidden />上传参考图</span>
                       <input
                         type="file"
@@ -1381,7 +1381,7 @@ export function CodexPetStudio({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
                   <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">生图模型</span>
-                  <div className="rounded-[10px] border border-hairline-subtle bg-[#f7f7f9] px-3 py-2 text-sm text-[#424249]">
+                  <div className="rounded-[10px] border border-hairline-subtle bg-surface-subtle px-3 py-2 text-sm text-[#424249]">
                     {readOnlyArchive
                       ? "历史项目，已归档为只读"
                       : historicalImageModel ? `历史模型 ${historicalImageModel}，已停止新运行` : "GPT Image 2 · Pixel"}
@@ -1406,7 +1406,7 @@ export function CodexPetStudio({
                       value={draft.visualQaModel}
                       disabled={!canEdit || interactionLocked}
                       onChange={(event) => updateDraft("visualQaModel", event.currentTarget.value)}
-                      className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                      className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-surface-subtle"
                     >
                       {modelOptions.visualModels.map((option) => <option key={option.model} value={option.model}>{option.displayName}</option>)}
                     </select>
@@ -1443,11 +1443,11 @@ export function CodexPetStudio({
                   disabled={!canEdit || interactionLocked}
                   onChange={(event) => updateDraft("styleNotes", event.target.value)}
                   placeholder="可选，例如：圆润、低饱和、不要文字"
-                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-surface-subtle"
                 />
               </label>
 
-              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#e5e7eb] bg-[#fafafa] p-3">
+              <label className="flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-[#e5e7eb] bg-surface-subtle p-3">
                 <input
                   type="checkbox"
                   checked={draft.autoContinue}
@@ -1461,7 +1461,7 @@ export function CodexPetStudio({
                 </span>
               </label>
 
-              <div className="rounded-[10px] bg-[#f7f8fa] px-3 py-2.5 text-[10px] leading-4 text-ink-secondary">
+              <div className="rounded-[10px] bg-surface-subtle px-3 py-2.5 text-[10px] leading-4 text-ink-secondary">
                 正常路径最多 {plannedCallLimit} 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准与计费。上传即表示你拥有参考图与角色的使用权。
               </div>
 
@@ -1716,7 +1716,7 @@ export function CodexPetStudio({
                         <img
                           src={codexPetArtifactUrl(finalContactSheet)}
                           alt="最终 Codex v2 Contact Sheet"
-                          className="max-h-72 w-full rounded-[8px] border border-[#e7e8ec] bg-[#f7f8fa] object-contain"
+                          className="max-h-72 w-full rounded-[8px] border border-[#e7e8ec] bg-surface-subtle object-contain"
                         />
                       ) : (
                         <ImagePlaceholder text="最终 Contact Sheet 已生成，正在刷新预览地址" />
@@ -1734,7 +1734,7 @@ export function CodexPetStudio({
                   </div>
                   <details className="rounded-[10px] border border-brand/30 bg-white px-3 py-2 text-[10px] text-ink-secondary">
                     <summary className="cursor-pointer font-semibold text-ink-secondary">查看完整质量报告</summary>
-                    <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-[#f7f8fa] p-2 font-mono text-[9px] leading-4">
+                    <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-[8px] bg-surface-subtle p-2 font-mono text-[9px] leading-4">
                       {JSON.stringify(latestRun.validationReport, null, 2)}
                     </pre>
                   </details>
@@ -1852,15 +1852,15 @@ export function CodexPetStudio({
               </ol>
               {latestRun && (
                 <div className="grid grid-cols-3 gap-2 border-t border-[#eceef1] pt-3 text-[10px]">
-                  <div className="rounded-[9px] bg-[#f7f8fa] p-2">
+                  <div className="rounded-[9px] bg-surface-subtle p-2">
                     <span className="block text-ink-tertiary">当前子任务</span>
                     <span data-testid="codex-pet-current-subtask" className="mt-0.5 block truncate font-semibold text-ink-secondary">{currentSubtask}</span>
                   </div>
-                  <div className="rounded-[9px] bg-[#f7f8fa] p-2">
+                  <div className="rounded-[9px] bg-surface-subtle p-2">
                     <span className="block text-ink-tertiary">成功图片</span>
                     <span className="mt-0.5 block font-semibold text-ink-secondary">{latestRun.hasSuccessfulImage ? "已有" : "暂无"}</span>
                   </div>
-                  <div className="rounded-[9px] bg-[#f7f8fa] p-2">
+                  <div className="rounded-[9px] bg-surface-subtle p-2">
                     <span className="block text-ink-tertiary">真实生图调用</span>
                     <span data-testid="codex-pet-image-call-count" className="mt-0.5 block font-semibold text-ink-secondary">{latestRun.imageGenerationCallCount ?? 0}/{latestRun.plannedImageCallLimit ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT}</span>
                   </div>
@@ -1931,7 +1931,7 @@ export function CodexPetStudio({
                 </div>
               )}
               {latestRun && (
-                <div className="rounded-[9px] bg-[#f7f8fa] px-2.5 py-2 text-[10px] leading-4 text-ink-secondary">
+                <div className="rounded-[9px] bg-surface-subtle px-2.5 py-2 text-[10px] leading-4 text-ink-secondary">
                   生图请求 {latestRun.requestedModel}<br />
                   生图实际 {latestRun.actualModels?.length > 0 ? latestRun.actualModels.join("、") : "等待上游返回"}<br />
                   AI 质检 {latestRun.qualityInspectionEnabled ? "已开启" : "关闭"}<br />

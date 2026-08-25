@@ -49,7 +49,7 @@ export function ArticleWorkflowSourceCanvas(props: ArticleWorkflowSourceCanvasPr
   }
 
   return (
-    <section className="flex h-full min-h-[520px] flex-col bg-[#f7f8fa]" aria-label="原文内容">
+    <section className="flex h-full min-h-[520px] flex-col bg-surface-subtle" aria-label="原文内容">
       <div className="flex h-12 flex-none items-center justify-between gap-3 border-b border-[#e5e7eb] bg-white px-4 lg:px-5">
         <span className="text-xs text-ink-tertiary">{props.sourceText.trim().length} 字</span>
         <div className="grid grid-cols-2 rounded-lg bg-[#ececf0] p-1">
