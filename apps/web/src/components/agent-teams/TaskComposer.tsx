@@ -76,7 +76,7 @@ export function TaskComposer({
       : [];
 
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] sm:p-6">
+    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] sm:p-6">
       <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">Agent 团队</p>
@@ -87,7 +87,7 @@ export function TaskComposer({
         </span>
       </div>
 
-      <div className="rounded-[10px] border border-[#d2d2d7] bg-white p-3 focus-within:border-brand/50">
+      <div className="rounded-[10px] border border-hairline bg-white p-3 focus-within:border-brand/50">
         <textarea
           value={taskGoal}
           onChange={(event) => onTaskGoalChange(event.target.value)}
@@ -124,7 +124,7 @@ export function TaskComposer({
         )}
         {attachmentError && <p className="mb-3 px-1 text-xs text-red-600">{attachmentError}</p>}
 
-        <div className="flex flex-col gap-3 border-t border-[#e8e8ed] pt-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex flex-col gap-3 border-t border-hairline-subtle pt-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="grid min-w-0 flex-1 gap-2 lg:grid-cols-3">
             <InAppSelect
               icon="mdi:robot-outline"
@@ -164,7 +164,7 @@ export function TaskComposer({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-white px-4 text-sm font-semibold text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
             >
               <Icon icon="mdi:paperclip" className="text-lg" aria-hidden />
               上传文件

@@ -68,7 +68,7 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
       </div>
       <div className="mt-3">
         <p className="mb-2 text-sm font-semibold text-ink">生成张数</p>
-        <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7]">
+        <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-hairline">
           {[1, 2, 3, 4].map((value) => (
             <button
               key={value}

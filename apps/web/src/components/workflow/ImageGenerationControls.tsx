@@ -78,7 +78,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
             aria-label="提示词"
             value={props.prompt}
             onChange={(event) => props.onPromptChange(event.target.value)}
-            className="min-h-[132px] resize-y rounded-lg border border-[#d2d2d7] bg-white p-3 leading-6 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
+            className="min-h-[132px] resize-y rounded-lg border border-hairline bg-white p-3 leading-6 outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
           />
         </label>
 
@@ -86,7 +86,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
           type="button"
           onClick={props.onOptimizePrompt}
           disabled={props.isOptimizingPrompt}
-          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-[#d2d2d7] text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary"
+          className="mt-2 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-[#f5f5f7] disabled:text-ink-tertiary"
         >
           <Icon icon={props.isOptimizingPrompt ? "mdi:loading" : "mdi:magic-staff"} className={props.isOptimizingPrompt ? "animate-spin text-base" : "text-base"} aria-hidden />
           {props.isOptimizingPrompt ? "优化中" : "优化提示词"}
@@ -129,7 +129,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
               {props.referenceImages.map((image, index) => {
                 const locked = image.id === props.lockedReferenceId;
                 return (
-                  <div key={image.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-[#d2d2d7] bg-[#f5f5f7]">
+                  <div key={image.id} className="relative h-16 w-16 overflow-hidden rounded-lg border border-hairline bg-[#f5f5f7]">
                     <img src={image.thumbnailUrl || image.originalUrl} alt={`参考图 ${index + 1}`} className="h-full w-full object-cover" />
                     {locked ? (
                       <span className="absolute inset-x-0 bottom-0 bg-black/65 py-0.5 text-center text-[10px] font-semibold text-white">来源图</span>
@@ -192,13 +192,13 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
 
         <div className="mt-5 grid gap-2">
           <p className="text-sm font-semibold text-ink">批量数量</p>
-          <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-[#d2d2d7] bg-white">
+          <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-hairline bg-white">
             {QUICK_COUNTS.map((count) => (
               <button
                 key={count}
                 type="button"
                 onClick={() => props.onQuickCountChange(count)}
-                className={`h-9 border-r border-[#e8e8ed] text-sm font-semibold last:border-r-0 ${
+                className={`h-9 border-r border-hairline-subtle text-sm font-semibold last:border-r-0 ${
                   props.selectedQuickCount === count ? "bg-brand-soft text-brand-ink" : "text-ink-secondary"
                 }`}
               >
@@ -213,7 +213,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
             inputMode="numeric"
             max={IMAGE_MAX_COUNT}
             onChange={(event) => props.onCountInputChange(event.target.value)}
-            className="h-10 rounded-lg border border-[#d2d2d7] px-3 outline-none focus:border-brand"
+            className="h-10 rounded-lg border border-hairline px-3 outline-none focus:border-brand"
           />
         </div>
 

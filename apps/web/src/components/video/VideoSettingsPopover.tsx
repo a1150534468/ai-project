@@ -92,13 +92,13 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
   return (
     <div ref={ref} className="relative">
       <button type="button" aria-label="视频设置" aria-expanded={open} onClick={toggle}
-        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white px-3 py-2.5 text-left transition ${open ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}>
+        className={`flex w-full items-center gap-2 rounded-[10px] border bg-white px-3 py-2.5 text-left transition ${open ? "border-[#1d1d1f]" : "border-hairline-subtle "}`}>
         <span className="shrink-0 text-xs text-ink-tertiary">视频设置</span>
         <span className="ml-auto min-w-0 truncate text-sm font-medium text-ink">{summary}</span>
         <Icon icon="mdi:chevron-down" className={`shrink-0 text-base text-ink-tertiary transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
       </button>
       {open && (
-        <div className={`absolute right-0 z-30 grid w-[calc(200%+0.5rem)] gap-3.5 rounded-[14px] border border-[#e3e3e8] bg-white p-3.5 shadow-[0_16px_40px_rgba(20,20,45,0.16)] ${dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"}`}>
+        <div className={`absolute right-0 z-30 grid w-[calc(200%+0.5rem)] gap-3.5 rounded-[14px] border border-hairline-subtle bg-white p-3.5 shadow-[0_16px_40px_rgba(20,20,45,0.16)] ${dropUp ? "bottom-[calc(100%+6px)]" : "top-[calc(100%+6px)]"}`}>
           <div>
             <p className="mb-1.5 text-[11px] font-semibold text-ink-secondary">视频比例</p>
             <div className="grid grid-cols-6 gap-1.5">
@@ -106,7 +106,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                 const on = a === aspectRatio;
                 return (
                   <button key={a} type="button" onClick={() => props.onAspectRatioChange(a)}
-                    className={`rounded-[8px] border px-1 py-2 text-[11px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-tertiary "}`}>
+                    className={`rounded-[8px] border px-1 py-2 text-[11px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-tertiary "}`}>
                     {a}
                   </button>
                 );
@@ -120,7 +120,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                 const on = r === resolution;
                 return (
                   <button key={r} type="button" onClick={() => props.onResolutionChange(r)}
-                    className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-tertiary "}`}>
+                    className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-tertiary "}`}>
                     {RESOLUTION_LABELS[r]}
                   </button>
                 );
@@ -135,7 +135,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                   const on = generateAudio === val;
                   return (
                     <button key={label} type="button" onClick={() => props.onGenerateAudioChange(val)}
-                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-tertiary "}`}>
+                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-tertiary "}`}>
                       {label}
                     </button>
                   );
@@ -151,7 +151,7 @@ export function VideoSettingsPopover(props: VideoSettingsPopoverProps) {
                   const on = d.value === durationSec;
                   return (
                     <button key={d.value} type="button" onClick={() => props.onDurationChange(d.value)}
-                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-tertiary "}`}>
+                      className={`rounded-[8px] border px-3 py-2 text-[12px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-tertiary "}`}>
                       {d.label}
                     </button>
                   );

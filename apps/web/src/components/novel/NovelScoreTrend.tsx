@@ -17,7 +17,7 @@ export function NovelScoreTrend({ rows, compact = false }: { readonly rows: read
       <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand ring-2 ring-brand/20" />质量</span>
       <span className="ml-auto text-ink-tertiary">0–100 分</span>
     </div>
-    <div className={`flex items-end gap-1 overflow-x-auto border-b border-l border-[#e1e6e4] px-2 pt-2 ${compact ? "h-52" : "h-64"}`} aria-label="章节张力与质量趋势图">
+    <div className={`flex items-end gap-1 overflow-x-auto border-b border-l border-hairline-subtle px-2 pt-2 ${compact ? "h-52" : "h-64"}`} aria-label="章节张力与质量趋势图">
       {rows.map((chapter) => {
         const tension = percent(chapter.tensionScore);
         const quality = percent(chapter.qualityScore);

@@ -36,7 +36,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
       )}
 
       {!props.bootstrapping && props.batches.length === 0 && (
-        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-4 text-center text-xs leading-5 text-ink-tertiary">
+        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-hairline bg-[#f7f8fa] px-4 text-center text-xs leading-5 text-ink-tertiary">
           还没有生成过图文
         </div>
       )}

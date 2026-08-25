@@ -136,7 +136,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
             value={props.summaryDraft}
             onChange={(event) => props.onSummaryChange(event.target.value)}
             rows={2}
-            className="w-full resize-none rounded-lg border border-[#d2d2d7] bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
+            className="w-full resize-none rounded-lg border border-hairline bg-[#f7f8fa] px-4 py-3 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
             placeholder="输入摘要"
           />
         )}
@@ -273,12 +273,12 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
           </RippleButton>
 
           <details className="group relative">
-            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3.5 text-sm font-semibold text-ink marker:content-none">
+            <summary className="flex h-9 cursor-pointer list-none items-center gap-2 rounded-lg border border-hairline bg-white px-3.5 text-sm font-semibold text-ink marker:content-none">
               <Icon icon="mdi:content-copy" className="text-base" aria-hidden />
               复制
               <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
             </summary>
-            <div className="absolute right-0 top-11 z-20 grid w-52 overflow-hidden rounded-lg border border-[#d2d2d7] bg-white p-1 shadow-lg">
+            <div className="absolute right-0 top-11 z-20 grid w-52 overflow-hidden rounded-lg border border-hairline bg-white p-1 shadow-lg">
               {captionPlatform ? (
                 <>
                   <button

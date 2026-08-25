@@ -11,7 +11,7 @@ interface TeamRecommendationPanelProps {
 export function TeamRecommendationPanel({ recommendation, isConfirming, onConfirm }: TeamRecommendationPanelProps) {
   if (!recommendation) return null;
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">等待确认</p>
@@ -30,7 +30,7 @@ export function TeamRecommendationPanel({ recommendation, isConfirming, onConfir
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {recommendation.members.map((member) => (
-          <article key={member.name} className="rounded-[10px] border border-[#e8e8ed] p-4">
+          <article key={member.name} className="rounded-[10px] border border-hairline-subtle p-4">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 flex-none items-center justify-center rounded-[8px] bg-brand-soft text-brand-ink">
                 <Icon icon="mdi:robot-outline" className="text-lg" aria-hidden />

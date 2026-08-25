@@ -25,14 +25,14 @@ export function ImageResultActions(props: ImageResultActionsProps) {
   } as const;
 
   return (
-    <div className="grid grid-cols-2 gap-2 border-t border-[#ececf0] pt-3 sm:flex sm:flex-wrap" aria-label="当前图片操作">
+    <div className="grid grid-cols-2 gap-2 border-t border-hairline-subtle pt-3 sm:flex sm:flex-wrap" aria-label="当前图片操作">
       {actions.map((action) => (
         <button
           key={action.key}
           type="button"
           onClick={() => handlers[action.key](props.image)}
           className={`inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-semibold ${
-            action.key === "modify" ? "bg-[#1d1d1f] text-white" : "border border-[#d2d2d7] bg-white text-ink"
+            action.key === "modify" ? "bg-[#1d1d1f] text-white" : "border border-hairline bg-white text-ink"
           }`}
         >
           <Icon icon={action.icon} className="text-base" aria-hidden />

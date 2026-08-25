@@ -10,7 +10,7 @@ export function LocalBusinessPromoWorkflowStudio(props: LocalBusinessPromoWorkfl
 
   if (studio.state.isBootstrapping) {
     return (
-      <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-sm text-ink-secondary">
+      <section className="rounded-[14px] border border-hairline-subtle bg-white p-8 text-sm text-ink-secondary">
         正在加载工作流...
       </section>
     );

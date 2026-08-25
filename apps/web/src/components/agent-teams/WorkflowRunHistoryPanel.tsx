@@ -64,7 +64,7 @@ function reportPreview(run: AgentWorkflowRunDto): string {
 
 export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: WorkflowRunHistoryPanelProps) {
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">历史记录</p>
@@ -84,7 +84,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
                 type="button"
                 onClick={() => onSelectRun(run)}
                 className={`rounded-[10px] border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
-                  active ? "border-brand/50 bg-brand-soft" : "border-[#e8e8ed] bg-white "
+                  active ? "border-brand/50 bg-brand-soft" : "border-hairline-subtle bg-white "
                 }`}
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -105,7 +105,7 @@ export function WorkflowRunHistoryPanel({ runs, activeRunId, onSelectRun }: Work
           })}
         </div>
       ) : (
-        <div className="mt-4 rounded-[10px] border border-dashed border-[#d2d2d7] p-6 text-center text-sm text-ink-secondary">
+        <div className="mt-4 rounded-[10px] border border-dashed border-hairline p-6 text-center text-sm text-ink-secondary">
           暂无运行历史
         </div>
       )}

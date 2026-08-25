@@ -49,7 +49,7 @@ function RunDocumentActions({ run }: RunDocumentActionsProps) {
       <button
         type="button"
         onClick={handleDownload}
-        className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-white px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
       >
         <Icon icon="mdi:download-outline" className="text-base" aria-hidden />
         下载文档
@@ -97,7 +97,7 @@ function WorkflowSteps({ run }: WorkflowStepsProps) {
   return (
     <div className="space-y-2">
       {run.steps.map((step) => (
-        <div key={step.id} className="rounded-[10px] border border-[#e8e8ed] bg-white p-3">
+        <div key={step.id} className="rounded-[10px] border border-hairline-subtle bg-white p-3">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold text-ink">{step.title}</p>
@@ -135,7 +135,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
   };
 
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">执行记录</p>
@@ -151,7 +151,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
               type="button"
               disabled={isCancelling}
               onClick={onCancel}
-              className="h-8 rounded-full border border-[#d2d2d7] px-3 text-xs font-medium text-ink-secondary transition disabled:opacity-60"
+              className="h-8 rounded-full border border-hairline px-3 text-xs font-medium text-ink-secondary transition disabled:opacity-60"
             >
               {isCancelling ? "取消中" : "取消"}
             </button>
@@ -162,7 +162,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
       {isCompletedReport ? (
         <div className="mt-4 space-y-4">
           <article className="rounded-[14px] border border-brand/15 bg-[#f7faf9] p-5">
-            <div className="flex flex-col gap-3 border-b border-[#e8e8ed] pb-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 border-b border-hairline-subtle pb-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-brand-ink">任务已完成</p>
                 <h3 className="mt-1 text-lg font-semibold text-ink">任务答案与报告</h3>
@@ -174,7 +174,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
                   aria-expanded={isWorkflowVisible}
                   aria-controls={`agent-workflow-steps-${run.id}`}
                   onClick={toggleWorkflow}
-                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-white px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-[10px] border border-hairline bg-white px-3 text-sm font-semibold text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
                 >
                   <Icon icon={isWorkflowVisible ? "mdi:chevron-up" : "mdi:source-branch"} className="text-base" aria-hidden />
                   {isWorkflowVisible ? "隐藏工作流" : "查看工作流"}
@@ -186,7 +186,7 @@ export function WorkflowRunPanel({ run, isCancelling, onCancel }: WorkflowRunPan
             </div>
           </article>
           {isWorkflowVisible && (
-            <div id={`agent-workflow-steps-${run.id}`} className="rounded-[14px] border border-[#e8e8ed] bg-[#fbfbfc] p-4">
+            <div id={`agent-workflow-steps-${run.id}`} className="rounded-[14px] border border-hairline-subtle bg-[#fbfbfc] p-4">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold text-ink">工作流过程</h3>
                 <span className="text-xs text-ink-secondary">{run.steps.length} 个步骤</span>

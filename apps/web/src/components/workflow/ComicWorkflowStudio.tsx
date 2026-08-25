@@ -256,7 +256,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
 
   return (
     <section className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <aside className="rounded-[14px] border border-[#e8e8ed] bg-white p-4">
+      <aside className="rounded-[14px] border border-hairline-subtle bg-white p-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-ink">漫剧项目</h2>
           <StatusPill>{`${projects.length} 个`}</StatusPill>
@@ -267,24 +267,24 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               key={item.id}
               type="button"
               onClick={() => void refreshProject(item.id)}
-              className={`w-full rounded-[10px] border px-3 py-3 text-left transition ${project?.id === item.id ? "border-brand bg-brand-soft" : "border-[#e8e8ed] "}`}
+              className={`w-full rounded-[10px] border px-3 py-3 text-left transition ${project?.id === item.id ? "border-brand bg-brand-soft" : "border-hairline-subtle "}`}
             >
               <p className="truncate text-sm font-semibold text-ink">{item.title}</p>
               <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-secondary">{item.logline || item.style || "未填写简介"}</p>
             </button>
           ))}
         </div>
-        <div className="mt-4 space-y-2 border-t border-[#e8e8ed] pt-4">
-          <input value={projectForm.title} onChange={(event) => setProjectForm({ ...projectForm, title: event.target.value })} placeholder="项目名" className="h-10 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
-          <input value={projectForm.logline} onChange={(event) => setProjectForm({ ...projectForm, logline: event.target.value })} placeholder="一句话剧情" className="h-10 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
-          <input value={projectForm.style} onChange={(event) => setProjectForm({ ...projectForm, style: event.target.value })} placeholder="视觉风格" className="h-10 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
+        <div className="mt-4 space-y-2 border-t border-hairline-subtle pt-4">
+          <input value={projectForm.title} onChange={(event) => setProjectForm({ ...projectForm, title: event.target.value })} placeholder="项目名" className="h-10 w-full rounded-[10px] border border-hairline px-3 text-sm" />
+          <input value={projectForm.logline} onChange={(event) => setProjectForm({ ...projectForm, logline: event.target.value })} placeholder="一句话剧情" className="h-10 w-full rounded-[10px] border border-hairline px-3 text-sm" />
+          <input value={projectForm.style} onChange={(event) => setProjectForm({ ...projectForm, style: event.target.value })} placeholder="视觉风格" className="h-10 w-full rounded-[10px] border border-hairline px-3 text-sm" />
           <RippleButton type="button" onClick={createProjectAction} disabled={!projectForm.title.trim() || Boolean(busy)} className="h-10 w-full rounded-[10px] bg-brand text-sm font-semibold text-white disabled:opacity-50">
             <Icon icon="mdi:plus" className="mr-1 inline-block" aria-hidden />新建项目
           </RippleButton>
         </div>
       </aside>
 
-      <div className="min-w-0 rounded-[14px] border border-[#e8e8ed] bg-white p-4 lg:p-5">
+      <div className="min-w-0 rounded-[14px] border border-hairline-subtle bg-white p-4 lg:p-5">
         {!project ? (
           <div className="grid min-h-[360px] place-items-center text-sm text-ink-secondary">选择或新建一个漫剧项目</div>
         ) : (
@@ -310,16 +310,16 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                 {stage === "script" && (
                   <div className="space-y-3">
                     <div className="grid gap-3 md:grid-cols-2">
-                      <input value={episodeForm.title} onChange={(event) => setEpisodeForm({ ...episodeForm, title: event.target.value })} placeholder="剧集标题" className="h-10 rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
-                      <input value={episodeForm.summary} onChange={(event) => setEpisodeForm({ ...episodeForm, summary: event.target.value })} placeholder="剧集摘要" className="h-10 rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
+                      <input value={episodeForm.title} onChange={(event) => setEpisodeForm({ ...episodeForm, title: event.target.value })} placeholder="剧集标题" className="h-10 rounded-[10px] border border-hairline px-3 text-sm" />
+                      <input value={episodeForm.summary} onChange={(event) => setEpisodeForm({ ...episodeForm, summary: event.target.value })} placeholder="剧集摘要" className="h-10 rounded-[10px] border border-hairline px-3 text-sm" />
                     </div>
                     <button type="button" onClick={createEpisodeAction} disabled={!episodeForm.title.trim() || Boolean(busy)} className="h-10 rounded-[10px] border border-brand px-4 text-sm font-semibold text-brand-ink disabled:opacity-50">创建剧集</button>
                     <div className="flex flex-wrap gap-2">
                       {project.episodes.map((episode) => (
-                        <button key={episode.id} type="button" onClick={() => setEpisodeId(episode.id)} className={`rounded-[10px] border px-3 py-2 text-sm ${selectedEpisode?.id === episode.id ? "border-brand bg-brand-soft text-brand-ink" : "border-[#e8e8ed] text-ink-secondary"}`}>第 {episode.episodeNo} 集 · {episode.title}</button>
+                        <button key={episode.id} type="button" onClick={() => setEpisodeId(episode.id)} className={`rounded-[10px] border px-3 py-2 text-sm ${selectedEpisode?.id === episode.id ? "border-brand bg-brand-soft text-brand-ink" : "border-hairline-subtle text-ink-secondary"}`}>第 {episode.episodeNo} 集 · {episode.title}</button>
                       ))}
                     </div>
-                    <textarea value={scriptText} onChange={(event) => setScriptText(event.target.value)} placeholder="粘贴或编写本集脚本" className="min-h-[280px] w-full rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-ink" />
+                    <textarea value={scriptText} onChange={(event) => setScriptText(event.target.value)} placeholder="粘贴或编写本集脚本" className="min-h-[280px] w-full rounded-[10px] border border-hairline p-3 text-sm leading-6 text-ink" />
                     <RippleButton type="button" onClick={saveScriptAction} disabled={!selectedEpisode || !scriptText.trim() || Boolean(busy)} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">保存并激活脚本</RippleButton>
                   </div>
                 )}
@@ -332,12 +332,12 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                         onChange={(event) => {
                           if (isComicAssetType(event.target.value)) setAssetForm({ ...assetForm, type: event.target.value });
                         }}
-                        className="h-10 rounded-[10px] border border-[#d2d2d7] px-3 text-sm"
+                        className="h-10 rounded-[10px] border border-hairline px-3 text-sm"
                       >
                         {ASSET_TYPES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
                       </select>
-                      <input value={assetForm.name} onChange={(event) => setAssetForm({ ...assetForm, name: event.target.value })} placeholder="资产名称" className="h-10 rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
-                      <input value={assetForm.description} onChange={(event) => setAssetForm({ ...assetForm, description: event.target.value })} placeholder="描述" className="h-10 rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
+                      <input value={assetForm.name} onChange={(event) => setAssetForm({ ...assetForm, name: event.target.value })} placeholder="资产名称" className="h-10 rounded-[10px] border border-hairline px-3 text-sm" />
+                      <input value={assetForm.description} onChange={(event) => setAssetForm({ ...assetForm, description: event.target.value })} placeholder="描述" className="h-10 rounded-[10px] border border-hairline px-3 text-sm" />
                     </div>
                     <RippleButton type="button" onClick={createAssetAction} disabled={!assetForm.name.trim() || Boolean(busy)} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:opacity-50">添加资产</RippleButton>
                     {assets.length > 0 ? (
@@ -346,7 +346,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                           <StaggerItem key={asset.id}>
                             <motion.article
                               layout
-                              className="rounded-[10px] border border-[#e8e8ed] p-3"
+                              className="rounded-[10px] border border-hairline-subtle p-3"
                               whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                               transition={spring.smooth}
                             >
@@ -369,7 +369,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                           <StaggerItem key={shot.id}>
                             <motion.article
                               layout
-                              className="grid gap-3 rounded-[10px] border border-[#e8e8ed] p-3 md:grid-cols-[160px_minmax(0,1fr)_auto]"
+                              className="grid gap-3 rounded-[10px] border border-hairline-subtle p-3 md:grid-cols-[160px_minmax(0,1fr)_auto]"
                               whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                               transition={spring.smooth}
                             >
@@ -386,7 +386,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
 
                 {stage === "render" && (
                   <div className="space-y-3">
-                    <select value={selectedVideoModelId} onChange={(event) => setSelectedVideoModelId(event.target.value)} className="h-10 rounded-[10px] border border-[#d2d2d7] px-3 text-sm">
+                    <select value={selectedVideoModelId} onChange={(event) => setSelectedVideoModelId(event.target.value)} className="h-10 rounded-[10px] border border-hairline px-3 text-sm">
                       {videoModels.map((model) => <option key={model.id} value={model.id}>{model.label} · {model.resolution}</option>)}
                     </select>
                     {shots.length > 0 ? (
@@ -396,7 +396,7 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
                             <StaggerItem key={shot.id}>
                               <motion.div
                                 layout
-                                className="flex items-center justify-between gap-3 rounded-[10px] border border-[#e8e8ed] p-3"
+                                className="flex items-center justify-between gap-3 rounded-[10px] border border-hairline-subtle p-3"
                                 whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                                 transition={spring.smooth}
                               >
@@ -417,10 +417,10 @@ export function ComicWorkflowStudio({ token, onBalanceRefresh }: ComicWorkflowSt
               <aside className="space-y-3 rounded-[10px] bg-[#f7faf9] p-3">
                 <h3 className="text-sm font-semibold text-ink">设定资料</h3>
                 <div className="space-y-2">
-                  {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-[#e8e8ed] bg-white p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-ink">{entry.title}</p></div>)}
+                  {project.bibleEntries.map((entry) => <div key={entry.id} className="rounded-[8px] border border-hairline-subtle bg-white p-2"><p className="text-xs font-semibold text-brand-ink">{entry.category}</p><p className="text-sm font-semibold text-ink">{entry.title}</p></div>)}
                 </div>
-                <input value={bibleForm.title} onChange={(event) => setBibleForm({ ...bibleForm, title: event.target.value })} placeholder="设定标题" className="h-10 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm" />
-                <textarea value={bibleForm.content} onChange={(event) => setBibleForm({ ...bibleForm, content: event.target.value })} placeholder="设定内容" className="min-h-24 w-full rounded-[10px] border border-[#d2d2d7] p-3 text-sm" />
+                <input value={bibleForm.title} onChange={(event) => setBibleForm({ ...bibleForm, title: event.target.value })} placeholder="设定标题" className="h-10 w-full rounded-[10px] border border-hairline px-3 text-sm" />
+                <textarea value={bibleForm.content} onChange={(event) => setBibleForm({ ...bibleForm, content: event.target.value })} placeholder="设定内容" className="min-h-24 w-full rounded-[10px] border border-hairline p-3 text-sm" />
                 <button type="button" onClick={createBibleAction} disabled={!bibleForm.title.trim() || Boolean(busy)} className="h-10 w-full rounded-[10px] border border-brand text-sm font-semibold text-brand-ink disabled:opacity-50">添加设定</button>
               </aside>
             </div>

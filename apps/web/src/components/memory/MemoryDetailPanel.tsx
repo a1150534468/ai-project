@@ -40,7 +40,7 @@ function getEditableTitle(node: MemoryNode): string {
 
 function EmptyState() {
   return (
-    <aside className="flex h-full min-h-[320px] flex-col justify-center rounded-[14px] border border-[#e8e8ed] bg-white p-6 text-center">
+    <aside className="flex h-full min-h-[320px] flex-col justify-center rounded-[14px] border border-hairline-subtle bg-white p-6 text-center">
       <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
         <Icon icon="mdi:table-row" className="text-2xl" />
       </div>
@@ -138,13 +138,13 @@ export default function MemoryDetailPanel({
 
   return (
     <motion.aside
-      className="flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-[#e8e8ed] bg-white"
+      className="flex h-full min-h-0 flex-col overflow-hidden rounded-[14px] border border-hairline-subtle bg-white"
       variants={msgIn}
       initial="initial"
       animate="animate"
       exit="exit"
     >
-      <div className="flex items-start justify-between gap-3 border-b border-[#e8e8ed] px-5 py-4">
+      <div className="flex items-start justify-between gap-3 border-b border-hairline-subtle px-5 py-4">
         <div className="min-w-0 flex-1">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             记忆详情
@@ -163,7 +163,7 @@ export default function MemoryDetailPanel({
               type="button"
               onClick={onClose}
               aria-label="关闭记忆详情"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#d2d2d7] bg-white text-ink shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-hairline bg-white text-ink shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -184,7 +184,7 @@ export default function MemoryDetailPanel({
             <button
               type="button"
               onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex items-center gap-2 rounded-full border border-hairline px-3 py-2 text-xs font-medium text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <Icon icon="mdi:pencil-outline" className="text-sm" />
               编辑
@@ -193,7 +193,7 @@ export default function MemoryDetailPanel({
             <button
               type="button"
               onClick={resetEditor}
-              className="inline-flex items-center gap-2 rounded-full border border-[#d2d2d7] px-3 py-2 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className="inline-flex items-center gap-2 rounded-full border border-hairline px-3 py-2 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
             >
               <Icon icon="mdi:close-circle-outline" className="text-sm" />
               取消
@@ -243,7 +243,7 @@ export default function MemoryDetailPanel({
         </AnimatePresence>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-[#e8e8ed] px-5 py-4">
+      <div className="flex items-center justify-between gap-3 border-t border-hairline-subtle px-5 py-4">
         <button
           type="button"
           onClick={() => void onDelete()}

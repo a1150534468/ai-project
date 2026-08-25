@@ -90,7 +90,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 </button>
               )}
               {imageMenuOpen && props.batchMissingProjectCount > 1 && (
-                <div className="absolute right-0 top-10 z-30 w-44 rounded-lg border border-[#d2d2d7] bg-white p-1 shadow-lg">
+                <div className="absolute right-0 top-10 z-30 w-44 rounded-lg border border-hairline bg-white p-1 shadow-lg">
                   <button
                     type="button"
                     onClick={() => {
@@ -186,7 +186,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
                 value={props.rewriteInstruction}
                 onChange={(event) => props.onRewriteInstructionChange(event.target.value)}
                 rows={4}
-                className="mt-3 w-full resize-none rounded-lg border border-[#d2d2d7] bg-[#f7f8fa] px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
+                className="mt-3 w-full resize-none rounded-lg border border-hairline bg-[#f7f8fa] px-3 py-2.5 text-sm leading-6 text-ink outline-none focus:border-brand focus:bg-white"
                 placeholder="例如：开头更有代入感，整体语气更自然。"
               />
             </div>

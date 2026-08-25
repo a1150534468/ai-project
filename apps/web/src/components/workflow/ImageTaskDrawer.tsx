@@ -109,7 +109,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
                       <button
                         type="button"
                         onClick={() => props.onRetryTask(task)}
-                        className="mb-3 ml-3 inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-ink"
+                        className="mb-3 ml-3 inline-flex h-7 items-center gap-1 rounded-lg border border-hairline px-2 text-xs font-semibold text-ink"
                       >
                         <Icon icon="mdi:refresh" className="text-sm" aria-hidden />
                         重新提交

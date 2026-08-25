@@ -99,7 +99,7 @@ export default function MemoryGalaxyCanvas({
   })).filter((item) => item.count > 0);
 
   return (
-    <section className="relative flex min-h-0 flex-1 overflow-hidden rounded-[14px] border border-[#d2d2d7] bg-white">
+    <section className="relative flex min-h-0 flex-1 overflow-hidden rounded-[14px] border border-hairline bg-white">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,102,204,0.06),transparent_48%)]" />
       <div
         className="absolute inset-0 opacity-60"
@@ -152,7 +152,7 @@ export default function MemoryGalaxyCanvas({
       <div ref={containerRef} className="relative min-h-[520px] flex-1">
         {loading ? (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/85">
-            <div className="flex items-center gap-3 rounded-full border border-[#e8e8ed] bg-white px-4 py-3 text-sm text-ink-secondary shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+            <div className="flex items-center gap-3 rounded-full border border-hairline-subtle bg-white px-4 py-3 text-sm text-ink-secondary shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
               <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
               正在编织记忆星河...
             </div>

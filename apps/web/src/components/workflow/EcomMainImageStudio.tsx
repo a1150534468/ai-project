@@ -180,7 +180,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
           {style === "custom" && (
             <label className="grid gap-2 text-sm font-semibold text-ink">
               自定义风格描述
-              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-lg border border-[#d2d2d7] p-3 text-sm leading-6 text-ink" />
+              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-lg border border-hairline p-3 text-sm leading-6 text-ink" />
             </label>
           )}
           <div className="grid gap-2 text-sm font-semibold text-ink">
@@ -219,11 +219,11 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
           </div>
         )}
-        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden /><p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p></div></div>}
+        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-hairline bg-[#f7f8fa] px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden /><p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p></div></div>}
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           {isSubmitting
             ? Array.from({ length: count }).map((_, skeletonIndex) => (
-                <article key={`skeleton-${skeletonIndex}`} className="overflow-hidden rounded-[12px] border border-[#e8e8ed]">
+                <article key={`skeleton-${skeletonIndex}`} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
                   <div className="relative grid aspect-square place-items-center overflow-hidden bg-[#f5f5f7]">
                     <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#f5f5f7] via-[#f7f8fa] to-[#f5f5f7]" />
                     <Icon icon="mdi:image-outline" className="relative animate-pulse text-3xl text-ink-tertiary" aria-hidden />
@@ -236,7 +236,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                 </article>
               ))
             : job?.images.map((image) => (
-                <article key={image.index} className="overflow-hidden rounded-[12px] border border-[#e8e8ed]">
+                <article key={image.index} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
                   <div className="group relative grid aspect-square place-items-center bg-[#f5f5f7]">
                     {image.originalUrl
                       ? <img src={image.thumbnailUrl || image.originalUrl} alt={`主图 ${image.index + 1}`} className="h-full w-full object-cover" />
@@ -256,7 +256,7 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
                     <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">画面要求：</span>{image.sceneRequirement}</p>
                     <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">文案要求：</span>{image.copyRequirement}</p>
                     {image.status === "failed" && (
-                      <RippleButton type="button" onClick={() => handleRedraw(image.index)} disabled={busy} className="h-9 rounded-[8px] border border-[#d2d2d7] text-xs font-semibold text-brand-ink disabled:text-ink-tertiary">
+                      <RippleButton type="button" onClick={() => handleRedraw(image.index)} disabled={busy} className="h-9 rounded-[8px] border border-hairline text-xs font-semibold text-brand-ink disabled:text-ink-tertiary">
                         {redrawingIndexes.includes(image.index) ? "重绘中…" : "重绘这张"}
                       </RippleButton>
                     )}

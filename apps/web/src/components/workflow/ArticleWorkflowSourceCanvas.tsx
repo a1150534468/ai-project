@@ -41,7 +41,7 @@ export function ArticleWorkflowSourceCanvas(props: ArticleWorkflowSourceCanvasPr
           aria-label="文章原文"
           value={props.sourceText}
           onChange={(event) => props.onSourceTextChange(event.target.value)}
-          className="min-h-[160px] w-full resize-y rounded-lg border border-[#d2d2d7] bg-white px-3.5 py-3 text-sm leading-6 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+          className="min-h-[160px] w-full resize-y rounded-lg border border-hairline bg-white px-3.5 py-3 text-sm leading-6 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
           placeholder={props.sourceFormat === "markdown" ? "粘贴 Markdown 内容" : "粘贴文章正文"}
         />
       </section>
@@ -76,7 +76,7 @@ export function ArticleWorkflowSourceCanvas(props: ArticleWorkflowSourceCanvasPr
           aria-label="文章原文"
           value={props.sourceText}
           onChange={(event) => props.onSourceTextChange(event.target.value)}
-          className="h-full min-h-[420px] w-full resize-none overflow-y-auto rounded-lg border border-[#d2d2d7] bg-white px-5 py-4 text-sm leading-7 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
+          className="h-full min-h-[420px] w-full resize-none overflow-y-auto rounded-lg border border-hairline bg-white px-5 py-4 text-sm leading-7 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/10"
           placeholder={props.sourceFormat === "markdown" ? "粘贴 Markdown 内容" : "粘贴文章正文"}
         />
       </div>

@@ -30,7 +30,7 @@ export function DownloadLinkDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/30 px-4">
-      <section className="w-full max-w-[560px] rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_20px_70px_rgba(15,23,42,0.18)]">
+      <section className="w-full max-w-[560px] rounded-[14px] border border-hairline-subtle bg-white p-5 shadow-[0_20px_70px_rgba(15,23,42,0.18)]">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-ink">{dialog.title}</h2>
@@ -53,18 +53,18 @@ export function DownloadLinkDialog({
             readOnly
             value={text}
             onFocus={(event) => event.currentTarget.select()}
-            className="mt-4 h-11 w-full rounded-[10px] border border-[#d2d2d7] px-3 text-sm text-ink"
+            className="mt-4 h-11 w-full rounded-[10px] border border-hairline px-3 text-sm text-ink"
           />
         ) : (
           <textarea
             readOnly
             value={text}
             onFocus={(event) => event.currentTarget.select()}
-            className="mt-4 min-h-44 w-full resize-y rounded-[10px] border border-[#d2d2d7] p-3 text-sm leading-6 text-ink"
+            className="mt-4 min-h-44 w-full resize-y rounded-[10px] border border-hairline p-3 text-sm leading-6 text-ink"
           />
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-[#d2d2d7] px-4 text-sm font-semibold text-ink ">
+          <button type="button" onClick={onClose} className="h-10 rounded-[10px] border border-hairline px-4 text-sm font-semibold text-ink ">
             关闭
           </button>
           <RippleButton type="button" onClick={handleCopy} className="h-10 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white ">

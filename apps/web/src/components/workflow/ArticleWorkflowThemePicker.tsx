@@ -68,7 +68,7 @@ export function ArticleWorkflowThemePicker(props: ArticleWorkflowThemePickerProp
               aria-label="自定义主色"
               value={effectiveColor}
               onChange={(event) => props.onThemeColorChange(event.target.value)}
-              className="h-8 w-12 cursor-pointer rounded border border-[#d2d2d7] bg-white p-0.5"
+              className="h-8 w-12 cursor-pointer rounded border border-hairline bg-white p-0.5"
             />
             <span className="font-mono text-[11px] text-ink-tertiary">{effectiveColor}</span>
             {props.selectedThemeColor && (
@@ -122,7 +122,7 @@ function ThemeCard(props: {
       aria-checked={props.selected}
       onClick={props.onClick}
       className={`min-w-0 overflow-hidden rounded-xl border p-2 text-left transition ${
-        props.selected ? "border-brand ring-1 ring-brand/20" : "border-[#e1e5e3] hover:border-[#cbd3d0]"
+        props.selected ? "border-brand ring-1 ring-brand/20" : "border-hairline-subtle hover:border-[#cbd3d0]"
       }`}
     >
       {props.placeholder ? (

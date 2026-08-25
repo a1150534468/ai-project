@@ -88,7 +88,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
                 value={draft.topic}
                 onChange={(event) => updateTopic({ topic: event.target.value })}
                 maxLength={200}
-                className="h-11 rounded-lg border border-[#d2d2d7] bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
+                className="h-11 rounded-lg border border-hairline bg-white px-3.5 text-sm text-ink outline-none focus:border-brand focus:ring-2 focus:ring-brand/10"
                 placeholder="例如：夏天在家做一杯清爽咖啡"
               />
             </label>
@@ -116,7 +116,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
                   aria-label="预设风格"
                   value={draft.style.preset}
                   onChange={(event) => updateTopic({ style: { mode: "preset", preset: event.target.value as ArticleWorkflowTopicPreset } })}
-                  className="mt-3 h-11 w-full rounded-lg border border-[#d2d2d7] bg-white px-3 text-sm text-ink outline-none focus:border-brand"
+                  className="mt-3 h-11 w-full rounded-lg border border-hairline bg-white px-3 text-sm text-ink outline-none focus:border-brand"
                 >
                   {PRESETS.map((preset) => <option key={preset.key} value={preset.key}>{preset.label}</option>)}
                 </select>
@@ -128,7 +128,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
                   onChange={(event) => updateTopic({ style: { mode: "custom", instruction: event.target.value } })}
                   maxLength={2000}
                   rows={5}
-                  className="mt-3 w-full resize-y rounded-lg border border-[#d2d2d7] bg-white px-3.5 py-3 text-sm leading-6 text-ink outline-none focus:border-brand"
+                  className="mt-3 w-full resize-y rounded-lg border border-hairline bg-white px-3.5 py-3 text-sm leading-6 text-ink outline-none focus:border-brand"
                   placeholder="例如：像朋友聊天，开头直接给结论，结尾自然提问"
                 />
               )}
@@ -139,7 +139,7 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
                   onChange={(event) => updateTopic({ style: { mode: "imitate", referenceText: event.target.value } })}
                   maxLength={20000}
                   rows={8}
-                  className="mt-3 w-full resize-y rounded-lg border border-[#d2d2d7] bg-white px-3.5 py-3 text-sm leading-6 text-ink outline-none focus:border-brand"
+                  className="mt-3 w-full resize-y rounded-lg border border-hairline bg-white px-3.5 py-3 text-sm leading-6 text-ink outline-none focus:border-brand"
                   placeholder="粘贴一篇用于参考表达风格的文案"
                 />
               )}
@@ -152,15 +152,15 @@ export function ArticleWorkflowCreationCanvas(props: ArticleWorkflowCreationCanv
               <div className="mt-4 grid gap-4">
                 <label className="grid gap-2">
                   <span className="text-xs font-semibold text-ink">核心要点</span>
-                  <textarea value={draft.keyPoints} onChange={(event) => updateTopic({ keyPoints: event.target.value })} maxLength={4000} rows={5} className="resize-y rounded-lg border border-[#d2d2d7] bg-white px-3.5 py-3 text-sm leading-6 outline-none focus:border-brand" />
+                  <textarea value={draft.keyPoints} onChange={(event) => updateTopic({ keyPoints: event.target.value })} maxLength={4000} rows={5} className="resize-y rounded-lg border border-hairline bg-white px-3.5 py-3 text-sm leading-6 outline-none focus:border-brand" />
                 </label>
                 <label className="grid gap-2">
                   <span className="text-xs font-semibold text-ink">目标受众</span>
-                  <input value={draft.audience} onChange={(event) => updateTopic({ audience: event.target.value })} maxLength={500} className="h-11 rounded-lg border border-[#d2d2d7] bg-white px-3.5 text-sm outline-none focus:border-brand" />
+                  <input value={draft.audience} onChange={(event) => updateTopic({ audience: event.target.value })} maxLength={500} className="h-11 rounded-lg border border-hairline bg-white px-3.5 text-sm outline-none focus:border-brand" />
                 </label>
                 <label className="grid gap-2">
                   <span className="text-xs font-semibold text-ink">禁写内容</span>
-                  <textarea value={draft.avoid} onChange={(event) => updateTopic({ avoid: event.target.value })} maxLength={2000} rows={4} className="resize-y rounded-lg border border-[#d2d2d7] bg-white px-3.5 py-3 text-sm leading-6 outline-none focus:border-brand" />
+                  <textarea value={draft.avoid} onChange={(event) => updateTopic({ avoid: event.target.value })} maxLength={2000} rows={4} className="resize-y rounded-lg border border-hairline bg-white px-3.5 py-3 text-sm leading-6 outline-none focus:border-brand" />
                 </label>
               </div>
             </details>

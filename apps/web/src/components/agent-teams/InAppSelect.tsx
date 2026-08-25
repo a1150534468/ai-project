@@ -33,7 +33,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
         type="button"
         disabled={disabled}
         onClick={() => setOpen((prev) => !prev)}
-        className="flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border border-[#d2d2d7] bg-[#f7faf9] px-3 text-left text-sm text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border border-hairline bg-[#f7faf9] px-3 text-left text-sm text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
@@ -42,7 +42,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
         <Icon icon="mdi:chevron-down" className="flex-none text-lg text-ink-tertiary" aria-hidden />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[12px] border border-[#e8e8ed] bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
+        <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden rounded-[12px] border border-hairline-subtle bg-white shadow-[0_18px_40px_rgba(15,23,42,0.12)]">
           <div className="border-b border-[#f0f0f3] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-secondary">
             {label}
           </div>
@@ -64,7 +64,7 @@ export function InAppSelect({ icon, label, value, options, disabled = false, onC
                   }`}
                 >
                   <span className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full ${
-                    checked ? "bg-brand text-white" : "border border-[#d2d2d7] text-transparent"
+                    checked ? "bg-brand text-white" : "border border-hairline text-transparent"
                   }`}>
                     <Icon icon="mdi:check" className="text-sm" aria-hidden />
                   </span>

@@ -9,8 +9,8 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
   const { state, actions } = studio;
   return (
     <section className="grid gap-4">
-      <div className="rounded-[14px] border border-[#e8e8ed] bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
-        <div className="flex flex-col gap-4 border-b border-[#e8e8ed] pb-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="rounded-[14px] border border-hairline-subtle bg-white p-5 shadow-[0_16px_44px_rgba(15,23,42,0.055)]">
+        <div className="flex flex-col gap-4 border-b border-hairline-subtle pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <div className="flex items-center gap-2 text-xs font-semibold text-brand-ink">
               <Icon icon="mdi:movie-open-play-outline" aria-hidden />
@@ -40,7 +40,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
                   type="button"
                   onClick={() => void actions.selectProject(item.id)}
                   disabled={opening || state.isLoadingProject}
-                  className="group grid min-h-[156px] content-between rounded-[12px] border border-[#e8e8ed] bg-white p-4 text-left transition disabled:opacity-60"
+                  className="group grid min-h-[156px] content-between rounded-[12px] border border-hairline-subtle bg-white p-4 text-left transition disabled:opacity-60"
                 >
                   <span className="flex min-w-0 items-start justify-between gap-3">
                     <span className="min-w-0">
@@ -72,7 +72,7 @@ export function LocalBusinessPromoProjectListView({ studio }: { readonly studio:
             })}
           </div>
         ) : (
-          <div className="mt-5 grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-[#d2d2d7] bg-[#f7faf9] px-4 text-center">
+          <div className="mt-5 grid min-h-[220px] place-items-center rounded-[12px] border border-dashed border-hairline bg-[#f7faf9] px-4 text-center">
             <div>
               <p className="text-base font-semibold text-ink">还没有项目</p>
               <p className="mt-2 text-sm text-ink-secondary">先新建一个宣传项目，再进入剪辑工作台。</p>

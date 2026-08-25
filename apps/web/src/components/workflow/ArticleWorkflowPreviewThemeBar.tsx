@@ -55,13 +55,13 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
         type="button"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
-        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
+        className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
       >
         <Icon icon="mdi:palette-outline" className="text-base" aria-hidden />
         {themeLabel}
         {effectiveTheme !== "auto" && (
           <span
-            className="h-3 w-3 rounded-full border border-[#d2d2d7]"
+            className="h-3 w-3 rounded-full border border-hairline"
             style={{ backgroundColor: effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary }}
             aria-hidden
           />
@@ -86,7 +86,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                   className={`min-w-0 overflow-hidden rounded-lg border p-1.5 text-left transition ${
                     effectiveTheme === key
                       ? "border-brand ring-1 ring-brand/20"
-                      : "border-[#e1e5e3] hover:border-[#cbd3d0]"
+                      : "border-hairline-subtle hover:border-[#cbd3d0]"
                   }`}
                 >
                   <span className="pointer-events-none block h-16 overflow-hidden rounded-md bg-white" aria-hidden>
@@ -111,7 +111,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                   aria-label="主色"
                   value={effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary}
                   onChange={(event) => props.onPreviewThemeColor(event.target.value)}
-                  className="h-7 w-10 cursor-pointer rounded border border-[#d2d2d7] bg-white p-0.5"
+                  className="h-7 w-10 cursor-pointer rounded border border-hairline bg-white p-0.5"
                 />
                 <span className="font-mono text-[11px] text-ink-tertiary">
                   {effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary}

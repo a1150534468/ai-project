@@ -28,7 +28,7 @@ export function TeamCardGrid({
 }: TeamCardGridProps) {
   const gridClassName = variant === "column" ? "mt-4 grid gap-3" : "mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3";
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-5">
+    <section className="rounded-[14px] border border-hairline-subtle bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <h2 className="text-base font-semibold text-ink">我的 Agent 团队</h2>
         <span className="text-xs text-ink-secondary">{teams.length} 个团队</span>
@@ -42,7 +42,7 @@ export function TeamCardGrid({
             <StaggerItem key={team.id}>
               <motion.article
                 className={`rounded-[10px] border p-4 transition ${
-                  selected ? "border-brand/50 bg-brand-soft" : "border-[#e8e8ed] bg-white"
+                  selected ? "border-brand/50 bg-brand-soft" : "border-hairline-subtle bg-white"
                 }`}
                 whileHover={!selected ? { y: -5 } : undefined}
                 transition={spring.snappy}
@@ -90,7 +90,7 @@ export function TeamCardGrid({
                       type="button"
                       onClick={onCancelDelete}
                       disabled={deleting}
-                      className="rounded-[8px] border border-[#d2d2d7] bg-white px-3 py-1.5 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-[8px] border border-hairline bg-white px-3 py-1.5 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       取消
                     </button>
@@ -110,7 +110,7 @@ export function TeamCardGrid({
           );
         })}
         {teams.length === 0 && (
-          <div className="rounded-[10px] border border-dashed border-[#d2d2d7] p-6 text-center text-sm text-ink-secondary">
+          <div className="rounded-[10px] border border-dashed border-hairline p-6 text-center text-sm text-ink-secondary">
             暂无可复用团队
           </div>
         )}

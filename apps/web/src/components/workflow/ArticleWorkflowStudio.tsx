@@ -15,7 +15,7 @@ import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
 function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boolean }) {
   return (
     <section className="grid h-full min-h-[440px] place-items-center bg-[#f7f8fa] px-6 py-10" aria-label="实时输出预览">
-      <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-[#d9dfdd] bg-white px-6 py-12 text-center">
+      <div className="grid w-full max-w-sm place-items-center rounded-2xl border border-dashed border-hairline bg-white px-6 py-12 text-center">
         <span className="grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink">
           <Icon
             icon={creating ? "mdi:loading" : "mdi:file-eye-outline"}
@@ -132,7 +132,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               type="button"
               onClick={() => setHistoryOpen(true)}
               aria-expanded={historyOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa]"
             >
               <Icon icon="mdi:history" className="text-base" aria-hidden />
               项目历史
@@ -142,7 +142,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               onClick={() => setConfigOpen(true)}
               disabled={state.bootstrapping}
               aria-expanded={configOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#d2d2d7] bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa] disabled:text-[#b2b2b7]"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-white px-2.5 text-xs font-semibold text-ink hover:bg-[#f7f8fa] disabled:text-[#b2b2b7]"
             >
               <Icon icon="mdi:tune-variant" className="text-base" aria-hidden />
               生成配置

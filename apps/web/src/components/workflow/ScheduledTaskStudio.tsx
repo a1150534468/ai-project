@@ -12,7 +12,7 @@ import { presetToCron, humanizeSchedule, draftToFormPatch, type SchedulePreset }
 interface Props { readonly token: string; }
 
 const DEFAULT_TZ = "Asia/Shanghai";
-const CARD = "rounded-[10px] border border-[#e8e8ed] bg-white p-4";
+const CARD = "rounded-[10px] border border-hairline-subtle bg-white p-4";
 
 export function ScheduledTaskStudio({ token }: Props) {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -93,7 +93,7 @@ export function ScheduledTaskStudio({ token }: Props) {
         <div className="grid gap-3">
           <div className="flex items-center gap-2 rounded-[8px] border border-dashed border-brand/40 bg-brand/5 p-2">
             <input
-              className="flex-1 rounded-[8px] border border-[#e8e8ed] bg-white px-3 py-2 text-sm placeholder-[#8a8a8f]"
+              className="flex-1 rounded-[8px] border border-hairline-subtle bg-white px-3 py-2 text-sm placeholder-[#8a8a8f]"
               placeholder="用一句话描述需求，AI 帮你填好"
               value={aiDesc}
               onChange={(e) => setAiDesc(e.target.value)}
@@ -107,8 +107,8 @@ export function ScheduledTaskStudio({ token }: Props) {
               <Icon icon={aiLoading ? "mdi:loading" : "mdi:auto-fix"} className={aiLoading ? "animate-spin" : ""} /> AI 生成
             </button>
           </div>
-          <input className="w-full rounded-[8px] border border-[#e8e8ed] px-3 py-2 text-sm placeholder-[#8a8a8f]" placeholder="任务名称" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <textarea className="w-full resize-y rounded-[8px] border border-[#e8e8ed] px-3 py-2 text-sm placeholder-[#8a8a8f]" rows={3} placeholder="到点执行的指令" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+          <input className="w-full rounded-[8px] border border-hairline-subtle px-3 py-2 text-sm placeholder-[#8a8a8f]" placeholder="任务名称" value={title} onChange={(e) => setTitle(e.target.value)} />
+          <textarea className="w-full resize-y rounded-[8px] border border-hairline-subtle px-3 py-2 text-sm placeholder-[#8a8a8f]" rows={3} placeholder="到点执行的指令" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
           <InAppSelect
             icon="mdi:robot-outline"
             label="模型"
@@ -116,13 +116,13 @@ export function ScheduledTaskStudio({ token }: Props) {
             options={models.length > 0 ? models.map((m) => ({ value: m.model, label: m.displayName, description: m.model })) : [{ value: model, label: model }]}
             onChange={setModel}
           />
-          <input className="w-full rounded-[8px] border border-[#e8e8ed] px-3 py-2 text-sm placeholder-[#8a8a8f]" placeholder="收件邮箱" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
+          <input className="w-full rounded-[8px] border border-hairline-subtle px-3 py-2 text-sm placeholder-[#8a8a8f]" placeholder="收件邮箱" value={emailTo} onChange={(e) => setEmailTo(e.target.value)} />
           <div className="flex items-center gap-2 text-sm">
             <span className="text-ink-secondary">每天</span>
-            <input type="number" min={0} max={23} className="w-16 rounded-[8px] border border-[#e8e8ed] px-2 py-1 text-center text-sm" value={preset.kind === "daily" ? preset.hour : 8}
+            <input type="number" min={0} max={23} className="w-16 rounded-[8px] border border-hairline-subtle px-2 py-1 text-center text-sm" value={preset.kind === "daily" ? preset.hour : 8}
               onChange={(e) => setPreset({ kind: "daily", hour: Number(e.target.value), minute: preset.kind === "daily" ? preset.minute : 0 })} />
             <span className="text-ink-secondary">时</span>
-            <input type="number" min={0} max={59} className="w-16 rounded-[8px] border border-[#e8e8ed] px-2 py-1 text-center text-sm" value={preset.kind === "daily" ? preset.minute : 0}
+            <input type="number" min={0} max={59} className="w-16 rounded-[8px] border border-hairline-subtle px-2 py-1 text-center text-sm" value={preset.kind === "daily" ? preset.minute : 0}
               onChange={(e) => setPreset({ kind: "daily", hour: preset.kind === "daily" ? preset.hour : 8, minute: Number(e.target.value) })} />
             <span className="text-ink-secondary">分（{DEFAULT_TZ}）</span>
           </div>
@@ -149,7 +149,7 @@ export function ScheduledTaskStudio({ token }: Props) {
               </div>
             </div>
             {openRuns[t.id] && (
-              <div className="mt-3 space-y-2 border-t border-[#e8e8ed] pt-3">
+              <div className="mt-3 space-y-2 border-t border-hairline-subtle pt-3">
                 {openRuns[t.id].length === 0 && <p className="text-xs text-ink-tertiary">暂无运行记录</p>}
                 {openRuns[t.id].map((run) => (
                   <details key={run.id} className="text-xs">

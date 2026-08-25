@@ -22,7 +22,7 @@ export default function MemoryMobileList({
 }: MemoryMobileListProps) {
   if (loading) {
     return (
-      <div className="flex min-h-[260px] items-center justify-center rounded-[14px] border border-[#d2d2d7] bg-white px-4 py-8">
+      <div className="flex min-h-[260px] items-center justify-center rounded-[14px] border border-hairline bg-white px-4 py-8">
         <div className="flex items-center gap-3 text-sm text-ink-secondary">
           <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" />
           正在加载记忆列表...
@@ -47,7 +47,7 @@ export default function MemoryMobileList({
 
   if (nodes.length === 0) {
     return (
-      <div className="rounded-[14px] border border-[#d2d2d7] bg-white px-4 py-10 text-center">
+      <div className="rounded-[14px] border border-hairline bg-white px-4 py-10 text-center">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
           <Icon icon="mdi:atom-variant" className="text-2xl" />
         </div>
@@ -79,7 +79,7 @@ export default function MemoryMobileList({
                 ? "border-brand shadow-[0_12px_28px_rgba(0,102,204,0.10)]"
                 : isHighlighted
                   ? "border-brand/60 bg-brand/5"
-                  : "border-[#d2d2d7] "
+                  : "border-hairline "
             }`}
           >
             <div className="flex items-start justify-between gap-3">
@@ -103,7 +103,7 @@ export default function MemoryMobileList({
                   {node.tags.slice(0, 3).map((tag) => (
                     <span
                       key={tag}
-                      className="rounded-full border border-[#e8e8ed] bg-white px-2.5 py-1 text-[11px] text-ink-secondary"
+                      className="rounded-full border border-hairline-subtle bg-white px-2.5 py-1 text-[11px] text-ink-secondary"
                     >
                       {tag}
                     </span>

@@ -693,7 +693,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
           {isImageHub ? (
             <>
               {imageTabs.length === 0 && (
-                <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-ink-secondary">
+                <section className="rounded-[14px] border border-hairline-subtle bg-white p-8 text-center text-ink-secondary">
                   <Icon icon="mdi:image-off-outline" className="mx-auto mb-3 text-3xl text-ink-tertiary" aria-hidden />
                   <p className="text-sm font-semibold">生图模块暂未开放</p>
                 </section>
@@ -815,7 +815,7 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
         ) : activeModuleId === "scheduled-task" ? (
           <ScheduledTaskStudio token={token} />
         ) : (
-          <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-8 text-center text-ink-secondary">
+          <section className="rounded-[14px] border border-hairline-subtle bg-white p-8 text-center text-ink-secondary">
             <Icon icon="mdi:hammer-wrench" className="mx-auto mb-3 text-3xl text-ink-tertiary" aria-hidden />
               <p className="text-sm font-semibold">模块开发中</p>
             </section>

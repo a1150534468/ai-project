@@ -311,7 +311,7 @@ function Card({ children, className = "", ariaLabel }: {
   return (
     <section
       aria-label={ariaLabel}
-      className={`rounded-[16px] border border-[#e6e7eb] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${className}`}
+      className={`rounded-[16px] border border-hairline-subtle bg-white shadow-[0_1px_2px_rgba(15,23,42,0.03)] ${className}`}
     >
       {children}
     </section>
@@ -355,7 +355,7 @@ function PrimaryButton(props: {
     ? "bg-brand text-white "
     : kind === "danger"
       ? "border border-red-200 bg-white text-red-600 "
-      : "border border-[#dfe1e6] bg-white text-ink ";
+      : "border border-hairline-subtle bg-white text-ink ";
   return (
     <button
       type="button"
@@ -1149,7 +1149,7 @@ export function CodexPetStudio({
 
   return (
     <section className="flex xl:h-full min-h-0 flex-col gap-3" data-testid="codex-pet-studio">
-      <div className="flex flex-none flex-wrap items-start justify-between gap-3 rounded-[16px] border border-[#e6e7eb] bg-white px-5 py-4">
+      <div className="flex flex-none flex-wrap items-start justify-between gap-3 rounded-[16px] border border-hairline-subtle bg-white px-5 py-4">
         <div>
           <div className="mb-1 flex items-center gap-2">
             <span className="grid size-9 place-items-center rounded-[12px] bg-brand text-white shadow-sm">
@@ -1277,7 +1277,7 @@ export function CodexPetStudio({
                   maxLength={30}
                   onChange={(event) => updateDraft("name", event.target.value)}
                   placeholder="例如：码仔"
-                  className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                 />
                 <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.name).length}/30</span>
               </label>
@@ -1288,7 +1288,7 @@ export function CodexPetStudio({
                   disabled={!canEdit || interactionLocked}
                   onChange={(event) => updateDraft("description", event.target.value)}
                   placeholder="它是谁、有什么性格"
-                  className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                 />
               </label>
               <label className="block">
@@ -1300,7 +1300,7 @@ export function CodexPetStudio({
                   onChange={(event) => updateDraft("prompt", event.target.value)}
                   placeholder="描述角色外形、配色、材质、标志性配件和气质；也可以只上传参考图。"
                   rows={5}
-                  className="w-full resize-y rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full resize-y rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                 />
                 <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.prompt).length}/4000</span>
               </label>
@@ -1313,7 +1313,7 @@ export function CodexPetStudio({
                     value={selectedActionPrompt}
                     disabled={!canEdit || interactionLocked}
                     onChange={(event) => setSelectedActionPrompt(event.currentTarget.value as CodexPetActionPromptKey)}
-                    className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                    className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                   >
                     {CODEX_PET_ACTION_PROMPT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
@@ -1329,7 +1329,7 @@ export function CodexPetStudio({
                     onChange={(event) => updateActionPrompt(event.currentTarget.value)}
                     placeholder="可选：描述这个动作的表情、幅度、节奏或已有肢体和配件如何运动。"
                     rows={3}
-                    className="w-full resize-y rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                    className="w-full resize-y rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm leading-5 outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                   />
                   <span className="mt-1 block text-right text-[10px] text-ink-tertiary">{Array.from(draft.actionPrompts[selectedActionPrompt] ?? "").length}/{CODEX_PET_ACTION_PROMPT_MAX_LENGTH}</span>
                 </label>
@@ -1381,13 +1381,13 @@ export function CodexPetStudio({
               <div className="grid gap-2 sm:grid-cols-2">
                 <div>
                   <span className="mb-1 block text-[11px] font-semibold text-ink-secondary">生图模型</span>
-                  <div className="rounded-[10px] border border-[#dfe1e6] bg-[#f7f7f9] px-3 py-2 text-sm text-[#424249]">
+                  <div className="rounded-[10px] border border-hairline-subtle bg-[#f7f7f9] px-3 py-2 text-sm text-[#424249]">
                     {readOnlyArchive
                       ? "历史项目，已归档为只读"
                       : historicalImageModel ? `历史模型 ${historicalImageModel}，已停止新运行` : "GPT Image 2 · Pixel"}
                   </div>
                 </div>
-                <label className="flex min-h-10 items-center justify-between gap-3 rounded-[10px] border border-[#dfe1e6] px-3 py-2 text-sm text-[#424249]">
+                <label className="flex min-h-10 items-center justify-between gap-3 rounded-[10px] border border-hairline-subtle px-3 py-2 text-sm text-[#424249]">
                   <span>AI 质检</span>
                   <input
                     aria-label="AI 质检"
@@ -1406,7 +1406,7 @@ export function CodexPetStudio({
                       value={draft.visualQaModel}
                       disabled={!canEdit || interactionLocked}
                       onChange={(event) => updateDraft("visualQaModel", event.currentTarget.value)}
-                      className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                      className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                     >
                       {modelOptions.visualModels.map((option) => <option key={option.model} value={option.model}>{option.displayName}</option>)}
                     </select>
@@ -1443,7 +1443,7 @@ export function CodexPetStudio({
                   disabled={!canEdit || interactionLocked}
                   onChange={(event) => updateDraft("styleNotes", event.target.value)}
                   placeholder="可选，例如：圆润、低饱和、不要文字"
-                  className="w-full rounded-[10px] border border-[#dfe1e6] bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
+                  className="w-full rounded-[10px] border border-hairline-subtle bg-white px-3 py-2 text-sm outline-none transition focus:border-brand disabled:bg-[#f7f7f9]"
                 />
               </label>
 
@@ -1555,7 +1555,7 @@ export function CodexPetStudio({
                           disabled={latestRun.status !== "awaiting_base_review" || interactionLocked}
                           aria-pressed={selected}
                           onClick={() => setSelectedBaseArtifactId(candidate.id)}
-                          className={`overflow-hidden rounded-[13px] border-2 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-[#e2e4e9] bg-white "}`}
+                          className={`overflow-hidden rounded-[13px] border-2 text-left transition ${selected ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-white "}`}
                         >
                           <div className="aspect-[3/2] bg-[#f5f5f7]">
                             {url ? <img src={url} alt={`主形象候选 ${index + 1}`} className="size-full object-contain" /> : (
@@ -1676,12 +1676,12 @@ export function CodexPetStudio({
                     <button
                       type="button"
                       onClick={() => setShowActualSize((current) => !current)}
-                      className="rounded-[8px] border border-[#dfe1e6] px-2 py-1 text-[10px] font-semibold text-ink-secondary "
+                      className="rounded-[8px] border border-hairline-subtle px-2 py-1 text-[10px] font-semibold text-ink-secondary "
                     >
                       {showActualSize ? "适应窗口" : "1:1 实际尺寸"}
                     </button>
                   </div>
-                  <div className={`overflow-auto rounded-[12px] border border-[#dfe1e6] bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:20px_20px] ${showActualSize ? "max-h-[560px]" : "p-3"}`}>
+                  <div className={`overflow-auto rounded-[12px] border border-hairline-subtle bg-[linear-gradient(45deg,#eee_25%,transparent_25%),linear-gradient(-45deg,#eee_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#eee_75%),linear-gradient(-45deg,transparent_75%,#eee_75%)] bg-[length:20px_20px] ${showActualSize ? "max-h-[560px]" : "p-3"}`}>
                     {codexPetArtifactUrl(spritesheetArtifact) ? (
                       <img
                         src={codexPetArtifactUrl(spritesheetArtifact)}
@@ -1750,7 +1750,7 @@ export function CodexPetStudio({
               )}
 
               {latestRun && runIsTerminal && !deliveryReady && (
-                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3 rounded-[12px] border border-hairline-subtle bg-[#f8f9fb] px-3 py-2.5">
                   <p className="text-[10px] leading-4 text-ink-secondary">
                     {canContinueFailedBase
                       ? "候选 1 已成功保存；可在本项目中只重试因 429 失败的候选 2。"
@@ -1776,7 +1776,7 @@ export function CodexPetStudio({
 
               {latestRun && (
                 <details
-                  className="rounded-[12px] border border-[#e2e4e9] bg-[#f8f9fb] px-3 py-2"
+                  className="rounded-[12px] border border-hairline-subtle bg-[#f8f9fb] px-3 py-2"
                   data-testid="codex-pet-process-artifacts"
                 >
                   <summary className="cursor-pointer text-[10px] font-semibold text-ink-secondary">

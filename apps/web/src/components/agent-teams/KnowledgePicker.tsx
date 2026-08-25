@@ -71,7 +71,7 @@ export function KnowledgePicker({
         className={`flex h-10 w-full min-w-0 items-center gap-2 rounded-[10px] border px-3 text-left text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20 ${
           attachAllOwn || selectedKbIds.length > 0
             ? "border-brand/20 bg-brand-soft text-brand-ink"
-            : "border-[#d2d2d7] bg-[#f7faf9] text-ink-secondary "
+            : "border-hairline bg-[#f7faf9] text-ink-secondary "
         }`}
       >
         <Icon icon="mdi:database-search-outline" className="flex-none text-lg" aria-hidden />
@@ -85,7 +85,7 @@ export function KnowledgePicker({
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-md overflow-hidden rounded-[14px] border border-[#e8e8ed] bg-white shadow-[0_28px_70px_rgba(15,23,42,0.20)]"
+            className="w-full max-w-md overflow-hidden rounded-[14px] border border-hairline-subtle bg-white shadow-[0_28px_70px_rgba(15,23,42,0.20)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-[#f0f0f3] px-5 py-4">
@@ -113,7 +113,7 @@ export function KnowledgePicker({
                 className={`flex w-full items-start gap-3 rounded-[12px] border p-4 text-left transition ${
                   draftAttachAllOwn
                     ? "border-brand/30 bg-brand-soft text-brand-ink"
-                    : "border-[#e8e8ed] text-ink-secondary "
+                    : "border-hairline-subtle text-ink-secondary "
                 }`}
               >
                 <span className="mt-0.5 flex h-8 w-8 flex-none items-center justify-center rounded-[10px] bg-white text-brand">
@@ -144,7 +144,7 @@ export function KnowledgePicker({
                           className={`flex w-full items-center gap-3 rounded-[10px] border px-3 py-2.5 text-left transition ${
                             checked
                               ? "border-brand/25 bg-brand-soft text-brand-ink"
-                              : "border-[#e8e8ed] text-ink-secondary "
+                              : "border-hairline-subtle text-ink-secondary "
                           }`}
                         >
                           <span className={`flex h-4 w-4 flex-none items-center justify-center rounded border ${
@@ -168,7 +168,7 @@ export function KnowledgePicker({
                     })}
                   </div>
                 ) : (
-                  <div className="rounded-[10px] border border-dashed border-[#d2d2d7] py-6 text-center text-xs text-ink-tertiary">
+                  <div className="rounded-[10px] border border-dashed border-hairline py-6 text-center text-xs text-ink-tertiary">
                     暂无可选知识库
                   </div>
                 )}

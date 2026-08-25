@@ -106,7 +106,7 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
                   className={`flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                     checked
                       ? "border-brand bg-brand-soft ring-1 ring-brand/20"
-                      : "border-[#e1e5e3] bg-white hover:border-[#cbd3d0]"
+                      : "border-hairline-subtle bg-white hover:border-[#cbd3d0]"
                   }`}
                 >
                   <span

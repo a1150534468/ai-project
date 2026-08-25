@@ -68,7 +68,7 @@ export function WorkflowHistoryStrip({ ariaLabel, groups, summary, emptyText, ac
       ) : (
         <div className="flex gap-5 overflow-x-auto pb-2 [scrollbar-width:thin]">
           {groups.map((group) => (
-            <div key={group.id} className="min-w-max border-r border-[#ececf0] pr-5 last:border-r-0 last:pr-0">
+            <div key={group.id} className="min-w-max border-r border-hairline-subtle pr-5 last:border-r-0 last:pr-0">
               <div className="mb-2 flex max-w-[360px] items-center justify-between gap-3 text-xs">
                 <p className="max-w-[220px] truncate font-semibold text-ink" title={group.title}>{group.title}</p>
                 {group.meta && <span className="flex-none text-ink-tertiary">{group.meta}</span>}

@@ -45,7 +45,7 @@ export function RunStatusCard({ run }: RunStatusCardProps) {
   ];
 
   return (
-    <section className="rounded-[14px] border border-[#e8e8ed] bg-white p-4">
+    <section className="rounded-[14px] border border-hairline-subtle bg-white p-4">
       <p className="mb-3 text-sm font-semibold text-ink">任务状态</p>
       <div className="grid grid-cols-2 gap-2">
         {metrics.map((metric) => (

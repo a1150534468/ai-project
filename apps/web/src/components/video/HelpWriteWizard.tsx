@@ -59,7 +59,7 @@ function stepIndexOf(stage: Stage): number {
 
 function StepRail({ active }: { active: number }) {
   return (
-    <aside className="w-[220px] shrink-0 border-r border-[#ececf0] bg-[#fafafa] p-5">
+    <aside className="w-[220px] shrink-0 border-r border-hairline-subtle bg-[#fafafa] p-5">
       <div className="flex items-center gap-2 pb-5">
         <Icon icon="mdi:auto-fix" className="text-lg text-ink" aria-hidden />
         <span className="text-[15px] font-semibold text-ink">帮我写</span>
@@ -181,7 +181,7 @@ function PillGroup({ label, options, value, onChange }: { label: string; options
         const on = opt === value;
         return (
           <button key={opt} type="button" onClick={() => onChange(opt)}
-            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-secondary "}`}>
+            className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-secondary "}`}>
             {opt}
             {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-ink" aria-hidden />}
           </button>
@@ -290,7 +290,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
       <div className="flex h-[760px] max-h-[90vh] w-full max-w-[1040px] overflow-hidden rounded-[18px] bg-white shadow-[0_24px_70px_rgba(0,0,0,0.28)]">
         <StepRail active={active} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-12 shrink-0 items-center justify-between border-b border-[#ececf0] px-5">
+          <header className="flex h-12 shrink-0 items-center justify-between border-b border-hairline-subtle px-5">
             <span className="text-[15px] font-semibold text-ink">{STEPS[active].title}</span>
             <button type="button" aria-label="关闭" onClick={onClose} className="text-ink-tertiary transition ">
               <Icon icon="mdi:close" className="text-xl" aria-hidden />
@@ -300,7 +300,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             {stage === "confirm" && (
               <div className="grid gap-4">
-                <section className="rounded-[14px] border border-[#ececf0] p-4">
+                <section className="rounded-[14px] border border-hairline-subtle p-4">
                   <p className="mb-3 text-sm font-semibold text-ink">待分析素材（{materials.length}）</p>
                   {materials.length === 0 ? (
                     <p className="rounded-[10px] bg-[#f7faf9] px-3 py-8 text-center text-xs text-ink-tertiary">请先在左侧上传素材，再使用「帮我写」。</p>
@@ -322,7 +322,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                     </div>
                   )}
                 </section>
-                <section className="rounded-[14px] border border-[#ececf0] p-4">
+                <section className="rounded-[14px] border border-hairline-subtle p-4">
                   <p className="mb-2 text-sm font-semibold text-ink">预计消耗</p>
                   {!pricing ? (
                     <p className="text-[13px] text-ink-tertiary">加载价格中…</p>
@@ -343,7 +343,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
 
             {stage === "insight" && insight && (
               <div className="grid gap-5">
-                <section className="rounded-[16px] border border-[#ececf0] p-5">
+                <section className="rounded-[16px] border border-hairline-subtle p-5">
                   <p className="mb-3.5 text-sm font-semibold text-ink">素材分析</p>
                   <div className="grid gap-3">
                     {materials.map((m, i) => (
@@ -363,7 +363,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   </div>
                 </section>
 
-                <section className="rounded-[16px] border border-[#ececf0] p-5">
+                <section className="rounded-[16px] border border-hairline-subtle p-5">
                   <p className="mb-4 text-sm font-semibold text-ink">商品洞察</p>
                   <div className="grid grid-cols-2 gap-4">
                     <label className="grid gap-1.5">
@@ -388,7 +388,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
 
             {stage === "creating" && (
               <div className="grid gap-4">
-                <section className="rounded-[14px] border border-[#ececf0] p-4">
+                <section className="rounded-[14px] border border-hairline-subtle p-4">
                   <p className="mb-3 text-sm font-semibold text-ink">业务场景</p>
                   <div className="grid gap-3">
                     <PillGroup label="业务" options={BUSINESS} value={business} onChange={setBusiness} />
@@ -396,14 +396,14 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   </div>
                 </section>
 
-                <section className="rounded-[14px] border border-[#ececf0] p-4">
+                <section className="rounded-[14px] border border-hairline-subtle p-4">
                   <p className="mb-3 text-sm font-semibold text-ink">脚本生成方式</p>
                   <div className="grid grid-cols-2 gap-3">
                     {([["config", "mdi:auto-fix", "按配置生成脚本", "基于商品卖点、内容方向和拍摄偏好，生成适合当前商品的原创短视频脚本"], ["reference", "mdi:video-outline", "参考视频生成脚本", "上传参考视频，提取结构、节奏与创意亮点，为当前商品生成新的原创脚本"]] as Array<["config" | "reference", string, string, string]>).map(([m, icon, title, desc]) => {
                       const on = mode === m;
                       return (
                         <button key={m} type="button" onClick={() => setMode(m)}
-                          className={`relative rounded-[8px] border p-3.5 text-left transition ${on ? "border-[#1d1d1f]" : "border-[#e8e8ed] "}`}>
+                          className={`relative rounded-[8px] border p-3.5 text-left transition ${on ? "border-[#1d1d1f]" : "border-hairline-subtle "}`}>
                           <span className="flex items-center gap-2 text-[13.5px] font-semibold text-ink">
                             <Icon icon={icon} className="text-base" aria-hidden />{title}
                           </span>
@@ -415,14 +415,14 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                   </div>
                 </section>
 
-                <section className="rounded-[14px] border border-[#ececf0] p-4">
+                <section className="rounded-[14px] border border-hairline-subtle p-4">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="w-14 shrink-0 text-[13px] text-ink-secondary">旁白</span>
                     {([[true, "有旁白/口播"], [false, "无旁白"]] as Array<[boolean, string]>).map(([val, label]) => {
                       const on = hasNarration === val;
                       return (
                         <button key={label} type="button" onClick={() => setHasNarration(val)}
-                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-[#e8e8ed] text-ink-secondary "}`}>
+                          className={`relative rounded-[8px] border px-3.5 py-2 text-[13px] transition ${on ? "border-[#1d1d1f] font-semibold text-ink" : "border-hairline-subtle text-ink-secondary "}`}>
                           {label}
                           {on && <Icon icon="mdi:check-circle" className="absolute -right-1.5 -top-1.5 text-sm text-ink" aria-hidden />}
                         </button>
@@ -433,20 +433,20 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 </section>
 
                 {mode === "config" ? (
-                  <section className="grid gap-4 rounded-[14px] border border-[#ececf0] p-4">
+                  <section className="grid gap-4 rounded-[14px] border border-hairline-subtle p-4">
                     <PillGroup label="内容类型" options={CONTENT_TYPES} value={contentType} onChange={setContentType} />
                     <PillGroup label="拍摄方式" options={SHOOT_TYPES} value={shootType} onChange={setShootType} />
                     <label className="grid gap-1.5">
                       <span className="text-[13px] text-ink-secondary">补充说明</span>
                       <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
                         placeholder="可选：可补充商品卖点、使用场景、目标人群、脚本风格、结尾引导等"
-                        className="min-h-[110px] resize-none rounded-[8px] border border-[#e8e8ed] p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
+                        className="min-h-[110px] resize-none rounded-[8px] border border-hairline-subtle p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
                     </label>
                   </section>
                 ) : (
                   <section className="grid gap-4">
                     <div className="grid grid-cols-2 gap-3">
-                      <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-[#e3e3e8] bg-[#f6f6f8] "}`}>
+                      <label className={`flex min-h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-[14px] border-[1.5px] border-dashed p-5 text-center transition ${busy ? "opacity-60" : "border-hairline-subtle bg-[#f6f6f8] "}`}>
                         <span className="grid h-11 w-11 place-items-center rounded-[10px] bg-white shadow-[0_1px_3px_rgba(20,20,40,0.08)]">
                           <Icon icon="mdi:tray-arrow-up" className="text-xl text-ink" aria-hidden />
                         </span>
@@ -455,7 +455,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                         <input type="file" accept="video/*" disabled={busy} className="sr-only"
                           onChange={(e) => { const f = e.target.files?.[0]; if (f) void handleReferenceUpload(f); e.target.value = ""; }} />
                       </label>
-                      <div className="rounded-[14px] border border-[#ececf0] p-4">
+                      <div className="rounded-[14px] border border-hairline-subtle p-4">
                         <p className="text-[13px] font-semibold text-ink">上传后将为你分析</p>
                         <p className="mt-1 text-[11.5px] leading-5 text-ink-tertiary">系统会从参考视频中提取结构、节奏和创意亮点，生成更贴合当前商品的新脚本。</p>
                         <p className="mb-2 mt-3 text-[12px] font-semibold text-ink-secondary">参考视频要求</p>
@@ -480,7 +480,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                       <span className="text-[13px] text-ink-secondary">补充说明</span>
                       <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000}
                         placeholder="可选：可补充商品卖点、使用场景、目标人群、脚本风格、结尾引导等"
-                        className="min-h-[90px] resize-none rounded-[8px] border border-[#e8e8ed] p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
+                        className="min-h-[90px] resize-none rounded-[8px] border border-hairline-subtle p-3 text-[13px] leading-6 text-ink outline-none focus:border-[#c3c3cc]" />
                     </label>
                   </section>
                 )}
@@ -490,14 +490,14 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
             {stage === "generating" && <WizardLoader messages={SCRIPT_MESSAGES} hint="生成脚本约需 10–30 秒" icon="mdi:script-text-outline" />}
 
             {stage === "preview" && (
-              <section className="rounded-[16px] border border-[#ececf0] p-5">
+              <section className="rounded-[16px] border border-hairline-subtle p-5">
                 <p className="mb-3.5 text-sm font-semibold text-ink">视频脚本</p>
                 <MarkdownMessage content={script} variant="report" />
               </section>
             )}
           </div>
 
-          <footer className="flex h-16 shrink-0 items-center justify-between border-t border-[#ececf0] px-5">
+          <footer className="flex h-16 shrink-0 items-center justify-between border-t border-hairline-subtle px-5">
             {stage === "confirm" && (
               <>
                 <button type="button" onClick={onClose} className="text-[13px] font-medium text-ink-tertiary ">取消</button>
@@ -530,7 +530,7 @@ export function HelpWriteWizard({ token, open, materials, durationSec, onClose, 
                 <button type="button" onClick={() => setStage("creating")} className="text-[13px] font-medium text-ink-tertiary ">返回上一步</button>
                 <div className="flex gap-2.5">
                   <button type="button" onClick={() => void runGenerate(undefined)} disabled={busy}
-                    className="h-10 rounded-[10px] border border-[#e3e3e8] px-5 text-[13px] font-semibold text-ink transition disabled:opacity-50">重新生成脚本</button>
+                    className="h-10 rounded-[10px] border border-hairline-subtle px-5 text-[13px] font-semibold text-ink transition disabled:opacity-50">重新生成脚本</button>
                   <button type="button" onClick={() => { onApply(script, { hasNarration }); onClose(); }} disabled={!script}
                     className="h-10 rounded-[10px] bg-[#1d1d1f] px-6 text-[13px] font-semibold text-white transition disabled:bg-[#c7c7cc]">应用脚本</button>
                 </div>

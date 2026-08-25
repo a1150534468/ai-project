@@ -22,7 +22,7 @@ function ComparePane({ label, image, missingText }: { readonly label: string; re
           <img src={image.originalUrl} alt={`${label} ${image.prompt}`} className="max-h-[56vh] w-full object-contain" />
         </div>
       ) : (
-        <div className="grid min-h-[300px] place-items-center rounded-lg border border-dashed border-[#d2d2d7] bg-[#f7f8fa] p-6 text-center text-sm font-semibold text-ink-secondary">
+        <div className="grid min-h-[300px] place-items-center rounded-lg border border-dashed border-hairline bg-[#f7f8fa] p-6 text-center text-sm font-semibold text-ink-secondary">
           <span><Icon icon="mdi:image-off-outline" className="mx-auto mb-2 text-3xl" aria-hidden />{missingText}</span>
         </div>
       )}
@@ -57,19 +57,19 @@ export function ImageCompareView(props: ImageCompareViewProps) {
         <ComparePane label="V2 新版本" image={props.newImage} missingText="新版本暂不可用" />
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2 border-t border-[#ececf0] pt-3">
+      <div className="mt-5 flex flex-wrap gap-2 border-t border-hairline-subtle pt-3">
         {props.newImage && (
           <>
             <button type="button" onClick={() => props.onSetCurrent(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg bg-[#1d1d1f] px-3 text-sm font-semibold text-white">
               <Icon icon="mdi:check" className="text-base" aria-hidden />设为当前版本
             </button>
-            <button type="button" onClick={() => props.onContinueModify(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-ink">
+            <button type="button" onClick={() => props.onContinueModify(props.newImage!)} className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline px-3 text-sm font-semibold text-ink">
               <Icon icon="mdi:source-branch" className="text-base" aria-hidden />继续修改
             </button>
           </>
         )}
-        {props.originalImage && <button type="button" onClick={() => props.onDownload(props.originalImage!)} className="h-9 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-ink">下载 V1</button>}
-        {props.newImage && <button type="button" onClick={() => props.onDownload(props.newImage!)} className="h-9 rounded-lg border border-[#d2d2d7] px-3 text-sm font-semibold text-ink">下载 V2</button>}
+        {props.originalImage && <button type="button" onClick={() => props.onDownload(props.originalImage!)} className="h-9 rounded-lg border border-hairline px-3 text-sm font-semibold text-ink">下载 V1</button>}
+        {props.newImage && <button type="button" onClick={() => props.onDownload(props.newImage!)} className="h-9 rounded-lg border border-hairline px-3 text-sm font-semibold text-ink">下载 V2</button>}
       </div>
     </section>
   );

@@ -43,7 +43,7 @@ export function OptionGrid<T extends string | number>(props: {
             type="button"
             onClick={() => props.onChange(option.value)}
             className={`rounded-[10px] border px-3 py-2.5 text-left transition ${
-              active ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-[#d2d2d7] "
+              active ? "border-brand/40 bg-brand-soft text-brand-ink" : "border-hairline "
             }`}
           >
             <p className={`text-[12px] ${active ? "font-semibold" : "font-medium"} text-current`}>{option.label}</p>
@@ -77,7 +77,7 @@ export function AudioAssetPanel(props: {
           <audio className="mt-3 w-full" controls src={props.asset.originalUrl} />
         </div>
       ) : (
-        <p className="mt-2 rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-[12px] leading-5 text-ink-tertiary">{props.emptyText}</p>
+        <p className="mt-2 rounded-[10px] border border-dashed border-hairline px-3 py-3 text-[12px] leading-5 text-ink-tertiary">{props.emptyText}</p>
       )}
     </div>
   );
@@ -106,7 +106,7 @@ export function AudioHistoryList(props: {
           const active = asset.id === props.activeAssetId;
           const pending = props.pendingKey === `${props.pendingKeyPrefix}:${asset.id}`;
           return (
-            <div key={asset.id} className={`rounded-[10px] border px-3 py-2 ${active ? "border-brand/30 bg-brand-soft" : "border-[#ececf0] bg-[#fafafa]"}`}>
+            <div key={asset.id} className={`rounded-[10px] border px-3 py-2 ${active ? "border-brand/30 bg-brand-soft" : "border-hairline-subtle bg-[#fafafa]"}`}>
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[12px] font-semibold text-ink">{formatLocalBusinessPromoTime(asset.createdAt)}</p>
@@ -119,7 +119,7 @@ export function AudioHistoryList(props: {
                     type="button"
                     onClick={() => props.onActivate(asset.id)}
                     disabled={pending}
-                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-[#d2d2d7] px-2.5 text-[11px] font-semibold text-ink disabled:opacity-50"
+                    className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-hairline px-2.5 text-[11px] font-semibold text-ink disabled:opacity-50"
                   >
                     <Icon icon={pending ? "mdi:loading" : "mdi:check-circle-outline"} className={pending ? "animate-spin" : ""} aria-hidden />
                     {pending ? "切换中" : props.actionLabel}
@@ -131,7 +131,7 @@ export function AudioHistoryList(props: {
             </div>
           );
         }) : (
-          <p className="rounded-[10px] border border-dashed border-[#d2d2d7] px-3 py-3 text-[12px] leading-5 text-ink-tertiary">{props.emptyText}</p>
+          <p className="rounded-[10px] border border-dashed border-hairline px-3 py-3 text-[12px] leading-5 text-ink-tertiary">{props.emptyText}</p>
         )}
       </div>
     </div>

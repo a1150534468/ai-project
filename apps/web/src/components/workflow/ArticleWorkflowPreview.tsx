@@ -78,7 +78,7 @@ export function ArticleWorkflowPreview({
         }`}
       >
         {mobile && <div className="mx-auto mb-4 h-1.5 w-16 rounded-full bg-[#d2d2d7]" aria-hidden />}
-        <header className="mb-6 border-b border-[#ececf0] pb-5">
+        <header className="mb-6 border-b border-hairline-subtle pb-5">
           <h1 className="text-[24px] font-semibold leading-[1.4] text-ink">{title || "未命名图文"}</h1>
           {summary && <p className="mt-2 text-sm leading-6 text-ink-secondary">{summary}</p>}
         </header>

@@ -131,7 +131,7 @@ export default function Shell({
                         className={`inline-flex flex-none items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
                           active
                             ? "border-brand bg-brand text-white"
-                            : "border-[#d2d2d7] bg-[#f7faf9] text-ink-secondary "
+                            : "border-hairline bg-[#f7faf9] text-ink-secondary "
                         }`}
                       >
                         <Icon icon={sub.icon} className="text-sm" aria-hidden />
@@ -147,7 +147,7 @@ export default function Shell({
                       className={`inline-flex flex-none items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
                         currentView === item.id
                           ? "border-brand bg-brand text-white"
-                          : "border-[#d2d2d7] bg-[#f7faf9] text-ink-secondary "
+                          : "border-hairline bg-[#f7faf9] text-ink-secondary "
                       }`}
                     >
                       <Icon icon={item.icon} className="text-sm" aria-hidden />

@@ -60,7 +60,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
     <>
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#f5f5f7] text-ink">
         <div className="flex flex-none flex-col gap-4 px-3 pb-3 pt-4 sm:px-4 lg:px-5 lg:pb-4 lg:pt-5 xl:px-6 xl:pb-5 xl:pt-6">
-          <section className="rounded-[14px] border border-[#e8e8ed] bg-white px-4 py-4 sm:px-5 sm:py-5">
+          <section className="rounded-[14px] border border-hairline-subtle bg-white px-4 py-4 sm:px-5 sm:py-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-brand">
@@ -172,7 +172,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
                 animate="animate"
                 exit="exit"
               >
-                <div className="flex max-h-[82vh] min-h-0 flex-col rounded-t-[20px] border border-b-0 border-[#d2d2d7] bg-white px-3 pb-3 pt-2 shadow-[0_-14px_36px_rgba(15,23,42,0.12)]">
+                <div className="flex max-h-[82vh] min-h-0 flex-col rounded-t-[20px] border border-b-0 border-hairline bg-white px-3 pb-3 pt-2 shadow-[0_-14px_36px_rgba(15,23,42,0.12)]">
                   <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#d2d2d7]" />
                   <div className="min-h-0 flex-1 overflow-hidden">
                     <MemoryDetailPanel

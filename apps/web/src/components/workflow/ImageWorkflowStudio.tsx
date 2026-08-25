@@ -126,7 +126,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
             type="button"
             onClick={props.onOpenTaskDrawer}
             aria-expanded={props.isTaskDrawerOpen ?? false}
-            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-ink"
+            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-hairline bg-white px-3 text-xs font-semibold text-ink"
           >
             <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
             任务列表{runningCount > 0 ? ` · 生成中 ${runningCount}` : ""}

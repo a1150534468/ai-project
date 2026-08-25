@@ -463,7 +463,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 disabled={hasActiveTask}
                 maxLength={1200}
                 placeholder="模特特征、场景、姿势或拍摄风格"
-                className="min-h-[92px] resize-y rounded-lg border border-[#d2d2d7] p-3 text-sm font-normal leading-5 disabled:bg-[#f5f5f7]"
+                className="min-h-[92px] resize-y rounded-lg border border-hairline p-3 text-sm font-normal leading-5 disabled:bg-[#f5f5f7]"
               />
               <span className="text-right text-[10px] font-normal text-ink-tertiary">{description.length}/1200</span>
             </label>
@@ -539,7 +539,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 type="button"
                 onClick={() => setIsTaskDrawerOpen(true)}
                 aria-expanded={isTaskDrawerOpen}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#d2d2d7] bg-white px-3 text-xs font-semibold text-ink"
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-white px-3 text-xs font-semibold text-ink"
               >
                 <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
                 任务 {tasks.filter(isActive).length}
@@ -574,7 +574,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                   type="button"
                   onClick={() => handleCancel(selectedTask)}
                   disabled={busyTaskId === selectedTask.id}
-                  className="mt-5 h-9 rounded-[8px] border border-[#d2d2d7] bg-white px-4 text-sm font-semibold text-ink-secondary"
+                  className="mt-5 h-9 rounded-[8px] border border-hairline bg-white px-4 text-sm font-semibold text-ink-secondary"
                 >
                   取消任务
                 </button>
@@ -717,7 +717,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                           type="button"
                           onClick={() => handleDeleteTask(task)}
                           disabled={busyTaskId === task.id}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#d2d2d7] px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-hairline px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"
                         >
                           <Icon
                             icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"}

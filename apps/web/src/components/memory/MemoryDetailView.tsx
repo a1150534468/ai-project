@@ -19,7 +19,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-[10px] border border-[#e8e8ed] bg-[#f7faf9] p-4">
+      <div className="rounded-[10px] border border-hairline-subtle bg-[#f7faf9] p-4">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${typeStyle.viewPill}`}>
             <span className={`h-2 w-2 rounded-full ${typeStyle.viewDot}`} />
@@ -46,7 +46,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
             node.tags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center rounded-full border border-[#d2d2d7] bg-white px-3 py-1 text-xs text-ink-secondary"
+                className="inline-flex items-center rounded-full border border-hairline bg-white px-3 py-1 text-xs text-ink-secondary"
               >
                 {tag}
               </span>
@@ -58,7 +58,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="rounded-[10px] border border-[#e8e8ed] bg-white p-4">
+        <div className="rounded-[10px] border border-hairline-subtle bg-white p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             创建时间
           </p>
@@ -66,7 +66,7 @@ export default function MemoryDetailView({ node }: MemoryDetailViewProps) {
             {new Date(node.createdAt).toLocaleString("zh-CN")}
           </p>
         </div>
-        <div className="rounded-[10px] border border-[#e8e8ed] bg-white p-4">
+        <div className="rounded-[10px] border border-hairline-subtle bg-white p-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
             最近使用
           </p>
