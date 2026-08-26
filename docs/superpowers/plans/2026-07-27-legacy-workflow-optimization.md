@@ -286,7 +286,7 @@ Step 1 的行为锚（`retries the row-9 pre-gate before starting the second loo
 
 **Files:** Modify `codex-pet-runner/runner-lease.ts`（新增 2 个 helper）+ 各调用文件
 
-- [ ] **Step 1:** 在 runner-lease.ts 新增（where 形状逐字照抄现有 `stage` :839-874 与 `persistProviderMetadata` :1047-1051 的谓词，包括事务句柄参数化——先读这两处确定 `tx` 的类型别名）：
+- [x] **Step 1:** 在 runner-lease.ts 新增（where 形状逐字照抄现有 `stage` :839-874 与 `persistProviderMetadata` :1047-1051 的谓词，包括事务句柄参数化——先读这两处确定 `tx` 的类型别名）：
   ```ts
   export async function updateOwnedActiveRun(tx, ctx: RunnerContext, data, extraWhere = {}): Promise<void> {
     const res = await tx.codexPetRun.updateMany({
@@ -297,8 +297,35 @@ Step 1 的行为锚（`retries the row-9 pre-gate before starting the second loo
   }
   export async function updateOwnedJob(tx, ctx, jobId: string, data, extraWhere = {}): Promise<void> { /* 同型，codexPetJob + ownership 列 */ }
   ```
-- [ ] **Step 2:** 逐处替换形状 A（一次 2-3 处一提交），每批后 typecheck + 合同测试；全部完成后 runner 集成。
-- [ ] **Step 3:** Commit（分批）`refactor(codex-pet): lease CAS 形状A/B 收敛为 updateOwnedActiveRun/updateOwnedJob`
+- [x] **Step 2:** 逐处替换形状 A（一次 2-3 处一提交），每批后 typecheck + 合同测试；全部完成后 runner 集成。
+- [x] **Step 3:** Commit（分批）`refactor(codex-pet): lease CAS 形状A/B 收敛为 updateOwnedActiveRun/updateOwnedJob`
+
+**执行记录（2026-08-26）**
+
+三次提交：`090e823`（helper + 形状 A 4 处）、`1e21f99`（形状 B runner-jobs / runner-direction 4 处）、`c47c556`（形状 B runner-base / runner-archive 5 处）。形状 A 收敛 4 处、形状 B 收敛 9 处，共 13 处。
+
+计划里的 `:xxx` 行号全部是 P2.1 拆分前那份 5115 行 `codex-pet-runner.ts` 的偏移，本次先逐处重新定位到拆分后的模块再动。重新定位后与计划的预估有出入，出入本身就是结论：
+
+| 计划预估 | 实际 | 原因 |
+| --- | --- | --- |
+| 形状 A 约 12 处 | 只有 4 处能逐字合一 | 计划把「run 表 + count 判定」都算作形状 A，但谓词与失败分支实测有 4 种变体（见下） |
+| 形状 B 约 6 处 | 9 处 | 计划漏了 runner-base 的 3 处与 runner-archive 的 2 处 |
+| 两个 helper 都带 `extraWhere` | 只有 `updateOwnedJob` 带 | 形状 A 的 4 处调用点谓词完全相同，没有一处需要 `extraWhere`；留着一个永远传不到的可选参数只会招来误用 |
+| `CodexPetLeaseLostError(ctx.runId)` | `CodexPetLeaseLostError()` | 现有构造函数不收参数，全文 30 余处也都是无参调用 |
+
+**被判定「不是形状 A」而保留原样的 run CAS（逐字比对过，不顺手改）：**
+
+- `runner-jobs.ts` `markImageSucceeded`：count 不中时会重查一次再决定抛 Cancelled 还是 LeaseLost，用不了只会抛 LeaseLost 的 helper。
+- `runner-billing.ts` `consumeImageGenerationApproval`：谓词含 `imageGenerationApprovalBudget: { gt: 0 }`，抛的是 `CodexPetImageApprovalRequiredError`。
+- `runner-billing.ts` `settlePerImageRunBilling` 与 `refundRun` 的台账写入：带计费谓词，且失败是有条件抛。
+- `codex-pet-runner.ts` 主形象选择的 3 处（`selectedBaseArtifactId` / `awaiting_base_review` / 选择提交）与 `colorKeyClaim`：**根本没有 `status: { in: ACTIVE }` 谓词**，套进 `updateOwnedActiveRun` 等于收紧 CAS，属于行为变更。`colorKeyClaim` 还在 `ctx` 构造之前，只有 `run` / `workerId` 局部量，签名上就传不进去。这 4 处是后续「要不要补 status 谓词」的独立议题，本次只登记不动。
+- `runner-archive.ts` / `runner-packaging-resume.ts` 的 `status: "archiving"` / `"packaging"` 字面量谓词、finalize 三兄弟的「不中就返回 `transitioned: false`」、`emit` 里没有 count 判定的那处、`claimRunLease`、`leaseHeartbeat`（fire-and-forget 且按计费模式变形）：与计划的排除清单一致。
+
+**`stage` 的两处等价变更（已写在代码注释里）：** 谓词多了 `projectId` / `userId`——同一次调用里 `checkCancelled` 已按这两列查过同一行，不匹配时它会先抛 Cancelled，判定结果不变；CAS 不中改为在事务内抛 LeaseLost，而此刻事务里还没有任何写入（项目行更新在其后且受 `advanced` 约束），回滚与空提交等价，错误类型也一样。`!current` 分支仍走原来的 `transition.claimed` 外抛路径。
+
+**`updateOwnedJob` 基础谓词不含 `workerId`：** runner-base.ts 手工选择补记那处故意不锁 worker（选择由路由提交，job.workerId 可能已是 null），基础谓词若带上 workerId 就会把手工选择打死。需要锁 worker 或锁状态的 7 处自己用 `extraWhere` 加。
+
+**验证：** `tsc --noEmit` 干净；改动的 7 个文件 `biome lint` 干净；每批后 `codex-pet-runner-contract.test.ts` 21 passed / 0 failed / 0 skipped；末批加 `codex-pet-archive.test.ts` 共 33 passed / 0 failed / 0 skipped；全量 `npx vitest run codex-pet` = 25 passed | 0 failed | 4 skipped（文件），321 passed | 0 failed | 8 skipped（用例），324.28s —— 与 Task 2.2 收尾时的基线逐个数字一致。
 
 ### Task 2.4（可选）: catch 链表驱动
 
