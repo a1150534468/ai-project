@@ -515,10 +515,21 @@ export async function registerDirectionRow(
   };
 }
 
-export function requireApprovedRegisteredRow(result: RegisteredDirectionRowResult, label: string): asserts result is RegisteredDirectionRowResult & {
+/**
+ * 一行已经通过门禁、两个注册产物都落库的方向行。
+ *
+ * 原先只是 `requireApprovedRegisteredRow` 断言签名里的匿名交叉类型；look-b 的修复
+ * 循环搬出 executeRun 之后需要把它当参数传，所以在这里命名。
+ */
+export type ApprovedRegisteredDirectionRow = RegisteredDirectionRowResult & {
   readonly registeredRowArtifact: CodexPetArtifact;
   readonly manifestArtifact: CodexPetArtifact;
-} {
+};
+
+export function requireApprovedRegisteredRow(
+  result: RegisteredDirectionRowResult,
+  label: string,
+): asserts result is ApprovedRegisteredDirectionRow {
   if (!result.ok || !result.registeredRowArtifact || !result.manifestArtifact) {
     throw new Error(`${label} 未形成可恢复的注册产物`);
   }

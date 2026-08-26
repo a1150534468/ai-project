@@ -174,7 +174,7 @@ commit 0e41be5「harden codex pet generation billing」后 start 路由改为按
 
 **Files:** Modify `apps/api/src/workflow/codex-pet/codex-pet-runner.ts`（executeRun 内 :554-858；本文件原写的 :4110-4700 是 P2.1 拆分前的行号，已作废）；`codex-pet/codex-pet-runner/runner-types.ts`
 
-- [ ] **Step 1:** 在 runner-types.ts 定义（字段类型全部取自既有函数返回值，不新造类型）：
+- [x] **Step 1:** 在 runner-types.ts 定义（字段类型全部取自既有函数返回值，不新造类型）：
   ```ts
   export interface DirectionRowState {
     lookA: BoardJobResult
@@ -188,9 +188,20 @@ commit 0e41be5「harden codex pet generation billing」后 start 路由改为按
   }
   ```
   （`ReturnType<typeof ...>` 若因函数在别的模块不便引用，就把这两个 compose 函数的返回类型名字化后引用。）
-- [ ] **Step 2:** executeRun 内把这 8 个 `let` 变量替换为一个 `const dir: DirectionRowState` 对象的字段读写（`lookA` 等首次赋值处初始化）。只做机械替换 `lookA` → `dir.lookA`，不改任何控制流。
-- [ ] **Step 3:** typecheck；**runner 集成**，预期与基线一致。
-- [ ] **Step 4:** Commit `refactor(codex-pet): 方向行共享状态收敛为 DirectionRowState`
+- [x] **Step 2:** executeRun 内把这 8 个 `let` 变量替换为一个 `const dir: DirectionRowState` 对象的字段读写（`lookA` 等首次赋值处初始化）。只做机械替换 `lookA` → `dir.lookA`，不改任何控制流。
+- [x] **Step 3:** typecheck；**runner 集成**，预期与基线一致。
+- [x] **Step 4:** Commit `refactor(codex-pet): 方向行共享状态收敛为 DirectionRowState`
+
+**执行记录（2026-08-26，提交 `1d284db`）**
+
+落地形状与计划不同，收敛成了**两个**类型而不是一个扁平的 8 字段 `DirectionRowState`：
+
+```ts
+export interface LookRowState<TGate> { row: BoardJobResult; registered: RegisteredDirectionRowResult; gate: TGate }
+export interface LookBReferenceState { registeredLookAReference: Buffer; lookBScreenLeftTrajectoryReference: Buffer }
+```
+
+理由：8 个 `let` 天然是「每行 3 个（产物 / 注册结果 / 门禁）× 2 行 + 2 张派生参考图」。按行分组后 Task 2.2 的修复函数只需要收一个 `state` 参数，而不是把整段方向行状态整体交出去；`TGate` 泛型还让两行各自保留自己的门禁类型（`FirstLookRowGate` / `SecondLookRowGate`，同批在 runner-direction.ts 命名），不必退化成联合类型再在循环里收窄。字段也因此都是非 null 的——首次赋值就在声明处，不存在计划里那批 `| null`。
 
 ### Task 2.2: 三份 look 修复循环统一为 repairLookARow / repairLookBRow
 
@@ -233,8 +244,8 @@ commit 0e41be5「harden codex pet generation billing」后 start 路由改为按
 
 **Files:** Create `apps/api/src/workflow/codex-pet/codex-pet-runner/runner-look-repair.ts`；Modify `codex-pet/codex-pet-runner.ts`
 
-- [ ] **Step 1:** 先在 runner 集成测试里确认现有修复分支用例可跑（「行10配准修复」用例）并新增一个驱动 look-a 修复循环的用例：`visual.qa` 对 look-a 第一次返回 fail verdict（带 repairPrompt）、第二次 pass，断言 run 最终 ready 且 `codexPetEvent` 中存在 `run.repairing` 事件、`CodexPetJob` 中 look-a 的 attempt=2。跑之，PASS 后作为去重的行为锚。
-- [ ] **Step 2:** 在 runner-look-repair.ts 实现（options 按上表修订：删 `attachDiagnosticFromStart`，加 `forceFirstRound` / `initialHint` / `gateFallbackHint`）：
+- [x] **Step 1:** 先在 runner 集成测试里确认现有修复分支用例可跑（「行10配准修复」用例）并新增一个驱动 look-a 修复循环的用例：`visual.qa` 对 look-a 第一次返回 fail verdict（带 repairPrompt）、第二次 pass，断言 run 最终 ready 且 `codexPetEvent` 中存在 `run.repairing` 事件、`CodexPetJob` 中 look-a 的 attempt=2。跑之，PASS 后作为去重的行为锚。
+- [x] **Step 2:** 在 runner-look-repair.ts 实现（options 按上表修订：删 `attachDiagnosticFromStart`，加 `forceFirstRound` / `initialHint` / `gateFallbackHint`）：
   ```ts
   export interface LookRepairOptions {
     progress: number                 // runBoardJob 与 emit 用的进度
@@ -250,11 +261,24 @@ commit 0e41be5「harden codex pet generation billing」后 start 路由改为按
   export async function repairLookBRow(ctx, dir, deps, opts): Promise<void>  // 行别轴差异见上表
   ```
   循环体逐行取自副本 1/2，`opts` 分支覆盖阶段轴的 6 个真参数；`dir` 上的字段就地更新（与 Task 2.1 后的现状一致）。`requireApprovedRegisteredRow` 与 `resumeStageIfRepairing` 留在调用点（差异 9）。
-- [ ] **Step 3:** 副本 1 替换为 `repairLookARow(..., { progress: 74, registerProgress: 73, forceFirstRound: false, gateFallbackHint: "Keep the complete 000 through 157.5 row…", budgetExhausted: "approval-gate", emitRepairing: true })`；typecheck + runner 集成（含 Step 1 新用例）。
-- [ ] **Step 4:** 副本 2 替换为 `repairLookBRow(..., { progress: 78, registerProgress: 78, forceFirstRound: false, gateFallbackHint: "…180 through 337.5…", budgetExhausted: "approval-gate", emitRepairing: true })`；同样验证。
-- [ ] **Step 5:** `regenerateDirectionRows` 闭包改写为：`repairLookARow(..., { progress: 84, registerProgress: 84, workflowStage: "validating", forceFirstRound: true, initialHint: repairHint, gateFallbackHint: "Keep row A monotonic…", budgetExhausted: "plain-error", emitRepairing: false })` → 重算两个派生参考图 → `repairLookBRow(同型，row B 兜底语)` → `resumeStageIfRepairing(ctx, "validating", 84, …)`。闭包本体移入 runner-look-repair.ts 导出为 `regenerateDirectionRows(ctx, dir, deps)`（deps 需在每个调用点**现场构造**，因为 `repairScopedRows` 会先改写 `cardinals`/`standard`/两个 anchorStoryboard 等再调它）。
-- [ ] **Step 6:** **codex-pet 全量**，预期基线 + 1 个新用例。
-- [ ] **Step 7:** Commit `refactor(codex-pet): 三份 look 修复循环统一为 repairLook{A,B}Row`
+- [x] **Step 3:** 副本 1 替换为 `repairLookARow(..., { progress: 74, registerProgress: 73, forceFirstRound: false, gateFallbackHint: "Keep the complete 000 through 157.5 row…", budgetExhausted: "approval-gate", emitRepairing: true })`；typecheck + runner 集成（含 Step 1 新用例）。
+- [x] **Step 4:** 副本 2 替换为 `repairLookBRow(..., { progress: 78, registerProgress: 78, forceFirstRound: false, gateFallbackHint: "…180 through 337.5…", budgetExhausted: "approval-gate", emitRepairing: true })`；同样验证。
+- [x] **Step 5:** `regenerateDirectionRows` 闭包改写为：`repairLookARow(..., { progress: 84, registerProgress: 84, workflowStage: "validating", forceFirstRound: true, initialHint: repairHint, gateFallbackHint: "Keep row A monotonic…", budgetExhausted: "plain-error", emitRepairing: false })` → 重算两个派生参考图 → `repairLookBRow(同型，row B 兜底语)` → `resumeStageIfRepairing(ctx, "validating", 84, …)`。闭包本体移入 runner-look-repair.ts 导出为 `regenerateDirectionRows(ctx, dir, deps)`（deps 需在每个调用点**现场构造**，因为 `repairScopedRows` 会先改写 `cardinals`/`standard`/两个 anchorStoryboard 等再调它）。
+- [x] **Step 6:** **codex-pet 全量**，预期基线 + 1 个新用例。
+- [x] **Step 7:** Commit `refactor(codex-pet): 三份 look 修复循环统一为 repairLook{A,B}Row`
+
+**执行记录（2026-08-26）**
+
+四段循环体现在只剩 `runner-look-repair.ts` 里的一个 `runLookRepairLoop` 骨架 + 两个行别函数；`codex-pet-runner.ts` 1577 → 1499 行。四处与计划的偏差：
+
+1. **`forceFirstRound: boolean` + `initialHint?: string` 合并为 `initialHint: string | null`。** 这两项本来就是同一个决定（差异 1 与差异 8 描述的是同一条分支），拆成两个字段能配出 `forceFirstRound: true, initialHint: undefined` 这种无意义组合；合并后不可能配错。
+2. **新增表外差异 #10 `exhaustedPrefix: string`。** 归一化 diff 只抹了行别，所以没暴露出这条：额度耗尽的报错文案在**两条轴上都变**（`方向 000 到 157.5 未通过 row-10 前置门禁` / `修复后的第一组观察方向未通过前置门禁`），而 `：${failures.join("；") || "方向语义或连续性失败"}` 的尾巴四份逐字一致。顺带记一条既有怪处：副本 1 的 look-a 文案确实写着「row-10 前置门禁」（look-a 是 row-9），原样保留。
+3. **`regenerateDirectionRows` 闭包本体没有移入 runner-look-repair.ts**，只有它内含的两个 `for(;;)` 被替换成两次 `repairLook{A,B}Row` 调用。它剩下的部分（两张派生参考图的重算、两个 `requireApprovedRegisteredRow` 标签、`resumeStageIfRepairing`）只有一个调用形状，搬出去要为它造一个 ~11 字段的 deps 对象却换不到任何去重。Step 5 的实质目标（两个 `for(;;)` 消失）已达成。共享的 7 个 deps 字段在闭包内**每次调用现场构造**（`const sharedDeps`），理由与计划一致。
+4. **`ApprovedRegisteredDirectionRow` 在 runner-direction.ts 命名。** 原先是 `requireApprovedRegisteredRow` 断言签名里的匿名交叉类型；look-b 的循环搬出 `executeRun` 后要把已批准的 row-9 当参数传，匿名类型过不了函数边界。
+
+Step 1 的行为锚（`retries the row-9 pre-gate before starting the second look row`）比计划写的更严：两次拒绝（attempt=3 而非 2），并钉住累积修复要求逐轮叠加、诊断板只在修复轮出现且首轮不出现、参考图前两张的顺序、`run.repairing` 的 progress/message/payload。行内 row-9 前置门禁此前**零覆盖**（row-10 的与校验期重建的都有），这条补的就是它。
+
+**测试：** `npx vitest run codex-pet` = 25 passed | 0 failed | 4 skipped（文件），321 passed | 0 failed | 8 skipped（用例），331.62s。基线 320 + 新增 1。typecheck 与 biome lint 全绿。
 
 ### Task 2.3: lease CAS 样板收敛（只收形状 A）
 

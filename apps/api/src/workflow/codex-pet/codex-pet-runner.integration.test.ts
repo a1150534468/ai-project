@@ -2771,6 +2771,58 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect((run.validationReport as { row10PreGenerationGate?: { passed?: boolean } }).row10PreGenerationGate?.passed).toBe(true);
   }, 120_000);
 
+  // 行内 row-9 前置门禁的修复循环此前没有测试覆盖（row-10 的有，validating 期重建的有）。
+  // 这条把它的可观察行为全部钉住：尝试次数、累积修复要求、诊断板只在修复轮出现、
+  // run.repairing 的进度/文案/job key。三份修复循环合一时靠它保证行内这份没被改掉。
+  it("retries the row-9 pre-gate before starting the second look row", async () => {
+    const seeded = await seed(true);
+    const store = memoryArtifactStore();
+    let rejectedRow9Count = 0;
+    const consensus = vi.fn(async (input: { prompt: string }) => {
+      if (rejectedRow9Count < 2 && input.prompt.includes("Pre-row-10 gate for the registered row-9 sequence")) {
+        rejectedRow9Count += 1;
+        const requirement = rejectedRow9Count === 1
+          ? "preserve the 000 anchor and repair the cell-4-to-5 quadrant"
+          : "preserve the earlier quadrant fix and stop the 090 screen-right reversal";
+        return { ...passedConsensus, pass: false, failures: [requirement], verdicts: [{ ...passedVerdict, pass: false, repairPrompt: requirement }] };
+      }
+      return passedConsensus;
+    });
+    const deps = runnerDeps(store, consensus);
+    const result = await executeCodexPetRun({ runId: seeded.run.id, deps });
+    expect(result.status).toBe("ready");
+    expect(rejectedRow9Count).toBe(2);
+    const row9Job = await prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a" } } });
+    expect(row9Job.attempt).toBe(3);
+    const row9GenerationCalls = (deps.visual.generate as unknown as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => call[0] as { prompt: string; references: Array<{ filename?: string }> })
+      .filter((call) => call.prompt.includes("Direction order: 000, 022.5"));
+    expect(row9GenerationCalls).toHaveLength(3);
+    expect(row9GenerationCalls[1]!.prompt).toContain("preserve the 000 anchor and repair the cell-4-to-5 quadrant");
+    expect(row9GenerationCalls[2]!.prompt).toContain("preserve the 000 anchor and repair the cell-4-to-5 quadrant");
+    expect(row9GenerationCalls[2]!.prompt).toContain("stop the 090 screen-right reversal");
+    expect(row9GenerationCalls[0]!.references.map((reference) => reference.filename))
+      .not.toContain("previous-specialized-qa-failed-pose-board.png");
+    expect(row9GenerationCalls[2]!.references.map((reference) => reference.filename))
+      .toContain("previous-specialized-qa-failed-pose-board.png");
+    expect(row9GenerationCalls[2]!.references.slice(0, 2).map((reference) => reference.filename)).toEqual([
+      "look-a-approved-anchor-storyboard.png",
+      "approved-canonical-base.png",
+    ]);
+    const repairEvents = await prisma.codexPetEvent.findMany({
+      where: { runId: seeded.run.id, type: "run.repairing", jobKey: "look-a" },
+      orderBy: { sequence: "asc" },
+    });
+    expect(repairEvents).toHaveLength(2);
+    expect(repairEvents.map((event) => event.progress)).toEqual([74, 74]);
+    expect(repairEvents.map((event) => event.message)).toEqual([
+      "正在修复第一组观察方向，第二组尚未启动",
+      "正在修复第一组观察方向，第二组尚未启动",
+    ]);
+    expect(repairEvents.map((event) => (event.payload as { attempt?: number; retryKind?: string }).attempt)).toEqual([1, 2]);
+    expect(repairEvents.map((event) => (event.payload as { retryKind?: string }).retryKind)).toEqual(["visual", "visual"]);
+  }, 120_000);
+
   it("resets an exhausted board job when its ordered input artifact revision changes", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
