@@ -2,7 +2,7 @@
 
 import { type CodexPetJob, Prisma } from "@prisma/client";
 import { settlePerImageBilling } from "./runner-billing.js";
-import { emit } from "./runner-lease.js";
+import { emit, updateOwnedJob } from "./runner-lease.js";
 import {
   CodexPetArchiveDeferredError,
   CodexPetCancelledError,
@@ -69,18 +69,7 @@ export async function transitionKnowledgeArchiveJob(
   data: Prisma.CodexPetJobUpdateManyMutationInput,
 ): Promise<CodexPetJob> {
   return withCurrentKnowledgeArchiveLease(ctx, async (tx) => {
-    const changed = await tx.codexPetJob.updateMany({
-      where: {
-        id: job.id,
-        runId: ctx.runId,
-        projectId: ctx.project.id,
-        userId: ctx.project.userId,
-        status: job.status,
-        workerId: job.workerId,
-      },
-      data,
-    });
-    if (changed.count !== 1) throw new CodexPetLeaseLostError();
+    await updateOwnedJob(tx, ctx, job.id, data, { status: job.status, workerId: job.workerId });
     const updated = await tx.codexPetJob.findFirst({
       where: {
         id: job.id,
@@ -167,24 +156,13 @@ export async function reconcileKnowledgeArchiveJob(
       && previous.documentId === document.id) {
       return document.id;
     }
-    const changed = await tx.codexPetJob.updateMany({
-      where: {
-        id: job.id,
-        runId: ctx.runId,
-        projectId: ctx.project.id,
-        userId: ctx.project.userId,
-        status: job.status,
-        workerId: job.workerId,
-      },
-      data: {
-        status: "completed",
-        output: { documentId: document.id } as Prisma.InputJsonValue,
-        completedAt: new Date(),
-        workerId: null,
-        error: null,
-      },
-    });
-    if (changed.count !== 1) throw new CodexPetLeaseLostError();
+    await updateOwnedJob(tx, ctx, job.id, {
+      status: "completed",
+      output: { documentId: document.id } as Prisma.InputJsonValue,
+      completedAt: new Date(),
+      workerId: null,
+      error: null,
+    }, { status: job.status, workerId: job.workerId });
     return document.id;
   });
 }

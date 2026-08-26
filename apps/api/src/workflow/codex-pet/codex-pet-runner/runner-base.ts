@@ -19,7 +19,7 @@ import {
   putJsonArtifact,
   startJob,
 } from "./runner-jobs.js";
-import { checkCancelled, currentRun, emit } from "./runner-lease.js";
+import { checkCancelled, currentRun, emit, updateOwnedJob } from "./runner-lease.js";
 import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   CodexPetCancelledError,
@@ -274,25 +274,15 @@ export async function ensurePersistedBaseSelection(ctx: RunnerContext, selectedA
   // Automatic selection already completes this job with a QA report. Manual
   // selection is committed by the route, so the runner records the same
   // durable graph node without inventing another visual review.
-  const changed = await ctx.prisma.codexPetJob.updateMany({
-    where: {
-      id: job.id,
-      runId: ctx.runId,
-      projectId: ctx.project.id,
-      userId: ctx.project.userId,
-      status: { not: "completed" },
-    },
-    data: {
-      status: "completed",
-      attempt: Math.max(1, job.attempt),
-      inputArtifactIds: [selectedArtifactId],
-      output: { selectedArtifactId, selectionMode: "manual" } as Prisma.InputJsonValue,
-      error: null,
-      workerId: null,
-      completedAt: new Date(),
-    },
-  });
-  if (changed.count !== 1) throw new CodexPetLeaseLostError();
+  await updateOwnedJob(ctx.prisma, ctx, job.id, {
+    status: "completed",
+    attempt: Math.max(1, job.attempt),
+    inputArtifactIds: [selectedArtifactId],
+    output: { selectedArtifactId, selectionMode: "manual" } as Prisma.InputJsonValue,
+    error: null,
+    workerId: null,
+    completedAt: new Date(),
+  }, { status: { not: "completed" } });
 }
 
 export async function getIdentityGuide(
@@ -373,28 +363,18 @@ export async function getIdentityGuide(
     // A regenerated/changed base must never inherit anatomy inferred from a
     // different candidate. Reset this internal text job and recompute it from
     // the currently approved, ownership-checked artifact.
-    const reset = await ctx.prisma.codexPetJob.updateMany({
-      where: {
-        id: job.id,
-        runId: ctx.runId,
-        projectId: ctx.project.id,
-        userId: ctx.project.userId,
-        status: "completed",
-      },
-      data: {
-        status: "queued",
-        attempt: 0,
-        input: guideBinding as Prisma.InputJsonValue,
-        inputArtifactIds: [canonical.artifact.id],
-        outputArtifactIds: [],
-        output: {} as Prisma.InputJsonValue,
-        error: null,
-        workerId: null,
-        startedAt: null,
-        completedAt: null,
-      },
-    });
-    if (reset.count !== 1) throw new CodexPetLeaseLostError();
+    await updateOwnedJob(ctx.prisma, ctx, job.id, {
+      status: "queued",
+      attempt: 0,
+      input: guideBinding as Prisma.InputJsonValue,
+      inputArtifactIds: [canonical.artifact.id],
+      outputArtifactIds: [],
+      output: {} as Prisma.InputJsonValue,
+      error: null,
+      workerId: null,
+      startedAt: null,
+      completedAt: null,
+    }, { status: "completed" });
     const resetJob = await ctx.prisma.codexPetJob.findUnique({ where: { id: job.id } });
     if (!resetJob) throw new Error("Identity guide job disappeared while resetting stale output");
     job = resetJob;
@@ -434,36 +414,25 @@ export async function getIdentityGuide(
       if (!guide) throw new Error("角色解剖与身份指南为空");
       const guideProvenance = assertCodexPetVisualQaProvenance(guideModelProvenance, ctx.visualQaModel, "identity-guide");
       await checkCancelled(ctx);
-      const completed = await ctx.prisma.codexPetJob.updateMany({
-        where: {
-          id: job.id,
-          runId: ctx.runId,
-          projectId: ctx.project.id,
-          userId: ctx.project.userId,
-          status: "running",
-          workerId: ctx.workerId,
-        },
-        data: {
-          status: "completed",
-          inputArtifactIds: [canonical.artifact.id],
-          outputArtifactIds: [],
-          output: {
-            version: IDENTITY_GUIDE_VERSION,
-            selectedArtifactId: canonical.artifact.id,
-            supportingReferenceAssetIds,
-            characterBriefHash,
-            guide,
-            modelProvenance: guideProvenance,
-          } as unknown as Prisma.InputJsonValue,
-          providerMetadata: {
-            visualQa: guideProvenance,
-          } as unknown as Prisma.InputJsonValue,
-          error: null,
-          workerId: null,
-          completedAt: new Date(),
-        },
-      });
-      if (completed.count !== 1) throw new CodexPetLeaseLostError();
+      await updateOwnedJob(ctx.prisma, ctx, job.id, {
+        status: "completed",
+        inputArtifactIds: [canonical.artifact.id],
+        outputArtifactIds: [],
+        output: {
+          version: IDENTITY_GUIDE_VERSION,
+          selectedArtifactId: canonical.artifact.id,
+          supportingReferenceAssetIds,
+          characterBriefHash,
+          guide,
+          modelProvenance: guideProvenance,
+        } as unknown as Prisma.InputJsonValue,
+        providerMetadata: {
+          visualQa: guideProvenance,
+        } as unknown as Prisma.InputJsonValue,
+        error: null,
+        workerId: null,
+        completedAt: new Date(),
+      }, { status: "running", workerId: ctx.workerId });
       completedGuide = guide;
     } catch (error) {
       if (error instanceof CodexPetLeaseLostError || ctx.signal?.reason instanceof CodexPetLeaseLostError) throw new CodexPetLeaseLostError();
