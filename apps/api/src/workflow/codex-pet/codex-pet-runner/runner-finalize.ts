@@ -1,9 +1,17 @@
 // 由 codex-pet-runner.ts 纯移动而来（P3.1 阶段 1，终态收尾）。
 
 import { type CodexPetProject, Prisma, type PrismaClient } from "@prisma/client";
-import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "../codex-pet-call-ledger.js";
-import { codexPetGateFailureSnapshotValue } from "../codex-pet-gate-failure.js";
 import {
+  CODEX_PET_PER_IMAGE_BILLING_MODE,
+  type CodexPetImageCallAlreadySentError,
+  type CodexPetImageCallApprovalRequiredError,
+  type CodexPetImageCallLimitError,
+} from "../codex-pet-call-ledger.js";
+import { codexPetGateFailureSnapshotValue } from "../codex-pet-gate-failure.js";
+import { type CodexPetPackagingDeferredError } from "../codex-pet-packaging.js";
+import { releaseDeferredArchiveLease } from "./runner-archive.js";
+import {
+  pauseForImageApproval,
   recordPerImageSettlementFailure,
   refundRun,
   settlePerImageBilling,
@@ -11,9 +19,13 @@ import {
   settlePerImageRunBilling,
 } from "./runner-billing.js";
 import { emit, } from "./runner-lease.js";
+import { releaseDeferredPackagingLease } from "./runner-packaging-resume.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
+  type CodexPetArchiveDeferredError,
+  type CodexPetExecutionResult,
   CodexPetGateFailureError,
+  CodexPetImageApprovalRequiredError,
   type CodexPetRunnerDeps,
   type RunnerContext,
 } from "./runner-types.js";
@@ -265,4 +277,110 @@ export async function finalizeCancellation(ctx: RunnerContext): Promise<void> {
     return;
   }
   if (outcome.refundPending) await refundRun(ctx, "cancelled_before_first_image");
+}
+
+/**
+ * 下面七个 handler 是 `executeCodexPetRun` catch 链七类信号异常的处理体，逐一
+ * 命名后 catch 链只剩 `instanceof` 分派。三点说明：
+ *
+ * 1. 原处理体读的是 `run.id / run.project.id / run.userId`，这里换成
+ *    `ctx.runId / ctx.project.id / ctx.project.userId`。等价性由
+ *    codex-pet-runner.ts 领取租约前的归属断言保证：`initialRun.project.id !==
+ *    initialRun.projectId || initialRun.project.userId !== initialRun.userId`
+ *    直接抛错，因此走到 catch 链时三列必然同源。
+ * 2. 原来四处重复的重读各带三种 `select` 形状（`{status,cancelRequested}` /
+ *    `{status}` / `{cancelRequested,status}`），合一为下面的超集查询——多读一列
+ *    不改变任何分支判定。
+ * 3. `latest.status` 在 Prisma 侧是 `string`，靠 `=== "ready"` 这类字面量比较
+ *    收窄后才能塞进 `CodexPetExecutionStatus` 联合类型，比较必须逐字保留。
+ */
+async function readOwnedRunOutcome(ctx: RunnerContext): Promise<{ readonly status: string; readonly cancelRequested: boolean } | null> {
+  return ctx.prisma.codexPetRun.findFirst({
+    where: { id: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId },
+    select: { status: true, cancelRequested: true },
+  });
+}
+
+export async function handleImageApprovalRequired(
+  ctx: RunnerContext,
+  error: CodexPetImageApprovalRequiredError,
+): Promise<CodexPetExecutionResult> {
+  await pauseForImageApproval(ctx, error);
+  return { status: ctx.perImageBilling ? "awaiting_regeneration_approval" : "awaiting_direction_review", runId: ctx.runId };
+}
+
+export async function handleImageCallLedgerPause(
+  ctx: RunnerContext,
+  error: CodexPetImageCallLimitError | CodexPetImageCallApprovalRequiredError | CodexPetImageCallAlreadySentError,
+): Promise<CodexPetExecutionResult> {
+  await pauseForImageApproval(ctx, new CodexPetImageApprovalRequiredError(error.jobKey, error.message));
+  return { status: "awaiting_regeneration_approval", runId: ctx.runId };
+}
+
+export async function handlePackagingDeferred(
+  ctx: RunnerContext,
+  error: CodexPetPackagingDeferredError,
+): Promise<CodexPetExecutionResult> {
+  if (await releaseDeferredPackagingLease(ctx, error)) {
+    return { status: "packaging", runId: ctx.runId };
+  }
+  const latest = await readOwnedRunOutcome(ctx);
+  if (latest?.cancelRequested || latest?.status === "cancelled") {
+    await finalizeCancellation(ctx);
+    return { status: "cancelled", runId: ctx.runId };
+  }
+  if (latest?.status === "ready" || latest?.status === "failed") {
+    return { status: latest.status, runId: ctx.runId };
+  }
+  if (latest?.status === "archiving") return { status: "archiving", runId: ctx.runId };
+  return { status: "busy", runId: ctx.runId };
+}
+
+export async function handleArchiveDeferred(
+  ctx: RunnerContext,
+  error: CodexPetArchiveDeferredError,
+): Promise<CodexPetExecutionResult> {
+  if (await releaseDeferredArchiveLease(ctx, error)) {
+    return { status: "archiving", runId: ctx.runId };
+  }
+  const latest = await readOwnedRunOutcome(ctx);
+  if (latest?.cancelRequested || latest?.status === "cancelled") {
+    await finalizeCancellation(ctx);
+    return { status: "cancelled", runId: ctx.runId };
+  }
+  if (latest?.status === "ready" || latest?.status === "failed") {
+    return { status: latest.status, runId: ctx.runId };
+  }
+  return { status: "busy", runId: ctx.runId };
+}
+
+export async function handleLeaseLost(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
+  const latest = await readOwnedRunOutcome(ctx);
+  if (latest?.status === "ready" || latest?.status === "failed" || latest?.status === "cancelled") {
+    return { status: latest.status, runId: ctx.runId };
+  }
+  return { status: "busy", runId: ctx.runId };
+}
+
+export async function handleCancelled(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
+  await finalizeCancellation(ctx);
+  return { status: "cancelled", runId: ctx.runId };
+}
+
+/**
+ * 兜底分支：只有取消竞态那条路径会返回，其余情况登记失败后原样重抛，交给
+ * Bull 记录失败。返回类型不含 never 分支是有意的——调用方一律 `return await`。
+ */
+export async function handleUnexpectedFailure(ctx: RunnerContext, error: unknown): Promise<CodexPetExecutionResult> {
+  // Cancellation may be persisted just after an upstream/QA error but
+  // before the monitor tick observes it. Re-read the row so that the
+  // cancellation/refund policy wins that race instead of recording a
+  // system failure.
+  const latestBeforeFailure = await readOwnedRunOutcome(ctx);
+  if (latestBeforeFailure?.cancelRequested || latestBeforeFailure?.status === "cancelled") {
+    await finalizeCancellation(ctx);
+    return { status: "cancelled", runId: ctx.runId };
+  }
+  await finalizeFailure(ctx, error);
+  throw error;
 }

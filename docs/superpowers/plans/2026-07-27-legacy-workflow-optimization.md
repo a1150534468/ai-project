@@ -331,6 +331,21 @@ Step 1 的行为锚（`retries the row-9 pre-gate before starting the second loo
 
 `executeCodexPetRun` 的 catch 链（:5044-5109）7 类信号异常逐一分派。**仅当阶段 2 前三个任务全绿后再做**：把每个 `instanceof` 分支的处理体提为命名函数（`handleApprovalRequired/handleArchiveDeferred/...`，放 runner-finalize.ts），catch 链只留分派。不引入注册表抽象（YAGNI——新增暂停类型的频率不支撑）。验证：typecheck + runner 集成（暂停/取消/退款用例是关键路径）。Commit `refactor(codex-pet): catch 链处理体命名化`。
 
+**执行记录（2026-08-26）**
+
+catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:5044-5109` 是 P2.1 拆分前的偏移）。7 个处理体全部提入 `runner-finalize.ts`：`handleImageApprovalRequired` / `handleImageCallLedgerPause` / `handlePackagingDeferred` / `handleArchiveDeferred` / `handleLeaseLost` / `handleCancelled` / `handleUnexpectedFailure`。catch 链从 66 行缩到 22 行，只剩 `instanceof` 判定 + `return await handleXxx(...)`。未引入注册表，与计划一致。
+
+三处需要说明的判断：
+
+- **handler 只收 `ctx`，不收 `run`/`deps`。** 原处理体读 `run.id / run.project.id / run.userId`，换成 `ctx.runId / ctx.project.id / ctx.project.userId`。等价性由领取租约前的归属断言保证（`codex-pet-runner.ts` 里 `initialRun.project.id !== initialRun.projectId || initialRun.project.userId !== initialRun.userId` 直接抛错），走到 catch 链时这三列必然同源。理由写进了代码注释。
+- **四处重复重读合一为 `readOwnedRunOutcome`。** 原来带三种 `select` 形状（`{status,cancelRequested}` / `{status}` / `{cancelRequested,status}`），统一取超集两列——多读一列不改变任何分支判定。
+- **`controller.signal.reason instanceof ...` 留在 catch 链里。** 它属于*分派谓词*而不是处理体；且 `controller` 是 `executeCodexPetRun` 的局部量，搬进 handler 就得多传一个参数换不来任何收益。
+- **`handleUnexpectedFailure` 声明为返回 `CodexPetExecutionResult`，但只有取消竞态那条路径真的返回**，其余情况 `finalizeFailure` 之后原样重抛（`throw error`，同一个 error 实例）。调用方 `return await`，语义与合一前逐字一致。
+
+顺带清掉了 `codex-pet-runner.ts` 因此空出的 5 个导入符号（`releaseDeferredPackagingLease` / `releaseDeferredArchiveLease` / `finalizeCancellation` / `finalizeFailure` / 整个 `runner-billing.js` 导入块只剩的 `pauseForImageApproval`）——这些调用点现在都在 runner-finalize.ts 内部。`runner-finalize.ts` 反向新增了对 `runner-archive.js` / `runner-packaging-resume.js` / `runner-billing.js` 的导入，无环：这三者都不导入 runner-finalize，而 runner-finalize 全仓只有 `codex-pet-runner.ts` 一个导入方。
+
+**验证：** `tsc --noEmit` 干净；两个改动文件 `biome lint` 干净；`codex-pet-runner-contract.test.ts` + `codex-pet-archive.test.ts` 共 33 passed / 0 failed / 0 skipped；全量 `npx vitest run codex-pet` = 25 passed | 0 failed | 4 skipped（文件），321 passed | 0 failed | 8 skipped（用例），341.27s —— 与 Task 2.2 / 2.3 的基线逐个数字一致。
+
 ---
 
 ## 阶段 3：加厚 packages/llm 并收敛复刻（约 2-3 天）

@@ -73,14 +73,18 @@ import {
 import {
   continueAfterDurablePackaging,
   deferRecoveryPackaging,
-  releaseDeferredPackagingLease,
   resumeDurablePackaging,
 } from "./codex-pet-runner/runner-packaging-resume.js";
-import { completeKnowledgeArchive, releaseDeferredArchiveLease } from "./codex-pet-runner/runner-archive.js";
+import { completeKnowledgeArchive } from "./codex-pet-runner/runner-archive.js";
 import {
-  finalizeCancellation,
   finalizeClaimedSetupFailure,
-  finalizeFailure,
+  handleArchiveDeferred,
+  handleCancelled,
+  handleImageApprovalRequired,
+  handleImageCallLedgerPause,
+  handleLeaseLost,
+  handlePackagingDeferred,
+  handleUnexpectedFailure,
 } from "./codex-pet-runner/runner-finalize.js";
 import {
   createApprovedCardinalAnchor,
@@ -116,9 +120,6 @@ import {
   codexPetMaxBoardAttempts,
   putJsonArtifact,
 } from "./codex-pet-runner/runner-jobs.js";
-import {
-  pauseForImageApproval,
-} from "./codex-pet-runner/runner-billing.js";
 import {
   checkCancelled,
   claimRunLease,
@@ -1427,70 +1428,24 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     return await executeRun(ctx);
   } catch (error) {
     if (error instanceof CodexPetImageApprovalRequiredError) {
-      await pauseForImageApproval(ctx, error);
-      return { status: ctx.perImageBilling ? "awaiting_regeneration_approval" : "awaiting_direction_review", runId: run.id };
+      return await handleImageApprovalRequired(ctx, error);
     }
     if (error instanceof CodexPetImageCallLimitError || error instanceof CodexPetImageCallApprovalRequiredError || error instanceof CodexPetImageCallAlreadySentError) {
-      await pauseForImageApproval(ctx, new CodexPetImageApprovalRequiredError(error.jobKey, error.message));
-      return { status: "awaiting_regeneration_approval", runId: run.id };
+      return await handleImageCallLedgerPause(ctx, error);
     }
     if (error instanceof CodexPetPackagingDeferredError) {
-      if (await releaseDeferredPackagingLease(ctx, error)) {
-        return { status: "packaging", runId: run.id };
-      }
-      const latest = await deps.prisma.codexPetRun.findFirst({
-        where: { id: run.id, projectId: run.project.id, userId: run.userId },
-        select: { status: true, cancelRequested: true },
-      });
-      if (latest?.cancelRequested || latest?.status === "cancelled") {
-        await finalizeCancellation(ctx);
-        return { status: "cancelled", runId: run.id };
-      }
-      if (latest?.status === "ready" || latest?.status === "failed") {
-        return { status: latest.status, runId: run.id };
-      }
-      if (latest?.status === "archiving") return { status: "archiving", runId: run.id };
-      return { status: "busy", runId: run.id };
+      return await handlePackagingDeferred(ctx, error);
     }
     if (error instanceof CodexPetArchiveDeferredError) {
-      if (await releaseDeferredArchiveLease(ctx, error)) {
-        return { status: "archiving", runId: run.id };
-      }
-      const latest = await deps.prisma.codexPetRun.findFirst({
-        where: { id: run.id, projectId: run.project.id, userId: run.userId },
-        select: { status: true, cancelRequested: true },
-      });
-      if (latest?.cancelRequested || latest?.status === "cancelled") {
-        await finalizeCancellation(ctx);
-        return { status: "cancelled", runId: run.id };
-      }
-      if (latest?.status === "ready" || latest?.status === "failed") {
-        return { status: latest.status, runId: run.id };
-      }
-      return { status: "busy", runId: run.id };
+      return await handleArchiveDeferred(ctx, error);
     }
     if (error instanceof CodexPetLeaseLostError || controller.signal.reason instanceof CodexPetLeaseLostError) {
-      const latest = await deps.prisma.codexPetRun.findFirst({ where: { id: run.id, projectId: run.project.id, userId: run.userId }, select: { status: true } });
-      if (latest?.status === "ready" || latest?.status === "failed" || latest?.status === "cancelled") {
-        return { status: latest.status, runId: run.id };
-      }
-      return { status: "busy", runId: run.id };
+      return await handleLeaseLost(ctx);
     }
     if (error instanceof CodexPetCancelledError || controller.signal.reason instanceof CodexPetCancelledError) {
-      await finalizeCancellation(ctx);
-      return { status: "cancelled", runId: run.id };
+      return await handleCancelled(ctx);
     }
-    // Cancellation may be persisted just after an upstream/QA error but
-    // before the monitor tick observes it. Re-read the row so that the
-    // cancellation/refund policy wins that race instead of recording a
-    // system failure.
-    const latestBeforeFailure = await deps.prisma.codexPetRun.findFirst({ where: { id: run.id, projectId: run.project.id, userId: run.userId }, select: { cancelRequested: true, status: true } });
-    if (latestBeforeFailure?.cancelRequested || latestBeforeFailure?.status === "cancelled") {
-      await finalizeCancellation(ctx);
-      return { status: "cancelled", runId: run.id };
-    }
-    await finalizeFailure(ctx, error);
-    throw error;
+    return await handleUnexpectedFailure(ctx, error);
   } finally {
     clearInterval(monitor);
     clearInterval(leaseHeartbeat);
