@@ -2,7 +2,7 @@
 
 import { Buffer } from "node:buffer";
 import { type CodexPetArtifact, type CodexPetJob, Prisma } from "@prisma/client";
-import { checkCancelled, emit } from "./runner-lease.js";
+import { checkCancelled, emit, updateOwnedJob } from "./runner-lease.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetCancelledError,
@@ -122,11 +122,9 @@ export async function failJobAttempt(
 export async function persistProviderMetadata(ctx: RunnerContext, job: CodexPetJob, result: ImageGenerationResult): Promise<void> {
   // Provider metadata is useful even when deterministic/visual QA rejects the
   // image, so retain it independently of the successful-image billing flag.
-  const changed = await ctx.prisma.codexPetJob.updateMany({
-    where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId },
-    data: { providerMetadata: providerMetadata(result) as Prisma.InputJsonValue },
-  });
-  if (changed.count !== 1) throw new CodexPetLeaseLostError();
+  await updateOwnedJob(ctx.prisma, ctx, job.id, {
+    providerMetadata: providerMetadata(result) as Prisma.InputJsonValue,
+  }, { workerId: ctx.workerId });
 }
 
 /**
@@ -159,8 +157,9 @@ export async function markImageSucceeded(ctx: RunnerContext, job: CodexPetJob, r
       throw new CodexPetLeaseLostError();
     }
     if (result) {
-      const jobChanged = await tx.codexPetJob.updateMany({ where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId }, data: { providerMetadata: providerMetadata(result) as Prisma.InputJsonValue } });
-      if (jobChanged.count !== 1) throw new CodexPetLeaseLostError();
+      await updateOwnedJob(tx, ctx, job.id, {
+        providerMetadata: providerMetadata(result) as Prisma.InputJsonValue,
+      }, { workerId: ctx.workerId });
     }
   });
 }

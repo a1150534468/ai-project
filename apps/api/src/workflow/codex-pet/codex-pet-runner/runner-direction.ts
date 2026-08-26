@@ -25,11 +25,10 @@ import {
   sanitizeCodexPetDirectionRepairPrompt,
 } from "../codex-pet-prompts.js";
 import { ensureJob, putJsonArtifact, startJob } from "./runner-jobs.js";
-import { checkCancelled, emit } from "./runner-lease.js";
+import { checkCancelled, emit, updateOwnedJob } from "./runner-lease.js";
 import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   type BoardJobResult,
-  CodexPetLeaseLostError,
   INTERMEDIATE_TTL_MS,
   type RegisteredDirectionRowResult,
   type RunnerContext,
@@ -394,26 +393,22 @@ export async function registerDirectionRow(
     expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
   });
   if (!result.ok) {
-    const rejected = await ctx.prisma.codexPetJob.updateMany({
-      where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId },
-      data: {
-        status: "queued",
-        inputArtifactIds: [...expectedInputArtifactIds],
-        outputArtifactIds: [reportArtifact.id],
-        output: {
-          sourceBoardArtifactId: input.source.boardArtifact.id,
-          neutralFrameArtifactId: input.neutral.artifact.id,
-          reportArtifactId: reportArtifact.id,
-          sourceBoardSize: result.sourceBoardSize,
-          ok: false,
-          errors: result.errors,
-        } as Prisma.InputJsonValue,
-        error: result.errors.join("；") || "中立帧锁定注册未通过",
-        workerId: null,
-        completedAt: null,
-      },
-    });
-    if (rejected.count !== 1) throw new CodexPetLeaseLostError();
+    await updateOwnedJob(ctx.prisma, ctx, job.id, {
+      status: "queued",
+      inputArtifactIds: [...expectedInputArtifactIds],
+      outputArtifactIds: [reportArtifact.id],
+      output: {
+        sourceBoardArtifactId: input.source.boardArtifact.id,
+        neutralFrameArtifactId: input.neutral.artifact.id,
+        reportArtifactId: reportArtifact.id,
+        sourceBoardSize: result.sourceBoardSize,
+        ok: false,
+        errors: result.errors,
+      } as Prisma.InputJsonValue,
+      error: result.errors.join("；") || "中立帧锁定注册未通过",
+      workerId: null,
+      completedAt: null,
+    }, { workerId: ctx.workerId });
     return {
       registrationJob: job,
       source: input.source,
@@ -469,27 +464,23 @@ export async function registerDirectionRow(
   const outputArtifactIds = input.row === "look-a"
     ? [registeredRowArtifact.id, manifestArtifact.id, reportArtifact.id]
     : [registeredRowArtifact.id, reportArtifact.id];
-  const completed = await ctx.prisma.codexPetJob.updateMany({
-    where: { id: job.id, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId },
-    data: {
-      status: "completed",
-      inputArtifactIds: [...expectedInputArtifactIds],
-      outputArtifactIds,
-      output: {
-        sourceBoardArtifactId: input.source.boardArtifact.id,
-        neutralFrameArtifactId: input.neutral.artifact.id,
-        registeredRowArtifactId: registeredRowArtifact.id,
-        manifestArtifactId: manifestArtifact.id,
-        reportArtifactId: reportArtifact.id,
-        sourceBoardSize: result.sourceBoardSize,
-        ok: true,
-      } as Prisma.InputJsonValue,
-      error: null,
-      workerId: null,
-      completedAt: new Date(),
-    },
-  });
-  if (completed.count !== 1) throw new CodexPetLeaseLostError();
+  await updateOwnedJob(ctx.prisma, ctx, job.id, {
+    status: "completed",
+    inputArtifactIds: [...expectedInputArtifactIds],
+    outputArtifactIds,
+    output: {
+      sourceBoardArtifactId: input.source.boardArtifact.id,
+      neutralFrameArtifactId: input.neutral.artifact.id,
+      registeredRowArtifactId: registeredRowArtifact.id,
+      manifestArtifactId: manifestArtifact.id,
+      reportArtifactId: reportArtifact.id,
+      sourceBoardSize: result.sourceBoardSize,
+      ok: true,
+    } as Prisma.InputJsonValue,
+    error: null,
+    workerId: null,
+    completedAt: new Date(),
+  }, { workerId: ctx.workerId });
   await emit(ctx, "preview.ready", "direction_generating", input.progress,
     input.row === "look-a" ? "第一组观察方向已按中立帧完成固定注册" : "第二组观察方向已复用 row-9 固定注册",
     {
