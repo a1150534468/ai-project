@@ -1,6 +1,6 @@
 // 由 codex-pet-runner.ts 纯移动而来（P3.1 阶段 1，租约、事件与阶段推进）。
 
-import { type CodexPetRun, type PrismaClient } from "@prisma/client";
+import { type CodexPetRun, type Prisma, type PrismaClient } from "@prisma/client";
 import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "../codex-pet-call-ledger.js";
 import { type CodexPetRunStage } from "../codex-pet-events.js";
 import {
@@ -53,6 +53,61 @@ export async function currentRun(ctx: RunnerContext): Promise<CodexPetRun> {
   });
   if (!run) throw new Error("Codex pet run no longer exists");
   return run;
+}
+
+/**
+ * 既接受 PrismaClient 也接受事务句柄：下面两个 CAS 的调用点一半在 `$transaction`
+ * 里、一半直接用 ctx.prisma，谓词却必须逐字一致，所以入口只能是这个联合类型。
+ */
+type RunnerOwnedStore = PrismaClient | Prisma.TransactionClient;
+
+/**
+ * 形状 A：以「本 worker 仍持有这个未被请求取消的活跃 run」为条件写 run 行，
+ * 不满足即租约已丢。
+ *
+ * 谓词照抄 `stage` 与 recordImageGenerationAttempt / pauseForImageApproval /
+ * bindBoardJobInput 三处：workerId 进 where 而不是先读后判，是因为「读到自己持有」
+ * 与「写成功」之间必须没有窗口 —— 接管者的 claimRunLease 只要抢先一步改掉
+ * workerId，这里的 count 就是 0。
+ */
+export async function updateOwnedActiveRun(
+  store: RunnerOwnedStore,
+  ctx: RunnerContext,
+  data: Prisma.CodexPetRunUpdateManyMutationInput,
+): Promise<void> {
+  const changed = await store.codexPetRun.updateMany({
+    where: {
+      id: ctx.runId,
+      projectId: ctx.project.id,
+      userId: ctx.project.userId,
+      workerId: ctx.workerId,
+      status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
+      cancelRequested: false,
+    },
+    data,
+  });
+  if (changed.count !== 1) throw new CodexPetLeaseLostError();
+}
+
+/**
+ * 形状 B：以「这个 job 仍属于本 run 与本用户」为条件写 job 行，不满足即租约已丢。
+ *
+ * 基础谓词里**故意不含 workerId**：主形象手工选择由路由提交，runner 补图时
+ * job.workerId 可能是 null（runner-base.ts 的 `status: { not: "completed" }` 那处）。
+ * 需要锁 worker 或锁状态的调用点自己用 extraWhere 加，谁加谁负责。
+ */
+export async function updateOwnedJob(
+  store: RunnerOwnedStore,
+  ctx: RunnerContext,
+  jobId: string,
+  data: Prisma.CodexPetJobUpdateManyMutationInput,
+  extraWhere: Prisma.CodexPetJobWhereInput = {},
+): Promise<void> {
+  const changed = await store.codexPetJob.updateMany({
+    where: { id: jobId, runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, ...extraWhere },
+    data,
+  });
+  if (changed.count !== 1) throw new CodexPetLeaseLostError();
 }
 
 /**
@@ -150,20 +205,19 @@ export async function stage(ctx: RunnerContext, status: string, progress: number
     // stage/progress move backwards while that replay catches up (notably
     // after base review or while resuming packaging/archival).
     const advanced = targetProgress >= current.progressPercent;
-    const changed = await tx.codexPetRun.updateMany({
-      where: { id: ctx.runId, workerId: ctx.workerId, status: { in: [...CODEX_PET_ACTIVE_STATUSES] }, cancelRequested: false },
-      data: advanced
-        ? {
-            status,
-            progressStage: status,
-            progressPercent: targetProgress,
-            progressMessage: message,
-            heartbeatAt: now,
-            error: null,
-          }
-        : { heartbeatAt: now, error: null },
-    });
-    if (changed.count !== 1) return { claimed: false, advanced: false } as const;
+    // 两点与合一之前不同、但都不改变可观察行为：谓词比上面的 findFirst 多
+    // projectId / userId（checkCancelled 已按这两列查过同一行）；CAS 不中时改为
+    // 在事务内抛 LeaseLost，而此刻事务里还没有任何写入，回滚与空提交等价。
+    await updateOwnedActiveRun(tx, ctx, advanced
+      ? {
+          status,
+          progressStage: status,
+          progressPercent: targetProgress,
+          progressMessage: message,
+          heartbeatAt: now,
+          error: null,
+        }
+      : { heartbeatAt: now, error: null });
     if (advanced) {
       await tx.codexPetProject.updateMany({ where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } }, data: { status } });
     }

@@ -8,7 +8,7 @@ import {
   prepareCodexPetImageCallDispatch,
   refundCodexPetFailedExtraCall,
 } from "../codex-pet-call-ledger.js";
-import { currentRun, emit } from "./runner-lease.js";
+import { currentRun, emit, updateOwnedActiveRun } from "./runner-lease.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetImageApprovalRequiredError,
@@ -58,21 +58,10 @@ export async function recordImageGenerationAttempt(
     });
     return;
   }
-  const updated = await ctx.prisma.codexPetRun.updateMany({
-    where: {
-      id: ctx.runId,
-      projectId: ctx.project.id,
-      userId: ctx.project.userId,
-      workerId: ctx.workerId,
-      status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-      cancelRequested: false,
-    },
-    data: {
-      imageGenerationCallCount: { increment: 1 },
-      heartbeatAt: new Date(),
-    },
+  await updateOwnedActiveRun(ctx.prisma, ctx, {
+    imageGenerationCallCount: { increment: 1 },
+    heartbeatAt: new Date(),
   });
-  if (updated.count !== 1) throw new CodexPetLeaseLostError();
   const run = await currentRun(ctx);
   await ctx.appendEvent({
     prisma: ctx.prisma,
@@ -182,27 +171,16 @@ export async function pauseForImageApproval(ctx: RunnerContext, error: CodexPetI
   const status = ctx.perImageBilling ? "awaiting_regeneration_approval" : "awaiting_direction_review";
   await ctx.prisma.$transaction(async (tx) => {
     await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', ctx.runId);
-    const changed = await tx.codexPetRun.updateMany({
-      where: {
-        id: ctx.runId,
-        projectId: ctx.project.id,
-        userId: ctx.project.userId,
-        workerId: ctx.workerId,
-        status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-        cancelRequested: false,
-      },
-      data: {
-        status,
-        progressStage: status,
-        progressMessage: message,
-        pendingImageJobKey: error.jobKey,
-        imageGenerationApprovalBudget: 0,
-        workerId: null,
-        heartbeatAt: null,
-        error: null,
-      },
+    await updateOwnedActiveRun(tx, ctx, {
+      status,
+      progressStage: status,
+      progressMessage: message,
+      pendingImageJobKey: error.jobKey,
+      imageGenerationApprovalBudget: 0,
+      workerId: null,
+      heartbeatAt: null,
+      error: null,
     });
-    if (changed.count !== 1) throw new CodexPetLeaseLostError();
     await tx.codexPetJob.updateMany({
       where: { runId: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, key: error.jobKey },
       data: { status: "awaiting_approval", workerId: null, completedAt: null, error: message },

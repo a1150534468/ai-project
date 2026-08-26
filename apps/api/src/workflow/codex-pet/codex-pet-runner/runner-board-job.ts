@@ -32,12 +32,11 @@ import {
   putJsonArtifact,
   startJob,
 } from "./runner-jobs.js";
-import { checkCancelled, currentRun, emit } from "./runner-lease.js";
+import { checkCancelled, currentRun, emit, updateOwnedActiveRun } from "./runner-lease.js";
 import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   BOARD_JOB_INPUT_SCHEMA_VERSION,
   type BoardJobResult,
-  CODEX_PET_ACTIVE_STATUSES,
   CodexPetCancelledError,
   CodexPetImageApprovalRequiredError,
   CodexPetLeaseLostError,
@@ -419,18 +418,7 @@ export async function bindBoardJobInput(
   return ctx.prisma.$transaction(async (tx) => {
     // Updating the run row makes the lease check a database CAS and holds its
     // row lock until the Job reset/backfill and artifact invalidation commit.
-    const lease = await tx.codexPetRun.updateMany({
-      where: {
-        id: ctx.runId,
-        projectId: ctx.project.id,
-        userId: ctx.project.userId,
-        workerId: ctx.workerId,
-        status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-        cancelRequested: false,
-      },
-      data: { heartbeatAt: new Date() },
-    });
-    if (lease.count !== 1) throw new CodexPetLeaseLostError();
+    await updateOwnedActiveRun(tx, ctx, { heartbeatAt: new Date() });
 
     const fresh = await tx.codexPetJob.findFirst({
       where: {
