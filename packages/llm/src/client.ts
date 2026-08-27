@@ -1,4 +1,15 @@
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  LlmRouteError,
+  type LlmRouteCredentials,
+  buildBailianBaseURL,
+  parseChatgptModelList,
+  resolveChatgptCredentials,
+} from "./routes.js";
+
+// CHATGPT_MODELS / buildBailianBaseURL 现在定义在 routes.ts（依赖方向只留
+// client → routes 一条边），这里 re-export 保持公开 API 不变。
+export { CHATGPT_DEFAULT_BASE_URL, CHATGPT_MODELS, buildBailianBaseURL } from "./routes.js";
 
 export type LlmProvider = "bailian" | "anthropic";
 
@@ -18,16 +29,6 @@ export interface LlmConfig {
 
 const BAILIAN_DEFAULT_MODEL = "qwen3.7-plus";
 const ANTHROPIC_DEFAULT_MODEL = "GLM-5.2";
-export const CHATGPT_MODELS = [
-  "codex-auto-review",
-  "gpt-5.4",
-  "gpt-5.4-mini",
-  "gpt-5.5",
-  "gpt-5.6-luna",
-  "gpt-5.6-sol",
-  "gpt-5.6-terra",
-] as const;
-const CHATGPT_DEFAULT_BASE_URL = "https://api.ai-pixel.online";
 
 type ToolCapableMessageParams = {
   readonly tools?: readonly unknown[];
@@ -64,15 +65,16 @@ function applyBailianMessageDefaults(client: Anthropic): void {
 }
 
 function loadModelRoutes(env: NodeJS.ProcessEnv): LlmModelRoute[] {
-  const apiKey = env.CHATGPT_API_KEY?.trim() || env.GPT_IMAGE_API_KEY?.trim();
-  if (!apiKey) return [];
-  const configuredModels = env.CHATGPT_MODELS?.split(",").map((model) => model.trim()).filter(Boolean);
-  const models = configuredModels?.length ? configuredModels : CHATGPT_MODELS;
-  return models.map((model) => ({
-    model,
-    baseURL: env.CHATGPT_BASE_URL?.trim() || CHATGPT_DEFAULT_BASE_URL,
-    apiKey,
-  }));
+  let credentials: LlmRouteCredentials;
+  try {
+    credentials = resolveChatgptCredentials(env);
+  } catch (error) {
+    // 现状语义：没有 ChatGPT key 就静默返回空路由表——那不是配置错误，只是没启
+    // 用这条旁路。缺 key 之外的异常（例如 region 配成空串）仍要冒泡。
+    if (error instanceof LlmRouteError) return [];
+    throw error;
+  }
+  return parseChatgptModelList(env).map((model) => ({ model, ...credentials }));
 }
 
 function withModelRoutes(config: LlmConfig, env: NodeJS.ProcessEnv): LlmConfig {
@@ -115,14 +117,6 @@ function normalizedProvider(env: NodeJS.ProcessEnv): LlmProvider {
   return env.BAILIAN_API_KEY || env.DASHSCOPE_API_KEY || env.BAILIAN_WORKSPACE_ID
     ? "bailian"
     : "anthropic";
-}
-
-export function buildBailianBaseURL(workspaceId: string, region = "cn-beijing"): string {
-  const normalizedWorkspaceId = workspaceId.trim();
-  const normalizedRegion = region.trim();
-  if (!normalizedWorkspaceId) throw new Error("BAILIAN_WORKSPACE_ID is required");
-  if (!normalizedRegion) throw new Error("BAILIAN_REGION is required");
-  return `https://${normalizedWorkspaceId}.${normalizedRegion}.maas.aliyuncs.com/apps/anthropic`;
 }
 
 export function loadLlmConfig(env: NodeJS.ProcessEnv = process.env): LlmConfig {

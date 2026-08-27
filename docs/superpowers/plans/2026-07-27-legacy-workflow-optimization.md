@@ -356,7 +356,7 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
 
 **Files:** Create `packages/llm/src/routes.ts`、`packages/llm/src/__tests__/routes.test.ts`；Modify `packages/llm/src/client.ts`（导出 `CHATGPT_DEFAULT_BASE_URL`）、`packages/llm/src/index.ts`
 
-- [ ] **Step 1: 写失败测试**（模式照抄 `client.test.ts` 的纯函数直测：手工构造 `{...} as NodeJS.ProcessEnv`）：
+- [x] **Step 1: 写失败测试**（模式照抄 `client.test.ts` 的纯函数直测：手工构造 `{...} as NodeJS.ProcessEnv`）：
   ```ts
   import { describe, expect, it } from "vitest"
   import { parseChatgptModelList, resolveChatgptCredentials, resolveBailianCredentials, LlmRouteError } from "../routes.js"
@@ -389,7 +389,7 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
   })
   ```
   运行：`cd "/Users/z/code/ai project/packages/llm" && pnpm exec vitest run src/__tests__/routes.test.ts`，预期 FAIL（模块不存在）。
-- [ ] **Step 2: 实现 routes.ts**（语义逐条对齐三处现存解析——`client.ts:66-76`、`codex-pet-model-contract.ts:70-77`、`codex-pet-visual.ts:86-118`）：
+- [x] **Step 2: 实现 routes.ts**（语义逐条对齐三处现存解析——`client.ts:66-76`、`codex-pet-model-contract.ts:70-77`、`codex-pet-visual.ts:86-118`）：
   ```ts
   import { CHATGPT_MODELS, CHATGPT_DEFAULT_BASE_URL, buildBailianBaseURL } from "./client.js"
 
@@ -415,8 +415,27 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
   }
   ```
   client.ts 将 `CHATGPT_DEFAULT_BASE_URL` 改为导出；`loadModelRoutes`（client.ts:66-76）改用 `parseChatgptModelList` + `try { resolveChatgptCredentials } catch { return [] }`（保留“无 key 静默返回空路由表”的现状语义）。index.ts 增加 `export { parseChatgptModelList, resolveChatgptCredentials, resolveBailianCredentials, LlmRouteError } from "./routes.js"`。
-- [ ] **Step 3:** 跑 routes.test.ts 预期 PASS；跑 `pnpm exec vitest run`（llm 包全量，含 client.test.ts 的 fetch 桩路由用例）预期全绿。
-- [ ] **Step 4:** Commit `feat(llm): 严格路由解析 routes.ts（收敛三处复刻的前置）`
+- [x] **Step 3:** 跑 routes.test.ts 预期 PASS；跑 `pnpm exec vitest run`（llm 包全量，含 client.test.ts 的 fetch 桩路由用例）预期全绿。
+- [x] **Step 4:** Commit `feat(llm): 严格路由解析 routes.ts（收敛三处复刻的前置）`
+
+**执行记录（2026-08-27）**
+
+新增 `packages/llm/src/routes.ts` + `src/__tests__/routes.test.ts`（12 个用例），`client.ts` 的 `loadModelRoutes` 改走新解析，`index.ts` 增加导出。三处复刻中的第一处（`client.ts:66-76`）已消除，另两处（`codex-pet-model-contract.ts:70-77`、`codex-pet-visual.ts:86-118`）按计划留给 Task 3.3。
+
+与计划 sketch 的六处偏差，都是先读现存实现再定的：
+
+| 计划 sketch | 实际 | 原因 |
+| --- | --- | --- |
+| routes.ts 从 client.ts 导入 `CHATGPT_MODELS` / `CHATGPT_DEFAULT_BASE_URL` / `buildBailianBaseURL` | 这三个符号搬到 routes.ts，client.ts re-export | sketch 的方向会形成 client ↔ routes 双向模块环（`loadModelRoutes` 必须用 routes 的解析函数）。搬迁后依赖只剩 client → routes 一条边，公开 API 与 `index.ts` 导出面不变，`client.test.ts` 的 import 路径也不用改 |
+| `LlmRouteError extends Error`，Task 3.3 用 `CodexPetModelContractError(e.message)` 透传 | `LlmRouteError` 带 `code`（3 个字面量），消息文本仍留在调用方 | 透传会改掉 4 条运维可见消息：丢掉 `${model}` 前缀与「for the Codex pet workflow」后缀，而 `codex-pet-visual.test.ts:305` 正断言 `"CHATGPT_API_KEY or GPT_IMAGE_API_KEY"` 这个短语。靠 code 映射，Task 3.3 能逐字保留原消息 |
+| `resolveBailianCredentials` 先查 key 再查端点 | 先查端点再查 key | `loadLlmConfig` 的 bailian 分支与 `loadCodexPetVisualQaRoute` 两处现存实现都是端点先判定；两者全缺时报的是端点错误，顺序反了会改变错误消息 |
+| region 用 `env.BAILIAN_REGION?.trim() \|\| "cn-beijing"` | 用 `env.BAILIAN_REGION ?? "cn-beijing"` | 两处现存实现都是 `??`。显式配成空串时要继续落到 `buildBailianBaseURL` 抛的普通 `Error("BAILIAN_REGION is required")`——那是配置写错，不能被吞成 `LlmRouteError` 让调用方当成「没启用该路由」 |
+| `try { resolveChatgptCredentials } catch { return [] }` | `catch (error) { if (error instanceof LlmRouteError) return []; throw error }` | 裸 `catch {}` 比现状更宽：现在只有缺 key 会返回空表，region 配错这类异常必须继续冒泡 |
+| （未提） | `loadLlmConfig` 的 bailian 分支**不迁** | 它多一个 `LLM_BASE_URL` 回退、workspace 不 trim、消息带「when LLM_PROVIDER=bailian」，与 `resolveBailianCredentials` 不等价，不在本任务范围 |
+
+测试除计划给的 6 个用例外补了 6 个，钉住这些判定：空白 key 回退、`CHATGPT_BASE_URL` 覆盖 + 去空白、`CHATGPT_MODELS` 全空项回退内置名单、显式 `BAILIAN_BASE_URL` 优先、端点与 key 都缺时的先后顺序、空白 workspace 等同未配、显式空 region 抛普通 Error 而非 `LlmRouteError`。
+
+**验证：** `pnpm exec tsc --noEmit`（llm 包）与 `npx tsc --noEmit`（apps/api）干净；4 个文件 `biome lint` 干净；llm 包全量 `pnpm exec vitest run` = 文件 2 passed / 0 failed / 2 skipped，用例 24 passed / 0 failed / 5 skipped（跳过的是两个 `.poc.test.ts`，缺凭据时本来就跳）；额外抽查 api 侧 llm 消费方 `codex-pet-visual` / `chat/routes.empty-response` / `agent-workflow-llm` = 文件 3 passed / 0 failed / 0 skipped，用例 32 passed / 0 failed / 0 skipped。
 
 ### Task 3.2: packages/llm 新增 retry.ts（通用重试，TDD）
 
