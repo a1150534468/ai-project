@@ -441,7 +441,7 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
 
 **Files:** Create `packages/llm/src/retry.ts`、`packages/llm/src/__tests__/retry.test.ts`；Modify `packages/llm/src/index.ts`
 
-- [ ] **Step 1: 写失败测试**（逻辑源自 `codex-pet-visual.ts:630-640/791-839`，语义必须一致）：
+- [x] **Step 1: 写失败测试**（逻辑源自 `codex-pet-visual.ts:630-640/791-839`，语义必须一致）：
   ```ts
   import { describe, expect, it, vi } from "vitest"
   import { defaultRetryableLlmError, llmRetryDelayMs, withLlmRetry } from "../retry.js"
@@ -483,7 +483,7 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
   })
   ```
   预期 FAIL。
-- [ ] **Step 2: 实现 retry.ts**：
+- [x] **Step 2: 实现 retry.ts**：
   ```ts
   const RETRYABLE_STATUS = new Set([408, 409, 429])
   const RETRYABLE_CODES = new Set(["econnreset", "econnrefused", "enotfound", "eai_again"])
@@ -517,8 +517,26 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
   }
   ```
   index.ts 补导出。
-- [ ] **Step 3:** retry.test.ts PASS；llm 包全量 PASS。
-- [ ] **Step 4:** Commit `feat(llm): 通用 LLM 重试原语 withLlmRetry`
+- [x] **Step 3:** retry.test.ts PASS；llm 包全量 PASS。
+- [x] **Step 4:** Commit `feat(llm): 通用 LLM 重试原语 withLlmRetry`
+
+**执行记录（2026-08-27）**
+
+新增 `packages/llm/src/retry.ts` + `src/__tests__/retry.test.ts`（23 个用例），`index.ts` 补 4 个值导出与 2 个类型导出。行为逐字取自 QA 那套（`retryableCodexPetVisualError` :800-812 / `codexPetVisualRetryDelayMs` :814-818 / `wait` :638-648，行号与计划所写有偏移），图片那套（dispatch cooldown、`onRetry` 回调、模型错配直抛）不在原语范围内。本任务只新增原语，`codex-pet-visual.ts` 一行未动。
+
+与计划 sketch 的偏差：
+
+| 计划 sketch | 实际 | 原因 |
+| --- | --- | --- |
+| `String((error as {name?})?.name ?? "").toLowerCase()` | `typeof record.name === "string" ? ... : ""`，且先 `if (!error \|\| typeof error !== "object") return false` | 逐字对齐现存实现。sketch 少了非对象守卫，`defaultRetryableLlmError("connection reset")` 会因为字符串没有 `.name` 而侥幸返回 false，但 `{ name: 123 }` 这类就走上了 `String(123)` 的岔路 |
+| `Math.min(cap, base * factor ** (attempt - 1))` | 保留 `Math.max(0, attempt - 1)` | 现存两处都有这个夹子；去掉后 `attempt=0` 会算出 `base/3`，比 base 还短 |
+| `opts.baseDelayMs ?? 5_000` | `Number.isFinite(v) && v >= 0 ? v : 5_000` | 现存实现是先 `Number.isFinite(Number(env.X)) && >= 0` 再算。只用 `??` 的话，调用方传 `Number(env.X)` 得到 NaN 时会算出 NaN 延迟 |
+| `Math.max(1, opts.maxAttempts ?? 3)` | `Number.isInteger(v) && v >= 1 ? v : 3` | `Math.max(1, NaN)` 是 NaN，`attempt >= NaN` 恒 false → 无限重试。调用方传 `Number(env.CODEX_PET_VISUAL_MAX_ATTEMPTS)` 时这是真实路径。Task 3.3 的 `Math.min(3, ...)` 上限仍留在调用点，可见的尝试次数不变 |
+| `waitCancellable` 未标 async | 保留 `async` | 现存 `wait` 是 async，已 abort 时是 reject 而非同步 throw；未 await 的调用点行为必须一致 |
+
+顺带钉住的一个现状（**未修**）：`code: "ETIMEDOUT"` 既不在 `["econnreset","econnrefused","enotfound","eai_again"]` 名单里，也不含子串 `"timeout"`（是 `"timed"`），因此当前判定为不可重试。测试里显式断言了 `toBe(false)` 并写明这是钉既有行为，要改需单独提。
+
+**验证：** `pnpm exec tsc --noEmit`（llm 包）与 `npx tsc --noEmit`（apps/api）干净；3 个文件 `biome lint` 干净；`vitest run retry` = 23 passed / 0 failed / 0 skipped；llm 包全量 `pnpm exec vitest run` = 文件 3 passed / 0 failed / 2 skipped，用例 47 passed / 0 failed / 5 skipped。
 
 ### Task 3.3: 迁移 codex-pet-visual.ts 与 codex-pet-model-contract.ts
 

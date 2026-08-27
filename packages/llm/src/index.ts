@@ -8,3 +8,5 @@ export {
   resolveChatgptCredentials,
 } from "./routes.js";
 export type { LlmRouteCredentials, LlmRouteErrorCode } from "./routes.js";
+export { defaultRetryableLlmError, llmRetryDelayMs, waitCancellable, withLlmRetry } from "./retry.js";
+export type { LlmRetryDelayOptions, LlmRetryOptions } from "./retry.js";
