@@ -50,8 +50,18 @@ export interface LlmRouteCredentials {
  * 的判定 (`configured?.length ? configured : CHATGPT_MODELS`) 逐字一致。
  */
 export function parseChatgptModelList(env: NodeJS.ProcessEnv = process.env): readonly string[] {
+  return configuredChatgptModelList(env) ?? CHATGPT_MODELS;
+}
+
+/**
+ * 只返回**显式配置**的名单，未配置或全是空项时返回 `null`。
+ * `parseChatgptModelList` 的回退形态丢掉了这个区分，而 codex-pet 的成员检查恰好
+ * 需要它：`CHATGPT_MODELS` 没配时不做成员检查（marketplace 才是可选模型的真
+ * 相，`gpt-` 前缀的新模型不该因为不在内置名单里就被拒），配了就必须命中。
+ */
+export function configuredChatgptModelList(env: NodeJS.ProcessEnv = process.env): readonly string[] | null {
   const configured = env.CHATGPT_MODELS?.split(",").map((model) => model.trim()).filter(Boolean);
-  return configured?.length ? configured : CHATGPT_MODELS;
+  return configured?.length ? configured : null;
 }
 
 export function resolveChatgptCredentials(env: NodeJS.ProcessEnv = process.env): LlmRouteCredentials {

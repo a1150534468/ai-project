@@ -3,6 +3,7 @@ export type { LlmConfig, LlmModelRoute, LlmProvider } from "./client.js";
 export {
   CHATGPT_DEFAULT_BASE_URL,
   LlmRouteError,
+  configuredChatgptModelList,
   parseChatgptModelList,
   resolveBailianCredentials,
   resolveChatgptCredentials,

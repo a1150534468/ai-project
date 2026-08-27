@@ -1,4 +1,4 @@
-import { CHATGPT_MODELS } from "@ai-assistant/llm";
+import { parseChatgptModelList } from "@ai-assistant/llm";
 import {
   GPT_IMAGE_MODEL,
   loadGptImageEditEndpoint,
@@ -67,9 +67,8 @@ export function codexPetVisualQaRouteForModel(model: string, env: NodeJS.Process
   if (!isAllowedCodexPetVisualModel(normalized)) {
     throw new CodexPetModelContractError(`Unsupported Codex pet visual model: ${normalized || "empty"}`);
   }
-  const configuredGptModels = env.CHATGPT_MODELS?.split(",").map((item) => item.trim()).filter(Boolean);
-  const gptModels = configuredGptModels?.length ? configuredGptModels : CHATGPT_MODELS;
-  if ((gptModels as readonly string[]).includes(normalized)
+  const gptModels = parseChatgptModelList(env);
+  if (gptModels.includes(normalized)
     || normalized === CODEX_PET_VISUAL_QA_MODEL
     || normalized === "codex-auto-review"
     || normalized.startsWith("gpt-")) {

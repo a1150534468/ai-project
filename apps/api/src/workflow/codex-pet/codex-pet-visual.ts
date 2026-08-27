@@ -1,7 +1,16 @@
 import { Buffer } from "node:buffer";
 import Anthropic from "@anthropic-ai/sdk";
 import { jsonrepair } from "jsonrepair";
-import { buildBailianBaseURL } from "@ai-assistant/llm";
+import {
+  LlmRouteError,
+  configuredChatgptModelList,
+  defaultRetryableLlmError,
+  resolveBailianCredentials,
+  resolveChatgptCredentials,
+  withLlmRetry,
+  type LlmRouteCredentials,
+  type LlmRouteErrorCode,
+} from "@ai-assistant/llm";
 import type { DirectionBlindAnswerKey } from "@ai-assistant/codex-pet-pipeline";
 import {
   DOUBAO_IMAGE_MODEL,
@@ -51,7 +60,6 @@ import {
 import { CODEX_PET_CARDINAL_APPEARANCE_CONTRACT } from "./codex-pet-prompts.js";
 
 export const DEFAULT_CODEX_PET_VISUAL_QA_MODEL = CODEX_PET_VISUAL_QA_MODEL;
-const DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL = "https://api.ai-pixel.online";
 
 export interface CodexPetVisualModelProvenance {
   readonly requestedModel: string;
@@ -85,6 +93,38 @@ export function assertCodexPetVisualQaRoute(env: NodeJS.ProcessEnv = process.env
   return { model, baseURL };
 }
 
+/**
+ * 路由解析收敛到 `@ai-assistant/llm` 的 routes 之后，这里只保留 codex-pet 自己
+ * 的三件事：合同错误的消息文本（带 `${model}` 前缀与「for the Codex pet
+ * workflow」后缀，运维按这些字符串排障，必须逐字保留）、`CHATGPT_MODELS` 的成员
+ * 检查、以及 `assertHttpModelRoute` 的协议校验。
+ *
+ * 映射靠 `LlmRouteError.code` 而不是透传 `error.message`：包里的消息是
+ * provider 视角的（`BAILIAN_API_KEY or DASHSCOPE_API_KEY is required`），直接透
+ * 传会丢掉 model 前缀与工作流后缀。非 `LlmRouteError`（例如 `BAILIAN_REGION`
+ * 配成空串时 `buildBailianBaseURL` 抛的普通 Error）继续原样冒泡——那是配置写错，
+ * 不是「这条路由没启用」。
+ */
+const CODEX_PET_ROUTE_ERROR_MESSAGES: Readonly<Record<LlmRouteErrorCode, (model: string) => string>> = {
+  bailian_base_url_missing: (model) => `${model} requires BAILIAN_WORKSPACE_ID or BAILIAN_BASE_URL`,
+  bailian_api_key_missing: (model) => `${model} requires BAILIAN_API_KEY or DASHSCOPE_API_KEY`,
+  chatgpt_api_key_missing: (model) => `${model} requires CHATGPT_API_KEY or GPT_IMAGE_API_KEY for the Codex pet workflow`,
+};
+
+function resolveCodexPetRouteCredentials(
+  model: string,
+  resolve: () => LlmRouteCredentials,
+): LlmRouteCredentials {
+  try {
+    return resolve();
+  } catch (error) {
+    if (error instanceof LlmRouteError) {
+      throw new CodexPetModelContractError(CODEX_PET_ROUTE_ERROR_MESSAGES[error.code](model));
+    }
+    throw error;
+  }
+}
+
 function loadCodexPetVisualQaRoute(env: NodeJS.ProcessEnv, requestedModel?: string): {
   readonly model: string;
   readonly baseURL: string;
@@ -94,27 +134,17 @@ function loadCodexPetVisualQaRoute(env: NodeJS.ProcessEnv, requestedModel?: stri
   const model = resolveCodexPetVisualQaModel(env, requestedModel);
   const route = codexPetVisualQaRouteForModel(model, env);
   if (route === "bailian_model_route") {
-    const workspaceId = env.BAILIAN_WORKSPACE_ID?.trim() || "";
-    const baseURL = env.BAILIAN_BASE_URL?.trim()
-      || (workspaceId ? buildBailianBaseURL(workspaceId, env.BAILIAN_REGION ?? "cn-beijing") : "");
-    const apiKey = env.BAILIAN_API_KEY?.trim() || env.DASHSCOPE_API_KEY?.trim() || "";
-    if (!baseURL) throw new CodexPetModelContractError(`${model} requires BAILIAN_WORKSPACE_ID or BAILIAN_BASE_URL`);
-    if (!apiKey) throw new CodexPetModelContractError(`${model} requires BAILIAN_API_KEY or DASHSCOPE_API_KEY`);
+    const { baseURL, apiKey } = resolveCodexPetRouteCredentials(model, () => resolveBailianCredentials(env));
     assertHttpModelRoute(baseURL, "Bailian visual model route");
     return { model, baseURL, apiKey, route };
   }
-  const configuredModels = env.CHATGPT_MODELS
-    ?.split(",")
-    .map((candidate) => candidate.trim())
-    .filter(Boolean);
-  if (configuredModels?.length && !configuredModels.includes(model)) {
+  // 只有显式配了 CHATGPT_MODELS 才做成员检查：没配时 marketplace 是可选模型的真
+  // 相，`gpt-` 前缀的新模型不该因为不在内置名单里就被拒。
+  const configuredModels = configuredChatgptModelList(env);
+  if (configuredModels && !configuredModels.includes(model)) {
     throw new CodexPetModelContractError(`${model} must be present in CHATGPT_MODELS for the Codex pet workflow`);
   }
-  const apiKey = env.CHATGPT_API_KEY?.trim() || env.GPT_IMAGE_API_KEY?.trim() || "";
-  if (!apiKey) {
-    throw new CodexPetModelContractError(`${model} requires CHATGPT_API_KEY or GPT_IMAGE_API_KEY for the Codex pet workflow`);
-  }
-  const baseURL = env.CHATGPT_BASE_URL?.trim() || DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL;
+  const { baseURL, apiKey } = resolveCodexPetRouteCredentials(model, () => resolveChatgptCredentials(env));
   assertHttpModelRoute(baseURL, "CHATGPT_BASE_URL");
   return { model, baseURL, apiKey, route };
 }
@@ -797,24 +827,15 @@ function textFromMessage(message: Anthropic.Message | string): string {
   return parsed.content.filter((block): block is Anthropic.TextBlock => block.type === "text").map((block) => block.text).join("").trim();
 }
 
-function retryableCodexPetVisualError(error: unknown): boolean {
-  if (error instanceof CodexPetModelContractError) return false;
-  if (!error || typeof error !== "object") return false;
-  const record = error as { name?: unknown; status?: unknown; code?: unknown };
-  const name = typeof record.name === "string" ? record.name.toLowerCase() : "";
-  const code = typeof record.code === "string" ? record.code.toLowerCase() : "";
-  const status = typeof record.status === "number" ? record.status : null;
-  if (status !== null) return status === 408 || status === 409 || status === 429 || status >= 500;
-  return name.includes("connection")
-    || name.includes("timeout")
-    || code.includes("timeout")
-    || ["econnreset", "econnrefused", "enotfound", "eai_again"].includes(code);
-}
-
-function codexPetVisualRetryDelayMs(attempt: number, env: NodeJS.ProcessEnv): number {
-  const configured = Number(env.CODEX_PET_VISUAL_RETRY_BASE_MS);
-  const base = Number.isFinite(configured) && configured >= 0 ? Math.min(30_000, configured) : 5_000;
-  return Math.min(30_000, base * 3 ** Math.max(0, attempt - 1));
+/**
+ * 两个 env 旋钮的解析留在调用点：`withLlmRetry` 刻意不读 env，而 `Math.min(3,
+ * …)` 的硬上限是 codex-pet 自己的策略。`CODEX_PET_VISUAL_RETRY_BASE_MS` 直接把
+ * `Number(...)` 交给 `llmRetryDelayMs`——非有限值与负数由它回退到 5s，与原本
+ * `codexPetVisualRetryDelayMs` 里的守卫逐字等价。
+ */
+function codexPetVisualMaxAttempts(env: NodeJS.ProcessEnv): number {
+  const configured = Number(env.CODEX_PET_VISUAL_MAX_ATTEMPTS);
+  return Number.isInteger(configured) && configured > 0 ? Math.min(3, configured) : 3;
 }
 
 async function createCodexPetVisualMessage(
@@ -826,25 +847,18 @@ async function createCodexPetVisualMessage(
     readonly timeout: number;
   },
 ): Promise<Anthropic.Message | string> {
-  const configuredAttempts = Number(options.env.CODEX_PET_VISUAL_MAX_ATTEMPTS);
-  const maxAttempts = Number.isInteger(configuredAttempts) && configuredAttempts > 0
-    ? Math.min(3, configuredAttempts)
-    : 3;
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    try {
-      return await visual.client.messages.create(params, {
-        signal: options.signal,
-        timeout: options.timeout,
-        maxRetries: 0,
-      }) as Anthropic.Message | string;
-    } catch (error) {
-      lastError = error;
-      if (attempt >= maxAttempts || options.signal?.aborted || !retryableCodexPetVisualError(error)) throw error;
-      await wait(codexPetVisualRetryDelayMs(attempt, options.env), options.signal);
-    }
-  }
-  throw lastError;
+  return withLlmRetry(async () => await visual.client.messages.create(params, {
+    signal: options.signal,
+    timeout: options.timeout,
+    maxRetries: 0,
+  }) as Anthropic.Message | string, {
+    maxAttempts: codexPetVisualMaxAttempts(options.env),
+    baseDelayMs: Number(options.env.CODEX_PET_VISUAL_RETRY_BASE_MS),
+    capDelayMs: 30_000,
+    signal: options.signal,
+    // 模型合同违规不是瞬时故障，重试只会把同一个错误再撞一遍。
+    retryable: (error) => !(error instanceof CodexPetModelContractError) && defaultRetryableLlmError(error),
+  });
 }
 
 export async function runCodexPetVisualQa(input: {

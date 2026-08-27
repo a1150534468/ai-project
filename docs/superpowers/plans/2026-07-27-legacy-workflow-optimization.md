@@ -542,12 +542,30 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
 
 **Files:** Modify `apps/api/src/workflow/codex-pet-visual.ts`、`apps/api/src/workflow/codex-pet-model-contract.ts`
 
-- [ ] **Step 1:** model-contract（:70-77）：`env.CHATGPT_MODELS?.split(...)` 换成 `parseChatgptModelList(env)`，其余分类条件（`CODEX_PET_VISUAL_QA_MODEL` / `codex-auto-review` / `gpt-` 前缀）原样保留。
-- [ ] **Step 2:** visual 的 `loadCodexPetVisualQaRoute`（:86-118）：chatgpt 分支改 `parseChatgptModelList` + `resolveChatgptCredentials`、bailian 分支改 `resolveBailianCredentials`，`catch (e) { if (e instanceof LlmRouteError) throw new CodexPetModelContractError(e.message); throw e }`。**保留**：「配置了列表但不含所选 model 即抛合同错误」的成员检查、`assertHttpModelRoute` 协议校验、`:52` 的 `DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL` 字面量删除（改由 `resolveChatgptCredentials` 的默认值提供）。
-- [ ] **Step 3:** visual 的 `createCodexPetVisualMessage`（:811-839）改为 `withLlmRetry((attempt) => client.messages.create(params, { signal, timeout, maxRetries: 0 }), { maxAttempts: Math.min(3, env CODEX_PET_VISUAL_MAX_ATTEMPTS), baseDelayMs: env CODEX_PET_VISUAL_RETRY_BASE_MS 默认 5_000, capDelayMs: 30_000, signal, retryable: (e) => !(e instanceof CodexPetModelContractError) && defaultRetryableLlmError(e) })`；删除本地 `wait/retryableCodexPetVisualError/codexPetVisualRetryDelayMs`。**图片生成那套重试循环（:674-783，用 `classifyImageGenerationError` 分类）本任务不动**——它的错误分类来自 image-service，留待与图像路由收敛时一并处理。
-- [ ] **Step 4:** typecheck；跑 `cd "/Users/z/code/ai project/apps/api" && pnpm exec vitest run src/workflow/codex-pet-visual.test.ts src/workflow/codex-pet-model-contract`（visual.test 644 行覆盖节流/QA 门/模型路由强制/瞬时错误重试，是本任务的行为安全网）。再跑 **runner 集成**。
-- [ ] **Step 5:** 检查 7 处 `vi.mock("@ai-assistant/llm")` 工厂（chat/routes.empty-response、agents/routes、agent-workflow-llm、agent-workflow-plan、novel-generation、local-business-promo-script、video-prompt-optimize 的测试）：它们的被测对象未导入新符号，预期不需要改；跑 `pnpm exec vitest run src/workflow/novel-generation.test.ts src/agent-teams` 抽查确认。
-- [ ] **Step 6:** Commit `refactor(codex-pet): visual/model-contract 收编到 @ai-assistant/llm 路由与重试原语`
+- [x] **Step 1:** model-contract（:70-77）：`env.CHATGPT_MODELS?.split(...)` 换成 `parseChatgptModelList(env)`，其余分类条件（`CODEX_PET_VISUAL_QA_MODEL` / `codex-auto-review` / `gpt-` 前缀）原样保留。
+- [x] **Step 2:** visual 的 `loadCodexPetVisualQaRoute`（:86-118）：chatgpt 分支改 `parseChatgptModelList` + `resolveChatgptCredentials`、bailian 分支改 `resolveBailianCredentials`，`catch (e) { if (e instanceof LlmRouteError) throw new CodexPetModelContractError(e.message); throw e }`。**保留**：「配置了列表但不含所选 model 即抛合同错误」的成员检查、`assertHttpModelRoute` 协议校验、`:52` 的 `DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL` 字面量删除（改由 `resolveChatgptCredentials` 的默认值提供）。
+- [x] **Step 3:** visual 的 `createCodexPetVisualMessage`（:811-839）改为 `withLlmRetry((attempt) => client.messages.create(params, { signal, timeout, maxRetries: 0 }), { maxAttempts: Math.min(3, env CODEX_PET_VISUAL_MAX_ATTEMPTS), baseDelayMs: env CODEX_PET_VISUAL_RETRY_BASE_MS 默认 5_000, capDelayMs: 30_000, signal, retryable: (e) => !(e instanceof CodexPetModelContractError) && defaultRetryableLlmError(e) })`；删除本地 `wait/retryableCodexPetVisualError/codexPetVisualRetryDelayMs`。**图片生成那套重试循环（:674-783，用 `classifyImageGenerationError` 分类）本任务不动**——它的错误分类来自 image-service，留待与图像路由收敛时一并处理。
+- [x] **Step 4:** typecheck；跑 `cd "/Users/z/code/ai project/apps/api" && pnpm exec vitest run src/workflow/codex-pet-visual.test.ts src/workflow/codex-pet-model-contract`（visual.test 644 行覆盖节流/QA 门/模型路由强制/瞬时错误重试，是本任务的行为安全网）。再跑 **runner 集成**。
+- [x] **Step 5:** 检查 7 处 `vi.mock("@ai-assistant/llm")` 工厂（chat/routes.empty-response、agents/routes、agent-workflow-llm、agent-workflow-plan、novel-generation、local-business-promo-script、video-prompt-optimize 的测试）：它们的被测对象未导入新符号，预期不需要改；跑 `pnpm exec vitest run src/workflow/novel-generation.test.ts src/agent-teams` 抽查确认。
+- [x] **Step 6:** Commit `refactor(codex-pet): visual/model-contract 收编到 @ai-assistant/llm 路由与重试原语`
+
+**执行记录（2026-08-27）**
+
+三处复刻清零：`codexPetVisualQaRouteForModel` 改走 `parseChatgptModelList`，`loadCodexPetVisualQaRoute` 的两个分支改走 `resolveChatgptCredentials` / `resolveBailianCredentials`，`createCodexPetVisualMessage` 改走 `withLlmRetry`。`DEFAULT_CODEX_PET_VISUAL_QA_BASE_URL` / `retryableCodexPetVisualError` / `codexPetVisualRetryDelayMs` 三个本地符号删除。行数上 `codex-pet-visual.ts` 是 +69/-55（净 +14）——重试与凭据解析的逻辑确实搬走了，但换来了 `code → 消息` 的映射表和解释等价性的注释；收敛的收益在「同一份判定只有一处」，不在行数。
+
+与计划的三处偏差：
+
+| 计划 | 实际 | 原因 |
+| --- | --- | --- |
+| 成员检查也用 `parseChatgptModelList` | 新增并使用 `configuredChatgptModelList`（未配置/全空项返回 `null`） | `parseChatgptModelList` 未配置时回退**内置名单**，成员检查一旦用它，`CHATGPT_MODELS` 没配 + 选了个不在内置名单里的 `gpt-` 新模型（marketplace 是可选模型的真相，见 `isAllowedCodexPetVisualModel` 的注释）就会被误拒。现状是「没配就不检查」，必须保住。`parseChatgptModelList` 改为 `configuredChatgptModelList(env) ?? CHATGPT_MODELS`，行为不变 |
+| 删除本地 `wait` | **保留** | `wait` 还有两处调用：dispatch cooldown（:674）与图片重试循环（:789）。后者在 `:674-783` 的禁改区内，为删一个 helper 去动它不值得 |
+| `catch (e) { if (e instanceof LlmRouteError) throw new CodexPetModelContractError(e.message) }` | `CODEX_PET_ROUTE_ERROR_MESSAGES[e.code](model)` 查表 | Task 3.1 已定的方案：透传 message 会丢掉 `${model}` 前缀与「for the Codex pet workflow」后缀 |
+
+等价性上专门核过的几点：chatgpt 分支的判定顺序仍是「成员检查 → apiKey → `assertHttpModelRoute`」（`resolveChatgptCredentials` 内部 apiKey 先于 baseURL，且 baseURL 不抛，所以可见顺序不变）；bailian 分支仍是「baseURL → apiKey」；`BAILIAN_REGION` 配成空串时 `buildBailianBaseURL` 抛的普通 `Error` 不是 `LlmRouteError`，继续原样冒泡而非被包成合同错误；`maxAttempts` 与 `baseDelayMs` 两个 env 旋钮的解析留在调用点（`Math.min(3, …)` 是 codex-pet 自己的策略，`withLlmRetry` 刻意不读 env）。
+
+`codex-pet-visual.test.ts` 补了 2 个用例（27 → 29）钉住新暴露的判定：「只在显式配置 CHATGPT_MODELS 时做成员检查」（含全空项等同未配、以及删掉本地默认端点常量后仍回落 `https://api.ai-pixel.online`）、「bailian 路由缺配时逐字保留带 model 前缀的两条合同错误 + 空 region 仍抛普通 Error」。第一个用例正是上表第一行那个坑的回归网——用 `parseChatgptModelList` 写会当场挂。
+
+**验证：** llm 包与 apps/api `tsc --noEmit` 干净；6 个文件 `biome lint` 干净；llm 包全量 = 文件 3 passed / 0 failed / 2 skipped，用例 49 passed / 0 failed / 5 skipped；`codex-pet-visual.test.ts` = 29 passed / 0 failed / 0 skipped；codex-pet 全量（含 runner 集成）= 文件 25 passed / 0 failed / 4 skipped，用例 323 passed / 0 failed / 8 skipped。Step 5 的 7 个 `vi.mock("@ai-assistant/llm")` 测试文件全跑：42 个用例里 41 passed / 1 failed / 0 skipped，唯一失败是 `agents/routes.test.ts` 的头像 object key 断言（本地无 S3 回落差异，属既有 12 个本地环境失败之一，与本次改动无关）。
 
 ---
 

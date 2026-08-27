@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CHATGPT_MODELS } from "../client.js";
 import {
   LlmRouteError,
+  configuredChatgptModelList,
   parseChatgptModelList,
   resolveBailianCredentials,
   resolveChatgptCredentials,
@@ -20,6 +21,19 @@ describe("parseChatgptModelList", () => {
 
   it("配置存在但全是空项时同样回退内置名单", () => {
     expect(parseChatgptModelList({ CHATGPT_MODELS: " , ,, " } as NodeJS.ProcessEnv)).toEqual([...CHATGPT_MODELS]);
+  });
+});
+
+describe("configuredChatgptModelList", () => {
+  it("显式配置时返回去空白后的名单", () => {
+    expect(configuredChatgptModelList({ CHATGPT_MODELS: " gpt-5.6-sol , gpt-5.5 ,, " } as NodeJS.ProcessEnv))
+      .toEqual(["gpt-5.6-sol", "gpt-5.5"]);
+  });
+
+  it("未配置或全是空项时返回 null，而不是回退内置名单", () => {
+    expect(configuredChatgptModelList({} as NodeJS.ProcessEnv)).toBeNull();
+    expect(configuredChatgptModelList({ CHATGPT_MODELS: "" } as NodeJS.ProcessEnv)).toBeNull();
+    expect(configuredChatgptModelList({ CHATGPT_MODELS: " , ,, " } as NodeJS.ProcessEnv)).toBeNull();
   });
 });
 

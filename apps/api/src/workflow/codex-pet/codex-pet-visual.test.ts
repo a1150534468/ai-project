@@ -327,6 +327,47 @@ describe("Codex pet visual generation", () => {
     expect(codexPetVisualQaRouteForModel("qwen3.6-flash", {})).toBe("bailian_model_route");
   });
 
+  it("只在显式配置 CHATGPT_MODELS 时做成员检查", () => {
+    // 未配置时 marketplace 是可选模型的真相：一个不在内置名单里的 gpt- 模型仍要
+    // 放行。收敛到 @ai-assistant/llm 时若用了会回退内置名单的 parseChatgptModelList，
+    // 这里就会误报 must be present。
+    expect(assertCodexPetVisualQaRoute({
+      CHATGPT_API_KEY: "pixel-key",
+      PET_VISUAL_QA_MODEL: "gpt-6.1-not-in-catalog",
+    })).toEqual({ model: "gpt-6.1-not-in-catalog", baseURL: "https://api.ai-pixel.online" });
+    expect(() => assertCodexPetVisualQaRoute({
+      CHATGPT_API_KEY: "pixel-key",
+      CHATGPT_MODELS: "gpt-5.6-sol",
+      PET_VISUAL_QA_MODEL: "gpt-6.1-not-in-catalog",
+    })).toThrow("must be present in CHATGPT_MODELS");
+    // 全是空项等同未配置。
+    expect(assertCodexPetVisualQaRoute({
+      CHATGPT_API_KEY: "pixel-key",
+      CHATGPT_MODELS: " , ,, ",
+      PET_VISUAL_QA_MODEL: "gpt-6.1-not-in-catalog",
+    }).model).toBe("gpt-6.1-not-in-catalog");
+  });
+
+  it("bailian 路由缺配时逐字保留带 model 前缀的合同错误", () => {
+    const model = "qwen3.6-flash";
+    expect(() => assertCodexPetVisualQaRoute({ PET_VISUAL_QA_MODEL: model }))
+      .toThrow(`${model} requires BAILIAN_WORKSPACE_ID or BAILIAN_BASE_URL`);
+    expect(() => assertCodexPetVisualQaRoute({ PET_VISUAL_QA_MODEL: model, BAILIAN_WORKSPACE_ID: "ws-test" }))
+      .toThrow(`${model} requires BAILIAN_API_KEY or DASHSCOPE_API_KEY`);
+    expect(assertCodexPetVisualQaRoute({
+      PET_VISUAL_QA_MODEL: model,
+      BAILIAN_WORKSPACE_ID: "ws-test",
+      DASHSCOPE_API_KEY: "dk",
+    })).toEqual({ model, baseURL: "https://ws-test.cn-beijing.maas.aliyuncs.com/apps/anthropic" });
+    // BAILIAN_REGION 显式配成空串是配置写错，不该被伪装成「路由没启用」的合同错误。
+    expect(() => assertCodexPetVisualQaRoute({
+      PET_VISUAL_QA_MODEL: model,
+      BAILIAN_WORKSPACE_ID: "ws-test",
+      BAILIAN_API_KEY: "bk",
+      BAILIAN_REGION: "",
+    })).toThrow("BAILIAN_REGION is required");
+  });
+
   it("persists the actual GPT-5.6 response model and rejects a Qwen response", async () => {
     const image = await sharp({ create: { width: 8, height: 8, channels: 4, background: "#ffffff" } }).png().toBuffer();
     const verdict = { pass: true, score: 99, mirrorSafe: true, identity: true, structure: true, semantics: true, continuity: true, warnings: [], failures: [], repairPrompt: "" };
