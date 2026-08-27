@@ -46,6 +46,8 @@
 
 ### Task 0.1: 修复 codex-pet-routes.integration.test.ts 红灯
 
+**状态（2026-08-27 复核）：本任务已无剩余工作，勾选框留作历史。** 文件现在位于 `apps/api/src/workflow/codex-pet/codex-pet-routes.integration.test.ts`（`1e32e62` 的纯移动），billing mock 已含 `reserveResource`，断言已是按图预留语义（`units: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT`、`billingChargeStatus: "reserved"`），幂等 replay 断言保留。单跑 = 1 passed / 0 failed / 0 skipped。Step 4 里「221 通过」的基线数字也早已被后续阶段推进到 323 通过 / 8 跳过 / 0 失败。
+
 commit 0e41be5「harden codex pet generation billing」后 start 路由改为按图预留：`codex-pet-routes.ts:1697` 在 `billing.reserveResource` 缺失时抛「Codex pet billing reserve capability is unavailable」→ 503。该测试的 billing mock 只提供了 `chargeResource`，断言也停留在旧的整包扣费语义（期待 `chargeResource` 调用一次、`billingChargeStatus="charged"`、`billingPoints=200`）。
 
 **Files:**
@@ -756,3 +758,11 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
 - **阶段 2 是唯一可能改变行为的阶段**：look 修复循环的四类差异已表格化，执行者若发现表外差异（如参数默认值不一致），停下来先补进表格再继续，不要顺手"修复"。
 - worker 主循环（`codex-pet-worker.ts` main()）与生产接线（server.ts:157 默认 deps）无测试覆盖——本计划刻意不动这两处。
 - 上线前（当前未上线）是本次重构的最佳窗口，但**阶段 2 完成后建议在 dev 环境完整跑一次真实桌宠生成**（POC env 守卫测试或手动触发）做端到端确认。
+
+## 计划完成状态（2026-08-27）
+
+五个阶段的全部任务已执行完毕：阶段 0 复核无剩余工作；阶段 1（13 个任务）、阶段 2（Task 2.1-2.4）、阶段 3（Task 3.1-3.3）、阶段 4（Task 4.1-4.6，2026-07-28 完成）均已提交。
+
+**唯一挂起项**：上面那条 dev 环境真实桌宠生成的端到端确认。用户决定推迟到整个计划做完之后再做（原话：「真实测试先不做，先把这个整个计划做完再去做测试」），现在到点了。
+
+**收尾时的自动化基线**：codex-pet 全量 = 文件 25 passed / 0 failed / 4 skipped，用例 323 passed / 0 failed / 8 skipped；`packages/llm` 全量 = 文件 3 passed / 0 failed / 2 skipped，用例 49 passed / 0 failed / 5 skipped。`apps/api` 另有 12 个本地环境失败（admin/resource-routes 7、admin/membership-routes 3、admin/code-routes 1、agents/routes 1），与本计划无关，均为缺 S3/MinIO 等本地依赖导致，不修。
