@@ -370,6 +370,25 @@ flowchart TD
 - 提交：`fe35f44 fix(codex-pet): 按次计费下不再花钱不出图`（已推 `origin/main`）。
 - **必须写在这里免得以后误读**：**单测全绿不等于真流程能出图**。上面这些只证明改动编得过、契约没被写反、已知的白花钱形状被堵住了；出图质量与端到端能不能走完 23 个 job，只有真跑能证。
 
+### 6.13 同一个动作连烧 5 次：阈值没判错，是切图网格和模型画的网格没对齐（2026-08-28）
+
+> 只读诊断，来自四模块工作流复查的第 4 项。样本是 run `cpr_2defdce20f99dd1a8dd3477f774de2f8` 的 `row-failed`（动作名就叫 `failed`，8 帧），attempt 5/5，同运行另外 9 个 job 全部 `completed`。第 8~12 次调用全花在这一行，每次都要用户单独批准。**本条没有改动任何判定或 prompt，只落了一条回归测试。**
+
+- **现象**：5 次 `validation.failed` 事件（sequence 38/45/53/59/68）的报错**逐字相同**：`frame-0:source-touches-slot-edge；frame-1:multiple-foreground-components`。同一条 prompt 连续 5 次在同样两个格位翻车。`modelProvenance.visualQa.enabled = false`——LLM 视觉质检是关着的，这一行完全由确定性闸门判死。
+- **量出来的数（slot 384×512，run 阈值 = 512 × 0.3 = 153.6）**：
+  - frame 0 的 `borderContactRuns.right` 五次分别是 **177 / 162 / 177 / 167 / 189**，全部超阈值；`longestHorizontalRun` 恒为 0；`edgePixels`(177) 对 `opaquePixels × 0.006`(≈525) → 总接触那一路**从没触发**。所以**只有竖直 run 这一路**把 frame 0 判成 error。
+  - frame 1 每次都有第二个连通域贴在**左**边界（bounds `[0-39]` / `[0-28]` / `[0-53]`，3040~7661 px），它的 `edgePixels` **161/166/176/177/183** 与 frame 0 的接触 run **一一对应**（177↔177、162↔161、177↔176、167↔166、189↔183）。渗漏预算 `primary.pixels × 0.03` 是 2557/2392/2588/2385/2501，碎片每次超预算 **1.2~3.1 倍** → 不能按邻格渗漏擦掉 → 硬 error。
+  - 把 `pose_board` 的第 0/1 格裁出来看：白色毛绒猫/狐狸的**尾巴压过格线**伸进第 1 格；碎片纵向范围 249→426（178 行）与那条 177 行接触 run、与尾巴的位置完全对上。
+  - `salvage` 五次一致：`brokenSourceSlots [0,1]`、`reusableSourceSlots [2,3,4,5,6,7]`——坏的永远只有这两格。
+- **结论一：`maxBorderRunFraction` 没判错，它抓到的是真溢出。** 177/512 = 34.6% 落在 `老鼠猫` 标定的「良性贴边 12.1%」与「真被切 50~61%」之间那条空带里，正是 30% 这个阈值被放在那儿要抓的东西。
+- **结论二：放宽阈值不只是有风险，是根本不管用。** 把 `maxBorderRunFraction` 提到 189/512 = 36.9% 以上，只能把 frame 0 降成 warning；frame 1 的 `multiple-foreground-components` 来自**另一条独立**判定 `maxBleedComponentFraction`（3%），碎片每次都超预算。这一行照样失败、照样再付一块板。两条都放宽的话，交付出去的是 frame 0 一条被平切的尾巴 + frame 1 左边界上焊着一块 3~8k 像素的外来碎片。
+- **结论三：prompt 里规则早就有了，但它约束的是模型看不见的东西。** [`codex-pet-prompts.ts:185/270/271/285`](../apps/api/src/workflow/codex-pet/codex-pet-prompts.ts) 已经写明 "Nothing may touch or cross a slot or outer canvas edge"、"keeps at least 15% clear background from every slot boundary"、"Do not split one character across neighboring slots"。同一条 prompt 连续 5 次在同样两个格位失败，是**排版配准错位**的签名，不是采样噪声——板上**没有印刷格线**，"slot boundary" 对模型根本不可观测。
+- **根因（量化）**：把每行主连通域中心减去标称格心，10 行拟合出模型实际列节距是 **363~373 px**，对着 `extractPoseBoard` 假定的 `1536/4 = 384 px`，而且**永远向画布中心压缩**。于是最左那个姿势坐在标称格心**右侧 +19~+38 px**，而这个角色的尾巴朝右——切线正好从尾巴中间过去。切图代码是纯算术等分（[`extraction.ts:864-941`](../packages/codex-pet-pipeline/src/extraction.ts)），没有任何装订线探测；`:948-952` 的注释其实已经承认存在「行列装订线漂移」，但只在**摆位**时把它当噪声丢掉，从来没用来修正**切割**。
+- **真正可动的两个杠杆（本条未实施，待确认后另做）**：① 切图网格按画出来的节距/装订线**配准**，而不是 `width/columns`；② 把排版约束改写成模型能观测的量（姿势之间的间隙、到画布边的距离），而不是不可见的网格。
+- **诚实的边界**：按实测数，sprite 0 连尾巴的真实横向范围约 **329 px**，塞进一个正确居中的 384 px 窗口还剩十几像素余量，所以「只做配准就能同时清掉这两条 error」是**从测量推出来的预期，不是已验证的修复**——真要落地必须用一次真实生成验。
+- **回归钉子（已落地）**：[`pipeline.test.ts`](../packages/codex-pet-pipeline/src/pipeline.test.ts) 新增用例，用 1536×1024 真实尺寸 + 365 px 节距造板，钉住「177 行跨格接触 + 超预算邻格碎片」必须是**硬失败**，并断言 frame 1 的 `borderContactRuns` 全为 0——因为边界 run 是**按连通域**度量的，外来碎片一条也不贡献，所以 run 阈值放得再宽都管不到它。以后想靠调 `maxBorderRunFraction` 修这一行的人，会先撞上这条测试。
+- **预防**：确定性闸门报错时，先分开量两件事——**「阈值判得对不对」**和**「放宽了这一行能不能过」**。本例第二问的答案是不能，于是整个「阈值太严」的方向根本不存在，省掉一次改坏判定的机会。以及：**约束必须写成被约束方能观测的量**；在没有印刷格线的隐式网格上，「不要越过格线」对模型等于什么都没说。
+
 ## 七、演进史（git × codex 会话）
 
 - `2026-07-17` 会话 `019f6f66`「设计 Codex 桌宠工作流」：从「上传参考图/文字生成、可导入 Codex」的想法出发，确认 Codex v2 规格、深链安装、`/v1/images/edits` 真实探测、`4×2` 姿势板方案与产品四阶段。会话 `019f7013` 顺带调研接口文档管理。

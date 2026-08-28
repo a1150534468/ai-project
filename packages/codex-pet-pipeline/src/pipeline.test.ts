@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import sharp from "sharp";
 import type { OverlayOptions } from "sharp";
 import {
+  FRAME_TOLERANCE,
   LOOK_BOARD_CHRONOLOGICAL_TO_SOURCE_SLOT,
   PET_ATLAS_HEIGHT,
   PET_ATLAS_WIDTH,
@@ -913,6 +914,72 @@ describe("codex pet deterministic pipeline", () => {
     });
     expect(strict.diagnostics[0]!.componentCount).toBe(2);
     expect(strict.errors).toContain("frame-0:multiple-foreground-components");
+  });
+
+  it("keeps a tail crossing the arithmetic divider a hard failure on a real-size 4x2 board", async () => {
+    // Regression pin for run cpr_2defdce2 row `failed`, which spent five paid
+    // attempts failing at the same two slots. The model lays four poses out at
+    // its own ~365px pitch centred on the canvas while the slicer divides
+    // 1536/4 = 384px, so the two left columns sit 19-38px right of nominal and
+    // this character's rightward tail crosses into slot 1. Loosening
+    // maxBorderRunFraction is the tempting "fix" and this test exists to refuse
+    // it: the frame-1 error comes from a different gate entirely.
+    const DRAWN_PITCH = 365; // measured 363-373px across all ten rows of that run
+    const slotWidth = 1536 / 4;
+    const slotHeight = 1024 / 2;
+    const bodyWidth = 260;
+    const bodyHeight = 360;
+    const shapes = Array.from({ length: 8 }, (_, index) => {
+      const centerX = Math.round(768 + ((index % 4) - 1.5) * DRAWN_PITCH);
+      const top = Math.floor(index / 4) * slotHeight + (slotHeight - bodyHeight) / 2;
+      return `<rect x="${centerX - bodyWidth / 2}" y="${top}" width="${bodyWidth}" height="${bodyHeight}" rx="28" fill="#2459c7"/>`;
+    });
+    // Slot 0's body ends at x=350; the tail runs to x=419, i.e. 177 rows flush
+    // against x=383 and 36px deep into slot 1. Both land inside the measured
+    // band: contact run 162-189 of 512, intruding fragment 3040-7661px.
+    shapes.push(`<rect x="350" y="200" width="70" height="177" fill="#2459c7"/>`);
+    const board = await sharp({ create: { width: 1536, height: 1024, channels: 4, background: "#ff00ff" } })
+      .composite([{ input: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1536" height="1024">${shapes.join("")}</svg>`) }])
+      .png()
+      .toBuffer();
+
+    const extracted = await extractPoseBoard(board, { columns: 4, rows: 2, frameCount: 8, chromaKey: "#ff00ff" });
+
+    expect(extracted.ok).toBe(false);
+    expect(extracted.errors).toContain("frame-0:source-touches-slot-edge");
+    expect(extracted.errors).toContain("frame-1:multiple-foreground-components");
+
+    // The overflow is real, not a benign touch, and it sits in the empty band
+    // between calibrated benign contact (12.1%) and a clipped pose (50-61%).
+    const overflowing = extracted.diagnostics[0]!;
+    expect(overflowing.borderContactRuns.right).toBeGreaterThan(slotHeight * FRAME_TOLERANCE.maxBorderRunFraction);
+    expect(overflowing.borderContactRuns.right).toBeLessThan(190);
+    expect(overflowing.borderContactRuns.left).toBe(0);
+
+    // Frame 1 fails on the bleed budget instead: border runs are measured per
+    // component, so the intruder contributes none of them and no run-length
+    // threshold, however generous, can demote this error. Raising
+    // maxBorderRunFraction would ship a flat-sliced tail on frame 0 and this
+    // foreign fragment welded to frame 1's left edge.
+    const invaded = extracted.diagnostics[1]!;
+    expect(invaded.borderContactRuns).toEqual({ left: 0, right: 0, top: 0, bottom: 0 });
+    expect(extracted.warnings).toContain("frame-1:source-touches-slot-edge");
+    const [primary, fragment] = [...invaded.foregroundComponents].sort((a, b) => b.pixels - a.pixels);
+    expect(fragment!.bounds.left).toBe(0);
+    expect(fragment!.pixels).toBeGreaterThan(primary!.pixels * FRAME_TOLERANCE.maxBleedComponentFraction);
+
+    // The whole pose, tail included, is what slot 0 kept plus what spilled into
+    // slot 1 — narrower than one slot. A grid registered to the drawn pitch
+    // would contain it, so the defect is where the cut falls, not how big the
+    // pose is.
+    expect(overflowing.sourceBounds!.width + fragment!.bounds.width).toBeLessThan(slotWidth);
+
+    // The other six slots are untouched, which is why the run kept salvaging
+    // them and re-billing only these two.
+    for (const index of [2, 3, 4, 5, 6, 7]) {
+      expect(extracted.diagnostics[index]!.edgePixels).toBe(0);
+      expect(extracted.diagnostics[index]!.componentCount).toBe(1);
+    }
   });
 
   it("removes an aligned detached half-body duplicate without accepting a second subject", async () => {
