@@ -234,6 +234,12 @@ export interface ChargeResourceArgs {
 }
 export interface ReserveResourceArgs {
   operationId: string; userId: string; resourceKey: string; units: number;
+  /**
+   * 这笔预留可以合法持有多久（秒，0/省略 = 用 billing 侧 recon 的全局 TTL，默认 10 分钟）。
+   * 生命周期本就超过全局 TTL 的工作流必须显式声明，否则运行途中预留就会被兜底按
+   * actual=0 关账，之后每次真实用量都免费结算且无人报错。上限 30 天，超出 billing 返回 400。
+   */
+  reservationTtlSeconds?: number;
 }
 export interface SettleVideoResourceArgs {
   operationId: string; resourceKey: string; units: number; inputUnits?: number;

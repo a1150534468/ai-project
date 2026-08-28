@@ -76,6 +76,12 @@ type UsageRecord struct {
 	Allocations       string `gorm:"type:text"` // JSON [{"bucketId":N,"amount":M}]，预扣分配明细
 	CreatedAt         time.Time
 	SettledAt         *time.Time
+	// 预留有效期。为空时由 recon 兜底按全局 TTL（默认 10 分钟）回收；
+	// 生命周期本就超过 TTL 的工作流（如桌宠按图计费预留要跨越「运行 + 等待授权 +
+	// 结算宽限」）必须在预留时显式声明到期时刻，否则运行途中就会被 recon 以
+	// actual=0 强行关账：后续每次真实调用都免费，且调用方 settle 时只会拿到
+	// 静默的 0，无任何报错。
+	ReservationExpiresAt *time.Time `gorm:"index"`
 }
 
 // 通用资源价表（按次/按量；模型按 token 仍在 PriceRule）。
@@ -137,11 +143,11 @@ type VipGrowthLedger struct {
 type MembershipCard struct {
 	ID           uint      `gorm:"primaryKey" json:"id"`
 	Name         string    `gorm:"size:64;not null" json:"name"`
-	PriceFen     int64     `gorm:"not null" json:"priceFen"`                       // 售价（分）
-	DurationDays int       `gorm:"not null" json:"durationDays"`                   // 有效期（天）
-	Cadence      string    `gorm:"size:8;not null" json:"cadence"`                 // DAILY|WEEKLY|MONTHLY
-	GrantPoints  int64     `gorm:"not null" json:"grantPoints"`                    // 每期发放临时算力点
-	KbQuotaBytes int64     `gorm:"not null;default:0" json:"kbQuotaBytes"`         // 知识库配额（字节）
+	PriceFen     int64     `gorm:"not null" json:"priceFen"`               // 售价（分）
+	DurationDays int       `gorm:"not null" json:"durationDays"`           // 有效期（天）
+	Cadence      string    `gorm:"size:8;not null" json:"cadence"`         // DAILY|WEEKLY|MONTHLY
+	GrantPoints  int64     `gorm:"not null" json:"grantPoints"`            // 每期发放临时算力点
+	KbQuotaBytes int64     `gorm:"not null;default:0" json:"kbQuotaBytes"` // 知识库配额（字节）
 	Enabled      bool      `gorm:"not null;default:true" json:"enabled"`
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`

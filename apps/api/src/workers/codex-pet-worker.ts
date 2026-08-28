@@ -28,6 +28,8 @@ import {
   assertCodexPetImageRoute,
   installCodexPetUpstreamDnsOverride,
   CODEX_PET_PER_IMAGE_BILLING_MODE,
+  CODEX_PET_PARKED_APPROVAL_EXPIRY_MS,
+  CODEX_PET_FAILED_SETTLEMENT_GRACE_MS,
   refundCodexPetUndispatchedExtraCalls,
   assertCodexPetVisualQaRoute,
 } from "../workflow/codex-pet/index.js";
@@ -515,26 +517,9 @@ type CodexPetSettlementClient = {
   }) => Promise<{ readonly settled: number }>;
 };
 
-/**
- * How long a run may sit in `awaiting_regeneration_approval` before maintenance
- * cancels it.
- *
- * `recoverStaleRuns` deliberately never touches an approval-waiting run: nobody
- * should re-enqueue work the user has not authorised. But without any expiry
- * that wait had no end, which left two debts: its 14-unit reservation was held
- * open indefinitely (the settlement reconciler only considers terminal runs),
- * and the run stayed wake-able forever — so a user who moved on to a new project
- * could later approve the zombie and have both runs hit the same relay quota at
- * once, which is exactly the 429 shape that killed an earlier run.
- *
- * Cancelling is the conservative resolution: it is the same transition the user
- * could make by hand, it settles only the units actually delivered, and it
- * leaves every artifact in place.
- */
-export const CODEX_PET_PARKED_APPROVAL_EXPIRY_MS = positiveNumber(
-  "CODEX_PET_PARKED_APPROVAL_EXPIRY_MS",
-  7 * 24 * 60 * 60_000,
-);
+// 等授权上限与失败结算宽限的口径在 codex-pet-reservation-window.ts（与 routes 声明给
+// billing 的预留有效期同源），这里只做转出，避免两边各写一份而让 billing 兜底早于业务动手。
+export { CODEX_PET_PARKED_APPROVAL_EXPIRY_MS, CODEX_PET_FAILED_SETTLEMENT_GRACE_MS };
 
 /**
  * Cancel runs that have waited for image approval past the expiry window.
@@ -630,19 +615,9 @@ export async function expireParkedCodexPetRuns(input: {
  * its reservation. This maintenance path only reconciles durable accounting
  * for terminal per-image runs; it never enqueues work or contacts Pixel.
  *
- * Settlement is irreversible: every resume path requires
- * billingSettlementStatus="reserved", so settling condemns the run forever.
- * `ready`/`cancelled` are genuine user-owned terminals and settle at once, but
- * a failure is frequently just a fixable bug sitting on top of intact paid
- * artifacts, so failed runs keep their reservation for a grace window and are
- * only settled once nobody has resumed them. Units are recounted from the call
- * ledger at settle time, so settling late is strictly more accurate.
+ * 宽限窗口本身（CODEX_PET_FAILED_SETTLEMENT_GRACE_MS）定义在
+ * codex-pet-reservation-window.ts，与预留有效期同源。
  */
-export const CODEX_PET_FAILED_SETTLEMENT_GRACE_MS = positiveNumber(
-  "CODEX_PET_FAILED_SETTLEMENT_GRACE_MS",
-  24 * 60 * 60_000,
-);
-
 export async function reconcilePerImageBillingSettlements(input: {
   readonly prisma: PrismaClient;
   readonly billing: CodexPetSettlementClient;

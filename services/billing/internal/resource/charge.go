@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
-	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 	"ai-assistant-billing/internal/bucket"
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/videopoint"
 	"ai-assistant-billing/internal/vip"
 	"ai-assistant-billing/internal/wallet"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func (s *Service) Charge(opID, userID, resourceKey string, units int64) (int64, error) {
@@ -185,11 +185,23 @@ func (s *Service) chargeVideoCost(opID, userID, resourceKey string, cost int64) 
 }
 
 func (s *Service) Reserve(opID, userID, resourceKey string, units int64) (int64, error) {
+	return s.ReserveFor(opID, userID, resourceKey, units, 0)
+}
+
+// ReserveFor 与 Reserve 相同，但可声明预留有效期：ttl > 0 时 recon 兜底只在真正过期后
+// 才回收这笔预留。生命周期可能超过 recon 全局 TTL（默认 10 分钟）的工作流必须传 ttl，
+// 否则运行途中预留就会被按 actual=0 关账，之后的真实用量全部免费且无人报错。
+func (s *Service) ReserveFor(opID, userID, resourceKey string, units int64, ttl time.Duration) (int64, error) {
 	cost, err := s.Quote(resourceKey, units)
 	if err != nil {
 		return 0, err
 	}
-	reserved, err := wallet.New(s.st).ReservePriced(opID, userID, resourceKey, resourceKey, cost)
+	var expiresAt *time.Time
+	if ttl > 0 {
+		deadline := time.Now().Add(ttl)
+		expiresAt = &deadline
+	}
+	reserved, err := wallet.New(s.st).ReservePricedUntil(opID, userID, resourceKey, resourceKey, cost, expiresAt)
 	if errors.Is(err, wallet.ErrInsufficient) {
 		return 0, ErrInsufficient
 	}

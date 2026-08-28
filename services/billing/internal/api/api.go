@@ -6,8 +6,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 	"ai-assistant-billing/internal/adjust"
 	"ai-assistant-billing/internal/analytics"
 	"ai-assistant-billing/internal/billingmode"
@@ -25,6 +23,8 @@ import (
 	"ai-assistant-billing/internal/topup"
 	"ai-assistant-billing/internal/videopoint"
 	"ai-assistant-billing/internal/wallet"
+	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 type Handler struct {
@@ -129,7 +129,15 @@ type reserveResourceReq struct {
 	UserID      string `json:"userId" binding:"required"`
 	ResourceKey string `json:"resourceKey" binding:"required"`
 	Units       int64  `json:"units"`
+	// 预留有效期（秒，可选）。缺省时由对账兜底按全局 TTL（10 分钟）回收；
+	// 生命周期超过该 TTL 的工作流必须显式声明，否则运行途中预留会被按 actual=0
+	// 关账，后续真实用量全部免费。
+	ReservationTtlSeconds int64 `json:"reservationTtlSeconds"`
 }
+
+// 预留有效期上限：足够覆盖桌宠「等待授权 7 天 + 结算宽限」这类最长窗口，
+// 同时避免一次笔误把用户的算力点永久冻结在预留里。
+const maxReservationTTLSeconds = int64(30 * 24 * 60 * 60)
 
 type settleResourceReq struct {
 	OperationID string `json:"operationId" binding:"required"`
@@ -226,7 +234,14 @@ func (h *Handler) reserveResource(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid units"})
 		return
 	}
-	reserved, err := h.resource.Reserve(req.OperationID, req.UserID, req.ResourceKey, req.Units)
+	if req.ReservationTtlSeconds < 0 || req.ReservationTtlSeconds > maxReservationTTLSeconds {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid reservation ttl"})
+		return
+	}
+	reserved, err := h.resource.ReserveFor(
+		req.OperationID, req.UserID, req.ResourceKey, req.Units,
+		time.Duration(req.ReservationTtlSeconds)*time.Second,
+	)
 	if errors.Is(err, resource.ErrInsufficient) {
 		c.JSON(http.StatusPaymentRequired, gin.H{"error": "insufficient", "code": "INSUFFICIENT_BALANCE"})
 		return

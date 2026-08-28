@@ -375,6 +375,82 @@ func TestResourceReserveAndSettleEndpoints(t *testing.T) {
 	}
 }
 
+func TestResourceReserveHonorsReservationTtl(t *testing.T) {
+	st := newAPIStore(t)
+	st.DB.Exec("TRUNCATE resource_prices, point_buckets, usage_records CASCADE")
+	if err := st.DB.Create(&model.ResourcePrice{
+		ResourceKey: "codex_pet_v2_package", DisplayName: "桌宠按图", PricingType: "PER_UNIT",
+		Rate: 200, PerUnits: 1, Enabled: true,
+	}).Error; err != nil {
+		t.Fatalf("create pet price: %v", err)
+	}
+	if err := bucket.GrantPoints(st.DB, "u-pet", 3000, nil, "test"); err != nil {
+		t.Fatalf("grant points: %v", err)
+	}
+
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	New(st, "test-token", nil).Register(r)
+
+	post := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/resource/reserve", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Internal-Token", "test-token")
+		resp := httptest.NewRecorder()
+		r.ServeHTTP(resp, req)
+		return resp
+	}
+
+	before := time.Now()
+	resp := post(`{
+		"operationId":"pet:run1:planned-images",
+		"userId":"u-pet",
+		"resourceKey":"codex_pet_v2_package",
+		"units":14,
+		"reservationTtlSeconds":3600
+	}`)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("reserve status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var rec model.UsageRecord
+	if err := st.DB.First(&rec, "operation_id = ?", "pet:run1:planned-images").Error; err != nil {
+		t.Fatalf("find usage: %v", err)
+	}
+	if rec.ReservationExpiresAt == nil {
+		t.Fatal("声明了 ttl 必须落库 reservation_expires_at，否则 recon 兜底会提前关账")
+	}
+	gap := rec.ReservationExpiresAt.Sub(before)
+	if gap < 59*time.Minute || gap > 61*time.Minute {
+		t.Fatalf("到期时刻应约为 now+1h, got %v", gap)
+	}
+
+	// 不声明 ttl 时保持旧语义（NULL → 走 recon 全局 TTL）
+	if resp := post(`{
+		"operationId":"pet:run2:planned-images",
+		"userId":"u-pet",
+		"resourceKey":"codex_pet_v2_package",
+		"units":1
+	}`); resp.Code != http.StatusOK {
+		t.Fatalf("reserve without ttl status=%d body=%s", resp.Code, resp.Body.String())
+	}
+	var noTTL model.UsageRecord
+	if err := st.DB.First(&noTTL, "operation_id = ?", "pet:run2:planned-images").Error; err != nil {
+		t.Fatalf("find usage: %v", err)
+	}
+	if noTTL.ReservationExpiresAt != nil {
+		t.Fatalf("未声明 ttl 应保持 NULL, got %v", noTTL.ReservationExpiresAt)
+	}
+
+	for name, body := range map[string]string{
+		"negative": `{"operationId":"pet:bad1","userId":"u-pet","resourceKey":"codex_pet_v2_package","units":1,"reservationTtlSeconds":-1}`,
+		"tooLong":  `{"operationId":"pet:bad2","userId":"u-pet","resourceKey":"codex_pet_v2_package","units":1,"reservationTtlSeconds":2678400}`,
+	} {
+		if resp := post(body); resp.Code != http.StatusBadRequest {
+			t.Fatalf("%s ttl 应被拒绝, got status=%d body=%s", name, resp.Code, resp.Body.String())
+		}
+	}
+}
+
 func TestResourcePricesEndpointReturnsLowerCamelAndSkipsBlankKeys(t *testing.T) {
 	st := newAPIStore(t)
 	st.DB.Exec("TRUNCATE resource_prices CASCADE")

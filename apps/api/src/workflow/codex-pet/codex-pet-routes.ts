@@ -38,6 +38,7 @@ import {
   refundCodexPetUndispatchedExtraCalls,
 } from "./codex-pet-call-ledger.js";
 import { initializeCodexPetFailedContinuation } from "./codex-pet-failed-continuation.js";
+import { codexPetReservationTtlSeconds } from "./codex-pet-reservation-window.js";
 import { readCodexPetGateFailureSnapshot } from "./codex-pet-gate-failure.js";
 import { CODEX_PET_GPT_FAILED_CONTINUATION_SCHEMA_VERSION } from "./codex-pet-gpt-continuation.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
@@ -1814,6 +1815,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           userId,
           resourceKey: activeRun.billingResourceKey || pricing.resourceKey,
           units: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+          reservationTtlSeconds: codexPetReservationTtlSeconds(),
         });
         activeRun = await prisma.codexPetRun.update({ where: { id: activeRun.id }, data: {
           billingReservedPoints: receipt.reserved,
@@ -2067,6 +2069,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           userId,
           resourceKey: continuationRun.billingResourceKey || pricing.resourceKey,
           units: prepared.plannedCallsRemaining,
+          reservationTtlSeconds: codexPetReservationTtlSeconds(),
         });
         continuationRun = await prisma.codexPetRun.update({ where: { id: continuationRun.id }, data: {
           billingReservedPoints: receipt.reserved,

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "../_shared/image-service.js";
 import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import { CODEX_PET_EXTRA_IMAGE_CALLS_PER_JOB_LIMIT } from "./codex-pet-call-ledger.js";
+import { codexPetReservationTtlSeconds } from "./codex-pet-reservation-window.js";
 import {
   CODEX_PET_PREVIEW_ARTIFACT_PURPOSE,
   CODEX_PET_RESOURCE_KEY,
@@ -1158,6 +1159,8 @@ describe("Codex pet routes", () => {
       userId: "u1",
       resourceKey: CODEX_PET_RESOURCE_KEY,
       units: 14,
+      // 必须声明有效期：不声明就会在运行途中被 billing 兜底按 actual=0 关账
+      reservationTtlSeconds: codexPetReservationTtlSeconds(),
     });
     expect(enqueueRun).toHaveBeenCalledTimes(2);
     expect(spies.executeRaw).toHaveBeenCalledWith("SELECT pg_advisory_xact_lock(hashtext($1))", "codex-pet:u1");
@@ -1385,6 +1388,7 @@ describe("Codex pet routes", () => {
       userId: "u1",
       resourceKey: CODEX_PET_RESOURCE_KEY,
       units: 12,
+      reservationTtlSeconds: codexPetReservationTtlSeconds(),
     });
     expect(billing.chargeResource).not.toHaveBeenCalled();
     expect(enqueueRun).not.toHaveBeenCalled();
@@ -1814,6 +1818,7 @@ describe("Codex pet routes", () => {
       userId: "u1",
       resourceKey: CODEX_PET_RESOURCE_KEY,
       units: 14,
+      reservationTtlSeconds: codexPetReservationTtlSeconds(),
     });
     await app.close();
   });

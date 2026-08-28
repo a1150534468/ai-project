@@ -131,3 +131,62 @@ func TestReconcileMultipleStaleRecords(t *testing.T) {
 		t.Fatalf("all stale reserves should be refunded, balance should be 5000, got %d", balanceOf(st, "u2"))
 	}
 }
+
+// 声明了有效期且尚未到期的预留，即使早于全局 TTL 也不能被兜底关账：
+// 关掉调用方仍合法持有的预留 = 之后的真实用量全部按 0 静默结算。
+func TestReconcileKeepsUnexpiredDeclaredReservation(t *testing.T) {
+	st := newTestStore(t)
+	w := wallet.New(st)
+	seed(st, "u3", 3000)
+	deadline := time.Now().Add(2 * time.Hour)
+	if _, err := w.ReservePricedUntil("longrun", "u3", "chat", "m", 800, &deadline); err != nil {
+		t.Fatal(err)
+	}
+	// 创建时间远早于 10 分钟 TTL，但预留自己声明了 2 小时有效期
+	st.DB.Model(&model.UsageRecord{}).Where("operation_id = ?", "longrun").
+		Update("created_at", time.Now().Add(-3*time.Hour))
+
+	n := Reconcile(st, w, 10*time.Minute)
+	if n != 0 {
+		t.Fatalf("未到期的声明式预留不应被回收, got %d", n)
+	}
+	if balanceOf(st, "u3") != 2200 {
+		t.Fatalf("余额应保持 2200（预留仍持有）, got %d", balanceOf(st, "u3"))
+	}
+	var rec model.UsageRecord
+	st.DB.First(&rec, "operation_id = ?", "longrun")
+	if rec.Status != "reserved" {
+		t.Fatalf("状态应仍为 reserved, got %s", rec.Status)
+	}
+	if rec.ReservationExpiresAt == nil {
+		t.Fatal("reservation_expires_at 应被持久化")
+	}
+}
+
+// 声明的有效期一过，兜底仍要收尸（否则预留会永久挂住余额）。
+func TestReconcileReclaimsExpiredDeclaredReservation(t *testing.T) {
+	st := newTestStore(t)
+	w := wallet.New(st)
+	seed(st, "u4", 3000)
+	deadline := time.Now().Add(-time.Minute)
+	if _, err := w.ReservePricedUntil("expired", "u4", "chat", "m", 800, &deadline); err != nil {
+		t.Fatal(err)
+	}
+	if balanceOf(st, "u4") != 2200 {
+		t.Fatalf("reserve 后应 2200, got %d", balanceOf(st, "u4"))
+	}
+
+	// created_at 是刚才（未过全局 TTL），只有声明的有效期过了
+	n := Reconcile(st, w, 10*time.Minute)
+	if n != 1 {
+		t.Fatalf("已过期的声明式预留应被回收 1 条, got %d", n)
+	}
+	if balanceOf(st, "u4") != 3000 {
+		t.Fatalf("过期预留应全额退回, want 3000 got %d", balanceOf(st, "u4"))
+	}
+	var rec model.UsageRecord
+	st.DB.First(&rec, "operation_id = ?", "expired")
+	if rec.Status != "settled" || rec.ActualPoints != 0 {
+		t.Fatalf("应按 actual=0 关账, got status=%s actual=%d", rec.Status, rec.ActualPoints)
+	}
+}

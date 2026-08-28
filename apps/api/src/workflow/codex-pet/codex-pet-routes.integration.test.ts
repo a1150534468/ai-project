@@ -3,6 +3,7 @@ import { getPrisma } from "@ai-assistant/db";
 import Fastify from "fastify";
 import { afterAll, describe, expect, it, vi } from "vitest";
 import { CODEX_PET_PLANNED_IMAGE_CALL_LIMIT } from "./codex-pet-call-ledger.js";
+import { codexPetReservationTtlSeconds } from "./codex-pet-reservation-window.js";
 import {
   CODEX_PET_RESOURCE_KEY,
   codexPetRoutes,
@@ -106,6 +107,8 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
         userId: user.id,
         resourceKey: CODEX_PET_RESOURCE_KEY,
         units: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+        // 桌宠预留要跨越等授权 + 结算宽限，必须显式声明有效期
+        reservationTtlSeconds: codexPetReservationTtlSeconds(),
       });
       expect(enqueueRun).toHaveBeenCalledWith(body.data.run.id);
 
