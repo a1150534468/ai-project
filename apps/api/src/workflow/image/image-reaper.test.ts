@@ -6,6 +6,7 @@ import {
   startImageReaper,
 } from "./image-reaper.js";
 import { DEFAULT_STALE_TASK_MS, type ImageGenerationTaskRow } from "./image-shared.js";
+import { DEFAULT_IMAGE_UPSTREAM_QUEUE_WAIT_MS } from "../_shared/image-dispatch-gate.js";
 
 const NOW = new Date("2026-08-05T12:00:00.000Z").getTime();
 
@@ -76,6 +77,12 @@ describe("scanStaleImageTasks", () => {
     const resume = vi.fn(async () => 0);
     await expect(scanStaleImageTasks({ prisma, resume, now: () => NOW })).resolves.toBe(0);
     expect(resume).not.toHaveBeenCalled();
+  });
+
+  it("默认阈值盖住「闸门排队 + 一次尝试 + 一次退避」，不误杀在跑的行", () => {
+    // 心跳是 onRetry 里的 updateTask，排队等许可那段不写心跳；
+    // 漏算闸门这一项就会把正在排队的行判成卡单。
+    expect(DEFAULT_STALE_TASK_MS).toBeGreaterThan(600_000 + DEFAULT_IMAGE_UPSTREAM_QUEUE_WAIT_MS);
   });
 
   it("batch 上限生效，默认 200，可覆盖", async () => {

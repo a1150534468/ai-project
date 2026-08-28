@@ -108,6 +108,7 @@ flowchart TD
 - **凭据复用链**：`GPT_IMAGE_EDIT_API_KEY` 缺省复用 `GPT_IMAGE_API_KEY`；Qwen 复用 `BAILIAN_API_KEY`；减少配置项。
 - **openai 协议默认流式**：中继有 60s 读超时而真实出图要 56s 以上，必须靠流式保活（见 6.8）。`IMAGE_UPSTREAM_STREAM=0` 可关闭。
 - **超时只有一个来源**：单次尝试截止时间由 `IMAGE_ATTEMPT_TIMEOUT_MS`（默认 600s）的 AbortController 掌管，undici 自带的 headers/body 超时一律关掉（见 6.9），避免两套超时打架。
+- **跨域共享派发闸门（2026-08-28）**：出图并发过去各域自己定（图文按 2 分批、生图按 count 最多 8 扇出、人像最多 4、桌宠 1），但打的是同一个中继，谁扇得宽谁挤掉谁（429 + 重试放大）。`_shared/image-dispatch-gate.ts` 把许可收到进程级、**按上游 host 分池**：同一 host 同时在飞不超过 `IMAGE_UPSTREAM_CONCURRENCY`（默认 4，0 = 关闭），先到先得。排队超过 `IMAGE_UPSTREAM_QUEUE_WAIT_MS`（默认 120s）**直接放行**（fail open）——闸门永远不许让一次已付费的调用失败。许可在 `onRequestDispatching` 与单次尝试 deadline **之外**获取，排队不吃尝试预算、也不让台账先记下没发出的派发。代价：排队期间不写心跳，因此 `articleProjectStaleMs` / `portraitTaskStaleMs`（try-on 复用）/ `DEFAULT_STALE_TASK_MS` 都把 `imageDispatchWorstWaitMs()` 算进阈值，漏算就会把在排队的行判成卡单收尸。桌宠不受影响：它的心跳是独立定时器。
 - **改一处，9 个调用点受益**：所有走 openai 协议的出图都收敛在 `image-service`，因此形象照/电商/通用生图/桌宠/文章配图/漫剧全部自动获得上述两项修复。
 
 ## 六、踩坑记录（现象 / 根因 / 修法 / 预防）

@@ -1,4 +1,5 @@
 import { loadImageAttemptTimeoutMs } from "../_shared/image-service.js";
+import { imageDispatchWorstWaitMs } from "../_shared/image-dispatch-gate.js";
 
 /** 单次上游失败后的重试间隔（固定间隔，不退避）。 */
 export const PORTRAIT_RETRY_DELAY_MS = 3_000;
@@ -30,9 +31,12 @@ export function portraitMaxAttempts(env: NodeJS.ProcessEnv = process.env): numbe
  * 单张上限 = 单次尝试超时 × 兜底重试次数 + 固定间隔退避。
  * 照 article 的教训（那边写死 15 分钟，加了重试后把在跑的行误判成超时收尸），
  * 这里从同一批常量推导，超时或重试预算调整时不会悄悄失配。
+ *
+ * 单次尝试还要先过共享派发闸门，排队等待期间不刷心跳，所以尝试上限要连闸门的
+ * 最坏等待一起算进去。
  */
 export function portraitTaskStaleMs(env: NodeJS.ProcessEnv = process.env): number {
-  const attemptMs = loadImageAttemptTimeoutMs(env);
+  const attemptMs = loadImageAttemptTimeoutMs(env) + imageDispatchWorstWaitMs(env);
   const attempts = portraitMaxAttempts(env);
   const backoffMs = Math.max(0, attempts - 1) * portraitRetryDelayMs(env);
   // 1.5 倍余量留给下载、sharp 解析、S3 上传等非上游耗时。

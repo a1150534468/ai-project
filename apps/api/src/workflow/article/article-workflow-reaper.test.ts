@@ -105,4 +105,13 @@ describe("reapStaleArticleWorkflowProjects", () => {
     // 但不低于兜底下限，避免把正常的单批出图判成卡死。
     expect(tight).toBe(ARTICLE_PROJECT_STALE_MS);
   });
+
+  it("阈值把共享派发闸门的排队等待算进去：排队期间不写进度心跳", () => {
+    const base = { IMAGE_ATTEMPT_TIMEOUT_MS: "600000" };
+    const queued = articleProjectStaleMs({ ...base, IMAGE_UPSTREAM_QUEUE_WAIT_MS: "300000" });
+    const noGate = articleProjectStaleMs({ ...base, IMAGE_UPSTREAM_CONCURRENCY: "0" });
+    // 一个批次里每次尝试都可能先排队，所以差值是 排队上限 × 尝试次数 × 1.5 余量。
+    expect(queued - noGate).toBe(ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS * 300_000 * 1.5);
+    expect(noGate).toBeLessThan(articleProjectStaleMs(base));
+  });
 });

@@ -13,6 +13,7 @@ import {
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, articleWorkflowRetryDelayMs } from "./article-workflow-retry.js";
 import { loadImageAttemptTimeoutMs } from "../_shared/image-service.js";
+import { imageDispatchWorstWaitMs } from "../_shared/image-dispatch-gate.js";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
 export const ARTICLE_MAX_SOURCE_LENGTH = 200_000;
@@ -40,9 +41,12 @@ export const ARTICLE_PROJECT_STALE_MS = 15 * 60_000;
  * 一个批次的上限 = 单次尝试超时 × 系统兜底重试次数 + 退避。曾经这里写死 15 分钟、
  * 注释只提「单张尝试上限」，加入重试后实测被 reaper 误判为超时中断（两行卡在 35% 被收尸），
  * 因此改成从同一批常量推导，避免超时或重试预算调整时这里悄悄失配。
+ *
+ * 每次尝试还要先过共享派发闸门，排队等待不写心跳，所以单次尝试的上限是
+ * 「闸门最坏等待 + 尝试超时」；漏掉闸门那一项就又是一次同样的误判收尸。
  */
 export function articleProjectStaleMs(env: NodeJS.ProcessEnv = process.env): number {
-  const attemptMs = loadImageAttemptTimeoutMs(env);
+  const attemptMs = loadImageAttemptTimeoutMs(env) + imageDispatchWorstWaitMs(env);
   const backoffMs =
     ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS * articleWorkflowRetryDelayMs(ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, env);
   // 1.5 倍余量留给下载、入库、S3 上传等批次内的非上游耗时。

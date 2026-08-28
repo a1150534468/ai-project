@@ -101,6 +101,15 @@ describe("scanStalePortraitTasks", () => {
     expect(tight).toBeLessThan(loose);
     expect(tight).toBe(PORTRAIT_TASK_STALE_MS);
   });
+
+  it("阈值把共享派发闸门的排队等待算进去：排队期间不刷 completedCount", () => {
+    const base = { IMAGE_ATTEMPT_TIMEOUT_MS: "600000", PORTRAIT_MAX_ATTEMPTS: "3", PORTRAIT_RETRY_DELAY_MS: "3000" };
+    const queued = portraitTaskStaleMs({ ...base, IMAGE_UPSTREAM_QUEUE_WAIT_MS: "300000" });
+    const noGate = portraitTaskStaleMs({ ...base, IMAGE_UPSTREAM_CONCURRENCY: "0" });
+    // 单张图的每次尝试都可能先排队，所以差值是 排队上限 × 尝试次数 × 1.5 余量。
+    expect(queued - noGate).toBe(3 * 300_000 * 1.5);
+    expect(noGate).toBeLessThan(portraitTaskStaleMs(base));
+  });
 });
 
 describe("reconcileStalePortraitBilling", () => {

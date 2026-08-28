@@ -8,6 +8,7 @@ import { publicObjectUrl as basePublicObjectUrl } from "../../storage/public-url
 import { imageResolutionFromSize } from "./image-upstream-options.js";
 import { IMAGE_STREAM_PARTIAL_IMAGES, readImageStream } from "./image-stream.js";
 import { withImageStreamDispatcher } from "./image-stream-dispatcher.js";
+import { withImageDispatchPermit } from "./image-dispatch-gate.js";
 
 export const QWEN_IMAGE_MODEL = "qwen-image-2.0-pro-2026-04-22";
 export const GPT_IMAGE_MODEL = "gpt-image-2";
@@ -898,22 +899,25 @@ export async function callImageGenerationDetailed(args: CallImageGenerationArgs)
           },
           parameters: qwenImageParameters(args.size),
         };
-  await args.onRequestDispatching?.();
-  // deadline 包住「取响应 + 读 body」：流式出图的 body 阶段才是耗时主体。
-  return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
-    const response = await fetchWithSignal(args.fetchFn, args.config.endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
-      body: JSON.stringify(body),
-    }, deadlineSignal, args.onRequestSent);
-    if (!response.ok) throw await upstreamError(response);
-    const payload = await readImagePayload(response);
-    return await detailedResult(
-      payload,
-      { model: args.config.model, size: args.size, quality: requestedQuality },
-      imageUpstreamRequestIdFromHeaders(response.headers),
-      usesRequestBoundNativeQwenModel(args.config),
-    );
+  // 闸门在派发登记与 deadline 之外：四个域打同一个中继，谁也不许挤掉谁。
+  return await withImageDispatchPermit({ endpoint: args.config.endpoint, signal: args.signal, env: args.env }, async () => {
+    await args.onRequestDispatching?.();
+    // deadline 包住「取响应 + 读 body」：流式出图的 body 阶段才是耗时主体。
+    return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
+      const response = await fetchWithSignal(args.fetchFn, args.config.endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+        body: JSON.stringify(body),
+      }, deadlineSignal, args.onRequestSent);
+      if (!response.ok) throw await upstreamError(response);
+      const payload = await readImagePayload(response);
+      return await detailedResult(
+        payload,
+        { model: args.config.model, size: args.size, quality: requestedQuality },
+        imageUpstreamRequestIdFromHeaders(response.headers),
+        usesRequestBoundNativeQwenModel(args.config),
+      );
+    });
   });
 }
 
@@ -938,20 +942,23 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       sequential_image_generation: "disabled",
       watermark: false,
     };
-    await args.onRequestDispatching?.();
-    return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
-      const response = await fetchWithSignal(args.fetchFn, args.endpoint ?? args.config.endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
-        body: JSON.stringify(body),
-      }, deadlineSignal, args.onRequestSent);
-      if (!response.ok) throw await upstreamError(response);
-      const payload = await response.json();
-      return await detailedResult(
-        payload,
-        { model: args.config.model, size: requestedSize, quality: args.quality },
-        imageUpstreamRequestIdFromHeaders(response.headers),
-      );
+    const endpoint = args.endpoint ?? args.config.endpoint;
+    return await withImageDispatchPermit({ endpoint, signal: args.signal, env: args.env }, async () => {
+      await args.onRequestDispatching?.();
+      return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
+        const response = await fetchWithSignal(args.fetchFn, endpoint, {
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+          body: JSON.stringify(body),
+        }, deadlineSignal, args.onRequestSent);
+        if (!response.ok) throw await upstreamError(response);
+        const payload = await response.json();
+        return await detailedResult(
+          payload,
+          { model: args.config.model, size: requestedSize, quality: args.quality },
+          imageUpstreamRequestIdFromHeaders(response.headers),
+        );
+      });
     });
   }
   if (args.config.protocol === "openai") {
@@ -982,20 +989,22 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
       const { bytes, mime, filename } = await openAiEditImagePart(args.mask, "mask image", "mask.png");
       form.set("mask", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
     }
-    await args.onRequestDispatching?.();
-    return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(env), args.signal, async (deadlineSignal) => {
-      const response = await fetchWithSignal(args.fetchFn, endpoint, {
-        method: "POST",
-        headers: { authorization: `Bearer ${apiKey}` },
-        body: form,
-      }, deadlineSignal, args.onRequestSent);
-      if (!response.ok) throw await upstreamError(response);
-      const payload = await readImagePayload(response);
-      return await detailedResult(
-        payload,
-        { model: args.config.model, size: requestedSize, quality: requestedQuality },
-        imageUpstreamRequestIdFromHeaders(response.headers),
-      );
+    return await withImageDispatchPermit({ endpoint, signal: args.signal, env }, async () => {
+      await args.onRequestDispatching?.();
+      return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(env), args.signal, async (deadlineSignal) => {
+        const response = await fetchWithSignal(args.fetchFn, endpoint, {
+          method: "POST",
+          headers: { authorization: `Bearer ${apiKey}` },
+          body: form,
+        }, deadlineSignal, args.onRequestSent);
+        if (!response.ok) throw await upstreamError(response);
+        const payload = await readImagePayload(response);
+        return await detailedResult(
+          payload,
+          { model: args.config.model, size: requestedSize, quality: requestedQuality },
+          imageUpstreamRequestIdFromHeaders(response.headers),
+        );
+      });
     });
   }
   if (args.mask) throw new Error("Qwen image editing does not support a separate mask input");
@@ -1009,21 +1018,23 @@ export async function callImageEditDetailed(args: CallImageEditArgs): Promise<Im
   };
   const configuredEditEndpoint = args.env?.IMAGE_EDIT_ENDPOINT?.trim();
   const endpoint = args.endpoint ?? configuredEditEndpoint ?? args.config.endpoint;
-  await args.onRequestDispatching?.();
-  return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
-    const response = await fetchWithSignal(args.fetchFn, endpoint, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
-      body: JSON.stringify(body),
-    }, deadlineSignal, args.onRequestSent);
-    if (!response.ok) throw await upstreamError(response);
-    const payload = await response.json();
-    return await detailedResult(
-      payload,
-      { model: args.config.model, size: args.size, quality: args.quality },
-      imageUpstreamRequestIdFromHeaders(response.headers),
-      usesRequestBoundNativeQwenModel(args.config),
-    );
+  return await withImageDispatchPermit({ endpoint, signal: args.signal, env: args.env }, async () => {
+    await args.onRequestDispatching?.();
+    return await withImageAttemptDeadline(loadImageAttemptTimeoutMs(args.env), args.signal, async (deadlineSignal) => {
+      const response = await fetchWithSignal(args.fetchFn, endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${args.config.apiKey}` },
+        body: JSON.stringify(body),
+      }, deadlineSignal, args.onRequestSent);
+      if (!response.ok) throw await upstreamError(response);
+      const payload = await response.json();
+      return await detailedResult(
+        payload,
+        { model: args.config.model, size: args.size, quality: args.quality },
+        imageUpstreamRequestIdFromHeaders(response.headers),
+        usesRequestBoundNativeQwenModel(args.config),
+      );
+    });
   });
 }
 
