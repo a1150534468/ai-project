@@ -9,6 +9,7 @@ import { authUserId } from "../_shared/route-auth.js";
 import { loadOwnedReferenceImages } from "../_shared/reference-image.js";
 import {
   appendBillingOperationId,
+  ecomImageReservationTtlSeconds,
   readBillingClientEnv,
   resolveLanguage,
   RefundCompensationError,
@@ -264,6 +265,10 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
       userId: chargedJob.userId,
       resourceKey: chargeRow.resourceKey,
       units: 1,
+      // 单张图的最坏耗时是 billing 那个 10 分钟全局兜底的三倍多；不声明的话预留会在出图途中
+      // 被按 actual=0 关账，之后 settle 静默返回 0——而这条链的结算失败是故意不致命的，
+      // 图照发、钱没收到，只剩一行日志。
+      reservationTtlSeconds: ecomImageReservationTtlSeconds({ maxAttempts, retryDelayMs }),
     });
     try {
       const referenceImages = chargedJob.referenceAssetIds.length > 0 ? await loadOwnedReferenceImages(prisma, chargedJob.userId, chargedJob.referenceAssetIds, fetchFn) : null;

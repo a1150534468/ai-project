@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { tryOnWorkflowRoutes } from "./try-on-routes.js";
+import { portraitReservationTtlSeconds } from "../portrait/portrait-shared.js";
 import { TRY_ON_CONSENT_VERSION } from "./try-on-prompts.js";
 
 type TryOnRouteDeps = NonNullable<Parameters<typeof tryOnWorkflowRoutes>[1]>;
@@ -436,6 +437,7 @@ describe("try-on workflow routes", () => {
       userId: "u1",
       resourceKey: "image_generation_2k",
       units: 2,
+      reservationTtlSeconds: portraitReservationTtlSeconds(2),
     });
     expect(billing.settleResource).toHaveBeenCalledWith({
       operationId: "try-on:try-on-request-1",
@@ -576,6 +578,7 @@ describe("try-on workflow routes", () => {
       userId: "u1",
       resourceKey: "image_generation_2k",
       units: 1,
+      reservationTtlSeconds: portraitReservationTtlSeconds(1),
     });
     expect(billing.settleResource).toHaveBeenCalledWith({
       operationId: "try-on:try-on-pending-1",

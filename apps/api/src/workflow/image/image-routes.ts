@@ -22,6 +22,7 @@ import { startImageReaper } from "./image-reaper.js";
 import {
   IMAGE_TASK_STATUS,
   type ImageGenerationTaskRow,
+  imageReservationTtlSeconds,
   loadImageStaleTaskMs,
   SETTLING_STALE_MS,
 } from "./image-shared.js";
@@ -104,7 +105,7 @@ const imagePricingQuerySchema = z.object({
 });
 
 interface BillingForImages {
-  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
+  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number; reservationTtlSeconds?: number }) => Promise<{ reserved: number }>;
   settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
   reserve: (args: { operationId: string; userId: string; type: string; model: string; inputTokens: number; maxOutputTokens: number }) => Promise<{ reserved: number }>;
@@ -1196,6 +1197,11 @@ export async function imageWorkflowRoutes(app: FastifyInstance, deps: ImageWorkf
         userId,
         resourceKey: chargeRow.resourceKey,
         units: request.count,
+        // 预留一直持有到任务终态：count 张图 × 每张的全部重试远超 billing 的 10 分钟兜底，
+        // 不声明就会在出图途中被按 actual=0 关账，之后结算静默返回 0。
+        // 用闭包里的 maxAttempts（deps 可覆盖）而不是再读一次环境，避免注入了更大的重试
+        // 预算时窗口反而按默认值算短。
+        reservationTtlSeconds: imageReservationTtlSeconds({ count: request.count, maxAttempts }),
       });
     } catch (error) {
       if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });

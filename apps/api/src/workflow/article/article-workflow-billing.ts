@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY,
+  articleTextReservationTtlSeconds,
   type ArticleWorkflowBilling,
 } from "./article-workflow-shared.js";
 
@@ -28,6 +29,9 @@ export async function runReservedArticleTextTask<T>(args: {
     userId: args.userId,
     resourceKey: ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY,
     units: args.units,
+    // work 里连出图一起跑，窗口远超 billing 的 10 分钟兜底；不声明的话预留会在出图途中
+    // 被按 actual=0 关账，下面那句 settle 就静默返回 0，成品照发、钱没收到。
+    reservationTtlSeconds: articleTextReservationTtlSeconds(),
   });
   try {
     await args.onReserved?.(operationId);

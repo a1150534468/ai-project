@@ -1,6 +1,9 @@
 import type { FastifyReply } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
+import { imageDispatchWorstWaitMs } from "../_shared/image-dispatch-gate.js";
+import { loadImageAttemptTimeoutMs } from "../_shared/image-service.js";
+import { reservationTtlSeconds, upstreamImageWorstMs } from "../_shared/reservation-window.js";
 import { segmentRecordSchema, type ProductInput } from "./ecom-route-types.js";
 import { WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { getEcomPlatform } from "./ecom-prompts.js";
@@ -218,4 +221,33 @@ export function buildSegmentRecord(args: {
     prompt: args.prompt,
     createdAt: args.createdAt.toISOString(),
   };
+}
+
+/**
+ * 预留有效期（秒）。电商两条链（主图 / 长图主图+分段）都是「一次调用一张图」：
+ * 预留、出图、结算全在一个进程内顺序跑完，所以窗口就是单张图的最坏耗时——按默认取值
+ * 单次尝试超时 600s、闸门最坏排队 120s、两次尝试，一张就 36 分钟，是 billing 那个
+ * 10 分钟全局兜底的三倍多。不声明的话预留会在出图途中被按 actual=0 关账，
+ * 之后 settle 静默返回 0：图交付了、钱没收到，而且电商这两条链的结算失败是**故意不致命**的
+ * （图已交出去，退款等于白送），只打日志，所以漏计费在这里更不容易被发现。
+ *
+ * 续跑余量传 0：电商没有 reaper，每次尝试各自 append 一个 `a{N}` operationId 单独预留，
+ * 失败那笔当场退款，不存在「同一笔预留被续跑延长」。
+ * 重试预算由调用方传入（deps 可覆盖），保证声明的 TTL 与真实生效的重试次数同源。
+ */
+export function ecomImageReservationTtlSeconds(
+  args: { readonly maxAttempts: number; readonly retryDelayMs: number },
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  return reservationTtlSeconds({
+    perHeartbeatMs: upstreamImageWorstMs({
+      attemptTimeoutMs: loadImageAttemptTimeoutMs(env),
+      dispatchWaitMs: imageDispatchWorstWaitMs(env),
+      maxAttempts: args.maxAttempts,
+      retryDelayMs: args.retryDelayMs,
+    }),
+    heartbeats: 1,
+    resumeAllowance: 0,
+    env,
+  });
 }

@@ -16,9 +16,10 @@ import { syncNovelSetupAssets } from "../../novel/structured-sync.js";
 import { isPlainObject } from "../../runtime/records.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { findEnabledNovelModel, novelWritingModel, type NovelPlatformModel } from "./novel-models.js";
+import { novelReservationTtlSeconds } from "./novel-reservation-window.js";
 
 export interface BillingForNovels {
-  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
+  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number; reservationTtlSeconds?: number }) => Promise<{ reserved: number }>;
   settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
   listModels?: () => Promise<{ data: NovelPlatformModel[] }>;
@@ -447,6 +448,9 @@ export async function reserveAndCreateTask(args: {
     userId: args.userId,
     resourceKey: NOVEL_RESOURCE_KEY,
     units: args.estimateChars,
+    // 预留在这里就下，结算却要等 worker 生成完：不声明有效期的话 billing 的 10 分钟兜底
+    // 会在等待期间把它按 actual=0 关账，之后 settle 静默返回 0（见 novel-reservation-window.ts）。
+    reservationTtlSeconds: novelReservationTtlSeconds(),
   });
   try {
     return await args.prisma.$transaction(async (tx) => {

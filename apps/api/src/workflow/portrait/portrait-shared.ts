@@ -1,5 +1,6 @@
 import { loadImageAttemptTimeoutMs } from "../_shared/image-service.js";
 import { imageDispatchWorstWaitMs } from "../_shared/image-dispatch-gate.js";
+import { reservationTtlSeconds } from "../_shared/reservation-window.js";
 
 /** 单次上游失败后的重试间隔（固定间隔，不退避）。 */
 export const PORTRAIT_RETRY_DELAY_MS = 3_000;
@@ -42,4 +43,18 @@ export function portraitTaskStaleMs(env: NodeJS.ProcessEnv = process.env): numbe
   // 1.5 倍余量留给下载、sharp 解析、S3 上传等非上游耗时。
   const worstImageMs = Math.round((attemptMs * attempts + backoffMs) * 1.5);
   return Math.max(PORTRAIT_TASK_STALE_MS, worstImageMs);
+}
+
+/**
+ * 预留有效期（秒）。预留在建行时就下，一直持有到任务终态才结算，中间要跨过 count 张图
+ * ——单张的最坏耗时按默认配置就有 54 分钟，远超 billing 的 10 分钟全局兜底。不声明的话
+ * 预留会在出图途中被按 actual=0 关账，之后每次 settle 都静默返回 0，无人报错。
+ *
+ * 心跳间隔正是 {@link portraitTaskStaleMs}（每出完一张刷一次），所以直接拿它当单位；
+ * 续跑余量走默认——reaper 捞到卡单是**交回续跑**而不是收尸，同一笔预留会被延长。
+ *
+ * try-on 复用这里：它的重试预算、count 上限（4）与心跳语义与 portrait 完全一致。
+ */
+export function portraitReservationTtlSeconds(count: number, env: NodeJS.ProcessEnv = process.env): number {
+  return reservationTtlSeconds({ perHeartbeatMs: portraitTaskStaleMs(env), heartbeats: count, env });
 }

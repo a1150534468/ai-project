@@ -49,6 +49,7 @@ import {
   PORTRAIT_ACTIVE_STATUSES,
   PORTRAIT_TERMINAL_STATUSES,
   portraitMaxAttempts,
+  portraitReservationTtlSeconds,
   portraitRetryDelayMs,
 } from "./portrait-shared.js";
 
@@ -148,7 +149,7 @@ type PortraitReferenceRow = {
 };
 
 interface PortraitBilling {
-  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
+  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number; reservationTtlSeconds?: number }) => Promise<{ reserved: number }>;
   settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
   listResourcePrices?: () => Promise<{ data: WorkflowResourcePriceRow[] }>;
@@ -539,7 +540,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     for (const row of rows) {
       if (row.status === "pending") {
         try {
-          await billing.reserveResource({ operationId: row.billingOperationId, userId: row.userId, resourceKey: row.billingResourceKey, units: row.count });
+          await billing.reserveResource({ operationId: row.billingOperationId, userId: row.userId, resourceKey: row.billingResourceKey, units: row.count, reservationTtlSeconds: portraitReservationTtlSeconds(row.count) });
           const reserved = await prisma.portraitTask.update({
             where: { id: row.id },
             data: { status: "running", billingReservedUnits: row.count, billingStatus: "reserved", error: null },
@@ -767,7 +768,9 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
         },
         include: { outputs: true },
       }) as unknown as PortraitTaskRow;
-      await billing.reserveResource({ operationId: billingOperationId, userId, resourceKey, units: parsed.data.count });
+      // 单张图的最坏耗时按默认配置就有 54 分钟，count 最多 4 张：不声明有效期的话
+      // billing 的 10 分钟兜底会在出图途中把预留按 actual=0 关账，之后 settle 静默返回 0。
+      await billing.reserveResource({ operationId: billingOperationId, userId, resourceKey, units: parsed.data.count, reservationTtlSeconds: portraitReservationTtlSeconds(parsed.data.count) });
       reserved = true;
       task = await prisma.portraitTask.update({ where: { id: task.id }, data: { status: "running", billingReservedUnits: parsed.data.count, billingStatus: "reserved" }, include: { outputs: true } }) as unknown as PortraitTaskRow;
     } catch (error) {

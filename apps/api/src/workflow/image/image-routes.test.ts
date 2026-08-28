@@ -4,6 +4,7 @@ import { describe, expect, it, beforeEach, vi } from "vitest";
 import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { imageWorkflowRoutes, loadImageAttemptTimeoutMs, loadImageMaxAttempts } from "./image-routes.js";
+import { imageReservationTtlSeconds } from "./image-shared.js";
 
 interface ImageRow {
   id: string;
@@ -377,6 +378,8 @@ describe("image workflow routes", () => {
       userId: "u1",
       resourceKey: "image_generation_1k",
       units: 2,
+      // 注入的 maxAttempts 是 3（createApp 里写死），窗口必须按注入值算而不是环境默认值。
+      reservationTtlSeconds: imageReservationTtlSeconds({ count: 2, maxAttempts: 3 }),
     });
     await scheduled[0];
     expect(billing.settleResource).toHaveBeenCalledWith({

@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "@prisma/client";
 import { portraitWorkflowRoutes } from "./portrait-routes.js";
+import { portraitReservationTtlSeconds } from "./portrait-shared.js";
 import { LEGACY_PORTRAIT_PRESET_NAMES, PORTRAIT_CONSENT_VERSION } from "./portrait-prompts.js";
 
 function priceRow(resourceKey: string, rate: number) {
@@ -313,7 +314,7 @@ describe("portrait workflow routes", () => {
     expect(response.statusCode).toBe(202);
     await Promise.all(scheduled);
 
-    expect(billing.reserveResource).toHaveBeenCalledWith({ operationId: "portrait:portrait-request-1", userId: "u1", resourceKey: "image_generation_2k", units: 2 });
+    expect(billing.reserveResource).toHaveBeenCalledWith({ operationId: "portrait:portrait-request-1", userId: "u1", resourceKey: "image_generation_2k", units: 2, reservationTtlSeconds: portraitReservationTtlSeconds(2) });
     expect(billing.settleResource).toHaveBeenCalledWith({ operationId: "portrait:portrait-request-1", resourceKey: "image_generation_2k", units: 2 });
     expect(billing.refundResource).not.toHaveBeenCalled();
     expect(callImageEdit).toHaveBeenCalledTimes(2);
@@ -524,6 +525,7 @@ describe("portrait workflow routes", () => {
       userId: "u1",
       resourceKey: "image_generation_2k",
       units: 1,
+      reservationTtlSeconds: portraitReservationTtlSeconds(1),
     });
     expect(db.tasks[0]).toMatchObject({ status: "completed", billingStatus: "settled", completedCount: 1 });
     await app.close();

@@ -4,6 +4,7 @@ import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRedisWorkflowMutationLocker, type WorkflowMutationLocker } from "./ecom-route-mutation.js";
+import { ecomImageReservationTtlSeconds } from "./ecom-route-helpers.js";
 import { ecomWorkflowRoutes } from "./ecom-routes.js";
 
 type AssetRow = { id: string; userId: string; requestId: string; requestIndex: number; prompt: string; model: string; size: string; originalUrl: string; thumbnailUrl: string; objectKey: string | null; mime: string; width?: number | null; height?: number | null; createdAt: Date };
@@ -290,6 +291,11 @@ describe("ecom workflow routes", () => {
     const chargedMasterOperationId = successBilling.reserveResource.mock.calls[0]?.[0]?.operationId as string;
     expect(success.statusCode).toBe(200); expect(successBilling.reserveResource).toHaveBeenCalledTimes(1);
     expect(successBilling.reserveResource).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: "image_generation_1k" }));
+    // 预留必须带上有效期：单张图的最坏耗时是 billing 那个 10 分钟兜底的三倍多，漏了就在出图
+    // 途中被按 actual=0 关账，之后 settle 静默返回 0，而这条链的结算失败是故意不致命的。
+    expect(successBilling.reserveResource).toHaveBeenCalledWith(
+      expect.objectContaining({ reservationTtlSeconds: ecomImageReservationTtlSeconds({ maxAttempts: 2, retryDelayMs: 0 }) }),
+    );
     expect(success.json().data.workflow.billingOperationIds).toEqual([chargedMasterOperationId]);
     expect(success.json().data.workflow.masterAsset?.originalUrl).toBe(dataUrl);
     await successApp.close();

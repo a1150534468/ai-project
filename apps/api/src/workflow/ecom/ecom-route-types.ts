@@ -77,7 +77,7 @@ export type SegmentRecord = z.infer<typeof segmentRecordSchema>;
 export type BillingForEcom = {
   readonly chargeResource: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ charged: number }>;
   /** 预留 + 结算：请求档预留，交付档结算，中转缩水时差额自动退回。 */
-  readonly reserveResource?: (args: { operationId: string; userId: string; resourceKey: string; units: number }) => Promise<{ reserved: number }>;
+  readonly reserveResource?: (args: { operationId: string; userId: string; resourceKey: string; units: number; reservationTtlSeconds?: number }) => Promise<{ reserved: number }>;
   readonly settleResource?: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   readonly refundResource: (operationId: string) => Promise<{ success: boolean }>;
   readonly listResourcePrices?: () => Promise<{ data: WorkflowResourcePriceRow[] }>;

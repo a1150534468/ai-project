@@ -37,7 +37,7 @@ import { resolveImageChargeRow, type WorkflowResourcePriceRow } from "../_shared
 import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "../_shared/image-delivered-tier.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
-import { portraitMaxAttempts, portraitRetryDelayMs, portraitTaskStaleMs } from "../portrait/index.js";
+import { portraitMaxAttempts, portraitReservationTtlSeconds, portraitRetryDelayMs, portraitTaskStaleMs } from "../portrait/index.js";
 import { buildTryOnPrompt, TRY_ON_CONSENT_VERSION } from "./try-on-prompts.js";
 
 const TRY_ON_REFERENCE_KINDS = ["garment_front", "garment_detail", "model"] as const;
@@ -105,6 +105,7 @@ interface TryOnBilling {
     userId: string;
     resourceKey: string;
     units: number;
+    reservationTtlSeconds?: number;
   }) => Promise<{ reserved: number }>;
   settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
   refundResource: (operationId: string) => Promise<{ success: boolean }>;
@@ -626,6 +627,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
             userId: row.userId,
             resourceKey: row.billingResourceKey,
             units: row.count,
+            reservationTtlSeconds: portraitReservationTtlSeconds(row.count),
           });
           const reserved = (await prisma.tryOnTask.update({
             where: { id: row.id },
@@ -954,6 +956,8 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
         userId: req.userId,
         resourceKey,
         units: parsed.data.count,
+        // 与 portrait 同一套重试预算与心跳语义，窗口口径直接复用，别在这里另算一份。
+        reservationTtlSeconds: portraitReservationTtlSeconds(parsed.data.count),
       });
       reserved = true;
       task = (await prisma.tryOnTask.update({

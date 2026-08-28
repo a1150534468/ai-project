@@ -7,7 +7,7 @@ import { ecomMasterResourceKey, ecomModelSizeError, ecomSegmentResourceKey, ecom
 import { deliveredImageResolution, pixelsFromSize } from "../_shared/image-delivered-tier.js";
 import { authUserId } from "../_shared/route-auth.js";
 import { loadOwnedReferenceImages, loadReferenceImage } from "../_shared/reference-image.js";
-import { appendBillingOperationId, buildSegmentRecord, findCurrentWorkflow, findWorkflowOrReply, listRecentWorkflows, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "./ecom-route-helpers.js";
+import { appendBillingOperationId, buildSegmentRecord, ecomImageReservationTtlSeconds, findCurrentWorkflow, findWorkflowOrReply, listRecentWorkflows, loadSerializedWorkflow, loadSerializedWorkflows, parseSegments, parseWorkflowProduct, readBillingClientEnv, RefundCompensationError, resolveLanguage, safeErrorMessage, serializeAsset } from "./ecom-route-helpers.js";
 import { createRedisWorkflowMutationLocker, workflowCreateMutationKey, workflowMutationKey, WorkflowMutationConflictError } from "./ecom-route-mutation.js";
 import { adoptMasterRequestSchema, imageBodySchema, masterRequestSchema, parsePricingModelQuery, segmentParamsSchema, workflowParamsSchema, type EcomRouteDeps } from "./ecom-route-types.js";
 import { ecomMasterPriceFallback, ecomSegmentPriceFallback, ECOM_RESOURCE_KEYS, resolveImageChargeRow, resolveImagePricingMatrix, type WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
@@ -78,6 +78,12 @@ async function runChargedOperation<T>(args: {
   readonly workflow: EcomWorkflowRow;
   readonly operationPrefix: string;
   readonly resourceKey: string;
+  /**
+   * 预留有效期（秒）。必填而不是可选：漏传就退回 billing 的 10 分钟全局兜底，
+   * 而单张图的最坏耗时是它的三倍多，预留会在出图途中被按 actual=0 关账，
+   * 之后 settle 静默返回 0——下面那个 onSettleError 也不会响，因为 settle 本身没报错。
+   */
+  readonly reservationTtlSeconds: number;
   /** 结算档位 key：由实际交付像素决定，返回 null 表示按请求档结算。 */
   readonly settleKeyFor?: (result: T) => Promise<string | null>;
   readonly onSettleError?: (error: unknown, operationId: string) => void;
@@ -95,7 +101,13 @@ async function runChargedOperation<T>(args: {
   const { reserveResource, settleResource } = args.billing;
   const canReserve = Boolean(reserveResource && settleResource);
   if (canReserve) {
-    await reserveResource!({ operationId, userId: workflow.userId, resourceKey: args.resourceKey, units: 1 });
+    await reserveResource!({
+      operationId,
+      userId: workflow.userId,
+      resourceKey: args.resourceKey,
+      units: 1,
+      reservationTtlSeconds: args.reservationTtlSeconds,
+    });
   } else {
     await args.billing.chargeResource({ operationId, userId: workflow.userId, resourceKey: args.resourceKey, units: 1 });
   }
@@ -225,6 +237,7 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
       workflow,
       operationPrefix: `ecom-master:${workflow.id}:a`,
       resourceKey: chargeRow.resourceKey,
+      reservationTtlSeconds: ecomImageReservationTtlSeconds({ maxAttempts, retryDelayMs }),
       settleKeyFor: (committed: CommittedArtifact) => settleKeyForAsset({
         asset: committed.asset,
         workflow,
@@ -281,6 +294,7 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
       workflow,
       operationPrefix: `ecom-segment:${workflow.id}:${index}:a`,
       resourceKey: chargeRow.resourceKey,
+      reservationTtlSeconds: ecomImageReservationTtlSeconds({ maxAttempts, retryDelayMs }),
       settleKeyFor: (committed: CommittedArtifact) => settleKeyForAsset({
         asset: committed.asset,
         workflow,

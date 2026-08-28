@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { runReservedArticleTextTask } from "./article-workflow-billing.js";
 import { reapStaleArticleWorkflowProjects } from "./article-workflow-reaper.js";
+import { articleTextReservationTtlSeconds } from "./article-workflow-shared.js";
 import {
   buildArticleWorkflowApp,
   buildArticleWorkflowHtml,
@@ -9,7 +10,7 @@ import {
   createArticleWorkflowPrismaMock,
 } from "./article-workflow-test-helpers.js";
 
-type BillingCallArgs = { operationId: string; userId: string; resourceKey: string; units: number };
+type BillingCallArgs = { operationId: string; userId: string; resourceKey: string; units: number; reservationTtlSeconds?: number };
 
 function createBillingStub() {
   return {
@@ -36,6 +37,9 @@ describe("runReservedArticleTextTask", () => {
 
     const reserved = billing.reserveResource.mock.calls[0]![0];
     expect(reserved.operationId).toMatch(/^article-text:p-1:/);
+    // 这笔"文本"预留的窗口实际含全部出图批次，远超 billing 的 10 分钟兜底：
+    // 不声明有效期就会在出图途中被按 actual=0 关账，之后 settle 静默返回 0。
+    expect(reserved.reservationTtlSeconds).toBe(articleTextReservationTtlSeconds());
     expect(onReserved).toHaveBeenCalledWith(reserved.operationId);
     expect(billing.settleResource).toHaveBeenCalledOnce();
   });

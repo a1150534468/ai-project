@@ -3,11 +3,12 @@
  *
  * 单独一个文件的唯一原因是破循环导入：image-routes 要 import reaper 来起定时器，
  * reaper 又要用 routes 里的状态常量与阈值。让两边都只依赖本文件；本文件只许依赖
- * 「自己谁也不 import」的叶子模块（image-dispatch-gate.ts 就是这样一个），
- * 这样循环从根上不成立。形状对齐 portrait-shared.ts / article-workflow-shared.ts。
+ * 「自己谁也不 import」的叶子模块（image-dispatch-gate.ts / reservation-window.ts
+ * 都是这样的），这样循环从根上不成立。形状对齐 portrait-shared.ts / article-workflow-shared.ts。
  */
 
 import { DEFAULT_IMAGE_UPSTREAM_QUEUE_WAIT_MS } from "../_shared/image-dispatch-gate.js";
+import { reservationTtlSeconds } from "../_shared/reservation-window.js";
 
 const DEFAULT_RETRY_DELAY_MS = 3000;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
@@ -59,6 +60,26 @@ export const DEFAULT_STALE_TASK_MS =
 export function loadImageStaleTaskMs(env: NodeJS.ProcessEnv = process.env): number {
   const value = Number(env.IMAGE_STALE_TASK_MS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_STALE_TASK_MS;
+}
+
+/**
+ * 预留有效期（秒）。一笔预留从建行一直持有到任务终态结算，跨越 count 张图 × 每张的全部
+ * 重试，远超 billing 的 10 分钟全局兜底（默认取值下单次尝试超时本身就是 600s），
+ * 不声明就会在运行途中被按 actual=0 关账，之后每次结算都静默返回 0。
+ *
+ * 心跳是「每次重试写一行」，所以心跳间隔用 {@link loadImageStaleTaskMs}，
+ * 要跨过的间隔数 = 张数 × 单张尝试次数（闸门会把并发扇出压成接近串行，按最坏算）。
+ * maxAttempts 由调用方传入：那个 loader 在 image-routes 里，本文件不能反向依赖它。
+ */
+export function imageReservationTtlSeconds(
+  args: { readonly count: number; readonly maxAttempts: number },
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  return reservationTtlSeconds({
+    perHeartbeatMs: loadImageStaleTaskMs(env),
+    heartbeats: Math.max(1, args.count) * Math.max(1, args.maxAttempts),
+    env,
+  });
 }
 
 /**

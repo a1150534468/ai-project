@@ -3,6 +3,7 @@ import sharp from "sharp";
 import { InsufficientBalanceError } from "@ai-assistant/billing";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ecomMainImageRoutes } from "./ecom-main-routes.js";
+import { ecomImageReservationTtlSeconds } from "./ecom-route-helpers.js";
 
 type JobRow = {
   id: string;
@@ -222,6 +223,11 @@ describe("ecom main image routes", () => {
     expect(job.images).toHaveLength(2);
     expect(job.images.every((i: { status: string }) => i.status === "ready")).toBe(true);
     expect(billing.reserveResource).toHaveBeenCalledTimes(2);
+    // 预留必须带上有效期：单张图的最坏耗时远超 billing 那个 10 分钟兜底，漏了就在出图途中
+    // 被按 actual=0 关账，之后 settle 静默返回 0（图照发、钱没收到）。
+    expect(billing.reserveResource).toHaveBeenCalledWith(
+      expect.objectContaining({ reservationTtlSeconds: ecomImageReservationTtlSeconds({ maxAttempts: 2, retryDelayMs: 1 }) }),
+    );
   });
 
   it("某张出图失败：该张 status=failed，job=partial，仅对成功张扣费", async () => {
