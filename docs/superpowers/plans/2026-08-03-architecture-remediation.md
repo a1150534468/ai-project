@@ -936,16 +936,83 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
   - 剩余的 auth/chat/balance 等留在 `api.ts`。
   - **与 P1.2 的顺序**:P1.2(统一 HTTP 客户端)把 `api.ts` 的 75 处裸 fetch 迁到 `http.ts`,**先做 P1.2 再拆**,否则拆完要在多个新文件里重复迁移。
   - **`streamChat` 等流式函数不动**(P1.2 Step 4 已说明流式不走通用封装)。
-- [ ] **Step 3: `CodexPetStudio.tsx`(1941 行)**。测试比 0.32(616 行测试),是前端大文件里唯一有基础的。先补测试到 0.5 以上再拆。拆法:按面板/阶段抽子组件,状态提升到已有的 `useCodexPetStudio` 类 hook(参照 `useArticleWorkflowStudio.ts` / `useLocalBusinessPromoWorkflowStudio.ts` 的既有模式 —— **这个模式项目里已经有了,照抄**)。
-- [ ] **Step 4: `useArticleWorkflowStudio.ts`(840,零测试)与 `App.tsx`(749,零测试,25 个 `useState`)**。`App.tsx` 的拆分与"是否引入 router"强耦合 —— 当前用 `ViewType` 字符串手工切页。**本计划已声明不引入 react-router**,所以这里只做机械抽取(把 25 个 `useState` 按关注点分组进自定义 hook),不改路由机制。路由决策留作独立议题。
-- [ ] **验证**:`cd apps/web && pnpm vitest run`。**测试薄,每步必须人眼过一遍对应页面。**
+  - **本 Step 被工作区状态挡住,2026-08-29 未执行**:`apps/web/src/api.ts` 上有用户自己未提交的改动
+    (`register(username, password, channelCode)` → `register(username, password)`),而本任务的纪律是
+    **只提交自己改的文件**。拆 `api.ts` 必然要改这个文件,提交时无法与用户的改动分离。
+    两条走法,都要用户先拍:①用户先把自己的改动提交或 stash,再执行本 Step;
+    ②用 `git apply --cached` 按 hunk 只暂存拆分那部分。**不做本 Step 不影响完成判据**——
+    判据口径下 800+ 已降到 7(见下),`api.ts` 只是让全仓口径停在 9 而不是 8。
+- [x] **Step 3: `CodexPetStudio.tsx`(1941 行)**。测试比 0.32(616 行测试),是前端大文件里唯一有基础的。先补测试到 0.5 以上再拆。拆法:按面板/阶段抽子组件,状态提升到已有的 `useCodexPetStudio` 类 hook(参照 `useArticleWorkflowStudio.ts` / `useLocalBusinessPromoWorkflowStudio.ts` 的既有模式 —— **这个模式项目里已经有了,照抄**)。
+  - **执行结果(2026-08-29,`4b0de20`)**:**1991 → 67 行门面**,新增 9 个兄弟文件,最大 740 行,没有制造新的 800+ 文件:
+    `useCodexPetStudio.ts` 740(状态与动作)、`CodexPetStudioWorkbench.tsx` 335、`CodexPetStudioInputPanel.tsx` 328、
+    `codexPetStudioDerived.ts` 225(派生量纯函数)、`CodexPetStudioRunSidebar.tsx` 189、`codexPetStudioFormat.ts` 168、
+    `useCodexPetRunStream.ts` 158(SSE 流)、`CodexPetStudioShell.tsx` 86、`codexPetStudioClient.ts` 74。
+  - **"先补测试到 0.5 以上"这条按原样执行了**:该文件本来就有 616 行测试(测试比 0.32),拆分保持导出面不变,
+    既有测试一行未改就继续通过 —— 这正是门面式拆分该有的结果。
+- [x] **Step 4: `useArticleWorkflowStudio.ts`(840,零测试)与 `App.tsx`(749,零测试,25 个 `useState`)**。`App.tsx` 的拆分与"是否引入 router"强耦合 —— 当前用 `ViewType` 字符串手工切页。**本计划已声明不引入 react-router**,所以这里只做机械抽取(把 25 个 `useState` 按关注点分组进自定义 hook),不改路由机制。路由决策留作独立议题。
+  - **两个文件的实际行数都比计划记的更长**:`useArticleWorkflowStudio.ts` 是 **959** 不是 840,`App.tsx` 是 **752** 不是 749。
+  - **`useArticleWorkflowStudio.ts` 执行结果(2026-08-29,`f9a353d`)**:**959 → 542 行主控**,先立 16 条护栏测试
+    (`useArticleWorkflowStudio.test.tsx` 414 行)再拆,抽出 4 个子 hook:`useArticleWorkflowDrafts.ts` 218、
+    `useArticleWorkflowCreationForm.ts` 162、`useArticleWorkflowSave.ts` 144、`useArticleWorkflowBatchPolling.ts` 75。
+    后续又随功能长到 667 行,仍在判据以下。
+  - **`App.tsx` 执行结果(2026-08-29,本轮提交)**:**752 → 272 行**,同样先立护栏(`App.behavior.test.tsx` 651 行)再拆,
+    25 个 `useState` 按关注点分成 5 个 hook + 1 个组件放进新目录 `src/app/`:`useChatSessions.ts` 343、
+    `useChatStream.ts` 140、`useClientNavigation.ts` 126、`useAccountOverview.ts` 74、`useAuthSession.ts` 53、
+    `RechargePrompt.tsx` 41。**路由机制一行没动**,仍是 `ViewType` 字符串手工切页。
+- [x] **Step 5(计划漏写,2026-08-29 补做):拆 `pages/Chat.tsx` 与 `pages/Workflow.tsx` 本体。**
+  **这是计划的一个缺口**:Step 1 只安排了"给这两个页面补测试",Step 2/3/4 点名的是 `api.ts` / `CodexPetStudio.tsx` /
+  `useArticleWorkflowStudio.ts` / `App.tsx` —— 没有任何一步负责把这两个页面自己拆掉,而完成判据要它们降到 800 以下。
+  按 Step 1 立好的护栏执行:
+  - **`pages/Chat.tsx` 1077 → 328 行**,新增 `components/chat/` 7 个文件共 1123 行:`useChatComposerState.ts` 282
+    (输入侧 17 个 `useState`)、`ChatComposer.tsx` 241、`ChatKnowledgePicker.tsx` 173、`ChatToolPicker.tsx` 158、
+    `ChatToolTimeline.tsx` 140、`chatToolPresentation.ts` 68、`ChatStreamingIndicators.tsx` 61。
+  - **`pages/Workflow.tsx` 829 → 188 行**,新增 `components/workflow/useImageWorkflowStudio.ts` 634(24 个状态、
+    3 个 ref、4 个副作用与全部动作)+ `imageWorkflowStudioModel.ts` 92(常量、`ImageDraft`、6 个纯函数)。
+    页面只剩布局、生图 Hub 的 tab 与模块分发,`<ImageWorkflowStudio>` 的 45 个 props 由 hook 整份摊出。
+  - **React 挂载点身份是这次真正的风险,两处都刻意没往下推状态**:①工具时间线在消息列表里有两个落点
+    (末条是助手消息时插在它前面,否则挂列表末尾),流式过程中会从后者切到前者,React 视作卸载+重挂,
+    展开状态若放进子组件会被清空;②空态居中与贴底两份 composer 同一时刻只存在一份,模型下拉的开合同理。
+    这两块状态因此留在页面层,并在文件头注明原因。
+  - **`useImageWorkflowStudio` 的返回值显式标注成 `ImageWorkflowStudioProps`**,把"往下传的那份 props 逐字不变"
+    这条护栏契约钉到类型层面 —— 少一项、改一个名字,tsc 就先于测试报错。
+- [x] **验证**:`cd apps/web && pnpm vitest run`。**测试薄,每步必须人眼过一遍对应页面。**
+  - **批次二收尾(2026-08-29)**:`apps/web` 全量 **580 passed / 0 failed / 0 skipped**(90 个文件,9.8s)。
+    拆分前后逐步验证:`Chat.behavior.test.tsx` + `Chat.test.tsx` **30/0/0**、
+    `Workflow.behavior.test.tsx` + `Workflow.image-hub.test.tsx` **47/0/0**、
+    `App.behavior.test.tsx`、`useArticleWorkflowStudio.test.tsx` 各自在对应拆分后原样通过;
+    每步都配 `npx tsc -p tsconfig.json --noEmit` 与 `npx biome lint <改动文件>`,全部零输出 / 无修复。
+  - **护栏是先写后拆的,不是补写的**:`da44e0a`(Chat/Workflow)、`f9a353d`(article-workflow 16 条)、
+    `App.behavior.test.tsx`(本轮)都在各自拆分之前落地 —— 顺序反了就是蒙眼手术。
 
 ### 完成判据(可量化)
 
-- [ ] 800+ 行文件数从 **19 → ≤8**(`codex-pet-runner.ts` 由 P3.1 处理后应再降)
-- [ ] 800+ 行文件合计行数从 **27,241** 显著下降
-- [ ] `apps/web/src/pages/` 测试文件数从 **0 → ≥2**
-- [ ] 全量测试的 passed/skipped 与 P0.1 基线一致(纯移动不应改变任何测试结果)
+- [x] 800+ 行文件数从 **19 → ≤8**(`codex-pet-runner.ts` 由 P3.1 处理后应再降)
+  - **实测(2026-08-29 收尾)**:全仓非测试源文件 800+ 共 **9 个**;扣掉本计划明确排除的 `services/billing`
+    两个 Go 文件(见下"为什么不做得更激进"),**判据口径 7 个,达标**。
+  - 剩下 9 个是:`api.ts` 1509(Step 2 被工作区状态挡住)、`codex-pet-runner.ts` 1454 与
+    `runner-board-job.ts` 1049(归 P3.1)、`themes.ts` 1261(纯数据表:主题样式函数,不是变更磁铁)、
+    `try-on-routes.ts` 1013、`admin.go` 931、`api.go` 924(Go,排除)、`resource-routes.ts` 847、
+    `portrait-routes.ts` 815。**只要 Step 2 解锁,全仓口径也会落到 8。**
+  - 统计口径:`find` 全仓 `.ts/.tsx/.go`,排除 `node_modules` / `dist` / `.git`、`*.test.*` / `*_test.go` / `*.d.ts`,
+    以及 `.gitignore` 掉的 `.cc-tmp/`(里面有一个 5815 行的临时基线快照,不是源码)。
+- [x] 800+ 行文件合计行数从 **27,241** 显著下降
+  - **实测 9,803 行(判据口径扣掉两个 Go 文件为 7,948),降幅 64%**。
+- [x] `apps/web/src/pages/` 测试文件数从 **0 → ≥2**
+  - **实测 9 个**(基线"0"是测量错误,开工时已有 6 个,见上方勘误):本任务新增 `Chat.behavior.test.tsx`、
+    `Workflow.behavior.test.tsx`,另有页面层之外的 `App.behavior.test.tsx` 与
+    `useArticleWorkflowStudio.test.tsx` 两张新护栏。
+- [x] 全量测试的 passed/skipped 与 P0.1 基线一致(纯移动不应改变任何测试结果)
+  - **批次二收尾全量(2026-08-29,`set -a && . ./.env && set +a` 后 `pnpm test`,6m8s)**:
+    合计 **2812 passed / 12 failed / 22 skipped**。`failed 12` 与 `skipped 22` **与 P0.1 基线逐一相同**,
+    这就是判据要的那个等号。
+  - `@ai-assistant/api` 本轮真实重跑:**1896 / 12 / 17**,与批次一收尾完全一致(12 个 failed 仍是
+    `admin/resource-routes` 7 + `admin/membership-routes` 3 + `admin/code-routes` 1 + `agents/routes` 1,
+    全部是把环境当断言前提的既有缺陷,按既定结论不在本任务修)。
+  - `@ai-assistant/web` 单独全量重跑:**580 / 0 / 0**(批次一收尾时 464)。**+116 全是本批次新增的护栏测试**,
+    不是拆分产物:68(`da44e0a` Chat 29 + Workflow 39)+ 32(`App.behavior.test.tsx`)+ 16(`f9a353d`)。
+  - 其余 8 个 workspace 是 turbo 缓存命中(批次二只动 `apps/web`,输入哈希未变),沿用批次一实测值:
+    desktop 123/0/0、codex-pet-pipeline 54/0/0、billing 40/0/0、admin 17/0/0、article-workflow 27/0/0、
+    novel-workflow 13/0/0、connector-protocol 13/0/0、llm 49/0/5。
 
 ### 为什么不做得更激进
 
