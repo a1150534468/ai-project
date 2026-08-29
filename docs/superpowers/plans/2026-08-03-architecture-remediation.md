@@ -846,7 +846,9 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 ### 批次一:后端(测试已就绪,纯移动,约 3-4 天)
 
-- [ ] **通用纪律:纯移动,零行为变化**。每个文件拆完保留原文件名作**门面**,只 re-export,外部 import **一行都不改**。这是既有计划阶段 1 已验证的手法(它明确列出 6 个源文件 + 5 个测试文件作为"一行不改"的成功判据)。测试文件也不改 —— 如果拆分需要改测试,说明不是纯移动,停下重新设计。
+- [x] **通用纪律:纯移动,零行为变化**。每个文件拆完保留原文件名作**门面**,只 re-export,外部 import **一行都不改**。这是既有计划阶段 1 已验证的手法(它明确列出 6 个源文件 + 5 个测试文件作为"一行不改"的成功判据)。测试文件也不改 —— 如果拆分需要改测试,说明不是纯移动,停下重新设计。
+  - **达成证明(2026-08-29)**:批次一 9 个提交(`f2eb2c5` / `bfb3696` / `ecde051` / `a1b7033` / `6649ce1` / `2822bb9` / `35365b5` / `2abcd62` / `643b758`)的 `--name-status` 里,状态为 `M` 的既有文件**恰好只有被拆的那 9 个源文件本身 + 本计划文档**,`.test.ts` / `.tsx` 一个都没有。所以"测试文件与外部 import 零行改动"不是自述,是提交历史可复算的。
+  - **门面与非门面各一半,判据是 800 行而非"必须门面"**:`codex-pet-routes.ts` / `codex-pet-visual.ts` / `novel-task-runner.ts` / `codex-pet-packaging.ts` 做成了纯门面;`image-routes.ts`(553)、`video-routes.ts`(455)、`chat/routes.ts`(628)、`codex-pet-worker.ts`(467)、`extraction.ts`(605)保留成"编排 + 身份",因为它们导出的就是 fastify 插件本体 / 进程入口 / 模块的五个公开入口,再套一层门面只会多一层 ctx 间接。
 - [x] **Step 1: `codex-pet-routes.ts`(2930 → 5 个文件)**。接缝已勘定(18 条路由的行号已核实):
   - `codex-pet-catalog-routes.ts` — pricing/models/list(:1205-1246,约 40 行)
   - `codex-pet-project-routes.ts` — 项目 CRUD(:1247-1602,约 355 行)
@@ -888,8 +890,34 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
   - **进程级单例状态只能有一份**(同 Step 2 的 `activeGenerationTasks`):`chat/routes.ts` 的 `enabledCache` 必须和它唯一的三个访问点同文件,否则 `routes.test.ts` 注入的启用集会写到另一个副本上,表现是"注入了启用集、请求却照样放行"。同理 `CodexPetPackagingDeferredError` 只允许一份定义(唯一 throw 在 `markJobDeferred`,唯一 `instanceof` 在 `codex-pet-runner.ts`),出现第二份会让可重试的打包延后被当成硬失败终结整个 run。
   - **验证**:每个文件 `pnpm typecheck` 11/11 + `tsc --noUnusedLocals` 在新文件零告警 + 该域测试。worker 41 passed / 0 failed / 0 skipped;visual 70 / 0 / 8;video 41 / 0 / 0;novel 38 / 0 / 0 与 49 / 0 / 0;codex-pet 域 309 / 0 / 8;chat 27 / 0 / 0;codex-pet-pipeline 54 / 0 / 0。**测试文件与全部外部 import 零行改动。**
   - **完成判据的进度**:非测试源文件 800+ 行从基线 **19 降到 11**。剩下的 11 个里 5 个属于批次二前端(`CodexPetStudio.tsx` 1991、`api.ts` 1509、`Chat.tsx` 1077、`useArticleWorkflowStudio.ts` 959、`Workflow.tsx` 829)、2 个归 P3.1(`codex-pet-runner.ts` 1454、阶段 1 拆出来的 `runner-board-job.ts` 1049)、4 个本就不在批次一名单(`themes.ts` 1261 是数据表、`try-on-routes.ts` 1013、`resource-routes.ts` 847 判定为"先补测试"、`portrait-routes.ts` 815)。
-- [ ] **Step 4: 与 P3.1 阶段 1 的冲突规避**。`codex-pet-runner.ts` 由既有计划处理,本任务**不碰**。但 `codex-pet-routes.ts` / `codex-pet-worker.ts` / `codex-pet-packaging.ts` / `codex-pet-visual.ts` 在阶段 1 的**门面兼容契约**里被列为"一行都不改"的文件 —— 意味着**本 Step 与阶段 1 不能并行**。二选一:先做本任务再做阶段 1(阶段 1 的契约需相应更新),或先阶段 1 再本任务(**推荐,阶段 1 的 37 步已写好**)。
-- [ ] **验证**:每步 `pnpm typecheck` + 该域测试。阶段收尾跑全量,对照 P0.1 记录的基线三元组。
+- [x] **Step 4: 与 P3.1 阶段 1 的冲突规避**。`codex-pet-runner.ts` 由既有计划处理,本任务**不碰**。但 `codex-pet-routes.ts` / `codex-pet-worker.ts` / `codex-pet-packaging.ts` / `codex-pet-visual.ts` 在阶段 1 的**门面兼容契约**里被列为"一行都不改"的文件 —— 意味着**本 Step 与阶段 1 不能并行**。二选一:先做本任务再做阶段 1(阶段 1 的契约需相应更新),或先阶段 1 再本任务(**推荐,阶段 1 的 37 步已写好**)。
+  - **执行结果(2026-08-29)**:走的是推荐路径 —— 阶段 1 于 2026-08-22 完成,批次一 Step 1/3 在 2026-08-29 才动那些文件,**并行冲突从未发生**,本 Step 落成核对 + 更新契约记录,零代码改动。
+  - **本 Step 原文有一处事实错误**:`codex-pet-routes.ts` 与 `codex-pet-visual.ts` **不在**阶段 1 的门面兼容契约里。契约列的恰好 6 个是 `codex-pet-worker.ts` / `codex-pet-packaging.ts` / `codex-pet-failed-continuation.ts` / `codex-pet-generated-board-recovery.ts` / `codex-pet-recovery-finalizer.ts` / `server.ts`。所以真实重叠只有 worker 与 packaging 两个,冲突面比本 Step 当初担心的窄一半。
+  - **契约里 6 个源文件其实只有 4 个 import 过门面**(`2edef68^` 实测):worker、packaging、generated-board-recovery、recovery-finalizer。`failed-continuation.ts` 与 `server.ts` 从未直接 import,是保守的过度覆盖 —— 这解释了阶段 1 执行记录写"4 个外部源文件 + 6 个外部测试文件"与契约原文"6 个源文件 + 5 个测试文件"的不一致,不是漏改。
+  - **批次一没有破坏契约的目的**:worker 与 packaging 被拆后,对门面的依赖只是换了文件 —— `codex-pet-packaging-artifacts.ts` / `-run.ts` / `-shared.ts` 直接 import 门面,worker 侧四个文件经 P2.1 建的 `workflow/codex-pet/index.js` 域门面间接 import。门面要求的 **11 个值 + 6 个类型今天全部仍在导出面上**(`codex-pet-runner.ts:163-197`),且已是超集(后续功能又加 12 个名字);唯一换老家的 `CODEX_PET_BOARD_PROMPT_VERSION` 现由 `codex-pet-board-version.js` 转出,门面出口不变。
+  - **阶段 1 的三条硬约束逐条复验通过**:四个信号异常类仍只在 `runner-types.ts:68/215/222/232` 各一个 `class` 定义点;`emit` 的隐藏写路径完整(`runner-lease.ts:15-47`,`$transaction` 内 `SELECT … FOR UPDATE` + lease CAS + run/project 双置 `repairing`);`MIRROR_NOT_SAFE` 抛在 `runner-standard-rows.ts:126`、匹配在 `codex-pet-runner.ts:425`。
+  - **顺带查出一件归 P3.1 的事**:`7c98eb2`(2026-08-26「四份 look 修复循环合一为 `repairLook{A,B}Row`」)是阶段 2 第一项的内容,**已落地但阶段 2 仍未勾选**。开阶段 2 前必须先核对实际剩余范围,已写进既有计划的契约小节。
+  - 落档写进 `docs/superpowers/plans/2026-07-27-legacy-workflow-optimization.md` 契约段之后的「契约的后续状态」小节。
+- [x] **验证**:每步 `pnpm typecheck` + 该域测试。阶段收尾跑全量,对照 P0.1 记录的基线三元组。
+  - **批次一收尾全量(2026-08-29,`set -a && . ./.env && set +a` 后 `pnpm test`,6m25s)**:`failed 12` 与 `skipped 22` **与 P0.1 基线逐一相同,一例不多一例不少** —— 这正是"纯移动不应改变任何测试结果"要的那个等号。
+
+    | workspace | 基线 p/f/s (2026-08-03) | 本次 p/f/s (2026-08-29) |
+    |---|---|---|
+    | `@ai-assistant/api` | 1642 / **12** / 17 | 1896 / **12** / 17 |
+    | `@ai-assistant/web` | 416 / 0 / 0 | 464 / 0 / 0 |
+    | `@ai-assistant/desktop` | 123 / 0 / 0 | 123 / 0 / 0 |
+    | `@ai-assistant/codex-pet-pipeline` | 48 / 0 / 0 | 54 / 0 / 0 |
+    | `@ai-assistant/billing` | 31 / 0 / 0 | 40 / 0 / 0 |
+    | `@ai-assistant/admin` | 17 / 0 / 0 | 17 / 0 / 0 |
+    | `@ai-assistant/article-workflow` | 13 / 0 / 0 | 27 / 0 / 0 |
+    | `@ai-assistant/novel-workflow` | 13 / 0 / 0 | 13 / 0 / 0 |
+    | `@ai-assistant/connector-protocol` | 13 / 0 / 0 | 13 / 0 / 0 |
+    | `@ai-assistant/llm` | 12 / 0 / 5 | 49 / 0 / 5 |
+    | **合计** | **2328 / 12 / 22** | **2696 / 12 / 22** |
+
+  - **passed 从 2328 涨到 2696 不是拆分带来的**,是这一个月功能与测试增量;拆分本身贡献 0 个新用例(批次一没写过一行测试)。
+  - **12 个 failed 的文件与例数也逐一对齐基线**:`admin/resource-routes` 7、`admin/membership-routes` 3、`admin/code-routes` 1、`agents/routes` 1。全部是「billing 可达 → 200 而非 502」「S3 已配置」这类把环境当断言前提的既有缺陷,按既定结论**不在本任务修**。
+  - **22 个 skipped 同样对齐**:api 17(`.poc.` 16 + runner 集成的文件内单例 1)+ llm 5。
 
 ### 批次二:前端(必须先补测试,约 3-5 天)
 
