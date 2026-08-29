@@ -591,6 +591,63 @@ describe("Codex pet stale-run recovery", () => {
     }) }));
   });
 
+  // 这条兜底路径原来无条件写 billingChargeError: null：已交付却结算到 0 点在这里比
+  // runner 侧更隐蔽——既不报错，还会把上一次留下的诊断擦掉。
+  it("records an under-settled diagnostic when delivered calls settle to zero points", async () => {
+    const findMany = vi.fn(async () => [{
+      id: "run-under-settled",
+      projectId: "project-1",
+      userId: "user-1",
+      billingOperationId: "codex-pet:run:run-under-settled:planned-images",
+      billingResourceKey: "image_generation_2k",
+      billingReservedPoints: 2800,
+    }]);
+    const updateMany = vi.fn(async (_args: { readonly data: Record<string, unknown> }) => ({ count: 1 }));
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: { findMany, updateMany, findFirst: vi.fn(async () => ({ id: "run-under-settled" })) },
+        codexPetImageCall: { count: vi.fn(async () => 8) },
+      } as unknown as PrismaClient,
+      billing: { settleResource: vi.fn(async () => ({ settled: 0 })) },
+    })).resolves.toBe(1);
+
+    // 诊断要靠预留点数判断「这笔预留被提前关账」，所以候选查询必须把它读出来。
+    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ billingReservedPoints: true }),
+    }));
+    const data = updateMany.mock.calls[0]![0]!.data as Record<string, unknown>;
+    expect(data.billingSettledPoints).toBe(0);
+    const diagnostic = String(data.billingChargeError);
+    expect(diagnostic).toContain("8");
+    expect(diagnostic).toContain("2800");
+  });
+
+  it("clears the charge error when a settlement lands normally", async () => {
+    const updateMany = vi.fn(async (_args: { readonly data: Record<string, unknown> }) => ({ count: 1 }));
+
+    await expect(reconcilePerImageBillingSettlements({
+      prisma: {
+        codexPetRun: {
+          findMany: vi.fn(async () => [{
+            id: "run-settled",
+            projectId: "project-1",
+            userId: "user-1",
+            billingOperationId: "codex-pet:run:run-settled:planned-images",
+            billingResourceKey: "image_generation_2k",
+            billingReservedPoints: 2800,
+          }]),
+          updateMany,
+          findFirst: vi.fn(async () => ({ id: "run-settled" })),
+        },
+        codexPetImageCall: { count: vi.fn(async () => 8) },
+      } as unknown as PrismaClient,
+      billing: { settleResource: vi.fn(async () => ({ settled: 1600 })) },
+    })).resolves.toBe(1);
+
+    expect((updateMany.mock.calls[0]![0]!.data as Record<string, unknown>).billingChargeError).toBeNull();
+  });
+
   it("holds a failed run's reservation until its grace window expires", async () => {
     const at = new Date("2026-07-18T00:00:00.000Z");
     const findMany = vi.fn(async (_args: { readonly where: Record<string, unknown> }) => []);

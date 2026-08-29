@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { BillingHttpError, createBillingClient, InsufficientBalanceError } from "../index.js";
+import { BillingHttpError, createBillingClient, InsufficientBalanceError, isSilentSettlement } from "../index.js";
 
 describe("billing client", () => {
   it("reserve 余额不足抛 InsufficientBalanceError", async () => {
@@ -506,5 +506,116 @@ describe("@ai-assistant/billing 月卡管理", () => {
         body: JSON.stringify({ userId: "u1", cardId: 1, method: "wxpay" }),
       }),
     );
+  });
+});
+
+// 「有真实用量却结算到 0 点」= 预留已被兜底提前关账（wallet.Settle 对非 reserved 记录
+// 静默 return nil）。以前这类漏计费全程无人报错，哨兵负责让它必然自报。
+describe("结算静默归零哨兵", () => {
+  const settleReceipt = (settled: number) =>
+    vi.fn(async () => new Response(JSON.stringify({ settled }), { status: 200 }));
+
+  it("settleResource 有量结算到 0 点时上报，且不改变返回值", async () => {
+    const onSilentSettlement = vi.fn();
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn: settleReceipt(0), onSilentSettlement });
+    const r = await c.settleResource({
+      operationId: "codex-pet:run:run-1:planned-images",
+      resourceKey: "image_generation_2k",
+      units: 8,
+    });
+    expect(r.settled).toBe(0);
+    expect(onSilentSettlement).toHaveBeenCalledTimes(1);
+    expect(onSilentSettlement).toHaveBeenCalledWith({
+      kind: "resource",
+      operationId: "codex-pet:run:run-1:planned-images",
+      resourceKey: "image_generation_2k",
+      units: 8,
+      settled: 0,
+    });
+  });
+
+  it("正常结算不上报", async () => {
+    const onSilentSettlement = vi.fn();
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn: settleReceipt(1600), onSilentSettlement });
+    await c.settleResource({ operationId: "op", resourceKey: "image_generation_2k", units: 8 });
+    expect(onSilentSettlement).not.toHaveBeenCalled();
+  });
+
+  // 桌宠失败宽限路径就是这个形状：一次都没交付，结算 0 点是正确结果，不该报警。
+  it("零用量结算 0 点不上报", async () => {
+    const onSilentSettlement = vi.fn();
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn: settleReceipt(0), onSilentSettlement });
+    await c.settleResource({ operationId: "op", resourceKey: "image_generation_2k", units: 0 });
+    expect(onSilentSettlement).not.toHaveBeenCalled();
+  });
+
+  // 幂等重放：resource.Settle 回读记录里的 actual_points，所以重复结算拿到的是原值，
+  // 不会因为「这次没扣钱」而变成噪声。
+  it("幂等重放拿到已记账点数不上报", async () => {
+    const onSilentSettlement = vi.fn();
+    const fetchFn = settleReceipt(1600);
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn, onSilentSettlement });
+    await c.settleResource({ operationId: "op", resourceKey: "image_generation_2k", units: 8 });
+    await c.settleResource({ operationId: "op", resourceKey: "image_generation_2k", units: 8 });
+    expect(fetchFn).toHaveBeenCalledTimes(2);
+    expect(onSilentSettlement).not.toHaveBeenCalled();
+  });
+
+  it("视频结算只有输入用量时也算真实用量", async () => {
+    const onSilentSettlement = vi.fn();
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn: settleReceipt(0), onSilentSettlement });
+    await c.settleVideoResource({ operationId: "dub:1", resourceKey: "video_io", units: 0, inputUnits: 12 });
+    expect(onSilentSettlement).toHaveBeenCalledWith({
+      kind: "video",
+      operationId: "dub:1",
+      resourceKey: "video_io",
+      units: 0,
+      inputUnits: 12,
+      settled: 0,
+    });
+  });
+
+  it("响应缺 settled 字段按静默归零处理", async () => {
+    const onSilentSettlement = vi.fn();
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({}), { status: 200 }));
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn, onSilentSettlement });
+    await c.settleResource({ operationId: "op", resourceKey: "image_generation_2k", units: 3 });
+    expect(onSilentSettlement).toHaveBeenCalledWith(expect.objectContaining({ units: 3, settled: undefined }));
+  });
+
+  // 哨兵是旁路观测，落点自己炸了也不能把一笔已经成功的结算变成失败——那会让调用方
+  // 去退款或重试，比漏计费更糟。
+  it("上报落点抛错不影响结算结果", async () => {
+    const onSilentSettlement = vi.fn(() => {
+      throw new Error("logger down");
+    });
+    const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn: settleReceipt(0), onSilentSettlement });
+    await expect(c.settleResource({ operationId: "op", resourceKey: "image_generation_2k", units: 8 }))
+      .resolves.toEqual({ settled: 0 });
+    expect(onSilentSettlement).toHaveBeenCalledTimes(1);
+  });
+
+  it("未传落点时默认写 console.warn", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const c = createBillingClient({ baseUrl: "http://b", token: "t", fetchFn: settleReceipt(0) });
+      await c.settleResource({ operationId: "op-warn", resourceKey: "image_generation_2k", units: 8 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      const line = String(warn.mock.calls[0]?.[0]);
+      expect(line).toContain("结算静默归零");
+      expect(line).toContain("op-warn");
+      expect(line).toContain("8 单位真实用量只结算到 0 点");
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("isSilentSettlement 判据只看有量没钱", () => {
+    expect(isSilentSettlement({ units: 8, settled: 0 })).toBe(true);
+    expect(isSilentSettlement({ units: 0, settled: 0 })).toBe(false);
+    expect(isSilentSettlement({ units: 8, settled: 1600 })).toBe(false);
+    expect(isSilentSettlement({ units: 8, settled: Number.NaN })).toBe(true);
+    expect(isSilentSettlement({ units: 8, settled: -1 })).toBe(true);
+    expect(isSilentSettlement({ units: 0, inputUnits: 5, settled: 0 })).toBe(true);
   });
 });

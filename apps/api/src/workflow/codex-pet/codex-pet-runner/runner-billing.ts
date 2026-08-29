@@ -8,7 +8,7 @@ import {
   prepareCodexPetImageCallDispatch,
   refundCodexPetFailedExtraCall,
 } from "../codex-pet-call-ledger.js";
-import { sanitizeCodexPetDiagnosticText } from "../codex-pet-events.js";
+import { codexPetUnderSettledDiagnostic } from "../codex-pet-billing.js";
 import { currentRun, emit, updateOwnedActiveRun } from "./runner-lease.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
@@ -281,7 +281,11 @@ export async function settlePerImageRunBilling(input: {
   // 之前这种漏计费无声无息——cpr_2defdce20f99dd1a8dd3477f774de2f8 就是 8 次真实出图
   // 结算 0 点。这里留下痕迹，好让 correctCodexPetPerImageBilling 有据可依地补收；
   // 仍然照常置为 settled，因为纠正工具只认终态且 settled 的运行。
-  const underpaid = units > 0 && receipt.settled <= 0 && run.billingReservedPoints > 0;
+  const underSettled = codexPetUnderSettledDiagnostic({
+    units,
+    settledPoints: receipt.settled,
+    reservedPoints: run.billingReservedPoints,
+  });
   const changed = await input.prisma.codexPetRun.updateMany({
     where: {
       id: input.runId,
@@ -297,14 +301,7 @@ export async function settlePerImageRunBilling(input: {
       billingPoints: receipt.settled,
       billingSettlementStatus: "settled",
       billingSettledAt: new Date(),
-      ...(underpaid
-        ? {
-            billingChargeError: sanitizeCodexPetDiagnosticText(
-              `结算异常：${units} 次已交付调用只结算到 ${receipt.settled} 点（预留 ${run.billingReservedPoints} 点已被提前关账），需要按图补收`,
-              1_000,
-            ),
-          }
-        : {}),
+      ...(underSettled ? { billingChargeError: underSettled } : {}),
     },
   });
   if (changed.count !== 1 && input.workerId) throw new CodexPetLeaseLostError();

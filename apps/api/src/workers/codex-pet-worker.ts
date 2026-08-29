@@ -13,6 +13,7 @@ import {
   executeCodexPetProjectCleanup,
   appendCodexPetEvent,
   codexPetRunChannel,
+  codexPetUnderSettledDiagnostic,
   sanitizeCodexPetDiagnosticText,
   listCodexPetBillingReconciliationCandidates,
   reconcileCodexPetRunBilling,
@@ -644,7 +645,14 @@ export async function reconcilePerImageBillingSettlements(input: {
         { status: "failed", completedAt: { lte: failedSettleBefore } },
       ],
     },
-    select: { id: true, projectId: true, userId: true, billingOperationId: true, billingResourceKey: true },
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+      billingOperationId: true,
+      billingResourceKey: true,
+      billingReservedPoints: true,
+    },
     take: Math.min(500, Math.max(1, input.limit ?? 50)),
   });
   let settled = 0;
@@ -682,6 +690,14 @@ export async function reconcilePerImageBillingSettlements(input: {
         resourceKey: run.billingResourceKey!,
         units,
       });
+      // 这条兜底路径原来无条件写 billingChargeError: null，于是「已交付却结算到 0」
+      // 在这里比 runner 那侧更隐蔽：不仅没报错，还把上一次的诊断擦掉了。留痕口径与
+      // runner 共用 codexPetUnderSettledDiagnostic，正常结算时仍然清空。
+      const underSettled = codexPetUnderSettledDiagnostic({
+        units,
+        settledPoints: receipt.settled,
+        reservedPoints: run.billingReservedPoints,
+      });
       // Deliberately not guarded on terminal status: once the external settle
       // succeeded the accounting must be recorded even if the run was resumed
       // in the meantime. A lost settlement receipt risks a double settle and is
@@ -700,7 +716,7 @@ export async function reconcilePerImageBillingSettlements(input: {
           billingPoints: receipt.settled,
           billingSettlementStatus: "settled",
           billingSettledAt: now(),
-          billingChargeError: null,
+          billingChargeError: underSettled,
         },
       });
       settled += changed.count;

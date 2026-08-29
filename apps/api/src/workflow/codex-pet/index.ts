@@ -15,7 +15,11 @@ export {
   codexPetReservationTtlSeconds,
 } from "./codex-pet-reservation-window.js";
 export { CODEX_PET_PER_IMAGE_BILLING_MODE, refundCodexPetUndispatchedExtraCalls } from "./codex-pet-call-ledger.js";
-export { listCodexPetBillingReconciliationCandidates, reconcileCodexPetRunBilling } from "./codex-pet-billing.js";
+export {
+  codexPetUnderSettledDiagnostic,
+  listCodexPetBillingReconciliationCandidates,
+  reconcileCodexPetRunBilling,
+} from "./codex-pet-billing.js";
 export type { CodexPetChargeClient } from "./codex-pet-billing.js";
 export { archiveCodexPetRun } from "./codex-pet-archive.js";
 export { archiveCodexPetLegacyRuns } from "./codex-pet-read-only-archive.js";

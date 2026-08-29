@@ -1,4 +1,4 @@
-import { InsufficientBalanceError } from "@ai-assistant/billing";
+import { InsufficientBalanceError, isSilentSettlement } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { sanitizeCodexPetDiagnosticText } from "./codex-pet-events.js";
@@ -27,6 +27,31 @@ export interface CodexPetChargeClient {
     readonly resourceKey: string;
     readonly units: number;
   }) => Promise<{ readonly charged: number }>;
+}
+
+/**
+ * 按图计费的结算诊断：交付了真实调用却结算到 0 点，只有一种成因——这笔预留已被
+ * billing 侧兜底提前关账（wallet.Settle 对非 reserved 记录静默返回 nil）。
+ *
+ * runner 的 settlePerImageRunBilling 与 worker 兜底的 reconcilePerImageBillingSettlements
+ * 必须写同一句话：correctCodexPetPerImageBilling 只认终态且 settled 的运行，
+ * 巡检时靠 billingChargeError 这行字判定该不该补收，两条路径措辞不一致就会漏掉一半。
+ *
+ * 返回 null 表示这笔结算正常（含「一次都没交付所以结算 0」），调用方不该留痕。
+ */
+export function codexPetUnderSettledDiagnostic(args: {
+  readonly units: number;
+  readonly settledPoints: number;
+  readonly reservedPoints: number;
+}): string | null {
+  // !(x > 0) 而不是 x <= 0：查询漏 select billingReservedPoints 时这里是 undefined，
+  // undefined <= 0 为 false 会让诊断照写，落出「预留 undefined 点」这种假痕迹。
+  if (!(args.reservedPoints > 0)) return null;
+  if (!isSilentSettlement({ units: args.units, settled: args.settledPoints })) return null;
+  return sanitizeCodexPetDiagnosticText(
+    `结算异常：${args.units} 次已交付调用只结算到 ${args.settledPoints} 点（预留 ${args.reservedPoints} 点已被提前关账），需要按图补收`,
+    1_000,
+  );
 }
 
 export type CodexPetBillingOutcome =

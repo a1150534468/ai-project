@@ -13,6 +13,12 @@ export interface BillingClientOpts {
   baseUrl: string;
   token: string;
   fetchFn?: typeof fetch;
+  /**
+   * 结算静默归零时的落点，缺省写 console.warn。传入可改接各自的结构化日志
+   * （fastify 的 app.log、worker 的 metrics 等），但不要传空实现——那等于把
+   * 唯一的报警关掉，回到 SilentSettlementReport 里描述的那种无人报错的漏计费。
+   */
+  onSilentSettlement?: (report: SilentSettlementReport) => void;
 }
 export type PaymentMethod = "alipay" | "wxpay";
 export interface ReserveArgs {
@@ -247,6 +253,46 @@ export interface SettleVideoResourceArgs {
 export interface SettleResourceArgs {
   operationId: string; resourceKey: string; units: number;
 }
+
+/**
+ * 「有真实用量却结算到 0 点」的结算侧哨兵。
+ *
+ * billing 的 wallet.Settle 遇到已经不是 reserved 的记录会静默 return nil，
+ * 调用方只拿到 settled=0：预留被兜底提前关账（recon 按 actual=0 关掉超期预留）、
+ * 或者先退款后又来结算，都走这一条。成品照发、钱没收到、没人抛错、DB 里也不留痕——
+ * cpr_2defdce20f99dd1a8dd3477f774de2f8 就是 8 次真实出图结算 0 点，全程无人报错。
+ *
+ * 判据只有「有量 && 没钱」：单价一律 ceil 取整（learning 模式恒为 1 点），
+ * 所以正常结算只要有量就必然 >0 点。已知误报面只有一种——管理台把某个资源的
+ * 费率配成了 0（真·免费资源），那种情况下这行告警是噪声，但不会改变任何行为。
+ */
+export interface SilentSettlementReport {
+  /** resource=算力点预留结算，video=视频点结算；两条路径的静默归零成因相同。 */
+  readonly kind: "resource" | "video";
+  readonly operationId: string;
+  readonly resourceKey: string;
+  readonly units: number;
+  readonly inputUnits?: number;
+  readonly settled: number;
+}
+
+/** 结算是否静默归零。视频复合计价里输入量也是真实用量，任一侧有量就该有钱进账。 */
+export function isSilentSettlement(report: {
+  readonly units: number;
+  readonly inputUnits?: number;
+  readonly settled: number;
+}): boolean {
+  const billableUnits = Math.max(report.units, report.inputUnits ?? 0);
+  // !(settled > 0) 一并盖住 0、负数、NaN 和字段缺失，别让响应形状变化绕开哨兵。
+  return billableUnits > 0 && !(report.settled > 0);
+}
+
+export function formatSilentSettlement(report: SilentSettlementReport): string {
+  const inputUnits = report.inputUnits === undefined ? "" : ` inputUnits=${report.inputUnits}`;
+  return `[billing] 结算静默归零：${report.units} 单位真实用量只结算到 ${report.settled} 点`
+    + ` kind=${report.kind} operationId=${report.operationId} resourceKey=${report.resourceKey}${inputUnits}`
+    + "；这笔预留大概率已被兜底提前关账，需要按实际用量补收";
+}
 export interface RechargePackageRow {
   id: string; name: string; amountFen: number; points: number; enabled: boolean; sortOrder: number;
 }
@@ -270,6 +316,20 @@ export interface PointsDetail {
 
 export function createBillingClient(opts: BillingClientOpts) {
   const f = opts.fetchFn ?? fetch;
+  const reportSilentSettlement = opts.onSilentSettlement
+    ?? ((report: SilentSettlementReport) => {
+      console.warn(formatSilentSettlement(report));
+    });
+  const guardSettlement = (report: SilentSettlementReport): void => {
+    if (!isSilentSettlement(report)) return;
+    // 哨兵自身出错不能把一笔已经成功的结算变成失败——那会让调用方去退款或重试，
+    // 比漏计费更糟。
+    try {
+      reportSilentSettlement(report);
+    } catch {
+      // 落点自己坏了就只能沉默，结算结果照常返回。
+    }
+  };
   const post = async (path: string, body: unknown) => {
     const r = await f(`${opts.baseUrl}/${path}`, {
       method: "POST",
@@ -436,10 +496,16 @@ export function createBillingClient(opts: BillingClientOpts) {
       post("resource/charge", a) as Promise<{ charged: number }>,
     reserveResource: (a: ReserveResourceArgs) =>
       post("resource/reserve", a) as Promise<{ reserved: number }>,
-    settleResource: (a: SettleResourceArgs) =>
-      post("resource/settle", a) as Promise<{ settled: number }>,
-    settleVideoResource: (a: SettleVideoResourceArgs) =>
-      post("resource/settle-video", a) as Promise<{ settled: number }>,
+    settleResource: async (a: SettleResourceArgs) => {
+      const receipt = await post("resource/settle", a) as { settled: number };
+      guardSettlement({ kind: "resource", ...a, settled: receipt?.settled });
+      return receipt;
+    },
+    settleVideoResource: async (a: SettleVideoResourceArgs) => {
+      const receipt = await post("resource/settle-video", a) as { settled: number };
+      guardSettlement({ kind: "video", ...a, settled: receipt?.settled });
+      return receipt;
+    },
     refundResource: (operationId: string) =>
       post("resource/refund", { operationId }) as Promise<{ success: boolean }>,
     getUserKbQuota: (userId: string) =>
