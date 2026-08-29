@@ -389,6 +389,19 @@ flowchart TD
 - **回归钉子（已落地）**：[`pipeline.test.ts`](../packages/codex-pet-pipeline/src/pipeline.test.ts) 新增用例，用 1536×1024 真实尺寸 + 365 px 节距造板，钉住「177 行跨格接触 + 超预算邻格碎片」必须是**硬失败**，并断言 frame 1 的 `borderContactRuns` 全为 0——因为边界 run 是**按连通域**度量的，外来碎片一条也不贡献，所以 run 阈值放得再宽都管不到它。以后想靠调 `maxBorderRunFraction` 修这一行的人，会先撞上这条测试。
 - **预防**：确定性闸门报错时，先分开量两件事——**「阈值判得对不对」**和**「放宽了这一行能不能过」**。本例第二问的答案是不能，于是整个「阈值太严」的方向根本不存在，省掉一次改坏判定的机会。以及：**约束必须写成被约束方能观测的量**；在没有印刷格线的隐式网格上，「不要越过格线」对模型等于什么都没说。
 
+### 6.14 8 张图交付了，1600 点一分没收，两个库都显示「成功」（2026-08-27 发生 / 08-29 补收）
+
+> 同一个样本 run `cpr_2defdce20f99dd1a8dd3477f774de2f8`（就是 6.13 那个卡在 `row-failed` 的运行）。**机制、判据、修法与补收 runbook 全部写在 [billing.md 第八节](./billing.md)，这里只留桌宠侧要记住的部分。**
+
+- **现象**：8 次 planned 出图全部成功交付，`CodexPetImageCall` 上每条都写着 `points: 200`，但运行的 `billingSettledPoints = 0`，Go 侧 `usage_records` 是 `settled` / `actual_points = 0`。**没有任何一条报错**——TS 侧甚至还显示 `reserved` / 2800，与账本长期不一致而无人发现。
+- **根因不在桌宠**：没有任何调用方传过 `units: 0`。预留在创建 11 分钟后被 `recon` 兜底按 `actual=0` 关掉（`reservation_expires_at` 是 NULL，走 10 分钟全局 TTL），之后每次 settle 都静默拿回 0。桌宠一笔预留天生要跨「运行 + 等授权 7 天 + 失败宽限 24 小时」，是**最先撞上这个 10 分钟兜底**的域。
+- **桌宠侧要记住的三件事**：
+  1. **窗口口径只能有一份**：[`codex-pet-reservation-window.ts`](../apps/api/src/workflow/codex-pet/codex-pet-reservation-window.ts) 同时供 worker 决定何时收尸、routes 声明 `reservationTtlSeconds`。两边不同源，兜底就会又一次早于业务动手。
+  2. **三条 settle 路径必须写逐字相同的诊断**：runner `settlePerImageRunBilling`、worker `reconcilePerImageBillingSettlements`、取消路由 `settleCancellationRefund`。后两条原先无条件写 `billingChargeError: null`，把上一次的痕迹也擦掉了。**取消是按图预留最常见的收口路径**（手动取消、停摆到期清理都从这里过），漏掉它等于漏掉一半人口。
+  3. **`billingReservedPoints` 必须进 select**：诊断函数用 `!(reservedPoints > 0)` 而不是 `<= 0` 守门，就是因为查询漏 select 时它是 `undefined`，而 `undefined <= 0` 为 false 会让诊断照写，落出「预留 undefined 点」这种假痕迹。
+- **收口方式（对以后同类停摆运行同样适用）**：**走应用自己的取消接口，不要直接改库**。取消路由会依次跑完「未派发额外调用退款 → 按已交付量结算 → 落诊断 → 项目状态解封」；直接 UPDATE 只能改出一行数据，业务链一条都不会跑。本次实测：`POST /api/workflow/codex-pets/projects/:projectId/runs/:runId/cancel` → 运行 `cancelled` / `billingSettlementStatus=settled` / `billingSettledUnits=8` / `billingSettledPoints=0` + 诊断落库，项目从 `awaiting_regeneration_approval` 回到 `cancelled`（账号解封），余额不动；随后补收脚本 charge 8 单位 = 1600 点，余额 5200 → 3600，重放返回 `already_corrected` 且不重复扣。
+- **不取消不会更安全**：停摆运行由 `expireParkedCodexPetRuns` 在 `awaiting_regeneration_approval` 满 7 天时自动清理，走的是**同一条零结算**，只是时间点不由人掌握，期间账号一直被挡。证据本来就在不可变的 `CodexPetImageCall` 行里，取消不会毁掉任何证据——**但这个结论只在 `870cbec` 之后成立**：在那之前取消路由会把诊断抹平，取消确实等于让分歧永久静默。
+
 ## 七、演进史（git × codex 会话）
 
 - `2026-07-17` 会话 `019f6f66`「设计 Codex 桌宠工作流」：从「上传参考图/文字生成、可导入 Codex」的想法出发，确认 Codex v2 规格、深链安装、`/v1/images/edits` 真实探测、`4×2` 姿势板方案与产品四阶段。会话 `019f7013` 顺带调研接口文档管理。

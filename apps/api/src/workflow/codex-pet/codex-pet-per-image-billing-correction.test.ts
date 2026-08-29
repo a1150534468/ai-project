@@ -6,7 +6,7 @@ import {
   correctCodexPetPerImageBilling,
 } from "./codex-pet-per-image-billing-correction.js";
 
-function createPrisma(status = "failed") {
+function createPrisma(status = "failed", overrides: Record<string, unknown> = {}) {
   const run: Record<string, unknown> = {
     id: "run-1",
     projectId: "project-1",
@@ -23,6 +23,7 @@ function createPrisma(status = "failed") {
     billingPoints: 200,
     usage: null,
     lastEventSequence: 4,
+    ...overrides,
   };
   const calls: Record<string, unknown>[] = [
     { id: "call-1", runId: "run-1", callKind: "planned", sentAt: new Date("2026-07-24T00:00:00.000Z"), points: 0 },
@@ -88,6 +89,53 @@ describe("Codex pet per-image billing correction", () => {
     })).resolves.toMatchObject({ status: "already_corrected", settledPoints: 400 });
     expect(chargeResource).toHaveBeenCalledOnce();
     expect(events).toHaveLength(1);
+  });
+
+  it("corrects a cancelled run whose cancellation flag is only history", async () => {
+    // 取消路由收口时一定会留下 cancelRequested=true，若把它当活跃信号，
+    // 从取消进来的漏计费就永远补不回来。
+    const { prisma, run } = createPrisma("cancelled", {
+      cancelRequested: true,
+      workerId: null,
+      billingChargeError: "结算异常：8 次已交付调用只结算到 0 点（预留 2800 点已被提前关账），需要按图补收",
+    });
+    const chargeResource = vi.fn(async () => ({ charged: 200 }));
+
+    await expect(correctCodexPetPerImageBilling({
+      prisma,
+      billing: { chargeResource },
+      runId: "run-1",
+      perImageCallPoints: 200,
+    })).resolves.toMatchObject({ status: "corrected", correctionPoints: 200, settledPoints: 400 });
+    expect(chargeResource).toHaveBeenCalledOnce();
+    // 补收完成后诊断必须消失，否则修好的运行会一直挂着「需要按图补收」的假报警。
+    expect(run).toMatchObject({ billingSettledPoints: 400, billingChargeError: null });
+  });
+
+  it("refuses a run still held by a worker even after cancellation was requested", async () => {
+    const { prisma } = createPrisma("cancelled", { cancelRequested: true, workerId: "worker-1" });
+    const chargeResource = vi.fn(async () => ({ charged: 200 }));
+
+    await expect(correctCodexPetPerImageBilling({
+      prisma,
+      billing: { chargeResource },
+      runId: "run-1",
+      perImageCallPoints: 200,
+    })).rejects.toThrow("inactive run");
+    expect(chargeResource).not.toHaveBeenCalled();
+  });
+
+  it("refuses a cancellation that landed on a non-cancelled terminal status", async () => {
+    const { prisma } = createPrisma("failed", { cancelRequested: true });
+    const chargeResource = vi.fn(async () => ({ charged: 200 }));
+
+    await expect(correctCodexPetPerImageBilling({
+      prisma,
+      billing: { chargeResource },
+      runId: "run-1",
+      perImageCallPoints: 200,
+    })).rejects.toThrow("inactive run");
+    expect(chargeResource).not.toHaveBeenCalled();
   });
 
   it("refuses a nonterminal run before contacting billing", async () => {

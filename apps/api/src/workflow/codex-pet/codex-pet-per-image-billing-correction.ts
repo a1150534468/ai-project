@@ -69,7 +69,15 @@ function assertCorrectableRun(run: CorrectableRun | null): asserts run is Correc
     || !TERMINAL_STATUSES.has(run.status)) {
     throw new Error("Codex pet billing correction only permits settled terminal per-image runs");
   }
-  if (run.workerId || run.cancelRequested || !run.billingOperationId || !run.billingResourceKey) {
+  // 活跃性只认 workerId。cancelRequested 在「已取消」终态上只是历史痕迹：worker 还在
+  // 跑时取消路由只写 cancelRequested 并保持非终态，等收手后才写 status=cancelled，
+  // 所以 cancelled + workerId=null 是确定的静止态。把 cancelRequested 一律当活跃信号，
+  // 会让这个补收工具永远修不了取消路径——而按图预留最常见的收口恰恰是取消，也正是
+  // settleCancellationRefund 写下「需要按图补收」诊断的那一条，诊断与工具必须对得上。
+  // ready/failed 上的 cancelRequested 仍然拦住：那说明取消信号发出后运行另有归宿，
+  // 状态机没走完，先查清再补收。
+  const stillActive = run.workerId !== null || (run.cancelRequested && run.status !== "cancelled");
+  if (stillActive || !run.billingOperationId || !run.billingResourceKey) {
     throw new Error("Codex pet billing correction requires an inactive run with a billing receipt");
   }
 }
@@ -177,6 +185,10 @@ export async function correctCodexPetPerImageBilling(input: {
         billingSettledUnits: current.calls.length,
         billingSettledPoints: settledPoints,
         billingPoints: settledPoints,
+        // 补收就是那条「需要按图补收」诊断的解除条件。留着不清，账本已经修好的运行
+        // 还会一直挂着报警，下一次真出事时没人会再当真；审计痕迹由下面的
+        // perImageBillingCorrection 和 billing.settlement.corrected 事件承担。
+        billingChargeError: null,
         usage: nextUsage,
         lastEventSequence: { increment: 1 },
       },

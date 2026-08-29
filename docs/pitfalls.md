@@ -125,6 +125,13 @@
 - **修法**：`refundCodexPetUndispatchedExtraCalls` 按运行清扫停在 `prepared` 的计划外调用（`sent`/`succeeded`/`failed` 各有自己的归宿，计划内一律不碰），幂等，退款接口抖动留 `pending` 给重试；取消与超期回收两条路径都会调它。详见 [codex-pet.md 6.12.8](codex-pet.md)。
 - **预防**：**扣费点和退款条件必须按同一个维度描述状态**。设计「先扣费、后异步执行」时，把两者之间**所有**中间状态列出来，逐个回答「停在这里时钱怎么办」——列不出来的那个状态就是漏钱窗口。相邻路径别一起改：扣费本身失败（置 `cancelled`）和入队失败（stale 回收自愈）这两条通常是好的。
 
+### 计费兜底提前关掉「还在跑」的预留：结算静默变成 0，数据层零痕迹
+
+- **现象**（桌宠 `cpr_2def…`，**已修 + 已补收**）：8 张图全部成功交付，运行的 `billingSettledPoints = 0`，账本 `actual_points = 0`，HTTP 200、无 error、**没有任何一条报错**。TS 侧还显示 `reserved` / 2800，与账本长期不一致而无人发现。**1600 点从头到尾没收到。**
+- **根因**：三处各自都合理的设计串成静默通道——① 对账兜底 `recon.Reconcile` 每 5 分钟把仍 `reserved` 的记录按 `actual=0` 关账，原本只认**全局 10 分钟** TTL；② `wallet.Settle` 对非 `reserved` 记录 `return nil`（为幂等重放写的，但「已被兜底关掉」走同一分支，返回值无法区分）；③ `resource.Settle` 重读记录返回兜底写进去的 0。**没有任何调用方传过 `units: 0`**——这一点必须先证伪，否则会去改一堆没病的调用点。
+- **修法**：预留可声明 `reservationTtlSeconds`（上限 30 天），兜底只回收**真正过期**的；再在 TS 客户端的 `settleResource` / `settleVideoResource` 里加判据 `max(units, inputUnits) > 0 && !(settled > 0)` 的哨兵，一处改动覆盖全部 43 个 `createBillingClient(` 调用点。详见 [billing.md 第八节](billing.md)。
+- **预防**：**任何新的 `reserveResource` 调用点都必须同时决定 TTL**，窗口推导一律往长的方向取整——两种失效方式代价严重不对称：TTL 偏短 = 静默漏钱且无痕迹，TTL 偏长 = 真被遗弃的预留晚一点退款。以及：**「不收钱」这种结果必须有人负责报出来**；一个既不抛异常也不改变返回形状的漏计费，等于没有发生过。
+
 ### 多副本重复消费任务
 
 - **现象**：API/Worker 多副本时，同一任务可能被并发认领。
