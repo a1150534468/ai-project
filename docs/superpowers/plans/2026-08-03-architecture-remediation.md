@@ -847,13 +847,21 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 ### 批次一:后端(测试已就绪,纯移动,约 3-4 天)
 
 - [ ] **通用纪律:纯移动,零行为变化**。每个文件拆完保留原文件名作**门面**,只 re-export,外部 import **一行都不改**。这是既有计划阶段 1 已验证的手法(它明确列出 6 个源文件 + 5 个测试文件作为"一行不改"的成功判据)。测试文件也不改 —— 如果拆分需要改测试,说明不是纯移动,停下重新设计。
-- [ ] **Step 1: `codex-pet-routes.ts`(2930 → 5 个文件)**。接缝已勘定(18 条路由的行号已核实):
+- [x] **Step 1: `codex-pet-routes.ts`(2930 → 5 个文件)**。接缝已勘定(18 条路由的行号已核实):
   - `codex-pet-catalog-routes.ts` — pricing/models/list(:1205-1246,约 40 行)
   - `codex-pet-project-routes.ts` — 项目 CRUD(:1247-1602,约 355 行)
   - `codex-pet-run-routes.ts` — 运行生命周期 start/continue-failed/resume-gate-failure/base-selection/cancel/approve-next-image(:1603-2674,**约 1070 行,最肥的一块**)
   - `codex-pet-event-routes.ts` — events + SSE stream(:2675-2796,约 120 行)
   - `codex-pet-delivery-routes.ts` — install-link/download/公开产物(:2797-2930,约 130 行)
   - 原文件保留为门面,注册顺序不变。**注意 `/api/public/codex-pets/artifacts/:artifactId`(:2863)是公开路由,不走鉴权**,拆走时别把它塞进带 `preHandler` 的分组。
+  - **执行结果(2026-08-29)**:`codex-pet-routes.ts` **2961 → 39 行门面**(实际行数比计划记的 2930 又长了 31 行),同目录新增 9 个兄弟文件,最大 638 行 —— 拆分**没有制造任何新的 800+ 行文件**:
+    - `codex-pet-route-types.ts`(191,原 :176-362)、`codex-pet-route-helpers.ts`(638,原 :53-174 + :364-846)、`codex-pet-route-context.ts`(446,原 :849-1245 包进 `createCodexPetRouteContext(app, deps)`)
+    - `codex-pet-catalog-routes.ts`(38)、`codex-pet-project-routes.ts`(408)、`codex-pet-run-routes.ts`(600)、`codex-pet-run-review-routes.ts`(560)、`codex-pet-event-routes.ts`(108)、`codex-pet-delivery-routes.ts`(191)
+  - **有意偏离计划:路由文件是 6 个而不是 5 个**。计划里的单一 run 分组自己就是"约 1070 行,最肥的一块",整块搬过去等于新造一个 800+ 行文件,直接和本任务的完成判据矛盾。因此按语义切成两半:`codex-pet-run-routes.ts`(start / continue-failed / resume-gate-failure)与 `codex-pet-run-review-routes.ts`(base-selection / cancel / approve-next-image),并**按这个顺序注册**,路由注册顺序与拆分前完全一致。
+  - **公开路由的处置**:`/api/public/codex-pets/artifacts/:artifactId` 放进 delivery 分组,与另外两条带鉴权的路由同文件。这里的 `preHandler` 是**逐路由**声明的、不是分组级的,所以同文件不会给它加上鉴权 —— 它仍然没有 `preHandler`。
+  - **共享上下文的类型**用 `export type CodexPetRouteContext = ReturnType<typeof createCodexPetRouteContext>` 推导,不手写签名(那些闭包返回 Prisma 行类型,手写一份必然分叉)。各分组文件在顶部解构 `ctx`,搬过去的函数体因此**逐字不变**。
+  - **逐字性怎么证的**:用 `sed` 机械切行段,再和 `git show HEAD:` 的同一行段 `diff`,不重打任何一行。9/9 段落逐字内嵌;types/helpers 两段与原文的差异**只有新加的 `export ` 关键字**;其余 7 段 diff 全空。
+  - **验证**:`pnpm typecheck` 干净;`npx tsc --noEmit --noUnusedLocals` 在新文件里**零个未使用 import**(唯一命中是搬过来的 pricing 路由里本来就有的 `catalog-routes.ts(11,11) TS6133 'userId'` 死代码,原样保留);测试 **27 files passed / 4 skipped(31),336 passed / 0 failed / 8 skipped(344)**,与拆分前基线逐数字一致。**测试文件与全部外部 import 零行改动**。
 - [ ] **Step 2: `image-routes.ts`(1307)+ `image-service.ts`(1082)**。这两个测试最厚(1.55 / 0.98)且 churn 最高(11 改),收益最大。注意与 P0.4 的关系:~~**P0.4 已把 `reconcilePendingImageBilling` / `resumeStaleTasks` 导出**~~ → **实际没导出**,P0.4 给 reaper 传的是闭包(它们依赖插件闭包里的 `scheduleTask`/`fetchFn`)。拆分时要把这两个依赖也一并带走,才能把它们移进 `image-reaper.ts` 或 `image-billing.ts`;这比计划原本设想的工作量大。共享的常量与行类型已在 `image-shared.ts`,可直接复用。
 - [ ] **Step 3: `codex-pet-worker.ts`(1157)、`codex-pet-visual.ts`(1133)、`extraction.ts`(1276)、`novel-task-runner.ts`(937)、`video-routes.ts`(893)、`codex-pet-packaging.ts`(850)、`chat/routes.ts`(816)**。一文件一提交,每次跑该域测试。
 - [ ] **Step 4: 与 P3.1 阶段 1 的冲突规避**。`codex-pet-runner.ts` 由既有计划处理,本任务**不碰**。但 `codex-pet-routes.ts` / `codex-pet-worker.ts` / `codex-pet-packaging.ts` / `codex-pet-visual.ts` 在阶段 1 的**门面兼容契约**里被列为"一行都不改"的文件 —— 意味着**本 Step 与阶段 1 不能并行**。二选一:先做本任务再做阶段 1(阶段 1 的契约需相应更新),或先阶段 1 再本任务(**推荐,阶段 1 的 37 步已写好**)。
