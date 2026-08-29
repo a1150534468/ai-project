@@ -1,14 +1,23 @@
+/**
+ * 图文工坊的主控。四个子层拆出去之后这里只剩「批次 + 项目 + 动作」:
+ *  - 草稿 / 脏标记 / hash 基线 → `useArticleWorkflowDrafts`
+ *  - 新建表单 + 预览态换肤 → `useArticleWorkflowCreationForm`
+ *  - 批次轮询 → `useArticleWorkflowBatchPolling`
+ *  - 手动保存 + 自动保存 + 409 竞态 → `useArticleWorkflowSave`
+ *
+ * 返回值仍然是**一个扁平对象**:`ArticleWorkflowStudio.tsx` 和 DOM 侧的两个测试文件直接按名
+ * 取值,拆分不允许改这层形状。
+ *
+ * 传给子 hook 的回调必须是稳定身份(`useCallback`)。`hydrateProjects → loadBatch → 轮询 effect`
+ * 是一条依赖链,链上任何一环每次渲染换新身份,2.5s 的轮询定时器就会被反复重建,等于永不发车。
+ */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ARTICLE_WORKFLOW_PLATFORMS,
   articleWorkflowPlatformConfig,
-  type ArticleWorkflowGalleryMode,
   type ArticleWorkflowGenerationMode,
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
-  type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
-import { ApiError } from "../../apiError";
 import { useToast } from "../../motion";
 import {
   applyArticleWorkflowTheme,
@@ -25,20 +34,15 @@ import {
   type ArticleWorkflowPricing,
   type ArticleWorkflowProject,
   type ArticleWorkflowProjectSummary,
-  updateArticleWorkflowProject,
 } from "../../workflowArticleApi";
 import {
   articleWorkflowCreationConfigFromDraft,
-  articleWorkflowCreationDraftFromProject,
   canSubmitArticleWorkflowCreationDraft,
-  defaultArticleWorkflowCreationDraft,
-  type ArticleWorkflowCreationDraft,
 } from "./articleWorkflowCreationDraft";
 import {
   articleWorkflowBatchProgress,
   groupArticleWorkflowHistory,
   resolveActiveArticleWorkflowProject,
-  shortPlatformLabel,
   type ArticleWorkflowBatchEntry,
 } from "./articleWorkflowBatchModel";
 import { createArticleWorkflowCopyActions } from "./articleWorkflowCopyActions";
@@ -49,26 +53,18 @@ import {
   cloneImageManifest,
   isBusyArticleWorkflowStatus,
 } from "./articleWorkflowStudioModel";
-
-const AUTOSAVE_DELAY_MS = 1500;
-
-type DraftRecord = Partial<Record<ArticleWorkflowPlatform, string>>;
-type TagsRecord = Partial<Record<ArticleWorkflowPlatform, readonly string[]>>;
+import {
+  useArticleWorkflowBatchPolling,
+  type ArticleWorkflowLoadBatchArgs,
+} from "./useArticleWorkflowBatchPolling";
+import { useArticleWorkflowCreationForm } from "./useArticleWorkflowCreationForm";
+import { useArticleWorkflowDrafts } from "./useArticleWorkflowDrafts";
+import { useArticleWorkflowSave } from "./useArticleWorkflowSave";
 
 export interface ArticleWorkflowBatchSelection {
   readonly key: string;
   readonly batchId: string | null;
   readonly projectId: string;
-}
-
-function draftHashOf(project: ArticleWorkflowProject): string {
-  return articleWorkflowDraftHash({
-    title: project.title,
-    summary: project.summary,
-    bodyHtml: project.bodyHtml,
-    captionText: project.captionText,
-    tags: project.tags,
-  });
 }
 
 function withClonedManifest(project: ArticleWorkflowProject): ArticleWorkflowProject {
@@ -84,10 +80,6 @@ export function useArticleWorkflowStudio({
 }: ArticleWorkflowStudioProps) {
   const toast = useToast();
   const previewBodyRef = useRef<HTMLDivElement | null>(null);
-  /** 每个平台各自记住上次保存的 hash，切页签不会互相误判脏 */
-  const lastSavedHashRef = useRef(new Map<ArticleWorkflowPlatform, string>());
-  /** 轮询回调里要读最新脏状态，用 ref 避免把轮询 effect 绑到 state 上反复重建 */
-  const dirtyPlatformsRef = useRef<readonly ArticleWorkflowPlatform[]>([]);
   const [editorSyncKey, setEditorSyncKey] = useState("");
   const [bootstrapping, setBootstrapping] = useState(initialBootstrapping ?? !initialHistory);
   const [history, setHistory] = useState<readonly ArticleWorkflowProjectSummary[]>(initialHistory ?? []);
@@ -98,41 +90,8 @@ export function useArticleWorkflowStudio({
     initialProject?.platform ?? null,
   );
   const [pricing, setPricing] = useState<ArticleWorkflowPricing | null>(null);
-  const [titleDrafts, setTitleDrafts] = useState<DraftRecord>(
-    initialProject ? { [initialProject.platform]: initialProject.title } : {},
-  );
-  const [summaryDrafts, setSummaryDrafts] = useState<DraftRecord>(
-    initialProject ? { [initialProject.platform]: initialProject.summary } : {},
-  );
-  const [bodyHtmlDrafts, setBodyHtmlDrafts] = useState<DraftRecord>(
-    initialProject ? { [initialProject.platform]: initialProject.bodyHtml } : {},
-  );
-  const [captionDrafts, setCaptionDrafts] = useState<DraftRecord>(
-    initialProject ? { [initialProject.platform]: initialProject.captionText } : {},
-  );
-  const [tagsDrafts, setTagsDrafts] = useState<TagsRecord>(
-    initialProject ? { [initialProject.platform]: initialProject.tags } : {},
-  );
-  const [creationDraft, setCreationDraft] = useState<ArticleWorkflowCreationDraft>(
-    initialProject ? articleWorkflowCreationDraftFromProject(initialProject) : defaultArticleWorkflowCreationDraft(),
-  );
-  const [generateImages, setGenerateImages] = useState(initialProject?.creationConfig.generateImages ?? true);
-  const [generationMode, setGenerationMode] = useState<ArticleWorkflowGenerationMode>(
-    initialProject?.generationMode ?? "preserve-text",
-  );
-  const [selectedPlatforms, setSelectedPlatforms] = useState<readonly ArticleWorkflowPlatform[]>(
-    initialProject ? [initialProject.platform] : ARTICLE_WORKFLOW_PLATFORMS,
-  );
-  const [selectedTheme, setSelectedTheme] = useState<ArticleWorkflowThemeKey>("auto");
-  const [selectedThemeColor, setSelectedThemeColor] = useState("");
-  const [selectedGalleryMode, setSelectedGalleryMode] = useState<ArticleWorkflowGalleryMode>("collage");
-  /** 预览态换肤：null 表示跟随项目主题，非 null 表示正在试看/已选未应用 */
-  const [previewTheme, setPreviewTheme] = useState<ArticleWorkflowThemeKey | null>(null);
-  const [previewThemeColor, setPreviewThemeColor] = useState<string | null>(null);
-  const [previewGalleryMode, setPreviewGalleryMode] = useState<ArticleWorkflowGalleryMode | null>(null);
   const [applyingTheme, setApplyingTheme] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   /** 正在重试的行 id，用来禁用按钮防重复点击 */
   const [retryingProjectId, setRetryingProjectId] = useState<string | null>(null);
@@ -146,10 +105,15 @@ export function useArticleWorkflowStudio({
   const [rewriteRegenerateImages, setRewriteRegenerateImages] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  /** 脏标记按平台记，避免切页签后把别的平台的未保存改动一起提交 */
-  const [dirtyPlatforms, setDirtyPlatforms] = useState<readonly ArticleWorkflowPlatform[]>([]);
 
-  dirtyPlatformsRef.current = dirtyPlatforms;
+  /** 任何一次用户操作都要把上一次的报错/提示清掉。身份要稳：它是创作表单的 onEdit */
+  const resetMessages = useCallback(() => {
+    setError("");
+    setNotice("");
+  }, []);
+
+  const drafts = useArticleWorkflowDrafts({ initialProject, batchProjects });
+  const { dirtyPlatforms, draftsFor, editDraft, hashOf, hydrateDrafts, markDirty, noteSaved } = drafts;
 
   const project = useMemo(
     () => resolveActiveArticleWorkflowProject(batchProjects, activePlatform),
@@ -164,11 +128,23 @@ export function useArticleWorkflowStudio({
   /** 只有成品行能存；failed / 生成中的行连脏标记都不打，自动保存自然不会启动 */
   const savable = canSaveArticleWorkflowStatus(project?.status);
 
-  const titleDraft = titleDrafts[platform] ?? "";
-  const summaryDraft = summaryDrafts[platform] ?? "";
-  const bodyHtmlDraft = bodyHtmlDrafts[platform] ?? "";
-  const captionDraft = captionDrafts[platform] ?? "";
-  const tagsDraft = tagsDrafts[platform] ?? [];
+  /**
+   * 当前平台的五个草稿值。这里必须 memo：`tags` 缺省时是 `[]` 字面量，每次渲染都是新数组，
+   * 直接往保存层传会让自动保存的 1.5s 计时器每次渲染重置一次。
+   */
+  const activeDrafts = useMemo(() => draftsFor(platform), [draftsFor, platform]);
+  const titleDraft = activeDrafts.title;
+  const summaryDraft = activeDrafts.summary;
+  const bodyHtmlDraft = activeDrafts.bodyHtml;
+  const captionDraft = activeDrafts.captionText;
+  const tagsDraft = activeDrafts.tags;
+
+  const creationForm = useArticleWorkflowCreationForm({
+    initialProject,
+    activeProjectId: project?.id,
+    onEdit: resetMessages,
+  });
+  const { creationDraft, generateImages, generationMode, selectedPlatforms } = creationForm;
   const sourceFormat: ArticleWorkflowSourceFormat =
     creationDraft.mode === "source" ? creationDraft.sourceFormat : "plain-text";
   const sourceText = creationDraft.mode === "source" ? creationDraft.sourceText : "";
@@ -177,59 +153,16 @@ export function useArticleWorkflowStudio({
   const batchProgress = useMemo(() => articleWorkflowBatchProgress(batchProjects), [batchProjects]);
   const batchBusy = batchProjects.some((item) => isBusyArticleWorkflowStatus(item.status));
 
-  const markDirtyRaw = useCallback((target: ArticleWorkflowPlatform, next: boolean) => {
-    setDirtyPlatforms((current) =>
-      next ? (current.includes(target) ? current : [...current, target]) : current.filter((item) => item !== target),
-    );
+  /** 单行的服务端值回写批次（图片 manifest 深拷贝，避免共享引用被就地改） */
+  const replaceProjectRow = useCallback((next: ArticleWorkflowProject) => {
+    setBatchProjects((current) => current.map((item) => (item.id === next.id ? withClonedManifest(next) : item)));
   }, []);
 
-  /** 打脏标记要看这行存不存得下去：failed / 生成中的行不打，免得挂着「待保存」又永远存不进 */
-  const markDirty = useCallback(
-    (target: ArticleWorkflowPlatform, next: boolean) => {
-      if (next && !canSaveArticleWorkflowStatus(batchProjects.find((item) => item.platform === target)?.status)) return;
-      markDirtyRaw(target, next);
-    },
-    [batchProjects, markDirtyRaw],
-  );
-
   /**
-   * 按内容决定脏标记，而不是按「有没有触发过 onChange」。
-   *
-   * 早先每次 onChange 都无条件打脏，1.5s 后自动保存就发车。于是编辑器载入时对
-   * HTML 做的规范化（它不认识的标签被拍平）也被当成用户编辑存回库里，成品被冲掉。
-   * 现在拿完整草稿的 hash 跟「上次保存的 hash」比：一致就撤脏标记，自动保存不发车；
-   * 用户把内容改回原样也会自动退出待保存状态。
-   *
-   * 注意这只挡住「内容没变」的那一类。编辑器把内容真改了（规范化就属于这种）
-   * hash 一定不同，仍然会存——那一层要靠编辑器自己只在用户真操作时才 onChange。
-   */
-  const syncDirtyByContent = useCallback(
-    (
-      target: ArticleWorkflowPlatform,
-      override: {
-        readonly title?: string;
-        readonly summary?: string;
-        readonly bodyHtml?: string;
-        readonly captionText?: string;
-        readonly tags?: readonly string[];
-      },
-    ) => {
-      const nextHash = articleWorkflowDraftHash({
-        title: override.title ?? titleDrafts[target] ?? "",
-        summary: override.summary ?? summaryDrafts[target] ?? "",
-        bodyHtml: override.bodyHtml ?? bodyHtmlDrafts[target] ?? "",
-        captionText: override.captionText ?? captionDrafts[target] ?? "",
-        tags: override.tags ?? tagsDrafts[target] ?? [],
-      });
-      markDirty(target, nextHash !== lastSavedHashRef.current.get(target));
-    },
-    [bodyHtmlDrafts, captionDrafts, markDirty, summaryDrafts, tagsDrafts, titleDrafts],
-  );
-
-  /**
-   * 把批次的服务端状态写回草稿。
+   * 把批次的服务端状态写回草稿与新建表单。
    * force=false 时保留仍在编辑的平台草稿（生成中的行没有用户改动，一律覆盖）。
    */
+  const { hydrateFromBatch } = creationForm;
   const hydrateProjects = useCallback(
     (
       details: readonly ArticleWorkflowProject[],
@@ -237,43 +170,8 @@ export function useArticleWorkflowStudio({
     ) => {
       const force = args?.force ?? true;
       setBatchProjects(details.map(withClonedManifest));
-
-      const sourceProject = details[0];
-      if (force && sourceProject) {
-        setCreationDraft(articleWorkflowCreationDraftFromProject(sourceProject));
-        setGenerateImages(sourceProject.creationConfig.generateImages);
-        setGenerationMode(sourceProject.generationMode);
-        setSelectedPlatforms(
-          ARTICLE_WORKFLOW_PLATFORMS.filter((item) => details.some((detail) => detail.platform === item)),
-        );
-      }
-
-      const nextTitles: DraftRecord = {};
-      const nextSummaries: DraftRecord = {};
-      const nextBodies: DraftRecord = {};
-      const nextCaptions: DraftRecord = {};
-      const nextTags: TagsRecord = {};
-      const keptDirty: ArticleWorkflowPlatform[] = [];
-      for (const detail of details) {
-        const overwrite =
-          force || isBusyArticleWorkflowStatus(detail.status) || !dirtyPlatformsRef.current.includes(detail.platform);
-        if (!overwrite) {
-          keptDirty.push(detail.platform);
-          continue;
-        }
-        nextTitles[detail.platform] = detail.title;
-        nextSummaries[detail.platform] = detail.summary;
-        nextBodies[detail.platform] = detail.bodyHtml;
-        nextCaptions[detail.platform] = detail.captionText;
-        nextTags[detail.platform] = detail.tags;
-        lastSavedHashRef.current.set(detail.platform, draftHashOf(detail));
-      }
-      setTitleDrafts((current) => ({ ...current, ...nextTitles }));
-      setSummaryDrafts((current) => ({ ...current, ...nextSummaries }));
-      setBodyHtmlDrafts((current) => ({ ...current, ...nextBodies }));
-      setCaptionDrafts((current) => ({ ...current, ...nextCaptions }));
-      setTagsDrafts((current) => ({ ...current, ...nextTags }));
-      setDirtyPlatforms((current) => current.filter((item) => keptDirty.includes(item)));
+      if (force) hydrateFromBatch(details);
+      hydrateDrafts(details, force);
 
       const requestedFocus = args?.focusPlatform ?? null;
       const inBatch = details.some((item) => item.platform === activePlatform);
@@ -282,17 +180,12 @@ export function useArticleWorkflowStudio({
       if (focused) {
         setActivePlatform(focused.platform);
         setRewriteGenerationMode(focused.generationMode);
-        setEditorSyncKey(`${focused.id}:${lastSavedHashRef.current.get(focused.platform) ?? ""}`);
+        setEditorSyncKey(`${focused.id}:${hashOf(focused.platform) ?? ""}`);
       }
       return details;
     },
-    [activePlatform],
+    [activePlatform, hashOf, hydrateDrafts, hydrateFromBatch],
   );
-
-  const resetMessages = () => {
-    setError("");
-    setNotice("");
-  };
 
   const refreshHistory = useCallback(async () => {
     setHistory(await listArticleWorkflowHistory(token));
@@ -308,12 +201,7 @@ export function useArticleWorkflowStudio({
 
   /** 批次载入；存量无 batchId 的行退回单项目接口 */
   const loadBatch = useCallback(
-    async (args: {
-      readonly batchId: string | null;
-      readonly projectId: string;
-      readonly force?: boolean;
-      readonly focusPlatform?: ArticleWorkflowPlatform | null;
-    }) => {
+    async (args: ArticleWorkflowLoadBatchArgs) => {
       const details = args.batchId
         ? (await getArticleWorkflowBatch(token, args.batchId)).projects
         : [await getArticleWorkflowProject(token, args.projectId)];
@@ -325,20 +213,12 @@ export function useArticleWorkflowStudio({
     [hydrateProjects, token],
   );
 
+  // 服务端直出的首个项目也要先立 hash 基线，否则编辑器载入的规范化回写会被当成用户编辑
   useEffect(() => {
     if (initialProject) {
-      const hash = draftHashOf(initialProject);
-      lastSavedHashRef.current.set(initialProject.platform, hash);
-      setEditorSyncKey(`${initialProject.id}:${hash}`);
+      setEditorSyncKey(`${initialProject.id}:${noteSaved(initialProject)}`);
     }
-  }, [initialProject]);
-
-  // 切换项目后重置预览态换肤，回到「跟随项目主题」
-  useEffect(() => {
-    setPreviewTheme(null);
-    setPreviewThemeColor(null);
-    setPreviewGalleryMode(null);
-  }, [project?.id]);
+  }, [initialProject, noteSaved]);
 
   useEffect(() => {
     if (initialHistory) {
@@ -357,42 +237,35 @@ export function useArticleWorkflowStudio({
     })();
   }, [initialHistory, refreshHistory, refreshPricing]);
 
-  const pollBatchId = batchProjects[0]?.batchId ?? null;
-  const pollProjectId =
-    batchProjects.find((item) => isBusyArticleWorkflowStatus(item.status))?.id ?? batchProjects[0]?.id ?? "";
+  useArticleWorkflowBatchPolling({
+    batchProjects,
+    batchBusy,
+    loadBatch,
+    refreshHistory,
+    setError,
+    setNotice,
+    onBalanceRefresh,
+  });
 
-  useEffect(() => {
-    if (!batchBusy || !pollProjectId) return undefined;
-    const timer = window.setInterval(() => {
-      void (async () => {
-        try {
-          // 已完成的平台可能正在被编辑，force=false 保住那份草稿
-          const details = await loadBatch({
-            batchId: pollBatchId,
-            projectId: pollProjectId,
-            force: false,
-          });
-          await refreshHistory();
-          if (details.some((item) => isBusyArticleWorkflowStatus(item.status))) return;
-          const failed = details.filter((item) => item.status === "failed");
-          const imageFailures = details.filter((item) => item.status === "ready" && item.error);
-          const ready = details.length - failed.length;
-          setNotice(ready > 0 ? `${ready} 个平台已生成` : "图文处理失败");
-          if (failed.length > 0) {
-            const names = failed.map((item) => shortPlatformLabel(item.platform)).join("、");
-            setError(`${names}生成失败：${failed[0]?.error || "未知原因"}`);
-          } else if (imageFailures.length > 0) {
-            const names = imageFailures.map((item) => shortPlatformLabel(item.platform)).join("、");
-            setError(`${names}配图失败：${imageFailures[0]?.error || "未知原因"}`);
-          }
-          onBalanceRefresh?.();
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "刷新项目失败");
-        }
-      })();
-    }, 2500);
-    return () => window.clearInterval(timer);
-  }, [batchBusy, loadBatch, onBalanceRefresh, pollBatchId, pollProjectId, refreshHistory]);
+  const { saving, saveProject } = useArticleWorkflowSave({
+    token,
+    project,
+    titleDraft,
+    summaryDraft,
+    bodyHtmlDraft,
+    captionDraft,
+    tagsDraft,
+    dirty,
+    rewriting,
+    hashOf,
+    markDirty,
+    noteSaved,
+    replaceProjectRow,
+    refreshHistory,
+    setError,
+    setNotice,
+    toast,
+  });
 
   const canGenerate = canSubmitArticleWorkflowCreationDraft(creationDraft) && selectedPlatforms.length > 0 && !creating;
   const canSave = Boolean(project && dirty && savable && !saving);
@@ -413,97 +286,6 @@ export function useArticleWorkflowStudio({
       setNotice,
     });
 
-  const saveProject = useCallback(
-    async (mode: "manual" | "auto" = "manual"): Promise<boolean> => {
-      if (!project) return false;
-      const target = project.platform;
-      // 兜底：后端对非 ready 行一律 409，这里先拦住，别让失败行被自动保存反复撞
-      if (!canSaveArticleWorkflowStatus(project.status)) {
-        markDirty(target, false);
-        return false;
-      }
-      const nextHash = articleWorkflowDraftHash({
-        title: titleDraft,
-        summary: summaryDraft,
-        bodyHtml: bodyHtmlDraft,
-        captionText: captionDraft,
-        tags: tagsDraft,
-      });
-      if (nextHash === lastSavedHashRef.current.get(target)) {
-        markDirty(target, false);
-        return true;
-      }
-      setSaving(true);
-      setError("");
-      if (mode === "manual") setNotice("");
-      try {
-        const isCaption = articleWorkflowPlatformConfig(target).outputKind === "caption";
-        const saved = await updateArticleWorkflowProject(
-          token,
-          project.id,
-          isCaption
-            ? {
-                title: titleDraft.trim(),
-                summary: summaryDraft.trim(),
-                captionText: captionDraft.trim(),
-                tags: tagsDraft.map((tag) => tag.trim()).filter(Boolean),
-              }
-            : {
-                title: titleDraft.trim(),
-                summary: summaryDraft.trim(),
-                bodyHtml: bodyHtmlDraft.trim(),
-              },
-        );
-        setBatchProjects((current) => current.map((item) => (item.id === saved.id ? withClonedManifest(saved) : item)));
-        lastSavedHashRef.current.set(target, draftHashOf(saved));
-        markDirty(target, false);
-        setNotice(mode === "auto" ? "已自动保存" : "已保存修改");
-        if (mode === "manual") toast.show("ok", "已保存修改");
-        await refreshHistory();
-        return true;
-      } catch (err) {
-        // 竞态：提交途中这行在服务端变成了 failed / 生成中。不当报错弹，静默刷一次这行状态
-        if (err instanceof ApiError && err.status === 409) {
-          markDirty(target, false);
-          const latest = await getArticleWorkflowProject(token, project.id).catch(() => null);
-          if (latest) {
-            setBatchProjects((current) =>
-              current.map((item) => (item.id === latest.id ? withClonedManifest(latest) : item)),
-            );
-          }
-          return false;
-        }
-        const message = err instanceof Error ? err.message : "保存失败";
-        setError(message);
-        toast.show("err", message);
-        return false;
-      } finally {
-        setSaving(false);
-      }
-    },
-    [
-      bodyHtmlDraft,
-      captionDraft,
-      markDirty,
-      project,
-      refreshHistory,
-      summaryDraft,
-      tagsDraft,
-      titleDraft,
-      toast,
-      token,
-    ],
-  );
-
-  // 只有 ready 行自动保存：failed 行放开的话，编辑器一打开就每 1.5s 撞一次 409
-  useEffect(() => {
-    if (!project || !dirty || saving || rewriting || !canSaveArticleWorkflowStatus(project.status)) return undefined;
-    const timer = window.setTimeout(() => {
-      void saveProject("auto");
-    }, AUTOSAVE_DELAY_MS);
-    return () => window.clearTimeout(timer);
-  }, [dirty, project, rewriting, saveProject, saving]);
-
   const ensureCanLeaveDirty = () => {
     if (!anyDirty) return true;
     return typeof window === "undefined" || window.confirm("当前有未保存修改，确定切换项目吗？");
@@ -512,21 +294,12 @@ export function useArticleWorkflowStudio({
   const resetToNewProject = () => {
     setBatchProjects([]);
     setActivePlatform(null);
-    setTitleDrafts({});
-    setSummaryDrafts({});
-    setBodyHtmlDrafts({});
-    setCaptionDrafts({});
-    setTagsDrafts({});
-    lastSavedHashRef.current.clear();
+    drafts.resetDrafts();
     setEditorSyncKey("");
-    setCreationDraft(defaultArticleWorkflowCreationDraft());
-    setGenerateImages(true);
-    setGenerationMode("preserve-text");
-    setSelectedPlatforms(ARTICLE_WORKFLOW_PLATFORMS);
+    creationForm.reset();
     setRewriteInstruction("");
     setRewriteGenerationMode("preserve-text");
     setRewriteRegenerateImages(false);
-    setDirtyPlatforms([]);
     resetMessages();
   };
 
@@ -540,8 +313,7 @@ export function useArticleWorkflowStudio({
     void (async () => {
       try {
         resetMessages();
-        setDirtyPlatforms([]);
-        dirtyPlatformsRef.current = [];
+        drafts.clearDirty();
         setActivePlatform(null);
         await loadBatch({ batchId: entry.batchId, projectId: entry.projectId, force: true });
       } catch (err) {
@@ -585,20 +357,7 @@ export function useArticleWorkflowStudio({
     if (!target) return;
     setActivePlatform(next);
     setRewriteGenerationMode(target.generationMode);
-    setEditorSyncKey(`${target.id}:${lastSavedHashRef.current.get(next) ?? ""}`);
-    resetMessages();
-  };
-
-  const handleTogglePlatform = (target: ArticleWorkflowPlatform) => {
-    setSelectedPlatforms((current) => {
-      if (!current.includes(target)) {
-        // 保持平台的固定顺序，勾选顺序不影响生成顺序
-        return ARTICLE_WORKFLOW_PLATFORMS.filter((item) => item === target || current.includes(item));
-      }
-      // 至少留一个平台，全取消没有意义
-      if (current.length === 1) return current;
-      return current.filter((item) => item !== target);
-    });
+    setEditorSyncKey(`${target.id}:${hashOf(next) ?? ""}`);
     resetMessages();
   };
 
@@ -617,12 +376,11 @@ export function useArticleWorkflowStudio({
           generationMode: creationDraft.mode === "topic" ? "polish-text" : generationMode,
           platforms: selectedPlatforms,
           generateImages,
-          theme: selectedTheme,
-          themeColor: selectedThemeColor || null,
-          galleryMode: selectedGalleryMode,
+          theme: creationForm.selectedTheme,
+          themeColor: creationForm.selectedThemeColor || null,
+          galleryMode: creationForm.selectedGalleryMode,
         });
-        setDirtyPlatforms([]);
-        dirtyPlatformsRef.current = [];
+        drafts.clearDirty();
         const details = await loadBatch({
           batchId: created.batchId,
           projectId: created.projectId,
@@ -712,11 +470,11 @@ export function useArticleWorkflowStudio({
       resetMessages();
       try {
         const updated = await regenerateArticleWorkflowImage(token, current.id, slot, {});
-        setBatchProjects((rows) => rows.map((item) => (item.id === updated.id ? withClonedManifest(updated) : item)));
-        lastSavedHashRef.current.set(current.platform, draftHashOf(updated));
-        setBodyHtmlDrafts((drafts) => ({ ...drafts, [current.platform]: updated.bodyHtml }));
-        markDirty(current.platform, false);
-        setEditorSyncKey(`${updated.id}:${lastSavedHashRef.current.get(current.platform) ?? ""}`);
+        replaceProjectRow(updated);
+        // 服务端重渲过正文：新值即新基线，草稿直接跟过去，不留脏标记
+        const hash = noteSaved(updated);
+        drafts.writeDrafts(current.platform, { bodyHtml: updated.bodyHtml });
+        setEditorSyncKey(`${updated.id}:${hash}`);
         setNotice("图片已更新");
         toast.show("ok", "图片已更新");
         await refreshHistory();
@@ -768,9 +526,9 @@ export function useArticleWorkflowStudio({
   /** 应用预览态主题到项目：后端按 bodyMarkdown + 新主题重渲正文，不计费。 */
   const handleApplyTheme = () => {
     if (!project) return;
-    const theme = previewTheme ?? project.theme;
-    const themeColor = (previewThemeColor ?? project.themeColor) || null;
-    const galleryMode = previewGalleryMode ?? project.galleryMode;
+    const theme = creationForm.previewTheme ?? project.theme;
+    const themeColor = (creationForm.previewThemeColor ?? project.themeColor) || null;
+    const galleryMode = creationForm.previewGalleryMode ?? project.galleryMode;
     void (async () => {
       const saved = dirty ? await saveProject("manual") : true;
       if (!saved) return;
@@ -778,14 +536,12 @@ export function useArticleWorkflowStudio({
       resetMessages();
       try {
         const updated = await applyArticleWorkflowTheme(token, project.id, { theme, themeColor, galleryMode });
-        setBatchProjects((rows) => rows.map((item) => (item.id === updated.id ? withClonedManifest(updated) : item)));
-        lastSavedHashRef.current.set(project.platform, draftHashOf(updated));
-        setBodyHtmlDrafts((drafts) => ({ ...drafts, [project.platform]: updated.bodyHtml }));
-        markDirty(project.platform, false);
-        setEditorSyncKey(`${updated.id}:${lastSavedHashRef.current.get(project.platform) ?? ""}`);
-        setPreviewTheme(null);
-        setPreviewThemeColor(null);
-        setPreviewGalleryMode(null);
+        replaceProjectRow(updated);
+        // 换肤是服务端重渲，新正文即新基线；预览态到这里才清掉
+        const hash = noteSaved(updated);
+        drafts.writeDrafts(project.platform, { bodyHtml: updated.bodyHtml });
+        setEditorSyncKey(`${updated.id}:${hash}`);
+        creationForm.clearPreviewTheme();
         setNotice("主题已应用");
         toast.show("ok", "主题已应用");
         await refreshHistory();
@@ -842,58 +598,16 @@ export function useArticleWorkflowStudio({
     canGenerate,
     canSave,
     canRewrite,
-    setCreationDraft: (value: ArticleWorkflowCreationDraft) => {
-      setCreationDraft(value);
-      resetMessages();
-    },
-    handleCreationModeChange: (mode: ArticleWorkflowCreationDraft["mode"]) => {
-      setCreationDraft(defaultArticleWorkflowCreationDraft(mode));
-      setGenerateImages(mode === "source");
-      setGenerationMode(mode === "source" ? "preserve-text" : "polish-text");
-      resetMessages();
-    },
-    setGenerateImages: (value: boolean) => {
-      setGenerateImages(value);
-      resetMessages();
-    },
-    setGenerationMode,
-    selectedTheme,
-    selectedThemeColor,
-    selectedGalleryMode,
-    onThemeChange: (value: ArticleWorkflowThemeKey) => {
-      setSelectedTheme(value);
-      resetMessages();
-    },
-    onThemeColorChange: (value: string) => {
-      setSelectedThemeColor(value);
-      resetMessages();
-    },
-    onGalleryModeChange: (value: ArticleWorkflowGalleryMode) => {
-      setSelectedGalleryMode(value);
-      resetMessages();
-    },
-    previewTheme,
-    previewThemeColor,
-    previewGalleryMode,
+    setGenerationMode: creationForm.setGenerationMode,
+    selectedTheme: creationForm.selectedTheme,
+    selectedThemeColor: creationForm.selectedThemeColor,
+    selectedGalleryMode: creationForm.selectedGalleryMode,
+    previewTheme: creationForm.previewTheme,
+    previewThemeColor: creationForm.previewThemeColor,
+    previewGalleryMode: creationForm.previewGalleryMode,
     applyingTheme,
-    onPreviewThemeChange: (value: ArticleWorkflowThemeKey) => {
-      setPreviewTheme(value);
-      resetMessages();
-    },
-    onPreviewThemeColorChange: (value: string) => {
-      setPreviewThemeColor(value);
-      resetMessages();
-    },
-    onPreviewGalleryModeChange: (value: ArticleWorkflowGalleryMode) => {
-      setPreviewGalleryMode(value);
-      resetMessages();
-    },
-    onResetPreviewTheme: () => {
-      setPreviewTheme(null);
-      setPreviewThemeColor(null);
-      setPreviewGalleryMode(null);
-      resetMessages();
-    },
+    // 创作表单/换肤的那批 setter 自带「改动即清提示」，原样透出
+    ...creationForm.handlers,
     handleApplyTheme,
     setRewriteInstruction,
     setRewriteGenerationMode,
@@ -902,7 +616,7 @@ export function useArticleWorkflowStudio({
     handleSelectBatch,
     handleDeleteBatch,
     handleSelectPlatform,
-    handleTogglePlatform,
+    handleTogglePlatform: creationForm.handleTogglePlatform,
     handleGenerate,
     handleSave: () => saveProject("manual"),
     handleCopyBody,
@@ -915,33 +629,27 @@ export function useArticleWorkflowStudio({
     handleRegenerateImage,
     handleGenerateImages,
     markTitleDirty: (value: string) => {
-      setTitleDrafts((current) => ({ ...current, [platform]: value }));
-      syncDirtyByContent(platform, { title: value });
+      editDraft(platform, { title: value });
       resetMessages();
     },
     markSummaryDirty: (value: string) => {
-      setSummaryDrafts((current) => ({ ...current, [platform]: value }));
-      syncDirtyByContent(platform, { summary: value });
+      editDraft(platform, { summary: value });
       resetMessages();
     },
     markBodyHtmlDirty: (value: string) => {
-      setBodyHtmlDrafts((current) => ({ ...current, [platform]: value }));
-      syncDirtyByContent(platform, { bodyHtml: value });
+      editDraft(platform, { bodyHtml: value });
       resetMessages();
     },
     markCaptionDirty: (value: string) => {
-      setCaptionDrafts((current) => ({ ...current, [platform]: value }));
-      syncDirtyByContent(platform, { captionText: value });
+      editDraft(platform, { captionText: value });
       resetMessages();
     },
     markTagsDirty: (value: readonly string[]) => {
-      setTagsDrafts((current) => ({ ...current, [platform]: value }));
-      syncDirtyByContent(platform, { tags: value });
+      editDraft(platform, { tags: value });
       resetMessages();
     },
     handleBodyBlur: (value: string) => {
-      setBodyHtmlDrafts((current) => ({ ...current, [platform]: value }));
-      syncDirtyByContent(platform, { bodyHtml: value });
+      editDraft(platform, { bodyHtml: value });
       // 失焦提交也要过内容判定：编辑器打开就会失焦一次，那一发不该写库
       const changed =
         articleWorkflowDraftHash({
@@ -950,7 +658,7 @@ export function useArticleWorkflowStudio({
           bodyHtml: value,
           captionText: captionDraft,
           tags: tagsDraft,
-        }) !== lastSavedHashRef.current.get(platform);
+        }) !== hashOf(platform);
       if (savable && changed) {
         void saveProject("auto");
       }
