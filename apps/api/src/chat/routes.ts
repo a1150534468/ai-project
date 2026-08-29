@@ -1,16 +1,42 @@
+/**
+ * 聊天路由:`POST /api/chat`(SSE 一轮对话)+ 三条会话读写路由。原文件 817 行,把模块级的
+ * schema、错误翻译、工具展示、运行期常量、模型闸门共 757 行里的 216 行搬到 5 个同域文件,
+ * 本文件只留下 fastify 插件本体。
+ *
+ * **本文件刻意不做成纯 re-export 门面**(与 image-routes.ts / video-routes.ts 同一处理):
+ * 插件闭包持有 `prisma` / `redis` / `client` / `billing`,四条路由全靠它们。要把路由再拆走就得
+ * 先造一层 ctx 间接,行数不会更少,只会多一层。它的导出面仍是**恰好 4 个名字**
+ * (`chatRoutes` / `chatModelErrorMessage` / `providerModelId` / `__setEnabledForTest`),
+ * 所以 `routes.test.ts` / `routes-errors.test.ts` / `routes.empty-response.test.ts` / `server.ts`
+ * 一行不改 —— 后三个名字由文件末尾的 re-export 原样转出。
+ *
+ * 分工:
+ *  - routes-schemas.ts      请求体校验(bodySchema 及其附件子 schema)
+ *  - routes-errors.ts       上游错误翻译 + 百炼模型别名
+ *  - routes-tool-summary.ts 工具事件 → SSE 载荷
+ *  - routes-runtime.ts      预扣口径 / KB 默认值 / 心跳间隔 / 环境变量读取
+ *  - routes-model-gate.ts   进程级启用集缓存与模型上限
+ *
+ * 五个新文件都是叶子,依赖方向单向:五个叶子 → 本文件。
+ *
+ * `POST /api/chat` 里几处顺序不能动:
+ *  - 封禁校验与模型校验都在 `acquireSessionLock` **之前**,因为它们是无副作用的 4xx。放到取锁之后
+ *    会让一次注定失败的请求把会话锁占满一个 TTL。
+ *  - `send("session", ...)` 必须在 reserve 之前发,前端靠它拿到 sessionId;余额不足时那条
+ *    `INSUFFICIENT_BALANCE` 才有会话可挂。
+ *  - `settleReservedTurnAsNoCharge` 带 `reservedTurnSettled` 幂等位,catch 与 finally 都可能走到它。
+ *    正常结算后置位,所以不会把已收的钱又退一次。
+ *  - `finally` 里 `clearInterval` → `release()` → `reply.raw.end()` 三件事都必须做:漏心跳会留下
+ *    永久 15s 一次写 SSE 的定时器,漏 release 会让该会话在锁 TTL 内一直 409。
+ */
+
 import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth/require-user.js";
-import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { getRedis } from "@ai-assistant/db";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
-import {
-  ChatModelEmptyResponseError,
-  ChatModelStreamTimeoutError,
-  runTurn,
-  type RunTurnToolEvent,
-} from "../agent/run.js";
+import { runTurn } from "../agent/run.js";
 import { execTool as execDefaultTool } from "../agent/tools.js";
 import { acquireSessionLock } from "./lock.js";
 import { loadEmbeddingConfig } from "../memory/embedding-client.js";
@@ -39,240 +65,25 @@ import {
   resolveChatModel,
 } from "./attachments.js";
 
-const attachmentSchema = z.object({
-  name: z.string().min(1).max(240),
-  mime: z.string().min(1).max(160),
-  sizeBytes: z.number().int().positive().max(10 * 1024 * 1024),
-  kind: z.enum(["image", "file"]),
-  dataBase64: z.string().min(1).max(14 * 1024 * 1024),
-});
+// === 拆分后的同域模块 ===
+import { bodySchema } from "./routes-schemas.js";
+import { chatModelErrorMessage, providerModelId, type ChatErrorProvider } from "./routes-errors.js";
+import { TOOL_LABELS, toToolPayload } from "./routes-tool-summary.js";
+import {
+  CHAT_RESERVE_OUTPUT_TOKENS,
+  DEFAULT_KB_MAX_CHUNKS_PER_DOCUMENT,
+  DEFAULT_KB_MAX_CONTEXT_CHUNKS,
+  DEFAULT_KB_MIN_SCORE,
+  DEFAULT_KB_TOPK,
+  positiveIntEnv,
+  positiveNumberEnv,
+  SSE_HEARTBEAT_MS,
+} from "./routes-runtime.js";
+import { isModelEnabled, resolveModelMaxOutput } from "./routes-model-gate.js";
 
-const bodySchema = z.object({
-  sessionId: z.string().optional(),
-  message: z.string().max(20_000).default(""),
-  model: z.string().min(1).max(128).optional(),
-  agentId: z.string().min(1).max(128).optional(),
-  kbIds: z.array(z.string()).max(50).optional(),
-  attachAllOwn: z.boolean().optional(),
-  toolIds: z.array(z.string().min(1).max(64)).max(64).optional(),
-  deviceId: z.string().min(1).max(128).optional(),
-  attachments: z.array(attachmentSchema).max(8).default([]),
-}).refine((data) => data.message.trim().length > 0 || data.attachments.length > 0, {
-  message: "message or attachments required",
-});
-
-let enabledCache: { at: number; set: Set<string>; maxOutput: Map<string, number> } | null = null;
-const ENABLED_TTL_MS = 30_000;
-// 预扣统一按 10000 token 的输出价计算（Go 侧按模型输出单价换算成算力点）。
-const CHAT_RESERVE_OUTPUT_TOKENS = 10_000;
-const DEFAULT_KB_MIN_SCORE = 0.35;
-const DEFAULT_KB_TOPK = 8;
-const DEFAULT_KB_MAX_CONTEXT_CHUNKS = 4;
-const DEFAULT_KB_MAX_CHUNKS_PER_DOCUMENT = 2;
-const SSE_HEARTBEAT_MS = 15_000;
-
-function upstreamErrorDetails(error: unknown): { status?: number; code: string; message: string } {
-  if (!error || typeof error !== "object") {
-    return { code: "", message: error instanceof Error ? error.message : String(error ?? "") };
-  }
-  const value = error as {
-    status?: unknown;
-    code?: unknown;
-    message?: unknown;
-    error?: { code?: unknown; message?: unknown };
-    cause?: { code?: unknown; message?: unknown };
-  };
-  const status = typeof value.status === "number" ? value.status : undefined;
-  const code = [value.code, value.error?.code, value.cause?.code]
-    .find((item): item is string => typeof item === "string") ?? "";
-  const message = [value.message, value.error?.message, value.cause?.message]
-    .find((item): item is string => typeof item === "string") ?? "";
-  return { status, code, message };
-}
-
-type ChatErrorProvider = "bailian" | "anthropic" | "ai-pixel";
-
-export function chatModelErrorMessage(error: unknown, provider: ChatErrorProvider): string {
-  if (error instanceof ChatModelStreamTimeoutError) return "模型响应超时，请重试";
-  if (error instanceof ChatModelEmptyResponseError) return "模型未返回内容，请重试";
-
-  const details = upstreamErrorDetails(error);
-  const searchable = `${details.code} ${details.message}`;
-  const providerName = provider === "bailian" ? "百炼" : provider === "ai-pixel" ? "AI Pixel" : "模型服务";
-  if (details.status === 401 || /invalid[_ .-]?api[_ .-]?key|authentication/i.test(searchable)) {
-    return `${providerName} API Key 无效或已失效`;
-  }
-  if (/Model\.AccessDenied|access.?denied|permission/i.test(searchable)) {
-    return `${providerName}业务空间未授权该模型，请检查 Workspace ID、API Key 与模型权限`;
-  }
-  if (details.status === 404 || /model.*(not found|不存在)|invalid.*model/i.test(searchable)) {
-    return `${providerName}中不存在该模型或当前地域不可用`;
-  }
-  if (/ECONNREFUSED|ENOTFOUND|fetch failed|connection/i.test(searchable)) {
-    return `无法连接${providerName}，请检查接入地址与网络`;
-  }
-  return "生成失败，请重试";
-}
-
-const BAILIAN_MODEL_ALIASES = new Map<string, string>([
-  ["GLM-5.2", "glm-5.2"],
-]);
-
-export function providerModelId(model: string, provider: "bailian" | "anthropic"): string {
-  return provider === "bailian" ? (BAILIAN_MODEL_ALIASES.get(model) ?? model) : model;
-}
-
-const TOOL_LABELS: Record<string, string> = {
-  terminal_exec: "执行命令",
-  fs_read: "读取文件",
-  fs_write: "写入文件",
-  fs_list: "列出目录",
-  fs_stat: "查看文件信息",
-  fs_edit: "编辑文件",
-  fs_glob: "查找文件",
-  fs_grep: "搜索文本",
-  fs_mkdir: "创建文件夹",
-  fs_move: "移动文件",
-  fs_delete: "删除文件",
-  fs_copy: "复制文件",
-  browser_navigate: "打开网页",
-  browser_snapshot: "读取网页结构",
-  browser_click: "点击网页",
-  browser_type: "输入网页文本",
-  browser_wait: "等待网页",
-  browser_evaluate: "执行网页脚本",
-  browser_screenshot: "网页截图",
-  browser_console: "读取网页日志",
-  browser_network: "读取网络请求",
-  browser_close: "关闭浏览器",
-};
-
-function compactText(value: string, maxLength = 160): string {
-  const normalized = value.replace(/\s+/g, " ").trim();
-  if (normalized.length <= maxLength) return normalized;
-  return `${normalized.slice(0, maxLength - 1)}…`;
-}
-
-function objectInput(input: unknown): Record<string, unknown> {
-  return input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
-}
-
-function stringInput(input: Record<string, unknown>, key: string): string | null {
-  const value = input[key];
-  return typeof value === "string" && value.trim().length > 0 ? value : null;
-}
-
-function summarizeToolInput(name: string, input: unknown, labels: Record<string, string> = TOOL_LABELS): string {
-  const data = objectInput(input);
-  const path = stringInput(data, "path");
-  const cwd = stringInput(data, "cwd");
-  switch (name) {
-    case "terminal_exec": {
-      const command = stringInput(data, "command");
-      return compactText([command ? `命令：${command}` : "执行命令", cwd ? `目录：${cwd}` : ""].filter(Boolean).join("；"));
-    }
-    case "fs_read":
-    case "fs_write":
-    case "fs_list":
-    case "fs_stat":
-    case "fs_edit":
-    case "fs_mkdir":
-    case "fs_delete":
-      return path ? compactText(`路径：${path}`) : labels[name] ?? name;
-    case "fs_move":
-    case "fs_copy": {
-      const from = stringInput(data, "from") ?? stringInput(data, "source") ?? path;
-      const to = stringInput(data, "to") ?? stringInput(data, "destination");
-      return compactText([from ? `从：${from}` : "", to ? `到：${to}` : ""].filter(Boolean).join("；") || (labels[name] ?? name));
-    }
-    case "fs_grep": {
-      const pattern = stringInput(data, "pattern") ?? stringInput(data, "query");
-      return compactText([pattern ? `关键词：${pattern}` : "", path ? `范围：${path}` : ""].filter(Boolean).join("；") || "搜索文本");
-    }
-    case "fs_glob": {
-      const pattern = stringInput(data, "pattern") ?? stringInput(data, "glob");
-      return compactText([pattern ? `匹配：${pattern}` : "", path ? `范围：${path}` : ""].filter(Boolean).join("；") || "查找文件");
-    }
-    case "browser_navigate": {
-      const url = stringInput(data, "url");
-      return url ? compactText(`网址：${url}`) : "打开网页";
-    }
-    case "browser_click":
-    case "browser_type": {
-      const selector = stringInput(data, "selector");
-      const text = stringInput(data, "text");
-      return compactText([
-        selector ? `目标：${selector}` : "",
-        name === "browser_type" && text ? `输入：${text.length} 字` : "",
-      ].filter(Boolean).join("；") || (labels[name] ?? name));
-    }
-    default:
-      return labels[name] ?? name;
-  }
-}
-
-function toolOutputPreview(event: RunTurnToolEvent): string | undefined {
-  const raw = event.error ?? event.output;
-  if (!raw) return undefined;
-  return compactText(raw, 220);
-}
-
-function toToolPayload(event: RunTurnToolEvent, labels: Record<string, string> = TOOL_LABELS) {
-  return {
-    id: event.id,
-    name: event.name,
-    label: labels[event.name] ?? event.name,
-    status: event.status,
-    detail: summarizeToolInput(event.name, event.input, labels),
-    elapsedMs: event.elapsedMs,
-    outputPreview: toolOutputPreview(event),
-  };
-}
-
-function positiveNumberEnv(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function positiveIntEnv(name: string, fallback: number): number {
-  return Math.floor(positiveNumberEnv(name, fallback));
-}
-
-/**
- * 测试钩子：直接注入启用集（仅测试用）。
- */
-export function __setEnabledForTest(set: Set<string>): void {
-  enabledCache = { at: Date.now(), set, maxOutput: new Map() };
-}
-
-/**
- * 校验模型是否启用，30s 缓存，billing 故障降级放行。
- * 同时缓存每个模型的 maxOutputTokens（单次输出上限），供 resolveModelMaxOutput 读取。
- */
-async function isModelEnabled(billing: ReturnType<typeof createBillingClient>, model: string): Promise<boolean> {
-  const now = Date.now();
-  if (!enabledCache || now - enabledCache.at >= ENABLED_TTL_MS) {
-    try {
-      const r = await billing.listEnabledModels();
-      enabledCache = {
-        at: now,
-        set: new Set(r.data.map((m) => m.model)),
-        maxOutput: new Map(r.data.map((m) => [m.model, Number(m.maxOutputTokens) || 0])),
-      };
-    } catch {
-      return true; // billing 故障降级放行；reserve 计价仍是安全网
-    }
-  }
-  return enabledCache.set.has(model);
-}
-
-/**
- * 读取模型配置的单次输出上限（0=未配置，交由 run 内的全局默认兜底）。
- * 依赖 isModelEnabled 已在本次请求前刷新缓存。
- */
-function resolveModelMaxOutput(model: string): number {
-  return enabledCache?.maxOutput.get(model) ?? 0;
-}
+// 导出面与拆分前逐字一致,这三个名字原样转出,不新增也不减少。
+export { chatModelErrorMessage, providerModelId } from "./routes-errors.js";
+export { __setEnabledForTest } from "./routes-model-gate.js";
 
 export async function chatRoutes(app: FastifyInstance) {
   // 本文件 4 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
