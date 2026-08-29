@@ -774,3 +774,5 @@ catch 链在拆分后位于 `codex-pet-runner.ts:1426-1499`（计划里的 `:504
 **唯一挂起项**：上面那条 dev 环境真实桌宠生成的端到端确认。用户决定推迟到整个计划做完之后再做（原话：「真实测试先不做，先把这个整个计划做完再去做测试」），现在到点了。
 
 **收尾时的自动化基线**：codex-pet 全量 = 文件 25 passed / 0 failed / 4 skipped，用例 323 passed / 0 failed / 8 skipped；`packages/llm` 全量 = 文件 3 passed / 0 failed / 2 skipped，用例 49 passed / 0 failed / 5 skipped。`apps/api` 另有 12 个本地环境失败（admin/resource-routes 7、admin/membership-routes 3、admin/code-routes 1、agents/routes 1），与本计划无关，均为缺 S3/MinIO 等本地依赖导致，不修。
+
+**2026-08-30 复核**：架构整治计划（`2026-08-03-architecture-remediation.md`）的 Task P3.1 里，阶段 2 / 阶段 3 的复选框此前一直未勾。已回到代码里逐条核对产物（两个 look 状态类型、`repairLook{A,B}Row` 与全仓仅剩的那一个 `for (;;)`、13 处 lease CAS helper 调用、7 个 catch handler、`packages/llm` 的 routes/retry 与三处 `CHATGPT_MODELS` 解析归一），确认与本文件的执行记录一致后补勾，明细见那份计划的「P3.1 复核记录」。复核当次实测：codex-pet 全量 336 passed / 0 failed / 8 skipped（+13 全部来自 `7d37c81` 之后的计费/预留窗口批次，与本计划无关），`packages/llm` 全量 49 passed / 0 failed / 5 skipped 与上面的基线一致。**唯一挂起项仍然挂起**，用户 2026-08-30 决定「测试单独补」。

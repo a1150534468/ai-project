@@ -1027,9 +1027,38 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 ## Task P3.1: 执行 `2026-07-27-legacy-workflow-optimization.md` 阶段 1-3
 
 - [x] 阶段 1：`codex-pet-runner.ts` 纯移动拆分（5678 行 / 110 函数 / 439 await / 嵌套 9 层 → 13 个文件）。37 步已写好，含**门面兼容契约**（6 个源文件 + 5 个测试文件一行不改）。**2026-08-22 完成**：5815 → 1561 行 + 13 个模块，136 个符号逐字节核对为纯移动，codex-pet 全量 320 passed / 0 failed / 8 skipped 与基线一致。
-- [ ] 阶段 2：`executeRun` 去重（三份 look 修复循环、lease CAS 样板）。14 步。**唯一可能改变行为的阶段。**
-- [ ] 阶段 3：加厚 `packages/llm`（`routes.ts` 严格路由解析 + `retry.ts` 通用重试，TDD）。14 步。
-- [ ] **与本计划的顺序**：P0 全部完成后再开 P3；P2.1（目录拆分）必须等 P3 阶段 1 完成。
+- [x] 阶段 2：`executeRun` 去重（三份 look 修复循环、lease CAS 样板）。14 步。**唯一可能改变行为的阶段。** **2026-08-25/26 完成**，5 个提交（`1d284db` / `7c98eb2` / `090e823` / `1e21f99` / `c47c556` / `17a83ef`）。
+- [x] 阶段 3：加厚 `packages/llm`（`routes.ts` 严格路由解析 + `retry.ts` 通用重试，TDD）。14 步。**2026-08-27 完成**，3 个提交（`5c7e4ee` / `3c0af37` / `7d37c81`）。
+- [x] **与本计划的顺序**：P0 全部完成后再开 P3；P2.1（目录拆分）必须等 P3 阶段 1 完成。**已遵守**：阶段 1 与 P2.1 都在 2026-08-22，P2.1 的「前置」条目里写明「阶段 1 已完成，codex-pet 正常纳入」。
+
+### P3.1 复核记录（2026-08-30）
+
+阶段 2 / 3 的两个复选框此前未勾，是**落档滞后而不是活儿没干** —— `2026-07-27-legacy-workflow-optimization.md` 末尾早已写着「五个阶段的全部任务已执行完毕（2026-08-27）」。本次逐条回到代码里核对产物，不看执行记录的自述：
+
+**阶段 2**
+
+| 任务 | 计划要求的产物 | 代码里的实际位置 |
+| --- | --- | --- |
+| 2.1 方向行共享状态 | 8 个共享 `let` 收敛 | `runner-types.ts:200` `LookRowState<TGate>` + `:210` `LookBReferenceState`；`runner-direction.ts:709-710` 命名了 `FirstLookRowGate` / `SecondLookRowGate`、`:515` `ApprovedRegisteredDirectionRow`；`codex-pet-runner.ts:591/624/671` 三处构造 |
+| 2.2 三份 look 修复循环 | 合一为 `repairLook{A,B}Row` | `runner-look-repair.ts:147/203` 两个行别函数 + `:103` 私有 `runLookRepairLoop`；**全仓只剩 `:118` 一个 `for (;;)`**，`codex-pet-runner.ts` 里四段循环体归零，改为 `:596/:676`（行内门禁）与 `:755/:776`（`regenerateDirectionRows` 内）四次调用；`LookRepairOptions` 8 个字段含表外的 `exhaustedPrefix` 与合并后的 `initialHint: string \| null`；行为锚 `codex-pet-runner.integration.test.ts:2777`「retries the row-9 pre-gate before starting the second look row」在 |
+| 2.3 lease CAS 样板 | 两个 helper + 逐处替换 | `runner-lease.ts:73` `updateOwnedActiveRun` / `:99` `updateOwnedJob`；调用点实测**形状 A 4 处 + 形状 B 9 处 = 13 处**，与执行记录一致（分布：runner-base 3、runner-archive 2、runner-billing 2、runner-direction 2、runner-jobs 2、runner-board-job 1、runner-lease 1） |
+| 2.4 catch 链 | 7 个处理体命名化 | `runner-finalize.ts:304-374` 七个 `handleXxx` 全部导出 + `:297` `readOwnedRunOutcome`；`codex-pet-runner.ts:1429-1449` 的 catch 链只剩 `instanceof` 判定 + `return await handleXxx(...)`，21 行 |
+
+**阶段 3**
+
+- `packages/llm/src/routes.ts`(95) + `retry.ts`(106) + 两个测试(122 / 187) 都在；`index.ts:10-13` 再导出，`client.ts:12` 把 `CHATGPT_MODELS` / `CHATGPT_DEFAULT_BASE_URL` / `buildBailianBaseURL` 反向从 routes.ts 再导出（依赖方向只留一条）。
+- **三处 `CHATGPT_MODELS` 解析已归一**：全仓 `env.CHATGPT_MODELS?.split(` 只剩 `routes.ts:63` 一处。
+- 消费方到位：`codex-pet-model-contract.ts:70` 用 `parseChatgptModelList`；`codex-pet-visual-client.ts` 用 `resolveChatgptCredentials` / `resolveBailianCredentials` / `withLlmRetry` / `defaultRetryableLlmError`，并按 `LlmRouteError.code` 映射中文合同错误（`:80` 的表）而不是透传 message。
+- 计划要求**不动**的图片生成重试循环确实没动：`codex-pet-visual-image.ts:284` 仍用 `classifyImageGenerationError`，本地 `wait()` 也还在（`:140`）——它服务的是图片路径，不在阶段 3 范围内。
+- **路径漂移提醒**：阶段 3 记录里的 `codex-pet-visual.ts` 已被 P2.4 批次一拆成 `codex-pet-visual-{client,image,qa,direction,seedream,types}.ts`，上面那些行号是拆分后的位置；按文件名去老记录里找会找不到。
+
+**验证（复核当次实测，未改一行代码）**
+
+- codex-pet 全量（`set -a && . ../../.env && set +a` 后 `npx vitest run codex-pet`）：**336 passed / 0 failed / 8 skipped**（文件 27 passed / 0 failed / 4 skipped），352.15s。
+- `packages/llm` 全量：**49 passed / 0 failed / 5 skipped**（文件 3 passed / 0 failed / 2 skipped）—— 与阶段 3 收尾记录逐个数字一致。
+- codex-pet 的 323 → 336（+13）**不是阶段 2/3 带来的**，逐条对上了 `7d37c81..HEAD` 的计费/预留窗口那批：新文件 `codex-pet-reservation-window.test.ts`(4) + `runner-billing/runner-billing.test.ts`(3)，改动文件新增 `codex-pet-per-image-billing-correction`/`routes`/`routes.integration` 共 4 个 + `workers/codex-pet-worker.test.ts` 2 个 = 13。`failed 0` 与 `skipped 8` 两个数字自阶段 1 收尾起从未变过。
+
+**仍然挂起（不属于本次复核范围）**：`2026-07-27-legacy-workflow-optimization.md` 标注的唯一挂起项 —— dev 环境真实端到端确认（生图 / 小说 / 桌宠 / 图文四模块手动触发，`codex_ui_0729`，会真实扣点）。用户 2026-08-30 决定「测试单独补」，另行安排。
 
 ---
 
