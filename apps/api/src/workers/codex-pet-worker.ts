@@ -1,794 +1,103 @@
+/**
+ * codex-pet 工作进程的入口。原本这一个文件是 1158 行(指标 + 兜底 + 结算 + 编排 + 进程入口),
+ * P2.4 拆分后按依赖方向分成五个文件,这里只留编排与入口:
+ *
+ * - `codex-pet-worker-support.ts`   env 读正数、异常裁成安全诊断串(叶子)
+ * - `codex-pet-worker-metrics.ts`   WorkerMetrics、事件 → 指标增量、/metrics 与 health server
+ * - `codex-pet-worker-recovery.ts`  量表刷新、产物清理、软删项目与卡死运行重投、抢占释放
+ * - `codex-pet-worker-billing.ts`   授权超时取消、按张预留结算、计费意图补偿激活
+ *
+ * 本文件**不能**变成纯 re-export 门面:`infra/k8s/base/37-codex-pet-worker.yaml` 与
+ * package.json 的 `worker:codex-pet` 都按这个路径起进程,底部的 `isDirectWorkerEntrypoint`
+ * 守卫必须留在这里;`env.test.ts` 还钉着"这个文件里出现 assertRequiredEnv()"。
+ *
+ * 对外导出面与拆分前逐字一致,仍是 20 个名字 —— `codex-pet-worker.test.ts` 与
+ * `combined-worker.ts` 一行都不用改。新代码要用更细的层就直接 import 对应文件,
+ * 不要往这里补 re-export。
+ */
+
 import { assertRequiredEnv } from "../env.js";
 import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
 import { createBillingClient } from "@ai-assistant/billing";
-import { getPrisma, getRedis } from "@ai-assistant/db";
-import type { PrismaClient } from "@prisma/client";
-import { getObject, makeS3, type S3 } from "../storage/s3.js";
+import { getPrisma } from "@ai-assistant/db";
+import { getObject, makeS3 } from "../storage/s3.js";
 import {
   archiveCodexPetRun,
   closeCodexPetCleanupQueue,
   createCodexPetCleanupWorker,
-  enqueueCodexPetProjectCleanup,
   executeCodexPetProjectCleanup,
   appendCodexPetEvent,
-  codexPetRunChannel,
-  codexPetUnderSettledDiagnostic,
   sanitizeCodexPetDiagnosticText,
-  listCodexPetBillingReconciliationCandidates,
-  reconcileCodexPetRunBilling,
-  type CodexPetChargeClient,
   closeCodexPetQueue,
   createCodexPetWorker,
-  enqueueCodexPetRun,
   CODEX_PET_ACTIVE_STATUSES,
   CodexPetLeaseLostError,
   executeCodexPetRun,
   createCodexPetArtifactStore,
-  deleteCodexPetArtifact,
   assertCodexPetImageRoute,
   installCodexPetUpstreamDnsOverride,
   CODEX_PET_PER_IMAGE_BILLING_MODE,
-  CODEX_PET_PARKED_APPROVAL_EXPIRY_MS,
-  CODEX_PET_FAILED_SETTLEMENT_GRACE_MS,
-  refundCodexPetUndispatchedExtraCalls,
   assertCodexPetVisualQaRoute,
 } from "../workflow/codex-pet/index.js";
-import {
-  isVerifiedWorkflowImageObjectKeyForUser,
-  sanitizeImageUpstreamRequestId,
-} from "../workflow/_shared/image-service.js";
+import { isVerifiedWorkflowImageObjectKeyForUser } from "../workflow/_shared/image-service.js";
 import { runHeavyWorkerTask } from "./heavy-task-gate.js";
 import {
   isDirectWorkerEntrypoint,
   runStandaloneWorker,
   type StartedWorkerRuntime,
 } from "./worker-runtime.js";
+import { positiveNumber, safeWorkerError } from "./codex-pet-worker-support.js";
+import {
+  createCodexPetWorkerHealthServer,
+  createCodexPetWorkerMetrics,
+  jsonRecord,
+  recordCodexPetImageFailureMetric,
+  recordCodexPetRetryMetrics,
+  recordCodexPetUpstreamRequestIdMetric,
+  type ActionOutcomeMetric,
+  type StageDurationMetric,
+} from "./codex-pet-worker-metrics.js";
+import {
+  cleanupExpiredCodexPetArtifacts,
+  observeProviderArtifacts,
+  recoverDeletingProjects,
+  recoverStaleRuns,
+  refreshDatabaseGauges,
+  releasePreemptedRuns,
+} from "./codex-pet-worker-recovery.js";
+import {
+  expireParkedCodexPetRuns,
+  reconcileBillingIntents,
+  reconcilePerImageBillingSettlements,
+} from "./codex-pet-worker-billing.js";
 
-function positiveNumber(key: string, fallback: number, env: NodeJS.ProcessEnv = process.env): number {
-  const value = Number(env[key]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function safeWorkerError(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error);
-  return sanitizeCodexPetDiagnosticText(message, 1_000);
-}
-
-export type WorkerMetrics = {
-  runsStarted: number;
-  runsCompleted: number;
-  runsFailed: number;
-  runsCancelled: number;
-  billingActivated: number;
-  billingRefunded: number;
-  billingRefundFailed: number;
-  staleRunsRecovered: number;
-  parkedRunsExpired: number;
-  deletingProjectsRecovered: number;
-  deletingProjectRecoveryFailed: number;
-  projectsCleaned: number;
-  projectCleanupFailed: number;
-  artifactsCleaned: number;
-  artifactCleanupFailed: number;
-  maintenancePasses: number;
-  gptImageCalls: number;
-  gptInputTokens: number;
-  gptOutputTokens: number;
-  gptTotalTokens: number;
-  gptModelMismatches: number;
-  gptSizeMismatches: number;
-  gptQualityMismatches: number;
-  gptRequestIdsCaptured: number;
-  visualRepairAttempts: number;
-  transportRetries: number;
-  rateLimitFailures: number;
-  timeoutFailures: number;
-  upstreamFailures: number;
-  networkFailures: number;
-  authenticationFailures: number;
-  moderationFailures: number;
-  invalidRequestFailures: number;
-  archiveRetries: number;
-  archiveCompleted: number;
-  validationWarnings: number;
-  validationFailures: number;
-  activeRuns: number;
-  archivingRuns: number;
-  readyRunsMissingArchive: number;
-  readyRunsMissingDeliverables: number;
-  databaseProjects: number;
-  databaseReadyRuns: number;
-  databaseFailedRuns: number;
-  databaseCancelledRuns: number;
-  databaseRefundedRuns: number;
-  knowledgePendingDocuments: number;
-  knowledgeIndexingDocuments: number;
-  knowledgeFailedDocuments: number;
-};
-
-export function createCodexPetWorkerMetrics(): WorkerMetrics {
-  return {
-    runsStarted: 0,
-    runsCompleted: 0,
-    runsFailed: 0,
-    runsCancelled: 0,
-    billingActivated: 0,
-    billingRefunded: 0,
-    billingRefundFailed: 0,
-    staleRunsRecovered: 0,
-    parkedRunsExpired: 0,
-    deletingProjectsRecovered: 0,
-    deletingProjectRecoveryFailed: 0,
-    projectsCleaned: 0,
-    projectCleanupFailed: 0,
-    artifactsCleaned: 0,
-    artifactCleanupFailed: 0,
-    maintenancePasses: 0,
-    gptImageCalls: 0,
-    gptInputTokens: 0,
-    gptOutputTokens: 0,
-    gptTotalTokens: 0,
-    gptModelMismatches: 0,
-    gptSizeMismatches: 0,
-    gptQualityMismatches: 0,
-    gptRequestIdsCaptured: 0,
-    visualRepairAttempts: 0,
-    transportRetries: 0,
-    rateLimitFailures: 0,
-    timeoutFailures: 0,
-    upstreamFailures: 0,
-    networkFailures: 0,
-    authenticationFailures: 0,
-    moderationFailures: 0,
-    invalidRequestFailures: 0,
-    archiveRetries: 0,
-    archiveCompleted: 0,
-    validationWarnings: 0,
-    validationFailures: 0,
-    activeRuns: 0,
-    archivingRuns: 0,
-    readyRunsMissingArchive: 0,
-    readyRunsMissingDeliverables: 0,
-    databaseProjects: 0,
-    databaseReadyRuns: 0,
-    databaseFailedRuns: 0,
-    databaseCancelledRuns: 0,
-    databaseRefundedRuns: 0,
-    knowledgePendingDocuments: 0,
-    knowledgeIndexingDocuments: 0,
-    knowledgeFailedDocuments: 0,
-  };
-}
-
-function jsonRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
-function finiteMetric(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-export interface CodexPetRetryMetricDelta {
-  readonly visualRepairAttempts: 0 | 1;
-  readonly transportRetries: 0 | 1;
-  readonly actionRetries: 0 | 1;
-  readonly failureCategory: unknown;
-}
-
-/**
- * Classify retry events without inferring transport failures from a visual
- * job's attempt counter. Older transport events predate `retryKind`, so a
- * positive integer `transportAttempt` remains the only legacy discriminator.
- */
-export function codexPetRetryMetricDelta(input: {
-  readonly type: unknown;
-  readonly payload?: unknown;
-}): CodexPetRetryMetricDelta {
-  if (input.type === "run.repairing") {
-    return {
-      visualRepairAttempts: 1,
-      transportRetries: 0,
-      actionRetries: 1,
-      failureCategory: null,
-    };
-  }
-  if (input.type !== "job.retrying") {
-    return {
-      visualRepairAttempts: 0,
-      transportRetries: 0,
-      actionRetries: 0,
-      failureCategory: null,
-    };
-  }
-
-  const payload = jsonRecord(input.payload);
-  const retryKind = payload.retryKind;
-  const transportAttempt = payload.transportAttempt;
-  const isLegacyTransportRetry = retryKind == null
-    && typeof transportAttempt === "number"
-    && Number.isSafeInteger(transportAttempt)
-    && transportAttempt > 0;
-  const isTransportRetry = retryKind === "transport" || isLegacyTransportRetry;
-  return {
-    visualRepairAttempts: 0,
-    transportRetries: isTransportRetry ? 1 : 0,
-    actionRetries: isTransportRetry ? 1 : 0,
-    failureCategory: isTransportRetry ? payload.category : null,
-  };
-}
-
-export interface CodexPetProviderMetricDelta {
-  readonly calls: number;
-  readonly inputTokens: number;
-  readonly outputTokens: number;
-  readonly totalTokens: number;
-  readonly modelMismatches: number;
-  readonly sizeMismatches: number;
-  readonly qualityMismatches: number;
-  readonly requestIdsCaptured: number;
-}
-
-/** Convert persisted, sanitized provider metadata into one Prometheus delta. */
-export function codexPetProviderMetricDelta(value: unknown): CodexPetProviderMetricDelta {
-  const metadata = jsonRecord(value);
-  const usage = jsonRecord(metadata.usage);
-  return {
-    calls: 1,
-    inputTokens: finiteMetric(usage.inputTokens),
-    outputTokens: finiteMetric(usage.outputTokens),
-    totalTokens: finiteMetric(usage.totalTokens),
-    modelMismatches: metadata.requestedModel && metadata.actualModel && metadata.requestedModel !== metadata.actualModel ? 1 : 0,
-    sizeMismatches: metadata.requestedSize && metadata.actualSize && metadata.requestedSize !== metadata.actualSize ? 1 : 0,
-    qualityMismatches: metadata.requestedQuality && metadata.actualQuality && metadata.requestedQuality !== metadata.actualQuality ? 1 : 0,
-    requestIdsCaptured: sanitizeImageUpstreamRequestId(metadata.upstreamRequestId) ? 1 : 0,
-  };
-}
-
-export function recordCodexPetUpstreamRequestIdMetric(value: unknown, metrics: WorkerMetrics): string | null {
-  const requestId = sanitizeImageUpstreamRequestId(value);
-  if (requestId) metrics.gptRequestIdsCaptured += 1;
-  return requestId;
-}
-
-export function recordCodexPetImageFailureMetric(category: unknown, metrics: WorkerMetrics): void {
-  if (category === "rate_limit") metrics.rateLimitFailures += 1;
-  if (category === "timeout") metrics.timeoutFailures += 1;
-  if (category === "upstream") metrics.upstreamFailures += 1;
-  if (category === "network") metrics.networkFailures += 1;
-  if (category === "authentication") metrics.authenticationFailures += 1;
-  if (category === "moderation") metrics.moderationFailures += 1;
-  if (category === "invalid_request") metrics.invalidRequestFailures += 1;
-}
-
-export function recordCodexPetRetryMetrics(
-  input: { readonly type: unknown; readonly payload?: unknown },
-  metrics: WorkerMetrics,
-): CodexPetRetryMetricDelta {
-  const delta = codexPetRetryMetricDelta(input);
-  metrics.transportRetries += delta.transportRetries;
-  metrics.visualRepairAttempts += delta.visualRepairAttempts;
-  if (delta.transportRetries) recordCodexPetImageFailureMetric(delta.failureCategory, metrics);
-  return delta;
-}
-
-async function observeProviderArtifacts(input: {
-  readonly prisma: PrismaClient;
-  readonly runId: string;
-  readonly metrics: WorkerMetrics;
-  readonly seenArtifactIds: Set<string>;
-}): Promise<void> {
-  const artifacts = await input.prisma.codexPetArtifact.findMany({
-    where: { runId: input.runId, kind: { in: ["base_candidate", "pose_board"] } },
-    select: { id: true, metadata: true },
-  });
-  for (const artifact of artifacts) {
-    if (input.seenArtifactIds.has(artifact.id)) continue;
-    input.seenArtifactIds.add(artifact.id);
-    const delta = codexPetProviderMetricDelta(artifact.metadata);
-    input.metrics.gptImageCalls += delta.calls;
-    input.metrics.gptInputTokens += delta.inputTokens;
-    input.metrics.gptOutputTokens += delta.outputTokens;
-    input.metrics.gptTotalTokens += delta.totalTokens;
-    input.metrics.gptModelMismatches += delta.modelMismatches;
-    input.metrics.gptSizeMismatches += delta.sizeMismatches;
-    input.metrics.gptQualityMismatches += delta.qualityMismatches;
-    input.metrics.gptRequestIdsCaptured += delta.requestIdsCaptured;
-  }
-  // Bound process memory while retaining enough IDs to de-duplicate every
-  // active/recent run. Counters are process-lifetime metrics and reset on a
-  // worker restart as normal Prometheus counters do.
-  if (input.seenArtifactIds.size > 100_000) input.seenArtifactIds.clear();
-}
-
-export async function cleanupExpiredCodexPetArtifacts(input: {
-  readonly prisma: PrismaClient;
-  readonly s3?: S3;
-  readonly now?: Date;
-  readonly limit?: number;
-  readonly deleteArtifact?: typeof deleteCodexPetArtifact;
-  readonly onError?: (error: unknown, artifactId: string) => void;
-}): Promise<{ readonly scanned: number; readonly deleted: number; readonly failed: number }> {
-  const limit = Math.min(500, Math.max(1, Math.floor(input.limit ?? 100)));
-  const expired = await input.prisma.codexPetArtifact.findMany({
-    where: { expiresAt: { lte: input.now ?? new Date() } },
-    orderBy: { expiresAt: "asc" },
-    select: { id: true, userId: true },
-    take: limit,
-  });
-  const remove = input.deleteArtifact ?? deleteCodexPetArtifact;
-  let deleted = 0;
-  let failed = 0;
-  for (const artifact of expired) {
-    try {
-      const removed = await remove({
-        prisma: input.prisma,
-        artifactId: artifact.id,
-        userId: artifact.userId,
-        s3: input.s3,
-      });
-      if (removed) deleted += 1;
-    } catch (error) {
-      failed += 1;
-      input.onError?.(error, artifact.id);
-    }
-  }
-  return { scanned: expired.length, deleted, failed };
-}
-
-async function refreshDatabaseGauges(prisma: PrismaClient, metrics: WorkerMetrics): Promise<void> {
-  const [
-    activeRuns,
-    archivingRuns,
-    readyRunsMissingArchive,
-    readyRunsMissingDeliverables,
-    databaseProjects,
-    databaseReadyRuns,
-    databaseFailedRuns,
-    databaseCancelledRuns,
-    databaseRefundedRuns,
-    knowledgePendingDocuments,
-    knowledgeIndexingDocuments,
-    knowledgeFailedDocuments,
-  ] = await Promise.all([
-    prisma.codexPetRun.count({ where: { status: { in: [...CODEX_PET_ACTIVE_STATUSES] } } }),
-    prisma.codexPetRun.count({ where: { status: "archiving" } }),
-    prisma.codexPetRun.count({ where: { status: "ready", knowledgeDocumentId: null } }),
-    prisma.codexPetRun.count({ where: {
-      status: "ready",
-      OR: [
-        { spritesheetArtifactId: null },
-        { packageArtifactId: null },
-        { previewArtifactId: null },
-      ],
-    } }),
-    prisma.codexPetProject.count(),
-    prisma.codexPetRun.count({ where: { status: "ready" } }),
-    prisma.codexPetRun.count({ where: { status: "failed" } }),
-    prisma.codexPetRun.count({ where: { status: "cancelled" } }),
-    prisma.codexPetRun.count({ where: { billingRefundedAt: { not: null } } }),
-    prisma.document.count({ where: { sourceModule: "codex_pet", status: "pending" } }),
-    prisma.document.count({ where: { sourceModule: "codex_pet", status: "indexing" } }),
-    prisma.document.count({ where: { sourceModule: "codex_pet", status: "failed" } }),
-  ]);
-  metrics.activeRuns = activeRuns;
-  metrics.archivingRuns = archivingRuns;
-  metrics.readyRunsMissingArchive = readyRunsMissingArchive;
-  metrics.readyRunsMissingDeliverables = readyRunsMissingDeliverables;
-  metrics.databaseProjects = databaseProjects;
-  metrics.databaseReadyRuns = databaseReadyRuns;
-  metrics.databaseFailedRuns = databaseFailedRuns;
-  metrics.databaseCancelledRuns = databaseCancelledRuns;
-  metrics.databaseRefundedRuns = databaseRefundedRuns;
-  metrics.knowledgePendingDocuments = knowledgePendingDocuments;
-  metrics.knowledgeIndexingDocuments = knowledgeIndexingDocuments;
-  metrics.knowledgeFailedDocuments = knowledgeFailedDocuments;
-}
-
-type StageDurationMetric = { seconds: number; transitions: number };
-type ActionOutcomeMetric = { completed: number; failed: number; retries: number };
-
-function metricLabel(value: string): string {
-  return value.replace(/[^A-Za-z0-9_.-]/g, "_").slice(0, 80) || "unknown";
-}
-
-export function codexPetWorkerMetricsText(
-  metrics: WorkerMetrics,
-  stageDurations: ReadonlyMap<string, StageDurationMetric>,
-  actionOutcomes: ReadonlyMap<string, ActionOutcomeMetric>,
-): string {
-  const lines = Object.entries(metrics)
-    .map(([key, value]) => `codex_pet_worker_${key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)} ${value}`);
-  for (const [stage, value] of stageDurations) {
-    const label = metricLabel(stage);
-    lines.push(`codex_pet_worker_stage_duration_seconds_total{stage="${label}"} ${value.seconds}`);
-    lines.push(`codex_pet_worker_stage_transitions_total{stage="${label}"} ${value.transitions}`);
-  }
-  for (const [jobKey, value] of actionOutcomes) {
-    const label = metricLabel(jobKey);
-    lines.push(`codex_pet_worker_action_completed_total{job_key="${label}"} ${value.completed}`);
-    lines.push(`codex_pet_worker_action_failed_total{job_key="${label}"} ${value.failed}`);
-    lines.push(`codex_pet_worker_action_retries_total{job_key="${label}"} ${value.retries}`);
-  }
-  return `${lines.join("\n")}\n`;
-}
-
-export async function recoverDeletingProjects(input: {
-  readonly prisma?: PrismaClient;
-  readonly enqueue?: (payload: { readonly userId: string; readonly projectId: string }) => Promise<void>;
-  readonly env?: NodeJS.ProcessEnv;
-  readonly onEnqueueError?: (error: unknown, projectId: string) => void;
-} = {}): Promise<{ readonly scanned: number; readonly enqueued: number; readonly failed: number }> {
-  const env = input.env ?? process.env;
-  const prisma = input.prisma ?? getPrisma();
-  const enqueue = input.enqueue ?? enqueueCodexPetProjectCleanup;
-  // A bounded scan runs every maintenance pass. Queue jobId is derived from
-  // projectId, so this safely repairs both an API crash after the `deleting`
-  // transaction and a first Queue.add failure without multiplying jobs.
-  const limit = Math.max(1, Math.floor(positiveNumber("CODEX_PET_CLEANUP_RECOVERY_LIMIT", 100, env)));
-  const projects = await prisma.codexPetProject.findMany({
-    // `deletedAt` marks the new soft-delete path. Only legacy tombstones
-    // without that marker still belong to the old hard-cleanup queue.
-    where: { status: "deleting", deletedAt: null },
-    orderBy: { updatedAt: "asc" },
-    select: { id: true, userId: true },
-    take: limit,
-  });
-  let enqueued = 0;
-  let failed = 0;
-  for (const project of projects) {
-    try {
-      await enqueue({ userId: project.userId, projectId: project.id });
-      enqueued += 1;
-    } catch (error) {
-      failed += 1;
-      input.onEnqueueError?.(error, project.id);
-    }
-  }
-  return { scanned: projects.length, enqueued, failed };
-}
-
-export function createCodexPetWorkerHealthServer(args: {
-  readonly port: number;
-  readonly isHealthy: () => boolean;
-  readonly metrics: WorkerMetrics;
-  readonly stageDurations: ReadonlyMap<string, StageDurationMetric>;
-  readonly actionOutcomes: ReadonlyMap<string, ActionOutcomeMetric>;
-  /** Tests can exercise the exact request handler without opening a socket. */
-  readonly listen?: boolean;
-}): Server {
-  const server = createServer((request, response) => {
-    const healthy = args.isHealthy();
-    if (request.url?.split("?", 1)[0] === "/metrics") {
-      response.writeHead(200, { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" });
-      response.end(codexPetWorkerMetricsText(args.metrics, args.stageDurations, args.actionOutcomes));
-      return;
-    }
-    response.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
-    response.end(JSON.stringify({ ok: healthy, worker: "codex-pet" }));
-  });
-  if (args.listen !== false) server.listen(args.port, "0.0.0.0");
-  return server;
-}
-
-export async function recoverStaleRuns(input: {
-  readonly prisma?: PrismaClient;
-  readonly enqueue?: (runId: string) => Promise<void>;
-  readonly now?: () => Date;
-  readonly env?: NodeJS.ProcessEnv;
-} = {}): Promise<number> {
-  const env = input.env ?? process.env;
-  const prisma = input.prisma ?? getPrisma();
-  const now = input.now ?? (() => new Date());
-  const enqueue = input.enqueue ?? ((runId: string) => enqueueCodexPetRun({ runId }));
-  const staleBefore = new Date(now().getTime() - positiveNumber("CODEX_PET_STALE_RUN_MS", 15 * 60_000, env));
-  const pausedStatuses = new Set(["awaiting_base_review", "awaiting_direction_review", "awaiting_regeneration_approval"]);
-  const runs = await prisma.codexPetRun.findMany({
-    where: {
-      status: { in: [...CODEX_PET_ACTIVE_STATUSES].filter((status) => !pausedStatuses.has(status)) },
-      AND: [
-        {
-          OR: [
-            { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
-            { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
-          ],
-        },
-        {
-          OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }, { status: "queued" }],
-        },
-      ],
-      // A cancellation requested while a worker owns the lease intentionally
-      // leaves the run active until that worker reaches a safe checkpoint.
-      // If the worker dies first, the persisted flag must still be recovered;
-      // executeCodexPetRun will claim the stale lease and immediately settle
-      // the cancellation/refund instead of leaving the run stuck forever.
-    },
-    select: { id: true },
-    take: 500,
-  });
-  await Promise.all(runs.map((run) => enqueue(run.id).catch(() => undefined)));
-  return runs.length;
-}
-
-type CodexPetSettlementClient = {
-  readonly settleResource: (args: {
-    readonly operationId: string;
-    readonly resourceKey: string;
-    readonly units: number;
-  }) => Promise<{ readonly settled: number }>;
-};
-
-// 等授权上限与失败结算宽限的口径在 codex-pet-reservation-window.ts（与 routes 声明给
-// billing 的预留有效期同源），这里只做转出，避免两边各写一份而让 billing 兜底早于业务动手。
-export { CODEX_PET_PARKED_APPROVAL_EXPIRY_MS, CODEX_PET_FAILED_SETTLEMENT_GRACE_MS };
-
-/**
- * Cancel runs that have waited for image approval past the expiry window.
- *
- * Only flips the run to `cancelled` and records the reason; the reservation is
- * then settled by `reconcilePerImageBillingSettlements` (which already accepts
- * `cancelled`) and any charged-but-undispatched extras are refunded here, since
- * those points sit outside the run reservation entirely.
- */
-export async function expireParkedCodexPetRuns(input: {
-  readonly prisma: PrismaClient;
-  readonly billing?: { readonly refundResource: (operationId: string) => Promise<{ success: boolean }> };
-  readonly now?: () => Date;
-  readonly limit?: number;
-  readonly expiryMs?: number;
-  readonly onError?: (error: unknown, runId: string) => void;
-}): Promise<number> {
-  const now = input.now ?? (() => new Date());
-  const expiryMs = Math.max(0, input.expiryMs ?? CODEX_PET_PARKED_APPROVAL_EXPIRY_MS);
-  const parkedBefore = new Date(now().getTime() - expiryMs);
-  const candidates = await input.prisma.codexPetRun.findMany({
-    where: {
-      status: "awaiting_regeneration_approval",
-      // A worker still holding the lease is mid-transition; leave it alone.
-      workerId: null,
-      updatedAt: { lte: parkedBefore },
-    },
-    select: { id: true, projectId: true, userId: true, progressPercent: true },
-    take: Math.min(200, Math.max(1, input.limit ?? 50)),
-  });
-  let cancelled = 0;
-  for (const run of candidates) {
-    try {
-      const expiredAt = now();
-      const changed = await input.prisma.$transaction(async (tx) => {
-        await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', run.id);
-        const updated = await tx.codexPetRun.updateMany({
-          where: { id: run.id, status: "awaiting_regeneration_approval", workerId: null },
-          data: {
-            cancelRequested: true,
-            status: "cancelled",
-            progressStage: "cancelled",
-            progressMessage: "等待授权超时，已自动取消并结清",
-            completedAt: expiredAt,
-            lastEventSequence: { increment: 1 },
-          },
-        });
-        if (updated.count === 0) return false;
-        const fresh = await tx.codexPetRun.findUniqueOrThrow({
-          where: { id: run.id },
-          select: { lastEventSequence: true, progressPercent: true },
-        });
-        await tx.codexPetEvent.create({
-          data: {
-            projectId: run.projectId,
-            runId: run.id,
-            userId: run.userId,
-            sequence: fresh.lastEventSequence,
-            type: "run.cancelled",
-            stage: "cancelled",
-            message: "等待重出图授权超时，已自动取消，未交付的预留额度会退回",
-            progress: fresh.progressPercent,
-            payload: { reason: "approval_expired", expiryMs },
-          },
-        });
-        await tx.codexPetProject.updateMany({
-          where: { id: run.projectId, userId: run.userId, latestRunId: run.id, status: { not: "deleting" } },
-          data: { status: "cancelled" },
-        });
-        return true;
-      });
-      if (!changed) continue;
-      cancelled += 1;
-      if (input.billing) {
-        await refundCodexPetUndispatchedExtraCalls({
-          prisma: input.prisma,
-          billing: input.billing,
-          runId: run.id,
-          projectId: run.projectId,
-          userId: run.userId,
-          onError: (error) => input.onError?.(error, run.id),
-        }).catch((error: unknown) => input.onError?.(error, run.id));
-      }
-    } catch (error) {
-      input.onError?.(error, run.id);
-    }
-  }
-  return cancelled;
-}
-
-/**
- * A worker can finish the artifact work yet lose connectivity while settling
- * its reservation. This maintenance path only reconciles durable accounting
- * for terminal per-image runs; it never enqueues work or contacts Pixel.
- *
- * 宽限窗口本身（CODEX_PET_FAILED_SETTLEMENT_GRACE_MS）定义在
- * codex-pet-reservation-window.ts，与预留有效期同源。
- */
-export async function reconcilePerImageBillingSettlements(input: {
-  readonly prisma: PrismaClient;
-  readonly billing: CodexPetSettlementClient;
-  readonly now?: () => Date;
-  readonly limit?: number;
-  readonly failedGraceMs?: number;
-}): Promise<number> {
-  const now = input.now ?? (() => new Date());
-  const terminalStatuses = ["ready", "failed", "cancelled"];
-  const graceMs = Math.max(0, input.failedGraceMs ?? CODEX_PET_FAILED_SETTLEMENT_GRACE_MS);
-  const failedSettleBefore = new Date(now().getTime() - graceMs);
-  const candidates = await input.prisma.codexPetRun.findMany({
-    where: {
-      billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
-      billingSettlementStatus: { in: ["reserved", "settle_failed"] },
-      billingOperationId: { not: null },
-      billingResourceKey: { not: null },
-      OR: [
-        { status: { in: ["ready", "cancelled"] } },
-        // A failed run whose completedAt is missing cannot have its window
-        // measured; treat it as expired rather than holding the reservation
-        // open forever.
-        { status: "failed", completedAt: null },
-        { status: "failed", completedAt: { lte: failedSettleBefore } },
-      ],
-    },
-    select: {
-      id: true,
-      projectId: true,
-      userId: true,
-      billingOperationId: true,
-      billingResourceKey: true,
-      billingReservedPoints: true,
-    },
-    take: Math.min(500, Math.max(1, input.limit ?? 50)),
-  });
-  let settled = 0;
-  for (const run of candidates) {
-    try {
-      // A failed run stays resumable during its grace window, so it can leave
-      // the terminal set between the scan and this settle. Re-read immediately
-      // before the irreversible external call to narrow that race.
-      const fresh = await input.prisma.codexPetRun.findFirst({
-        where: {
-          id: run.id,
-          projectId: run.projectId,
-          userId: run.userId,
-          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
-          billingSettlementStatus: { in: ["reserved", "settle_failed"] },
-          status: { in: terminalStatuses },
-        },
-        select: { id: true },
-      });
-      if (!fresh) continue;
-      // Must match the runner and the cancellation path exactly: a planned call
-      // that failed at the provider delivered no image and is not settled.
-      const units = await input.prisma.codexPetImageCall.count({
-        where: {
-          runId: run.id,
-          projectId: run.projectId,
-          userId: run.userId,
-          callKind: "planned",
-          sentAt: { not: null },
-          status: { not: "failed" },
-        },
-      });
-      const receipt = await input.billing.settleResource({
-        operationId: run.billingOperationId!,
-        resourceKey: run.billingResourceKey!,
-        units,
-      });
-      // 这条兜底路径原来无条件写 billingChargeError: null，于是「已交付却结算到 0」
-      // 在这里比 runner 那侧更隐蔽：不仅没报错，还把上一次的诊断擦掉了。留痕口径与
-      // runner 共用 codexPetUnderSettledDiagnostic，正常结算时仍然清空。
-      const underSettled = codexPetUnderSettledDiagnostic({
-        units,
-        settledPoints: receipt.settled,
-        reservedPoints: run.billingReservedPoints,
-      });
-      // Deliberately not guarded on terminal status: once the external settle
-      // succeeded the accounting must be recorded even if the run was resumed
-      // in the meantime. A lost settlement receipt risks a double settle and is
-      // unrecoverable; a wrongly condemned run is recoverable by an operator.
-      const changed = await input.prisma.codexPetRun.updateMany({
-        where: {
-          id: run.id,
-          projectId: run.projectId,
-          userId: run.userId,
-          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
-          billingSettlementStatus: { in: ["reserved", "settle_failed"] },
-        },
-        data: {
-          billingSettledUnits: units,
-          billingSettledPoints: receipt.settled,
-          billingPoints: receipt.settled,
-          billingSettlementStatus: "settled",
-          billingSettledAt: now(),
-          billingChargeError: underSettled,
-        },
-      });
-      settled += changed.count;
-    } catch (error) {
-      await input.prisma.codexPetRun.updateMany({
-        where: {
-          id: run.id,
-          projectId: run.projectId,
-          userId: run.userId,
-          billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE,
-          billingSettlementStatus: { in: ["reserved", "settle_failed"] },
-          status: { in: terminalStatuses },
-        },
-        data: {
-          billingSettlementStatus: "settle_failed",
-          billingChargeError: safeWorkerError(error),
-        },
-      }).catch(() => undefined);
-    }
-  }
-  return settled;
-}
-
-export async function releasePreemptedRuns(input: {
-  readonly prisma: PrismaClient;
-  readonly deliveries: readonly { readonly runId: string; readonly workerLeaseId: string }[];
-  readonly enqueue?: (runId: string) => Promise<void>;
-  readonly onEnqueueError?: (error: unknown, runId: string) => void;
-}): Promise<number> {
-  const enqueue = input.enqueue ?? ((runId: string) => enqueueCodexPetRun({ runId }));
-  let released = 0;
-  for (const delivery of input.deliveries) {
-    const result = await input.prisma.codexPetRun.updateMany({
-      where: {
-        id: delivery.runId,
-        workerId: delivery.workerLeaseId,
-        status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-      },
-      data: { workerId: null, heartbeatAt: null },
-    });
-    if (result.count !== 1) continue;
-    released += 1;
-    // Queue.add is idempotent by runId. If Redis is temporarily unavailable,
-    // heartbeatAt=null also makes the next maintenance pass recover the run.
-    await enqueue(delivery.runId).catch((error) => input.onEnqueueError?.(error, delivery.runId));
-  }
-  return released;
-}
-
-async function reconcileBillingIntents(prisma: PrismaClient, billing: CodexPetChargeClient): Promise<number> {
-  const candidates = await listCodexPetBillingReconciliationCandidates({ prisma, limit: 50 });
-  let activated = 0;
-  for (const candidate of candidates) {
-    const { runId, userId, projectId } = candidate;
-    try {
-      const result = await reconcileCodexPetRunBilling({
-        prisma,
-        billing,
-        runId,
-        userId,
-        projectId,
-      });
-      if (!result.shouldEnqueue) continue;
-      await enqueueCodexPetRun({ runId });
-      activated += 1;
-      await getRedis().publish(codexPetRunChannel(runId), "billing-activated").catch(() => undefined);
-    } catch (error) {
-      console.warn(`[codex-pet-worker] billing reconciliation deferred run=${runId}: ${safeWorkerError(error)}`);
-    }
-  }
-  return activated;
-}
+export type {
+  CodexPetProviderMetricDelta,
+  CodexPetRetryMetricDelta,
+  WorkerMetrics,
+} from "./codex-pet-worker-metrics.js";
+export {
+  codexPetProviderMetricDelta,
+  codexPetRetryMetricDelta,
+  codexPetWorkerMetricsText,
+  createCodexPetWorkerHealthServer,
+  createCodexPetWorkerMetrics,
+  recordCodexPetImageFailureMetric,
+  recordCodexPetRetryMetrics,
+  recordCodexPetUpstreamRequestIdMetric,
+} from "./codex-pet-worker-metrics.js";
+export {
+  cleanupExpiredCodexPetArtifacts,
+  recoverDeletingProjects,
+  recoverStaleRuns,
+  releasePreemptedRuns,
+} from "./codex-pet-worker-recovery.js";
+export {
+  CODEX_PET_FAILED_SETTLEMENT_GRACE_MS,
+  CODEX_PET_PARKED_APPROVAL_EXPIRY_MS,
+  expireParkedCodexPetRuns,
+  reconcilePerImageBillingSettlements,
+} from "./codex-pet-worker-billing.js";
 
 export async function startCodexPetWorker(options: {
   readonly healthPort?: number | false;
