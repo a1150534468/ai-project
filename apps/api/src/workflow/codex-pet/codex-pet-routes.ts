@@ -37,6 +37,7 @@ import {
   prepareCodexPetExtraImageCall,
   refundCodexPetUndispatchedExtraCalls,
 } from "./codex-pet-call-ledger.js";
+import { codexPetUnderSettledDiagnostic } from "./codex-pet-billing.js";
 import { initializeCodexPetFailedContinuation } from "./codex-pet-failed-continuation.js";
 import { codexPetReservationTtlSeconds } from "./codex-pet-reservation-window.js";
 import { readCodexPetGateFailureSnapshot } from "./codex-pet-gate-failure.js";
@@ -1143,6 +1144,15 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
           resourceKey: result.run.billingResourceKey,
           units,
         });
+        // 取消是按图预留最常见的收口路径（用户手动取消、暂停到期清理都从这里过），
+        // 原先无条件写 billingChargeError: null——已交付却结算到 0 点在这里同样被
+        // 抹平。口径与 runner 的 settlePerImageRunBilling 和 worker 兜底完全一致，
+        // 否则 correctCodexPetPerImageBilling 巡检会漏掉从取消进来的那一半。
+        const underSettled = codexPetUnderSettledDiagnostic({
+          units,
+          settledPoints: receipt.settled,
+          reservedPoints: result.run.billingReservedPoints,
+        });
         const settled = await prisma.codexPetRun.update({
           where: { id: result.run.id },
           data: {
@@ -1151,7 +1161,7 @@ export async function codexPetRoutes(app: FastifyInstance, deps: CodexPetRouteDe
             billingPoints: receipt.settled,
             billingSettlementStatus: "settled",
             billingSettledAt: now(),
-            billingChargeError: null,
+            billingChargeError: underSettled,
           },
         });
         return { ...result, run: settled as RunShape };

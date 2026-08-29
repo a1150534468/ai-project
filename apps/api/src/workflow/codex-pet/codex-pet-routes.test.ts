@@ -2008,6 +2008,57 @@ describe("Codex pet routes", () => {
     await app.close();
   });
 
+  // 取消是按图预留最常见的收口路径，原先无条件写 billingChargeError: null——
+  // 已交付却结算到 0 点在这里同样被抹平。留痕口径必须与 runner 和 worker 兜底一致，
+  // correctCodexPetPerImageBilling 巡检才不会漏掉从取消进来的那一半。
+  it("records an under-settled diagnostic when a cancelled per-image run settles to zero points", async () => {
+    const parked = runRow({
+      id: "run-under-settled",
+      status: "awaiting_regeneration_approval",
+      progressStage: "awaiting_regeneration_approval",
+      billingOperationId: "codex-pet:run:run-under-settled:planned-images",
+      billingMode: "per_image_call_v1",
+      billingResourceKey: CODEX_PET_RESOURCE_KEY,
+      billingReservedUnits: 14,
+      billingReservedPoints: 2_800,
+      billingSettlementStatus: "reserved",
+      billingChargeStatus: "reserved",
+      plannedImageCallLimit: 14,
+      pendingImageJobKey: "row-failed",
+      hasSuccessfulImage: true,
+      workerId: null,
+    });
+    const project = projectRow({ latestRunId: parked.id, status: "awaiting_regeneration_approval" });
+    const imageCalls = Array.from({ length: 8 }, (_unused, index) => ({
+      id: `call-${index + 1}`,
+      runId: parked.id,
+      projectId: project.id,
+      userId: "u1",
+      jobKey: `row-${index + 1}`,
+      logicalAttempt: 1,
+      callKind: "planned",
+      status: "succeeded",
+      points: 200,
+      sentAt: new Date(NOW),
+    }));
+    const { prisma, state } = createPrismaMock({ projects: [project], runs: [parked], imageCalls });
+    const billing = createBilling({ settleResource: vi.fn(async () => ({ settled: 0 })) });
+    const { app } = await createApp(prisma, { billing });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/workflow/codex-pets/projects/project-1/runs/${parked.id}/cancel`,
+      headers: auth,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ units: 8 }));
+    const persisted = state.runs.find((run) => run.id === parked.id)!;
+    expect(persisted).toMatchObject({ status: "cancelled", billingSettlementStatus: "settled", billingSettledPoints: 0 });
+    expect(String(persisted.billingChargeError)).toContain("8");
+    expect(String(persisted.billingChargeError)).toContain("2800");
+    await app.close();
+  });
+
   it("does not refund a legacy base-review run even when its success flag is unset", async () => {
     const waiting = runRow({
       id: "run-base-review",
