@@ -923,7 +923,13 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
 
 **这批的顺序是"补测试 → 再拆",不能反。** 前端整体测试比 0.25,`pages/` 目录为 0,没有回归网。
 
-- [ ] **Step 1: 先给 `pages/Chat.tsx`(1077)与 `pages/Workflow.tsx`(815)补最小行为测试**。不追求覆盖率,只要覆盖"主要交互路径不炸":渲染、切换、提交、错误态。参照 `components/workflow/` 下已有的测试写法(该目录有 79 个文件、测试比虽低但有可抄的形状,如 `ArticleWorkflowStudio.test.tsx`)。
+> **勘误(2026-08-29)**:"`pages/` 目录为 0"是基线的测量错误。开工时 `pages/` 已有 6 个测试文件(`AgentTeams` / `Chat` / `Knowledge.codex-pet` / `ModelMarketplace` / `ToolMarket` / `Workflow.image-hub`),只是**没有一个覆盖 Chat.tsx / Workflow.tsx 的编排层**——`Chat.test.tsx` 只管消息面板自动滚动,`Workflow.image-hub.test.tsx` 只管真实 studio 下的生图文案。所以"没有回归网"这个结论仍然成立,补测试照做。
+
+- [x] **Step 1: 先给 `pages/Chat.tsx`(1077)与 `pages/Workflow.tsx`(829,计划里记的 815 已过期)补最小行为测试**。不追求覆盖率,只要覆盖"主要交互路径不炸":渲染、切换、提交、错误态。参照 `components/workflow/` 下已有的测试写法(该目录有 79 个文件、测试比虽低但有可抄的形状,如 `ArticleWorkflowStudio.test.tsx`)。
+  - **执行结果(2026-08-29)**:两个新文件共 **68 passed / 0 failed / 0 skipped**——`Chat.behavior.test.tsx` 29 例、`Workflow.behavior.test.tsx` 39 例。四类路径逐一落地:渲染(空态 / 消息列表 / 标题回落)、切换(模型 / 知识库 / 工具 / 生图子 tab)、提交(按钮 / Enter vs Shift+Enter / trim / isLoading 期间不重发)、错误态(error 横幅 / 工具加载失败 / 402 → `积分不足，请充值`)。
+  - **断言刻意只落在两端:用户看得见的文案,和回调收到的载荷。** 不碰内部 state 形状——抽子组件必然重排 state 归属,但 `onSend` 的六个字段、`onModelChange` 的模型 id、往 studio 传下去的每个 prop 必须逐字不变。这才是拆分时真正会踩的那根线。
+  - **两个 Workflow 测试文件是互补的,不是重复**:`Workflow.image-hub.test.tsx` 保留真实 studio + stub `fetch`,断言 studio 内部渲染;新的 `Workflow.behavior.test.tsx` 把 11 个 studio 全换成探针,断言 **Workflow.tsx 自己算出来往下传的那份 props**。拆分允许改的是前者的那一侧,所以护栏必须钉在后者。
+  - **踩到的两个坑记下来**:①`vitest.config.ts` 的 `environment` 是 `node`,页面测试必须自带 `// @vitest-environment jsdom` 顶注,否则连 `document` 都没有;②受控 `<textarea>` 要用 `HTMLTextAreaElement.prototype` 上的原生 value setter + `dispatchEvent(new Event("input"))` 才能让 React 19 收到 onChange,直接赋值不触发。`@iconify/react` 已在 `src/test/setup.ts` 全局 mock,新测试不用再 mock。
 - [ ] **Step 2: `api.ts`(1775 行、183 个导出、churn 全仓第一)按域拆**。接缝已勘定:**Novel 独占 36 个函数**(最大单一聚类)、Kb 11、Memory 5、Wechat 3、Agent 3、Tool 2、Session 2、Recharge 2。
   - 抽 `novelApi.ts`(36 个)—— 单独一步,收益最大。注意 `api.ts:2` 已 import `@ai-assistant/novel-workflow/contracts`,类型契约跟着走。
   - 抽 `kbApi.ts`(11)、`memoryApi.ts`(5)。
