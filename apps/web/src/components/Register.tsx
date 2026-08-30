@@ -14,7 +14,6 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [channelCode, setChannelCode] = useState("");
   const [error, setError] = useState("");
 
   const handleRegister = async () => {
@@ -46,17 +45,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
         setError("两次输入的密码不一致");
         return;
       }
-      const code = channelCode.trim().toUpperCase();
-      if (!code) {
-        setError("请输入注册码");
-        return;
-      }
-      if (!/^[A-Z]{2}$/.test(code)) {
-        setError("注册码为 2 位字母");
-        return;
-      }
-
-      const token = await register(username, password, code);
+      const token = await register(username, password);
       onAuthed(token);
     } catch (err) {
       setError(
@@ -100,28 +89,6 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleRegister()}
                   placeholder="3-32 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
-                />
-              </div>
-            </div>
-
-            {/* Channel Code Input */}
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                注册码
-              </label>
-              <div className="relative">
-                <Icon
-                  icon="mdi:key-outline"
-                  className="absolute left-3 top-3.5 text-ink-tertiary"
-                />
-                <input
-                  type="text"
-                  value={channelCode}
-                  onChange={(e) => setChannelCode(e.target.value.toUpperCase())}
-                  onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                  placeholder="2 位大写字母，如 AB"
-                  maxLength={2}
                   className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
                 />
               </div>

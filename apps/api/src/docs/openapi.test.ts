@@ -14,6 +14,7 @@ describe("OpenAPI documentation", () => {
     apps.push(app);
 
     await registerOpenApi(app);
+    app.post("/api/auth/register", async () => ({ token: "test" }));
     app.post("/api/auth/login", async () => ({ token: "test" }));
     app.get("/api/admin/users/:id/detail", async () => ({ success: true }));
     await registerOpenApiUi(app);
@@ -30,6 +31,9 @@ describe("OpenAPI documentation", () => {
       "identifier",
       "password",
     ]);
+    const registerSchema = document.paths["/api/auth/register"].post.requestBody.content["application/json"].schema;
+    expect(registerSchema.required).toEqual(["username", "password"]);
+    expect(registerSchema.properties).not.toHaveProperty("channelCode");
 
     expect(document.paths["/api/admin/users/{id}/detail"].get.tags).toEqual(["管理 · 用户"]);
     expect(document.paths["/api/admin/users/{id}/detail"].get.security).toEqual([{ adminBearerAuth: [] }]);

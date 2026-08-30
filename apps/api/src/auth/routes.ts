@@ -6,11 +6,11 @@ import { getPrisma } from "@ai-assistant/db";
 import { requireUser } from "./require-user.js";
 import { signToken } from "./token.js";
 import { generateUniquePrefixedUid } from "./uid.js";
+import { getPlatformChannelCode } from "../reseller/seed.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
   password: z.string().min(8).max(200),
-  channelCode: z.string().regex(/^[A-Z]{2}$/, "注册码格式不合法"),
 });
 const loginSchema = z.object({
   identifier: z.string().min(1).max(64),
@@ -25,10 +25,14 @@ export async function authRoutes(app: FastifyInstance) {
   app.post("/api/auth/register", async (req, reply) => {
     const parsed = registerSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
-    const { username, password, channelCode } = parsed.data;
+    const { username, password } = parsed.data;
 
-    const channel = await prisma.channel.findUnique({ where: { code: channelCode } });
-    if (!channel || !channel.enabled) return reply.code(400).send({ error: "注册码无效" });
+    const platformCode = getPlatformChannelCode();
+    const channel = await prisma.channel.findUnique({ where: { code: platformCode } });
+    if (!channel || channel.ownerType !== "PLATFORM" || !channel.enabled) {
+      req.log.error({ platformCode }, "默认平台注册渠道不可用");
+      return reply.code(503).send({ error: "注册服务暂不可用" });
+    }
 
     if (await prisma.user.findUnique({ where: { username } })) {
       return reply.code(409).send({ error: "用户名已被占用" });

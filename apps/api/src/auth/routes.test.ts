@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
+import { getPlatformChannelCode, seedPlatformChannel } from "../reseller/seed.js";
 
 const prisma = getPrisma();
 let app: Awaited<ReturnType<typeof buildServer>>;
@@ -22,14 +23,6 @@ afterAll(async () => {
   await prisma.user.deleteMany({
     where: { username: uname },
   });
-  // 删除新增的渠道用户
-  await prisma.user.deleteMany({
-    where: { username: { in: ["nochan_user_t3", "badchan_user_t3", "goodchan_user_t3", "disabled_chan_user_t3"] } },
-  });
-  // 删除测试渠道（Task 3）
-  await prisma.channel.deleteMany({
-    where: { code: { in: ["AA", "TT", "ZZ", "DD"] } },
-  });
 });
 
 describe("auth 身份重构", () => {
@@ -38,30 +31,32 @@ describe("auth 身份重构", () => {
   let defaultChannelId = "";
 
   beforeAll(async () => {
-    // 为现有用例创建默认渠道
-    const ch = await prisma.channel.create({
-      data: { code: "AA", ownerType: "PLATFORM", commissionRate: 0, enabled: true },
-    });
-    defaultChannelId = ch.id;
+    await seedPlatformChannel(prisma);
+    const channel = await prisma.channel.findUniqueOrThrow({ where: { code: getPlatformChannelCode() } });
+    defaultChannelId = channel.id;
   });
 
-  it("注册返回前缀 uid", async () => {
+  it("注册无需注册码并自动绑定默认平台渠道", async () => {
     const r = await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { username: uname, password: "password123", channelCode: "AA" },
+      payload: { username: uname, password: "password123" },
     });
     expect(r.statusCode).toBe(200);
     uid = r.json().uid;
-    expect(uid).toMatch(/^AA-\d{8}$/);
-    const user = await prisma.user.findUnique({ where: { uid }, select: { memoryEnabled: true } });
+    expect(uid).toMatch(new RegExp(`^${getPlatformChannelCode()}-\\d{8}$`));
+    const user = await prisma.user.findUnique({
+      where: { uid },
+      select: { memoryEnabled: true, channelId: true },
+    });
     expect(user?.memoryEnabled).toBe(true);
+    expect(user?.channelId).toBe(defaultChannelId);
   });
   it("用户名重复 409", async () => {
     const r = await app.inject({
       method: "POST",
       url: "/api/auth/register",
-      payload: { username: uname, password: "password123", channelCode: "AA" },
+      payload: { username: uname, password: "password123" },
     });
     expect(r.statusCode).toBe(409);
   });
@@ -135,53 +130,5 @@ describe("auth 身份重构", () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(r.statusCode).toBe(403);
-  });
-
-  // Task 3: 分销代理 - 注册强制填渠道码
-  it("注册缺少 channelCode → 400", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { username: "nochan_user_t3", password: "password123" },
-    });
-    expect(r.statusCode).toBe(400);
-  });
-
-  it("注册用无效 channelCode → 400 注册码无效", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { username: "badchan_user_t3", password: "password123", channelCode: "ZZ" },
-    });
-    expect(r.statusCode).toBe(400);
-    expect(r.json().error).toContain("注册码");
-  });
-
-  it("注册用有效 channelCode → 绑定 channelId 且 UID 带前缀", async () => {
-    const ch = await prisma.channel.create({
-      data: { code: "TT", ownerType: "PLATFORM", commissionRate: 0, enabled: true },
-    });
-    const r = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { username: "goodchan_user_t3", password: "password123", channelCode: "TT" },
-    });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().uid).toMatch(/^TT-\d{8}$/);
-    const u = await prisma.user.findUnique({ where: { username: "goodchan_user_t3" } });
-    expect(u?.channelId).toBe(ch.id);
-  });
-
-  it("注册用已禁用渠道 → 400 注册码无效", async () => {
-    await prisma.channel.create({
-      data: { code: "DD", ownerType: "PLATFORM", commissionRate: 0, enabled: false },
-    });
-    const r = await app.inject({
-      method: "POST",
-      url: "/api/auth/register",
-      payload: { username: "disabled_chan_user_t3", password: "password123", channelCode: "DD" },
-    });
-    expect(r.statusCode).toBe(400);
-    expect(r.json().error).toContain("注册码");
   });
 });

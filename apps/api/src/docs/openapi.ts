@@ -221,11 +221,10 @@ const bodySchemas: Record<string, JsonSchema> = {
   "POST /api/auth/register": {
     type: "object",
     additionalProperties: false,
-    required: ["username", "password", "channelCode"],
+    required: ["username", "password"],
     properties: {
       username: { type: "string", minLength: 3, maxLength: 32, description: "用户名" },
       password: { type: "string", minLength: 8, maxLength: 200, format: "password", description: "密码" },
-      channelCode: { type: "string", pattern: "^[A-Z]{2}$", description: "两位大写渠道注册码" },
     },
   },
   "POST /api/auth/login": {

@@ -16,13 +16,13 @@ export * from "./novelApi";
 export * from "./kbApi";
 export * from "./memoryApi";
 
-export async function register(username: string, password: string, channelCode: string): Promise<string> {
+export async function register(username: string, password: string): Promise<string> {
   try {
     // 注册/登录显式传 token: null——这两个页面不该把 localStorage 里可能残留的旧 token 带上。
     const data = await request<{ token: string }>("/api/auth/register", {
       method: "POST",
       token: null,
-      body: { username, password, channelCode },
+      body: { username, password },
       fallback: "注册失败",
     });
     return data.token;
