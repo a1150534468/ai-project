@@ -1,9 +1,18 @@
 name: Verify and deploy production
 
 on:
-  pull_request:
+  # 只在打 tag 或手动触发时跑。原来是「push 到 main 就跑」，于是每次 push 都要把
+  # ci.yml 刚跑过的 typecheck + 全量测试再跑一遍，再接着 build 4 个镜像并部署一次
+  # 生产 —— 一次 push 约 50 个计费分钟。Free 计划每月 2000 分钟只够 40 次，
+  # 2026-08 就是这么在 08-27 把额度用光，之后每个 job 都以「The job was not started
+  # because ... spending limit」直接不启动，连着红了三天。
+  #
+  # 随之而来的约定：**tag 只打在 main 上 CI 已经绿灯的 commit 上**。ci.yml 的触发条件
+  # 是 push 到分支，而 tag push 不算分支，所以本工作流跑起来时那个 commit 不会再有
+  # 一次 CI —— 它的测试结论来自它当初在 main 上那一次。想额外保一道，就对着 tag 手动
+  # 触发一次 ci.yml 的 workflow_dispatch。
   push:
-    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
@@ -13,18 +22,13 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 20 分钟够跑完（实测 verify 瘦身后 ~6 分钟）。压低上限是为了防「卡住的 job
+    # 一个人吃掉 45 分钟额度」——额度是按 job 实际墙钟时间向上取整计费的。
+    timeout-minutes: 20
     services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_USER: ai-assistant
-          POSTGRES_PASSWORD: ci-postgres-password
-          POSTGRES_DB: ai-assistant
-        ports: ["5433:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ai-assistant -d ai-assistant"
-          --health-interval 5s --health-timeout 5s --health-retries 20
+      # 只留 billing 自己的库：go test ./... 要连它。pgvector 和 redis 是给
+      # pnpm test 用的，测试已挪回 ci.yml，这两个 service 一起删掉——service 容器
+      # 的拉起时间也算在 job 计费里。
       billing-postgres:
         image: postgres:17
         env:
@@ -35,23 +39,15 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ai_assistant_billing -d ai_assistant_billing"
           --health-interval 5s --health-timeout 5s --health-retries 20
-      redis:
-        image: redis:7-alpine
-        ports: ["6380:6379"]
-        options: >-
-          --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      DATABASE_URL: postgresql://ai-assistant:ci-postgres-password@127.0.0.1:5433/ai-assistant
+      # 同理，这里只保留 Go 侧真正读的两个 DSN。原来那串 DATABASE_URL / REDIS_URL /
+      # SESSION_SECRET / LLM_* 全是 JS 测试的入参，Go 代码里一个都不读
+      # （services/billing 全量 grep 无 DATABASE_URL / REDIS / ffmpeg）。
+      # BILLING_BASE_URL 也不需要：服务自己 envOr("BILLING_PORT", "8093")，
+      # 下面 smoke 步骤直接 curl 8093。
       BILLING_DATABASE_URL: postgresql://ai_assistant_billing:ci-billing-password@127.0.0.1:5434/ai_assistant_billing
       BILLING_TEST_DATABASE_URL: postgresql://ai_assistant_billing:ci-billing-password@127.0.0.1:5434/ai_assistant_billing
-      BILLING_BASE_URL: http://127.0.0.1:8093
       BILLING_INTERNAL_TOKEN: ci-billing-token
-      REDIS_URL: redis://127.0.0.1:6380
-      SESSION_SECRET: ci-session-secret-with-at-least-32-characters
-      ADMIN_SESSION_SECRET: ci-admin-secret-with-at-least-32-characters
-      CODEX_PET_ARTIFACT_SIGNING_SECRET: ci-codex-pet-signing-secret-long-enough
-      LLM_BASE_URL: http://127.0.0.1:9
-      LLM_API_KEY: ci-placeholder-not-a-real-key
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -65,16 +61,15 @@ jobs:
         with:
           go-version-file: services/billing/go.mod
           cache-dependency-path: services/billing/go.sum
-      - name: Install ffmpeg
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg
-          ffmpeg -version | head -1
-          ffprobe -version | head -1
       - run: pnpm install --frozen-lockfile
-      - run: pnpm --filter @ai-assistant/db exec prisma migrate deploy
-      - run: pnpm typecheck
-      - run: pnpm test --force
+      # 刻意不再跑 pnpm typecheck / pnpm test --force：同一个 commit 在 main 上已经
+      # 被 ci.yml 跑过（见文件顶部「tag 只打绿灯 commit」的约定），再跑一遍只是花
+      # 双倍额度买同一个结论。跟着一起删的是 Install ffmpeg 和 prisma migrate
+      # deploy —— 那两步只为 pnpm test 存在（ffmpeg 决定 8 个用例是真跑还是静默跳）。
+      #
+      # 留下 pnpm build 是因为 ci.yml 里没有 build 步骤，全仓只有这里会真的过一遍
+      # vite / electron 打包。代价写明：**打不出包这件事从此只在打 tag 时才暴露**。
+      # 想在 push 阶段就拦住，得往 ci.yml 加 build，那是每次 push 再多几分钟。
       - run: pnpm build
       - run: go test ./...
         working-directory: services/billing
@@ -94,7 +89,9 @@ jobs:
           exit 1
 
   images:
-    if: github.event_name != 'pull_request'
+    # 原来这里有 `if: github.event_name != 'pull_request'`，是为了让 PR 只验证不
+    # 发布。现在触发条件里已经没有 pull_request，这个判断恒为真，删掉免得误读成
+    # 「还有某种情况不发布」。
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -167,7 +164,6 @@ jobs:
           done
 
   deploy:
-    if: github.event_name != 'pull_request'
     needs: images
     runs-on: ubuntu-latest
     environment: production
