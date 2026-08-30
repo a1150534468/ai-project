@@ -1,6 +1,6 @@
 # 架构整治执行计划（按严重度排序）
 
-**Created:** 2026-08-03 · **Baseline:** `main` @ `d2c5625` · **Status:** 待执行
+**Created:** 2026-08-03 · **Baseline:** `main` @ `d2c5625` · **Status:** ✅ 全部执行完毕（2026-08-30，95 项全勾，无未勾选项）
 
 **Architecture:** 四个优先级，严重度递减、独立可交付。P0 止血（有用户已扣费但拿不到货的真实路径）→ P1 止腐（无门禁导致的系统性劣化）→ P2 可维护性（复制粘贴与巨型文件）→ P3 交回既有计划。每个任务独立成 commit，任何一步变红即 `git revert` 单个提交。
 
@@ -14,8 +14,8 @@
 |---|---|---|
 | 阶段 0（修 `codex-pet-routes.integration.test.ts` 红灯） | 未执行（5 步未勾） | **并入本计划 P0.1**，与另一个红灯一起修 |
 | 阶段 1（`codex-pet-runner.ts` 纯移动拆分，37 步） | ✅ 2026-08-22 完成（37 步全勾） | **不动**，见 P3.1 |
-| 阶段 2（`executeRun` 去重 / lease CAS 收敛，14 步） | 未执行 | **不动**，见 P3.1 |
-| 阶段 3（加厚 `packages/llm`，14 步） | 未执行 | **不动**，见 P3.1；本计划 P2.2 的去重范围**明确排除** llm 相关符号，避免撞车 |
+| 阶段 2（`executeRun` 去重 / lease CAS 收敛，14 步） | ✅ 已落地（2026-08-30 回代码复核确认，勾选滞后于实现） | **不动**，见 P3.1 与「P3.1 复核记录」 |
+| 阶段 3（加厚 `packages/llm`，14 步） | ✅ 已落地（同上复核） | **不动**，见 P3.1；本计划 P2.2 的去重范围**明确排除** llm 相关符号，避免撞车 |
 | 阶段 4（article-workflow 止血 + reaper） | ✅ 2026-07-28 完成 | **作为 P0.3–P0.5 的模板复制源** |
 
 **关键约束（项目已拍板，不要重新讨论）**：存量工作流保持自研编排、只做代码优化，不迁编排框架；新工作流才走框架选型。见 `docs/orchestration.md`。
@@ -930,18 +930,29 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
   - **断言刻意只落在两端:用户看得见的文案,和回调收到的载荷。** 不碰内部 state 形状——抽子组件必然重排 state 归属,但 `onSend` 的六个字段、`onModelChange` 的模型 id、往 studio 传下去的每个 prop 必须逐字不变。这才是拆分时真正会踩的那根线。
   - **两个 Workflow 测试文件是互补的,不是重复**:`Workflow.image-hub.test.tsx` 保留真实 studio + stub `fetch`,断言 studio 内部渲染;新的 `Workflow.behavior.test.tsx` 把 11 个 studio 全换成探针,断言 **Workflow.tsx 自己算出来往下传的那份 props**。拆分允许改的是前者的那一侧,所以护栏必须钉在后者。
   - **踩到的两个坑记下来**:①`vitest.config.ts` 的 `environment` 是 `node`,页面测试必须自带 `// @vitest-environment jsdom` 顶注,否则连 `document` 都没有;②受控 `<textarea>` 要用 `HTMLTextAreaElement.prototype` 上的原生 value setter + `dispatchEvent(new Event("input"))` 才能让 React 19 收到 onChange,直接赋值不触发。`@iconify/react` 已在 `src/test/setup.ts` 全局 mock,新测试不用再 mock。
-- [ ] **Step 2: `api.ts`(1775 行、183 个导出、churn 全仓第一)按域拆**。接缝已勘定:**Novel 独占 36 个函数**(最大单一聚类)、Kb 11、Memory 5、Wechat 3、Agent 3、Tool 2、Session 2、Recharge 2。
+- [x] **Step 2: `api.ts`(1775 行、183 个导出、churn 全仓第一)按域拆**。接缝已勘定:**Novel 独占 36 个函数**(最大单一聚类)、Kb 11、Memory 5、Wechat 3、Agent 3、Tool 2、Session 2、Recharge 2。
   - 抽 `novelApi.ts`(36 个)—— 单独一步,收益最大。注意 `api.ts:2` 已 import `@ai-assistant/novel-workflow/contracts`,类型契约跟着走。
   - 抽 `kbApi.ts`(11)、`memoryApi.ts`(5)。
   - 剩余的 auth/chat/balance 等留在 `api.ts`。
   - **与 P1.2 的顺序**:P1.2(统一 HTTP 客户端)把 `api.ts` 的 75 处裸 fetch 迁到 `http.ts`,**先做 P1.2 再拆**,否则拆完要在多个新文件里重复迁移。
   - **`streamChat` 等流式函数不动**(P1.2 Step 4 已说明流式不走通用封装)。
-  - **本 Step 被工作区状态挡住,2026-08-29 未执行**:`apps/web/src/api.ts` 上有用户自己未提交的改动
-    (`register(username, password, channelCode)` → `register(username, password)`),而本任务的纪律是
-    **只提交自己改的文件**。拆 `api.ts` 必然要改这个文件,提交时无法与用户的改动分离。
-    两条走法,都要用户先拍:①用户先把自己的改动提交或 stash,再执行本 Step;
-    ②用 `git apply --cached` 按 hunk 只暂存拆分那部分。**不做本 Step 不影响完成判据**——
-    判据口径下 800+ 已降到 7(见下),`api.ts` 只是让全仓口径停在 9 而不是 8。
+  - **曾被工作区状态挡住(2026-08-29),2026-08-30 按当时列的走法 ② 执行完毕**:`apps/web/src/api.ts` 上有
+    用户自己未提交的改动(`register(username, password, channelCode)` → `register(username, password)`),
+    而本任务的纪律是**只提交自己改的文件**。实际走法比 `git apply --cached` 更直接:**先按 HEAD 语义
+    (仍带 `channelCode`)重建 `api.ts` 并 `git add`,再把用户那 2 行改回工作区** —— 索引里是纯拆分,
+    工作区仍保留用户那处未暂存的改动,两边互不污染,用户不需要先提交或 stash。
+  - **执行结果(2026-08-30)**:`api.ts` **1509 → 728 行**(计划记的 1775 已过期),新增 3 个域文件:
+    `novelApi.ts` 651(71 个导出 = 48 个函数 + 23 个类型;计划记的"36 个函数"只数了一部分)、
+    `kbApi.ts` 114(14 个)、`memoryApi.ts` 57(9 个)。合计搬走 **94 个导出、781 行正文**。
+    文件命名跟已有的域客户端一致(`dubApi.ts` / `codexPetApi.ts` / `workflowEcomApi.ts`)。
+  - **`api.ts` 留成门面,但用 `export *` 三行转发,不逐名列**:94 个名字逐行写出来会给门面加回约 104 行,
+    `api.ts` 会停在 817 行 —— 刚好又踩回 800 判据以上,把这一步的收益抵消掉。`export *` 在 `apps/web`
+    已有先例(`src/motion/index.ts`)。安全性先查过:全仓没有 `import * as api from "./api"`,
+    也没有对搬走的名字做 `vi.spyOn`,所以命名空间形状的变化没有观察者。
+  - **纯移动判据达标:0 个测试文件改动、0 个调用方改动**(68 个 import `./api` 的文件一行没动)。
+    三块正文逐字未改,只换 import 头:`novelApi.ts` 带走 `@ai-assistant/novel-workflow/contracts` 的类型契约
+    与 `HttpMethod`,`memoryApi.ts` 带走 `./memoryTypes`,`api.ts` 只剩 `ApiError` + `request/requestResponse`。
+    **导出名集合前后机器比对逐字相同(173 个顶层导出)**;`streamChat` 按计划留在 `api.ts` 没动。
 - [x] **Step 3: `CodexPetStudio.tsx`(1941 行)**。测试比 0.32(616 行测试),是前端大文件里唯一有基础的。先补测试到 0.5 以上再拆。拆法:按面板/阶段抽子组件,状态提升到已有的 `useCodexPetStudio` 类 hook(参照 `useArticleWorkflowStudio.ts` / `useLocalBusinessPromoWorkflowStudio.ts` 的既有模式 —— **这个模式项目里已经有了,照抄**)。
   - **执行结果(2026-08-29,`4b0de20`)**:**1991 → 67 行门面**,新增 9 个兄弟文件,最大 740 行,没有制造新的 800+ 文件:
     `useCodexPetStudio.ts` 740(状态与动作)、`CodexPetStudioWorkbench.tsx` 335、`CodexPetStudioInputPanel.tsx` 328、
@@ -983,20 +994,25 @@ Fastify 的 `app.register(fn)` 会封装作用域，**直接调用不会**。`no
     每步都配 `npx tsc -p tsconfig.json --noEmit` 与 `npx biome lint <改动文件>`,全部零输出 / 无修复。
   - **护栏是先写后拆的,不是补写的**:`da44e0a`(Chat/Workflow)、`f9a353d`(article-workflow 16 条)、
     `App.behavior.test.tsx`(本轮)都在各自拆分之前落地 —— 顺序反了就是蒙眼手术。
+  - **Step 2(`api.ts`)验证(2026-08-30)**:`apps/web` 全量 **580 passed / 0 failed / 0 skipped**(90 个文件),
+    与拆分前逐个数字相同 —— 纯移动就该是这个结果,一个测试文件都没改。
+    `npx tsc -p tsconfig.json --noEmit` 零输出、`npx biome lint`(4 个文件)无修复。
+    另外机器比对了拆分前后的导出名集合(173 个,`diff` 为空),这比跑测试更能证明门面没漏名字 ——
+    有 68 个调用方,漏一个名字未必有测试覆盖到。
 
 ### 完成判据(可量化)
 
 - [x] 800+ 行文件数从 **19 → ≤8**(`codex-pet-runner.ts` 由 P3.1 处理后应再降)
-  - **实测(2026-08-29 收尾)**:全仓非测试源文件 800+ 共 **9 个**;扣掉本计划明确排除的 `services/billing`
-    两个 Go 文件(见下"为什么不做得更激进"),**判据口径 7 个,达标**。
-  - 剩下 9 个是:`api.ts` 1509(Step 2 被工作区状态挡住)、`codex-pet-runner.ts` 1454 与
-    `runner-board-job.ts` 1049(归 P3.1)、`themes.ts` 1261(纯数据表:主题样式函数,不是变更磁铁)、
-    `try-on-routes.ts` 1013、`admin.go` 931、`api.go` 924(Go,排除)、`resource-routes.ts` 847、
-    `portrait-routes.ts` 815。**只要 Step 2 解锁,全仓口径也会落到 8。**
+  - **实测(2026-08-30,Step 2 解锁后)**:全仓非测试源文件 800+ 共 **8 个**;扣掉本计划明确排除的
+    `services/billing` 两个 Go 文件(见下"为什么不做得更激进"),**判据口径 6 个,达标**。
+  - 剩下 8 个是:`codex-pet-runner.ts` 1454 与 `runner-board-job.ts` 1049(归 P3.1)、
+    `themes.ts` 1261(纯数据表:主题样式函数,不是变更磁铁)、`try-on-routes.ts` 1013、
+    `admin.go` 931、`api.go` 924(Go,排除)、`resource-routes.ts` 847、`portrait-routes.ts` 815。
+    `api.ts` 已于 2026-08-30 拆到 728 行退出名单(收尾时记的"只要 Step 2 解锁,全仓口径也会落到 8"已兑现)。
   - 统计口径:`find` 全仓 `.ts/.tsx/.go`,排除 `node_modules` / `dist` / `.git`、`*.test.*` / `*_test.go` / `*.d.ts`,
     以及 `.gitignore` 掉的 `.cc-tmp/`(里面有一个 5815 行的临时基线快照,不是源码)。
 - [x] 800+ 行文件合计行数从 **27,241** 显著下降
-  - **实测 9,803 行(判据口径扣掉两个 Go 文件为 7,948),降幅 64%**。
+  - **实测 8,294 行(判据口径扣掉两个 Go 文件为 6,439),降幅 70%**。
 - [x] `apps/web/src/pages/` 测试文件数从 **0 → ≥2**
   - **实测 9 个**(基线"0"是测量错误,开工时已有 6 个,见上方勘误):本任务新增 `Chat.behavior.test.tsx`、
     `Workflow.behavior.test.tsx`,另有页面层之外的 `App.behavior.test.tsx` 与
