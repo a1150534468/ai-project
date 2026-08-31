@@ -405,6 +405,55 @@ describe("image workflow routes", () => {
     await app.close();
   });
 
+  /**
+   * P3.4 的护栏：`IMAGE_KEEP_LIMIT` 只截列表，不删库。
+   *
+   * 旧实现在每次生图成功后调 `pruneImages`，把该用户第 50 条之后的 `ImageAsset`
+   * 连 S3 对象一起硬删。窗口是**所有非 `ecom-` 前缀共用**的，所以掉出去的往往不是
+   * 刚才那张生图，而是最老的文章配图 / 桌宠底图 —— 素材库上线后这就是「素材凭空消失」。
+   * 这里种满 50 条再跑一次生图：列表还是 50 条，库里必须是 52 条。
+   */
+  it("caps the image list at IMAGE_KEEP_LIMIT without deleting anything past it", async () => {
+    const rows: ImageRow[] = Array.from({ length: 50 }, (_, index) => ({
+      id: `seed-${index}`,
+      userId: "u1",
+      requestId: index === 0 ? "article:doc-1:inline-4:oldest" : index % 2 === 0 ? `pet-${index}` : `img-${index}`,
+      requestIndex: 0,
+      prompt: "历史素材",
+      model: "qwen-image-2.0-pro-2026-04-22",
+      size: "1024x1024",
+      originalUrl: `http://localhost:9000/private/seed-${index}.png`,
+      thumbnailUrl: `http://localhost:9000/private/seed-${index}.png`,
+      // 每条都有 objectKey：旧实现连带删的就是这些对象。
+      objectKey: `workflow/images/u1/seed-${index}.png`,
+      mime: "image/png",
+      // 升序，所以 seed-0（那张文章配图）最老，正是旧实现第一个删的。
+      createdAt: new Date(Date.UTC(2026, 4, 1, 0, index)),
+    }));
+    const prisma = createPrismaMock(rows);
+    const fetchFn = vi.fn(async () => new Response(JSON.stringify({ data: [{ b64_json: Buffer.from("png").toString("base64") }] }), { status: 200 })) as typeof fetch;
+    const scheduled: Promise<void>[] = [];
+    const app = await createApp({ prisma, billing: createBillingMock(), fetchFn, scheduled });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/images/generate",
+      payload: { requestId: "req-keep-limit", prompt: "陶瓷餐盘", size: "1024x1024", count: 2 },
+    });
+    expect(response.statusCode).toBe(202);
+    await scheduled[0];
+
+    expect(prisma.imageAsset.deleteMany).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(52);
+    expect(rows.some((row) => row.id === "seed-0")).toBe(true);
+
+    // 列表仍然只给最近 50 条：最老的两条掉出窗口 —— 掉出窗口不等于从库里消失。
+    const listed = (await app.inject({ method: "GET", url: "/api/workflow/images" })).json().data as { readonly id: string }[];
+    expect(listed).toHaveLength(50);
+    expect(listed.map((image) => image.id)).not.toContain("seed-0");
+    await app.close();
+  });
+
   it("selects GPT Image 2 and sends the OpenAI-compatible generation body", async () => {
     process.env.GPT_IMAGE_API_KEY = "gpt-image-key";
     process.env.GPT_IMAGE_GENERATION_ENDPOINT = "https://pixel.test/v1/images/generations";

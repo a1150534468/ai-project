@@ -1,6 +1,6 @@
 /**
  * 拆分 image-routes.ts 时抽出的无状态工具层：请求 schema、序列化、blob 签名、
- * S3 装载、提示词优化、以及 `activeGenerationTasks` 这一份取消登记表。
+ * 提示词优化、以及 `activeGenerationTasks` 这一份取消登记表。
  *
  * `activeGenerationTasks` 必须只在本文件存在一份：task-runner 往里登记 AbortController、
  * 插件的 cancel 路由从里面取出来 abort，两边 import 的是同一个模块实例才对得上。
@@ -15,7 +15,6 @@ import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type Anthropic from "@anthropic-ai/sdk";
-import { deleteObject, loadS3Config, makeS3, type S3Config } from "../../storage/s3.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { IMAGE_TASK_STATUS, type ImageGenerationTaskRow } from "./image-shared.js";
 import {
@@ -35,6 +34,18 @@ import type {
 } from "./image-route-types.js";
 
 export const DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL = "mimo-v2.5-pro-ultraspeed";
+/**
+ * 生图历史条带一次给多少条。**纯展示上限，不是保留上限** —— 和 `VIDEO_KEEP_LIMIT` /
+ * `PORTRAIT_TASK_KEEP_LIMIT` 那些同名常量一样，只允许出现在 `take:` 里。
+ *
+ * 它曾经还兼职触发 `pruneImages`：每跑完一次生图，就把该用户第 50 条之后的
+ * `ImageAsset` 连 S3 对象一起硬删。撤掉的原因不是「顺手清理」，而是这个窗口
+ * **由所有非 `ecom-` 前缀共用**：裸生图、`article:` 文章配图、`pet-` 桌宠底图挤在同一个 50 里，
+ * 于是一次生图会删掉最老的文章配图——而素材库（P3.1）已经把这些行变成用户能翻到的素材。
+ * 列表可以只给最近 50 条，库里的行不许因为「列表装不下」而消失。
+ *
+ * 真要给产物上限，那是一次显式的产品决定（可见的删除入口或配额），不是这里的一个数字。
+ */
 export const IMAGE_KEEP_LIMIT = 50;
 export const IMAGE_TASK_KEEP_LIMIT = 12;
 export const IMAGE_MAX_COUNT = 8;
@@ -135,31 +146,6 @@ export async function retryUntilSuccess<T>(fn: () => Promise<T>, options: RetryO
       await new Promise((resolve) => setTimeout(resolve, options.retryDelayMs));
     }
   }
-}
-
-export function tryLoadS3(env: NodeJS.ProcessEnv = process.env): { readonly cfg: S3Config; readonly s3: ReturnType<typeof makeS3> } | null {
-  try {
-    const cfg = loadS3Config(env);
-    return { cfg, s3: makeS3(cfg) };
-  } catch {
-    return null;
-  }
-}
-
-export async function pruneImages(prisma: PrismaClient, userId: string): Promise<void> {
-  const oldRows = await prisma.imageAsset.findMany({
-    where: { userId, NOT: { requestId: { startsWith: ECOM_IMAGE_REQUEST_PREFIX } } },
-    orderBy: { createdAt: "desc" },
-    skip: IMAGE_KEEP_LIMIT,
-    select: { id: true, objectKey: true },
-  });
-  if (oldRows.length === 0) return;
-  await prisma.imageAsset.deleteMany({ where: { id: { in: oldRows.map((row) => row.id) } } });
-  const loaded = tryLoadS3();
-  if (!loaded) return;
-  await Promise.all(oldRows.map(async (row) => {
-    if (row.objectKey) await deleteObject(loaded.s3, row.objectKey).catch(() => undefined);
-  }));
 }
 
 export async function listRecentImages(prisma: PrismaClient, userId: string) {

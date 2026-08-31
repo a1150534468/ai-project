@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（14/23 项，P0 + P1 + P2 + P3.1 + P3.2 + P3.3 已完成，下一步 P3.4 —— 重新定义 `pruneImages` 的保留策略）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（15/23 项，P0 + P1 + P2 + P3 全部完成，下一步 P4.1 —— 素材库/成品页加「加入我的知识库」）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
 
@@ -289,7 +289,15 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **四条判「不该进」，理由记在这里，免得下次复核重新纠结**：`PortraitReferenceAsset` / `TryOnReferenceAsset` ❌——24h TTL，清理路径把 S3 对象一起删（`portrait-routes.ts:286-322`），库里各 2 行、**存活 0 行**；收它们等于重造这整个计划要消灭的 H3 死链。`VideoMaterial` ❌——计费用的时长缓存，按 URL 读给 `sumInputDurationSec`，只对 `video/*` 写行，从不回列给用户（0 行）。`Avatar` ❌——自有「我的形象」入口，按规则 3 素材库最多做引用（0 行）。`ComicWorkflowShot.videoUrl` ❌——漫画整段不收（资产 tab，规则 3，0 行）。
   → **另记一条结构缺口（不属本项，本项也不为它加代码）**：不挂 `projectId` 的独立 `video_create` 任务（`dub-video-service.ts:29`）把成品只写进 `SkyhumanTask.resultPayload.videoUrl`，从不落 `DubProject`，于是**永远进不了素材库**。今天 0 行不阻塞；真要收，得先让那条链路把成品落进一张权威表，而不是让素材库去解 `resultPayload`。
   → 用例：`asset-sources.integration.test.ts` +2（试穿独立成 module、链接走自己的签名函数；`module=try-on` 过滤），并把「同毫秒跨源定序」从三源扩到四源（`try-on:` > `portrait:` > `image:` > `codex-pet:`）——`src/assets` 107 例、其中 19 例打真库，全绿 0 跳过。前端 `assetApi.ts` 的枚举与 `assetLibrary.ts` 三张表（标签 / 顺序 / 分区）各加一行，`moduleFiltersForOrigin("ai")` 的精确名单跟着改；web 全量 94 文件 637 例全绿、0 跳过。
-- [ ] P3.4 处理 H3 的另一半：`pruneImages` 的豁免名单（`image-route-helpers.ts:152`）当前只排除 `ecom-`，而形象照/文章配图/桌宠图都会被连 S3 删掉。**素材库上线后这个 50 条上限就是「用户素材会凭空消失」，必须重新定义保留策略。**
+- [x] P3.4 处理 H3 的另一半：`pruneImages` 的豁免名单（`image-route-helpers.ts:152`）当前只排除 `ecom-`，而形象照/文章配图/桌宠图都会被连 S3 删掉。**素材库上线后这个 50 条上限就是「用户素材会凭空消失」，必须重新定义保留策略。**
+  → **结论：硬删整个撤掉，`IMAGE_KEEP_LIMIT` 退回纯展示上限。** 不是「换个更宽的豁免名单」，因为豁免名单已经把 `ecom-*` 全排除了，剩下能被删的三类——裸生图（含 `pet-` 桌宠底图）、`article:` 文章配图、`comic:` 漫画分镜——**每一类都有用户面在展示**（前两类进素材库，`comic:` 在漫画剧集资产 tab）。也就是说**没有一类是合法可删的**：再去定义一个「该删的类」等于新删今天安全的行。
+  → 一致性论据：全仓每一个 `*_KEEP_LIMIT`（`VIDEO_KEEP_LIMIT` / `PORTRAIT_TASK_KEEP_LIMIT` / `TRY_ON_TASK_KEEP_LIMIT` / 宣传片的 `PROJECT_`·`RUN_`·`AUDIO_KEEP_LIMIT`）都只出现在 `take:` 里。`pruneImages` 是**全仓唯一**把展示上限当成硬删依据、并且连 S3 对象一起删的地方。系统既有立场也是「产物留着，用户上传的输入才给 TTL」（形象照/试穿参考图 24h、桌宠 `expiresAt`）。
+  → **真库量过的影响面**（psql 实测）：分类计数 `article:` 43 行 / 1 用户、裸生图 16 行 / 5 用户、`ecom-*` 13、`ecom-reference:` 13。用户 `cmrg7sx3w0002c3lsyza7tqci` 手上 51 条非 ecom 行（其中 43 条是 `article:`）——**已经有 1 条越过上限**，就是 `article:cms4aaacj0006c3bigknqnaw8:inline-4:…`（2026-07-28 创建、`has-s3`）。撤掉之前，该用户下一次生图就会把这张活着的文章配图连 S3 对象一起删掉。
+  → **正文两处更正**：①「形象照」会被删是**错的**——形象照在 `PortraitOutput` 另一张表，`pruneImages` 只碰 `ImageAsset`，从来够不着；②「桌宠图」是**对的**，桌宠底图走生图端点、`pet-` 前缀落 `ImageAsset`。另外那个 50 的窗口是**所有非 `ecom-` 前缀共用**的，所以掉出去的通常不是刚生的那张，而是最老的文章配图——这才是它危险的真正原因。
+  → 代价说清：这把「静默丢数据」换成了「产物无上限增长」。真要设上限，那是一次显式的产品决定（可见的删除入口，或配额），不是一个悄悄滑动的 50 行窗口。这段判断写进了 `IMAGE_KEEP_LIMIT` 的注释里，免得下一个人当无用常量又加回去。
+  → 顺带清掉删除后落空的死代码：`image-route-helpers.ts` 里只服务 `pruneImages` 的导出函数 `tryLoadS3`，以及 `deleteObject`/`loadS3Config`/`makeS3`/`S3Config` 这组 import（同名 `tryLoadS3` 在 `image-service-storage.ts` / `video-service.ts` / `audio-service.ts` 各有自己的一份，删的是第四份重复品）。
+  → 用例：`image-routes.test.ts` 补**这个行为的第一个护栏**（改之前 `pruneImages` 零测试覆盖，加上 mock 的 `deleteMany` 恒返回 `count: 0`，所以删除一直没人看见）——种满 50 条历史（最老一条是带 `objectKey` 的 `article:`）再跑一次两张图的生图，断言 `deleteMany` 一次都没被调、库里从 50 涨到 52、列表仍然只给 50 条且那条最老的不在列表里（**掉出窗口 ≠ 从库里消失**）。已反向验证：把旧的 prune 逻辑临时贴回去，这条用例失败并指名 `seed-0`。`src/assets` + `src/workflow/image` + `src/workflow/ecom` 共 13 文件 245 例全绿、0 跳过；api typecheck 干净。
+  → **另记一条不属本项、本项也不修的展示问题**：`listRecentImages` 同样只排除 `ecom-`，于是那 43 张文章配图占掉该用户生图历史条带 50 格里的 86%。这是**展示**口径的问题（生图条带该不该混进文章配图），不是保留策略，修它要动生图页的语义，留给后续。
 
 ### P4 — 策展路径
 

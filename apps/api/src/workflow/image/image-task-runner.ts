@@ -21,7 +21,6 @@ import {
   assertImageTaskRunning,
   callImageGeneration,
   ImageTaskStoppedError,
-  pruneImages,
   retryUntilSuccess,
   safeErrorMessage,
   tryLoadImageGenerationConfig,
@@ -124,7 +123,6 @@ export async function runImageGenerationTask(args: {
     }
 
     await assertImageTaskRunning(prisma, task.id);
-    await pruneImages(prisma, task.userId);
     const generated = await prisma.imageAsset.findMany({
       where: { userId: task.userId, requestId: task.requestId },
       orderBy: { requestIndex: "asc" },
