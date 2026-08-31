@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（8/23 项，P0 + P1 已完成，下一步 P2.1 —— 不可逆，需先确认备份）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（11/23 项，P0 + P1 + P2 已完成，下一步 P3.1 —— 素材库读模型）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
 
@@ -255,9 +255,16 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
 
 ### P2 — 清存量
 
-- [ ] P2.1 迁移：`DELETE FROM "Document" WHERE "sourceType" = 'ARTIFACT'`（`Chunk` 走 `onDelete: Cascade` 自动清），再 `DELETE FROM "KnowledgeBase" WHERE "systemKey" IS NOT NULL`。按 P0.2 的量级决定是否分批。**不可逆——执行前确认已有备份。**
-- [ ] P2.2 处理 `CodexPetRun.knowledgeDocumentId` 外键（`20260717180000_codex_pet_workflow/migration.sql:161`，`ON DELETE SET NULL`）：P0.3 解耦后该列可置空并在 P5 退役。
-- [ ] P2.3 校验：`usedBytes`（`service.ts:205`）与「知识晶格数」（`service.ts:73`）回归到只反映用户上传 → 顺带解掉 M5。管理端 `kbUploads*`（`analytics-routes.ts:218-220`）同步核对。
+- [x] P2.1 迁移：`DELETE FROM "Document" WHERE "sourceType" = 'ARTIFACT'`（`Chunk` 走 `onDelete: Cascade` 自动清），再 `DELETE FROM "KnowledgeBase" WHERE "systemKey" IS NOT NULL`。按 P0.2 的量级决定是否分批。**不可逆——执行前确认已有备份。**
+  → [`20260831130000_delete_ai_artifact_documents_and_kbs`](../../../packages/db/prisma/migrations/20260831130000_delete_ai_artifact_documents_and_kbs/migration.sql)，已 `migrate deploy`。**写成三步而不是计划里的两步**，因为「先删库让 `Document_kbId_fkey` 级联」会把任何被手工上传进产物库的用户文件一起 cascade 掉：① 删产物文档 → ② 仍有用户文件的产物库只摘 `systemKey`（降级成普通个人库，能改名能删）→ ③ 只删已空的产物库。②③ 都带 `ownerType = 'USER'` 护栏。**不分批**（P0.2 的量级结论）。
+  - 删前审计（用户要求「看清楚不要删错」，全部只读）：`ownerType` × `systemKey` 交叉表证明唯一那个 OFFICIAL 库 `systemKey` 是 NULL，谓词碰不到它；`systemKey` 只有 `AI_ARTIFACTS`(9,661) 和 NULL(17) 两种取值；**零交叉污染**——1,275 个 ARTIFACT 文档全在系统库内，8 个用户上传（6 FILE + 2 TEXT）全在系统库外；孤儿文档 0；`Chunk.kbId` 与其文档不一致 0；三张表上的外键只有 CASCADE / SET NULL，**没有 RESTRICT 会挡住删除**；松引用（无 FK 的 KB id）`Session.attachedKbIds` / `DubProject.attachedKbIds` / `ScheduledTask.kbIds` 命中 **0 / 0 / 0**，`kbAttachAllOwn=true` 的会话 **0**。
+  - 实际结果与预测**逐项吻合**：Document 1,275 → **8**（ARTIFACT 0、`sourceModule` 非空 0）、Chunk 211 → **0**、KnowledgeBase 9,678 → **17**（16 自建 + 1 官方，`systemKey` 非空 0）、`CodexPetRun.knowledgeDocumentId` 非空 43 → **0**（`CodexPetRun` 本身 127 行未变）。步骤 ② 本地命中 0 行（776 个装产物的库删完产物后全空）。
+  - 备份：用户以「本地开发环境」为由放弃全库备份，仍做了定向 `pg_dump --data-only -t Document -t Chunk -t KnowledgeBase` → `/tmp/kb-p2-backup/kb-before-p2.sql`（462 MB，绝大部分是产物正文）。
+- [x] P2.2 处理 `CodexPetRun.knowledgeDocumentId` 外键（`20260717180000_codex_pet_workflow/migration.sql:161`，`ON DELETE SET NULL`）：P0.3 解耦后该列可置空并在 P5 退役。
+  → **不需要改 schema**：`confdeltype = 'n'`（SET NULL）已经是想要的语义，P2.1 一删就把 43 个非空值全置空了，现在全表 127 行该列皆为 NULL。这列从此是惰性的，等 P5.4 连列带外键一起退役；P0.3 已经让 `ready + knowledgeDocumentId=null` 成为合法终态，所以中间态不会有人报错。
+- [x] P2.3 校验：`usedBytes`（`service.ts:205`）与「知识晶格数」（`service.ts:73`）回归到只反映用户上传 → 顺带解掉 M5。管理端 `kbUploads*`（`analytics-routes.ts:218-220`）同步核对。
+  → **三处都不用改代码**：它们从来没做产物/上传的区分，只是「`Document` 里有什么就报什么」，所以产物一删就自动正确了。`usedBytes` 是 `sum(sizeBytes) where kb.userId=… and status != 'failed'`；晶格数是 `groupBy kbId, sum(chunkCount)`，产物库行没了就不会再多出条目；管理端 `kbUploads{Today,Month,Total}` 是不带过滤的 `Document.count()`——之前把 1,275 个产物当「用户上传」报，现在是 8。M5 解除。
+  - 附带确认「删掉的东西回不来」：应用代码里**没有任何一处写** `sourceType: 'ARTIFACT'` 或 `KnowledgeBase.systemKey`。剩下的 `ARTIFACT` 只有三个**读**点——`kb/deps.ts:30-36`（`loadObject` 的内联正文分支，已不可达，随 P5.3 一起删）、`service.ts:99/130`（`systemKey` 的 403 保护，随 P5.1 退役）、`Knowledge.tsx:254/383/396`（「自动归档」徽章与隐藏改名/删除按钮的分支，同 P5.1）。`codex-pet` 里那批 `CODEX_PET_*_ARTIFACT_*` 是 S3 产物命名，与知识库无关。
 
 ### P3 — 素材库（读模型 + 页面）
 
@@ -323,7 +330,7 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 1. ~~**全程静态取证**：没连数据库、没跑测试、**没有比对生产库 `pg_trigger` 确认这批触发器真的装上了**。~~ → **已消除**：P0.1 的集成测试直接查 `pg_trigger` 断言 11 个触发器全在，7 例全绿。
 2. 标「结构性」的条目（H2 锁竞争实际耗时、M4 并发重复 chunk）是代码文本已确认、运行时后果未实测。要钉死 M4 需要并发集成测试。**仍未实测**——但 P1 删掉触发器后这两条自然消失，不再值得单独投入。
 3. ~~**P0.3 的改动量未评估**。X1 耦合牵着退款逻辑，是本计划里唯一「不是删除动作」的一步，也是唯一没底的一步。~~ → **已消除**：实际只动一个函数（`completeKnowledgeArchive`），加三条集成测试的断言反转。
-4. `Document.content` 是否有 ARTIFACT 之外的写入者未核实（阻塞 P5.2）。
-5. `ownerType='OFFICIAL'` 官方知识库的现状（有无管理端入口、有无实际数据）未核实。本计划假设它照旧可用，未做任何改动。
+4. ~~`Document.content` 是否有 ARTIFACT 之外的写入者未核实（阻塞 P5.2）。~~ → **已消除**（P2 顺带核实）：应用代码里**一个写入者都没有**，库里 `content IS NOT NULL` 的行也是 **0**。全部提及只有三处：`indexer.ts:108`（`loadObject` 签名里的字段）、`indexer.ts:250`（原样透传）、`deps.ts:32`（已不可达的 ARTIFACT 分支）；`retrieve.ts` 那两处是 `Chunk.content`，另一列。**P5.2 解除阻塞**，删这列只需连带删掉 `deps.ts` 的 ARTIFACT 分支和签名里的字段。
+5. `ownerType='OFFICIAL'` 官方知识库的现状（有无管理端入口、有无实际数据）未核实。本计划假设它照旧可用，未做任何改动。 → 部分核实：全库**恰好 1 行** OFFICIAL 库、`systemKey` 为 NULL、**没有文档**（所以 P2.1 的谓词碰不到它，且它现在是个空库）。管理端入口仍未核实。
 6. ~~存量 ARTIFACT 文档/Chunk 的实际规模未知（阻塞 P2.1 的分批决策）。~~ → **已消除**：见 P0.2 实测数据，1,265 文档 / 211 chunk / 9,563 库行，一次性删即可。
 
