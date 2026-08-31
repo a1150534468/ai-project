@@ -51,6 +51,7 @@ import { adminResellerRoutes } from "./admin/reseller-routes.js";
 import { clientMenuRoutes } from "./admin/client-menu-routes.js";
 import { resellerRoutes } from "./reseller/routes.js";
 import { kbRoutes } from "./kb/routes.js";
+import { assetRoutes } from "./assets/asset-routes.js";
 import { wechatRoutes } from "./wechat/routes.js";
 import { verifyToken } from "./auth/token.js";
 import { registerHub } from "./connector/hub.js";
@@ -148,6 +149,7 @@ export async function buildServer() {
   await app.register(chatRoutes);
   await app.register(wechatRoutes);
   await app.register(kbRoutes);
+  await app.register(assetRoutes);
   await app.register(billingRoutes);
   await app.register(membershipUserRoutes);
   await app.register(agentRoutes, { redis: getRedis() });

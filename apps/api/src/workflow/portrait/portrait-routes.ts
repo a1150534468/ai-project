@@ -206,7 +206,8 @@ function portraitBlobSignature(kind: "reference" | "output", id: string, objectK
   return createHmac("sha256", portraitBlobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
 }
 
-function portraitBlobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
+/** 导出给素材库复用：形象照的取件链接只能由这里签，素材库不另开一条取件端点。 */
+export function portraitBlobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
   const exp = Math.floor((Date.now() + PORTRAIT_BLOB_TTL_MS) / 1000);
   const sig = portraitBlobSignature(kind, id, objectKey, exp, env);
   const path = kind === "reference" ? "references" : "outputs";

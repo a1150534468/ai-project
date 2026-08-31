@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（11/23 项，P0 + P1 + P2 已完成，下一步 P3.1 —— 素材库读模型）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（12/23 项，P0 + P1 + P2 + P3.1 已完成，下一步 P3.2 —— 素材库页面与一级入口）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
 
@@ -268,7 +268,13 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
 
 ### P3 — 素材库（读模型 + 页面）
 
-- [ ] P3.1 `GET /api/assets` 读模型：按第二部分的准入规则聚合 `ImageAsset`（排除 `ecom-` / `comic:` 前缀）+ `VideoAsset` + `AudioAsset`（按 `kind` 分区）+ `DubProject` 媒体列 + `PortraitOutput` / `TryOnOutput` + `CodexPetRun` 的四个指定 artifact 指针。**第一版就要有分页、`sourceModule` 过滤、缩略图**，否则 M3 在素材库重演。
+- [x] P3.1 `GET /api/assets` 读模型：按第二部分的准入规则聚合 `ImageAsset`（排除 `ecom-` / `comic:` 前缀）+ `VideoAsset` + `AudioAsset`（按 `kind` 分区）+ `DubProject` 媒体列 + `PortraitOutput` / `TryOnOutput` + `CodexPetRun` 的四个指定 artifact 指针。**第一版就要有分页、`sourceModule` 过滤、缩略图**，否则 M3 在素材库重演。
+  → 落成 `apps/api/src/assets/` 六个文件：类型层 `asset-types.ts`、准入裁定 `asset-classify.ts`、排序/游标 `asset-cursor.ts`、六个源适配器 `asset-sources.ts`、归并分页 `asset-service.ts`、路由 `asset-routes.ts`。**不建表、不新开取件端点**：每条链接都调原模块自己的签名函数（`imageBlobUrl` / `portraitBlobUrl` / `projectAudioBlobUrl` / `defaultArtifactPreviewUrl`），素材库一条都没自己签。分页是**键集**而不是 offset——六路归并 + 新素材随时插到最前面，offset 会同时漏行和重行。
+  → **`TryOnOutput` 这一路按项目所有者指示暂缺**（试穿工作流有未提交改动在手上）。加一路只需往 `ASSET_SOURCES` 里追加一个源，`asset-service.ts` 不动。
+  → **偏差 1：桌宠不按计划正文那份 kind 白名单收，只收 `CodexPetRun` 四个指针列指着的 artifact。** 实测裁定表第 173 行的白名单有两处与库不符：`final_package` 这个 kind **在库里根本不存在**；`animation_preview` 有 **691 行、其中被四个指针引用的是 0 行**——按 kind 收会多收 691 条中间件（约 14 倍）。被指针指着的四种 kind 实测占比：`base_candidate` 79/84、`package` 48/50、`spritesheet` 48/50、`preview` 48/50。这正是同一行括号里那句「run 已经声明了哪几个 artifact 是有意义的，直接用这四个指针」，所以取指针、弃 kind 名单。代价是这个源必须走 `$queryRawUnsafe` 做 JOIN：准入条件是「`artifact.id` 等于 run 上四个列之一」，列与列的比较 Prisma 表达不了，而取回内存再筛会让分页判不出见底。
+  → **偏差 2：`ecom-master:` / `ecom-segment:` / `ecom-main:` 进素材库，只有 `ecom-stitch:` 和未知 `ecom-*` 不进。** 裁定表第 168 行字面写的是「前缀 `ecom-` 一律不进」，但按计划自己的「形态 × 来源 × 角色」三维规则，这三个前缀是**交付成品**不是中间件；`listRecentImages` 排掉整个 `ecom-` 是因为电商工作台另有视图，对应规则 3 的「素材库最多做引用」——所以按 `article:` 同样的办法处理：进，但带 `groupKey` 折叠到所属 workflow/job 下。`ecom-reference:` 同理进「我上传的」区（M2），`sourceModule` 记作 `reference` 而不是 `ecom`（该前缀被 image 与 ecom 两个模块共用，从前缀恢复不出真正的工作流）。未知 `ecom-*` 默认不进：宁可漏一个成品，也不要把中间件塞进用户素材库。
+  → API 除分页与 `sourceModule` 外还带了 `origin=ai|upload`：P3.2 的两个分区没有它就翻不了页（跨表的分区结果无法在前端拼)。
+  → 105 个用例，其中 `asset-sources.integration.test.ts` 17 例打真库：钉住嵌套 OR/AND/NOT 真能被翻成 SQL、桌宠那条手写 JOIN 与 `$n` 占位符对得上、以及「一行多素材」+「跨源同毫秒」两种情况下键集分页不重不漏。`asset-classify.test.ts` 里自带一个 where 求值器，逐条比对「SQL 判据」与「规则表判据」等价——两边不一致的症状是「素材库少了/多了一类素材」，没人会立刻发现。
 - [ ] P3.2 前端素材库页面 + `NavRail.tsx:52-64` 一级入口（现 11 项）。按「AI 生成 / 我上传的」分区。
 - [ ] P3.3 复核 M6 覆盖面：按新规则重新核一遍，确认 `PortraitOutput`/`TryOnOutput` 已纳入、caption 类文章不再被误期待。
 - [ ] P3.4 处理 H3 的另一半：`pruneImages` 的豁免名单（`image-route-helpers.ts:152`）当前只排除 `ecom-`，而形象照/文章配图/桌宠图都会被连 S3 删掉。**素材库上线后这个 50 条上限就是「用户素材会凭空消失」，必须重新定义保留策略。**
