@@ -1,8 +1,8 @@
 /**
- * 六路归并 + 键集分页。素材库的全部「服务层」就这一个函数。
+ * 多路归并 + 键集分页。素材库的全部「服务层」就这一个函数。
  *
- * `try-on` 这一路**故意缺着**：`TryOnOutput` 与试穿工作流当前有未提交的改动在手上，
- * 等那边落定后按 P3.3 补一个源进 `ASSET_SOURCES` 即可 —— 加一路不需要动这里。
+ * 这里**不认识任何一个具体的源**：源的名单、准入规则、链接怎么签全在 asset-sources.ts。
+ * 加一路（P3.3 补 `try-on` 时就是这样）只改那份名单，本文件一个字都不用动。
  */
 
 import { compareAssetKeysDesc, encodeAssetCursor, isBelowCursor } from "./asset-cursor.js";
@@ -26,7 +26,7 @@ export function clampAssetPageSize(raw: number | undefined): number {
 }
 
 /**
- * `sources` 可注入，测试用假源钉分页行为，不必造六张表的数据。
+ * `sources` 可注入，测试用假源钉分页行为，不必造七张表的数据。
  *
  * **每源多捞两行**（`limit + 2`）撑起两个判据：
  *   1. 同源的游标那一行会被 `keysetWhere` 连着捞回来（一行可能产出多条素材），由

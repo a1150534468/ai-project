@@ -239,6 +239,9 @@ function blobUrl(kind: "reference" | "output", id: string, objectKey: string, en
   return `/api/workflow/try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
 }
 
+/** 素材库要的是同一条签名链接（`assets/asset-sources.ts`），别在那边重签一份。 */
+export const tryOnBlobUrl = blobUrl;
+
 function validBlobSignature(
   kind: "reference" | "output",
   id: string,

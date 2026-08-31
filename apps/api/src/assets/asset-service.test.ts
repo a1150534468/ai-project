@@ -1,5 +1,5 @@
 /**
- * 钉住六路归并 + 键集分页：**全量走一遍，不重不漏，且顺序等于全局降序**。
+ * 钉住多路归并 + 键集分页：**全量走一遍，不重不漏，且顺序等于全局降序**。
  *
  * 假源不是随便返几条就算：它按真源的方式工作 —— 用 `keysetWhere` 真实返回的 where 形状
  * 在**行**粒度上筛，排序取前 `take` **行**，再把每行摊成 1..n 条素材。这样「一行多素材」
@@ -178,7 +178,7 @@ describe("clampAssetPageSize", () => {
   });
 });
 
-describe("六路归并 + 键集分页", () => {
+describe("多路归并 + 键集分页", () => {
   it("单页就装得下时，顺序等于全局降序", async () => {
     const sources = makeSources();
     const page = await listAssets(DEPS, { userId: "u1", limit: 100 }, sources);

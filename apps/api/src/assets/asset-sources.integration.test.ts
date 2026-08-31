@@ -1,5 +1,5 @@
 /**
- * 六个源的 SQL **真的能跑**，且准入/隔离/分页在 Postgres 上成立。
+ * 七个源的 SQL **真的能跑**，且准入/隔离/分页在 Postgres 上成立。
  *
  * 这是 P3.1 唯一验证得了下面这几件事的地方：
  *   - `imageAdmissionWhere` 那坨嵌套 OR/AND/NOT 是合法的 Prisma 输入（单测只验语义，不验它能不能被翻成 SQL）；
@@ -23,6 +23,7 @@ const deps: AssetSourceDeps = {
   prisma,
   imageBlobUrl: (imageId, objectKey) => `img://${imageId}/${objectKey}`,
   portraitBlobUrl: (outputId, objectKey) => `por://${outputId}/${objectKey}`,
+  tryOnBlobUrl: (outputId, objectKey) => `fit://${outputId}/${objectKey}`,
   projectAudioBlobUrl: (projectId, objectKey, mime) => `aud://${projectId}/${objectKey}/${mime}`,
   codexPetArtifactUrl: (artifact) => `pet://${artifact.id}`,
 };
@@ -157,7 +158,36 @@ async function seedMainUser() {
     },
   });
 
-  return { admitted, denied, video, audios, dub, dubEmpty, portrait };
+  // 试穿与形象照同构，一起放在 TIE 上：同毫秒的跨源定序里多一个前缀要排。
+  const tryOnTask = await prisma.tryOnTask.create({
+    data: {
+      userId: mainUserId,
+      requestId: `fit-${suffix}`,
+      model: "gpt-image-2",
+      aspectRatio: "3:4",
+      resolution: "1024x1536",
+      count: 1,
+      effectivePrompt: "p",
+      garmentFrontAssetId: `garment-${suffix}`,
+      billingOperationId: `fit-op-${suffix}`,
+      billingResourceKey: "try-on",
+      createdAt: at(23),
+    },
+  });
+  const tryOn = await prisma.tryOnOutput.create({
+    data: {
+      taskId: tryOnTask.id,
+      userId: mainUserId,
+      requestIndex: 1,
+      objectKey: `try-on/${suffix}.png`,
+      width: 1024,
+      height: 1536,
+      sizeBytes: 8192,
+      createdAt: TIE,
+    },
+  });
+
+  return { admitted, denied, video, audios, dub, dubEmpty, portrait, tryOnTask, tryOn };
 }
 
 /** 桌宠：一个 run 指着 base + package 两个 artifact，另外两个（含 691 行的 animation_preview）无人指。 */
@@ -222,6 +252,7 @@ beforeAll(async () => {
     dubFinal: `dub:${seeded.dub.id}:final`,
     dubAudio: `dub:${seeded.dub.id}:audio`,
     portrait: `portrait:${seeded.portrait.id}`,
+    tryOn: `try-on:${seeded.tryOn.id}`,
     petBase: `codex-pet:${pet.base.id}`,
     petPackage: `codex-pet:${pet.pkg.id}`,
     petOrphanPreview: `codex-pet:${pet.orphanPreview.id}`,
@@ -242,13 +273,13 @@ async function fullPage(query: Parameters<typeof listAssets>[1] = { userId: "" }
   return page.items;
 }
 
-describe.skipIf(!databaseEnabled)("六个源在真库上的准入", () => {
-  it("恰好收下该收的 15 条，一条不多", async () => {
+describe.skipIf(!databaseEnabled)("七个源在真库上的准入", () => {
+  it("恰好收下该收的 16 条，一条不多", async () => {
     const items = await fullPage();
     expect([...items.map((item) => item.id)].sort()).toEqual([
       ids.articleImage, ids.bareImage, ids.bgm, ids.dubAudio, ids.dubFinal,
       ids.ecomMaster, ids.ecomReference, ids.narration, ids.noKeyImage, ids.petBase,
-      ids.petPackage, ids.portrait, ids.tieImage, ids.video, ids.voiceSample,
+      ids.petPackage, ids.portrait, ids.tieImage, ids.tryOn, ids.video, ids.voiceSample,
     ].sort());
   });
 
@@ -308,6 +339,23 @@ describe.skipIf(!databaseEnabled)("六个源在真库上的准入", () => {
     expect(byId.get(ids.petBase)?.url).toBe(`pet://${pet.base.id}`);
   });
 
+  it("试穿：独立成 try-on 而不是并进 portrait，链接走试穿自己的签名函数", async () => {
+    const byId = new Map((await fullPage()).map((item) => [item.id, item]));
+    expect(byId.get(ids.tryOn)).toMatchObject({
+      sourceModule: "try-on",
+      origin: "ai",
+      mediaType: "image",
+      // requestIndex 从 0 起，标题按人读的序号 +1。
+      title: "试穿结果 #2",
+      groupKey: seeded.tryOnTask.id,
+      sizeBytes: 8192,
+    });
+    const url = `fit://${seeded.tryOn.id}/try-on/${suffix}.png`;
+    expect(byId.get(ids.tryOn)?.url).toBe(url);
+    expect(byId.get(ids.tryOn)?.thumbnailUrl).toBe(url);
+    expect(byId.get(ids.portrait)?.sourceModule).toBe("portrait");
+  });
+
   it("只看自己的：两个用户的素材集合完全不相交", async () => {
     const mine = new Set((await fullPage()).map((item) => item.id));
     const otherPage = await listAssets(deps, { userId: otherUserId, limit: 100 });
@@ -318,9 +366,12 @@ describe.skipIf(!databaseEnabled)("六个源在真库上的准入", () => {
 });
 
 describe.skipIf(!databaseEnabled)("真库上的过滤与分页", () => {
-  it("按 module 过滤只回该 module", async () => {
-    const items = await fullPage({ userId: mainUserId, sourceModule: "portrait" });
-    expect(items.map((item) => item.id)).toEqual([ids.portrait]);
+  it.each([
+    ["portrait", "portrait"],
+    ["try-on", "tryOn"],
+  ] as const)("按 module=%s 过滤只回该 module", async (sourceModule, idKey) => {
+    const items = await fullPage({ userId: mainUserId, sourceModule });
+    expect(items.map((item) => item.id)).toEqual([ids[idKey]]);
   });
 
   it("按 origin=upload 过滤：横跨 ImageAsset 与 AudioAsset 两张表", async () => {
@@ -328,10 +379,10 @@ describe.skipIf(!databaseEnabled)("真库上的过滤与分页", () => {
     expect(items.map((item) => item.id).sort()).toEqual([ids.bgm, ids.ecomReference, ids.voiceSample].sort());
   });
 
-  it("同一毫秒上跨源按前缀定序（portrait: > image: > codex-pet:）", async () => {
+  it("同一毫秒上跨源按前缀定序（try-on: > portrait: > image: > codex-pet:）", async () => {
     const items = await fullPage();
     const tieIds = items.filter((item) => item.createdAt === TIE.toISOString()).map((item) => item.id);
-    expect(tieIds).toEqual([ids.portrait, ids.tieImage, ids.petBase]);
+    expect(tieIds).toEqual([ids.tryOn, ids.portrait, ids.tieImage, ids.petBase]);
   });
 
   it.each([1, 2, 3, 7])("limit=%i 在真 SQL 上翻到底：与单页结果逐条一致", async (limit) => {

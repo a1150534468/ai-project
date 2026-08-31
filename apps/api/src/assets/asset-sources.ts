@@ -1,11 +1,11 @@
 /**
- * 六个源适配器。每个把一张权威表的行翻成 `AssetItem`，**不新建表、不新开取件端点**。
+ * 七个源适配器。每个把一张权威表的行翻成 `AssetItem`，**不新建表、不新开取件端点**。
  *
  * 三条贯穿全文件的约束：
  *
- * 1. **URL 一律问原模块要。** 图片走 `imageBlobUrl`、形象照走 `portraitBlobUrl`、宣传片
- *    音频走 `projectAudioBlobUrl`、桌宠走 `defaultArtifactPreviewUrl`，视频/口播本来就存的是
- *    可直接播的 URL。素材库自己签一条链接就等于第二套访问控制。
+ * 1. **URL 一律问原模块要。** 图片走 `imageBlobUrl`、形象照走 `portraitBlobUrl`、试穿走
+ *    `tryOnBlobUrl`、宣传片音频走 `projectAudioBlobUrl`、桌宠走 `defaultArtifactPreviewUrl`，
+ *    视频/口播本来就存的是可直接播的 URL。素材库自己签一条链接就等于第二套访问控制。
  * 2. **准入条件必须落在 SQL 里。** 见 asset-classify.ts 的 `imageAdmissionWhere`：拉回内存
  *    再筛会让分页的「见底」判据失效。所以「音频按 kind 分区」也写成 `kind: { in: [...] }`，
  *    「口播只要有媒体列的项目」也写成 `OR` 而不是取回来再挑。
@@ -20,6 +20,7 @@ import type { CodexPetArtifactShape } from "../workflow/codex-pet/codex-pet-rout
 import { imageBlobUrl } from "../workflow/image/image-route-helpers.js";
 import { projectAudioBlobUrl } from "../workflow/local-business-promo/local-business-promo-media-access.js";
 import { portraitBlobUrl } from "../workflow/portrait/portrait-routes.js";
+import { tryOnBlobUrl } from "../workflow/try-on/try-on-routes.js";
 import { classifyImageRequestId, imageAdmissionWhere, imageGroupKey } from "./asset-classify.js";
 import { ASSET_SOURCE_ID_PREFIXES, keysetWhere } from "./asset-cursor.js";
 import type { AssetCursor, AssetItem, AssetOrigin, AssetSourceModule } from "./asset-types.js";
@@ -28,6 +29,7 @@ export interface AssetSourceDeps {
   readonly prisma: PrismaClient;
   readonly imageBlobUrl: (imageId: string, objectKey: string) => string;
   readonly portraitBlobUrl: (outputId: string, objectKey: string) => string;
+  readonly tryOnBlobUrl: (outputId: string, objectKey: string) => string;
   readonly projectAudioBlobUrl: (projectId: string, objectKey: string, mime: string) => string;
   readonly codexPetArtifactUrl: (artifact: CodexPetArtifactRow) => string | null;
 }
@@ -352,6 +354,57 @@ const portraitSource: AssetSource = {
 };
 
 /**
+ * 试穿输出与形象照同构（同样是 `taskId` + `requestIndex` + 唯一 `objectKey`），所以这一路是
+ * portrait 那一路的镜像。但 `sourceModule` 是独立的 `try-on` 而不是并进 `portrait`：
+ * 后台菜单里两者本来就是两个三级菜单（`workflow.image.portrait` / `workflow.image.try-on`），
+ * 找试穿结果的人不该去「形象照」筛选项下面翻。
+ */
+const tryOnSource: AssetSource = {
+  key: "tryOn",
+  modules: ["try-on"],
+  origins: ["ai"],
+  fetch: async (deps, query) => {
+    const rows = await deps.prisma.tryOnOutput.findMany({
+      where: { userId: query.userId, AND: [keysetWhere(query.cursor, P.tryOn)] },
+      orderBy: [...ROW_ORDER],
+      take: query.take,
+      select: {
+        id: true,
+        taskId: true,
+        requestIndex: true,
+        objectKey: true,
+        mime: true,
+        width: true,
+        height: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
+    });
+    // 与 try-on-routes.ts 的 serializeOutput 一样：只有一条签名链接，没有单独的缩略图。
+    return rows.map((row) => {
+      const url = deps.tryOnBlobUrl(row.id, row.objectKey);
+      return {
+        id: `${P.tryOn}${row.id}`,
+        sourceModule: "try-on" as const,
+        origin: "ai" as const,
+        mediaType: "image" as const,
+        title: `试穿结果 #${row.requestIndex + 1}`,
+        url,
+        thumbnailUrl: url,
+        mime: row.mime,
+        width: row.width,
+        height: row.height,
+        sizeBytes: row.sizeBytes,
+        durationSec: null,
+        createdAt: row.createdAt.toISOString(),
+        groupKey: row.taskId,
+        groupLabel: null,
+      };
+    });
+  },
+};
+
+/**
  * 桌宠只收 `CodexPetRun` 四个指针列指着的那几个 artifact（计划裁定表最后一行：
  * 「run 已经声明了哪几个 artifact 是有意义的，素材库直接用这四个指针，不要扫全表」）。
  *
@@ -431,13 +484,14 @@ const codexPetSource: AssetSource = {
   },
 };
 
-/** 顺序只影响并发发起的次序，归并按全局键重排；`try-on` 暂缺，见 asset-service.ts。 */
+/** 顺序只影响并发发起的次序，归并按全局键重排。 */
 export const ASSET_SOURCES: readonly AssetSource[] = [
   imageSource,
   videoSource,
   audioSource,
   dubSource,
   portraitSource,
+  tryOnSource,
   codexPetSource,
 ];
 
@@ -450,6 +504,7 @@ export function createAssetSourceDeps(prisma: PrismaClient): AssetSourceDeps {
     prisma,
     imageBlobUrl,
     portraitBlobUrl: (outputId, objectKey) => portraitBlobUrl("output", outputId, objectKey),
+    tryOnBlobUrl: (outputId, objectKey) => tryOnBlobUrl("output", outputId, objectKey),
     projectAudioBlobUrl,
     // 非光栅图（交付包 zip）拿不到预览链接，取件仍走桌宠自己那条限流的安装链接接口。
     codexPetArtifactUrl: (artifact) => defaultArtifactPreviewUrl(artifact, {}),

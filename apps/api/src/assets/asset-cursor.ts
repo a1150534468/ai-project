@@ -1,7 +1,7 @@
 /**
  * 素材库的排序键、游标与键集条件。
  *
- * 键是 `(createdAt desc, id desc)`，**不是 offset**：六路归并 + 新素材随时插到最前面，
+ * 键是 `(createdAt desc, id desc)`，**不是 offset**：多路归并 + 新素材随时插到最前面，
  * offset 会同时漏行和重行（见 asset-types.ts 的 AssetCursor）。
  *
  * 下面 `keysetWhere` 的跨源分支依赖一条前缀性质：**任意两个源前缀之间，谁都不是谁的前缀**。
@@ -18,6 +18,7 @@ export const ASSET_SOURCE_ID_PREFIXES = {
   audio: "audio:",
   dub: "dub:",
   portrait: "portrait:",
+  tryOn: "try-on:",
   codexPet: "codex-pet:",
 } as const;
 

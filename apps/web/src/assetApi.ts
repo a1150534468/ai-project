@@ -21,6 +21,7 @@ export const ASSET_SOURCE_MODULES = [
   "audio",
   "dub",
   "portrait",
+  "try-on",
   "codex-pet",
 ] as const;
 

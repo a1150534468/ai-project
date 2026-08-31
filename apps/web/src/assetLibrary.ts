@@ -35,6 +35,7 @@ export const ASSET_MODULE_LABELS: Readonly<Record<AssetSourceModule, string>> = 
   audio: "音频",
   dub: "数字人口播",
   portrait: "形象照",
+  "try-on": "AI 试穿",
   "codex-pet": "桌宠",
 };
 
@@ -42,6 +43,7 @@ export const ASSET_MODULE_LABELS: Readonly<Record<AssetSourceModule, string>> = 
 const MODULE_ORDER: readonly AssetSourceModule[] = [
   "image",
   "portrait",
+  "try-on",
   "article",
   "ecom",
   "comic",
@@ -68,6 +70,7 @@ const MODULE_ORIGINS: Readonly<Record<AssetSourceModule, readonly AssetOrigin[]>
   audio: ["ai", "upload"],
   dub: ["ai"],
   portrait: ["ai"],
+  "try-on": ["ai"],
   "codex-pet": ["ai"],
 };
 

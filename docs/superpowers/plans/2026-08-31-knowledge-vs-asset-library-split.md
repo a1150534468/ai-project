@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（13/23 项，P0 + P1 + P2 + P3.1 + P3.2 已完成，下一步 P3.3 —— 复核 M6 覆盖面）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（14/23 项，P0 + P1 + P2 + P3.1 + P3.2 + P3.3 已完成，下一步 P3.4 —— 重新定义 `pruneImages` 的保留策略）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
 
@@ -181,6 +181,7 @@
 **用户上传的输入素材（现状被误当成 AI 产物）**
 
 `ecom-reference:` 参考图（M2）、`PortraitReferenceAsset`、`TryOnReferenceAsset`、`bgm`、`voice-sample`、`DubBgmPreset`——这些**是素材，但不是 AI 产物**。
+（P3.3 复核更正：`DubBgmPreset` 列在这里是错的，它**没有 `userId`**，是带后台 CRUD 的平台预设目录，不是用户上传物；用户自己传的 BGM 在 `AudioAsset(kind='bgm')`。两张 `*ReferenceAsset` 也判为不收，理由见 P3.3。）
 这恰恰说明「素材库」比「AI 产物库」是更正确的容器名：**素材库天然应该同时装「我上传的」和「AI 生成的」**，并用来源维度分区。而现状那个叫「AI 产物」的库把参考图混进去，正文写成「图片提示词：image_reference_upload」，是概念错位的直接证据。
 
 ### 裁定汇总
@@ -269,8 +270,8 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
 ### P3 — 素材库（读模型 + 页面）
 
 - [x] P3.1 `GET /api/assets` 读模型：按第二部分的准入规则聚合 `ImageAsset`（排除 `ecom-` / `comic:` 前缀）+ `VideoAsset` + `AudioAsset`（按 `kind` 分区）+ `DubProject` 媒体列 + `PortraitOutput` / `TryOnOutput` + `CodexPetRun` 的四个指定 artifact 指针。**第一版就要有分页、`sourceModule` 过滤、缩略图**，否则 M3 在素材库重演。
-  → 落成 `apps/api/src/assets/` 六个文件：类型层 `asset-types.ts`、准入裁定 `asset-classify.ts`、排序/游标 `asset-cursor.ts`、六个源适配器 `asset-sources.ts`、归并分页 `asset-service.ts`、路由 `asset-routes.ts`。**不建表、不新开取件端点**：每条链接都调原模块自己的签名函数（`imageBlobUrl` / `portraitBlobUrl` / `projectAudioBlobUrl` / `defaultArtifactPreviewUrl`），素材库一条都没自己签。分页是**键集**而不是 offset——六路归并 + 新素材随时插到最前面，offset 会同时漏行和重行。
-  → **`TryOnOutput` 这一路按项目所有者指示暂缺**（试穿工作流有未提交改动在手上）。加一路只需往 `ASSET_SOURCES` 里追加一个源，`asset-service.ts` 不动。
+  → 落成 `apps/api/src/assets/` 六个文件：类型层 `asset-types.ts`、准入裁定 `asset-classify.ts`、排序/游标 `asset-cursor.ts`、源适配器 `asset-sources.ts`（P3.1 六路，P3.3 补 `try-on` 起七路）、归并分页 `asset-service.ts`、路由 `asset-routes.ts`。**不建表、不新开取件端点**：每条链接都调原模块自己的签名函数（`imageBlobUrl` / `portraitBlobUrl` / `projectAudioBlobUrl` / `defaultArtifactPreviewUrl`），素材库一条都没自己签。分页是**键集**而不是 offset——多路归并 + 新素材随时插到最前面，offset 会同时漏行和重行。
+  → **`TryOnOutput` 这一路在 P3.1 时按项目所有者指示暂缺**（试穿工作流当时有未提交改动在手上），P3.3 已补齐。事后印证了这个设计：加一路只往 `ASSET_SOURCES` 追加一个源，`asset-service.ts` 一个字没动。
   → **偏差 1：桌宠不按计划正文那份 kind 白名单收，只收 `CodexPetRun` 四个指针列指着的 artifact。** 实测裁定表第 173 行的白名单有两处与库不符：`final_package` 这个 kind **在库里根本不存在**；`animation_preview` 有 **691 行、其中被四个指针引用的是 0 行**——按 kind 收会多收 691 条中间件（约 14 倍）。被指针指着的四种 kind 实测占比：`base_candidate` 79/84、`package` 48/50、`spritesheet` 48/50、`preview` 48/50。这正是同一行括号里那句「run 已经声明了哪几个 artifact 是有意义的，直接用这四个指针」，所以取指针、弃 kind 名单。代价是这个源必须走 `$queryRawUnsafe` 做 JOIN：准入条件是「`artifact.id` 等于 run 上四个列之一」，列与列的比较 Prisma 表达不了，而取回内存再筛会让分页判不出见底。
   → **偏差 2：`ecom-master:` / `ecom-segment:` / `ecom-main:` 进素材库，只有 `ecom-stitch:` 和未知 `ecom-*` 不进。** 裁定表第 168 行字面写的是「前缀 `ecom-` 一律不进」，但按计划自己的「形态 × 来源 × 角色」三维规则，这三个前缀是**交付成品**不是中间件；`listRecentImages` 排掉整个 `ecom-` 是因为电商工作台另有视图，对应规则 3 的「素材库最多做引用」——所以按 `article:` 同样的办法处理：进，但带 `groupKey` 折叠到所属 workflow/job 下。`ecom-reference:` 同理进「我上传的」区（M2），`sourceModule` 记作 `reference` 而不是 `ecom`（该前缀被 image 与 ecom 两个模块共用，从前缀恢复不出真正的工作流）。未知 `ecom-*` 默认不进：宁可漏一个成品，也不要把中间件塞进用户素材库。
   → API 除分页与 `sourceModule` 外还带了 `origin=ai|upload`：P3.2 的两个分区没有它就翻不了页（跨表的分区结果无法在前端拼)。
@@ -281,7 +282,13 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **前端必须按 id 去重，这不是防御性代码**：同源游标是 `lte`（`asset-cursor.test.ts` 钉住的行为，因为一行可能产出多条素材，游标那行要重取），所以第二页必然带回已展示过的兄弟素材。`appendAssetPage` 顺带处理「游标不前进」——服务端若返回同一个 `nextCursor`，「加载更多」会永远可点，这里直接判到底。
   → module→分区的对应表**硬编码在前端**（手工与 `asset-classify.ts` + `AUDIO_KIND_RULES` 同步，只管展示，准入仍以 API 为准）：从已加载素材反推筛选项的话，第 5 页才首次出现的模块在那之前根本没有入口。`comic: []`——漫画分镜整段不进素材库。
   → 翻页用显式按钮而不是 `IntersectionObserver`：jsdom 里没有真实滚动，观察器版本的分页在测试里钉不住。59 个新用例（`assetApi` 10 / `assetLibrary` 37 / `Assets` 页面 12）+ `App.behavior.test.tsx` 补一例视图分派。
-- [ ] P3.3 复核 M6 覆盖面：按新规则重新核一遍，确认 `PortraitOutput`/`TryOnOutput` 已纳入、caption 类文章不再被误期待。
+- [x] P3.3 复核 M6 覆盖面：按新规则重新核一遍，确认 `PortraitOutput`/`TryOnOutput` 已纳入、caption 类文章不再被误期待。
+  → 复核方式不是只核正文点到的那两个名字，而是把 schema 里**每个带媒体列**（`objectKey` / `*Url` / `mime`）的 model 全过一遍（15 处命中），逐个查读写点与真实行数再判。
+  → **`PortraitOutput` ✅ 早已纳入**（`portraitSource`，库里 16 行）。**`TryOnOutput` 是本项唯一真缺口，已补**：`tryOnSource` 与 portrait 那一路同构（同样 `taskId` + `requestIndex` + 唯一 `objectKey`），链接调试穿自己的签名函数——`try-on-routes.ts` 只加一行 `export const tryOnBlobUrl = blobUrl;`，素材库不重签第二条。`sourceModule` 独立成 `try-on` 而不是并进 `portrait`：后台目录里两者本来就是两个三级菜单（`workflow.image.portrait` / `workflow.image.try-on`），找试穿结果的人不该去「形象照」筛选项下面翻。新前缀 `try-on:` 自动被 `asset-cursor.test.ts` 那条「任意两个源前缀互不为前缀」的性质测试覆盖。
+  → **caption 类文章的误期待已经**结构性**消失，不是靠加判断绕过**：库里归档触发器/函数 0 个（P0.4 + P1 删净），`Document` 只剩 FILE 6 行 + TEXT 2 行、**ARTIFACT 0 行**，代码里再没有把配图/caption 与知识库耦合的路径。残留只有文案：`Knowledge.tsx:385/577` 两处已归 P5.1，另发现 `codexPetStudioModel.ts:141` 还有一个「归档到知识库」状态文案，一并留给 P5.1。
+  → **四条判「不该进」，理由记在这里，免得下次复核重新纠结**：`PortraitReferenceAsset` / `TryOnReferenceAsset` ❌——24h TTL，清理路径把 S3 对象一起删（`portrait-routes.ts:286-322`），库里各 2 行、**存活 0 行**；收它们等于重造这整个计划要消灭的 H3 死链。`VideoMaterial` ❌——计费用的时长缓存，按 URL 读给 `sumInputDurationSec`，只对 `video/*` 写行，从不回列给用户（0 行）。`Avatar` ❌——自有「我的形象」入口，按规则 3 素材库最多做引用（0 行）。`ComicWorkflowShot.videoUrl` ❌——漫画整段不收（资产 tab，规则 3，0 行）。
+  → **另记一条结构缺口（不属本项，本项也不为它加代码）**：不挂 `projectId` 的独立 `video_create` 任务（`dub-video-service.ts:29`）把成品只写进 `SkyhumanTask.resultPayload.videoUrl`，从不落 `DubProject`，于是**永远进不了素材库**。今天 0 行不阻塞；真要收，得先让那条链路把成品落进一张权威表，而不是让素材库去解 `resultPayload`。
+  → 用例：`asset-sources.integration.test.ts` +2（试穿独立成 module、链接走自己的签名函数；`module=try-on` 过滤），并把「同毫秒跨源定序」从三源扩到四源（`try-on:` > `portrait:` > `image:` > `codex-pet:`）——`src/assets` 107 例、其中 19 例打真库，全绿 0 跳过。前端 `assetApi.ts` 的枚举与 `assetLibrary.ts` 三张表（标签 / 顺序 / 分区）各加一行，`moduleFiltersForOrigin("ai")` 的精确名单跟着改；web 全量 94 文件 637 例全绿、0 跳过。
 - [ ] P3.4 处理 H3 的另一半：`pruneImages` 的豁免名单（`image-route-helpers.ts:152`）当前只排除 `ecom-`，而形象照/文章配图/桌宠图都会被连 S3 删掉。**素材库上线后这个 50 条上限就是「用户素材会凭空消失」，必须重新定义保留策略。**
 
 ### P4 — 策展路径

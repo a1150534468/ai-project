@@ -3,8 +3,8 @@
  *
  * 素材库**不建表**（见 docs/superpowers/plans/2026-08-31-knowledge-vs-asset-library-split.md
  * 「素材库不建新表」一节）：它是 ImageAsset / VideoAsset / AudioAsset / PortraitOutput /
- * DubProject / CodexPetRun 这几张权威表的聚合读模型。查不到就是没有，源删则自然消失，
- * 孤儿结构性地不可能存在 —— 这正是知识库那 335 行归档触发器付出代价才没换到的性质。
+ * TryOnOutput / DubProject / CodexPetRun 这几张权威表的聚合读模型。查不到就是没有，源删则
+ * 自然消失，孤儿结构性地不可能存在 —— 这正是知识库那 335 行归档触发器付出代价才没换到的性质。
  */
 
 /** 素材归属的工作流。`reference` 不是工作流，见 asset-classify.ts 的说明。 */
@@ -18,6 +18,7 @@ export const ASSET_SOURCE_MODULES = [
   "audio",
   "dub",
   "portrait",
+  "try-on",
   "codex-pet",
 ] as const;
 
@@ -66,7 +67,7 @@ export interface AssetPage {
 
 /**
  * 键集游标：`(createdAt, id)` 降序。用 offset 分页在这里是错的 ——
- * 六路归并 + 新素材随时插到最前面，offset 会漏行也会重行。
+ * 多路归并 + 新素材随时插到最前面，offset 会漏行也会重行。
  */
 export interface AssetCursor {
   readonly createdAt: Date;

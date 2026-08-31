@@ -1,7 +1,7 @@
 /**
  * `GET /api/assets` 只做**查询解析**，所以这里只钉解析契约：谁能进、参数怎么收敛、
  * 解出来的东西原样交给 `listAssets`。归并与分页的正确性在 asset-service.test.ts，
- * 六个源的 SQL 真能跑在 asset-sources.integration.test.ts。
+ * 七个源的 SQL 真能跑在 asset-sources.integration.test.ts。
  *
  * 用裸 Fastify 而不是 `buildServer()`：本文件的守卫是插件级 `preHandler`，
  * 单独注册这一个插件时它必须依然生效（见 auth/require-user.ts 的说明）。
