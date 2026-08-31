@@ -7,7 +7,7 @@
  *  - 会话记录 + 切换/删除/开新对话 → `useChatSessions`
  *  - 发送一轮对话(SSE 事件机) → `useChatStream`
  *
- * 视图切换仍然是 `ViewType` 字符串(本计划不引入 react-router),`renderContent` 的 13 个分支
+ * 视图切换仍然是 `ViewType` 字符串(本计划不引入 react-router),`renderContent` 的 14 个分支
  * 就是唯一的路由表。
  *
  * **hook 的调用顺序有意义**:`useAuthSession` 必须排第一 —— 它那个把 token 同步进 `http.ts`
@@ -19,6 +19,7 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 import Chat from "./pages/Chat";
 import Knowledge from "./pages/Knowledge";
+import Assets from "./pages/Assets";
 import ToolMarket from "./pages/ToolMarket";
 import Workflow from "./pages/Workflow";
 import Video from "./pages/Video";
@@ -153,6 +154,10 @@ export default function App() {
           onViewChange={(v: string) => setView(v as ViewType)}
         />
       );
+    }
+
+    if (nav.view === "assets") {
+      return <Assets token={token} />;
     }
 
     if (nav.view === "tool-market") {

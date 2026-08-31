@@ -18,6 +18,7 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
   { key: "nav.chat", label: "对话", group: "main", defaultVisible: true },
   { key: "nav.models", label: "模型广场", group: "main", defaultVisible: true },
   { key: "nav.kb", label: "知识库", group: "main", defaultVisible: true },
+  { key: "nav.assets", label: "素材库", group: "main", defaultVisible: true },
   { key: "nav.tool-market", label: "工具市场", group: "main", defaultVisible: true },
   { key: "nav.workflow", label: "工作流", group: "main", defaultVisible: true },
   { key: "nav.video", label: "AI 视频", group: "main", defaultVisible: true },

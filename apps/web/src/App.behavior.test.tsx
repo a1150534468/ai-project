@@ -4,12 +4,12 @@
  * `App.tsx`(752 行)拆分前的行为护栏。P2.4 批次二 Step 4 只允许「把 25 个 useState 按关注点
  * 分组进自定义 hook」、不许改路由机制,所以这里断言的全是**编排契约**:
  *  - 登录态:token 进 localStorage、getMe 401 清登录态、登出回登录页
- *  - 视图分派:13 个 view 分支各渲染谁、工作流二级菜单怎么落到 workflow / report
+ *  - 视图分派:14 个 view 分支各渲染谁、工作流二级菜单怎么落到 workflow / report
  *  - 深链一次性:知识库 ↔ 桌宠的跳转意图,离开目标页就必须清掉
  *  - 会话流:发送 → session 事件把草稿键迁到真实 id → text / tool / reset / citation / error
  *  - 后台开关顶掉当前页时跳第一个可见页
  *
- * 13 个页面组件全部换成探针,断言的是 **App.tsx 自己算出来、往下传的那份 props**,不进页面
+ * 14 个页面组件全部换成探针,断言的是 **App.tsx 自己算出来、往下传的那份 props**,不进页面
  * 内部找 DOM —— 拆分会把这段编排搬进 hook,探针看到的 props 才是必须逐字不变的契约。
  *
  * `probes.shell` / `probes.chat` 抓的是最后一次渲染的 props,回调直接从这里调用。
@@ -119,6 +119,7 @@ vi.mock("./components/Register", () => ({
 
 vi.mock("./pages/Chat", () => pageProbe("chat", "chat-page"));
 vi.mock("./pages/Knowledge", () => pageProbe("knowledge", "kb-page"));
+vi.mock("./pages/Assets", () => stub("assets-page"));
 vi.mock("./pages/Workflow", () => pageProbe("workflow", "workflow-page"));
 vi.mock("./pages/Settings", () => pageProbe("settings", "settings-page"));
 vi.mock("./pages/ToolMarket", () => stub("tool-market-page"));
@@ -316,6 +317,16 @@ describe("App 视图分派", () => {
       probes.chat?.onOpenToolMarket();
     });
     expect(find("tool-market-page")).not.toBeNull();
+  });
+
+  // 素材库是 P3.2 新增的一级入口:走的是和其他 13 个页面同一套 view 分派,token 照样往下传。
+  it("素材库是独立一级视图,拿到 token", async () => {
+    await mount();
+    await act(async () => {
+      probes.shell?.onViewChange("assets");
+    });
+    expect(find("assets-page")?.getAttribute("data-token")).toBe("t-1");
+    expect(find("kb-page")).toBeNull();
   });
 
   it("当前页被后台隐藏时跳到第一个可见的主菜单", async () => {

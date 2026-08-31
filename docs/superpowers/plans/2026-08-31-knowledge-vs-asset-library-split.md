@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（12/23 项，P0 + P1 + P2 + P3.1 已完成，下一步 P3.2 —— 素材库页面与一级入口）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（13/23 项，P0 + P1 + P2 + P3.1 + P3.2 已完成，下一步 P3.3 —— 复核 M6 覆盖面）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
 
@@ -275,7 +275,12 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **偏差 2：`ecom-master:` / `ecom-segment:` / `ecom-main:` 进素材库，只有 `ecom-stitch:` 和未知 `ecom-*` 不进。** 裁定表第 168 行字面写的是「前缀 `ecom-` 一律不进」，但按计划自己的「形态 × 来源 × 角色」三维规则，这三个前缀是**交付成品**不是中间件；`listRecentImages` 排掉整个 `ecom-` 是因为电商工作台另有视图，对应规则 3 的「素材库最多做引用」——所以按 `article:` 同样的办法处理：进，但带 `groupKey` 折叠到所属 workflow/job 下。`ecom-reference:` 同理进「我上传的」区（M2），`sourceModule` 记作 `reference` 而不是 `ecom`（该前缀被 image 与 ecom 两个模块共用，从前缀恢复不出真正的工作流）。未知 `ecom-*` 默认不进：宁可漏一个成品，也不要把中间件塞进用户素材库。
   → API 除分页与 `sourceModule` 外还带了 `origin=ai|upload`：P3.2 的两个分区没有它就翻不了页（跨表的分区结果无法在前端拼)。
   → 105 个用例，其中 `asset-sources.integration.test.ts` 17 例打真库：钉住嵌套 OR/AND/NOT 真能被翻成 SQL、桌宠那条手写 JOIN 与 `$n` 占位符对得上、以及「一行多素材」+「跨源同毫秒」两种情况下键集分页不重不漏。`asset-classify.test.ts` 里自带一个 where 求值器，逐条比对「SQL 判据」与「规则表判据」等价——两边不一致的症状是「素材库少了/多了一类素材」，没人会立刻发现。
-- [ ] P3.2 前端素材库页面 + `NavRail.tsx:52-64` 一级入口（现 11 项）。按「AI 生成 / 我上传的」分区。
+- [x] P3.2 前端素材库页面 + `NavRail.tsx:52-64` 一级入口（现 11 项）。按「AI 生成 / 我上传的」分区。
+  → 四个新文件 + 四处改动：网络层 `assetApi.ts`（唯一 fetch 点，类型手抄 `asset-types.ts`——web 与 api 没有共享类型包，这是既有约定）、纯逻辑 `assetLibrary.ts`（分区表/筛选项/翻页归并/两个格式化）、展示组件 `components/assets/AssetLibraryView.tsx`、页面 `pages/Assets.tsx`；一级入口进 `NavRail.tsx`（`ViewType` + `NAV_ITEMS`，紧挨知识库）、`App.tsx` 的 `renderContent` 加第 14 个分支、后台目录加 `nav.assets`（`client-menu-catalog.ts`，`defaultVisible: true`）。
+  → **`clientMenu.ts` 一行都不用改**：`isClientMenuVisible` 是 `visibility?.[key] ?? DEFAULT[key] ?? true`（未知 key 默认可见）、`clientMenuKeyForView` 自动推 `nav.<view>`、`FALLBACK_VIEW_ORDER` 只在当前页被隐藏时兜底。新入口天生就被这三处正确处理。
+  → **前端必须按 id 去重，这不是防御性代码**：同源游标是 `lte`（`asset-cursor.test.ts` 钉住的行为，因为一行可能产出多条素材，游标那行要重取），所以第二页必然带回已展示过的兄弟素材。`appendAssetPage` 顺带处理「游标不前进」——服务端若返回同一个 `nextCursor`，「加载更多」会永远可点，这里直接判到底。
+  → module→分区的对应表**硬编码在前端**（手工与 `asset-classify.ts` + `AUDIO_KIND_RULES` 同步，只管展示，准入仍以 API 为准）：从已加载素材反推筛选项的话，第 5 页才首次出现的模块在那之前根本没有入口。`comic: []`——漫画分镜整段不进素材库。
+  → 翻页用显式按钮而不是 `IntersectionObserver`：jsdom 里没有真实滚动，观察器版本的分页在测试里钉不住。59 个新用例（`assetApi` 10 / `assetLibrary` 37 / `Assets` 页面 12）+ `App.behavior.test.tsx` 补一例视图分派。
 - [ ] P3.3 复核 M6 覆盖面：按新规则重新核一遍，确认 `PortraitOutput`/`TryOnOutput` 已纳入、caption 类文章不再被误期待。
 - [ ] P3.4 处理 H3 的另一半：`pruneImages` 的豁免名单（`image-route-helpers.ts:152`）当前只排除 `ecom-`，而形象照/文章配图/桌宠图都会被连 S3 删掉。**素材库上线后这个 50 条上限就是「用户素材会凭空消失」，必须重新定义保留策略。**
 

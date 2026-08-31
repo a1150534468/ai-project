@@ -8,7 +8,7 @@ import { WorkflowFlyout } from "./WorkflowFlyout";
 import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { ThemeToggle } from "../ThemeToggle";
 
-export type ViewType = "chat" | "models" | "kb" | "tool-market" | "workflow" | "video" | "digital-human" | "report" | "agent-teams" | "billing" | "memory" | "settings" | "wechat";
+export type ViewType = "chat" | "models" | "kb" | "assets" | "tool-market" | "workflow" | "video" | "digital-human" | "report" | "agent-teams" | "billing" | "memory" | "settings" | "wechat";
 
 /** 工作流二级菜单项 id：模块 id 或独立的 AI 智能报告页 */
 export type WorkflowSubId = WorkflowModuleId | "report";
@@ -53,6 +53,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "chat", label: "对话", icon: "mdi:chat-outline" },
   { id: "models", label: "模型广场", icon: "mdi:storefront-outline" },
   { id: "kb", label: "知识库", icon: "mdi:database-search-outline" },
+  // 紧挨着知识库：知识归知识库、工作流产物归素材库，这条界限在导航上要看得见。
+  { id: "assets", label: "素材库", icon: "mdi:folder-multiple-image" },
   { id: "tool-market", label: "工具市场", icon: "mdi:toolbox-outline" },
   { id: "workflow", label: "工作流", icon: "mdi:view-dashboard-outline" },
   { id: "video", label: "AI 视频", icon: "mdi:video-outline" },
