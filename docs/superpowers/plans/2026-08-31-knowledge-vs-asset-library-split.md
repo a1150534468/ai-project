@@ -1,0 +1,300 @@
+# 知识库 / 素材库拆分执行计划
+
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（3/23 项，P0 进行中）
+
+**决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
+
+**本计划的两个核心产出**：第一部分是**问题全清单**（拆分要解决的东西，逐条带 `path:line`）；第二部分是**产物分类裁定**（哪些落素材库、哪些不落、依据什么规则）。第三部分才是执行顺序。
+
+---
+
+## 溯源：这套东西是怎么进来的
+
+引入 commit 是 `4b552c2`（2026-07-17），36 文件 `+1035/-1231`，message 写的是「删除了"监控与 DAG"独立标签」——那句话对应的 diff 是 `NovelRunCockpit.tsx` 里删掉一行标签数组元素。同一提交里夹着 335 行触发器 + 4 个新列 + 2 个跨表唯一索引 + 一次全用户全产物回填，外加配额包整条下线。
+
+`docs/` 整体是 2026-08-17 才第一次进 git，比这个迁移晚一个月；11 条 ADR 无一涉及 `systemKey` / `sourceType=ARTIFACT`；全部 commit 的 md 历史里 grep「素材库|作品库」零命中——**是没比较过替代方案，不是比较后选了知识库**。
+
+唯一带「理由」性质的文字是 [`apps/api/src/kb/indexer.ts:313`](../../../apps/api/src/kb/indexer.ts) 的注释「自动归档产物是平台能力，不重复向用户收取知识库索引费用」。那次改动的主题是**知识库的钱怎么算**，在那个框架里把产物挂进已有的配额/索引/计费三条管道是高效的；只是那个框架里没有「知识库该装什么」这个问题的位置。
+
+**机制性教训（写进本计划的验收项）**：含迁移的 commit 不与功能改动混提；触发器必须有集成测试才能进主干。当前 335 行 SQL 零测试覆盖（全仓 grep `ImageAsset_archive` / `archive_image_asset` / `ai_artifact_` 在 `.ts/.tsx` 里零命中），是这次拆分最大的单点风险——**删之前必须先有测试钉住现状，否则删错了没人知道**。
+
+---
+
+## 范围边界（明确不做什么）
+
+- **不做「素材库也能被 RAG 检索」**。素材库不建向量索引、不建第二条检索链路、不建第二个越权校验入口。需要让 AI 引用某个产物时，走 P4 的手动策展路径（「加入我的知识库」）。
+- **不动 `services/billing`（Go）**。
+- **不动 RAG 检索算法**（topK / minScore / rerank 一律不调）。删掉产物库之后 `resolveEffectiveKbIds` 的候选集合自然收敛，不需要改打分。
+- **不重构 codex-pet runner**。P0 只解「ready 判据依赖 `knowledgeDocumentId`」这一处耦合，不碰 `codex-pet-runner.ts` 的拆分（交由既有计划）。
+- **不改各工作流自己的产物展示**。小说「作品空间」、漫画「资产 tab」、文章项目列表、本地商家「素材资料」四分组都保持原样——它们是长文本成品的正确归宿，本计划只是**不再往知识库复制一份**。
+- **不做用户注销 / 数据导出**。`KnowledgeBase.userId` 缺 FK 到 `User`（[`schema.prisma:251`](../../../packages/db/prisma/schema.prisma)、建表迁移 `20260628124422_kb_and_quota/migration.sql:15` 无 FK 约束）单独立项。
+
+---
+
+## 第一部分：问题全清单
+
+来源：2026-08-31 的九路只读取证（检索 / 索引与配额 / 前端信息架构 / codex 产物 / 历史溯源 / 生命周期，加两路对抗复核与一路裁定）。**全部为静态取证**：没连数据库、没跑测试、没比对生产库 `pg_trigger`。标注「结构性」的条目是代码文本已确认、运行时后果未实测。
+
+每条后面标注拆分后的归宿：**[删]** = 触发器一删即不存在；**[搬]** = 会跟着产物搬到素材库，必须在 P3 单独解决；**[留]** = 与本次拆分无关，独立立项。
+
+### H 级（高）
+
+**H1 — 归档同步跑在业务事务里，且全文零 `EXCEPTION` 兜底。** **[删]**
+`archive_ai_artifact`、`ensure_ai_artifacts_kb` 与 10 个归档触发器函数没有任何异常兜底（整个 `20260717090000_ai_artifact_knowledge_base/migration.sql` 里 `EXCEPTION` 出现 **0** 次）。可达耦合点：小说落章整块在 `prisma.$transaction` 内（章节 upsert + 结构节点 + ChapterVersion + KnowledgeFact + 叙事账本 + 连续性资产），见 [`novel-task-persist.ts:151`](../../../apps/api/src/workflow/novel/novel-task-persist.ts)；ecom 生图落库同样在显式 `$transaction` 内，见 [`ecom-routes.ts:40`](../../../apps/api/src/workflow/ecom/ecom-routes.ts)。**一次纯登记动作失败，能把一次已经烧掉算力、内容已产出的业务写入整体回滚。**
+
+**H2 — 单行 `KnowledgeBase` 锁热点。**（结构性）**[删]**
+`ensure_ai_artifacts_kb` 的 `ON CONFLICT DO UPDATE SET "updatedAt" = "KnowledgeBase"."updatedAt"` 是**真实行更新**（自己赋给自己），行级排他锁持到事务提交（`migration.sql:34-35`）。结果：同一用户所有模块的产物写入被串行化到一行上；并发生图（[`image-task-runner.ts:99`](../../../apps/api/src/workflow/image/image-task-runner.ts) 的 `Promise.all` 多分支 upsert）互相排队；小说长事务持锁期间该用户其它模块归档全部阻塞；每次归档还在 `KnowledgeBase` 上留一个死元组。
+
+**H3 — 孤儿文档 + 可点击死链，只增不减。** **[搬]** ← 本次最需要警惕的一条
+`pruneImages` 在每次生图任务收尾都跑（[`image-task-runner.ts:127`](../../../apps/api/src/workflow/image/image-task-runner.ts)），只保留每用户最新 50 条图、连 S3 对象一起删，**全程不碰 `Document`**（[`image-route-helpers.ts:149-163`](../../../apps/api/src/workflow/image/image-route-helpers.ts)）。而豁免名单只有 `ecom-` 一个前缀——实测 `where: { userId, NOT: { requestId: { startsWith: ECOM_IMAGE_REQUEST_PREFIX } } }`，所以 `article:`（文章配图）、`comic:`（漫画分镜）、`portrait-request-`（形象照）、`pet-run-`（桌宠出图）**全部在裁剪范围内**。全仓零 DELETE 触发器、零孤儿回收 reaper。前端还给孤儿渲染可点击的「打开产物」外链且不校验对象存在（[`Knowledge.tsx:729-736`](../../../apps/web/src/pages/Knowledge.tsx)）。
+**为什么标 [搬]**：这条的成因不是「存在知识库里」，是「删源行时不通知副本」。**素材库如果建新表，同样的孤儿会在新表里原样长出来。** 见第二部分「素材库不建表」的论证。
+
+**H4 — 删除既非终态也不一致。** **[删]**
+同一个文档列表、同一个删除按钮，三种结果：①媒体类（image/video/audio 只有 `AFTER INSERT`，`migration.sql:250-252`）删了永不回来；②8 个带 `UPDATE OF` 的模块下次更新原地复活——`ON CONFLICT DO UPDATE` 无 tombstone（`migration.sql:78`），而文章 PATCH 保存无条件写 `title/summary/bodyHtml`，正好命中该触发器的监听列（[`article-workflow-routes.ts:298`](../../../apps/api/src/workflow/article/article-workflow-routes.ts)）；③codex_pet 被 `archive_deleted` 永久拒绝。删文档路由只做 `assertKbOwner`，对 ARTIFACT / `sourceModule` / `systemKey` **零守卫**（[`kb/routes.ts:174`](../../../apps/api/src/kb/routes.ts)），而同一个 service 对系统库改名/删库是硬 403（[`kb/service.ts:99,130`](../../../apps/api/src/kb/service.ts)）——**保护漏在了文档粒度上**。团队在 codex_pet 路径里明确知道并规避了复活问题（[`codex-pet-cleanup.ts:169`](../../../apps/api/src/workflow/codex-pet/codex-pet-cleanup.ts) 注释原文 `without resurrecting the deleted knowledge document`），触发器路径没有任何等价保护。
+
+**H5 — 召回污染没有出口，且 UI 文案在诱导用户打开它。** **[删]**
+`resolveEffectiveKbIds` 是全仓唯一候选库解析函数（三条 RAG 链路：聊天 / 智能体团队 / 口播洗稿都走它）。`kbAttachAllOwn=true` 时无条件取该用户全部 `ownerType='USER'` 库，**函数全文不含 `systemKey`**（[`retrieve.ts:22-31`](../../../apps/api/src/kb/retrieve.ts)）。召回结果 `RetrievedChunk` 只有 `content/docName/ordinal/score`（`retrieve.ts:85`），SQL 谓词只有 `c."kbId" = ANY($2) AND d.status = $3`（`retrieve.ts:188`）——**下游即使想在召回后过滤，也拿不到「这条是产物还是资料」的判据**。`filterRelevantChunks` 只有全局条数与单文档条数上限，无 per-source 配额（`retrieve.ts:124`）；聊天总上限 4 条（`chat/routes-runtime.ts:23-28`），两篇产物文档就占满。
+两个选择器都不过滤 `systemKey`（`ChatKnowledgePicker.tsx:93-95`、`agent-teams/KnowledgePicker.tsx:134-168`），而「你自己创建的 N 个知识库」的 N 把用户从没创建过的系统库计入（`useChatComposerState.ts:70`）。
+**精确说法**：默认是关的（`kbAttachAllOwn` 初值 false，口播只接受显式 kbIds）。但用户一旦打开「我的全库搜索」，产物库全量进来且无法排除——库本身不可删。
+**智能体团队那条更重**：它**根本不做向量检索**，按 `orderBy: { updatedAt: "desc" }, take: 2` 取每库最新 indexed 文档（[`agent-knowledge-context.ts:110-113`](../../../apps/api/src/agent-teams/agent-knowledge-context.ts)），与提问无关；而归档 upsert 每次刷新 `updatedAt`（`migration.sql:90`）→ **产物库永远排最前**。叠加 `AgentWorkflowRun.finalReport` 自己被归档（`migration.sql:266`），上一次报告会喂给下一次运行的 prompt。
+
+**H6 — 重复 embedding 按「源行被 UPDATE 的次数」而不是「内容变化次数」计费。** **[删]**
+`ON CONFLICT` 无条件把 `status` 打回 `pending`、`attempts` 归 0、清租约，**不比较 content**（`migration.sql:84-89`）。文章配图进度回调每张图都 `SET title + summary`，而 `ArticleWorkflowProject_archive` 正好监听 `bodyHtml/title/summary`（`migration.sql:258`）→ **一篇文章配 10 张图 ≈ 全文重嵌 10 次**（[`article-workflow-runner.ts:348`](../../../apps/api/src/workflow/article/article-workflow-runner.ts)）。同仓 `novel-vector-memory.ts:248` 已有 contentHash 跳过的现成模式，没用上。
+
+**H7 — 平台 embedding 成本零可观测。** **[删]**
+`settle` 被 `!doc.sourceModule` 跳过（[`indexer.ts:313-314`](../../../apps/api/src/kb/indexer.ts)），`tokensUsed` 写进 Document 但全仓无人读取/聚合（`indexer.ts:339`），billing 无流水。叠加迁移 backfill 对 `ImageAsset`/`VideoAsset`/`AudioAsset` **无 WHERE 全表扫描**排队（`migration.sql:274-295`，而小说那条反而有 `INNER JOIN` + 非空过滤），且 reaper 固定 20 条/30 秒、`orderBy: createdAt asc`（[`reaper.ts:38-50`](../../../apps/api/src/kb/reaper.ts)）→ **老产物排在用户新上传文档前面，队头阻塞**。
+
+### M 级（中）
+
+**M1 — codex_pet 产物吃用户上传配额。** **[删]**
+两条归档路的配额账不一致：触发器路径 `sizeBytes` 硬编码 `0` 且 `DO UPDATE` 的 SET 列表也不含它（`migration.sql:68,78-90`），而 codex_pet 走 TS 路径写真实 ZIP 字节（[`codex-pet-archive.ts:347`](../../../apps/api/src/workflow/codex-pet/codex-pet-archive.ts)）。`usedBytes` 按 `kb.userId` 汇总所有 `status != 'failed'` 文档的 `sizeBytes`、**零 systemKey/sourceType 排除**（[`kb/service.ts:205`](../../../apps/api/src/kb/service.ts)），并被上传路径的 `assertQuota` 使用（全仓唯一调用点，[`kb/ingest.ts:220`](../../../apps/api/src/kb/ingest.ts)）→ **桌宠 ZIP 可以把 used 顶过 effective，随后用户自己上传直接 402**，而 UI 明写「媒体复用原文件，不会重复占用空间」（[`Knowledge.tsx:634`](../../../apps/web/src/pages/Knowledge.tsx)）。
+
+**M2 — 用户上传的参考图被当成 AI 产物永久归档。** **[删]**
+参考图 requestId 是 `ecom-reference:<uuid>`、prompt 写死 `image_reference_upload`（[`image-routes.ts:214,228`](../../../apps/api/src/workflow/image/image-routes.ts)），触发器无条件归档（`migration.sql:100,250`）→ 知识库里一条正文为「图片提示词：image_reference_upload」的**可召回**文档，而它在生图模块的历史里被 `ecom-` 前缀过滤掉、也永不被裁剪。
+
+**M3 — 文档列表本身不可用。** **[部分搬]**
+`GET /api/kb/:id/documents` 是 `findMany({ where: { kbId }, orderBy: createdAt desc })`——**无 take、无 skip、无过滤、无搜索**（[`kb/routes.ts:123-140`](../../../apps/api/src/kb/routes.ts)），前端同样无搜索框无分页。文档名精度只到分钟（`'AI 图片 · ' || to_char(createdAt,'YYYY-MM-DD HH24:MI')`，`migration.sql:98`）→ 同分钟多张图同名。`thumbnailUrl` 已写进 metadata（`migration.sql:101`）但前端从不渲染（`Knowledge.tsx:657-662`），唯一有预览图的是 codex_pet（`Knowledge.tsx:700-715`，被三条测试固化于 `Knowledge.codex-pet.test.tsx:202,235,265`）。
+**为什么标 [部分搬]**：知识库那半会随产物清空而消失（知识库回到用户自己上传的几十份文档，分页不再是刚需）；但**素材库天生就是几百上千条媒体，分页/过滤/缩略图从第一版就必须有**，否则 M3 在素材库原样重演。
+
+**M4 — 索引器被触发器踩。**（结构性）**[删]**
+归档 upsert 把 `status` 打回 pending 并清 `lockedBy/lockedAt`，而 `claim()` 只要求 `status='pending'` 或租约过期的 `'indexing'`（[`indexer.ts:188`](../../../apps/api/src/kb/indexer.ts)）→ 第二个 worker 能抢走正在索引的文档，两边都跑「删旧 chunk + 插新 chunk」，而 `Chunk` 表只有 `kbId`/`documentId` 两个普通索引、**没有 `(documentId, ordinal)` 唯一约束**（`schema.prisma:532-544`）→ 可能留下重复分块与失真的 `chunkCount`。`attempts` 归零同时破坏有界重试（reaper 候选条件是 `attempts < maxAttempts`，[`reaper.ts:47`](../../../apps/api/src/kb/reaper.ts)）：源行每被碰一次，失败计数就清零。
+
+**M5 — 统计口径污染。** **[删]**
+用户侧「知识晶格数」（[`kb/service.ts:73`](../../../apps/api/src/kb/service.ts)）与管理端 `kbUploads*` / `kbUploadBytesTotal`（[`admin/analytics-routes.ts:218-220`](../../../apps/api/src/admin/analytics-routes.ts)）都是全量 count/sum `Document`，不区分 `sourceModule`。
+
+**M6 — 「全部 AI 产物」覆盖面名不副实且不一致。** **[留]**
+漏的：小红书/抖音文章 `outputKind=caption`，正文恒为 `bodyHtml=""`（实际内容在 `captionText`，[`platforms.ts:50`](../../../packages/article-workflow/src/platforms.ts)、[`article-workflow-runner-caption.ts:113`](../../../apps/api/src/workflow/article/article-workflow-runner-caption.ts)），被空正文守卫挡掉、永远不进库，但 `title/summary` 更新照样触发一次空转；`PortraitOutput` / `TryOnOutput` 两条后加的出图业务既无触发器也不写 `ImageAsset`。
+多的：ecom 中间图 / 文章配图 / 漫画分镜——**用户在自己图库里根本看不到**（`listRecentImages` 排除 `ecom-` 前缀）却一张不落全部进库。
+**为什么标 [留]**：这条证明「按表挂触发器」这个切法本身就抓不住业务语义。它不会因为换容器而消失，但也不该由本次拆分负责——第二部分的分类规则会给出正确切法，覆盖面缺口在 P3 按该规则重新核一遍。
+
+**M7 — 触发器链路零测试覆盖。** **[删，但删之前必须先补]**
+全仓（含 `.test.ts` / `.integration.test.ts`）grep 不到 `ImageAsset_archive` / `archive_image_asset` / `ai_artifact_` / `archive_ai_artifact` 任何一个标识符；有测试的只有后来手写的 codex_pet 应用层归档。`retrieve.test.ts` 用 `prisma.user.create` 建测试用户——**触发器已经在给每个测试用户建一个 AI 产物库，而全部断言是 `toContain`，没有一条会注意到**。
+**这既说明现状零回归保护，也说明 P1 的删除不会打破现有测试——恰恰是最危险的情况：删对了删错了都是绿的。**
+
+### L 级（低 / 形状缺陷）
+
+**L1 — HTML 进向量库。** **[删]**
+文章产物存 raw `bodyHtml` 却标 `text/plain`（`migration.sql:161`）；ARTIFACT 文档强制按 `text/plain` 读 `Document.content`、**从不回源 S3**（[`kb/deps.ts:30`](../../../apps/api/src/kb/deps.ts)）；`parseDocument` 对 `text/plain` 只做 `buf.toString('utf8').trim()`、无任何 HTML 清洗（[`kb/parse.ts:73`](../../../apps/api/src/kb/parse.ts)）→ 标签被原样切块嵌入，并作为「参考资料」前 200 字进 systemPrompt（[`chat/routes.ts:355`](../../../apps/api/src/chat/routes.ts)）。
+
+**L2 — 唯一键不含 userId 且 `kbId` 被无条件覆盖。**（当前不可达）**[删]**
+唯一索引是 `("sourceModule","sourceId")`、主键是 `'ai_artifact_' || md5(module || ':' || sourceId)`，均不含 userId（`migration.sql:11`）；`ON CONFLICT DO UPDATE` 里 `"kbId" = EXCLUDED."kbId"` 是无条件覆盖（`migration.sql:79`）→ 同一 `(module, sourceId)` 以另一 userId 归档时，文档会**静默搬进另一个用户的库**而不是报错。当前代码不可达（sourceId 恒为源表 cuid，全局唯一；grep 不到改 owner 的路径），但 DB 层不设防。对照：同一唯一键上的 codex_pet 路径显式校验 `kb.userId` 并抛 `source_conflict`（[`codex-pet-archive.ts:379`](../../../apps/api/src/workflow/codex-pet/codex-pet-archive.ts)）。
+
+**L3 — 小说触发器缺关联行兜底。**（当前不可达）**[删]**
+`archive_novel_chapter_trigger` 用非 STRICT 的 `SELECT * INTO`（`migration.sql:141`）：project 查不到时不报错，`v_project` 全字段 NULL → `md5(NULL)` 为 NULL → 往 `KnowledgeBase."id"` 插 NULL 违反 NOT NULL，错误冒泡到章节写入事务。当前被 `NovelChapter.projectId` 的普通外键挡住（`schema.prisma:1186`）。同一迁移的 backfill 用了 `INNER JOIN` 防护（`migration.sql:297`）、`archive_scheduled_report_trigger` 用了 `COALESCE` 兜底（`migration.sql:234`）——**说明这是漏写而非统一风格**。
+
+**L4 — 清空源内容不会清空归档。** **[删]**
+空内容守卫是 `RETURN NEW`（不删文档，`migration.sql:216`）。`failRun` 会把已存在 run 的 `finalReport` 写成空串（[`agent-workflow-store.ts:143`](../../../apps/api/src/agent-teams/agent-workflow-store.ts)）→ 触发器直接返回，**上一版报告永久留在知识库里并继续参与检索**。
+
+### 单独立项（不并入本计划）
+
+**X1 — codex_pet 把「写进知识库」绑成 ready 的硬前置。**
+`knowledgeDocumentId` 被写进状态更新的 where 谓词（[`runner-archive.ts:271-279`](../../../apps/api/src/workflow/codex-pet/codex-pet-runner/runner-archive.ts)），归档重试到上限即判运行失败并**全额退款**（`docs/codex-pet.md:487`）。这是 codex-pet 自己的架构决定，不是「产物该不该进 KB」的账；但它是**一个事后登记动作能否掉一次已交付付费运行**的真实耦合。
+**注意**：本计划的 P0 必须先解开它才能往下走，但「把归档降级为 best-effort + 后台补偿」这个更大的改造独立立项。
+
+---
+
+## 第二部分：产物分类裁定（本计划的核心）
+
+### 为什么必须先分类
+
+「工作流产物」这个词把**三个正交维度**压平成了一个：
+
+| 维度 | 取值 |
+|---|---|
+| **形态** | 媒体二进制（图/视频/音频/精灵图） · 长文本 · 结构化包（ZIP/JSON） |
+| **来源** | AI 生成 · 用户上传 |
+| **角色** | 交付成品 · 可复用原料 · 中间件 · 运行证据 · 输入素材 |
+
+现状的 10 个触发器**只按「表」切**，所以三个维度全被压平：`ImageAsset` 一张表里同时装着用户的成品图、电商中间拼图、文章配图、漫画分镜、形象照、桌宠出图、以及用户自己上传的参考图——触发器一视同仁全归档。这就是 M6（覆盖面名不副实）和 M2（参考图被当产物）的共同根因。
+
+**如果素材库沿用「按表收」这个切法，只是换个容器堆同一堆东西。** 所以准入规则必须同时用三个维度。
+
+### 准入规则
+
+一条产物进素材库，必须同时满足：
+
+1. **形态 = 媒体二进制。** 长文本一律不进（它不是「素材」，是「作品」）。
+2. **角色 ∈ {交付成品, 可复用原料, 用户上传的输入素材}。** 中间件与运行证据不进。
+3. **没有更合适的家。** 已有专属工作台/项目视图承载的，留在原地，素材库最多做引用。
+
+第 3 条是最容易被忽略的。判据是**「用户会去哪里找它」**：找一章小说会去小说工作台，找一张图会去哪里？——目前没有地方（`listRecentImages` 只给最新 50 条的横向 strip）。**素材库要填的正是这个空缺，而不是给已有入口的东西再建一个入口。**
+
+### 逐类裁定
+
+**落素材库（4 类，全部是媒体，全部已有权威表）**
+
+| # | 类型 | 权威表 | 裁定 | 依据 |
+|---|---|---|---|---|
+| 1 | 生图成品 | `ImageAsset`（裸 `req-*` 前缀） | ✅ 进 | 形态=媒体，角色=交付成品，且**当前无处可找**（`listRecentImages` 只给最新 50 条 strip，超出即被 `pruneImages` 连 S3 一起删）。素材库是这类东西第一次有正式的家。 |
+| 2 | 生成视频 | `VideoAsset` | ✅ 进 | 同上。 |
+| 3 | 生成音频 | `AudioAsset`（`kind='narration'` 等 AI 产出） | ✅ 进 | 同上。**但要按 `kind` 分区**，见下方「音频的三种角色」。 |
+| 4 | 口播成品视频/音频 | `DubProject.finalVideoUrl` / `resultVideoUrl` / `audioUrl` | ✅ 进（只进媒体那半） | 形态=媒体、角色=交付成品，且可被二次剪辑复用。**`DubProject.script` 那半不进**——现状的 `DubProject_archive` 同时监听 `script` 和三个媒体 URL（`migration.sql:264`），**一条记录同时是文本又是媒体，这正是「按表收」必然产出的畸形**。 |
+
+**不落素材库 — 长文本成品，留在各自工作流（6 类）**
+
+| # | 类型 | 权威表 | 已有的家 | 裁定 |
+|---|---|---|---|---|
+| 5 | 小说章节 | `NovelChapter` | 小说工作台「作品空间」 | ❌ 不进。且小说自有 `NovelVectorMemory` 做语义检索，**从来就不需要 KB**。 |
+| 6 | 文章全文 | `ArticleWorkflowProject` | 文章项目列表 | ❌ 不进。 |
+| 7 | 漫画剧本 | `ComicWorkflowScriptVersion` | 漫画 episode + 资产 tab | ❌ 不进。且它是**版本**（`versionNo`），版本历史属于工作流内部，不该外泄到全局库。 |
+| 8 | 宣传片脚本 | `LocalBusinessPromoProject` | 项目自身即容器（`sourceId` 就是 project id） | ❌ 不进。归档它等于把项目复制一份。 |
+| 9 | 智能体任务报告 | `AgentWorkflowRun.finalReport` | 运行详情页 | ❌ 不进任何库。**角色=运行证据**，脱离 `taskGoal` 无意义。现状它被自己归档后喂给下一次运行的 prompt（H5），是 bug 不是 feature。 |
+| 10 | 定时任务报告 | `ScheduledTaskRun.reportText` | 任务运行历史 | ❌ 不进任何库。纯流水，**量最大、单条价值最低**，每次运行一条。 |
+
+**不落素材库 — 中间件与运行证据（同表内按角色剔除）**
+
+| 来源 | 识别方式 | 裁定 |
+|---|---|---|
+| 电商中间图 | `ImageAsset.requestId` 前缀 `ecom-` / `ecom-stitch:` | ❌ 不进。**系统已经认定它们不属于用户图库**——`listRecentImages` 明确排除该前缀。 |
+| 文章配图 | 前缀 `article:` | ⚠️ 进，但归到所属文章项目下、默认折叠。它是媒体且用户可能想单独取用，但主入口应是文章项目。**注意它当前不在 `pruneImages` 豁免名单里，会被连 S3 删掉**（H3）。 |
+| 漫画分镜图 | 前缀 `comic:` | ❌ 不进。漫画已有「资产 tab」，规则 3 命中。同样不在豁免名单、会被删（H3）。 |
+| 形象照/试穿输出 | 前缀 `portrait-request-` / `portrait-pending-`；`PortraitOutput`/`TryOnOutput` | ✅ 进。形态=媒体、角色=交付成品。**注意这两条业务当前既无触发器也不写 `ImageAsset`**（M6 漏的那半），素材库要主动纳入。 |
+| 桌宠运行证据 | `CodexPetArtifact.kind` ∈ `qa_report` / `qa_contact_sheet` / `direction_qa` / `direction_blind_qa` / `frame` / `base_candidate` / `pose_board*` / `identity_guide` / `look_row` / `look_cardinals` / `cardinal_anchor_strip` / `package_source_atlas` / `direction_registration_*` / `knowledge_archive` … | ❌ 不进。一次桌宠运行产生 **20+ 种** artifact kind，绝大多数是中间件与质检证据。 |
+| 桌宠交付物 | `kind` ∈ `final_package` / `package` / `preview` / `animation_preview` | ✅ 进。**白名单已经在数据里**：`CodexPetRun` 自己有 `spritesheetArtifactId` / `packageArtifactId` / `previewArtifactId` / `selectedBaseArtifactId` 四个指定列（`schema.prisma:331-400`）——**run 已经声明了哪几个 artifact 是有意义的，素材库直接用这四个指针，不要扫 `CodexPetArtifact` 全表**。 |
+
+**音频的三种角色（`AudioAsset.kind` 必须分区）**
+
+- `narration` — AI 生成旁白 → ✅ 进「AI 生成」区（[`local-business-promo-audio-helpers.ts:201,225`](../../../apps/api/src/workflow/local-business-promo/local-business-promo-audio-helpers.ts)）
+- `bgm` — 用户上传的背景音乐 → ✅ 进「我上传的」区（[`local-business-promo-audio-upload-routes.ts:87`](../../../apps/api/src/workflow/local-business-promo/local-business-promo-audio-upload-routes.ts)）
+- `voice-sample` — 音色样本 → ✅ 进「我上传的」区，但标为**输入素材**（`local-business-promo-audio-upload-routes.ts:41`）
+
+**用户上传的输入素材（现状被误当成 AI 产物）**
+
+`ecom-reference:` 参考图（M2）、`PortraitReferenceAsset`、`TryOnReferenceAsset`、`bgm`、`voice-sample`、`DubBgmPreset`——这些**是素材，但不是 AI 产物**。
+这恰恰说明「素材库」比「AI 产物库」是更正确的容器名：**素材库天然应该同时装「我上传的」和「AI 生成的」**，并用来源维度分区。而现状那个叫「AI 产物」的库把参考图混进去，正文写成「图片提示词：image_reference_upload」，是概念错位的直接证据。
+
+### 裁定汇总
+
+**11 类「产物」里，只有 4 类主体 + 3 类补充该进素材库，且全部是媒体、全部已有权威表。6 类长文本一个都不进——它们的正确归宿是「什么都不做」，因为权威表和前端入口本来就都有。**
+
+### 素材库不建新表（本计划最重要的约束）
+
+**事实**：产物本体从来不在知识库里。媒体本体在 S3 + `ImageAsset`/`VideoAsset`/`AudioAsset`/`CodexPetArtifact`，长文本在 `NovelChapter`/`ArticleWorkflowProject`/…。KB 里的 `Document` 只是**一份登记副本**——ARTIFACT 文档强制读 `Document.content`、**从不回源 S3**（`kb/deps.ts:30`）。
+
+因此上表全部 4+3 类都已有权威表，**素材库 = 这几张表的聚合读模型**：
+
+- ✅ **不新增 `MaterialLibrary` / `MaterialItem` 表**
+- ✅ **不新增向量索引与第二条检索链路**
+- ✅ **不做数据搬迁**（只删 KB 侧的 ARTIFACT 副本）
+
+**为什么这条是硬约束而不是偏好**：H3（孤儿死链）的成因是「删源行时不通知副本」。新表就是第三份副本，就要有第三套同步——而这套同步的 bug 正是现在这 335 行触发器。**建新表 = 把 H1/H2/H3/H4/H6 原样搬到新表上重写一遍。** 读模型没有同步问题：查不到就是没有，源删则自然消失，**孤儿结构性地不可能存在**。
+
+**代价（必须承认）**：跨 4 张表的 UNION 分页与统一排序会比单表难写，`createdAt desc` 全局排序在数据量大时需要每表各取 N 再归并。这是本方案唯一的实现复杂度集中点，但它是**查询层**的复杂度，不是**一致性**的复杂度——后者才是会长期流血的那种。
+
+### 会丢的能力，以及怎么补
+
+拆完之后「让 AI 引用我自己产出的东西」这个能力消失。当前这个能力质量极差（图片产物在向量库里就一条「图片提示词：xxx」；智能体那条按 `updatedAt` 取最新 2 篇、与提问无关），但方向是对的。
+
+**补法（P4）**：素材库与各工作流成品页给一个「加入我的知识库」按钮，走现有手工上传/ingest 链路，以 `sourceType='TEXT'` 落进用户**自选的个人知识库**、计入用户配额、可正常删除。
+
+这不只是补偿，**它恰好把知识库的语义恢复成应有的样子**：入库 = 人主动声明「这值得被引用」，而不是系统偷偷塞进来。
+
+---
+
+## 第三部分：执行顺序
+
+**总原则**：先补测试 → 再解耦 → 再停写 → 再清存量 → 最后才做素材库页面。**前四步做完已拿到约 90% 收益**（H1/H2/H4/H5/H6/H7 + M1/M2/M4/M5 + L1–L4 全消失），素材库页面可以慢工出细活。
+
+### P0 — 先给现状上锁（删之前必须做）
+
+M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第一步不是删，是钉住现状。
+
+- [x] P0.1 写第一个触发器集成测试（当前 335 行 SQL 零覆盖）：插 `ImageAsset` → 断言 `Document` 出现且 `sizeBytes=0`；删源行 → 断言 `Document` **残留**（钉住 H3 现状）；重复 UPDATE 同内容 → 断言 status 被打回 pending（钉住 H6 现状）；`$transaction` 内让归档抛错 → 断言主业务**一起回滚**（钉住 H1 现状）。
+  → [`apps/api/src/kb/ai-artifact-triggers.integration.test.ts`](../../../apps/api/src/kb/ai-artifact-triggers.integration.test.ts)，7 例全绿。H1 的抛错手法：抢占触发器的确定性主键 `ai_artifact_<md5(module:id)>` 并挂到另一组 `(sourceModule, sourceId)` 上，`ON CONFLICT` 只处理后者 → `Document_pkey` unique_violation 原样抛出 → `ImageAsset` 插入被回滚。另外钉了两条：`KnowledgeBase.updatedAt` 自赋值不变（是纯拿锁的空写），`chunkCount`/`tokensUsed` 不在 upsert 的 SET 列表里（旧 chunk 计数留在原地）。
+- [x] P0.2 清点存量影响面（只读，需连库）：`AI_ARTIFACTS` 库数、`sourceType='ARTIFACT'` 文档数、其 `Chunk` 数、`sum(tokensUsed)`。这决定 P2 是一次性删还是分批。
+  → **2026-08-31 实测（`localhost:5433/ai-assistant`）：**
+  - 11 个触发器确认在库（10 归档 + `User_ai_artifacts_kb`）——未验证项 1 消除。
+  - `AI_ARTIFACTS` 系统库 **9,563** 个，用户自建库 **17** 个 → **99.8% 的知识库行是系统自动开的产物库**。
+  - `Document`：ARTIFACT **1,265** / FILE 6 / TEXT 2 → 用户真实上传一共 **8 篇**。
+  - ARTIFACT 状态：**failed 1,086 / indexed 179，失败率 86%**。其中 **1,080 条是同一个原因**：`embeddings 400 ... Access denied, please make sure your account is in good standing`，`attempts` 全部 = 3 已耗尽。**这 1,080 条永久占位、永不重试、用户不可见也删不掉。**
+  - `Chunk` 总数 **211，全部来自 ARTIFACT 文档**；用户上传的那 8 篇一个 chunk 都没有。
+  - `tokensUsed` ARTIFACT 合计 **121,391**，是真金白银的 embedding 花费。
+  - **配额污染确认（M5 从「待核」升级为已确认）**：`sizeBytes>0` 的 381 篇全是 `codex_pet`（触发器那条路硬编码 0，应用层归档写真实字节），合计 **13.9 MB**，占了 **376 个用户**的知识库配额。
+  - **量级结论：P2.1 一次性删即可**，不需要分批（1,265 文档 / 211 chunk / 9,563 库行）。未验证项 6 消除。
+- [x] P0.3 解开 X1 耦合：`knowledgeDocumentId` 从 codex-pet 的 ready 判据里摘出来（[`runner-archive.ts`](../../../apps/api/src/workflow/codex-pet/codex-pet-runner/runner-archive.ts) 的 `completeKnowledgeArchive`）。**这是唯一的硬拆点**，不解开 P1 无法往下走。
+  → 改动量比预估小：**一个函数**。`completeKnowledgeArchive` 里归档改成尽力而为（只有 `CodexPetLeaseLostError` / `CodexPetCancelledError` 继续上抛），ready 转换的 where 谓词去掉 `knowledgeDocumentId: documentId`。`ready + knowledgeDocumentId=null` 从此是合法终态。未验证项 3 消除。
+  → **这一步本身就是个生产 bug 修复，实测有据**：库里 `CodexPetRun` 共 127 条，**47 条 refunded**；`knowledge-archive` Job 有 1 条 `failed` 且 `attempt=3`（重试耗尽），即「一个事后登记动作掉了一次已交付的付费运行」真的发生过。另有 3 条 `ready` 运行的 `knowledgeDocumentId` 已是 null（FK `SetNull` 生效），在旧判据下是不该存在的状态。
+  → 三条断言旧耦合的集成测试改成断言新契约：`enters ready even when the archived knowledge document is concurrently deleted`、`delivers ready without a refund when knowledge archival fails outright`、`does not retry archival on an already-delivered run`。前端 `useCodexPetStudio.ts` / `CodexPetStudioWorkbench.tsx` / `CodexPetStudioRunSidebar.tsx` 的归档文案不在这里改——P1.2 会整段删掉，避免改两遍。
+- [ ] P0.4 `Knowledge.tsx` 的 codex-pet 交付 UI（`:16,309,700-715`）与三条测试（`Knowledge.codex-pet.test.tsx:202,235,265`）——决定是搬到素材库还是搬到桌宠工作台。**建议后者**（规则 3：桌宠有自己的工作台）。
+
+### P1 — 停写
+
+- [ ] P1.1 一个迁移：`DROP TRIGGER` × 10（`ImageAsset_archive` / `VideoAsset_archive` / `AudioAsset_archive` / `NovelChapter_archive` / `ArticleWorkflowProject_archive` / `ComicWorkflowScriptVersion_archive` / `LocalBusinessPromoProject_archive` / `DubProject_archive` / `AgentWorkflowRun_archive` / `ScheduledTaskRun_archive`）+ `User_ai_artifacts_kb` + `DROP FUNCTION` × 12。**这一个迁移即删掉 H1/H2/H4/H5/H6/H7/L1/L3/L4。**
+- [ ] P1.2 删 codex-pet 的应用层归档：`codex-pet-archive.ts`、`runner-archive.ts` 的 KB 部分、`codex-pet-cleanup.ts:155-169`。→ 删掉 M1。
+- [ ] P1.3 `indexer.ts:313-314` 的 `!doc.sourceModule` 跳过 settle 分支删除（不再有 sourceModule 文档）→ 恢复 billing 口径单一。
+- [ ] P1.4 P0.1 的测试全部反转断言：删源行 → 断言无 `Document`；归档抛错 → 断言主业务**不受影响**（因为不再有归档）。
+
+### P2 — 清存量
+
+- [ ] P2.1 迁移：`DELETE FROM "Document" WHERE "sourceType" = 'ARTIFACT'`（`Chunk` 走 `onDelete: Cascade` 自动清），再 `DELETE FROM "KnowledgeBase" WHERE "systemKey" IS NOT NULL`。按 P0.2 的量级决定是否分批。**不可逆——执行前确认已有备份。**
+- [ ] P2.2 处理 `CodexPetRun.knowledgeDocumentId` 外键（`20260717180000_codex_pet_workflow/migration.sql:161`，`ON DELETE SET NULL`）：P0.3 解耦后该列可置空并在 P5 退役。
+- [ ] P2.3 校验：`usedBytes`（`service.ts:205`）与「知识晶格数」（`service.ts:73`）回归到只反映用户上传 → 顺带解掉 M5。管理端 `kbUploads*`（`analytics-routes.ts:218-220`）同步核对。
+
+### P3 — 素材库（读模型 + 页面）
+
+- [ ] P3.1 `GET /api/assets` 读模型：按第二部分的准入规则聚合 `ImageAsset`（排除 `ecom-` / `comic:` 前缀）+ `VideoAsset` + `AudioAsset`（按 `kind` 分区）+ `DubProject` 媒体列 + `PortraitOutput` / `TryOnOutput` + `CodexPetRun` 的四个指定 artifact 指针。**第一版就要有分页、`sourceModule` 过滤、缩略图**，否则 M3 在素材库重演。
+- [ ] P3.2 前端素材库页面 + `NavRail.tsx:52-64` 一级入口（现 11 项）。按「AI 生成 / 我上传的」分区。
+- [ ] P3.3 复核 M6 覆盖面：按新规则重新核一遍，确认 `PortraitOutput`/`TryOnOutput` 已纳入、caption 类文章不再被误期待。
+- [ ] P3.4 处理 H3 的另一半：`pruneImages` 的豁免名单（`image-route-helpers.ts:152`）当前只排除 `ecom-`，而形象照/文章配图/桌宠图都会被连 S3 删掉。**素材库上线后这个 50 条上限就是「用户素材会凭空消失」，必须重新定义保留策略。**
+
+### P4 — 策展路径
+
+- [ ] P4.1 素材库 + 各工作流成品页加「加入我的知识库」：选目标个人库 → 走 `kb/ingest.ts` → `sourceType='TEXT'`、计入配额、可删除。
+- [ ] P4.2 两个选择器（`ChatKnowledgePicker.tsx`、`agent-teams/KnowledgePicker.tsx`）与「你自己创建的 N 个知识库」计数（`useChatComposerState.ts:70`）——不再需要 `systemKey` 过滤，但要确认删库后计数正确。
+- [ ] P4.3 智能体团队那条按 `updatedAt desc take 2` 取文档的逻辑（`agent-knowledge-context.ts:110-113`）：产物库消失后不再有「永远排最前」的库，但**它仍然不做向量检索**——单独记录，不在本计划范围。
+
+### P5 — 列退役
+
+- [ ] P5.1 `KnowledgeBase.systemKey`（`AI_ARTIFACTS` 是全仓唯一取值，删库后完全无用）
+- [ ] P5.2 `Document.sourceModule` / `sourceId` / `metadata` / `content`（**先确认 `content` 除 ARTIFACT 外无其他写入者**——手工 `sourceType='TEXT'` 上传是否用它，P5 开工前必须核实）
+- [ ] P5.3 `Document.sourceType` 的 `'ARTIFACT'` 取值从注释与校验里移除，回到 `FILE|URL|TEXT`
+- [ ] P5.4 `CodexPetRun.knowledgeDocumentId` 与其外键
+- [ ] P5.5 `Document_sourceModule_sourceId_key` / `KnowledgeBase_userId_systemKey_key` 两个唯一索引
+
+---
+
+## 验证纪律
+
+**必须先 source `.env`，否则测试结果不可信**（本项目最容易踩的坑）：
+
+```bash
+cd "/Users/z/code/ai project" && set -a && . .env && set +a
+```
+
+有 **12 个测试文件**用 `describe.skipIf(!databaseEnabled)` 守卫，缺 env 时**静默消失且退出码为 0**。**报告测试结果时必须同时报告 skipped 数；只写 passed 不写 skipped 的报告视为无效。**
+
+每个阶段独立成 commit。**含迁移的 commit 不与功能改动混提**（这正是 `4b552c2` 的教训）。任何一步变红即 `git revert` 单个提交——但 P2 是数据删除，不可 revert，执行前必须确认备份。
+
+---
+
+## 未验证项（执行者必读）
+
+> 2026-08-31 P0 执行后更新：第 1、3、6 条已消除，原文留在下面并标注结论。
+
+1. ~~**全程静态取证**：没连数据库、没跑测试、**没有比对生产库 `pg_trigger` 确认这批触发器真的装上了**。~~ → **已消除**：P0.1 的集成测试直接查 `pg_trigger` 断言 11 个触发器全在，7 例全绿。
+2. 标「结构性」的条目（H2 锁竞争实际耗时、M4 并发重复 chunk）是代码文本已确认、运行时后果未实测。要钉死 M4 需要并发集成测试。**仍未实测**——但 P1 删掉触发器后这两条自然消失，不再值得单独投入。
+3. ~~**P0.3 的改动量未评估**。X1 耦合牵着退款逻辑，是本计划里唯一「不是删除动作」的一步，也是唯一没底的一步。~~ → **已消除**：实际只动一个函数（`completeKnowledgeArchive`），加三条集成测试的断言反转。
+4. `Document.content` 是否有 ARTIFACT 之外的写入者未核实（阻塞 P5.2）。
+5. `ownerType='OFFICIAL'` 官方知识库的现状（有无管理端入口、有无实际数据）未核实。本计划假设它照旧可用，未做任何改动。
+6. ~~存量 ARTIFACT 文档/Chunk 的实际规模未知（阻塞 P2.1 的分批决策）。~~ → **已消除**：见 P0.2 实测数据，1,265 文档 / 211 chunk / 9,563 库行，一次性删即可。
+

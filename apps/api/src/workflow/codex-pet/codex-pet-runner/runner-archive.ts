@@ -261,26 +261,36 @@ export async function runKnowledgeArchiveAttempt(ctx: RunnerContext): Promise<st
 }
 
 export async function completeKnowledgeArchive(ctx: RunnerContext): Promise<CodexPetExecutionResult> {
-  const documentId = await runKnowledgeArchiveAttempt(ctx);
+  // 知识库归档是「事后登记」，不是交付条件：精灵图、ZIP、验证报告在 packaging
+  // 阶段就已经落库并复核过。归档失败以前会把整条运行判 failed 并全额退款——
+  // 一个登记动作掉一次已交付的付费运行。这里改成尽力而为。
+  // 计划：docs/superpowers/plans/2026-08-31-knowledge-vs-asset-library-split.md（P0.3）
+  let documentId: string | null = null;
+  try {
+    documentId = await runKnowledgeArchiveAttempt(ctx);
+  } catch (error) {
+    // 租约丢失和用户取消是真正的控制流，仍然要往上抛。
+    if (error instanceof CodexPetLeaseLostError) throw error;
+    if (error instanceof CodexPetCancelledError) throw error;
+    // 归档失败的事件由 runKnowledgeArchiveAttempt 自己发（knowledge.archive_retrying），
+    // 这里不重复发一条。
+  }
   await settlePerImageBilling(ctx);
   const now = new Date();
   const readyCommitted = await ctx.prisma.$transaction(async (tx) => {
-    // Document deletion uses FK SetNull. Require the exact archive link and
-    // archiving stage in the same conditional transition so a concurrent
-    // knowledge-base deletion can never produce ready + null document.
+    // 判据只看租约和阶段。ready + knowledgeDocumentId=null 现在是合法终态。
     const transition = await tx.codexPetRun.updateMany({
-      where: { id: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId, status: "archiving", knowledgeDocumentId: documentId, cancelRequested: false },
+      where: { id: ctx.runId, projectId: ctx.project.id, userId: ctx.project.userId, workerId: ctx.workerId, status: "archiving", cancelRequested: false },
       data: { status: "ready", progressStage: "ready", progressPercent: 100, progressMessage: "桌宠已完成，可安装到 Codex", completedAt: now, heartbeatAt: now, workerId: null, error: null },
     });
     if (transition.count !== 1) return false;
     await tx.codexPetProject.updateMany({ where: { id: ctx.project.id, userId: ctx.project.userId, status: { not: "deleting" } }, data: { status: "ready" } });
     return true;
   });
-  if (!readyCommitted) throw new Error("知识库归档关联已变化，桌宠不能进入 ready");
-  // ready + knowledgeDocumentId is the authoritative committed outcome. A
-  // final SSE/event write failure must never downgrade a deliverable run to
-  // failed or trigger a package refund.
-  await emit(ctx, "run.completed", "ready", 100, "桌宠已完成并归档", {
+  if (!readyCommitted) throw new Error("运行租约或阶段已变化，桌宠不能进入 ready");
+  // ready 就是权威的已提交结果。最后这一次 SSE/事件写失败绝不能把一个可交付的
+  // 运行降级成 failed 或触发退款。
+  await emit(ctx, "run.completed", "ready", 100, documentId ? "桌宠已完成并归档" : "桌宠已完成", {
     knowledgeDocumentId: documentId,
   }).catch(() => undefined);
   return { status: "ready", runId: ctx.runId };

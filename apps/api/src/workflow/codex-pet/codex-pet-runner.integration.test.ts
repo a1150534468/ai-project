@@ -2122,7 +2122,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(guidedPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
   }, 120_000);
 
-  it("does not enter ready when the archived knowledge document is concurrently deleted", async () => {
+  it("enters ready even when the archived knowledge document is concurrently deleted", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
@@ -2132,11 +2132,14 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       return archived;
     };
 
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps })).rejects.toThrow("知识库归档关联已变化");
+    // 归档是事后登记：文档被并发删掉不改变「桌宠已交付」这个事实。
+    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
+      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
 
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "failed", knowledgeDocumentId: null, billingRefundStatus: "refunded" });
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+    expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundStatus: "none" });
+    expect(run.knowledgeDocumentId).toBeNull();
+    expect(deps.billing.refundResource).not.toHaveBeenCalled();
   }, 120_000);
 
   it("rejects and refunds an active legacy run without the GPT-only model contract", async () => {
@@ -2469,41 +2472,39 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(await prisma.codexPetEvent.count({ where: { runId: { in: [cancelledSeed.run.id, failedSeed.run.id] } } })).toBe(0);
   });
 
-  it("keeps transient archive failures at 98%, resumes without regenerating, then refunds after durable retries exhaust", async () => {
+  it("delivers ready without a refund when knowledge archival fails outright", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
     const baseDeps = runnerDeps(store);
     const archiveRun = vi.fn(async () => { throw new Error("knowledge archive unavailable"); });
     const deps = { ...baseDeps, archiveRun, env: { CODEX_PET_ARCHIVE_MAX_ATTEMPTS: "3" } };
 
+    // 归档失败不再把运行挂在 98% 等重试、也不再耗尽重试后退款：一次交付直接 ready。
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "archiving", runId: seeded.run.id });
-    const generationMock = baseDeps.visual.generate as unknown as { readonly mock: { readonly calls: readonly unknown[] } };
-    const generationCallsAfterPackaging = generationMock.mock.calls.length;
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "archiving", runId: seeded.run.id });
-    expect(generationMock.mock.calls).toHaveLength(generationCallsAfterPackaging);
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .rejects.toThrow("knowledge archive unavailable");
+      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
 
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
     expect(run).toMatchObject({
-      status: "failed",
-      progressStage: "failed",
-      progressPercent: 98,
+      status: "ready",
+      progressStage: "ready",
+      progressPercent: 100,
       knowledgeDocumentId: null,
-      billingRefundStatus: "refunded",
+      billingRefundStatus: "none",
     });
-    expect(archiveRun).toHaveBeenCalledTimes(3);
-    expect(baseDeps.billing.refundResource).toHaveBeenCalledOnce();
+    // 交付物齐全——这才是用户付钱买的东西。
+    expect(run.spritesheetArtifactId).toBeTruthy();
+    expect(run.packageArtifactId).toBeTruthy();
+    expect(run.previewArtifactId).toBeTruthy();
+    expect(archiveRun).toHaveBeenCalledTimes(1);
+    expect(baseDeps.billing.refundResource).not.toHaveBeenCalled();
     expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(0);
     const events = await prisma.codexPetEvent.findMany({ where: { runId: run.id }, orderBy: { sequence: "asc" } });
-    expect(events.filter((event) => event.type === "knowledge.archive_retrying")).toHaveLength(3);
-    expect(events.map((event) => event.type)).toContain("run.failed");
-    expect(events.map((event) => event.type)).not.toContain("run.completed");
+    expect(events.filter((event) => event.type === "knowledge.archive_retrying")).toHaveLength(1);
+    expect(events.map((event) => event.type)).toContain("run.completed");
+    expect(events.map((event) => event.type)).not.toContain("run.failed");
   }, 120_000);
 
-  it("recovers a deferred knowledge archive on the next worker delivery", async () => {
+  it("does not retry archival on an already-delivered run", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
     const baseDeps = runnerDeps(store);
@@ -2517,19 +2518,19 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     const deps = { ...baseDeps, archiveRun, env: { CODEX_PET_ARCHIVE_MAX_ATTEMPTS: "3" } };
 
+    // 第一次投递吞掉归档失败直接 ready；已 ready 的运行不再重跑归档。
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "archiving", runId: seeded.run.id });
+      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
     const generationMock = baseDeps.visual.generate as unknown as { readonly mock: { readonly calls: readonly unknown[] } };
-    const generationCallsAfterPackaging = generationMock.mock.calls.length;
+    const generationCallsAfterDelivery = generationMock.mock.calls.length;
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
       .resolves.toEqual({ status: "ready", runId: seeded.run.id });
 
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "ready", progressPercent: 100 });
-    expect(run.knowledgeDocumentId).toBeTruthy();
-    expect(generationMock.mock.calls).toHaveLength(generationCallsAfterPackaging);
+    expect(run).toMatchObject({ status: "ready", progressPercent: 100, knowledgeDocumentId: null });
+    expect(generationMock.mock.calls).toHaveLength(generationCallsAfterDelivery);
     expect(baseDeps.billing.refundResource).not.toHaveBeenCalled();
-    expect(archiveRun).toHaveBeenCalledTimes(2);
+    expect(archiveRun).toHaveBeenCalledTimes(1);
   }, 120_000);
 
   it("reconciles an ownership-scoped archived Document without consuming another archive attempt", async () => {
