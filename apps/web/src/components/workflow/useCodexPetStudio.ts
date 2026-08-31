@@ -77,7 +77,6 @@ export interface CodexPetStudioProps {
   readonly token: string;
   readonly initialProjectId?: string | null;
   readonly onBalanceRefresh?: () => void;
-  readonly onOpenKnowledgeDocument?: (documentId: string) => void;
   readonly onInstallUrl?: (url: string) => void;
   readonly client?: CodexPetStudioClient;
 }
@@ -94,7 +93,6 @@ export function useCodexPetStudio({
   token,
   initialProjectId,
   onBalanceRefresh,
-  onOpenKnowledgeDocument,
   onInstallUrl,
   client = DEFAULT_CODEX_PET_STUDIO_CLIENT,
 }: CodexPetStudioProps) {
@@ -648,19 +646,6 @@ export function useCodexPetStudio({
       .finally(() => setBusyAction(null));
   };
 
-  const handleOpenKnowledge = () => {
-    const documentId = latestRun?.knowledgeDocumentId;
-    if (!documentId || !deliveryReady || interactionLocked) return;
-    if (onOpenKnowledgeDocument) {
-      onOpenKnowledgeDocument(documentId);
-      return;
-    }
-    window.dispatchEvent(new CustomEvent("ai-assistant:open-knowledge-document", {
-      detail: { documentId, systemKey: "AI_ARTIFACTS" },
-    }));
-    setNotice("已请求打开「AI 产物」知识库中的桌宠文档");
-  };
-
   const handleCopyProject = () => {
     const project = detail?.project;
     if (!project || interactionLocked) return;
@@ -731,7 +716,6 @@ export function useCodexPetStudio({
       handleApproveNextImage,
       handleInstall,
       handleDownload,
-      handleOpenKnowledge,
       handleCopyProject,
     },
   };

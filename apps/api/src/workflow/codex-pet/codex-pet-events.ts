@@ -18,6 +18,7 @@ export const CODEX_PET_EVENT_TYPES = [
   "validation.failed",
   "run.repairing",
   "package.ready",
+  // 仅存量：P1.2 起不再产出。产物不落知识库了，但已落库的事件行还要能读出来。
   "knowledge.archive_started",
   "knowledge.archive_completed",
   "knowledge.archive_retrying",

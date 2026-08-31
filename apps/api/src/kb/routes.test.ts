@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
@@ -176,9 +176,12 @@ describe("知识库路由", () => {
       await prisma.knowledgeBase.delete({ where: { id: kb.id } });
     });
 
-    it("AI 产物系统库不能重命名", async () => {
-      const kb = await prisma.knowledgeBase.findFirstOrThrow({
-        where: { userId, systemKey: "AI_ARTIFACTS" },
+    // P1.1 删掉触发器之后没人再自动建 AI_ARTIFACTS 系统库了，但
+    // service.ts 的 `kb.systemKey` 保护还是活代码（P5.1 才连列一起退役），
+    // 所以这里自己插一行带 systemKey 的库来盯这条分支。
+    it("带 systemKey 的系统库不能重命名", async () => {
+      const kb = await prisma.knowledgeBase.create({
+        data: { ownerType: "USER", userId, name: "系统库", systemKey: "AI_ARTIFACTS" },
       });
       const r = await app.inject({
         method: "PATCH",
@@ -187,6 +190,8 @@ describe("知识库路由", () => {
         payload: { name: "改名" },
       });
       expect(r.statusCode).toBe(403);
+
+      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
     });
   });
 
@@ -220,9 +225,9 @@ describe("知识库路由", () => {
       expect(found).toBeNull();
     });
 
-    it("AI 产物系统库不能删除", async () => {
-      const kb = await prisma.knowledgeBase.findFirstOrThrow({
-        where: { userId, systemKey: "AI_ARTIFACTS" },
+    it("带 systemKey 的系统库不能删除", async () => {
+      const kb = await prisma.knowledgeBase.create({
+        data: { ownerType: "USER", userId, name: "系统库", systemKey: "AI_ARTIFACTS" },
       });
       const r = await app.inject({
         method: "DELETE",
@@ -231,6 +236,8 @@ describe("知识库路由", () => {
       });
       expect(r.statusCode).toBe(403);
       expect(await prisma.knowledgeBase.findUnique({ where: { id: kb.id } })).not.toBeNull();
+
+      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
     });
   });
 

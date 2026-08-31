@@ -93,20 +93,15 @@ export async function refreshDatabaseGauges(prisma: PrismaClient, metrics: Worke
   const [
     activeRuns,
     archivingRuns,
-    readyRunsMissingArchive,
     readyRunsMissingDeliverables,
     databaseProjects,
     databaseReadyRuns,
     databaseFailedRuns,
     databaseCancelledRuns,
     databaseRefundedRuns,
-    knowledgePendingDocuments,
-    knowledgeIndexingDocuments,
-    knowledgeFailedDocuments,
   ] = await Promise.all([
     prisma.codexPetRun.count({ where: { status: { in: [...CODEX_PET_ACTIVE_STATUSES] } } }),
     prisma.codexPetRun.count({ where: { status: "archiving" } }),
-    prisma.codexPetRun.count({ where: { status: "ready", knowledgeDocumentId: null } }),
     prisma.codexPetRun.count({ where: {
       status: "ready",
       OR: [
@@ -120,22 +115,15 @@ export async function refreshDatabaseGauges(prisma: PrismaClient, metrics: Worke
     prisma.codexPetRun.count({ where: { status: "failed" } }),
     prisma.codexPetRun.count({ where: { status: "cancelled" } }),
     prisma.codexPetRun.count({ where: { billingRefundedAt: { not: null } } }),
-    prisma.document.count({ where: { sourceModule: "codex_pet", status: "pending" } }),
-    prisma.document.count({ where: { sourceModule: "codex_pet", status: "indexing" } }),
-    prisma.document.count({ where: { sourceModule: "codex_pet", status: "failed" } }),
   ]);
   metrics.activeRuns = activeRuns;
   metrics.archivingRuns = archivingRuns;
-  metrics.readyRunsMissingArchive = readyRunsMissingArchive;
   metrics.readyRunsMissingDeliverables = readyRunsMissingDeliverables;
   metrics.databaseProjects = databaseProjects;
   metrics.databaseReadyRuns = databaseReadyRuns;
   metrics.databaseFailedRuns = databaseFailedRuns;
   metrics.databaseCancelledRuns = databaseCancelledRuns;
   metrics.databaseRefundedRuns = databaseRefundedRuns;
-  metrics.knowledgePendingDocuments = knowledgePendingDocuments;
-  metrics.knowledgeIndexingDocuments = knowledgeIndexingDocuments;
-  metrics.knowledgeFailedDocuments = knowledgeFailedDocuments;
 }
 
 export async function recoverDeletingProjects(input: {

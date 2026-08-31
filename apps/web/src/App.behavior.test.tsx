@@ -337,61 +337,6 @@ describe("App 视图分派", () => {
   });
 });
 
-describe("App 跨页深链", () => {
-  it("知识库跳桌宠项目是一次性意图,离开工作流页后清掉", async () => {
-    await mount();
-    await act(async () => {
-      probes.shell?.onViewChange("kb");
-    });
-    await act(async () => {
-      probes.knowledge?.onOpenCodexPetProject("p-1");
-    });
-    expect(find("workflow-page")).not.toBeNull();
-    expect(probes.workflow?.activeModuleId).toBe("codex-pet");
-    expect(probes.workflow?.initialCodexPetProjectId).toBe("p-1");
-    await act(async () => {
-      probes.shell?.onViewChange("kb");
-    });
-    await act(async () => {
-      probes.shell?.onViewChange("workflow");
-    });
-    expect(probes.workflow?.initialCodexPetProjectId).toBeNull();
-  });
-
-  it("工作流跳知识库文档也是一次性意图", async () => {
-    await mount();
-    await act(async () => {
-      probes.shell?.onSelectWorkflowSub("codex-pet");
-    });
-    await act(async () => {
-      probes.workflow?.onOpenKnowledgeDocument("doc-1");
-    });
-    expect(find("kb-page")).not.toBeNull();
-    expect(probes.knowledge?.initialDocumentId).toBe("doc-1");
-    await act(async () => {
-      probes.shell?.onViewChange("chat");
-    });
-    await act(async () => {
-      probes.shell?.onViewChange("kb");
-    });
-    expect(probes.knowledge?.initialDocumentId).toBeNull();
-  });
-
-  it("从菜单选工作流模块会丢掉上一次的桌宠深链意图", async () => {
-    await mount();
-    await act(async () => {
-      probes.shell?.onViewChange("kb");
-    });
-    await act(async () => {
-      probes.knowledge?.onOpenCodexPetProject("p-1");
-    });
-    await act(async () => {
-      probes.shell?.onSelectWorkflowSub("codex-pet");
-    });
-    expect(probes.workflow?.initialCodexPetProjectId).toBeNull();
-  });
-});
-
 describe("App 会话流", () => {
   it("发送后用户消息立即入列并进入加载态", async () => {
     await mount();

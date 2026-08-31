@@ -150,9 +150,7 @@ export default function App() {
       return (
         <Knowledge
           token={token}
-          initialDocumentId={nav.knowledgeDocumentTarget}
           onViewChange={(v: string) => setView(v as ViewType)}
-          onOpenCodexPetProject={nav.openCodexPetProject}
         />
       );
     }
@@ -168,8 +166,6 @@ export default function App() {
           activeModuleId={nav.workflowModule}
           menuVisibility={nav.menuVisibility}
           onBalanceRefresh={refreshBalance}
-          initialCodexPetProjectId={nav.codexPetProjectTarget}
-          onOpenKnowledgeDocument={nav.openKnowledgeDocument}
         />
       );
     }

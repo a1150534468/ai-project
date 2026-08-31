@@ -151,23 +151,11 @@ export async function executeCodexPetProjectCleanup(args: {
     await args.persistObjectRefs(objectRefs);
   }
   await args.prisma.$transaction(async (tx) => {
-    if (runs.length) {
-      // Restrict archive cleanup to this user's system AI_ARTIFACTS base. The
-      // sourceId is already run-scoped/unique, but the KB predicate makes the
-      // ownership boundary explicit and protects against legacy collisions.
-      await tx.document.deleteMany({
-        where: {
-          sourceModule: "codex_pet",
-          sourceId: { in: runs.map((run) => run.id) },
-          kb: { userId: args.userId, systemKey: "AI_ARTIFACTS" },
-        },
-      });
-    }
     await tx.codexPetProject.deleteMany({ where: { id: project.id, userId: args.userId } });
   });
   // Binary cleanup is deliberately after the synchronous relational cleanup.
   // A failure throws and leaves the BullMQ job (including objectRefs)
-  // retryable without resurrecting the deleted knowledge document or project.
+  // retryable without resurrecting the deleted project.
   await deleteObjectRefs(objectRefs);
   return { deleted: true, objectCount: objectRefs.length };
 }

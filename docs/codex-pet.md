@@ -32,7 +32,7 @@ flowchart TD
     G --> H["拼成 1536×2288 spritesheet.webp + pet.json"]
     H --> I["上 MinIO，生成签名下载 URL"]
     I --> J["codex://pets/install 深链 / 下载 ZIP"]
-    J --> K["成功运行在用户 AI_ARTIFACTS 知识库登记 sourceModule=codex_pet 文档"]
+    J --> K["archiving 直通收尾：结清按张计费 → ready（产物不落知识库）"]
 ```
 
 每一步都追加写 `CodexPetEvent`，前端 Studio 靠 SSE + 2.5 秒轮询兜底渲染进度、事件日志、失败原因、重试次数与计费状态；刷新/换设备/断线后从持久化事件游标恢复。
@@ -63,7 +63,7 @@ flowchart TD
 
 ### 4.4 交付安全与软删除
 - 产物下载走**签名 URL**（`CODEX_PET_ARTIFACT_SIGNING_SECRET`，缺省复用 ≥32 字节的 `SESSION_SECRET`）；生产强制要求 HTTPS 的 `CODEX_PET_PUBLIC_BASE_URL`，本地开发才允许 HTTP。
-- **软删除（假删）**：DELETE 写 `deletedAt`，列表/详情默认排除，项目/运行/知识库文档/产物全部保留；仍在运行的项目删除时先取消并按原规则退款；旧的「`deleting` 且无 `deletedAt`」tombstone 仍走硬清理队列，新软删除不进硬清理。
+- **软删除（假删）**：DELETE 写 `deletedAt`，列表/详情默认排除，项目/运行/产物全部保留；仍在运行的项目删除时先取消并按原规则退款；旧的「`deleting` 且无 `deletedAt`」tombstone 仍走硬清理队列，新软删除不进硬清理。
 
 ### 4.5 计费
 `codex-pet-billing.ts` 按运行计次（设计期定为固定套餐 `codex_pet_v2_package`，默认 200 点，可后台调）；套餐内的自动修复成本由系统承担；尚无任何成功图片时主动取消全额退款，已有图片后主动取消不退，系统最终无法交付全额退款——遵循平台 finalize 幂等退款范式。
@@ -430,7 +430,6 @@ flowchart TD
 - GPT Image edits 真实 POC 通过单参考图、多参考图和 `1536×1024` 任务。
 - 文字、单参考图和不对称多参考图三类桌宠均通过 v2 验证。
 - Codex 安装深链和 ZIP 手动导入均在目标 Codex 版本验证成功。
-- 成功运行在用户的 `AI_ARTIFACTS` 知识库中只产生一个 `sourceModule=codex_pet` 文档。
 
 ### 必需配置
 
@@ -484,25 +483,24 @@ curl -fsS http://127.0.0.1:8092/health
 curl -fsS http://127.0.0.1:8092/metrics
 ```
 
-Worker 会周期性恢复 stale run、确认不确定扣费、重试退款和清理到期中间产物。历史项目删除采用 `deletedAt` 软删除：项目、运行、知识库文档和产物保留，列表与项目详情默认隐藏；仍在运行的项目会先请求取消并按现有账单策略退款。只有迁移前遗留的 `status=deleting` 且没有 `deletedAt` 的旧 tombstone 才进入硬清理队列。知识库归档失败的上限由 `CODEX_PET_ARCHIVE_MAX_ATTEMPTS` 控制（默认 10，最大 100）；达到上限后运行失败并进入全额退款收敛。不要通过手工删除数据库行跳过这些收敛流程。
+Worker 会周期性恢复 stale run、确认不确定扣费、重试退款和清理到期中间产物。历史项目删除采用 `deletedAt` 软删除：项目、运行和产物保留，列表与项目详情默认隐藏；仍在运行的项目会先请求取消并按现有账单策略退款。只有迁移前遗留的 `status=deleting` 且没有 `deletedAt` 的旧 tombstone 才进入硬清理队列。不要通过手工删除数据库行跳过这些收敛流程。
 
-旧版本项目删除任务会先把所有待删私有对象的所有权信息持久化到 BullMQ job，再在同一数据库事务中删除对应的 AI 产物 Document/Chunk 与桌宠项目，最后异步删除对象存储内容。对象存储暂时失败时，重试继续使用 job 中的清单，不会重新创建知识库文档或项目。新软删除不触发这条硬清理路径。
+旧版本项目删除任务会先把所有待删私有对象的所有权信息持久化到 BullMQ job，再在同一数据库事务中删除桌宠项目，最后异步删除对象存储内容。对象存储暂时失败时，重试继续使用 job 中的清单，不会重新创建项目。新软删除不触发这条硬清理路径。
 
 ### 生产发布与回滚顺序
 
 1. 保持 `workflow.codex-pet` 隐藏，并先部署已包含新迁移的 migrate 镜像。
 2. 固定名 `migrate` Job 重跑前先删除旧 Job，由发布编排只应用 Kustomize 渲染结果中的迁移 Job，并等待 `job/migrate` Complete；此阶段不要对整套 overlay 执行 `kubectl apply -k`，避免 API 或 Worker 提前滚动。
 3. 迁移成功后再应用整套 overlay。更新 API 镜像时同步滚动 `deployment/api` 及所有复用该镜像的 Worker，并确认 Codex 桌宠 Worker `/health`、`/metrics` 和真实 GPT edits POC。
-4. 完成三类桌宠、知识库归档、HTTPS 深链和 ZIP 验收后，才在客户端菜单后台开启入口。
+4. 完成三类桌宠、HTTPS 深链和 ZIP 验收后，才在客户端菜单后台开启入口。
 
 **回滚**：旧 API 镜像前先隐藏入口、停止新运行并等待或取消存量运行，然后 scale/delete `codex-pet-worker`；旧应用镜像不包含该 Worker 入口文件，不能让新 Deployment 继续引用旧镜像。新增表和字段保持向后兼容，回滚应用时无需破坏性回退数据库迁移。
 
 ### 关键一致性告警
 
-- `ready` 运行必须同时存在 `knowledgeDocumentId`、最终 spritesheet、ZIP 和通过的验证报告。
+- `ready` 运行必须同时存在最终 spritesheet、ZIP 和通过的验证报告。
 - 相同 `operationId=codex-pet:<runId>` 不得出现重复扣费。
-- 相同 `sourceModule=codex_pet, sourceId=<runId>` 不得出现重复知识库文档。
-- `archiving` 持续失败、stale run、退款重试、对象清理失败和上游模型/尺寸/质量偏差应告警。
+- stale run、退款重试、对象清理失败和上游模型/尺寸/质量偏差应告警。
 - `CodexPetImageCall.refundStatus = 'pending'` 堆积必须告警：那是失败调用的退款没成功，钱还压在用户身上（索引 `refundStatus, createdAt` 就是给这条查询用的）。
 - 结清单位数应恒等于该运行 `callKind='planned' AND sentAt IS NOT NULL AND status <> 'failed'` 的流水条数；不等说明四处结清口径又走散了（见 4.5 不变量 3）。
 - `awaiting_regeneration_approval` 停留超过阈值（比如 24h）必须告警：该状态**没有任何超时回收**，其 14 单位预留会被无限期占住，且不挡新建运行——醒来后会和现役运行抢同一份 relay 配额（见 6.12.7）。

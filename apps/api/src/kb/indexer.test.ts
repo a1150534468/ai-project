@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { getPrisma } from '@ai-assistant/db';
-import type { User, KnowledgeBase, Document } from '@prisma/client';
+import type { User, KnowledgeBase } from '@prisma/client';
 import { claim, indexOnce, EmptyTextError, type IndexDeps } from './indexer.js';
 
 const prisma = getPrisma();
@@ -216,84 +216,6 @@ describe('indexOnce', () => {
       inputTokens: expectedTokens,
       outputTokens: 0,
     });
-  });
-
-  it('Codex 桌宠自动归档在成功索引时不重复计费', async () => {
-    const doc = await prisma.document.create({
-      data: {
-        kbId: userKb.id,
-        name: 'Codex 桌宠 · 测试狐',
-        sourceType: 'ARTIFACT',
-        sourceModule: 'codex_pet',
-        sourceId: `codex-pet-success-${Date.now()}`,
-        content: '桌宠名称：测试狐\nCodex v2 规格：1536×2288，16 个方向。',
-        mime: 'application/zip',
-        status: 'pending',
-      },
-    });
-    createdDocIds.push(doc.id);
-    const mockBilling = { settle: vi.fn() };
-    const text = doc.content!;
-    const deps: IndexDeps = {
-      prisma,
-      loadObject: vi.fn().mockResolvedValue({
-        buf: Buffer.from(text),
-        mime: 'text/plain',
-        filename: 'codex-pet.txt',
-      }),
-      parse: vi.fn().mockResolvedValue(text),
-      chunk: vi.fn().mockReturnValue([text]),
-      embed: vi.fn().mockResolvedValue({ vector: new Array(1024).fill(0.3), tokens: 20 }),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
-      workerId: 'worker-codex-pet-success',
-    };
-
-    await indexOnce(deps, doc.id);
-
-    const updated = await prisma.document.findUniqueOrThrow({ where: { id: doc.id } });
-    expect(updated).toMatchObject({ status: 'indexed', chunkCount: 1 });
-    const chunks = await prisma.chunk.findMany({ where: { documentId: doc.id } });
-    createdChunkIds.push(...chunks.map((chunk) => chunk.id));
-    expect(chunks).toHaveLength(1);
-    expect(mockBilling.settle).not.toHaveBeenCalled();
-  });
-
-  it('Codex 桌宠自动归档在索引失败时也不发起零额退款结算', async () => {
-    const doc = await prisma.document.create({
-      data: {
-        kbId: userKb.id,
-        name: 'Codex 桌宠 · 空内容测试',
-        sourceType: 'ARTIFACT',
-        sourceModule: 'codex_pet',
-        sourceId: `codex-pet-failure-${Date.now()}`,
-        content: '待索引桌宠摘要',
-        mime: 'application/zip',
-        status: 'pending',
-      },
-    });
-    createdDocIds.push(doc.id);
-    const mockBilling = { settle: vi.fn() };
-    const deps: IndexDeps = {
-      prisma,
-      loadObject: vi.fn().mockResolvedValue({
-        buf: Buffer.from('待索引桌宠摘要'),
-        mime: 'text/plain',
-        filename: 'codex-pet.txt',
-      }),
-      parse: vi.fn().mockRejectedValue(new EmptyTextError('桌宠摘要为空')),
-      chunk: vi.fn(),
-      embed: vi.fn(),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
-      workerId: 'worker-codex-pet-failure',
-    };
-
-    await indexOnce(deps, doc.id);
-
-    expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
-      .toMatchObject({ status: 'failed', error: '桌宠摘要为空' });
-    expect(mockBilling.settle).not.toHaveBeenCalled();
   });
 
   it('瞬时失败在次数耗尽前回到 pending，成功重试只结算一次', async () => {

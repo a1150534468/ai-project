@@ -18,7 +18,6 @@ import {
   validateStandardPetAtlas,
   type PetFramesByState,
 } from "@ai-assistant/codex-pet-pipeline";
-import { archiveCodexPetRun } from "./codex-pet-archive.js";
 import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { CODEX_PET_MODEL_CONTRACT_VERSION, codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 import { persistOrResumeCodexPetFinalPackage, type CodexPetFinalPackageSeed } from "./codex-pet-packaging.js";
@@ -118,7 +117,6 @@ export interface CodexPetRecoveryRunResult {
 
 export interface CodexPetRecoveryFinalizeResult extends CodexPetRecoveryBuildResult {
   readonly package: Awaited<ReturnType<typeof persistOrResumeCodexPetFinalPackage>>;
-  readonly knowledgeDocumentId: string;
 }
 
 function record(value: unknown): JsonRecord {
@@ -527,7 +525,7 @@ export async function initializeCodexPetRecoveryRun(input: CodexPetRecoveryRunIn
   });
 }
 
-/** Persist and archive an already-approved recovery without claiming a model call. */
+/** Persist an already-approved recovery without claiming a model call. */
 export async function finalizeCodexPetRecovery(input: CodexPetRecoveryFinalizeInput): Promise<CodexPetRecoveryFinalizeResult> {
   const run = await input.prisma.codexPetRun.findUnique({
     where: { id: input.runId, projectId: input.projectId, userId: input.userId },
@@ -563,13 +561,6 @@ export async function finalizeCodexPetRecovery(input: CodexPetRecoveryFinalizeIn
     seed: built.seed,
   });
   if (!packaged) throw new Error("恢复最终化未建立最终打包 checkpoint");
-  const document = await archiveCodexPetRun({
-    prisma: input.prisma,
-    runId: input.runId,
-    projectId: input.projectId,
-    userId: input.userId,
-    workerId: input.workerId,
-  });
   const ready = await input.prisma.$transaction(async (tx) => {
     const changed = await tx.codexPetRun.updateMany({
       where: {
@@ -578,7 +569,6 @@ export async function finalizeCodexPetRecovery(input: CodexPetRecoveryFinalizeIn
         userId: input.userId,
         workerId: input.workerId,
         status: "archiving",
-        knowledgeDocumentId: document.documentId,
         cancelRequested: false,
       },
       data: {
@@ -599,10 +589,10 @@ export async function finalizeCodexPetRecovery(input: CodexPetRecoveryFinalizeIn
     });
     return true;
   });
-  if (!ready) throw new Error("恢复最终化归档关联已变化，桌宠不能进入 ready");
+  if (!ready) throw new Error("恢复最终化的运行租约或阶段已变化，桌宠不能进入 ready");
   const finalRun = await input.prisma.codexPetRun.findUniqueOrThrow({ where: { id: input.runId }, select: { imageGenerationCallCount: true } });
   if (finalRun.imageGenerationCallCount !== imageCallsBefore) {
     throw new Error("恢复最终化意外增加了真实生图调用计数");
   }
-  return { ...built, package: packaged, knowledgeDocumentId: document.documentId };
+  return { ...built, package: packaged };
 }

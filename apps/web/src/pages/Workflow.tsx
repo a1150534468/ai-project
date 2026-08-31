@@ -40,12 +40,11 @@ interface WorkflowProps {
   readonly activeModuleId: WorkflowModuleId;
   readonly onBalanceRefresh?: () => void;
   readonly initialCodexPetProjectId?: string | null;
-  readonly onOpenKnowledgeDocument?: (documentId: string) => void;
   readonly menuVisibility?: ClientMenuVisibility;
 }
 
 const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerce-long-image", "article-workflow", "codex-pet"]);
-export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, onOpenKnowledgeDocument, menuVisibility }: WorkflowProps) {
+export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, menuVisibility }: WorkflowProps) {
   const image = useImageWorkflowStudio({ token, onBalanceRefresh });
   const [commerceTab, setCommerceTab] = useState<"main" | "detail">("main");
   const [commerceLoadMainJob, setCommerceLoadMainJob] = useState<EcomMainJob | null>(null);
@@ -163,7 +162,6 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             token={token}
             initialProjectId={initialCodexPetProjectId}
             onBalanceRefresh={onBalanceRefresh}
-            onOpenKnowledgeDocument={onOpenKnowledgeDocument}
           />
         ) : activeModuleId === "local-business-promo" ? (
           <LocalBusinessPromoWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />

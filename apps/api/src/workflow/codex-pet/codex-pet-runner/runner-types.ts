@@ -115,13 +115,6 @@ export interface CodexPetRunnerDeps {
   readonly artifacts: CodexPetArtifactStore;
   readonly appendEvent: (input: CodexPetEventInput) => Promise<unknown>;
   readonly loadReferenceAsset: (asset: ImageAsset) => Promise<{ buffer: Buffer; mime: string }>;
-  readonly archiveRun: (input: {
-    prisma: PrismaClient;
-    runId: string;
-    userId: string;
-    projectId: string;
-    workerId?: string;
-  }) => Promise<{ documentId: string }>;
   readonly billing: {
     refundResource(operationId: string): Promise<{ success: boolean }>;
     settleResource?: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
@@ -226,17 +219,6 @@ export class CodexPetImageApprovalRequiredError extends Error {
   ) {
     super(message);
     this.name = "CodexPetImageApprovalRequiredError";
-  }
-}
-
-export class CodexPetArchiveDeferredError extends Error {
-  constructor(
-    message: string,
-    readonly attempt: number,
-    readonly maxAttempts: number,
-  ) {
-    super(message);
-    this.name = "CodexPetArchiveDeferredError";
   }
 }
 

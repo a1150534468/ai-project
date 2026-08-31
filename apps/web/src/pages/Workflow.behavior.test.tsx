@@ -212,19 +212,16 @@ describe("Workflow 模块分派", () => {
     expect(scope.textContent).not.toContain("小说模块");
   });
 
-  it("桌宠模块不渲染页头，并把 initialProjectId 与打开知识库文档的回调透传下去", async () => {
-    const onOpenKnowledgeDocument = vi.fn();
+  it("桌宠模块不渲染页头，并把 initialProjectId 透传下去", async () => {
     const scope = await mountWorkflow({
       activeModuleId: "codex-pet",
       initialCodexPetProjectId: "pet-42",
-      onOpenKnowledgeDocument,
     });
 
     expect(scope.querySelector('[data-testid="codex-pet-studio"]')?.getAttribute("data-project")).toBe("pet-42");
     expect(scope.querySelector("h1")).toBeNull();
     expect(probes.codexPetProps?.token).toBe("token");
     expect(probes.codexPetProps?.onBalanceRefresh).toBe(onBalanceRefresh);
-    expect(probes.codexPetProps?.onOpenKnowledgeDocument).toBe(onOpenKnowledgeDocument);
   });
 
   it("非全屏模块渲染页头：面包屑 + 标题 + 描述都取自 WORKFLOW_MODULES", async () => {

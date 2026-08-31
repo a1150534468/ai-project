@@ -1,4 +1,3 @@
-import { getPrisma } from '@ai-assistant/db';
 import type { PrismaClient } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { DEFAULT_EMBEDDING_DIMENSION } from '../memory/embedding-client.js';
@@ -310,8 +309,10 @@ export async function indexOnce(
     });
 
     // 8. 计费 settle（仅 USER 库）
-    // 自动归档产物是平台能力，不重复向用户收取知识库索引费用。
-    if (kb.ownerType === 'USER' && kb.userId && !doc.sourceModule) {
+    // 原先这里排除了 `doc.sourceModule` 非空的文档 —— 自动归档的产物算平台能力,
+    // 不向用户收索引费。P1.2 之后产物不再进知识库,能走到索引的只有用户自己上传
+    // 的文档,豁免条件永远为真,留着只会掩盖「有产物又在偷偷进库」这种回归。
+    if (kb.ownerType === 'USER' && kb.userId) {
       try {
         await deps.billing.settle({
           operationId: doc.opId ?? docId,
@@ -371,7 +372,8 @@ export async function indexOnce(
     });
 
     // 瞬时失败期间保留原预扣；成功或最终失败只结算一次。
-    if (!willRetry && doc.kb.ownerType === 'USER' && doc.kb.userId && !doc.sourceModule) {
+    // 同 P1.2：产物不再进知识库，`sourceModule` 豁免不再有对应的文档。
+    if (!willRetry && doc.kb.ownerType === 'USER' && doc.kb.userId) {
       try {
         await deps.billing.settle({
           operationId: doc.opId ?? docId,

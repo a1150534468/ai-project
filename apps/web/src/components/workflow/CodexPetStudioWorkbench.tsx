@@ -218,7 +218,7 @@ export function CodexPetStudioWorkbench({ studio }: { readonly studio: CodexPetS
                 <div>
                   <h3 className="text-sm font-semibold text-brand-ink">桌宠已生成，可安装</h3>
                   <p className="mt-0.5 text-[11px] text-brand-ink">
-                    最终精灵图与 ZIP 兼容包已就绪。{latestRun.knowledgeDocumentId ? "AI 产物已完成归档。" : "AI 产物正在后台归档，不影响安装和下载。"}
+                    最终精灵图与 ZIP 兼容包已就绪。
                   </p>
                 </div>
               </div>
@@ -257,9 +257,6 @@ export function CodexPetStudioWorkbench({ studio }: { readonly studio: CodexPetS
               <div className="flex flex-wrap gap-2">
                 <PrimaryButton icon="mdi:download-circle-outline" disabled={interactionLocked} onClick={actions.handleInstall}>安装到 Codex</PrimaryButton>
                 <PrimaryButton kind="secondary" icon="mdi:folder-zip-outline" disabled={interactionLocked} onClick={actions.handleDownload}>下载兼容包</PrimaryButton>
-                {latestRun.knowledgeDocumentId && (
-                  <PrimaryButton kind="secondary" icon="mdi:database-eye-outline" disabled={interactionLocked} onClick={actions.handleOpenKnowledge}>在 AI 产物中查看</PrimaryButton>
-                )}
                 <PrimaryButton kind="secondary" icon="mdi:content-copy" disabled={interactionLocked} onClick={actions.handleCopyProject}>复制为新项目</PrimaryButton>
               </div>
             </div>

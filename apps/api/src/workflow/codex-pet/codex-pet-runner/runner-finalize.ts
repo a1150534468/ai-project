@@ -9,7 +9,6 @@ import {
 } from "../codex-pet-call-ledger.js";
 import { codexPetGateFailureSnapshotValue } from "../codex-pet-gate-failure.js";
 import { type CodexPetPackagingDeferredError } from "../codex-pet-packaging.js";
-import { releaseDeferredArchiveLease } from "./runner-archive.js";
 import {
   pauseForImageApproval,
   recordPerImageSettlementFailure,
@@ -22,7 +21,6 @@ import { emit, } from "./runner-lease.js";
 import { releaseDeferredPackagingLease } from "./runner-packaging-resume.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
-  type CodexPetArchiveDeferredError,
   type CodexPetExecutionResult,
   CodexPetGateFailureError,
   CodexPetImageApprovalRequiredError,
@@ -280,7 +278,7 @@ export async function finalizeCancellation(ctx: RunnerContext): Promise<void> {
 }
 
 /**
- * 下面七个 handler 是 `executeCodexPetRun` catch 链七类信号异常的处理体，逐一
+ * 下面六个 handler 是 `executeCodexPetRun` catch 链六类信号异常的处理体，逐一
  * 命名后 catch 链只剩 `instanceof` 分派。三点说明：
  *
  * 1. 原处理体读的是 `run.id / run.project.id / run.userId`，这里换成
@@ -333,24 +331,6 @@ export async function handlePackagingDeferred(
     return { status: latest.status, runId: ctx.runId };
   }
   if (latest?.status === "archiving") return { status: "archiving", runId: ctx.runId };
-  return { status: "busy", runId: ctx.runId };
-}
-
-export async function handleArchiveDeferred(
-  ctx: RunnerContext,
-  error: CodexPetArchiveDeferredError,
-): Promise<CodexPetExecutionResult> {
-  if (await releaseDeferredArchiveLease(ctx, error)) {
-    return { status: "archiving", runId: ctx.runId };
-  }
-  const latest = await readOwnedRunOutcome(ctx);
-  if (latest?.cancelRequested || latest?.status === "cancelled") {
-    await finalizeCancellation(ctx);
-    return { status: "cancelled", runId: ctx.runId };
-  }
-  if (latest?.status === "ready" || latest?.status === "failed") {
-    return { status: latest.status, runId: ctx.runId };
-  }
   return { status: "busy", runId: ctx.runId };
 }
 

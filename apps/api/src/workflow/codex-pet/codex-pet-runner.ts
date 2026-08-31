@@ -75,10 +75,9 @@ import {
   deferRecoveryPackaging,
   resumeDurablePackaging,
 } from "./codex-pet-runner/runner-packaging-resume.js";
-import { completeKnowledgeArchive } from "./codex-pet-runner/runner-archive.js";
+import { completeArchivingStage } from "./codex-pet-runner/runner-archive.js";
 import {
   finalizeClaimedSetupFailure,
-  handleArchiveDeferred,
   handleCancelled,
   handleImageApprovalRequired,
   handleImageCallLedgerPause,
@@ -143,7 +142,6 @@ import {
 import {
   type BoardJobResult,
   CODEX_PET_ACTIVE_STATUSES,
-  CodexPetArchiveDeferredError,
   CodexPetCancelledError,
   type CodexPetExecutionResult,
   CodexPetGateFailureError,
@@ -328,7 +326,7 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   if (run.status === "ready") return { status: "ready", runId: ctx.runId };
   if (run.status === "failed") return { status: "failed", runId: ctx.runId };
   if (run.status === "cancelled" || run.cancelRequested) throw new CodexPetCancelledError();
-  if (run.status === "archiving") return completeKnowledgeArchive(ctx);
+  if (run.status === "archiving") return completeArchivingStage(ctx);
   if (run.status === "packaging") {
     const recoveryRun = isCodexPetRecoverySnapshot(run.inputSnapshot);
     if (recoveryRun) {
@@ -1435,9 +1433,6 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     }
     if (error instanceof CodexPetPackagingDeferredError) {
       return await handlePackagingDeferred(ctx, error);
-    }
-    if (error instanceof CodexPetArchiveDeferredError) {
-      return await handleArchiveDeferred(ctx, error);
     }
     if (error instanceof CodexPetLeaseLostError || controller.signal.reason instanceof CodexPetLeaseLostError) {
       return await handleLeaseLost(ctx);

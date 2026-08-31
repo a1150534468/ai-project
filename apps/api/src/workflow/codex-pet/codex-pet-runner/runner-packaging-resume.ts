@@ -5,7 +5,7 @@ import {
   CodexPetPackagingDeferredError,
   persistOrResumeCodexPetFinalPackage,
 } from "../codex-pet-packaging.js";
-import { completeKnowledgeArchive } from "./runner-archive.js";
+import { completeArchivingStage } from "./runner-archive.js";
 import { emit } from "./runner-lease.js";
 import { summarizeProviderUsage } from "./runner-provenance.js";
 import {
@@ -82,10 +82,10 @@ export async function continueAfterDurablePackaging(
     previewArtifactId: packaged.previewArtifactId,
     recovered: packaged.recovered,
   }, "final-package").catch(() => undefined);
-  await emit(ctx, "stage.started", "archiving", 98, "正在归档到 AI 产物知识库", {
+  await emit(ctx, "stage.started", "archiving", 98, "正在收尾", {
     finalPackageJobId: packaged.jobId,
   }, "final-package").catch(() => undefined);
-  return completeKnowledgeArchive(ctx);
+  return completeArchivingStage(ctx);
 }
 
 export async function resumeDurablePackaging(ctx: RunnerContext): Promise<CodexPetExecutionResult | null> {

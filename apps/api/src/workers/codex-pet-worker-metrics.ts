@@ -49,22 +49,16 @@ export type WorkerMetrics = {
   authenticationFailures: number;
   moderationFailures: number;
   invalidRequestFailures: number;
-  archiveRetries: number;
-  archiveCompleted: number;
   validationWarnings: number;
   validationFailures: number;
   activeRuns: number;
   archivingRuns: number;
-  readyRunsMissingArchive: number;
   readyRunsMissingDeliverables: number;
   databaseProjects: number;
   databaseReadyRuns: number;
   databaseFailedRuns: number;
   databaseCancelledRuns: number;
   databaseRefundedRuns: number;
-  knowledgePendingDocuments: number;
-  knowledgeIndexingDocuments: number;
-  knowledgeFailedDocuments: number;
 };
 
 export function createCodexPetWorkerMetrics(): WorkerMetrics {
@@ -102,22 +96,16 @@ export function createCodexPetWorkerMetrics(): WorkerMetrics {
     authenticationFailures: 0,
     moderationFailures: 0,
     invalidRequestFailures: 0,
-    archiveRetries: 0,
-    archiveCompleted: 0,
     validationWarnings: 0,
     validationFailures: 0,
     activeRuns: 0,
     archivingRuns: 0,
-    readyRunsMissingArchive: 0,
     readyRunsMissingDeliverables: 0,
     databaseProjects: 0,
     databaseReadyRuns: 0,
     databaseFailedRuns: 0,
     databaseCancelledRuns: 0,
     databaseRefundedRuns: 0,
-    knowledgePendingDocuments: 0,
-    knowledgeIndexingDocuments: 0,
-    knowledgeFailedDocuments: 0,
   };
 }
 

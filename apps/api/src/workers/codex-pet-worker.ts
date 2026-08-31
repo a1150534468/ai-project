@@ -22,7 +22,6 @@ import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { getObject, makeS3 } from "../storage/s3.js";
 import {
-  archiveCodexPetRun,
   closeCodexPetCleanupQueue,
   createCodexPetCleanupWorker,
   executeCodexPetProjectCleanup,
@@ -253,8 +252,6 @@ export async function startCodexPetWorker(options: {
                 );
               }
             }
-            if (input.type === "knowledge.archive_retrying") metrics.archiveRetries += 1;
-            if (input.type === "knowledge.archive_completed") metrics.archiveCompleted += 1;
             if (input.type === "validation.warning") metrics.validationWarnings += 1;
             if (input.type === "validation.failed") metrics.validationFailures += 1;
             if (input.type === "run.failed") {
@@ -263,7 +260,6 @@ export async function startCodexPetWorker(options: {
             }
             return event;
           },
-          archiveRun: archiveCodexPetRun,
           billing,
           loadReferenceAsset: async (asset) => {
             if (!asset.objectKey) throw new Error("桌宠参考图必须来自已验证的私有对象存储");

@@ -426,7 +426,8 @@ describe("Codex pet recovery finalizer", () => {
       status: "ready",
       progressPercent: 100,
       imageGenerationCallCount: 26,
-      knowledgeDocumentId: result.knowledgeDocumentId,
+      // P1.2 起恢复最终化不再写知识库：交付判据只有产物本身。
+      knowledgeDocumentId: null,
     });
     const finalKinds = await prisma.codexPetArtifact.findMany({
       where: { runId: initialized.runId, status: "ready", expiresAt: null },
@@ -440,8 +441,7 @@ describe("Codex pet recovery finalizer", () => {
       "direction_blind_qa",
       "validation_report",
     ]));
-    const document = await prisma.document.findUniqueOrThrow({ where: { id: result.knowledgeDocumentId } });
-    expect(document).toMatchObject({ sourceModule: "codex_pet", sourceId: initialized.runId, mime: "application/zip" });
+    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: initialized.runId } })).toBe(0);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: persistedRun.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
   }, 180_000);

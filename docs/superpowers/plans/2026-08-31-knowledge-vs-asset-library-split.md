@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（3/23 项，P0 进行中）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（8/23 项，P0 + P1 已完成，下一步 P2.1 —— 不可逆，需先确认备份）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。
 
@@ -235,14 +235,23 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → 改动量比预估小：**一个函数**。`completeKnowledgeArchive` 里归档改成尽力而为（只有 `CodexPetLeaseLostError` / `CodexPetCancelledError` 继续上抛），ready 转换的 where 谓词去掉 `knowledgeDocumentId: documentId`。`ready + knowledgeDocumentId=null` 从此是合法终态。未验证项 3 消除。
   → **这一步本身就是个生产 bug 修复，实测有据**：库里 `CodexPetRun` 共 127 条，**47 条 refunded**；`knowledge-archive` Job 有 1 条 `failed` 且 `attempt=3`（重试耗尽），即「一个事后登记动作掉了一次已交付的付费运行」真的发生过。另有 3 条 `ready` 运行的 `knowledgeDocumentId` 已是 null（FK `SetNull` 生效），在旧判据下是不该存在的状态。
   → 三条断言旧耦合的集成测试改成断言新契约：`enters ready even when the archived knowledge document is concurrently deleted`、`delivers ready without a refund when knowledge archival fails outright`、`does not retry archival on an already-delivered run`。前端 `useCodexPetStudio.ts` / `CodexPetStudioWorkbench.tsx` / `CodexPetStudioRunSidebar.tsx` 的归档文案不在这里改——P1.2 会整段删掉，避免改两遍。
-- [ ] P0.4 `Knowledge.tsx` 的 codex-pet 交付 UI（`:16,309,700-715`）与三条测试（`Knowledge.codex-pet.test.tsx:202,235,265`）——决定是搬到素材库还是搬到桌宠工作台。**建议后者**（规则 3：桌宠有自己的工作台）。
+- [x] P0.4 `Knowledge.tsx` 的 codex-pet 交付 UI（`:16,309,700-715`）与三条测试（`Knowledge.codex-pet.test.tsx:202,235,265`）——决定是搬到素材库还是搬到桌宠工作台。**建议后者**（规则 3：桌宠有自己的工作台）。
+  → **裁定：搬到桌宠工作台，即「就地删除，不另建入口」。** 那张交付卡（打开桌宠项目 / 安装到 Codex / 下载兼容包）三个动作在 `CodexPetStudioWorkbench.tsx` 里本来就都有，知识库那份是重复入口；`initialDocumentId` 深链与 `codexPetDetails` 预取也一并删。`Knowledge.codex-pet.test.tsx` 整个文件 3 例全部覆盖被删行为，`git rm`。
+  → **副产物：`App.tsx` 的跨页深链意图少了一条。**「知识库 → 桌宠项目」和「工作流 → 知识库文档」是一对，后者随交付卡消失。`App.behavior.test.tsx` 的 `describe("App 跨页深链")` 3 例一起删。**tsc 抓不到这三例**——probes 是松类型，`probes.knowledge?.initialDocumentId` 编译期合法，只有 grep 意图名才找得到。
 
 ### P1 — 停写
 
-- [ ] P1.1 一个迁移：`DROP TRIGGER` × 10（`ImageAsset_archive` / `VideoAsset_archive` / `AudioAsset_archive` / `NovelChapter_archive` / `ArticleWorkflowProject_archive` / `ComicWorkflowScriptVersion_archive` / `LocalBusinessPromoProject_archive` / `DubProject_archive` / `AgentWorkflowRun_archive` / `ScheduledTaskRun_archive`）+ `User_ai_artifacts_kb` + `DROP FUNCTION` × 12。**这一个迁移即删掉 H1/H2/H4/H5/H6/H7/L1/L3/L4。**
-- [ ] P1.2 删 codex-pet 的应用层归档：`codex-pet-archive.ts`、`runner-archive.ts` 的 KB 部分、`codex-pet-cleanup.ts:155-169`。→ 删掉 M1。
-- [ ] P1.3 `indexer.ts:313-314` 的 `!doc.sourceModule` 跳过 settle 分支删除（不再有 sourceModule 文档）→ 恢复 billing 口径单一。
-- [ ] P1.4 P0.1 的测试全部反转断言：删源行 → 断言无 `Document`；归档抛错 → 断言主业务**不受影响**（因为不再有归档）。
+- [x] P1.1 一个迁移：`DROP TRIGGER` × 10（`ImageAsset_archive` / `VideoAsset_archive` / `AudioAsset_archive` / `NovelChapter_archive` / `ArticleWorkflowProject_archive` / `ComicWorkflowScriptVersion_archive` / `LocalBusinessPromoProject_archive` / `DubProject_archive` / `AgentWorkflowRun_archive` / `ScheduledTaskRun_archive`）+ `User_ai_artifacts_kb` + `DROP FUNCTION` × 12。**这一个迁移即删掉 H1/H2/H4/H5/H6/H7/L1/L3/L4。**
+  → [`20260831120000_drop_ai_artifact_archive_triggers`](../../../packages/db/prisma/migrations/20260831120000_drop_ai_artifact_archive_triggers/migration.sql)，已 `migrate deploy` 到 `localhost:5433/ai-assistant`。实际是 **11 个 `DROP TRIGGER` + 13 个 `DROP FUNCTION`**：计划漏数了 `ensure_ai_artifacts_kb` 之外的一个内部辅助函数，按 `pg_proc` 实际清单补齐（P1.4 的第一条测试就是拿 `pg_proc`/`pg_trigger` 反查，数不对会红）。存量数据一行未动，留给 P2.1。
+- [x] P1.2 删 codex-pet 的应用层归档：`codex-pet-archive.ts`、`runner-archive.ts` 的 KB 部分、`codex-pet-cleanup.ts:155-169`。→ 删掉 M1。
+  → `codex-pet-archive.ts` + `codex-pet-archive.test.ts`（9 例）整文件删；`archiving` **保留为直通阶段**——`CODEX_PET_RUN_STAGES` 枚举不动，省掉一次数据迁移，崩在 `archiving` 的运行照旧可被新 worker 接走走到 ready。
+  → 连带死掉的东西比计划列的多：`CodexPetJob(kind='knowledge_archive')` 那套可续跑重试机制（含 `CODEX_PET_ARCHIVE_MAX_ATTEMPTS`，已从 `.env.example` 与 `infra/k8s/base/10-configmap.yaml` 摘除）、`codex-pet.md` 里 7 处归档描述、`codex-pet-cleanup.ts` 的产物文档删除块（其测试断言翻成 `document.deleteMany` **不被调用**）。
+  → `codex-pet-runner.integration.test.ts` 41 → 37 例：原先 4 例专门覆盖「归档失败仍交付 / 已交付不重试 / 按归属 reconcile 已有 Document / 陈旧 worker 竞态」，机制没了就地合并成 1 例（崩在 archiving → 新 worker 接走 → ready，且不建 Document、不建归档 Job、不退款），顺带把仅有的 `seedArchivingDeliverables` 两个调用点保活。
+- [x] P1.3 `indexer.ts:313-314` 的 `!doc.sourceModule` 跳过 settle 分支删除（不再有 sourceModule 文档）→ 恢复 billing 口径单一。
+  → **实际有两处，不是一处。** 计划只点了成功路径（`indexer.ts:313`），另一处在**最终失败路径**（`indexer.ts:376`，零额退款结算同样按 `sourceModule` 豁免）。两处都删，口径这才真的单一。`indexer.test.ts` 13 → 11 例，删掉的两例（`Codex 桌宠自动归档在成功索引时不重复计费`、`…在索引失败时也不发起零额退款结算`）钉的正是被删的豁免；正向断言（USER 库文档确实结算）文件里第一例本来就有。
+- [x] P1.4 P0.1 的测试全部反转断言：删源行 → 断言无 `Document`；归档抛错 → 断言主业务**不受影响**（因为不再有归档）。
+  → 同一个文件整体重写，仍是 7 例，逐条与 P0.1 一一对应反转。多做了两件事：(1) 第一例直接查 `pg_trigger`/`pg_proc` 断言两张清单都为 `[]`——触发器在 Prisma schema 里不可见，光删迁移不留断言，下一个人再加回来 CI 依然全绿；(2) H1 那例的诱饵文档现在得先手建一个 KB 才挂得上去（自动开库的触发器已死），插入 `ImageAsset` 必须成功。
+
 
 ### P2 — 清存量
 
@@ -278,12 +287,32 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
 **必须先 source `.env`，否则测试结果不可信**（本项目最容易踩的坑）：
 
 ```bash
-cd "/Users/z/code/ai project" && set -a && . .env && set +a
+cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 ```
+
+**路径必须写 `./.env`**：zsh 的 `.` 只搜 `PATH` 不含 cwd，写 `. .env` 会报 `no such file or directory` 然后你带着空 env 继续跑，得到的正是那批 `skipIf` 静默跳过的假绿。
 
 有 **12 个测试文件**用 `describe.skipIf(!databaseEnabled)` 守卫，缺 env 时**静默消失且退出码为 0**。**报告测试结果时必须同时报告 skipped 数；只写 passed 不写 skipped 的报告视为无效。**
 
+**反过来，source 本地 `.env` 会让 12 例必挂，`apps/api` 本地永远到不了 0 failed**：`admin/{resource,membership,code}-routes.test.ts` 11 例断言「billing 不可达返回 502」，写法是 `process.env.BILLING_BASE_URL ??= "http://localhost:1"`，本地 `.env` 把它设成了真在跑的 billing（:8093）于是拿到 200；`agents/routes.test.ts` 1 例断言「无 S3 时回落 object key」，本地 minio（:9000）是活的。CI 刻意让 `BILLING_BASE_URL` 存在但不可达、S3 一律留空。**判「是不是我改坏的」不能拿本地数字对 CI 数字。**
+
 每个阶段独立成 commit。**含迁移的 commit 不与功能改动混提**（这正是 `4b552c2` 的教训）。任何一步变红即 `git revert` 单个提交——但 P2 是数据删除，不可 revert，执行前必须确认备份。
+
+### P1 收口实测（2026-08-31）
+
+`pnpm exec turbo run test --force --continue`（ci.yml 原命令）+ `node scripts/check-test-report.mjs`：
+
+| | passed | failed | skipped |
+|---|---|---|---|
+| 10 个 workspace 合计 | **2,794** | 13 | **22** |
+| 基线 `.github/test-baseline.json` | 下限 2,411 | — | 上限 23 |
+
+13 个 failed 全部与本阶段无关，逐个查证：12 例是上面那条本地 env 差异；1 例是 `packages/codex-pet-pipeline/src/pipeline.test.ts` 在 10 个 workspace 并行抢 CPU 时 5s 超时，单跑 **45 例全绿**，该包本次一行未改。
+
+**基线不用动**：本阶段净删 21 例（api −15：archive 9 + runner.integration 4 + indexer 2；web −6：Knowledge.codex-pet 3 + App.behavior 3），但 `minPassed` 是**下限**、`maxSkipped` 是**上限**，2,794 ≥ 2,411 且 22 ≤ 23，两条都仍然满足。基线 2,411 是 2026-08-06 的 CI 打印值，此后新增的测试远多于这次删掉的。
+
+`biome lint`（CI 的门只有 lint、不含 formatter）跑改动文件全绿——顺手清掉 3 个**先前就有**的 `noUnusedImports`（`indexer.ts` 的 `getPrisma`、`indexer.test.ts` 的 `Document` 类型、`routes.test.ts` 的 `beforeEach`）：这三个文件本阶段进了改动集，`biome ci --changed` 从此会扫到它们。两个 workspace `tsc --noEmit` 均 0 错。
+
 
 ---
 

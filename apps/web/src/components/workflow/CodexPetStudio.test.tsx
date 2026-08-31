@@ -714,7 +714,7 @@ describe("CodexPetStudio", () => {
     await act(async () => { mounted.root.unmount(); });
   });
 
-  it("allows installation while a packaged pet is still being archived", async () => {
+  it("allows installation while a packaged pet is still wrapping up", async () => {
     const run = makeRun({
       status: "archiving",
       progressPercent: 100,
@@ -735,16 +735,17 @@ describe("CodexPetStudio", () => {
     const onInstallUrl = vi.fn();
     const mounted = await mountStudio({ token: "token", client, onInstallUrl });
 
-    expect(mounted.container.textContent).toContain("AI 产物正在后台归档，不影响安装和下载。");
+    expect(mounted.container.textContent).toContain("最终精灵图与 ZIP 兼容包已就绪。");
     await act(async () => { buttonByText(mounted.container, "安装到 Codex").click(); });
     await flushEffects();
     expect(client.createInstallLink).toHaveBeenCalledWith("token", "project-1");
     expect(onInstallUrl).toHaveBeenCalledWith("codex://pets/install?name=%E7%A0%81%E4%BB%94");
+    // P1.2 起产物不落知识库,这个入口是永久没有的。
     expect(Array.from(mounted.container.querySelectorAll("button")).some((button) => button.textContent?.includes("在 AI 产物中查看"))).toBe(false);
     await act(async () => { mounted.root.unmount(); });
   });
 
-  it("installs and opens the archived document when it is available", async () => {
+  it("renders the complete delivery card and installs a ready pet", async () => {
     const run = makeRun({
       status: "ready",
       progressPercent: 100,
@@ -769,20 +770,15 @@ describe("CodexPetStudio", () => {
     };
     const client = makeClient({ project, detail });
     const onInstallUrl = vi.fn();
-    const onOpenKnowledgeDocument = vi.fn();
-    const mounted = await mountStudio({ token: "token", client, onInstallUrl, onOpenKnowledgeDocument });
+    const mounted = await mountStudio({ token: "token", client, onInstallUrl });
 
     expect(mounted.container.textContent).toContain("9 组标准动画");
     expect(mounted.container.textContent).toContain("16 个观察方向");
-    expect(mounted.container.textContent).toContain("AI 产物 · 已归档");
 
     await act(async () => { buttonByText(mounted.container, "安装到 Codex").click(); });
     await flushEffects();
     expect(client.createInstallLink).toHaveBeenCalledWith("token", "project-1");
     expect(onInstallUrl).toHaveBeenCalledWith("codex://pets/install?name=%E7%A0%81%E4%BB%94");
-
-    await act(async () => { buttonByText(mounted.container, "在 AI 产物中查看").click(); });
-    expect(onOpenKnowledgeDocument).toHaveBeenCalledWith("document-1");
     await act(async () => { mounted.root.unmount(); });
   });
 

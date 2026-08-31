@@ -110,11 +110,6 @@ export function configuredVisualConcurrency(env: NodeJS.ProcessEnv): number {
   return Number.isInteger(value) && value > 0 ? Math.min(3, value) : 1;
 }
 
-export function configuredArchiveMaxAttempts(env: NodeJS.ProcessEnv): number {
-  const value = Number(env.CODEX_PET_ARCHIVE_MAX_ATTEMPTS);
-  return Number.isInteger(value) && value > 0 ? Math.min(100, value) : 10;
-}
-
 export async function mapWithConcurrency<T, R>(
   items: readonly T[],
   concurrency: number,

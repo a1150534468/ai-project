@@ -21,7 +21,6 @@ export {
   reconcileCodexPetRunBilling,
 } from "./codex-pet-billing.js";
 export type { CodexPetChargeClient } from "./codex-pet-billing.js";
-export { archiveCodexPetRun } from "./codex-pet-archive.js";
 export { archiveCodexPetLegacyRuns } from "./codex-pet-read-only-archive.js";
 export { correctCodexPetPerImageBilling } from "./codex-pet-per-image-billing-correction.js";
 export { closeCodexPetQueue, createCodexPetWorker, enqueueCodexPetRun } from "./codex-pet-queue.js";

@@ -112,12 +112,6 @@ export function CodexPetStudioRunSidebar({ studio }: { readonly studio: CodexPet
                 instead, on the same unit rule the backend settles by. */}
             <span className="font-semibold text-ink">{latestRun ? `${derived.projectedRefundPoints ?? 0} 积分${latestRun.billingSettlementStatus === "settled" ? "" : "（预估）"}` : "—"}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-ink-tertiary">知识库</span>
-            <span className={`font-semibold ${latestRun?.knowledgeDocumentId ? "text-brand-ink" : latestRun?.status === "archiving" ? "text-brand-ink" : "text-ink-tertiary"}`}>
-              {latestRun?.knowledgeDocumentId ? "AI 产物 · 已归档" : latestRun?.status === "archiving" ? "正在归档" : "等待最终产物"}
-            </span>
-          </div>
           {derived.packageArtifact && (
             <div className="flex items-center justify-between">
               <span className="text-ink-tertiary">兼容包大小</span>

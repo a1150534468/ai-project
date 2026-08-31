@@ -4,7 +4,6 @@ import { getPrisma } from "@ai-assistant/db";
 import { inspectCodexPetZip, LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import sharp from "sharp";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { archiveCodexPetRun } from "./codex-pet-archive.js";
 import { appendCodexPetEvent } from "./codex-pet-events.js";
 import { initializeCodexPetTargetedBoardRetry } from "./codex-pet-failed-continuation.js";
 import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, ImageGenerationUpstreamError } from "../_shared/image-service.js";
@@ -321,7 +320,6 @@ function runnerDeps(store: ReturnType<typeof memoryArtifactStore>, consensus = v
         .toBuffer(),
       mime: asset.mime,
     })),
-    archiveRun: archiveCodexPetRun,
     billing: {
       refundResource: vi.fn(async () => ({ success: true })),
       settleResource: vi.fn(async ({ units }: { units: number }) => ({ settled: units * 200 })),
@@ -964,7 +962,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(deps.visual.qa).not.toHaveBeenCalled();
   }, 120_000);
 
-  it("runs all visual groups, packages v2 and archives before ready", async () => {
+  it("runs all visual groups, packages v2 and delivers ready without touching the knowledge base", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
     let idleFailed = false;
@@ -1047,7 +1045,8 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(deps.visual.blindQa).toHaveBeenCalledWith(expect.objectContaining({ identityGuide: IDENTITY_GUIDE }));
     expect(deps.visual.directionSemantics).toHaveBeenCalledWith(expect.objectContaining({ identityGuide: IDENTITY_GUIDE }));
     expect(run.progressPercent).toBe(100);
-    expect(run.knowledgeDocumentId).toBeTruthy();
+    // P1.2：交付不再写知识库。ready + knowledgeDocumentId=null 是唯一的正常终态。
+    expect(run.knowledgeDocumentId).toBeNull();
     expect(run.actualModels).toEqual(["gpt-image-2-codex"]);
     expect((run.usage as { totalTokens: number }).totalTokens).toBeGreaterThan(0);
     const providerArtifact = await prisma.codexPetArtifact.findFirstOrThrow({
@@ -1151,22 +1150,14 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     ))).toBe(true);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: run.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
-    const document = await prisma.document.findUniqueOrThrow({ where: { id: run.knowledgeDocumentId! } });
-    expect(document.sourceModule).toBe("codex_pet");
-    expect(document.sourceId).toBe(run.id);
-    expect(JSON.stringify(document.metadata)).not.toContain("objectKey");
+    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(0);
     expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
     expect(await executeCodexPetRun({ runId: run.id, deps: { ...deps, workerId: "identity-guide-replay-worker" } }))
       .toEqual({ status: "ready", runId: run.id });
     expect(deps.visual.identityGuide).toHaveBeenCalledOnce();
 
-    const artifactCount = await prisma.codexPetArtifact.count({ where: { runId: run.id } });
-    await prisma.document.delete({ where: { id: document.id } });
-    const retainedRun = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: run.id } });
-    expect(retainedRun.knowledgeDocumentId).toBeNull();
     expect(await prisma.codexPetProject.findUnique({ where: { id: seeded.project.id } })).not.toBeNull();
-    expect(await prisma.codexPetArtifact.count({ where: { runId: run.id } })).toBe(artifactCount);
   }, 120_000);
 
   it("recovers partial and fully-written final packages without replaying visual QA or duplicating permanent artifacts", async () => {
@@ -1272,9 +1263,9 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
       const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
       expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundedAt: null });
-      expect(run.knowledgeDocumentId).toBeTruthy();
+      expect(run.knowledgeDocumentId).toBeNull();
       expect(deps.billing.refundResource).not.toHaveBeenCalled();
-      expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(1);
+      expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(0);
       expect(await prisma.codexPetEvent.count({ where: { runId: run.id, type: "package.ready" } })).toBe(0);
 
       const finalJob = await prisma.codexPetJob.findUniqueOrThrow({
@@ -1898,7 +1889,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(warning.payload).toMatchObject({ adjudicationScore: passedConsensus.score });
   }, 120_000);
 
-  it("runs a single-reference plush pet through packaging and knowledge archival", async () => {
+  it("runs a single-reference plush pet through packaging and delivery", async () => {
     const seeded = await seed(true, {
       referenceCount: 1,
       stylePreset: "plush",
@@ -1932,8 +1923,11 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
     const selected = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: run.selectedBaseArtifactId! } });
     expect(selected.name).toBe("主形象候选 2");
-    const document = await prisma.document.findUniqueOrThrow({ where: { id: run.knowledgeDocumentId! } });
-    expect(document.content).toContain("风格预设：plush");
+    // 原先这里读归档文档的正文,确认风格预设写进了摘要。P1.2 之后没有摘要,
+    // 交付判据回到产物本身。
+    expect(run.knowledgeDocumentId).toBeNull();
+    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: seeded.run.id } })).toBe(0);
+    expect(run.packageArtifactId).toBeTruthy();
   }, 120_000);
 
   it("uses all three references and generates running-left separately for asymmetric identity", async () => {
@@ -2120,26 +2114,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       .filter((prompt) => !prompt.includes("main character candidate"));
     expect(guidedPrompts.length).toBeGreaterThan(0);
     expect(guidedPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
-  }, 120_000);
-
-  it("enters ready even when the archived knowledge document is concurrently deleted", async () => {
-    const seeded = await seed(true);
-    const store = memoryArtifactStore();
-    const deps = runnerDeps(store);
-    deps.archiveRun = async (input) => {
-      const archived = await archiveCodexPetRun(input);
-      await prisma.document.delete({ where: { id: archived.documentId } });
-      return archived;
-    };
-
-    // 归档是事后登记：文档被并发删掉不改变「桌宠已交付」这个事实。
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
-
-    const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundStatus: "none" });
-    expect(run.knowledgeDocumentId).toBeNull();
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
   }, 120_000);
 
   it("rejects and refunds an active legacy run without the GPT-only model contract", async () => {
@@ -2472,115 +2446,20 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(await prisma.codexPetEvent.count({ where: { runId: { in: [cancelledSeed.run.id, failedSeed.run.id] } } })).toBe(0);
   });
 
-  it("delivers ready without a refund when knowledge archival fails outright", async () => {
-    const seeded = await seed(true);
-    const store = memoryArtifactStore();
-    const baseDeps = runnerDeps(store);
-    const archiveRun = vi.fn(async () => { throw new Error("knowledge archive unavailable"); });
-    const deps = { ...baseDeps, archiveRun, env: { CODEX_PET_ARCHIVE_MAX_ATTEMPTS: "3" } };
-
-    // 归档失败不再把运行挂在 98% 等重试、也不再耗尽重试后退款：一次交付直接 ready。
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
-
-    const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({
-      status: "ready",
-      progressStage: "ready",
-      progressPercent: 100,
-      knowledgeDocumentId: null,
-      billingRefundStatus: "none",
-    });
-    // 交付物齐全——这才是用户付钱买的东西。
-    expect(run.spritesheetArtifactId).toBeTruthy();
-    expect(run.packageArtifactId).toBeTruthy();
-    expect(run.previewArtifactId).toBeTruthy();
-    expect(archiveRun).toHaveBeenCalledTimes(1);
-    expect(baseDeps.billing.refundResource).not.toHaveBeenCalled();
-    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(0);
-    const events = await prisma.codexPetEvent.findMany({ where: { runId: run.id }, orderBy: { sequence: "asc" } });
-    expect(events.filter((event) => event.type === "knowledge.archive_retrying")).toHaveLength(1);
-    expect(events.map((event) => event.type)).toContain("run.completed");
-    expect(events.map((event) => event.type)).not.toContain("run.failed");
-  }, 120_000);
-
-  it("does not retry archival on an already-delivered run", async () => {
-    const seeded = await seed(true);
-    const store = memoryArtifactStore();
-    const baseDeps = runnerDeps(store);
-    let first = true;
-    const archiveRun = vi.fn(async (input: Parameters<typeof archiveCodexPetRun>[0]) => {
-      if (first) {
-        first = false;
-        throw new Error("knowledge database temporarily unavailable");
-      }
-      return archiveCodexPetRun(input);
-    });
-    const deps = { ...baseDeps, archiveRun, env: { CODEX_PET_ARCHIVE_MAX_ATTEMPTS: "3" } };
-
-    // 第一次投递吞掉归档失败直接 ready；已 ready 的运行不再重跑归档。
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
-    const generationMock = baseDeps.visual.generate as unknown as { readonly mock: { readonly calls: readonly unknown[] } };
-    const generationCallsAfterDelivery = generationMock.mock.calls.length;
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
-
-    const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "ready", progressPercent: 100, knowledgeDocumentId: null });
-    expect(generationMock.mock.calls).toHaveLength(generationCallsAfterDelivery);
-    expect(baseDeps.billing.refundResource).not.toHaveBeenCalled();
-    expect(archiveRun).toHaveBeenCalledTimes(1);
-  }, 120_000);
-
-  it("reconciles an ownership-scoped archived Document without consuming another archive attempt", async () => {
+  // P1.2:archiving 是直通阶段,不再写知识库。原先这里有四个测试覆盖
+  // CodexPetJob(kind='knowledge_archive') 的可续跑归档 —— 归档失败仍交付、
+  // 已交付不重试、按归属 reconcile 已有 Document、陈旧 worker 竞态。那套
+  // 持久化重试机制是为「登记到知识库」这一个动作建的,写入删了它也就没了。
+  // 留下的判据只有一条:崩在 archiving 的运行仍能被新 worker 接走并走到
+  // ready,过程中不建任何 Document、不建归档任务、不退款。
+  it("passes a crashed archiving run straight through to ready without creating a knowledge document", async () => {
     const seeded = await seed(true);
     await seedArchivingDeliverables(seeded);
-    const kb = await prisma.knowledgeBase.upsert({
-      where: { userId_systemKey: { userId: seeded.user.id, systemKey: "AI_ARTIFACTS" } },
-      create: {
-        ownerType: "USER",
-        userId: seeded.user.id,
-        systemKey: "AI_ARTIFACTS",
-        name: "AI 产物",
-      },
-      update: {},
+    await prisma.codexPetRun.update({
+      where: { id: seeded.run.id },
+      data: { workerId: "archive-worker-crashed", heartbeatAt: new Date(0) },
     });
-    const document = await prisma.document.create({ data: {
-      kbId: kb.id,
-      name: "Codex 桌宠 · 已归档恢复",
-      sourceType: "ARTIFACT",
-      sourceModule: "codex_pet",
-      sourceId: seeded.run.id,
-      mime: "application/zip",
-      status: "pending",
-    } });
-    await prisma.$transaction([
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: {
-          knowledgeDocumentId: document.id,
-          workerId: "archive-worker-crashed",
-          heartbeatAt: new Date(0),
-        },
-      }),
-      prisma.codexPetJob.create({ data: {
-        projectId: seeded.project.id,
-        runId: seeded.run.id,
-        userId: seeded.user.id,
-        key: "knowledge-archive",
-        kind: "knowledge_archive",
-        status: "running",
-        attempt: 2,
-        maxAttempts: 3,
-        workerId: "archive-worker-crashed",
-        startedAt: new Date(Date.now() - 120_000),
-      } }),
-    ]);
     const deps = runnerDeps(memoryArtifactStore());
-    deps.archiveRun = vi.fn(async () => {
-      throw new Error("archive routine must not run for a committed Document link");
-    });
 
     await expect(executeCodexPetRun({
       runId: seeded.run.id,
@@ -2591,67 +2470,27 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       },
     })).resolves.toEqual({ status: "ready", runId: seeded.run.id });
 
-    const [run, job] = await Promise.all([
+    const [run, project, archiveJobs, documents] = await Promise.all([
       prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "knowledge-archive" } } }),
+      prisma.codexPetProject.findUniqueOrThrow({ where: { id: seeded.project.id } }),
+      prisma.codexPetJob.count({ where: { runId: seeded.run.id, kind: "knowledge_archive" } }),
+      prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: seeded.run.id } }),
     ]);
-    expect(run).toMatchObject({ status: "ready", knowledgeDocumentId: document.id, progressPercent: 100 });
-    expect(job).toMatchObject({ status: "completed", attempt: 2, workerId: null, error: null });
-    expect(job.output).toEqual({ documentId: document.id });
-    expect(deps.archiveRun).not.toHaveBeenCalled();
-  });
-
-  it("recovers the same running archive attempt and prevents the stale worker from overwriting it", async () => {
-    const seeded = await seed(true);
-    await seedArchivingDeliverables(seeded);
-    let signalOldEntered!: () => void;
-    let releaseOldWorker!: () => void;
-    const oldEntered = new Promise<void>((resolve) => { signalOldEntered = resolve; });
-    const oldReleased = new Promise<void>((resolve) => { releaseOldWorker = resolve; });
-    const archiveRun = vi.fn(async (input: Parameters<typeof archiveCodexPetRun>[0]) => {
-      if (input.workerId === "archive-worker-old") {
-        signalOldEntered();
-        await oldReleased;
-        throw new Error("late stale worker failure");
-      }
-      return archiveCodexPetRun(input);
+    expect(run).toMatchObject({
+      status: "ready",
+      progressStage: "ready",
+      progressPercent: 100,
+      knowledgeDocumentId: null,
+      billingRefundStatus: "none",
+      workerId: null,
+      error: null,
     });
-    const baseDeps = runnerDeps(memoryArtifactStore());
-    const sharedEnv = { CODEX_PET_STALE_RUN_MS: "1", CODEX_PET_HEARTBEAT_MS: "60000" };
-    const oldExecution = executeCodexPetRun({
-      runId: seeded.run.id,
-      deps: { ...baseDeps, archiveRun, workerId: "archive-worker-old", env: sharedEnv },
-    });
-    await oldEntered;
-    const initiallyRunning = await prisma.codexPetJob.findUniqueOrThrow({
-      where: { runId_key: { runId: seeded.run.id, key: "knowledge-archive" } },
-    });
-    expect(initiallyRunning).toMatchObject({ status: "running", attempt: 1, workerId: "archive-worker-old" });
-
-    await prisma.codexPetRun.update({
-      where: { id: seeded.run.id },
-      data: { heartbeatAt: new Date(0) },
-    });
-    await expect(executeCodexPetRun({
-      runId: seeded.run.id,
-      deps: { ...baseDeps, archiveRun, workerId: "archive-worker-new", env: sharedEnv },
-    })).resolves.toEqual({ status: "ready", runId: seeded.run.id });
-
-    releaseOldWorker();
-    await expect(oldExecution).resolves.toEqual({ status: "ready", runId: seeded.run.id });
-
-    const [run, job, events] = await Promise.all([
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "knowledge-archive" } } }),
-      prisma.codexPetEvent.findMany({ where: { runId: seeded.run.id }, orderBy: { sequence: "asc" } }),
-    ]);
-    expect(run.status).toBe("ready");
-    expect(run.knowledgeDocumentId).toBeTruthy();
-    expect(job).toMatchObject({ status: "completed", attempt: 1, workerId: null, error: null });
-    expect(job.output).toEqual({ documentId: run.knowledgeDocumentId });
-    expect(events.filter((event) => event.type === "knowledge.archive_retrying")).toHaveLength(0);
-    expect(events.filter((event) => event.type === "knowledge.archive_completed")).toHaveLength(1);
-    expect(archiveRun).toHaveBeenCalledTimes(2);
+    expect(project.status).toBe("ready");
+    expect(archiveJobs).toBe(0);
+    expect(documents).toBe(0);
+    expect(await prisma.knowledgeBase.count({ where: { userId: seeded.user.id } })).toBe(0);
+    expect(deps.billing.refundResource).not.toHaveBeenCalled();
+    expect(deps.visual.generate).not.toHaveBeenCalled();
   });
 
   it("repairs complete action groups requested by the final visual QA", async () => {

@@ -49,7 +49,6 @@ export const DETAIL_REFRESH_EVENTS = new Set([
   "job.completed",
   "validation.failed",
   "package.ready",
-  "knowledge.archive_completed",
   "run.completed",
   "run.failed",
   "run.cancelled",
@@ -73,6 +72,7 @@ export const EVENT_LABELS: Record<string, string> = {
   "validation.failed": "质量检查未通过",
   "run.repairing": "正在自动修复",
   "package.ready": "兼容包已生成",
+  // 仅存量事件的标签：新运行不再归档知识库，老运行的事件流还要有中文名。
   "knowledge.archive_started": "开始归档知识库",
   "knowledge.archive_completed": "知识库归档完成",
   "knowledge.archive_retrying": "知识库归档重试",

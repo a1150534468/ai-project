@@ -92,15 +92,16 @@ describe("Codex pet durable project cleanup", () => {
     }
   });
 
-  it("persists the object plan, deletes documents/project, then deletes private objects", async () => {
+  it("persists the object plan, deletes the project, then deletes private objects", async () => {
     const value = fixture();
     await expect(executeCodexPetProjectCleanup({ prisma: value.prisma, s3: value.s3, userId: "user-1", projectId: "project-1", persistObjectRefs: value.persistObjectRefs }))
       .resolves.toEqual({ deleted: true, objectCount: 1 });
     expect(value.persistObjectRefs).toHaveBeenCalledOnce();
     expect(value.send).toHaveBeenCalledOnce();
-    expect(value.tx.document.deleteMany).toHaveBeenCalledWith({ where: { sourceModule: "codex_pet", sourceId: { in: ["run-1"] }, kb: { userId: "user-1", systemKey: "AI_ARTIFACTS" } } });
+    // P1.2 起产物不落知识库，这个事务里也就没有产物文档可删了。
+    expect(value.tx.document.deleteMany).not.toHaveBeenCalled();
     expect(value.tx.codexPetProject.deleteMany).toHaveBeenCalledWith({ where: { id: "project-1", userId: "user-1" } });
-    expect(value.persistObjectRefs.mock.invocationCallOrder[0]).toBeLessThan(value.tx.document.deleteMany.mock.invocationCallOrder[0]!);
+    expect(value.persistObjectRefs.mock.invocationCallOrder[0]).toBeLessThan(value.tx.codexPetProject.deleteMany.mock.invocationCallOrder[0]!);
     expect(value.tx.codexPetProject.deleteMany.mock.invocationCallOrder[0]).toBeLessThan(value.send.mock.invocationCallOrder[0]!);
   });
 
