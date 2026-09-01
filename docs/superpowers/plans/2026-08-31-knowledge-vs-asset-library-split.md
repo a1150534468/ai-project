@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（17/23 项已定：16 完成 + P4.1 撤销；P0–P3 全部完成，下一步 P4.3 —— 记录智能体团队那条 `updatedAt desc take 2` 仍不做向量检索）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（18/23 项已定：17 完成 + P4.1 撤销；P0–P4 全部完成，下一步 P5.1 —— 删 `KnowledgeBase.systemKey`）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -317,7 +317,12 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **库里核对过**：`KnowledgeBase` 现在 17 行 = 16 USER + 1 OFFICIAL，`systemKey IS NOT NULL` 为 0，与 P2.1 迁移头部预测的删后状态逐个对上。唯一的真人用户 `cmrg7sx3w0002c3lsyza7tqci` 现在只剩 1 个自建库（「本地」，0 文档）——删库之前这里会数出 2，文案会说「你自己创建的 2 个知识库」，而第 2 个是他没建过的产物库。
   → **补上覆盖（改之前这个数字零测试、`agent-teams/KnowledgePicker` 整个组件零测试）**：`Chat.behavior.test.tsx` 加 1 例、新建 `agent-teams/KnowledgePicker.test.tsx` 2 例，都用「2 个自建 + 1 个官方」让 N 与列表长度不相等，钉住官方库列得出但不计数。已反向验证：把两处 `ownKbCount` 临时退成 `.length`，只有这两个新用例失败且报的是 3 不是 2。`apps/web` 全量 95 文件 640 例全绿、0 跳过；typecheck 干净。
   → **另记一条不修的**：本地开发库里有一行 `ownerType='USER'` 但 `userId=''` 的残渣（name `Test`，0 文档），来自某个老集成测试。它对两条查询都是死行（`{userId:'<真 id>'}` 匹配不上空串），撑不高任何人的 N，属测试库残渣不是产品数据。
-- [ ] P4.3 智能体团队那条按 `updatedAt desc take 2` 取文档的逻辑（`agent-knowledge-context.ts:110-113`）：产物库消失后不再有「永远排最前」的库，但**它仍然不做向量检索**——单独记录，不在本计划范围。
+- [x] P4.3 **（已记录，不改行为）** 智能体团队那条按 `updatedAt desc take 2` 取文档的逻辑（`agent-knowledge-context.ts:110-113`）：产物库消失后不再有「永远排最前」的库，但**它仍然不做向量检索**——单独记录，不在本计划范围。
+  → **本项原文的说法要更正：「永远排最前」从来不成立。** `take: 2` 是**按库**嵌在 KB 的 `documents` select 里的，不是全局排序，产物库排不到别人前面去。它真正干的两件事是：占掉 `attachAllOwn` 集合里一个位子；以及因为触发器天天在写、`updatedAt` 永远最新，稳定吃掉全局 `MAX_SNIPPETS`（12）里最多 4 条（2 文档 × 2 块）。而**库之间的顺序本身是不确定的**——`resolveEffectiveKbIds` 返回的是 Set 迭代序，底下那次 `findMany` 没有 `orderBy`——所以挂了 3 个以上库时，那 4 条真能把一个真库挤出预算。这个伤害已随 P2 删行消失。
+  → **但主症状不是排序，是压根没有查询输入。** `buildAgentKnowledgeBaseContext(prisma, userId, { kbIds?, attachAllOwn? })` 连任务目标都不收，所以它**不可能**按相关性排——`updatedAt desc` 取 2 篇 + `ordinal asc` 取前 2 块 = 「最近改过的两篇文档的开头 ~1400 字」，和用户这次问什么无关。长文档拿到的是封面和目录。这是缺一个入参，不是排序策略选错。
+  → **对照物就在同一个仓里**：`workflow/dub/dub-kb-context.ts`（56 行）用同一套积木做对了——`resolveEffectiveKbIds` → `billableEmbed(query)` → `retrieveChunks`（pgvector 余弦）→ `filterRelevantChunks`（minScore 0.35 / maxChunks 4），任一步失败降级为 `null`。而任务目标在调用点就在手边：`agent-teams/routes.ts:215` 与 `:264`，`parsed.data.taskGoal` 下一行正传给 `recommendTeam`。**所以差的不是管线，是一次产品决定**：每次提交任务多一笔**计费的** embedding，以及推荐链路上多一个失败点该怎么降级。留在本计划范围外是显式决定，不是漏掉。
+  → **本项交付物 = 只加注释**：给 `agent-knowledge-context.ts` 补文件头（原来一行注释都没有），把上面三条写在下一个读者必然看到的地方，参照 P3.4 处理 `IMAGE_KEEP_LIMIT` 的先例。+22 行纯注释，零行为改动。`apps/api` typecheck exit 0；`src/agent-teams` 9 文件 52 例全绿、**0 跳过**。
+  → **顺带记一条覆盖缺口**：`buildAgentKnowledgeBaseContext` 至今零测试——`agent-teams/` 下没有 `agent-knowledge-context.test.ts`，`agent-workflow-service.test.ts` 与 `agent-workflow-plan.test.ts` 只 import 了 `emptyKnowledgeBaseContext`。**故意不在本项补**：现在补测试就是把「按 updatedAt 取开头」这个待改的形状钉死；真要动这块，测试和检索一起写。
 
 ### P5 — 列退役
 

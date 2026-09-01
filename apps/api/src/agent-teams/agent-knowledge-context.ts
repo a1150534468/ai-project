@@ -1,3 +1,25 @@
+/**
+ * 智能体团队跑任务前，把挂载的知识库压成一段随 prompt 走的 `knowledgeText`。
+ *
+ * **这里不是检索，别把它当检索看**（P4.3 记录，2026-09-01）：
+ * `buildAgentKnowledgeBaseContext` 连任务目标都不收 —— 参数只有 `kbIds` / `attachAllOwn`。
+ * 它按 `updatedAt desc` 每个库取 2 篇 `indexed` 文档、再按 `ordinal asc` 取每篇前 2 块，
+ * 也就是「最近改过的两篇文档的开头 ~1400 字」，和用户这次问什么毫无关系。
+ * 长文档尤其糟：拿到的是封面和目录，不是相关段落。
+ *
+ * 对照 `workflow/dub/dub-kb-context.ts`（56 行）就是该有的样子：
+ * `resolveEffectiveKbIds` → `billableEmbed(query)` → `retrieveChunks`（pgvector 余弦）
+ * → `filterRelevantChunks`（minScore 0.35）。任务目标在调用点 `routes.ts:215/264` 就在手边
+ * （下一行正传给 `recommendTeam`），差的不是管线而是一次决定：
+ * 每次提交任务多一笔**计费的** embedding、以及推荐链路上多一个失败点该怎么降级。
+ * 所以它留在本计划范围外，是显式决定，不是漏掉。
+ *
+ * 顺带更正 P4.3 原文的说法：`take: 2` 是**按库**嵌在 KB select 里的，产物系统库从来不是
+ * 「永远排最前」。它真正的伤害是占掉 `attachAllOwn` 集合里一个位子、并吃掉全局
+ * `MAX_SNIPPETS`（12）里最多 4 条 —— 而库间顺序本身是不确定的（`resolveEffectiveKbIds`
+ * 返回的是 Set 迭代序，底下那次 `findMany` 没有 `orderBy`），所以挂了 3 个以上库时，
+ * 它能把一个真库挤出预算。那些行已随 P2 删掉。
+ */
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { resolveEffectiveKbIds } from "../kb/retrieve.js";
 
