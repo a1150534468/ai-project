@@ -1,4 +1,4 @@
-import type { PrismaClient, KnowledgeBase, Document } from "@prisma/client";
+import type { PrismaClient, KnowledgeBase } from "@prisma/client";
 import type { S3 } from "../storage/s3.js";
 import { deletePrefix } from "../storage/s3.js";
 
@@ -88,6 +88,10 @@ export async function listKbsForUser(
 /**
  * Rename a knowledge base (update name and/or description).
  * Only the owner can rename their KB.
+ *
+ * P5.1 之前这里还有一道 `if (kb.systemKey) throw ForbiddenError("系统知识库不能重命名")`。
+ * 「系统知识库」这个概念随 `systemKey` 一起退役了：知识库现在只有官方库和个人自建库
+ * 两类，个人自建库全都能改名。官方库不走这条路——`assertKbOwner` 只认 `userId`。
  */
 export async function renameKb(
   prisma: Prisma,
@@ -95,10 +99,7 @@ export async function renameKb(
   userId: string,
   patch: { name?: string; description?: string }
 ): Promise<KnowledgeBase> {
-  const kb = await assertKbOwner(prisma, kbId, userId);
-  if (kb.systemKey) {
-    throw new ForbiddenError("系统知识库不能重命名");
-  }
+  await assertKbOwner(prisma, kbId, userId);
 
   const updateData: { name?: string; description?: string } = {};
   if (patch.name !== undefined) {
@@ -118,6 +119,8 @@ export async function renameKb(
  * Delete a knowledge base and all its documents/chunks.
  * Only the owner can delete their KB.
  * Also deletes associated S3 objects under kb/{kbId}/.
+ *
+ * 同 renameKb：P5.1 撤掉了 `systemKey` 的 403 保护，删库不再有「系统库」这个例外。
  */
 export async function deleteKb(
   prisma: Prisma,
@@ -126,10 +129,7 @@ export async function deleteKb(
   userId: string
 ): Promise<void> {
   // Verify ownership
-  const kb = await assertKbOwner(prisma, kbId, userId);
-  if (kb.systemKey) {
-    throw new ForbiddenError("系统知识库不能删除");
-  }
+  await assertKbOwner(prisma, kbId, userId);
 
   // Delete from S3
   await deletePrefix(s3, `kb/${kbId}/`);

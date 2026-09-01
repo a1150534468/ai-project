@@ -252,14 +252,12 @@ model KnowledgeBase {
   id          String     @id @default(cuid())
   ownerType   String // "USER" | "OFFICIAL"
   userId      String?
-  systemKey   String?
   name        String
   description String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   documents   Document[]
 
-  @@unique([userId, systemKey])
   @@index([userId])
   @@index([ownerType])
 }

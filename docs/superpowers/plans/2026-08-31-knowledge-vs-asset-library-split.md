@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（18/23 项已定：17 完成 + P4.1 撤销；P0–P4 全部完成，下一步 P5.1 —— 删 `KnowledgeBase.systemKey`）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（19/23 项已定：18 完成 + P4.1 撤销；P0–P4 与 P5.1 完成，下一步 P5.2 —— 退 `Document.sourceModule/sourceId/metadata/content`，**开工前必须先确认 `content` 除 ARTIFACT 外无写入者**）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -326,11 +326,17 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
 
 ### P5 — 列退役
 
-- [ ] P5.1 `KnowledgeBase.systemKey`（`AI_ARTIFACTS` 是全仓唯一取值，删库后完全无用）
+- [x] P5.1 `KnowledgeBase.systemKey`（`AI_ARTIFACTS` 是全仓唯一取值，删库后完全无用）
+  → 迁移 [`20260901120000_drop_knowledge_base_system_key`](../../../packages/db/prisma/migrations/20260901120000_drop_knowledge_base_system_key/migration.sql)，已 `migrate deploy`。三步：① `DO $$` 守卫，`systemKey IS NOT NULL` 只要还有行就 `RAISE EXCEPTION` 中止（那说明 P2.1 在那个库上没清完，直接删列会静默丢掉「哪些库是自动开的」这个唯一判据）→ ② 显式 `DROP INDEX KnowledgeBase_userId_systemKey_key` → ③ `DROP COLUMN`。删前删后都核过库：列 8 → 7、索引 4 → 3、`KnowledgeBase` 17 行（16 自建 + 1 官方）**一行没动**。
+  → **这条同时结清了 P5.5 的一半**：Postgres 在 `DROP COLUMN` 时本来就会连带删掉依赖该列的索引，所以 `KnowledgeBase_userId_systemKey_key` 由本项完成（迁移里显式写出来只为可读），**P5.5 只剩 `Document_sourceModule_sourceId_key`**。
+  → **两处 403 保护跟着列一起退役**（`kb/service.ts` 的 `renameKb` / `deleteKb`）：「系统知识库不能重命名 / 不能删除」这个例外不存在了——知识库现在只有官方库和个人自建库两类，自建库全都能改名能删，官方库压根不走这条路（`assertKbOwner` 只认 `userId`）。两个函数里的 `const kb =` 也随之退成 `await`，判断依据写在各自的文档注释里。
+  → **改动的测试与「有没有丢覆盖」**：删掉 `kb/routes.test.ts` 里那两个自己插一行带 `systemKey` 的库来打 403 的用例（分支没了，用例无从存在；同 describe 里「属主库改名 200」「属主库删除 204」照旧盯着正路）；`kb/ai-artifact-triggers.integration.test.ts` 里那次 `findUnique({ where: { userId_systemKey } })` 复合唯一查询删掉——同一用例紧跟着的 `count({ where: { userId } }) === 0` **本来就是更强的断言**，「一个库都没有」覆盖了「没有 AI_ARTIFACTS 库」；`codex-pet-routes.test.ts` 手搓 prisma mock 里那对 `systemKey` 收发（种子 + `matchesScalar`）一并摘掉，那个 `document.findFirst` 分支现在全仓已无生产调用点（唯一残留的 `document.findUnique` 三处都不带 `kb` 过滤）。
+  → **顺手清掉计划挂在本项名下的三处落空文案，其中一处其实不是落空而是在说谎**：`Knowledge.tsx` 的「自动归档」徽章、`!kb.systemKey` 包住的编辑/删除按钮、`!isSystemKb` 包住的上传区，都随列删掉（自建库现在无条件显示这些）；`Knowledge.tsx:577` 的「AI 自动归档 · {模块}」连同那张 11 项 `artifactModuleLabels` 一起删——**注意它读的是 `doc.sourceModule` 不是 `systemKey`，属 P5.2 的列**，UI 提前删是因为 0 行数据、它已经渲染不出来，但列本身与 `kbApi.ts:55` 的 `sourceModule?: string` **仍留给 P5.2**；`codexPetStudioModel.ts:141` 的 `archiving: "归档到知识库"` **不是死文案**——`archiving` 是活状态（`codex-pet-packaging-run.ts:279` 还在往里推），只是 P1.2 之后这个阶段不再写知识库（`runner-archive.ts:1-5` 的头注释：阶段名保留是为了不动状态机），所以它是在向用户承诺一件已经不发生的事，**改文案而不是删**，对齐服务端同阶段的事件文案「正在收尾」（`runner-packaging-resume.ts:85`）。
+  → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 已重跑）。`apps/api` 的 `src/kb` + `src/workflow/codex-pet`：**35 文件通过 / 1 文件失败、431 例通过 / 3 例失败 / 8 例跳过**——失败的 3 例全在 `codex-pet-runner.integration.test.ts`，全是 `Test timed out in 120000ms`，与本项无关（该文件不含 `systemKey`，而同目录 `codex-pet-routes.test.ts`、`src/kb/routes.test.ts` 29 例全绿），详见下方「P5.1 那 3 个超时」。本地数字不与 CI 比（见「验证纪律」）。
 - [ ] P5.2 `Document.sourceModule` / `sourceId` / `metadata` / `content`（**先确认 `content` 除 ARTIFACT 外无其他写入者**——手工 `sourceType='TEXT'` 上传是否用它，P5 开工前必须核实）
 - [ ] P5.3 `Document.sourceType` 的 `'ARTIFACT'` 取值从注释与校验里移除，回到 `FILE|URL|TEXT`
 - [ ] P5.4 `CodexPetRun.knowledgeDocumentId` 与其外键
-- [ ] P5.5 `Document_sourceModule_sourceId_key` / `KnowledgeBase_userId_systemKey_key` 两个唯一索引
+- [ ] P5.5 `Document_sourceModule_sourceId_key`（`KnowledgeBase_userId_systemKey_key` 已由 P5.1 的 `DROP COLUMN` 连带删掉，见该项）
 
 ---
 
@@ -364,6 +370,12 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 **基线不用动**：本阶段净删 21 例（api −15：archive 9 + runner.integration 4 + indexer 2；web −6：Knowledge.codex-pet 3 + App.behavior 3），但 `minPassed` 是**下限**、`maxSkipped` 是**上限**，2,794 ≥ 2,411 且 22 ≤ 23，两条都仍然满足。基线 2,411 是 2026-08-06 的 CI 打印值，此后新增的测试远多于这次删掉的。
 
 `biome lint`（CI 的门只有 lint、不含 formatter）跑改动文件全绿——顺手清掉 3 个**先前就有**的 `noUnusedImports`（`indexer.ts` 的 `getPrisma`、`indexer.test.ts` 的 `Document` 类型、`routes.test.ts` 的 `beforeEach`）：这三个文件本阶段进了改动集，`biome ci --changed` 从此会扫到它们。两个 workspace `tsc --noEmit` 均 0 错。
+
+### P5.1 那 3 个超时（2026-09-01）
+
+`pnpm vitest run src/kb src/workflow/codex-pet` 报 3 例 `Test timed out in 120000ms`，全在 `codex-pet-runner.integration.test.ts`。**单跑那一个文件：36 例通过 / 1 例跳过 / 0 失败**（303s），所以是 CPU 争抢下的超时，不是本项改坏的——和 P1 收口那次 `pipeline.test.ts` 同一个形状。
+
+判据不止「单跑绿了」：整轮 `src/kb + src/workflow/codex-pet` 跑了 **5,739 秒**，同文件里正常 15–18s 的用例被挤到 120s 以上；`codex-pet-runner.integration.test.ts` 全文不含 `systemKey`；真正碰 `systemKey` 的两个文件（`src/kb/routes.test.ts` 29 例、`codex-pet-routes.test.ts`）全绿。
 
 
 ---

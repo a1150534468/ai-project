@@ -11,7 +11,6 @@ export interface KnowledgeBase {
   name: string;
   description?: string;
   ownerType: string;
-  systemKey?: string;
   latticeCount?: number;
 }
 

@@ -243,7 +243,7 @@ function createPrismaMock(seed: {
     id: run.knowledgeDocumentId,
     sourceModule: "codex_pet",
     sourceId: run.id,
-    kb: { userId: run.userId, systemKey: "AI_ARTIFACTS" },
+    kb: { userId: run.userId },
   }] : []);
   const deletedDocumentSourceIds: string[] = [];
   let transactionTail = Promise.resolve();
@@ -452,8 +452,7 @@ function createPrismaMock(seed: {
         if (!matches(row, where)) return false;
         const expectedKb = recordCondition(where.kb);
         const actualKb = recordCondition(row.kb);
-        return matchesScalar(actualKb.userId, expectedKb.userId)
-          && matchesScalar(actualKb.systemKey, expectedKb.systemKey);
+        return matchesScalar(actualKb.userId, expectedKb.userId);
       }) ?? null),
       deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
         const sourceIds = recordCondition(where.sourceId).in;

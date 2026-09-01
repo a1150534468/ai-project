@@ -138,7 +138,11 @@ const STATUS_LABELS: Record<CodexPetProjectStatus, string> = {
   validating: "质量检查",
   repairing: "自动修复",
   packaging: "生成兼容包",
-  archiving: "归档到知识库",
+  // P1.2 之后 `archiving` 阶段不再写知识库，只是结清按张计费再置 ready
+  // （见 apps/api/src/workflow/codex-pet/codex-pet-runner/runner-archive.ts 的头注释：
+  // 阶段名保留是为了不动状态机）。这里跟服务端同阶段的事件文案对齐成「正在收尾」，
+  // 原文案「归档到知识库」是在向用户承诺一件已经不发生的事。
+  archiving: "正在收尾",
   ready: "制作完成",
   failed: "制作失败",
   cancelled: "已取消",

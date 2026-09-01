@@ -20,20 +20,6 @@ interface KnowledgePageProps {
   onViewChange: (view: string) => void;
 }
 
-const artifactModuleLabels: Record<string, string> = {
-  image: "AI 图片 / 电商图",
-  video: "AI 视频",
-  audio: "AI 音频",
-  novel: "小说章节",
-  article: "AI 文章",
-  comic_script: "漫画剧本",
-  promo_script: "宣传片脚本",
-  dub: "AI 口播",
-  agent_workflow: "智能体任务",
-  scheduled_report: "定时任务报告",
-  codex_pet: "Codex 桌宠",
-};
-
 export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
   const toast = useToast();
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
@@ -251,7 +237,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
   const officialKbs = kbList.filter((kb) => kb.ownerType === "OFFICIAL");
   const selectedKb = kbList.find((kb) => kb.id === selectedKbId);
   const isOfficialKb = selectedKb?.ownerType === "OFFICIAL";
-  const isSystemKb = Boolean(selectedKb?.systemKey);
   const fileAccept = [
     ".txt",
     ".md",
@@ -380,11 +365,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-ink truncate">{kb.name}</p>
-                        {kb.systemKey && (
-                          <span className="mt-1 inline-flex items-center rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-brand-ink">
-                            自动归档
-                          </span>
-                        )}
                         {kb.description && (
                           <p className="text-xs text-ink-secondary line-clamp-1 mt-1">{kb.description}</p>
                         )}
@@ -393,7 +373,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                         </p>
                       </div>
                     </div>
-                    {!kb.systemKey && <div className="flex gap-2">
+                    <div className="flex gap-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -414,7 +394,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                       >
                         删除
                       </button>
-                    </div>}
+                    </div>
                   </div>
                 ))
               )}
@@ -472,7 +452,7 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                   <p className="text-sm text-ink-secondary leading-relaxed">{selectedKb.description}</p>
                 )}
 
-                {!isOfficialKb && !isSystemKb && (
+                {!isOfficialKb && (
                   <div className="pt-4 space-y-4">
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="block rounded-lg border border-hairline-subtle bg-surface p-4 text-sm">
@@ -572,11 +552,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm font-semibold text-ink truncate">{doc.name}</p>
-                                {doc.sourceModule && (
-                                  <p className="mt-1 text-xs text-ink-secondary">
-                                    AI 自动归档 · {artifactModuleLabels[doc.sourceModule] ?? doc.sourceModule}
-                                  </p>
-                                )}
                                 <div className="flex items-center gap-2 mt-2">
                                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${statusConfig.bg} ${statusConfig.text}`}>
                                     <Icon

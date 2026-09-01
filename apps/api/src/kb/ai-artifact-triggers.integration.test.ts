@@ -77,12 +77,11 @@ describe.skipIf(!databaseEnabled)("AI 产物归档触发器已删除", () => {
 
   it("建用户不再白送一个 AI_ARTIFACTS 系统库", async () => {
     const user = await createUser("provision");
-    expect(await prisma.knowledgeBase.findUnique({
-      where: { userId_systemKey: { userId: user.id, systemKey: "AI_ARTIFACTS" } },
-    })).toBeNull();
     expect(await prisma.knowledgeBase.findUnique({ where: { id: artifactKbId(user.id) } })).toBeNull();
     // 一个新用户名下现在是零个知识库——官方库靠 ownerType=OFFICIAL 共享，
-    // 个人库要用户自己建。
+    // 个人库要用户自己建。这一条比按 systemKey 查更强：P5.1 已经把
+    // `systemKey` 列连同 userId_systemKey 唯一索引一起删了，「系统知识库」
+    // 这个概念不存在了，所以「一个都没有」就是完整断言。
     expect(await prisma.knowledgeBase.count({ where: { userId: user.id } })).toBe(0);
   });
 
