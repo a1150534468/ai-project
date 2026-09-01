@@ -266,7 +266,7 @@ model Document {
   id           String        @id @default(cuid())
   kbId         String
   name         String
-  sourceType   String // "FILE" | "URL" | "TEXT" | "ARTIFACT"
+  sourceType   String // "FILE" | "URL" | "TEXT"（ARTIFACT 随 P1.2/P5.2 退役：产物不再进知识库）
   sourceUri    String?
   mime         String?
   sizeBytes    Int?

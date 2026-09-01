@@ -152,6 +152,8 @@ export async function storeAndCreateDocument(
   const hasText = typeof bodyObj.text === "string";
   const hasUrl = typeof bodyObj.url === "string";
 
+  // 这个联合类型就是 sourceType 的全部校验：它不是客户端入参（由下面三个分支推导得出），
+  // 库里也没有 CHECK 约束。ARTIFACT 随 P1.2/P5.2 退役后，这三种取值即穷尽。
   let sourceType: "TEXT" | "URL" | "FILE" = "TEXT";
   let sourceUri: string | null = null;
   let sizeBytes = 0;

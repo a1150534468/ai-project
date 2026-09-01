@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（21/23 项已定：19 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P4 与 P5.1/P5.2/P5.5 完成，下一步 P5.3 —— `Document.sourceType` 的 `'ARTIFACT'` 取值退出注释与校验）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（22/23 项已定：20 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P4 与 P5.1/P5.2/P5.3/P5.5 完成，下一步 P5.4 —— `CodexPetRun.knowledgeDocumentId` 与其外键）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -342,7 +342,13 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **6 处测试断言换了形状，理由记这里**：`ai-artifact-triggers.integration.test.ts` 3 处 + `codex-pet-runner.integration.test.ts` 4 处 + `codex-pet-recovery-finalizer.test.ts` 1 处原本都是 `document.count({ where: { sourceModule, sourceId } }) === 0`，按「哪个模块的哪条记录」精确点名。那两列删了——**产物与业务记录之间的这条挂钩本身就是本计划要消灭的东西**，点名式断言无从存在——换成按属主数 `count({ where: { kb: { userId } } }) === 0`，**比原来更强**：原来只盖「没有 codex_pet/这条 id 的文档」，现在盖「不管用什么键，这个用户名下什么文档都没被写出来」。触发器确定性主键那一路（`findUnique(artifactDocId(...))`）照旧，两句合起来既管确定性键也管任意键。另外三处：诱饵文档的 `sourceModule`/`sourceId` 删掉（它起作用靠**占住确定性主键**，那对值只是陪衬），runner 的 `afterAll` 清理从「按 runId 查再按 sourceModule/sourceId 删」改成按属主删，`codex-pet-routes.test.ts` 手搓 mock 的 documents 种子摘掉那两个字段（该 mock 整体随 P5.4 退役）。
   → 附带清掉 `deps.ts` 两个**存量**未用 import（`putObject` / `assertSafeUrl`，`git show HEAD` 核对过本来就没用），理由同 P1 收口：文件进了改动集就会被 `biome ci --changed` 扫到。
   → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 已重跑）；`src/kb` + `codex-pet-routes.test.ts` **12 文件 203 例全过 / 0 跳过**；`apps/web` **95 文件 640 例全过 / 0 跳过**；两个重型集成文件单独跑（见下方「P5.2 的两个重型集成文件」）。本地数字不与 CI 比（见「验证纪律」）。
-- [ ] P5.3 `Document.sourceType` 的 `'ARTIFACT'` 取值从注释与校验里移除，回到 `FILE|URL|TEXT`（`deps.ts:30-36` 的内联正文分支已由 P5.2 带走，见该项）
+- [x] P5.3 `Document.sourceType` 的 `'ARTIFACT'` 取值从注释与校验里移除，回到 `FILE|URL|TEXT`（`deps.ts:30-36` 的内联正文分支已由 P5.2 带走，见该项）
+  → **「与校验里」这半句没有对应物——从来就不存在接受 `ARTIFACT` 的校验点**，这是 P5.2 交接时提出、本项开工先查清的问题（「全仓只剩注释，还是真有 zod / 手写判断在收 ARTIFACT」决定这一项是纯文档改动还是要动校验；答案是前者）。库里 `Document` 只有 `Document_pkey` 与 `Document_kbId_fkey` 两条约束，**没有 CHECK**，`sourceType` 是裸 `text NOT NULL` 无默认值；它也从来不是客户端入参——`kb/routes.ts` 全部 zod schema 只有 `createKbSchema`/`renameKbSchema` 的 name/description 两个字段，`sourceType` 由 `ingest.ts` 从 `isMultipart()`/`body.text`/`body.url` 三个分支自己推导。**唯一的「校验」是那个联合类型**：`ingest.ts` 的 `let sourceType: "TEXT" | "URL" | "FILE"`，P5.2 之前就已经把 ARTIFACT 排除在外了。**因此本项无迁移**（没有 CHECK 要删，`sourceType` 列本身要留）。
+  → **全仓只有一行在说谎，本项改的就是它**：`schema.prisma:269` 的 `// "FILE" | "URL" | "TEXT" | "ARTIFACT"` → `// "FILE" | "URL" | "TEXT"（ARTIFACT 随 P1.2/P5.2 退役：产物不再进知识库）`。注释里点名退役阶段，是为了让下一个读到的人不用再去翻历史找 ARTIFACT 去哪了。
+  → 另外两处收口：`kbApi.ts:51` 的 `sourceType?: string` 收紧成 `sourceType?: "FILE" | "URL" | "TEXT"`（取值现在恰好穷尽；前端只透传不读值，全 `apps/web` grep 就这一行提及，所以收紧零风险且是唯一能表达约束的地方——Prisma 那侧是 `String` 不是 enum）；`ingest.ts:156` 在联合类型上方补两行注释，写明「这个联合类型就是全部校验、库里没有 CHECK」，免得下一个人再去找 zod。
+  → **剩下的 `ARTIFACT` 提及一个都不动，因为它们不是谎**：`deps.ts:30` / `indexer.ts:109` 是 P5.2 记的历史（解释被删掉的分支）；`ai-artifact-triggers.integration.test.ts:93/103` 是测试名（「不再生成 ARTIFACT 文档」本就是过去时的负向断言）；`KnowledgePicker.test.tsx:12` / `Chat.behavior.test.tsx:428` 是同类历史注释（P5.1 已裁定保留）；四条迁移里的提及是历史记录，**禁改**；`codex-pet` 的 `FINAL_ARTIFACT_KEYS`/`CODEX_PET_*_ARTIFACT_*` 是 S3 产物命名，与知识库无关。
+  → **明确没有加 CHECK 约束**：本项是「退役 ARTIFACT」不是「加新约束」。唯一写入者 `ingest.ts` 已在编译期封死，运行期还有 `deps.ts:50` 的 `Unknown sourceType:` 兜底（被 `indexer.ts:69` 判为永久失败、不进 reaper 重试）。要不要给这列加 CHECK 是另一个决定，不混进本项的迁移里。
+  → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 重跑、`prisma validate` 通过）；`src/kb` **11 文件 141 例全过 / 0 跳过**；`apps/web` **95 文件 640 例全过 / 0 跳过**；`migrate diff` 残留与 P5.2 记录一致（`Document`/`KnowledgeBase` **零提及**）。另有一次误触发的 api 全量轮，结论见下方「P5.3 那次误触发的全量轮」。本地数字不与 CI 比（见「验证纪律」）。
 - [ ] P5.4 `CodexPetRun.knowledgeDocumentId` 与其外键
 - [x] ~~P5.5 `Document_sourceModule_sourceId_key`~~ → **无剩余工作**：`KnowledgeBase_userId_systemKey_key` 由 P5.1 的 `DROP COLUMN` 连带删掉，`Document_sourceModule_sourceId_key` 由 P5.2 显式删掉。两条迁移都在库上核过索引数（4 → 3）。
 
@@ -395,6 +401,14 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 另外用 `prisma migrate diff --from-schema-datamodel --to-schema-datasource` 复核了 schema 与库是否一致：**`Document` 和 `KnowledgeBase` 一个字都没出现**，说明 P5.1/P5.2 改的列与索引两边完全对齐。残留差异是三张表（`Chunk`/`Memory`/`NovelVectorMemory`）的 `embedding` 向量索引（pgvector HNSW，Prisma datamodel 表达不了，恒定噪音），外加一处**存量**漂移：`schema.prisma:435` 写的是 `@@index([refundStatus, createdAt])`，但 `20260730120000_codex_pet_failed_call_refund` 实际只建了单列 `CodexPetImageCall_refundStatus_idx`。那是 2026-07-30 就有的，与本计划无关，另开任务处理。
 
 判据不止「单跑绿了」：整轮 `src/kb + src/workflow/codex-pet` 跑了 **5,739 秒**，同文件里正常 15–18s 的用例被挤到 120s 以上；`codex-pet-runner.integration.test.ts` 全文不含 `systemKey`；真正碰 `systemKey` 的两个文件（`src/kb/routes.test.ts` 29 例、`codex-pet-routes.test.ts`）全绿。
+
+### P5.3 那次误触发的全量轮（2026-09-01）
+
+`pnpm --filter api test -- src/kb` 里那个 `--` 把过滤器吞了，vitest 收到的是空过滤，于是 **api 全量跑了一轮**（257 文件 / 2,020 例，326s）：**247 文件通过 / 4 文件失败、1,991 例通过 / 12 例失败 / 17 例跳过**。
+
+这 12 例与本项无关，是「验证纪律」里那条**本地 `.env` 副作用的第一次实测确认**：全部集中在 4 个文件、全是「billing 不可达返回 502」形状的断言——`src/agents/routes.test.ts`（1 例）、`src/admin/resource-routes.test.ts`（7 例）、`src/admin/membership-routes.test.ts`（3 例）、`src/admin/code-routes.test.ts`（1 例）。source 了本地 `.env` 之后 `BILLING_BASE_URL` 指向真在跑的 billing（:8093），这些用例拿到的是真响应而不是连接失败，断言自然不成立。
+
+**`src/kb` 那 11 个文件在这一轮里同样全绿**，所以误触发反而是比定向轮更强的证据。正确的定向写法是 `pnpm --filter api test src/kb`（不带 `--`），定向轮结果：11 文件 141 例全过 / 0 跳过。
 
 
 ---

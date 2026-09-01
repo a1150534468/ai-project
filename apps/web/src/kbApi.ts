@@ -48,7 +48,7 @@ export interface KbDocument {
   sizeBytes: number;
   chunkCount: number;
   error?: string;
-  sourceType?: string;
+  sourceType?: "FILE" | "URL" | "TEXT";
   sourceUri?: string;
   mime?: string;
   createdAt: string;
