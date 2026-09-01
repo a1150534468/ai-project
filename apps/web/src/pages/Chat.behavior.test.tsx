@@ -417,6 +417,34 @@ describe("Chat 知识库挂载", () => {
     expect(buttonByText(scope, "2 个知识库")).toBeTruthy();
     expect(scope.textContent).toContain("已挂载 2 库");
   });
+
+  /**
+   * P4.2 的护栏：「你自己创建的 N 个知识库」里的 N 是**自己的库数**，不是列表长度。
+   *
+   * 这个数字必须和服务端「全库搜索」的取值范围同口径：`resolveEffectiveKbIds` 的 own 集是
+   * `ownerType='USER' AND userId=本人`（`kb/retrieve.ts`）。所以官方库要列得出来、能单独勾，
+   * 但绝不能计进 N —— 否则文案承诺的库数里混着全库搜索根本不碰的官方库。
+   *
+   * 也顺手钉住 P2 的成果：产物系统库（`systemKey='AI_ARTIFACTS'`、`ownerType='USER'`、
+   * userId 是本人）当年就躺在这份列表里，带着「我的」角标可勾选、计进 N、还真被全库搜索检索到。
+   * 两个选择器从来没有过 `systemKey` 过滤，也不需要加 —— 那些行已经删掉了，
+   * 列表里出现的「我的」库就该真是用户自己建的。
+   */
+  it("「你自己创建的 N 个」只数自己的库：官方库列得出来但不计数", async () => {
+    apiMocks.listKb.mockResolvedValue([
+      kb("kb-1", "产品手册"),
+      kb("kb-2", "行业报告", "OFFICIAL"),
+      kb("kb-3", "会议记录"),
+    ]);
+    const scope = await mountChat();
+
+    await click(buttonByText(scope, "知识库"));
+
+    expect(scope.textContent).toContain("你自己创建的 2 个知识库");
+    expect(rowButton(scope, "产品手册").textContent).toContain("我的");
+    expect(rowButton(scope, "会议记录").textContent).toContain("我的");
+    expect(rowButton(scope, "行业报告").textContent).toContain("官方");
+  });
 });
 
 describe("Chat 工具挂载", () => {

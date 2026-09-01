@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（16/23 项已定：15 完成 + P4.1 撤销；P0–P3 全部完成，下一步 P4.2 —— 两个知识库选择器与「你自己创建的 N 个」计数复核）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（17/23 项已定：16 完成 + P4.1 撤销；P0–P3 全部完成，下一步 P4.3 —— 记录智能体团队那条 `updatedAt desc take 2` 仍不做向量检索）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -311,7 +311,12 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → 服务端能力本来就现成、**保持不动**：`POST /api/kb/:id/documents` 收 `{text,name}` 就落 `sourceType='TEXT'`（`kb/ingest.ts`，走配额校验与计费预扣、失败回滚 Document+S3、可正常删除），前端 `kbApi.addKbText` 也在。这条链路留给**用户手工上传**，只是不给产物开这条路。
   → 顺带记一条：素材库本来也当不了这个按钮的落点——`AssetItem.title` 对图片就是 prompt（`asset-sources.ts:112`），照这个路子入库，得到的正是计划自己批过的「图片提示词：xxx」那种垃圾文档。
   → 连带更正：「范围边界」里指向本项的那句已标注失效。
-- [ ] P4.2 两个选择器（`ChatKnowledgePicker.tsx`、`agent-teams/KnowledgePicker.tsx`）与「你自己创建的 N 个知识库」计数（`useChatComposerState.ts:70`）——不再需要 `systemKey` 过滤，但要确认删库后计数正确。
+- [x] P4.2 两个选择器（`ChatKnowledgePicker.tsx`、`agent-teams/KnowledgePicker.tsx`）与「你自己创建的 N 个知识库」计数（`useChatComposerState.ts:70`）——不再需要 `systemKey` 过滤，但要确认删库后计数正确。
+  → **本项原文的前提是错的，更正记下来**：说「不再需要 `systemKey` 过滤」听着像本来有一层过滤要撤，其实**从来就没有过**——两个选择器、`listKbsForUser`（`OR: [{userId}, {ownerType:'OFFICIAL'}]`）、`resolveEffectiveKbIds`（`ownerType:'USER' AND userId=本人`）四处都不看 `systemKey`。所以产物系统库当年是**完全裸露**的：在选择器列表里带着「我的」角标可勾选、计进那个 N、并且真被全库搜索检索到。P2 删行同时修掉了这三件事，本项**一行代码都不用改**。
+  → **计数与服务端同口径，这是真正要确认的东西**：前端 N = 列表里 `ownerType === 'USER'` 的条数，服务端「全库」= `ownerType='USER' AND userId=本人`（`kb/retrieve.ts`）。列表本身就是「我的 ∪ 官方」，而 `createKb` 对 OFFICIAL 强制 `userId: null`，不存在既属于我又是官方的行 —— 两个集合逐行相同，所以这句文案不会承诺一个全库搜索根本不碰的库。官方库要列得出来、能单独勾，但不能计数。
+  → **库里核对过**：`KnowledgeBase` 现在 17 行 = 16 USER + 1 OFFICIAL，`systemKey IS NOT NULL` 为 0，与 P2.1 迁移头部预测的删后状态逐个对上。唯一的真人用户 `cmrg7sx3w0002c3lsyza7tqci` 现在只剩 1 个自建库（「本地」，0 文档）——删库之前这里会数出 2，文案会说「你自己创建的 2 个知识库」，而第 2 个是他没建过的产物库。
+  → **补上覆盖（改之前这个数字零测试、`agent-teams/KnowledgePicker` 整个组件零测试）**：`Chat.behavior.test.tsx` 加 1 例、新建 `agent-teams/KnowledgePicker.test.tsx` 2 例，都用「2 个自建 + 1 个官方」让 N 与列表长度不相等，钉住官方库列得出但不计数。已反向验证：把两处 `ownKbCount` 临时退成 `.length`，只有这两个新用例失败且报的是 3 不是 2。`apps/web` 全量 95 文件 640 例全绿、0 跳过；typecheck 干净。
+  → **另记一条不修的**：本地开发库里有一行 `ownerType='USER'` 但 `userId=''` 的残渣（name `Test`，0 文档），来自某个老集成测试。它对两条查询都是死行（`{userId:'<真 id>'}` 匹配不上空串），撑不高任何人的 N，属测试库残渣不是产品数据。
 - [ ] P4.3 智能体团队那条按 `updatedAt desc take 2` 取文档的逻辑（`agent-knowledge-context.ts:110-113`）：产物库消失后不再有「永远排最前」的库，但**它仍然不做向量检索**——单独记录，不在本计划范围。
 
 ### P5 — 列退役
