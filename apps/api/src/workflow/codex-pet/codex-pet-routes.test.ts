@@ -241,8 +241,6 @@ function createPrismaMock(seed: {
   const imageCalls = seed.imageCalls ?? [];
   const documents = seed.documents ?? runs.flatMap((run) => run.knowledgeDocumentId ? [{
     id: run.knowledgeDocumentId,
-    sourceModule: "codex_pet",
-    sourceId: run.id,
     kb: { userId: run.userId },
   }] : []);
   const deletedDocumentSourceIds: string[] = [];

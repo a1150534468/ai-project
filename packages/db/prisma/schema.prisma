@@ -268,7 +268,6 @@ model Document {
   name         String
   sourceType   String // "FILE" | "URL" | "TEXT" | "ARTIFACT"
   sourceUri    String?
-  content      String?
   mime         String?
   sizeBytes    Int?
   status       String        @default("pending") // pending|indexing|indexed|failed
@@ -276,9 +275,6 @@ model Document {
   chunkCount   Int           @default(0)
   tokensUsed   Int           @default(0)
   opId         String?
-  sourceModule String?
-  sourceId     String?
-  metadata     Json?
   lockedBy     String?
   lockedAt     DateTime?
   attempts     Int           @default(0)
@@ -288,7 +284,6 @@ model Document {
   chunks       Chunk[]
   codexPetRun  CodexPetRun?
 
-  @@unique([sourceModule, sourceId])
   @@index([kbId])
   @@index([status])
 }

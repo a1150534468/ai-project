@@ -441,7 +441,7 @@ describe("Codex pet recovery finalizer", () => {
       "direction_blind_qa",
       "validation_report",
     ]));
-    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: initialized.runId } })).toBe(0);
+    expect(await prisma.document.count({ where: { kb: { userId: persistedRun.userId } } })).toBe(0);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: persistedRun.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
   }, 180_000);

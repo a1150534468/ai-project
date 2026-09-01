@@ -104,8 +104,12 @@ export interface IndexDeps {
   /**
    * 加载文档内容（FILE/URL/TEXT）
    * loadObject 由调用方注入，indexer 不直接耦合 S3/fetch
+   *
+   * P5.2 之前这里还有第四个字段 `content`：产物文档不落 S3，正文内联在
+   * `Document.content` 里，由 `deps.ts` 的 ARTIFACT 分支读回来。产物不再进知识库，
+   * 那一列已随本项删掉，三种来源现在都靠 `sourceUri` 定位内容。
    */
-  loadObject: (doc: { sourceType: string; sourceUri: string | null; content: string | null }) => Promise<{
+  loadObject: (doc: { sourceType: string; sourceUri: string | null }) => Promise<{
     buf: Buffer;
     mime: string;
     filename: string;
@@ -247,7 +251,6 @@ export async function indexOnce(
     const { buf, mime, filename } = await deps.loadObject({
       sourceType: doc.sourceType,
       sourceUri: doc.sourceUri,
-      content: doc.content,
     });
 
     // 4. parse 解析
@@ -312,6 +315,7 @@ export async function indexOnce(
     // 原先这里排除了 `doc.sourceModule` 非空的文档 —— 自动归档的产物算平台能力,
     // 不向用户收索引费。P1.2 之后产物不再进知识库,能走到索引的只有用户自己上传
     // 的文档,豁免条件永远为真,留着只会掩盖「有产物又在偷偷进库」这种回归。
+    // P5.2 起 `sourceModule` 这一列本身也没了,所以那个豁免连写都写不出来。
     if (kb.ownerType === 'USER' && kb.userId) {
       try {
         await deps.billing.settle({
@@ -372,7 +376,7 @@ export async function indexOnce(
     });
 
     // 瞬时失败期间保留原预扣；成功或最终失败只结算一次。
-    // 同 P1.2：产物不再进知识库，`sourceModule` 豁免不再有对应的文档。
+    // 同 P1.2：产物不再进知识库，`sourceModule` 豁免不再有对应的文档（该列已随 P5.2 删除）。
     if (!willRetry && doc.kb.ownerType === 'USER' && doc.kb.userId) {
       try {
         await deps.billing.settle({

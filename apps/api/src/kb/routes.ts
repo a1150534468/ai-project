@@ -132,8 +132,6 @@ export async function kbRoutes(app: FastifyInstance) {
           sourceType: true,
           sourceUri: true,
           mime: true,
-          sourceModule: true,
-          metadata: true,
           createdAt: true,
         },
         orderBy: { createdAt: "desc" },

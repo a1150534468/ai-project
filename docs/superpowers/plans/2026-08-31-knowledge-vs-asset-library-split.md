@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（19/23 项已定：18 完成 + P4.1 撤销；P0–P4 与 P5.1 完成，下一步 P5.2 —— 退 `Document.sourceModule/sourceId/metadata/content`，**开工前必须先确认 `content` 除 ARTIFACT 外无写入者**）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（21/23 项已定：19 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P4 与 P5.1/P5.2/P5.5 完成，下一步 P5.3 —— `Document.sourceType` 的 `'ARTIFACT'` 取值退出注释与校验）
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -269,7 +269,7 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **不需要改 schema**：`confdeltype = 'n'`（SET NULL）已经是想要的语义，P2.1 一删就把 43 个非空值全置空了，现在全表 127 行该列皆为 NULL。这列从此是惰性的，等 P5.4 连列带外键一起退役；P0.3 已经让 `ready + knowledgeDocumentId=null` 成为合法终态，所以中间态不会有人报错。
 - [x] P2.3 校验：`usedBytes`（`service.ts:205`）与「知识晶格数」（`service.ts:73`）回归到只反映用户上传 → 顺带解掉 M5。管理端 `kbUploads*`（`analytics-routes.ts:218-220`）同步核对。
   → **三处都不用改代码**：它们从来没做产物/上传的区分，只是「`Document` 里有什么就报什么」，所以产物一删就自动正确了。`usedBytes` 是 `sum(sizeBytes) where kb.userId=… and status != 'failed'`；晶格数是 `groupBy kbId, sum(chunkCount)`，产物库行没了就不会再多出条目；管理端 `kbUploads{Today,Month,Total}` 是不带过滤的 `Document.count()`——之前把 1,275 个产物当「用户上传」报，现在是 8。M5 解除。
-  - 附带确认「删掉的东西回不来」：应用代码里**没有任何一处写** `sourceType: 'ARTIFACT'` 或 `KnowledgeBase.systemKey`。剩下的 `ARTIFACT` 只有三个**读**点——`kb/deps.ts:30-36`（`loadObject` 的内联正文分支，已不可达，随 P5.3 一起删）、`service.ts:99/130`（`systemKey` 的 403 保护，随 P5.1 退役）、`Knowledge.tsx:254/383/396`（「自动归档」徽章与隐藏改名/删除按钮的分支，同 P5.1）。`codex-pet` 里那批 `CODEX_PET_*_ARTIFACT_*` 是 S3 产物命名，与知识库无关。
+  - 附带确认「删掉的东西回不来」：应用代码里**没有任何一处写** `sourceType: 'ARTIFACT'` 或 `KnowledgeBase.systemKey`。剩下的 `ARTIFACT` 只有三个**读**点——`kb/deps.ts:30-36`（`loadObject` 的内联正文分支，已不可达；计划原挂 P5.3，实际由 **P5.2** 带走，因为 `content` 列一删它就编译不过）、`service.ts:99/130`（`systemKey` 的 403 保护，随 P5.1 退役）、`Knowledge.tsx:254/383/396`（「自动归档」徽章与隐藏改名/删除按钮的分支，同 P5.1）。`codex-pet` 里那批 `CODEX_PET_*_ARTIFACT_*` 是 S3 产物命名，与知识库无关。
 
 ### P3 — 素材库（读模型 + 页面）
 
@@ -333,10 +333,18 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **改动的测试与「有没有丢覆盖」**：删掉 `kb/routes.test.ts` 里那两个自己插一行带 `systemKey` 的库来打 403 的用例（分支没了，用例无从存在；同 describe 里「属主库改名 200」「属主库删除 204」照旧盯着正路）；`kb/ai-artifact-triggers.integration.test.ts` 里那次 `findUnique({ where: { userId_systemKey } })` 复合唯一查询删掉——同一用例紧跟着的 `count({ where: { userId } }) === 0` **本来就是更强的断言**，「一个库都没有」覆盖了「没有 AI_ARTIFACTS 库」；`codex-pet-routes.test.ts` 手搓 prisma mock 里那对 `systemKey` 收发（种子 + `matchesScalar`）一并摘掉，那个 `document.findFirst` 分支现在全仓已无生产调用点（唯一残留的 `document.findUnique` 三处都不带 `kb` 过滤）。
   → **顺手清掉计划挂在本项名下的三处落空文案，其中一处其实不是落空而是在说谎**：`Knowledge.tsx` 的「自动归档」徽章、`!kb.systemKey` 包住的编辑/删除按钮、`!isSystemKb` 包住的上传区，都随列删掉（自建库现在无条件显示这些）；`Knowledge.tsx:577` 的「AI 自动归档 · {模块}」连同那张 11 项 `artifactModuleLabels` 一起删——**注意它读的是 `doc.sourceModule` 不是 `systemKey`，属 P5.2 的列**，UI 提前删是因为 0 行数据、它已经渲染不出来，但列本身与 `kbApi.ts:55` 的 `sourceModule?: string` **仍留给 P5.2**；`codexPetStudioModel.ts:141` 的 `archiving: "归档到知识库"` **不是死文案**——`archiving` 是活状态（`codex-pet-packaging-run.ts:279` 还在往里推），只是 P1.2 之后这个阶段不再写知识库（`runner-archive.ts:1-5` 的头注释：阶段名保留是为了不动状态机），所以它是在向用户承诺一件已经不发生的事，**改文案而不是删**，对齐服务端同阶段的事件文案「正在收尾」（`runner-packaging-resume.ts:85`）。
   → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 已重跑）。`apps/api` 的 `src/kb` + `src/workflow/codex-pet`：**35 文件通过 / 1 文件失败、431 例通过 / 3 例失败 / 8 例跳过**——失败的 3 例全在 `codex-pet-runner.integration.test.ts`，全是 `Test timed out in 120000ms`，与本项无关（该文件不含 `systemKey`，而同目录 `codex-pet-routes.test.ts`、`src/kb/routes.test.ts` 29 例全绿），详见下方「P5.1 那 3 个超时」。本地数字不与 CI 比（见「验证纪律」）。
-- [ ] P5.2 `Document.sourceModule` / `sourceId` / `metadata` / `content`（**先确认 `content` 除 ARTIFACT 外无其他写入者**——手工 `sourceType='TEXT'` 上传是否用它，P5 开工前必须核实）
-- [ ] P5.3 `Document.sourceType` 的 `'ARTIFACT'` 取值从注释与校验里移除，回到 `FILE|URL|TEXT`
+- [x] P5.2 `Document.sourceModule` / `sourceId` / `metadata` / `content`（**先确认 `content` 除 ARTIFACT 外无其他写入者**——手工 `sourceType='TEXT'` 上传是否用它，P5 开工前必须核实）
+  → **开工前那条核实做了，而且是重新核当前工作树，不是照抄 P2 的旧结论**（判据写进了迁移头注释）：全仓唯一的生产 `document.create` 是 [`kb/ingest.ts:238`](../../../apps/api/src/kb/ingest.ts#L238)，只写 `kbId/name/sourceType/sourceUri/mime/sizeBytes`，四列一个都不写，且那里的 `sourceType` 变量类型就是 `"TEXT" | "URL" | "FILE"`，**写不出 ARTIFACT**。计划问的那一句「手工 TEXT 上传是否用 `content`」答案是**不用**：`ingest.ts:231-234` 把正文 `putObject` 进 S3、`sourceUri` 记 S3 key，`deps.ts` 读回来时 TEXT 和 FILE 走同一条 `getObject` 分支。两处生产 `document.update`（`indexer.ts` 置 indexed / 置 failed）只碰 `status/chunkCount/tokensUsed/lockedBy/lockedAt/error`。`content` 的读点只有 3 个（`indexer.ts:108` 签名字段、`indexer.ts:250` 原样透传、`deps.ts:30-36` 不可达的 ARTIFACT 分支）；`retrieve.ts` 里的 `content` 是 `Chunk.content`，另一张表。
+  → 迁移 [`20260901130000_drop_document_artifact_columns`](../../../packages/db/prisma/migrations/20260901130000_drop_document_artifact_columns/migration.sql)，已 `migrate deploy`。结构同 P5.1 三步：① `DO $$` 守卫，四列任一还有非空行就 `RAISE EXCEPTION`（那说明 P2.1 没清完，直接删列会静默烧掉「这份文档原本对应哪条业务记录」这唯一判据）→ ② 显式 `DROP INDEX Document_sourceModule_sourceId_key` → ③ 一条 `ALTER TABLE` 删四列。删前删后都核过库：列 **21 → 17**、索引 **4 → 3**、`Document` **8 行（FILE 6 + TEXT 2、ARTIFACT 0）一行没动**，四列删前非空行各为 0。
+  → **P5.5 到此全部结清，没有剩余工作**：两个唯一索引里 `KnowledgeBase_userId_systemKey_key` 由 P5.1 的 `DROP COLUMN` 连带完成，`Document_sourceModule_sourceId_key` 由本项完成。
+  → **顺带带走了计划挂在 P5.3 名下的 `deps.ts:30-36`**：`content` 列一删，那个 ARTIFACT 内联正文分支连编译都过不去，所以只能同项退役（`loadObject` 的入参类型也随之从三字段退成两字段）。**P5.3 因此只剩 `sourceType` 的注释与校验**。
+  → **服务端不再把这四列吐给前端**：`kb/routes.ts` 文档列表的 `select` 去掉 `sourceModule`/`metadata`，`kbApi.ts` 的 `KbDocument` 去掉对应两个字段（`sourceModule` 是 P5.1 明确留给本项的那个）。注意 `GET /api/kb/:id/documents/:docId` 是不带 `select` 的整行返回，所以它是自动跟着列走的，不用改。
+  → **6 处测试断言换了形状，理由记这里**：`ai-artifact-triggers.integration.test.ts` 3 处 + `codex-pet-runner.integration.test.ts` 4 处 + `codex-pet-recovery-finalizer.test.ts` 1 处原本都是 `document.count({ where: { sourceModule, sourceId } }) === 0`，按「哪个模块的哪条记录」精确点名。那两列删了——**产物与业务记录之间的这条挂钩本身就是本计划要消灭的东西**，点名式断言无从存在——换成按属主数 `count({ where: { kb: { userId } } }) === 0`，**比原来更强**：原来只盖「没有 codex_pet/这条 id 的文档」，现在盖「不管用什么键，这个用户名下什么文档都没被写出来」。触发器确定性主键那一路（`findUnique(artifactDocId(...))`）照旧，两句合起来既管确定性键也管任意键。另外三处：诱饵文档的 `sourceModule`/`sourceId` 删掉（它起作用靠**占住确定性主键**，那对值只是陪衬），runner 的 `afterAll` 清理从「按 runId 查再按 sourceModule/sourceId 删」改成按属主删，`codex-pet-routes.test.ts` 手搓 mock 的 documents 种子摘掉那两个字段（该 mock 整体随 P5.4 退役）。
+  → 附带清掉 `deps.ts` 两个**存量**未用 import（`putObject` / `assertSafeUrl`，`git show HEAD` 核对过本来就没用），理由同 P1 收口：文件进了改动集就会被 `biome ci --changed` 扫到。
+  → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 已重跑）；`src/kb` + `codex-pet-routes.test.ts` **12 文件 203 例全过 / 0 跳过**；`apps/web` **95 文件 640 例全过 / 0 跳过**；两个重型集成文件单独跑（见下方「P5.2 的两个重型集成文件」）。本地数字不与 CI 比（见「验证纪律」）。
+- [ ] P5.3 `Document.sourceType` 的 `'ARTIFACT'` 取值从注释与校验里移除，回到 `FILE|URL|TEXT`（`deps.ts:30-36` 的内联正文分支已由 P5.2 带走，见该项）
 - [ ] P5.4 `CodexPetRun.knowledgeDocumentId` 与其外键
-- [ ] P5.5 `Document_sourceModule_sourceId_key`（`KnowledgeBase_userId_systemKey_key` 已由 P5.1 的 `DROP COLUMN` 连带删掉，见该项）
+- [x] ~~P5.5 `Document_sourceModule_sourceId_key`~~ → **无剩余工作**：`KnowledgeBase_userId_systemKey_key` 由 P5.1 的 `DROP COLUMN` 连带删掉，`Document_sourceModule_sourceId_key` 由 P5.2 显式删掉。两条迁移都在库上核过索引数（4 → 3）。
 
 ---
 
@@ -375,6 +383,17 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 
 `pnpm vitest run src/kb src/workflow/codex-pet` 报 3 例 `Test timed out in 120000ms`，全在 `codex-pet-runner.integration.test.ts`。**单跑那一个文件：36 例通过 / 1 例跳过 / 0 失败**（303s），所以是 CPU 争抢下的超时，不是本项改坏的——和 P1 收口那次 `pipeline.test.ts` 同一个形状。
 
+### P5.2 的两个重型集成文件（2026-09-01）
+
+吃过 P5.1 的教训，本项**没有再把重型集成文件塞进大轮**：`src/kb` + `codex-pet-routes.test.ts` 走一轮（12 文件 203 例，0 跳过），改动到的两个重型文件**各自单跑、顺序执行**，不并发抢 CPU：
+
+- `codex-pet-runner.integration.test.ts`：**36 例通过 / 1 例跳过 / 0 失败**（326s）
+- `codex-pet-recovery-finalizer.test.ts`：**11 例通过 / 0 跳过 / 0 失败**（53s）
+
+这么跑一次也就不需要再事后解释超时。1 例跳过是该文件本来就带 `it.skipIf` 的那条，与本项无关。
+
+另外用 `prisma migrate diff --from-schema-datamodel --to-schema-datasource` 复核了 schema 与库是否一致：**`Document` 和 `KnowledgeBase` 一个字都没出现**，说明 P5.1/P5.2 改的列与索引两边完全对齐。残留差异是三张表（`Chunk`/`Memory`/`NovelVectorMemory`）的 `embedding` 向量索引（pgvector HNSW，Prisma datamodel 表达不了，恒定噪音），外加一处**存量**漂移：`schema.prisma:435` 写的是 `@@index([refundStatus, createdAt])`，但 `20260730120000_codex_pet_failed_call_refund` 实际只建了单列 `CodexPetImageCall_refundStatus_idx`。那是 2026-07-30 就有的，与本计划无关，另开任务处理。
+
 判据不止「单跑绿了」：整轮 `src/kb + src/workflow/codex-pet` 跑了 **5,739 秒**，同文件里正常 15–18s 的用例被挤到 120s 以上；`codex-pet-runner.integration.test.ts` 全文不含 `systemKey`；真正碰 `systemKey` 的两个文件（`src/kb/routes.test.ts` 29 例、`codex-pet-routes.test.ts`）全绿。
 
 
@@ -387,7 +406,7 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 1. ~~**全程静态取证**：没连数据库、没跑测试、**没有比对生产库 `pg_trigger` 确认这批触发器真的装上了**。~~ → **已消除**：P0.1 的集成测试直接查 `pg_trigger` 断言 11 个触发器全在，7 例全绿。
 2. 标「结构性」的条目（H2 锁竞争实际耗时、M4 并发重复 chunk）是代码文本已确认、运行时后果未实测。要钉死 M4 需要并发集成测试。**仍未实测**——但 P1 删掉触发器后这两条自然消失，不再值得单独投入。
 3. ~~**P0.3 的改动量未评估**。X1 耦合牵着退款逻辑，是本计划里唯一「不是删除动作」的一步，也是唯一没底的一步。~~ → **已消除**：实际只动一个函数（`completeKnowledgeArchive`），加三条集成测试的断言反转。
-4. ~~`Document.content` 是否有 ARTIFACT 之外的写入者未核实（阻塞 P5.2）。~~ → **已消除**（P2 顺带核实）：应用代码里**一个写入者都没有**，库里 `content IS NOT NULL` 的行也是 **0**。全部提及只有三处：`indexer.ts:108`（`loadObject` 签名里的字段）、`indexer.ts:250`（原样透传）、`deps.ts:32`（已不可达的 ARTIFACT 分支）；`retrieve.ts` 那两处是 `Chunk.content`，另一列。**P5.2 解除阻塞**，删这列只需连带删掉 `deps.ts` 的 ARTIFACT 分支和签名里的字段。
+4. ~~`Document.content` 是否有 ARTIFACT 之外的写入者未核实（阻塞 P5.2）。~~ → **已消除**（P2 顺带核实，P5.2 开工前又按纪律重核了一遍当前工作树，结论一致）：应用代码里**一个写入者都没有**，库里 `content IS NOT NULL` 的行也是 **0**；关键的一条是**手工 TEXT 上传不用这一列**（`ingest.ts:231-234` 走 S3，`sourceUri` 记 key）。全部提及只有三处：`indexer.ts:108`（`loadObject` 签名里的字段）、`indexer.ts:250`（原样透传）、`deps.ts:32`（已不可达的 ARTIFACT 分支）；`retrieve.ts` 那两处是 `Chunk.content`，另一列。**P5.2 已完成**，四列连同 `deps.ts` 的 ARTIFACT 分支、签名字段一起退役。
 5. `ownerType='OFFICIAL'` 官方知识库的现状（有无管理端入口、有无实际数据）未核实。本计划假设它照旧可用，未做任何改动。 → 部分核实：全库**恰好 1 行** OFFICIAL 库、`systemKey` 为 NULL、**没有文档**（所以 P2.1 的谓词碰不到它，且它现在是个空库）。管理端入口仍未核实。
 6. ~~存量 ARTIFACT 文档/Chunk 的实际规模未知（阻塞 P2.1 的分批决策）。~~ → **已消除**：见 P0.2 实测数据，1,265 文档 / 211 chunk / 9,563 库行，一次性删即可。
 

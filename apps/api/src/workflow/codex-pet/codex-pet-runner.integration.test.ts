@@ -1150,7 +1150,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     ))).toBe(true);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: run.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
-    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(0);
+    expect(await prisma.document.count({ where: { kb: { userId: run.userId } } })).toBe(0);
     expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
     expect(await executeCodexPetRun({ runId: run.id, deps: { ...deps, workerId: "identity-guide-replay-worker" } }))
@@ -1265,7 +1265,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundedAt: null });
       expect(run.knowledgeDocumentId).toBeNull();
       expect(deps.billing.refundResource).not.toHaveBeenCalled();
-      expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: run.id } })).toBe(0);
+      expect(await prisma.document.count({ where: { kb: { userId: run.userId } } })).toBe(0);
       expect(await prisma.codexPetEvent.count({ where: { runId: run.id, type: "package.ready" } })).toBe(0);
 
       const finalJob = await prisma.codexPetJob.findUniqueOrThrow({
@@ -1926,7 +1926,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     // 原先这里读归档文档的正文,确认风格预设写进了摘要。P1.2 之后没有摘要,
     // 交付判据回到产物本身。
     expect(run.knowledgeDocumentId).toBeNull();
-    expect(await prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: seeded.run.id } })).toBe(0);
+    expect(await prisma.document.count({ where: { kb: { userId: seeded.user.id } } })).toBe(0);
     expect(run.packageArtifactId).toBeTruthy();
   }, 120_000);
 
@@ -2474,7 +2474,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
       prisma.codexPetProject.findUniqueOrThrow({ where: { id: seeded.project.id } }),
       prisma.codexPetJob.count({ where: { runId: seeded.run.id, kind: "knowledge_archive" } }),
-      prisma.document.count({ where: { sourceModule: "codex_pet", sourceId: seeded.run.id } }),
+      prisma.document.count({ where: { kb: { userId: seeded.user.id } } }),
     ]);
     expect(run).toMatchObject({
       status: "ready",
@@ -2887,8 +2887,10 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
 afterAll(async () => {
   if (cleanupUserIds.length) {
-    const runs = await prisma.codexPetRun.findMany({ where: { userId: { in: cleanupUserIds } }, select: { id: true } });
-    await prisma.document.deleteMany({ where: { sourceModule: "codex_pet", sourceId: { in: runs.map((run) => run.id) } } });
+    // P5.2 之前这里先按 runId 查一遍再 `deleteMany({ sourceModule, sourceId })`。
+    // 那两列删了，改成按属主清；本文件从不建知识库，所以这一句今天恒删 0 行，
+    // 留着只是别让「跑完不留脏数据」这条纪律断在这里。
+    await prisma.document.deleteMany({ where: { kb: { userId: { in: cleanupUserIds } } } });
     await prisma.user.deleteMany({ where: { id: { in: cleanupUserIds } } });
   }
   await prisma.$disconnect();

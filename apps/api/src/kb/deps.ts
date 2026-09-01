@@ -1,7 +1,7 @@
 import { getPrisma } from "@ai-assistant/db";
 import { createBillingClient } from "@ai-assistant/billing";
-import { getObject, putObject, type S3 } from "../storage/s3.js";
-import { fetchUrl, assertSafeUrl } from "./url-fetch.js";
+import { getObject, type S3 } from "../storage/s3.js";
+import { fetchUrl } from "./url-fetch.js";
 import { parseDocument } from "./parse.js";
 import { chunkText } from "./chunk.js";
 import { embed, loadEmbeddingConfig } from "../memory/embedding-client.js";
@@ -27,13 +27,10 @@ export async function buildIndexDeps(
   return {
     prisma,
     loadObject: async (doc) => {
-      if (doc.sourceType === "ARTIFACT") {
-        return {
-          buf: Buffer.from(doc.content ?? "", "utf8"),
-          mime: "text/plain",
-          filename: "artifact.txt",
-        };
-      }
+      // P5.2 之前这里的第一个分支是 `sourceType === "ARTIFACT"`，把内联在
+      // `Document.content` 的产物正文直接包成 Buffer。P1.2 之后没有产物文档，这个
+      // 分支已不可达；`content` 列随 P5.2 删掉后它连编译都过不去，所以一并退役
+      // （计划把它挂在 P5.3 名下，实际由本项带走）。剩下三种来源都靠 sourceUri 定位。
       if (doc.sourceType === "FILE" || doc.sourceType === "TEXT") {
         // FILE 和 TEXT 都存在 S3，sourceUri 是 S3 key
         const buf = await getObject(s3, doc.sourceUri!);

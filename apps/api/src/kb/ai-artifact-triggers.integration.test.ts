@@ -35,6 +35,21 @@ function artifactDocId(sourceModule: string, sourceId: string): string {
   return `ai_artifact_${md5(`${sourceModule}:${sourceId}`)}`;
 }
 
+/**
+ * 「这个用户名下一份文档都没有」。
+ *
+ * P5.2 之前每条断言后面都跟一句
+ * `document.count({ where: { sourceModule, sourceId } })`，按「哪个模块的哪条记录」
+ * 精确点名。那两列随 P5.2 删了——产物与业务记录之间的这条挂钩本身就是要消灭的东西，
+ * 所以点名式断言无从存在。换成按属主数，比原来更强：原来只盖「没有 codex_pet/这条 id
+ * 的文档」，现在盖「不管用什么键，这个用户名下什么文档都没被写出来」。
+ * 前面 `findUnique(artifactDocId(...))` 那句照旧盯着触发器的确定性主键，两句合起来
+ * 既管确定性键也管任意键。
+ */
+async function documentsOwnedBy(userId: string): Promise<number> {
+  return prisma.document.count({ where: { kb: { userId } } });
+}
+
 async function createUser(tag: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const user = await prisma.user.create({
@@ -101,7 +116,7 @@ describe.skipIf(!databaseEnabled)("AI 产物归档触发器已删除", () => {
       },
     });
     expect(await prisma.document.findUnique({ where: { id: artifactDocId("image", asset.id) } })).toBeNull();
-    expect(await prisma.document.count({ where: { sourceModule: "image", sourceId: asset.id } })).toBe(0);
+    expect(await documentsOwnedBy(user.id)).toBe(0);
     // 图片本身照常落库：删掉的只是事后登记那一步。
     expect(await prisma.imageAsset.findUniqueOrThrow({ where: { id: asset.id } }))
       .toMatchObject({ prompt: "一只戴墨镜的柯基", userId: user.id });
@@ -123,7 +138,7 @@ describe.skipIf(!databaseEnabled)("AI 产物归档触发器已删除", () => {
     });
     await prisma.imageAsset.delete({ where: { id: asset.id } });
     expect(await prisma.document.findUnique({ where: { id: artifactDocId("image", asset.id) } })).toBeNull();
-    expect(await prisma.document.count({ where: { sourceModule: "image", sourceId: asset.id } })).toBe(0);
+    expect(await documentsOwnedBy(user.id)).toBe(0);
   });
 
   it("改小说章节标题不再动任何文档索引状态", async () => {
@@ -136,7 +151,7 @@ describe.skipIf(!databaseEnabled)("AI 产物归档触发器已删除", () => {
     // attempts 归零；现在连文档都不存在，改标题就只是改标题。
     await prisma.novelChapter.update({ where: { id: chapter.id }, data: { title: "第二稿" } });
     expect(await prisma.document.findUnique({ where: { id: artifactDocId("novel", chapter.id) } })).toBeNull();
-    expect(await prisma.document.count({ where: { sourceModule: "novel", sourceId: chapter.id } })).toBe(0);
+    expect(await documentsOwnedBy(user.id)).toBe(0);
     expect(await prisma.novelChapter.findUniqueOrThrow({ where: { id: chapter.id } }))
       .toMatchObject({ title: "第二稿", content: "正文内容不变。" });
   });
@@ -149,14 +164,15 @@ describe.skipIf(!databaseEnabled)("AI 产物归档触发器已删除", () => {
     });
     // P0.1 里这个诱饵会让触发器的 INSERT 撞 Document_pkey，unique_violation
     // 原样抛出，用户的生图记录被一次「事后登记」干掉——产物落 KB 最贵的那笔账。
+    // 诱饵起作用靠的是**占住那个确定性主键**，所以 P5.2 删掉 sourceModule/sourceId
+    // 两列对这一条毫无影响；原先那对值只是陪衬（sourceId 还特意错开，免得撞
+    // Document_sourceModule_sourceId_key —— 那个唯一索引也随 P5.2 一起没了）。
     await prisma.document.create({
       data: {
         id: artifactDocId("image", assetId),
         kbId: kb.id,
         name: "占位诱饵",
         sourceType: "TEXT",
-        sourceModule: "image",
-        sourceId: `decoy-${assetId}`,
       },
     });
 

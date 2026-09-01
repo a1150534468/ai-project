@@ -51,8 +51,6 @@ export interface KbDocument {
   sourceType?: string;
   sourceUri?: string;
   mime?: string;
-  sourceModule?: string;
-  metadata?: Record<string, unknown>;
   createdAt: string;
 }
 
