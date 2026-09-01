@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** ✅ 执行完毕（23/23 项已定：21 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P5 全部收口）。**仍开着的只有「未验证项」第 5 条的后半句**——`ownerType='OFFICIAL'` 官方库有无管理端入口未核实；本计划对它未做任何改动，不阻塞任何已完成项。
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** ✅ 执行完毕（23/23 项已定：21 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P5 全部收口）。**「未验证项」也已清零**——最后一条（第 5 条：官方知识库有无管理端入口）2026-09-01 核完，入口存在且完整、本计划退役的列一个都没碰到它；同日顺手修掉了那处存量 `CodexPetImageCall` 索引命名漂移，`migrate diff` 现在只剩三条恒定的 pgvector 噪音。
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -406,7 +406,9 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 
 这么跑一次也就不需要再事后解释超时。1 例跳过是该文件本来就带 `it.skipIf` 的那条，与本项无关。
 
-另外用 `prisma migrate diff --from-schema-datamodel --to-schema-datasource` 复核了 schema 与库是否一致：**`Document` 和 `KnowledgeBase` 一个字都没出现**，说明 P5.1/P5.2 改的列与索引两边完全对齐。残留差异是三张表（`Chunk`/`Memory`/`NovelVectorMemory`）的 `embedding` 向量索引（pgvector HNSW，Prisma datamodel 表达不了，恒定噪音），外加一处**存量**漂移：`schema.prisma:435` 写的是 `@@index([refundStatus, createdAt])`，但 `20260730120000_codex_pet_failed_call_refund` 实际只建了单列 `CodexPetImageCall_refundStatus_idx`。那是 2026-07-30 就有的，与本计划无关，另开任务处理。
+另外用 `prisma migrate diff --from-schema-datamodel --to-schema-datasource` 复核了 schema 与库是否一致：**`Document` 和 `KnowledgeBase` 一个字都没出现**，说明 P5.1/P5.2 改的列与索引两边完全对齐。残留差异是三张表（`Chunk`/`Memory`/`NovelVectorMemory`）的 `embedding` 向量索引（pgvector HNSW，Prisma datamodel 表达不了，恒定噪音），外加一处**存量**漂移：`schema.prisma:432` 的 `@@index([refundStatus, createdAt])` 与库里的索引名对不上。那是 2026-07-30 就有的，与本计划无关，另开任务处理。
+
+> **2026-09-01 更正并修完**：上面这处漂移当时被记成「`20260730120000_codex_pet_failed_call_refund` 实际只建了单列 `CodexPetImageCall_refundStatus_idx`」，**那句是错的**。那条迁移建的是 `("refundStatus", "createdAt")` 双列索引，列和顺序都对，**只有名字**少了 `createdAt` 那一段（所以 `migrate diff` 报的是一句 `RenameIndex`，而不是 DROP + CREATE——真缺列会是后者）。修法是 [`20260901150000_rename_codex_pet_image_call_refund_status_index`](../../../packages/db/prisma/migrations/20260901150000_rename_codex_pet_image_call_refund_status_index/migration.sql) 一句 `ALTER INDEX ... RENAME TO "CodexPetImageCall_refundStatus_createdAt_idx"`（只改系统目录，不重建索引、不动数据），而不是给 schema 加 `map:`——全 schema 一个 `map:` 都没有，加一个等于引入一种此前不存在的写法。改完 `migrate diff` **只剩那三条 pgvector 噪音**，非噪音漂移清零。顺带记一笔（本次不动）：这个索引当年是给「跨运行扫还欠着的退款」的 sweeper 建的，但现在 `CodexPetImageCall` 上所有读查询都带 `runId` 前缀（`codex-pet-call-ledger.ts:470` 那个退款扫描也是 `runId+projectId+userId` 起头），没有一条以 `refundStatus` 领头，它今天大概率吃不到——要不要留是另一个决定。
 
 判据不止「单跑绿了」：整轮 `src/kb + src/workflow/codex-pet` 跑了 **5,739 秒**，同文件里正常 15–18s 的用例被挤到 120s 以上；`codex-pet-runner.integration.test.ts` 全文不含 `systemKey`；真正碰 `systemKey` 的两个文件（`src/kb/routes.test.ts` 29 例、`codex-pet-routes.test.ts`）全绿。
 
@@ -435,11 +437,13 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 ## 未验证项（执行者必读）
 
 > 2026-08-31 P0 执行后更新：第 1、3、6 条已消除，原文留在下面并标注结论。
+>
+> 2026-09-01 收尾：第 4 条随 P2／P5.2 的重核消除，第 5 条已全部核完。**只剩第 2 条仍未实测，且它已经不需要实测了**——那两个运行时后果（H2 锁竞争、M4 并发重复 chunk）都寄生在归档触发器上，P1 把触发器删净之后一起消失了。
 
 1. ~~**全程静态取证**：没连数据库、没跑测试、**没有比对生产库 `pg_trigger` 确认这批触发器真的装上了**。~~ → **已消除**：P0.1 的集成测试直接查 `pg_trigger` 断言 11 个触发器全在，7 例全绿。
 2. 标「结构性」的条目（H2 锁竞争实际耗时、M4 并发重复 chunk）是代码文本已确认、运行时后果未实测。要钉死 M4 需要并发集成测试。**仍未实测**——但 P1 删掉触发器后这两条自然消失，不再值得单独投入。
 3. ~~**P0.3 的改动量未评估**。X1 耦合牵着退款逻辑，是本计划里唯一「不是删除动作」的一步，也是唯一没底的一步。~~ → **已消除**：实际只动一个函数（`completeKnowledgeArchive`），加三条集成测试的断言反转。
 4. ~~`Document.content` 是否有 ARTIFACT 之外的写入者未核实（阻塞 P5.2）。~~ → **已消除**（P2 顺带核实，P5.2 开工前又按纪律重核了一遍当前工作树，结论一致）：应用代码里**一个写入者都没有**，库里 `content IS NOT NULL` 的行也是 **0**；关键的一条是**手工 TEXT 上传不用这一列**（`ingest.ts:231-234` 走 S3，`sourceUri` 记 key）。全部提及只有三处：`indexer.ts:108`（`loadObject` 签名里的字段）、`indexer.ts:250`（原样透传）、`deps.ts:32`（已不可达的 ARTIFACT 分支）；`retrieve.ts` 那两处是 `Chunk.content`，另一列。**P5.2 已完成**，四列连同 `deps.ts` 的 ARTIFACT 分支、签名字段一起退役。
-5. `ownerType='OFFICIAL'` 官方知识库的现状（有无管理端入口、有无实际数据）未核实。本计划假设它照旧可用，未做任何改动。 → 部分核实：全库**恰好 1 行** OFFICIAL 库、`systemKey` 为 NULL、**没有文档**（所以 P2.1 的谓词碰不到它，且它现在是个空库）。管理端入口仍未核实。
+5. ~~`ownerType='OFFICIAL'` 官方知识库的现状（有无管理端入口、有无实际数据）未核实。本计划假设它照旧可用，未做任何改动。~~ → **已消除（2026-09-01 全部核完）**。数据：全库**恰好 1 行** OFFICIAL 库、`systemKey` 为 NULL（P5.1 后该列已不存在）、**没有文档**，所以 P2.1 的谓词碰不到它，它现在是个空库。管理端入口：**存在且完整，一共三层都在**——① 服务端 [`apps/api/src/admin/knowledge-routes.ts`](../../../apps/api/src/admin/knowledge-routes.ts) 七个端点（官方库 list/create/patch/delete + 文档 list/add/delete，全部 `requireAdmin("KNOWLEDGE_MANAGE")`，每个写操作都 `writeAudit`；建库走 `createKb(..., ownerType: "OFFICIAL")`，加文档走 `storeAndCreateDocument` 且 `skipQuotaCheck: true` 跳计费），在 [`server.ts:25`](../../../apps/api/src/server.ts) 注册；② 管理端页面 [`apps/admin/src/pages/Knowledge.tsx`](../../../apps/admin/src/pages/Knowledge.tsx)（495 行）与 [`api.ts`](../../../apps/admin/src/api.ts) 里对应的七个调用；③ 一级导航 [`App.tsx:54`](../../../apps/admin/src/App.tsx) 的 `官方知识库` 页签，按 `KNOWLEDGE_MANAGE` 权限显示。**本计划退役的列一个都没碰到它**：admin 的文档 `select` 只取 id/name/status/sizeBytes/chunkCount/error/createdAt，`apps/admin` 全仓 grep `systemKey`/`sourceModule`/`sourceId`/`metadata`/`content` **零命中**。证据不止 grep：[`knowledge-routes.test.ts`](../../../apps/api/src/admin/knowledge-routes.test.ts) **20 例全绿 / 0 跳过**（2026-09-01 在 P5.4 之后的库上跑的，权限 403、CRUD、非官方库 404、加文本文档不调 `billing.reserve`、`KB_CREATE` 审计都在里面），所以官方库这条路在删完三批列之后仍然端到端可用。
 6. ~~存量 ARTIFACT 文档/Chunk 的实际规模未知（阻塞 P2.1 的分批决策）。~~ → **已消除**：见 P0.2 实测数据，1,265 文档 / 211 chunk / 9,563 库行，一次性删即可。
 
