@@ -329,7 +329,7 @@ describe("Codex pet recovery finalizer", () => {
     })).rejects.toThrow(/16 个方向/);
   }, 120_000);
 
-  it.skipIf(!databaseEnabled)("creates an idempotent zero-charge recovery, preserves source calls, and archives knowledge", async () => {
+  it.skipIf(!databaseEnabled)("creates an idempotent zero-charge recovery, preserves source calls, and writes nothing to the knowledge base", async () => {
     const suffix = randomUUID();
     const workerId = `recovery-${suffix}`;
     const user = await prisma.user.create({ data: { uid: `pet-recovery-${suffix}`, username: `pet-recovery-${suffix}`, passwordHash: "test" } });
@@ -426,8 +426,6 @@ describe("Codex pet recovery finalizer", () => {
       status: "ready",
       progressPercent: 100,
       imageGenerationCallCount: 26,
-      // P1.2 起恢复最终化不再写知识库：交付判据只有产物本身。
-      knowledgeDocumentId: null,
     });
     const finalKinds = await prisma.codexPetArtifact.findMany({
       where: { runId: initialized.runId, status: "ready", expiresAt: null },
@@ -441,6 +439,8 @@ describe("Codex pet recovery finalizer", () => {
       "direction_blind_qa",
       "validation_report",
     ]));
+    // P1.2 起恢复最终化不再写知识库，交付判据只有产物本身；P5.4 退役了
+    // CodexPetRun.knowledgeDocumentId 那一列，这条按属主数文档的断言就是唯一也是更强的钉子。
     expect(await prisma.document.count({ where: { kb: { userId: persistedRun.userId } } })).toBe(0);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: persistedRun.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);

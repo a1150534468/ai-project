@@ -296,7 +296,6 @@ export function serializeRun(run: RunShape, ownedRunIds: ReadonlySet<string> | n
     visualQaRoutes,
     actualModels: [...run.actualModels],
     usage: run.usage,
-    knowledgeDocumentId: run.knowledgeDocumentId,
     lastEventSequence: run.lastEventSequence,
     // A gate that named its action groups leaves the failure resumable inside the
     // same paid run. Publishing the scope is what lets the panel offer that resume

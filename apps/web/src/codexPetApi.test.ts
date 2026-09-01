@@ -54,7 +54,6 @@ const run: CodexPetRun = {
   visualQaRoutes: [],
   actualModels: [],
   usage: null,
-  knowledgeDocumentId: null,
   lastEventSequence: 1,
   error: null,
   startedAt: null,

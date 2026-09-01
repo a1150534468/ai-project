@@ -127,7 +127,6 @@ function runRow(overrides: Record<string, unknown> = {}) {
     pendingImageJobKey: null as string | null,
     actualModels: [] as string[],
     usage: null as unknown,
-    knowledgeDocumentId: null as string | null,
     lastEventSequence: 0,
     workerId: null as string | null,
     heartbeatAt: null as Date | null,
@@ -230,7 +229,6 @@ function createPrismaMock(seed: {
   images?: Array<Record<string, unknown>>;
   jobs?: Array<Record<string, unknown>>;
   imageCalls?: Array<Record<string, unknown>>;
-  documents?: Array<Record<string, unknown>>;
 } = {}) {
   const projects = seed.projects ?? [];
   const runs = seed.runs ?? [];
@@ -239,11 +237,6 @@ function createPrismaMock(seed: {
   const images = seed.images ?? [];
   const jobs = seed.jobs ?? [];
   const imageCalls = seed.imageCalls ?? [];
-  const documents = seed.documents ?? runs.flatMap((run) => run.knowledgeDocumentId ? [{
-    id: run.knowledgeDocumentId,
-    kb: { userId: run.userId },
-  }] : []);
-  const deletedDocumentSourceIds: string[] = [];
   let transactionTail = Promise.resolve();
   let transactionDepth = 0;
   let projectCounter = projects.length;
@@ -445,19 +438,6 @@ function createPrismaMock(seed: {
         return found.map((row) => Object.fromEntries(Object.keys(select).filter((key) => select[key]).map((key) => [key, row[key]])));
       }),
     },
-    document: {
-      findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => documents.find((row) => {
-        if (!matches(row, where)) return false;
-        const expectedKb = recordCondition(where.kb);
-        const actualKb = recordCondition(row.kb);
-        return matchesScalar(actualKb.userId, expectedKb.userId);
-      }) ?? null),
-      deleteMany: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
-        const sourceIds = recordCondition(where.sourceId).in;
-        if (Array.isArray(sourceIds)) deletedDocumentSourceIds.push(...sourceIds.map(String));
-        return { count: Array.isArray(sourceIds) ? sourceIds.length : 0 };
-      }),
-    },
     $queryRawUnsafe: queryRaw,
     $executeRawUnsafe: executeRaw,
   });
@@ -478,7 +458,7 @@ function createPrismaMock(seed: {
   });
   return {
     prisma: prisma as unknown as PrismaClient,
-    state: { projects, runs, artifacts, events, images, jobs, imageCalls, documents, deletedDocumentSourceIds },
+    state: { projects, runs, artifacts, events, images, jobs, imageCalls },
     spies: { queryRaw, executeRaw, projectDelegate, runDelegate, artifactDelegate, eventDelegate, jobDelegate, isTransactionActive: () => transactionDepth > 0 },
   };
 }
@@ -2272,7 +2252,7 @@ describe("Codex pet routes", () => {
     }
   });
 
-  it("delivers a revalidated package before knowledge archival completes, then serves only the signed spritesheet", async () => {
+  it("delivers a revalidated package while the run is still wrapping up, then serves only the signed spritesheet", async () => {
     const project = projectRow({ latestRunId: "run-ready", status: "archiving", name: "代码 狐" });
     const run = runRow({
       id: "run-ready",
@@ -2281,7 +2261,6 @@ describe("Codex pet routes", () => {
       packageArtifactId: "package-final",
       previewArtifactId: "preview-final",
       validationReport: { ok: false, errors: ["legacy QA report is incomplete"] },
-      knowledgeDocumentId: null,
     });
     const sprite = artifactRow({
       id: "sprite-final",
@@ -2339,7 +2318,6 @@ describe("Codex pet routes", () => {
       spritesheetArtifactId: "sprite-historical",
       packageArtifactId: "package-historical",
       validationReport: completeValidationReport(),
-      knowledgeDocumentId: "knowledge-historical",
     });
     const latest = runRow({
       id: "run-latest",
@@ -2347,7 +2325,6 @@ describe("Codex pet routes", () => {
       spritesheetArtifactId: "sprite-latest",
       packageArtifactId: "package-latest",
       validationReport: completeValidationReport(),
-      knowledgeDocumentId: "knowledge-latest",
     });
     const artifacts = [
       artifactRow({ id: "sprite-historical", runId: historical.id, kind: "spritesheet", objectKey: "workflow/codex-pets/u1/project-1/run-historical/historical.webp", width: 1536, height: 2288 }),
@@ -2391,7 +2368,6 @@ describe("Codex pet routes", () => {
       spritesheetArtifactId: "sprite-selected",
       packageArtifactId: "package-selected",
       validationReport: completeValidationReport(),
-      knowledgeDocumentId: "knowledge-selected",
     });
     const artifacts = [
       artifactRow({ id: "sprite-selected", runId: selected.id, kind: "spritesheet", objectKey: "workflow/codex-pets/u1/project-1/run-selected/sprite.webp", width: 1536, height: 2288 }),
@@ -2407,7 +2383,6 @@ describe("Codex pet routes", () => {
 
     state.runs[0]!.status = "archiving";
     state.runs[0]!.validationReport = { ok: false, spriteVersionNumber: 2 };
-    state.runs[0]!.knowledgeDocumentId = null;
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(200);
 
     state.runs[0]!.validationReport = { ok: true };
@@ -2463,7 +2438,6 @@ describe("Codex pet routes", () => {
     expect(state.projects[0]).toMatchObject({ status: "deleting", deletedAt: NOW, createIdempotencyKey: null });
     expect(state.runs).toHaveLength(1);
     expect(state.artifacts).toHaveLength(1);
-    expect(state.deletedDocumentSourceIds).toEqual([]);
 
     const duplicate = await app.inject({ method: "DELETE", url: "/api/workflow/codex-pets/projects/project-1", headers: auth });
     expect(duplicate.statusCode).toBe(404);

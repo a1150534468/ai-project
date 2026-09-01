@@ -633,7 +633,10 @@ describe.skipIf(!enabled)("Codex pet R7 real zero-image recovery", () => {
     expect(recovery.billingPoints).toBe(0);
     expect(recovery.billingChargeStatus).toBe("not_required");
     expect(recovery.imageGenerationCallCount).toBe(EXPECTED_IMAGE_CALLS);
-    expect(recovery.knowledgeDocumentId).toBeTruthy();
+    // 这里原先断言 knowledgeDocumentId 非空。P1.2 之后交付根本不写知识库，这条断言
+    // 从那时就该错了，只因为 RUN_CODEX_PET_R7_RECOVERY 这道开关默认关着才一直没跑到。
+    // P5.4 顺手改成正确且更强的判据：这个用户名下一条文档都不该有。
+    expect(await prisma.document.count({ where: { kb: { userId: recovery.userId } } })).toBe(0);
     expect(projectAfter.latestRunId).toBe(recovery.id);
     expect(projectAfter.status).toBe("ready");
 
@@ -666,7 +669,6 @@ describe.skipIf(!enabled)("Codex pet R7 real zero-image recovery", () => {
         sourceRunId: SOURCE_RUN_ID,
         recoveryRunId: recovery.id,
         projectId: PROJECT_ID,
-        knowledgeDocumentId: recovery.knowledgeDocumentId,
         spritesheetArtifactId: recovery.spritesheetArtifactId,
         packageArtifactId: recovery.packageArtifactId,
         previewArtifactId: recovery.previewArtifactId,

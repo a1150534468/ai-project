@@ -168,7 +168,6 @@ export type RunShape = {
   readonly pendingImageJobKey: string | null;
   readonly actualModels: readonly string[];
   readonly usage: unknown;
-  readonly knowledgeDocumentId: string | null;
   readonly lastEventSequence: number;
   readonly workerId?: string | null;
   readonly error: string | null;

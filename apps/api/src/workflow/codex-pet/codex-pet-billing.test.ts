@@ -80,7 +80,6 @@ function runRow(overrides: Row = {}): Row {
     requestedModel: "gpt-image-2",
     actualModels: [],
     usage: null,
-    knowledgeDocumentId: null,
     lastEventSequence: 0,
     workerId: null,
     heartbeatAt: null,

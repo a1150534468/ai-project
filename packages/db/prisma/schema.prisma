@@ -282,7 +282,6 @@ model Document {
   updatedAt    DateTime      @updatedAt
   kb           KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
   chunks       Chunk[]
-  codexPetRun  CodexPetRun?
 
   @@index([kbId])
   @@index([status])
@@ -373,7 +372,6 @@ model CodexPetRun {
   pendingImageJobKey            String?
   actualModels                  String[]           @default([])
   usage                         Json?
-  knowledgeDocumentId           String?            @unique
   lastEventSequence             Int                @default(0)
   workerId                      String?
   heartbeatAt                   DateTime?
@@ -384,7 +382,6 @@ model CodexPetRun {
   updatedAt                     DateTime           @updatedAt
   project                       CodexPetProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user                          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  knowledgeDocument             Document?          @relation(fields: [knowledgeDocumentId], references: [id], onDelete: SetNull)
   jobs                          CodexPetJob[]
   artifacts                     CodexPetArtifact[]
   events                        CodexPetEvent[]

@@ -1045,8 +1045,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(deps.visual.blindQa).toHaveBeenCalledWith(expect.objectContaining({ identityGuide: IDENTITY_GUIDE }));
     expect(deps.visual.directionSemantics).toHaveBeenCalledWith(expect.objectContaining({ identityGuide: IDENTITY_GUIDE }));
     expect(run.progressPercent).toBe(100);
-    // P1.2：交付不再写知识库。ready + knowledgeDocumentId=null 是唯一的正常终态。
-    expect(run.knowledgeDocumentId).toBeNull();
     expect(run.actualModels).toEqual(["gpt-image-2-codex"]);
     expect((run.usage as { totalTokens: number }).totalTokens).toBeGreaterThan(0);
     const providerArtifact = await prisma.codexPetArtifact.findFirstOrThrow({
@@ -1150,6 +1148,9 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     ))).toBe(true);
     const packageArtifact = await prisma.codexPetArtifact.findUniqueOrThrow({ where: { id: run.packageArtifactId! } });
     expect((await inspectCodexPetZip(await store.load(packageArtifact))).manifest.spriteVersionNumber).toBe(2);
+    // P1.2：交付不再写知识库，所以 ready 的判据里没有任何归档指针可看。P5.4 连
+    // CodexPetRun.knowledgeDocumentId 那一列也退役了，这条按属主数文档的断言就是
+    // 现在唯一也是更强的钉子——不管用什么键，这个用户名下什么文档都没被写出来。
     expect(await prisma.document.count({ where: { kb: { userId: run.userId } } })).toBe(0);
     expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
@@ -1195,7 +1196,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
         spritesheetArtifactId: null,
         packageArtifactId: null,
         previewArtifactId: null,
-        knowledgeDocumentId: null,
         billingRefundedAt: null,
       });
       const interruptedJob = await prisma.codexPetJob.findUniqueOrThrow({
@@ -1263,7 +1263,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
       const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
       expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundedAt: null });
-      expect(run.knowledgeDocumentId).toBeNull();
       expect(deps.billing.refundResource).not.toHaveBeenCalled();
       expect(await prisma.document.count({ where: { kb: { userId: run.userId } } })).toBe(0);
       expect(await prisma.codexPetEvent.count({ where: { runId: run.id, type: "package.ready" } })).toBe(0);
@@ -1925,7 +1924,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(selected.name).toBe("主形象候选 2");
     // 原先这里读归档文档的正文,确认风格预设写进了摘要。P1.2 之后没有摘要,
     // 交付判据回到产物本身。
-    expect(run.knowledgeDocumentId).toBeNull();
     expect(await prisma.document.count({ where: { kb: { userId: seeded.user.id } } })).toBe(0);
     expect(run.packageArtifactId).toBeTruthy();
   }, 120_000);
@@ -2480,7 +2478,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       status: "ready",
       progressStage: "ready",
       progressPercent: 100,
-      knowledgeDocumentId: null,
       billingRefundStatus: "none",
       workerId: null,
       error: null,

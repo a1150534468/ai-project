@@ -1,6 +1,6 @@
 # 知识库 / 素材库拆分执行计划
 
-**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** 🚧 执行中（22/23 项已定：20 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P4 与 P5.1/P5.2/P5.3/P5.5 完成，下一步 P5.4 —— `CodexPetRun.knowledgeDocumentId` 与其外键）
+**Created:** 2026-08-31 · **Baseline:** `main` @ `f0be226` · **Status:** ✅ 执行完毕（23/23 项已定：21 完成 + P4.1 撤销 + P5.5 无剩余工作；P0–P5 全部收口）。**仍开着的只有「未验证项」第 5 条的后半句**——`ownerType='OFFICIAL'` 官方库有无管理端入口未核实；本计划对它未做任何改动，不阻塞任何已完成项。
 
 **决策（已拍板，不再讨论）**：AI 产物**不再落知识库**。删掉 `AI_ARTIFACTS` 系统库与全套自动归档触发器；知识库回到「官方知识库 + 个人自建知识库」两类；可复用媒体素材进新的**素材库**；长文本成品留在各自工作流；运行报告留在运行详情。**2026-09-01 加严**：连人工策展入口也不给——产物一律不进知识库，P4.1 撤销（见「会丢的能力（2026-09-01 定：不补）」）。
 
@@ -349,7 +349,15 @@ M7 说明现状零回归保护：**删对了删错了都是绿的**。所以第�
   → **剩下的 `ARTIFACT` 提及一个都不动，因为它们不是谎**：`deps.ts:30` / `indexer.ts:109` 是 P5.2 记的历史（解释被删掉的分支）；`ai-artifact-triggers.integration.test.ts:93/103` 是测试名（「不再生成 ARTIFACT 文档」本就是过去时的负向断言）；`KnowledgePicker.test.tsx:12` / `Chat.behavior.test.tsx:428` 是同类历史注释（P5.1 已裁定保留）；四条迁移里的提及是历史记录，**禁改**；`codex-pet` 的 `FINAL_ARTIFACT_KEYS`/`CODEX_PET_*_ARTIFACT_*` 是 S3 产物命名，与知识库无关。
   → **明确没有加 CHECK 约束**：本项是「退役 ARTIFACT」不是「加新约束」。唯一写入者 `ingest.ts` 已在编译期封死，运行期还有 `deps.ts:50` 的 `Unknown sourceType:` 兜底（被 `indexer.ts:69` 判为永久失败、不进 reaper 重试）。要不要给这列加 CHECK 是另一个决定，不混进本项的迁移里。
   → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 重跑、`prisma validate` 通过）；`src/kb` **11 文件 141 例全过 / 0 跳过**；`apps/web` **95 文件 640 例全过 / 0 跳过**；`migrate diff` 残留与 P5.2 记录一致（`Document`/`KnowledgeBase` **零提及**）。另有一次误触发的 api 全量轮，结论见下方「P5.3 那次误触发的全量轮」。本地数字不与 CI 比（见「验证纪律」）。
-- [ ] P5.4 `CodexPetRun.knowledgeDocumentId` 与其外键
+- [x] P5.4 `CodexPetRun.knowledgeDocumentId` 与其外键
+  → 迁移 [`20260901140000_drop_codex_pet_run_knowledge_document_id`](../../../packages/db/prisma/migrations/20260901140000_drop_codex_pet_run_knowledge_document_id/migration.sql)，已 `migrate deploy`（78 条迁移，exit 0）。结构同 P5.1/P5.2 三步：① `DO $$` 守卫，该列还有非空行就 `RAISE EXCEPTION`（那说明 `20260831130000`／P2.1 在这个库上没清完，直接删列会把「这条运行归档到了哪份文档」这唯一线索静默烧掉）→ ② 显式 `DROP CONSTRAINT CodexPetRun_knowledgeDocumentId_fkey` + `DROP INDEX CodexPetRun_knowledgeDocumentId_key` → ③ `ALTER TABLE ... DROP COLUMN`。删前删后都核过库：列 **60 → 59**、约束 **4 → 3**、索引 **10 → 9**、`CodexPetRun` **127 行**与 `Document` **8 行一行没动**，删前该列非空行为 **0**。
+  → **这一列的 43 个非空值不是本项清的，是 P2.1 顺带冲掉的**：外键的 `ON DELETE SET NULL`（`confdeltype='n'`）在 `20260831130000` 删掉那批产物文档时把它们全置了空（见 P2.2 的记录）。所以本项开工时它已经是一列纯惰性的 NULL，守卫只是把「万一在别的库上 P2.1 没跑」挡在删列之前。
+  → **删这列之所以安全，是 P0.3 早就把终态改了**：`ready + knowledgeDocumentId = null` 从 P0.3 起就是合法终态，ready 转换的 where 谓词里已经没有这个字段；P1.2 又把 `archiving` 阶段改成纯过场（结算按图计费 → 置 ready → 发事件，阶段名保留是为了不动状态机）。因此库里没有任何写入者，codex-pet 整条链路上也没有一处 `prisma.document.*`。
+  → **运行响应体少了一个字段，且没有任何客户端在读它**：`codex-pet-route-helpers.ts` 的 `serializeRun` 去掉 `knowledgeDocumentId`，`codex-pet-route-types.ts` 的 `RunShape` 与 `apps/web/src/codexPetApi.ts` 的 `CodexPetRun` 同步去掉。全仓 grep 过：`apps/web` 里除了 fixture 就没有第二处提及，没有组件读它的值。
+  → **顺手结清 P5.2 明确挂到本项的那个 mock**：`codex-pet-routes.test.ts` 手搓的 `document: { findFirst, deleteMany }` 整个删掉——它的 `deleteMany` 过滤的是 `where.sourceId`（P5.2 已删的列），而 codex-pet 生产代码里根本没有 `prisma.document.*` 调用者（全在 `kb/` 与 `admin/`），所以那条 `expect(state.deletedDocumentSourceIds).toEqual([])` 是**恒真断言**，删得干净。同文件那条测试名里的「knowledge archival」也一并改掉（→「while the run is still wrapping up」），`codexPetStudioModel.test.ts:149` 与 `codex-pet-recovery-finalizer.test.ts:332`（「and archives knowledge」）同理。
+  → **`RUN_CODEX_PET_R7_RECOVERY` 这道开关一直在藏一条过时断言**：`codex-pet-r7-recovery.poc.test.ts:636` 的 `expect(recovery.knowledgeDocumentId).toBeTruthy()` 自 P1.2 起就该是错的，只因为该文件默认跳过（live-API POC，900s 超时）才没人撞见。本项改成正确且更强的判据 `document.count({ where: { kb: { userId } } }) === 0`，输出 JSON 报告里那个字段也去掉了。
+  → **四处 `expect(run.knowledgeDocumentId).toBeNull()` 全部让位给按属主数文档的断言**，理由与 P5.2 那六处同形：列都没了，「归档指针为空」这句话无从表达，而 `count({ where: { kb: { userId } } }) === 0` 覆盖面更大——不管用什么键，这个用户名下什么文档都没被写出来。原来挂在这些断言上的 P1.2 说明搬到了存活的那条断言头上，没有丢。
+  → 验证：`apps/api` / `apps/web` / `apps/admin` / `packages/db` 四个 typecheck 全 exit 0（`prisma generate` 已重跑，`prisma validate` 通过）；改动集 `biome lint` 11 文件 0 问题；`src/workflow/codex-pet` **28 文件（24 通过 + 4 整文件跳过）／290 例通过 / 8 例跳过 / 0 失败**，重型文件照 P5.2 的规矩单跑（见下方「P5.4 的重型文件与跳过账」）；`apps/web` **95 文件 640 例全过 / 0 跳过**；`migrate diff` 里 **`CodexPetRun` 与 `knowledgeDocument` 零提及**，全部残留 12 行仍是三条 pgvector HNSW 噪音 + 那处存量 `CodexPetImageCall` 索引漂移。本地数字不与 CI 比（见「验证纪律」）。
 - [x] ~~P5.5 `Document_sourceModule_sourceId_key`~~ → **无剩余工作**：`KnowledgeBase_userId_systemKey_key` 由 P5.1 的 `DROP COLUMN` 连带删掉，`Document_sourceModule_sourceId_key` 由 P5.2 显式删掉。两条迁移都在库上核过索引数（4 → 3）。
 
 ---
@@ -409,6 +417,17 @@ cd "/Users/z/code/ai project" && set -a && . ./.env && set +a
 这 12 例与本项无关，是「验证纪律」里那条**本地 `.env` 副作用的第一次实测确认**：全部集中在 4 个文件、全是「billing 不可达返回 502」形状的断言——`src/agents/routes.test.ts`（1 例）、`src/admin/resource-routes.test.ts`（7 例）、`src/admin/membership-routes.test.ts`（3 例）、`src/admin/code-routes.test.ts`（1 例）。source 了本地 `.env` 之后 `BILLING_BASE_URL` 指向真在跑的 billing（:8093），这些用例拿到的是真响应而不是连接失败，断言自然不成立。
 
 **`src/kb` 那 11 个文件在这一轮里同样全绿**，所以误触发反而是比定向轮更强的证据。正确的定向写法是 `pnpm --filter api test src/kb`（不带 `--`），定向轮结果：11 文件 141 例全过 / 0 跳过。
+
+### P5.4 的重型文件与跳过账（2026-09-01）
+
+照 P5.2 的规矩，`src/workflow/codex-pet` 拆成四轮跑，重型文件不与别人抢 CPU：
+
+- `codex-pet-routes.test.ts` + `codex-pet-billing.test.ts`：**75 例通过 / 0 跳过**（1.3s）
+- `codex-pet-runner.integration.test.ts` 单跑：**36 例通过 / 1 例跳过 / 0 失败**（304s）
+- `codex-pet-recovery-finalizer.test.ts` + `codex-pet-r7-recovery.poc.test.ts`：**11 例通过 / 1 例跳过**（50s）
+- 其余 23 个文件一轮：**20 文件通过 / 3 文件跳过、168 例通过 / 6 例跳过**（2.5s）
+
+**8 例跳过全部有名有姓，没有一例是本项弄丢的**：`codex-pet-runner.integration.test.ts` 自带的那条 `it.skipIf` 1 例；`codex-pet-r7-recovery.poc.test.ts` 1 例（`RUN_CODEX_PET_R7_RECOVERY` 未置 1）；`codex-pet-look.poc.test.ts` / `codex-pet-action.poc.test.ts` / `codex-pet-look-b.poc.test.ts` 各 2 例（同类 live-API POC 开关）。这四个 POC 文件整文件跳过，所以文件数是 24 通过 + 4 跳过。
 
 
 ---

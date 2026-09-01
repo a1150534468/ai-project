@@ -40,7 +40,6 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     visualQaRoutes: ["chatgpt_model_route"],
     actualModels: ["gpt-image-2-codex"],
     usage: { totalTokens: 123 },
-    knowledgeDocumentId: null,
     lastEventSequence: 10,
     error: null,
     startedAt: "2026-07-17T08:00:00.000Z",
@@ -146,12 +145,12 @@ describe("codexPetStudioModel", () => {
     expect(codexPetCurrentSubtask([], null, "standard_generating")).toBe("standard_generating");
   });
 
-  it("makes a packaged pet available while knowledge archival continues in the background", () => {
+  it("makes a packaged pet available while the run is still wrapping up", () => {
     const archiving = makeRun();
     expect(codexPetDisplayProgress(archiving, 100)).toBe(100);
     expect(isCodexPetDeliveryReady(archiving)).toBe(true);
 
-    const ready = makeRun({ status: "ready", knowledgeDocumentId: "document-1", completedAt: "2026-07-17T08:12:00.000Z" });
+    const ready = makeRun({ status: "ready", completedAt: "2026-07-17T08:12:00.000Z" });
     expect(isCodexPetDeliveryReady(ready)).toBe(true);
     expect(codexPetDisplayProgress(ready, 100)).toBe(100);
 
@@ -164,7 +163,6 @@ describe("codexPetStudioModel", () => {
   it("accepts exact selected-model provenance and rejects mismatches", () => {
     const ready = makeRun({
       status: "ready",
-      knowledgeDocumentId: "document-1",
       completedAt: "2026-07-17T08:12:00.000Z",
     });
     expect(codexPetModelContractState(ready)).toBe("valid");

@@ -173,7 +173,6 @@ export interface CodexPetRun {
   readonly visualQaRoutes: readonly string[];
   readonly actualModels: readonly string[];
   readonly usage: CodexPetProviderUsage | null;
-  readonly knowledgeDocumentId: string | null;
   readonly lastEventSequence: number;
   readonly error: string | null;
   readonly startedAt: string | null;

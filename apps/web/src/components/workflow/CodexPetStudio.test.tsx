@@ -101,7 +101,6 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     visualQaRoutes: [],
     actualModels: ["gpt-image-2-codex"],
     usage: { totalTokens: 321 },
-    knowledgeDocumentId: null,
     lastEventSequence: 1,
     error: null,
     startedAt: "2026-07-17T08:01:00.000Z",
@@ -721,7 +720,6 @@ describe("CodexPetStudio", () => {
       spritesheetArtifactId: "sheet-1",
       packageArtifactId: "zip-1",
       validationReport: { ok: true, spriteVersionNumber: 2 },
-      knowledgeDocumentId: null,
     });
     const project = makeProject({ status: "archiving", latestRunId: run.id });
     const detail: CodexPetProjectDetail = {
@@ -753,7 +751,6 @@ describe("CodexPetStudio", () => {
       packageArtifactId: "zip-1",
       previewArtifactId: "preview-1",
       validationReport: { ok: true, spriteVersionNumber: 2, warnings: [] },
-      knowledgeDocumentId: "document-1",
       completedAt: "2026-07-17T08:20:00.000Z",
     });
     const project = makeProject({ status: "ready", latestRunId: run.id });
@@ -790,7 +787,6 @@ describe("CodexPetStudio", () => {
       packageArtifactId: "zip-current",
       previewArtifactId: "contact-current",
       validationReport: { ok: true, spriteVersionNumber: 2, warnings: [] },
-      knowledgeDocumentId: "document-current",
     });
     const project = makeProject({ status: "ready", latestRunId: run.id });
     const states = ["idle", "running-right", "running-left", "waving", "jumping", "failed", "waiting", "running", "review"] as const;
