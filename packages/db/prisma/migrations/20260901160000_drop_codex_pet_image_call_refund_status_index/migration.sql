@@ -1,0 +1,70 @@
+-- 退役 CodexPetImageCall 上的 (refundStatus, createdAt) 索引。
+--
+-- **只删这一个索引，别的什么都不动。** 特别是：refundStatus / refundedAt /
+-- refundError 三列全部保留（退款状态机还在用，见 codex-pet-call-ledger.ts:429-500），
+-- 同表另外六个索引全部保留。全库还有两个名字里带 refund 的索引，它们是**另外两张表
+-- 上的另一列**（billingRefundStatus，不是 refundStatus），与本次无关、不许碰：
+--   CodexPetRun_billingRefundStatus_billingRefundNextRetryAt_idx
+--   LocalBusinessPromoRun_billingRefundStatus_billingRefundNext_idx
+--
+-- 为什么删：它是一个零读取、纯写入的索引。2026-09-01 在本地库量到的数字（
+-- pg_stat_database.stats_reset 为 NULL，所以计数覆盖整个库的生命周期）：
+--
+--   CodexPetImageCall 各索引的 idx_scan
+--     projectId_createdAt_idx           76,373
+--     runId_status_createdAt_idx        54,616
+--     userId_createdAt_idx              38,416
+--     runId_jobKey_logicalAttempt_key    4,682
+--     pkey                               3,396
+--     operationId_key                        0   （唯一约束，靠约束身份存在）
+--     refundStatus_createdAt_idx             0   ← 本次删的就是它
+--
+--   n_tup_ins = 3,973、n_tup_upd = 8,300、n_tup_hot_upd = **2**
+--
+-- 同表其他普通索引都是几万次扫描，说明规划器在这张表上确实吃索引，只是一次都没吃过
+-- 这一个。而 hot_upd 只有 2/8300（这张表的 update 普遍会改 status，而 status 在
+-- runId_status_createdAt_idx 里，走不了 HOT），意味着每次 UPDATE 都要往全部七个索引
+-- 各写一条 entry —— 累计约 3,973 + 8,298 ≈ 12,271 条写进了这个从没被读过的索引。
+--
+-- 为什么它将来也吃不到（这条比上面的计数更要紧）：
+--   * 全仓唯一按 refundStatus 过滤的读查询是 codex-pet-call-ledger.ts:470 的
+--     refundCodexPetUndispatchedExtraCalls，where 为
+--     runId + projectId + userId + callKind + status + refundStatus: { not: "refunded" }，
+--     **没有 orderBy，也没有 createdAt 范围**，前导键是 runId。
+--   * :436/:442/:491/:499 那四处是 update/updateMany，where 以 id 领头走主键，
+--     refundStatus 只是幂等守卫。
+--   * 全部 3 个 findMany + 10 个 count（ledger / route-context / runner-billing /
+--     runner-finalize / run-routes / per-image-billing-correction / workers 的
+--     worker-billing）一律以 runId 领头，没有一条以 refundStatus 领头。
+--   * refundStatus 基数是 2（本地库 none 295 / refunded 3，pending 与 failed 都是 0），
+--     且代码惯用的是否定谓词 { not: "refunded" }，命中 99%+ 的行 —— 规划器永远不会
+--     为这种条件走前导 btree，seq scan 才是对的。
+--
+-- 它当年是给「跨运行扫还欠着的退款」的 sweeper 建的（见 20260730120000 的注释
+-- "Lets the sweeper find refunds still owed without scanning the whole ledger"），
+-- 但那个跨运行 sweeper 从来没写出来，现存的只有按 run 收尾的那一条。所以留着它不是
+-- 「为将来预留」，而是「一个名字在说谎的索引」：叫 refundStatus_createdAt_idx 就是在
+-- 声明有查询按 refundStatus 过滤、按 createdAt 排序，而实际上没有。
+--
+-- 怎么回退 / 真要做那个 sweeper 时怎么建：
+--   * 直接回退：CREATE INDEX CONCURRENTLY "CodexPetImageCall_refundStatus_createdAt_idx"
+--     ON "CodexPetImageCall" ("refundStatus", "createdAt"); —— 不阻塞写入，代价只有
+--     时间和 IO，不是可用性风险。
+--   * 但真要覆盖那个 sweeper，**正确的形状是部分索引**，不是这个全表索引：
+--       CREATE INDEX ... ("refundStatus", "createdAt") WHERE "refundStatus" <> 'none';
+--     只索引待办行（本地库 3 行 vs 298 行），且 99% 落在 'none' 的插入完全跳过索引维护。
+--     配套要求：sweeper 的谓词得写成正向枚举（refundStatus IN ('pending','failed')），
+--     照抄现有的 { not: ... } 写法照样吃不到。代价是 Prisma schema 表达不了部分索引，
+--     加了会让 prisma migrate diff 永久多一行差异 —— 那天要在迁移头部写明这是有意的。
+--
+-- 为什么用普通 DROP INDEX 而不是 CONCURRENTLY（与上一轮口头说法不同，这里改了主意）：
+-- DROP INDEX 不扫表，只改系统目录 + unlink 索引文件，锁持有是毫秒级；真正的风险是
+-- ACCESS EXCLUSIVE 排队等长事务，而这张表上没有长查询（全是 runId 点查与小 count）。
+-- 反过来 CONCURRENTLY 是本仓从未用过的写法（migrations/ 全目录零命中），Prisma 是否
+-- 把迁移包在事务里没有实测过 —— 若包了，CONCURRENTLY 会直接报错，留下一条失败迁移。
+-- 一条 migrate deploy 跑不了的迁移是给部署的人埋雷，不值得。
+-- 如果生产上这张表大到担心排队，可以先手工跑一句：
+--   DROP INDEX CONCURRENTLY IF EXISTS "CodexPetImageCall_refundStatus_createdAt_idx";
+-- 跑完这条迁移因为带 IF EXISTS 会变成 no-op，两条路径可以叠加，不冲突。
+
+DROP INDEX IF EXISTS "CodexPetImageCall_refundStatus_createdAt_idx";

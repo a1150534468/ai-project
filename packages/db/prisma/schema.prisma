@@ -429,7 +429,6 @@ model CodexPetImageCall {
   @@index([projectId, createdAt])
   @@index([runId, status, createdAt])
   @@index([userId, createdAt])
-  @@index([refundStatus, createdAt])
 }
 
 model CodexPetJob {
