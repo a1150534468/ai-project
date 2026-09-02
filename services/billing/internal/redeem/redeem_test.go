@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"ai-assistant-billing/internal/bucket"
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/pgtest"
@@ -14,18 +12,18 @@ import (
 )
 
 // newStore 打开测试数据库，清理表。如果数据库不可用，跳过测试。
+// 必须走 store.Open：它带 AutoMigrate，保证空库上也能自建 schema。
 func newStore(t *testing.T) *store.Store {
-	dsn := pgtest.DSN()
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	st, err := store.Open(pgtest.DSN())
 	if err != nil {
 		t.Skipf("billing-postgres 不可用: %v", err)
 	}
 
 	// 清理表：保证测试隔离
-	pgtest.Serialize(t, db)
-	db.Exec("TRUNCATE point_buckets, accounts, usage_records, top_ups, redemptions, subscriptions CASCADE")
+	pgtest.Serialize(t, st.DB)
+	st.DB.Exec("TRUNCATE point_buckets, accounts, usage_records, top_ups, redemptions, subscriptions CASCADE")
 
-	return &store.Store{DB: db}
+	return st
 }
 
 // balanceOf 查询桶余额

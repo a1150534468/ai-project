@@ -5,22 +5,21 @@ import (
 	"testing"
 	"time"
 
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"ai-assistant-billing/internal/model"
 	"ai-assistant-billing/internal/pgtest"
 	"ai-assistant-billing/internal/store"
 )
 
+// newStore 打开测试数据库并清表。必须走 store.Open：它带 AutoMigrate，
+// 保证本包在空库上也能自建 schema，不依赖其他包先跑过。
 func newStore(t *testing.T) *store.Store {
-	dsn := pgtest.DSN()
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	st, err := store.Open(pgtest.DSN())
 	if err != nil {
 		t.Skipf("billing-postgres 不可用: %v", err)
 	}
-	pgtest.Serialize(t, db)
-	db.Exec("TRUNCATE top_ups, usage_records CASCADE")
-	return &store.Store{DB: db}
+	pgtest.Serialize(t, st.DB)
+	st.DB.Exec("TRUNCATE top_ups, usage_records CASCADE")
+	return st
 }
 
 func mkTopup(st *store.Store, user string, fen, points int64, paidAt time.Time) {
