@@ -1,0 +1,121 @@
+name: Probe egress bandwidth
+
+# 一次性诊断：只测「GitHub runner 出境」这一段的真实带宽，用来决定镜像该走哪条路。
+#
+# 为什么需要它：v0.1.1/v0.1.2 两次发布都死在 images (api) 的 docker push 上，形状是
+# 「第一层 5.9 MB/s，之后塌到 0.05~0.4 MB/s」。服务器侧实测同一个 TCR 走 VPC 内网
+# 端点稳定 11 MB/s，所以慢的是 runner→TCR 的公网这一段。要决定是「继续推 TCR」还是
+# 「改成 SSH 直接把 docker save 的 tar 灌进生产机」，就得知道这两条路各自多快。
+#
+# 安全性：
+#   - tcr job 只开 blob upload 会话、PATCH 随机数据、然后 DELETE 掉会话。不提交
+#     manifest、不打 tag，仓库里不会多出任何东西。
+#   - ssh job 把数据送到生产机的 `cat > /dev/null`，不落盘、不动 docker、不动 compose。
+#
+# 结论拿到后这个文件就可以删掉。
+on:
+  workflow_dispatch:
+
+jobs:
+  tcr:
+    name: runner -> TCR (public)
+    runs-on: ubuntu-latest
+    # 6 × 25MB，每块单独限时 150s（≈0.17 MB/s 地板），最坏 15 分钟内一定收敛。
+    timeout-minutes: 16
+    env:
+      REG: ${{ secrets.REGISTRY }}
+      NS: ${{ secrets.IMAGE_NAMESPACE }}
+      REG_USER: ${{ secrets.REGISTRY_USERNAME }}
+      REG_PASS: ${{ secrets.REGISTRY_PASSWORD }}
+    steps:
+      - name: Measure blob upload throughput
+        run: |
+          set -uo pipefail
+          repo="$NS/ai-assistant-api"
+
+          hdr=$(curl -sSI "https://$REG/v2/" | tr -d '\r' | grep -i '^www-authenticate:')
+          realm=$(printf '%s' "$hdr" | sed -n 's/.*realm="\([^"]*\)".*/\1/p')
+          service=$(printf '%s' "$hdr" | sed -n 's/.*service="\([^"]*\)".*/\1/p')
+          echo "auth realm: $realm (service=$service)"
+
+          token=$(curl -sS -u "$REG_USER:$REG_PASS" --get \
+            --data-urlencode "service=$service" \
+            --data-urlencode "scope=repository:$repo:pull,push" \
+            "$realm" | jq -r '.token // .access_token // empty')
+          if [ -z "$token" ]; then echo "::error::TCR 取 bearer token 失败"; exit 1; fi
+
+          dd if=/dev/urandom of=/tmp/chunk bs=1M count=25 status=none
+          printf '%-6s %-9s %-9s %-9s %s\n' "块" "累计MB" "耗时s" "MB/s" "HTTP"
+          total=0
+          for i in 1 2 3 4 5 6; do
+            loc=$(curl -sS -D - -o /dev/null -X POST -H "Authorization: Bearer $token" \
+              -H 'Content-Length: 0' "https://$REG/v2/$repo/blobs/uploads/" \
+              | tr -d '\r' | sed -n 's/^[Ll]ocation: *//p' | tail -n1)
+            case "$loc" in
+              https://*) url="$loc" ;;
+              /*)        url="https://$REG$loc" ;;
+              *)         echo "::error::第 $i 块拿不到 upload location"; exit 1 ;;
+            esac
+
+            t0=$(date +%s%3N)
+            code=$(curl -sS -o /dev/null --max-time 150 -X PATCH \
+              -H "Authorization: Bearer $token" \
+              -H 'Content-Type: application/octet-stream' \
+              --data-binary @/tmp/chunk "$url" -w '%{http_code}') || code="TIMEOUT"
+            t1=$(date +%s%3N)
+
+            ms=$((t1 - t0)); total=$((total + 25))
+            printf '%-6s %-9s %-9s %-9s %s\n' "$i" "$total" \
+              "$(awk -v m="$ms" 'BEGIN{printf "%.1f", m/1000}')" \
+              "$(awk -v m="$ms" 'BEGIN{printf "%.2f", 25000/m}')" "$code"
+
+            curl -sS -o /dev/null -X DELETE -H "Authorization: Bearer $token" "$url" || true
+            if [ "$code" = TIMEOUT ]; then
+              echo "::warning::第 $i 块 150s 内没传完（<0.17 MB/s），限速已确认，提前收工"
+              break
+            fi
+          done
+
+  ssh:
+    name: runner -> prod host (ssh)
+    runs-on: ubuntu-latest
+    # deploy job 用的是 production environment，DEPLOY_* 可能是环境级 secret，
+    # 这里跟着声明才读得到。如果这个环境配了人工审批，这个 job 会等你点一下。
+    environment: production
+    timeout-minutes: 16
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+    steps:
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          if [ -z "$DEPLOY_HOST" ]; then echo "::error::DEPLOY_HOST 为空"; exit 1; fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Measure ssh upload throughput
+        run: |
+          set -uo pipefail
+          # Compression=no：镜像层本来就压过，开压缩会把 CPU 算进带宽读数里。
+          ssh_opts=(-o Compression=no -o BatchMode=yes -o ConnectTimeout=15 -p "${DEPLOY_PORT:-22}")
+          dd if=/dev/urandom of=/tmp/chunk bs=1M count=25 status=none
+          printf '%-6s %-9s %-9s %-9s %s\n' "块" "累计MB" "耗时s" "MB/s" "结果"
+          total=0
+          for i in 1 2 3 4 5 6; do
+            t0=$(date +%s%3N)
+            if timeout 150 ssh "${ssh_opts[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
+                 'cat > /dev/null' < /tmp/chunk; then result=ok; else result=TIMEOUT; fi
+            t1=$(date +%s%3N)
+            ms=$((t1 - t0)); total=$((total + 25))
+            printf '%-6s %-9s %-9s %-9s %s\n' "$i" "$total" \
+              "$(awk -v m="$ms" 'BEGIN{printf "%.1f", m/1000}')" \
+              "$(awk -v m="$ms" 'BEGIN{printf "%.2f", 25000/m}')" "$result"
+            if [ "$result" = TIMEOUT ]; then
+              echo "::warning::第 $i 块 150s 内没传完（<0.17 MB/s），SSH 这条路也被限"
+              break
+            fi
+          done
