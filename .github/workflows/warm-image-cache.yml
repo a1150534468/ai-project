@@ -1,0 +1,107 @@
+name: Warm image build cache
+
+# 只做一件事：在 main 上把 4 个镜像的 buildx 层缓存写进 gha，好让之后 tag 上的
+# production.yml 读得到。不导出镜像、不登录 registry、不往外推一个字节。
+#
+# 为什么非得在 main 上写：**GitHub Actions 缓存是按 ref 隔离的——任何 ref 都能读默认
+# 分支的缓存，但 tag 之间互相读不到**。production.yml 只在 tag 上跑，它 cache-to 写出去
+# 的条目下一个 tag 根本读不到，于是 v0.1.2 的构建日志里 CACHED 出现 0 次、462 MB 一个
+# 字节不少地重传。main 上先构建一遍，tag 才有东西可命中。
+#
+# 命中省下的不是构建时间，是出境字节：buildkit 命中缓存时复用的是同一个 layer blob、
+# 同一个 digest，TCR 直接判 Layer already exists。runner 出境到国内实测 0.15~0.40 MB/s
+# （probe-egress.yml 的结论），少传 ffmpeg + apt 那 185 MB 就是少 8~20 分钟。
+on:
+  push:
+    branches: [main]
+    # 刻意只盯这几个路径：要保温的是 apt / ffmpeg / node_modules / go mod 这些不含业务
+    # 源码的层，它们只在依赖清单、schema 和 Dockerfile 变时才需要刷新。日常改
+    # apps/api/src 不触发本工作流，一分钟额度都不多花——那种改动在 tag 上照样能命中：
+    # 源码层之前的层全没变，而源码之后只剩两条 COPY，其中 node_modules 那条的缓存键是
+    # 内容哈希（见 infra/docker/api/Dockerfile 里 mv/rm .modules.yaml 的注释），
+    # deploy 重跑一遍出来的 node_modules 内容一致，键就还能对上。
+    #
+    # 代价写明：一次触发 = 4 个 job，冷缓存下合计约 30 个计费分钟（Free 计划 2000/月，
+    # 2026-08 就是把额度跑光连红三天的）。所以路径写窄，别顺手加 apps/**。
+    #
+    # 根 package.json 单独列一行：GitHub 的 `**/x` 是「零个或多个任意字符」+ 字面量
+    # `/x`，能不能匹配仓库根上那个同名文件文档里没写死，两条一起列就不用赌。
+    # services/billing/go.{mod,sum} 刻意不列：billing 镜像总共 26 MB，Go builder 那层
+    # 重建一次也就多推十几 MB，不值得为它把 4 个 job 全拉起来一次。
+    paths:
+      - "infra/docker/**"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "package.json"
+      - "**/package.json"
+      - "packages/db/prisma/schema.prisma"
+  workflow_dispatch:
+
+concurrency:
+  # 缓存只有最新那份有意义，旧的跑一半没必要占额度。跟 ci.yml 相反——那边 main 上每个
+  # 提交都要有独立的测试结论，这边只是保温，没有「结论」可言。
+  group: warm-image-cache
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    # 冷缓存下 api 最久（apt + pnpm install + prisma generate + 再一轮 apt）。30 分钟
+    # 留足余量，又不至于让卡住的 job 白吃额度——额度按 job 墙钟向上取整计费。
+    timeout-minutes: 30
+    strategy:
+      # 不设 max-parallel: 1。production.yml 设成 1 是因为 4 个 job 抢同一根被限到
+      # 0.16 MB/s 的出境管子推 TCR；这里只写 gha 缓存（同机房，不走那根管子），
+      # 并行不抢带宽，而并行与串行的计费分钟数是一样的。
+      fail-fast: false
+      matrix:
+        # 必须跟 production.yml 的 matrix 逐字一致：name（= scope 名）、context、
+        # file、build_args 任何一处不同都会让缓存键对不上——那就是白构建一次，
+        # 而且是不报错的白构建。改那边记得改这边。
+        # 那边多一个 hash_paths（P3 的 :src-<hash> 判定用的），缓存键不看它，这边不需要。
+        include:
+          - name: api
+            context: .
+            file: infra/docker/api/Dockerfile
+            build_args: |
+              USE_CHINA_APT_MIRROR=false
+              NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+              PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
+          - name: billing
+            context: services/billing
+            file: infra/docker/billing/Dockerfile
+            build_args: ""
+          - name: migrate
+            context: .
+            file: infra/docker/migrate/Dockerfile
+            build_args: |
+              USE_CHINA_APT_MIRROR=false
+              NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+              PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
+          - name: gateway
+            context: .
+            file: infra/docker/gateway/Dockerfile
+            build_args: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        env:
+          # 跟 production.yml 那边保持一致。SOURCE_DATE_EPOCH 只影响导出、不进层缓存键，
+          # 所以这里加不加本来都命中；两边写一样是为了不留「万一它其实进了缓存键」这种
+          # 静默不命中的可能——本工作流唯一的产出就是缓存键，赌不起。
+          SOURCE_DATE_EPOCH: "0"
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          build-args: ${{ matrix.build_args }}
+          # cacheonly：只写缓存，不导出镜像。刻意不写 load/push/tags——本工作流没有
+          # registry 凭据，也不需要，缓存条目是内容寻址的，tag 那边照样能用。
+          outputs: type=cacheonly
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
