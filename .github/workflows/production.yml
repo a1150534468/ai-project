@@ -244,18 +244,32 @@ jobs:
           # 「判断不准时一律重新构建」：多构建一次只是慢，少构建一次是把旧代码发上生产。
           # 这里用的 buildx 是 runner 自带的 CLI 插件，imagetools 只说 registry 的 HTTP 协议、
           # 不需要 builder 实例，所以排在 setup-buildx 之前也能跑。
-          if docker buildx imagetools inspect "$IMAGE_REPO:src-$hash" >/dev/null 2>&1; then
+          # 两条复用依据，先查更硬的那条 :<sha>。它钉的是整棵树，而 src-<hash> 钉的只是
+          # hash_paths 那个集合（写窄了就会错）——所以 :<sha> 在的时候没有任何理由再构建。
+          #
+          # 平时它不会命中（同一个 commit 不会发两次），加它是为了两件具体的事：
+          #   1. 出境被限速的这段时间里，镜像是在别处构建好、直接推到 TCR 的（本机就行，
+          #      不占生产机、不多开机器）。推完再跑本工作流，images 这一整段空转，只剩
+          #      deploy 真的做事。没有这条判断，workflow 会把同一个镜像原样重传一遍——
+          #      api 是 462 MB，按实测速率就是 19~51 分钟白烧。
+          #   2. `gh run rerun` 天然幂等：上一次已经推成功的镜像不再重传。
+          if docker buildx imagetools inspect "$IMAGE_REPO:$GITHUB_SHA" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "sha_present=true" >> "$GITHUB_OUTPUT"
+            echo "TCR 上已经有 :$GITHUB_SHA，构建与推送整段跳过"
+          elif docker buildx imagetools inspect "$IMAGE_REPO:src-$hash" >/dev/null 2>&1; then
             echo "hit=true" >> "$GITHUB_OUTPUT"
             echo "TCR 上已有同源镜像，跳过构建与推送"
           else
             echo "hit=false" >> "$GITHUB_OUTPUT"
-            echo "TCR 上没有 src-$hash，走完整构建"
+            echo "TCR 上没有 :$GITHUB_SHA 也没有 src-$hash，走完整构建"
           fi
       - name: Reuse identical image already in TCR
         if: steps.src.outputs.hit == 'true'
         env:
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
           SRC_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
+          SHA_PRESENT: ${{ steps.src.outputs.sha_present }}
         run: |
           # registry 内部复制 manifest。源和目标在同一个仓库、层已经在那儿了，所以这一步只
           # PUT 一份 manifest（几 KB），不碰那根 0.15~0.40 MB/s 的出境管子——这才是 P3 省下的
@@ -263,7 +277,14 @@ jobs:
           #
           # 为什么必须做这一步而不是干脆跳过整个 job：deploy 用的引用是 <sha> 那个 tag，
           # 它不存在的话 compose pull 直接失败。「跳过构建」不等于「跳过打 tag」。
-          docker buildx imagetools create -t "$IMAGE_REF" "$SRC_REF"
+          if [ "${SHA_PRESENT:-}" = true ]; then
+            # deploy 要的 tag 本来就在，方向反过来：把 src tag 指到它身上，让下一次同源发布
+            # 也能命中。失败不该让发布挂——后果只是下次多构建一次。
+            docker buildx imagetools create -t "$SRC_REF" "$IMAGE_REF" \
+              || echo "::warning::src tag 回填失败，下次同源发布会重新构建这个镜像"
+          else
+            docker buildx imagetools create -t "$IMAGE_REF" "$SRC_REF"
+          fi
       - name: Limit concurrent registry uploads
         # 命中跳过时这一步没意义（不推任何层），而它要重启 dockerd，白花二十来秒。
         if: steps.src.outputs.hit != 'true'
