@@ -94,9 +94,11 @@ jobs:
     # 「还有某种情况不发布」。
     needs: verify
     runs-on: ubuntu-latest
-    # 90 分钟 > 单次 push 20m × 3 次重试，重试才真的有机会跑完。
-    # 别再调回 60：那会让 attempt 2 注定被总闸切断（v0.1.1 就是这么挂的）。
-    timeout-minutes: 90
+    # 115 分钟 > 单次 push 35m × 3 次重试。上限是按「实测出境速率」倒推的，不是拍的：
+    # 2026-09-02 的带宽探测（probe-egress.yml）显示 runner→国内只有 0.16 MB/s 量级，
+    # v0.1.2 的实测区间是 0.15~0.40 MB/s。api 镜像 462 MB ⇒ 单次全量推需要 19~51 分钟。
+    # 所以 20m/次 是「物理上不够」，不是网络故障。
+    timeout-minutes: 115
     strategy:
       max-parallel: 1
       matrix:
@@ -126,16 +128,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Limit concurrent registry uploads
-        # 并发 3：给 TCR 限速留余量，同时保证冷缓存（层全新）时推得完。
-        # 原值 1 只够热缓存增量推送；v0.1.1 冷推 api 镜像时单层耗时 11~18 分钟，
-        # 串行 45 分钟只推完 8/11 层就被 timeout 砍了。
+        # 并发回到 1。出境是一根被限到 0.16 MB/s 量级的管子，并发只是把它切成 N 份，
+        # 结果谁都跑不完一整层：v0.1.1（并发 1）推完 8/11 层，v0.1.2（并发 3）反而只
+        # 推完 6/11、attempt 1 一层都没落地。限速链路上，串行才能把层一个个「存档」。
         run: |
           daemon_config="$(mktemp)"
           if sudo test -f /etc/docker/daemon.json; then
             sudo cat /etc/docker/daemon.json \
-              | jq '. + {"max-concurrent-uploads": 3}' > "$daemon_config"
+              | jq '. + {"max-concurrent-uploads": 1}' > "$daemon_config"
           else
-            jq -n '{"max-concurrent-uploads": 3}' > "$daemon_config"
+            jq -n '{"max-concurrent-uploads": 1}' > "$daemon_config"
           fi
           sudo install -m 0644 "$daemon_config" /etc/docker/daemon.json
           sudo systemctl restart docker
@@ -158,10 +160,12 @@ jobs:
         env:
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
         run: |
-          # 单次 20m：已上传的层是内容寻址的，重试时会直接 "Layer already exists"，
-          # 所以宁可早点砍掉卡住的连接去重试，也别让一次尝试吃掉整个 job 的时间。
+          # 单次 35m：最大的一层 195.88 MB，按实测下限 0.15 MB/s 需要 22 分钟才落地，
+          # 所以单次窗口必须明显大于它——否则每次尝试都在同一层上半途被砍，一层都存不下。
+          # 已上传的层是内容寻址的，重试时直接 "Layer already exists"，所以多次尝试是
+          # 累积的：v0.1.2 的 attempt 3 就复用了 attempt 2 推上去的 195.88 MB。
           for attempt in 1 2 3; do
-            if timeout --signal=TERM 20m docker push "$IMAGE_REF"; then
+            if timeout --signal=TERM 35m docker push "$IMAGE_REF"; then
               exit 0
             fi
             if [ "$attempt" -eq 3 ]; then
