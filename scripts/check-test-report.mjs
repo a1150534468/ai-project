@@ -106,8 +106,14 @@ if (total.failedSuites > 0) {
   // 用例数达标、只有 suite 失败，通常是 import/收集阶段就炸了（语法错、缺依赖、
   // 顶层 throw）。这种情况整个文件的用例一个都没跑，但 numPassedTests 不会变，
   // 单看计数是绿的，所以必须独立成一条。
+  //
+  // 措辞刻意不说「文件」：vitest 的 numFailedTestSuites 把**文件级 suite 和它里面
+  // 每一层 describe 都各算一个**（实测：一个文件、一个 describe、一个失败用例 ⇒
+  // numTotalTestSuites=2、numFailedTestSuites=2）。run 33630383578 就因此印出
+  // 「2 个测试文件失败」，而实际只有 apps/web 一个文件的一个用例红，白查了一轮。
   fail(
-    `${total.failedSuites} 个测试文件失败${total.failed === 0 ? "（用例数达标，说明是 import/收集阶段就失败了，整个文件没跑）" : ""}。`,
+    `${total.failedSuites} 个测试套件失败（文件与其中每层 describe 各算一个）` +
+      `${total.failed === 0 ? "；用例数达标，说明是 import/收集阶段就失败了，整个文件没跑" : ""}。`,
   );
 }
 

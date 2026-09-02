@@ -159,12 +159,37 @@ function probeText(scope: HTMLElement, testId: string): string {
   return scope.querySelector(`[data-testid="${testId}"]`)?.textContent ?? "";
 }
 
+/**
+ * 反复让出 tick 直到 predicate 成立，而不是赌一个固定的 tick 数。不满足也不抛 ——
+ * 让调用方的 expect 去报，失败时看到的是真实 diff 而不是这里的 timeout。
+ *
+ * 为什么需要:`handleReferenceUpload` 这类回调**自己是同步的**，真正的活在
+ * `void (async () => { ... })()` 里，`invoke` 的 `await run(...)` 拿到的是 undefined，
+ * 等不到那条链。而链的第一步 `readFileAsInlineImage` 走 jsdom 的 FileReader ——
+ * 实测它的 onload 要 **2 个** setTimeout(0) 轮次才触发，`invoke` 只抽一轮，剩下的
+ * 全靠 `act` 自己 flush 时顺带让出的那一两轮凑。本机凑得上，GitHub 2 核 runner 上
+ * 凑不上，于是 run 33630383578 报 `expected '' to be '对象存储不可用'` ——
+ * `setError` 还没执行，断言已经读完 DOM 了。
+ *
+ * 所以选收敛而不是给 `invoke` 多加几轮 tick:固定轮次只是把边界往后挪一格，
+ * 下一个多一次 await 的链照样红。
+ */
+async function drainUntil(predicate: () => boolean): Promise<void> {
+  for (let round = 0; round < 100; round += 1) {
+    if (predicate()) return;
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  }
+}
+
 function imageProps(): Record<string, any> {
   if (!probes.imageStudioProps) throw new Error("ImageWorkflowStudio was never rendered");
   return probes.imageStudioProps;
 }
 
-/** 通过 studio 收到的回调驱动编排,再把 microtask 抽干。 */
+/** 通过 studio 收到的回调驱动编排，再把 microtask 抽干。回调自己 detach 出去的
+ *  async 链不在保证范围内（见 waitForProbe），要断言那种结果得用它收敛。 */
 async function invoke(run: (props: Record<string, any>) => unknown): Promise<void> {
   await act(async () => {
     await run(imageProps());
@@ -456,10 +481,21 @@ describe("Workflow 参考图上传", () => {
     return blob;
   }
 
+  /**
+   * 触发上传并等那条 detach 出去的链落地 —— 进草稿(成功)或进 error(失败)都算落地。
+   * 本 describe 里四个用例都依赖它:只给 `invoke` 一轮 tick 的话，上传成功那三个会读到
+   * 空的 `image-refs`，「移除」那个更糟 —— 上传可能在 `onRemoveReference` **之后**才落地，
+   * 把刚移掉的 ref-1 又加回草稿。今天红的只是失败那个，剩下三个是同一条链上的同一个赌局。
+   */
+  async function uploadReference(scope: HTMLElement, target: File): Promise<void> {
+    await invoke((props) => props.onReferenceUpload(target));
+    await drainUntil(() => probeText(scope, "image-refs") !== "" || probeText(scope, "image-error") !== "");
+  }
+
   it("上传成功后参考图进入草稿，并给出提示", async () => {
     const scope = await mountWorkflow();
 
-    await invoke((props) => props.onReferenceUpload(file("ref.png", "image/png", 1024)));
+    await uploadReference(scope, file("ref.png", "image/png", 1024));
 
     expect(apiMocks.uploadWorkflowImageReference).toHaveBeenCalledTimes(1);
     expect(probeText(scope, "image-refs")).toBe("ref-1");
@@ -469,7 +505,7 @@ describe("Workflow 参考图上传", () => {
   it("上传后的参考图会跟着下一次提交一起发出去", async () => {
     const scope = await mountWorkflow();
 
-    await invoke((props) => props.onReferenceUpload(file("ref.png", "image/png", 1024)));
+    await uploadReference(scope, file("ref.png", "image/png", 1024));
     await invoke((props) => props.onSubmit());
 
     expect(apiMocks.generateWorkflowImages.mock.calls[0][1]).toMatchObject({ referenceAssetIds: ["ref-1"] });
@@ -479,7 +515,7 @@ describe("Workflow 参考图上传", () => {
   it("移除参考图后不再随提交发出", async () => {
     const scope = await mountWorkflow();
 
-    await invoke((props) => props.onReferenceUpload(file("ref.png", "image/png", 1024)));
+    await uploadReference(scope, file("ref.png", "image/png", 1024));
     await invoke((props) => props.onRemoveReference("ref-1"));
     expect(probeText(scope, "image-refs")).toBe("");
 
@@ -512,7 +548,7 @@ describe("Workflow 参考图上传", () => {
     apiMocks.uploadWorkflowImageReference.mockRejectedValue(new Error("对象存储不可用"));
     const scope = await mountWorkflow();
 
-    await invoke((props) => props.onReferenceUpload(file("ref.png", "image/png", 1024)));
+    await uploadReference(scope, file("ref.png", "image/png", 1024));
 
     expect(probeText(scope, "image-error")).toBe("对象存储不可用");
     expect(probeText(scope, "image-refs")).toBe("");
