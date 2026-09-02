@@ -94,7 +94,9 @@ jobs:
     # 「还有某种情况不发布」。
     needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # 90 分钟 > 单次 push 20m × 3 次重试，重试才真的有机会跑完。
+    # 别再调回 60：那会让 attempt 2 注定被总闸切断（v0.1.1 就是这么挂的）。
+    timeout-minutes: 90
     strategy:
       max-parallel: 1
       matrix:
@@ -124,13 +126,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Limit concurrent registry uploads
+        # 并发 3：给 TCR 限速留余量，同时保证冷缓存（层全新）时推得完。
+        # 原值 1 只够热缓存增量推送；v0.1.1 冷推 api 镜像时单层耗时 11~18 分钟，
+        # 串行 45 分钟只推完 8/11 层就被 timeout 砍了。
         run: |
           daemon_config="$(mktemp)"
           if sudo test -f /etc/docker/daemon.json; then
             sudo cat /etc/docker/daemon.json \
-              | jq '. + {"max-concurrent-uploads": 1}' > "$daemon_config"
+              | jq '. + {"max-concurrent-uploads": 3}' > "$daemon_config"
           else
-            jq -n '{"max-concurrent-uploads": 1}' > "$daemon_config"
+            jq -n '{"max-concurrent-uploads": 3}' > "$daemon_config"
           fi
           sudo install -m 0644 "$daemon_config" /etc/docker/daemon.json
           sudo systemctl restart docker
@@ -153,8 +158,10 @@ jobs:
         env:
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
         run: |
+          # 单次 20m：已上传的层是内容寻址的，重试时会直接 "Layer already exists"，
+          # 所以宁可早点砍掉卡住的连接去重试，也别让一次尝试吃掉整个 job 的时间。
           for attempt in 1 2 3; do
-            if timeout --signal=TERM 45m docker push "$IMAGE_REF"; then
+            if timeout --signal=TERM 20m docker push "$IMAGE_REF"; then
               exit 0
             fi
             if [ "$attempt" -eq 3 ]; then
