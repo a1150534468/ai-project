@@ -29,18 +29,26 @@ describe("clientMenu", () => {
   });
 
   it("生图模块页内 tab 按后台开关过滤", () => {
-    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual(["general", "ecom", "portrait", "try-on"]);
+    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual([
+      "general",
+      "ecom",
+      "product-extraction",
+      "portrait",
+      "try-on",
+    ]);
     expect(visibleImageHubTabs({ "workflow.image.ecom": false }).map((tab) => tab.id)).toEqual([
       "general",
+      "product-extraction",
       "portrait",
       "try-on",
     ]);
   });
 
-  it("生图模块四个 tab 全关时二级入口一并隐藏", () => {
+  it("生图模块五个 tab 全关时二级入口一并隐藏", () => {
     const allTabsOff = {
       "workflow.image.general": false,
       "workflow.image.ecom": false,
+      "workflow.image.product-extraction": false,
       "workflow.image.portrait": false,
       "workflow.image.try-on": false,
     };

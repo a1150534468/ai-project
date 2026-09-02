@@ -28,7 +28,7 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
   { key: "nav.memory", label: "记忆", group: "main", defaultVisible: true },
   { key: "nav.settings", label: "设置", group: "main", defaultVisible: true },
   { key: "workflow.image", label: "生图模块", group: "workflow", defaultVisible: true },
-  // 生图模块已把通用生图 / 电商生图 / 形象照合并成同一页面的三个 tab，
+  // 生图模块的多个场景共用同一页面，由后台分别控制页内 tab。
   // 因此电商图不再是独立二级菜单，改为生图模块下的三级菜单；旧 key 的开关沿用到电商生图。
   { key: "workflow.image.general", label: "通用生图", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   {
@@ -39,8 +39,9 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
     parentKey: "workflow.image",
     legacyKey: "workflow.commerce-long-image",
   },
+  { key: "workflow.image.product-extraction", label: "商品提取", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.image.portrait", label: "形象照", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
-  { key: "workflow.image.try-on", label: "服装试穿", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
+  { key: "workflow.image.try-on", label: "万物试穿", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.novel", label: "小说模块", group: "workflow", defaultVisible: true },
   { key: "workflow.codex-pet", label: "Codex 桌宠工坊", group: "workflow", defaultVisible: false },
   { key: "workflow.report", label: "AI 智能报告", group: "workflow", defaultVisible: false },

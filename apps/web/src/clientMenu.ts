@@ -9,13 +9,14 @@ export interface ClientMenuItem {
 export type ClientMenuVisibility = Readonly<Record<string, boolean>>;
 
 /** 生图模块页内 tab：后台按 workflow.image.* 单独开关。 */
-export type ImageHubTabId = "general" | "ecom" | "portrait" | "try-on";
+export type ImageHubTabId = "general" | "ecom" | "product-extraction" | "portrait" | "try-on";
 
 export const IMAGE_HUB_TABS: readonly { readonly id: ImageHubTabId; readonly label: string; readonly menuKey: string }[] = [
   { id: "general", label: "通用生图", menuKey: "workflow.image.general" },
   { id: "ecom", label: "电商生图", menuKey: "workflow.image.ecom" },
+  { id: "product-extraction", label: "商品提取", menuKey: "workflow.image.product-extraction" },
   { id: "portrait", label: "形象照", menuKey: "workflow.image.portrait" },
-  { id: "try-on", label: "服装试穿", menuKey: "workflow.image.try-on" },
+  { id: "try-on", label: "万物试穿", menuKey: "workflow.image.try-on" },
 ] as const;
 
 const DEFAULT_HIDDEN_KEYS = [
@@ -47,8 +48,8 @@ export function visibleImageHubTabs(
 }
 
 /**
- * 工作流二级菜单是否显示。生图模块把三个 tab 合并进同一页面，
- * 三个 tab 全被后台关掉时整个入口也没有内容可展示，一并隐藏。
+ * 工作流二级菜单是否显示。生图模块把五个 tab 合并进同一页面，
+ * 五个 tab 全被后台关掉时整个入口也没有内容可展示，一并隐藏。
  */
 export function isWorkflowSubVisible(
   visibility: ClientMenuVisibility | undefined,

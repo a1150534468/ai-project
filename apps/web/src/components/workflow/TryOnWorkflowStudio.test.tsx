@@ -35,7 +35,7 @@ function options() {
       { value: "doubao-seedream-5-0-260128", label: "豆包 Seedream 5.0", supports1K: false, supports4K: true },
       { value: "gpt-image-2", label: "GPT Image 2", supports1K: true, supports4K: false },
     ],
-    consentVersion: "try-on-consent-v1",
+    consentVersion: "try-on-consent-v2",
     aspectRatios: ["1:1", "3:4", "4:3", "9:16", "16:9"],
     resolutions: ["1K", "2K", "4K"],
     pricing: {
@@ -160,20 +160,25 @@ afterEach(() => {
 });
 
 describe("TryOnWorkflowStudio", () => {
-  it("requires a garment front image but allows submission without a model", async () => {
+  it("requires a target item but allows submission without a subject", async () => {
     const scope = await mount();
-    const submit = button(scope, "生成试穿图");
+    expect(scope.textContent).toContain("万物试穿设置");
+    expect(scope.textContent).toContain("目标素材");
+    expect(scope.textContent).toContain("补充细节");
+    expect(scope.textContent).toContain("主体图");
+    expect(scope.textContent).toContain("支持服饰、配件、发型、妆容、家具等素材");
+    const submit = button(scope, "生成试穿效果");
     expect(submit?.disabled).toBe(true);
 
     await upload(scope, "garment_front", "front.jpg");
-    await waitFor(() => expect(button(scope, "生成试穿图")?.disabled).toBe(false));
+    await waitFor(() => expect(button(scope, "生成试穿效果")?.disabled).toBe(false));
     const description = scope.querySelector<HTMLTextAreaElement>('textarea[aria-label="试穿补充描述"]');
     if (!description) throw new Error("description missing");
     act(() => {
       fireEvent.change(description, { target: { value: "短发模特，城市街景" } });
     });
     await act(async () => {
-      button(scope, "生成试穿图")?.click();
+      button(scope, "生成试穿效果")?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(mocks.create).toHaveBeenCalledWith(
@@ -190,7 +195,7 @@ describe("TryOnWorkflowStudio", () => {
     expect(payload).not.toHaveProperty("authorizationAccepted");
   });
 
-  it("shows and enforces authorization only after a model image is uploaded", async () => {
+  it("shows and enforces authorization only after a subject image is uploaded", async () => {
     const scope = await mount();
     await upload(scope, "garment_front", "front.jpg");
     vi.clearAllMocks();
@@ -200,15 +205,15 @@ describe("TryOnWorkflowStudio", () => {
       return { asset };
     });
     await upload(scope, "model", "model.jpg");
-    const consent = scope.querySelector<HTMLInputElement>('input[aria-label="试穿模特授权确认"]');
+    const consent = scope.querySelector<HTMLInputElement>('input[aria-label="试穿主体图授权确认"]');
     expect(consent).toBeTruthy();
-    expect(button(scope, "生成试穿图")?.disabled).toBe(true);
+    expect(button(scope, "生成试穿效果")?.disabled).toBe(true);
     act(() => {
       consent?.click();
     });
-    expect(button(scope, "生成试穿图")?.disabled).toBe(false);
+    expect(button(scope, "生成试穿效果")?.disabled).toBe(false);
     await act(async () => {
-      button(scope, "生成试穿图")?.click();
+      button(scope, "生成试穿效果")?.click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     expect(mocks.create).toHaveBeenCalledWith(
@@ -216,7 +221,7 @@ describe("TryOnWorkflowStudio", () => {
       expect.objectContaining({
         modelAssetId: "model-1",
         authorizationAccepted: true,
-        consentVersion: "try-on-consent-v1",
+        consentVersion: "try-on-consent-v2",
       }),
     );
   });
@@ -253,11 +258,11 @@ describe("TryOnWorkflowStudio", () => {
     expect(scope.querySelector('[data-testid="try-on-preview"]')?.getAttribute("src")).toBe(
       "https://example.test/try-on.png",
     );
-    expect(scope.querySelector('[aria-label="服装试穿生成历史"]')).toBeTruthy();
+    expect(scope.querySelector('[aria-label="万物试穿生成历史"]')).toBeTruthy();
     act(() => {
       button(scope, "任务 0")?.click();
     });
-    expect(scope.querySelector('[aria-label="服装试穿任务队列"]')).toBeTruthy();
+    expect(scope.querySelector('[aria-label="万物试穿任务队列"]')).toBeTruthy();
     expect(scope.textContent).toContain("明亮影棚");
   });
 });

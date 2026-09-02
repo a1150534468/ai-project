@@ -1,32 +1,34 @@
 import type { HumanImageAspectRatio } from "../_shared/human-image-options.js";
 
-export const TRY_ON_CONSENT_VERSION = "try-on-consent-v1";
+export const TRY_ON_CONSENT_VERSION = "try-on-consent-v2";
 
 export function buildTryOnPrompt(args: {
   readonly aspectRatio: HumanImageAspectRatio;
-  readonly hasGarmentDetail: boolean;
-  readonly hasModelReference: boolean;
+  readonly hasItemDetail: boolean;
+  readonly hasSubjectReference: boolean;
   readonly description?: string;
 }): string {
   const references = [
-    "参考图 1 是必须准确还原的服装正面图。",
-    args.hasGarmentDetail ? "参考图 2 是同一件服装的背面或细节图，只用于补充结构、材质和装饰信息。" : "",
-    args.hasModelReference
-      ? `参考图 ${args.hasGarmentDetail ? 3 : 2} 是模特人物图，只用于锁定人物身份、长相和自然体态。`
+    "参考图 1 是必须准确还原并应用到画面中的目标素材。它可以是服装、鞋帽、首饰、眼镜、发型、妆容、纹身、配件、家具、装饰物或其他任何物品与视觉效果。",
+    args.hasItemDetail ? "参考图 2 是同一目标素材的补充角度或细节图，只用于补充结构、材质、颜色和装饰信息。" : "",
+    args.hasSubjectReference
+      ? `参考图 ${args.hasItemDetail ? 3 : 2} 是承载试穿效果的主体图。主体可能是人物、动物、物体或空间，以图片实际内容为准。`
       : "",
   ].filter(Boolean);
-  const modelRule = args.hasModelReference
-    ? "严格保持模特人物身份一致：保留脸型、五官比例、肤色、年龄特征、发际线和可见独特特征；不要换脸、不要改变人物长相，也不要保留人物图里的原服装。"
-    : "创建一位自然、真实、适合展示该服装的单人模特；人物长相、体态、场景和姿势优先遵循补充描述，未描述部分由你合理完成。";
+  const subjectRule = args.hasSubjectReference
+    ? "严格保持主体一致：若主体是人物，保留身份、脸型、五官比例、肤色、年龄和体态；若主体是动物、物体或空间，保留其外形、结构、材质、颜色、比例、视角和环境。只修改应用目标素材所必需的区域；原发型、穿搭、妆容和其他特征只在与目标效果冲突时改变，其余内容不要擅自修改。"
+    : "根据目标素材及补充描述创建最合适的承载主体与场景。主体可以是人物、动物、物体或空间；不要默认生成服装模特，也不要把非服装素材强行解释为服装。";
   const description = args.description?.trim();
 
   return [
-    "生成一张高品质、真实摄影风格的单人服装上身试穿图。",
+    "生成一张高品质的万物试穿效果图。",
     ...references,
-    "服装还原是最高优先级：准确保留版型、领口、袖型、长度、面料质感、颜色、图案、Logo、纽扣、缝线和其他可见装饰，不擅自增删或改色。",
-    modelRule,
-    "让服装自然贴合人体并符合真实重力、褶皱和遮挡关系；完整清晰展示服装正面，避免手臂、头发、包袋或其他物体遮挡服装主体。",
-    "画面中只出现一位人物，不添加文字、水印、边框或无关商品；面部、双手、肢体和服装结构自然，商业服装摄影级布光与清晰度。",
+    "先识别目标素材是什么，再判断它与主体之间合理的穿着、佩戴、附着、替换、摆放或装配关系；严格按素材真实用途和补充描述执行。",
+    "目标素材还原是最高优先级：准确保留可见的外形、结构、比例、材质、颜色、图案、Logo、文字和独特细节，不擅自增删、改色或替换设计。",
+    subjectRule,
+    "若目标意图是换装、换发型、换妆容等替换效果，移除目标区域内与新效果冲突的原内容，不要将新旧元素错误叠加或混合。",
+    "让目标素材与主体自然融合：尺度、位置、透视、光影、重力、形变、接触和遮挡关系必须合理；完整清晰展示关键效果，避免无关元素遮挡。",
+    "默认输出真实、清晰、可直接比较效果的商业级画面；若参考图或补充描述指定了插画、动漫等风格，则准确延续该风格。不添加水印、边框、说明文字或无关物品。",
     `画面比例：${args.aspectRatio}。`,
     description ? `补充描述：${description}` : "",
   ]

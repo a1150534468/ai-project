@@ -7,6 +7,7 @@ interface ImageResultActionsProps {
   readonly onVariation: (image: WorkflowImageAsset) => void;
   readonly onEdit: (image: WorkflowImageAsset) => void;
   readonly onDownload: (image: WorkflowImageAsset) => void;
+  readonly mode?: "all" | "download-only";
 }
 
 const actions = [
@@ -23,10 +24,13 @@ export function ImageResultActions(props: ImageResultActionsProps) {
     edit: props.onEdit,
     download: props.onDownload,
   } as const;
+  const visibleActions = props.mode === "download-only"
+    ? actions.filter((action) => action.key === "download")
+    : actions;
 
   return (
     <div className="grid grid-cols-2 gap-2 border-t border-hairline-subtle pt-3 sm:flex sm:flex-wrap" aria-label="当前图片操作">
-      {actions.map((action) => (
+      {visibleActions.map((action) => (
         <button
           key={action.key}
           type="button"

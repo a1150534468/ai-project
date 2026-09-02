@@ -107,11 +107,11 @@ function requestTryOn<T>(args: {
 }
 
 export function getTryOnOptions(token: string): Promise<TryOnOptions> {
-  return requestTryOn({ token, path: "/api/workflow/try-ons/options", fallback: "获取服装试穿配置失败" });
+  return requestTryOn({ token, path: "/api/workflow/try-ons/options", fallback: "获取万物试穿配置失败" });
 }
 
 export function getTryOnState(token: string): Promise<TryOnState> {
-  return requestTryOn({ token, path: "/api/workflow/try-ons/state", fallback: "获取服装试穿任务失败" });
+  return requestTryOn({ token, path: "/api/workflow/try-ons/state", fallback: "获取万物试穿任务失败" });
 }
 
 export function uploadTryOnReference(
@@ -143,7 +143,7 @@ export function createTryOnTask(token: string, payload: CreateTryOnPayload): Pro
     path: "/api/workflow/try-ons/generate",
     method: "POST",
     body: payload,
-    fallback: "服装试穿生成失败",
+    fallback: "万物试穿生成失败",
   });
 }
 

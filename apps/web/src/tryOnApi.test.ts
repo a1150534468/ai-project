@@ -38,12 +38,12 @@ describe("tryOnApi", () => {
       modelAssetId: "model-1",
       description: "影棚",
       authorizationAccepted: true,
-      consentVersion: "try-on-consent-v1",
+      consentVersion: "try-on-consent-v2",
     });
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
       modelAssetId: "model-1",
       authorizationAccepted: true,
-      consentVersion: "try-on-consent-v1",
+      consentVersion: "try-on-consent-v2",
     });
   });
 });

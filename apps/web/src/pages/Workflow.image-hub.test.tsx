@@ -9,20 +9,22 @@ import Workflow from "./Workflow";
 import { ToastProvider } from "../motion";
 
 describe("Workflow image hub", () => {
-  it("keeps all four image studios mounted under separate tabs", () => {
+  it("keeps all five image studios mounted under separate tabs", () => {
     const html = renderToStaticMarkup(<ToastProvider><Workflow token="token" activeModuleId="image" /></ToastProvider>);
     expect(html).toContain("通用生图");
     expect(html).toContain("电商生图");
+    expect(html).toContain("商品提取");
     expect(html).toContain("形象照");
-    expect(html).toContain("服装试穿");
+    expect(html).toContain("万物试穿");
     expect(html).toContain('data-testid="portrait-studio"');
+    expect(html).toContain('data-testid="product-extraction-studio"');
     expect(html).toContain('data-testid="try-on-studio"');
     expect(html).toContain("产品资料");
     expect(html).toContain("商品主图");
     expect(html).toContain("生成图片");
     expect(html).toContain('aria-label="电商图生成历史"');
     expect(html).toContain('aria-label="形象照生成历史"');
-    expect(html).toContain('aria-label="服装试穿生成历史"');
+    expect(html).toContain('aria-label="万物试穿生成历史"');
     expect(html).toContain("生成概览");
     expect(html).toMatch(/class="hidden"[^>]*><section data-testid="portrait-studio"/);
   });
@@ -33,13 +35,20 @@ describe("Workflow image hub", () => {
         <Workflow
           token="token"
           activeModuleId="image"
-          menuVisibility={{ "workflow.image.ecom": false, "workflow.image.portrait": false, "workflow.image.try-on": false }}
+          menuVisibility={{
+            "workflow.image.ecom": false,
+            "workflow.image.product-extraction": false,
+            "workflow.image.portrait": false,
+            "workflow.image.try-on": false,
+          }}
         />
       </ToastProvider>,
     );
     expect(html).not.toContain("电商生图");
+    expect(html).not.toContain("商品提取");
     expect(html).not.toContain("形象照");
     expect(html).not.toContain('data-testid="portrait-studio"');
+    expect(html).not.toContain('data-testid="product-extraction-studio"');
     expect(html).not.toContain('data-testid="try-on-studio"');
     expect(html).not.toContain("商品主图");
     expect(html).toContain("生成图片");
@@ -150,11 +159,11 @@ describe("Workflow 通用生图计价与重试", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const scope = await mountHub();
+    const studio = generalStudio(scope);
     await waitFor(() => expect(pricingCalls.length).toBeGreaterThan(0));
     expect(pricingCalls[0]).toBe(`${PRICING_PATH}?model=qwen-image-2.0-pro-2026-04-22`);
-    await waitFor(() => expect(scope.textContent).toContain("20 算力点"));
+    await waitFor(() => expect(studio.textContent).toContain("20 算力点"));
 
-    const studio = generalStudio(scope);
     const modelTrigger = buttons(studio).find((button) => button.textContent?.includes("Qwen Image 2.0 Pro"));
     if (!modelTrigger) throw new Error("model select trigger missing");
     await act(async () => { modelTrigger.click(); });
@@ -163,7 +172,7 @@ describe("Workflow 通用生图计价与重试", () => {
     await act(async () => { gptOption.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
 
     await waitFor(() => expect(pricingCalls).toContain(`${PRICING_PATH}?model=gpt-image-2`));
-    await waitFor(() => expect(scope.textContent).toContain("45 算力点"));
+    await waitFor(() => expect(studio.textContent).toContain("45 算力点"));
   });
 
   it("乱序返回的旧计价响应被丢弃，只认最后一次模型切换的价格", async () => {
@@ -191,12 +200,12 @@ describe("Workflow 通用生图计价与重试", () => {
     const gptOption = buttons(studio).find((button) => button.getAttribute("role") === "option" && button.textContent?.includes("GPT Image 2"));
     if (!gptOption) throw new Error("gpt model option missing");
     await act(async () => { gptOption.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    await waitFor(() => expect(scope.textContent).toContain("45 算力点"));
+    await waitFor(() => expect(studio.textContent).toContain("45 算力点"));
 
     // 旧模型的响应此刻才回来，不能盖掉新模型的价格
     await act(async () => { releaseFirst?.(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect(scope.textContent).toContain("45 算力点");
-    expect(scope.textContent).not.toContain("20 算力点");
+    expect(studio.textContent).toContain("45 算力点");
+    expect(studio.textContent).not.toContain("20 算力点");
   });
 
   it("连点重新提交只预扣费一次：同一原任务的重试在飞行中被忽略", async () => {

@@ -47,11 +47,11 @@ export const DEFAULT_IMAGE_DRAFT: ImageDraft = {
   referenceImages: [],
 };
 
-export function createRequestId(): string {
+export function createRequestId(prefix = "img-"): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `img-${crypto.randomUUID()}`;
+    return `${prefix}${crypto.randomUUID()}`;
   }
-  return `img-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `${prefix}${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 export function errorMessage(error: unknown, fallback: string): string {

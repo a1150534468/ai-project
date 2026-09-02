@@ -68,6 +68,12 @@ if (pathname.endsWith("/generations")) {
 
 `referenceAssetIds` 落在 `ImageGenerationTask`（迁移 `20260715130000_image_task_references`）。这样服务重启或任务重试时，后台恢复执行会**按原模型 + 原参考图**重放，参考图不丢。计费上先扣（`chargeResource` 按 resourceKey 计次）后生成，失败 `refundResource` 退款。
 
+### 2.5 商品提取只做场景约束，不另建生图链路
+
+生图 Hub 的「商品提取」接收一张商品原图和商品描述，比例、分辨率、模型、上传、任务轮询、取消、历史、下载与计费全部复用通用生图工作台。前端提交时把描述拼成固定的图片编辑约束：保留商品造型与包装细节、正上方平铺构图、纯白 `#FFFFFF` 背景、无人物/道具/水印，并固定单张输出。
+
+商品提取请求使用 `product-extract-` 前缀，通用生图与商品提取在前端按此前缀隔离任务和历史；后端仍走同一个 `/api/workflow/images/generate`，因此没有新增表、队列、计费资源或部署变量。核心文件是 `ProductExtractionWorkflowStudio.tsx`、`productExtractionWorkflowModel.ts` 和可配置的 `useImageWorkflowStudio.ts`。
+
 ## 三、端到端流程
 
 ```mermaid
@@ -94,6 +100,8 @@ flowchart TD
 | `apps/api/src/workflow/_shared/image-stream-dispatcher.ts` | undici dispatcher：关掉自带 headers/body 超时，让截止时间只有一个来源（见 6.9） |
 | `apps/api/src/workflow/_shared/gpt-image-edit.poc.test.ts` | GPT Image edits 真实链路 POC（`RUN_GPT_IMAGE_EDIT_POC=1` 触发） |
 | `apps/web/src/components/workflow/ImageWorkflowStudio.tsx` | 前端工作台（模型选择、参考图上传、尺寸选择） |
+| `apps/web/src/components/workflow/ProductExtractionWorkflowStudio.tsx` | 商品提取场景工作台（单原图、描述、白底平铺单张输出） |
+| `apps/web/src/components/workflow/productExtractionWorkflowModel.ts` | 商品提取固定提示词、请求前缀与历史作用域 |
 | `apps/web/src/workflowState.ts` | 前端纯逻辑状态 |
 
 被复用的下游：电商（`ecom-routes.ts` 直接 `import { callImageEdit, callImageGeneration, retryUntilSuccess, storeWorkflowImage } from "./image-service.js"`）、桌宠（生图走 `gpt-image-2`）、文章配图、漫剧。

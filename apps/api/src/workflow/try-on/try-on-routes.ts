@@ -92,7 +92,7 @@ const tryOnRequestSchema = z
       context.addIssue({ code: z.ZodIssueCode.custom, message: "素材不能重复" });
     }
     if (value.modelAssetId && (!value.authorizationAccepted || value.consentVersion !== TRY_ON_CONSENT_VERSION)) {
-      context.addIssue({ code: z.ZodIssueCode.custom, message: "必须确认已获得模特人物授权" });
+      context.addIssue({ code: z.ZodIssueCode.custom, message: "必须确认主体图使用授权" });
     }
   });
 const idParamsSchema = z.object({ id: z.string().trim().min(1).max(128) });
@@ -205,7 +205,7 @@ function nowPlus(ms: number): Date {
 
 function safeErrorMessage(error: unknown): string {
   // InsufficientBalanceError 的 message 本身就是「余额不足，请充值」，无需单列分支。
-  return errorMessageOrFallback(error, "服装试穿生成失败", 300);
+  return errorMessageOrFallback(error, "万物试穿生成失败", 300);
 }
 
 function referenceIds(
@@ -468,9 +468,9 @@ async function runTryOnTask(args: {
     if (references.some((reference) => !isTryOnObjectKeyForUser(reference.objectKey, task.userId, "references")))
       throw new Error("试穿素材存储位置不合法");
     const filenames = [
-      "garment-front.jpg",
-      ...(task.garmentDetailAssetId ? ["garment-detail.jpg"] : []),
-      ...(task.modelAssetId ? ["model-reference.jpg"] : []),
+      "try-on-item.jpg",
+      ...(task.garmentDetailAssetId ? ["try-on-item-detail.jpg"] : []),
+      ...(task.modelAssetId ? ["try-on-subject.jpg"] : []),
     ];
     const referenceImages = await Promise.all(
       references.map(async (reference, index) => ({
@@ -897,7 +897,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
 
   app.post("/api/workflow/try-ons/generate", { preHandler: requireUser }, async (req, reply) => {
     const parsed = tryOnRequestSchema.safeParse(req.body);
-    if (!parsed.success) return reply.code(400).send({ error: "试穿生成参数不完整；上传模特图时必须确认人物授权" });
+    if (!parsed.success) return reply.code(400).send({ error: "试穿生成参数不完整；上传主体图时必须确认使用授权" });
     if (!humanImageModelSupports(parsed.data.model, parsed.data.resolution)) {
       const model = HUMAN_IMAGE_MODELS.find((item) => item.value === parsed.data.model)!;
       return reply.code(400).send({ error: `${model.label} 暂不支持 ${parsed.data.resolution}` });
@@ -921,8 +921,8 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     if (!references) return reply.code(404).send({ error: "试穿素材不存在、类型不匹配或无权访问" });
     const effectivePrompt = buildTryOnPrompt({
       aspectRatio: parsed.data.aspectRatio,
-      hasGarmentDetail: Boolean(parsed.data.garmentDetailAssetId),
-      hasModelReference: Boolean(parsed.data.modelAssetId),
+      hasItemDetail: Boolean(parsed.data.garmentDetailAssetId),
+      hasSubjectReference: Boolean(parsed.data.modelAssetId),
       description: parsed.data.description,
     });
     const resourceKey = resolveImageChargeRow(await listPriceRows(), {
@@ -974,7 +974,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
       const duplicate = await taskWithOutputs(prisma, req.userId, parsed.data.requestId).catch(() => null);
       if (duplicate) return reply.code(202).send({ success: true, data: { task: serializeTask(duplicate) } });
       if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "余额不足，请充值" });
-      return reply.code(502).send({ error: "服装试穿任务创建失败" });
+      return reply.code(502).send({ error: "万物试穿任务创建失败" });
     }
     schedule(task);
     return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });

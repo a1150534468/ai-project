@@ -16,6 +16,8 @@ interface ImageResultCanvasProps {
   readonly onVariation: (image: WorkflowImageAsset) => void;
   readonly onEdit: (image: WorkflowImageAsset) => void;
   readonly onDownload: (image: WorkflowImageAsset) => void;
+  readonly actionMode?: "all" | "download-only";
+  readonly emptyText?: string;
 }
 
 function imageAlt(image: WorkflowImageAsset): string {
@@ -112,7 +114,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
           <div className={`grid h-full min-h-[340px] place-items-center rounded-lg border border-dashed px-6 text-center ${isFailed ? "border-danger/30 bg-danger/10" : "border-hairline bg-surface-subtle"}`}>
             <div className={isFailed ? "text-danger-ink" : "text-ink-secondary"}>
               <Icon icon={isFailed ? "mdi:alert-circle-outline" : "mdi:image-plus-outline"} className="mx-auto mb-3 text-4xl" aria-hidden />
-              <p className="text-sm font-semibold">{isFailed ? "生成失败" : "填写左侧提示词后开始生成"}</p>
+              <p className="text-sm font-semibold">{isFailed ? "生成失败" : props.emptyText ?? "填写左侧提示词后开始生成"}</p>
               {isFailed && props.task?.error && <p className="mt-2 max-w-md text-xs leading-5">{props.task.error}</p>}
             </div>
           </div>
@@ -141,6 +143,7 @@ export function ImageResultCanvas(props: ImageResultCanvasProps) {
             onVariation={props.onVariation}
             onEdit={props.onEdit}
             onDownload={props.onDownload}
+            mode={props.actionMode}
           />
         </div>
       )}

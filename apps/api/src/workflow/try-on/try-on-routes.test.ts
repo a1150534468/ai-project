@@ -263,7 +263,7 @@ function persistedTask(overrides: Partial<TaskRow> = {}): TaskRow {
     resolution: "2K",
     count: 1,
     description: "",
-    effectivePrompt: "生成服装试穿图",
+    effectivePrompt: "生成万物试穿效果图",
     garmentFrontAssetId: "front-1",
     garmentDetailAssetId: null,
     modelAssetId: null,
@@ -413,7 +413,7 @@ describe("try-on workflow routes", () => {
     await app.close();
   });
 
-  it("generates with a garment only and settles successful images", async () => {
+  it("generates with a target item only and settles successful images", async () => {
     const db = createPrismaMock([reference("garment_front", "front-1")]);
     const callImageEdit = vi.fn<CallImageEdit>(async () => ({ kind: "b64" as const, b64: "", mime: "image/png" }));
     const { app, billing, scheduled } = await createApp(db, callImageEdit);
@@ -428,8 +428,8 @@ describe("try-on workflow routes", () => {
     expect(callImageEdit).toHaveBeenCalledWith(
       expect.objectContaining({
         size: "1728x2304",
-        prompt: expect.stringContaining("创建一位自然、真实、适合展示该服装的单人模特"),
-        referenceImages: [expect.objectContaining({ filename: "garment-front.jpg" })],
+        prompt: expect.stringContaining("主体可以是人物、动物、物体或空间"),
+        referenceImages: [expect.objectContaining({ filename: "try-on-item.jpg" })],
       }),
     );
     expect(billing.reserveResource).toHaveBeenCalledWith({
@@ -593,7 +593,7 @@ describe("try-on workflow routes", () => {
     await app.close();
   });
 
-  it("requires model consent and sends garment, detail, then model in fixed order", async () => {
+  it("requires subject consent and sends item, detail, then subject in fixed order", async () => {
     const db = createPrismaMock([
       reference("garment_front", "front-1"),
       reference("garment_detail", "detail-1"),
@@ -624,11 +624,11 @@ describe("try-on workflow routes", () => {
     await Promise.all(scheduled);
     const call = callImageEdit.mock.calls[0]![0];
     expect(call.referenceImages.map((image) => image.filename)).toEqual([
-      "garment-front.jpg",
-      "garment-detail.jpg",
-      "model-reference.jpg",
+      "try-on-item.jpg",
+      "try-on-item-detail.jpg",
+      "try-on-subject.jpg",
     ]);
-    expect(call.prompt).toContain("严格保持模特人物身份一致");
+    expect(call.prompt).toContain("严格保持主体一致");
     expect(db.tasks[0]).toMatchObject({ consentVersion: TRY_ON_CONSENT_VERSION, modelAssetId: "model-1" });
     await app.close();
   });

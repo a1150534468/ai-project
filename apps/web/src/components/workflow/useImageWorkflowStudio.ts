@@ -68,13 +68,35 @@ export interface ImageWorkflowStudioController {
   readonly closeDownloadDialog: () => void;
 }
 
+const includeEveryRequest = (_requestId: string): boolean => true;
+const preservePrompt = (prompt: string): string => prompt;
+
 export function useImageWorkflowStudio(args: {
   readonly token: string;
   readonly onBalanceRefresh?: () => void;
+  readonly initialDraft?: ImageDraft;
+  readonly requestIdPrefix?: string;
+  readonly requestFilter?: (requestId: string) => boolean;
+  readonly buildSubmissionPrompt?: (prompt: string) => string;
+  readonly requiredReferenceCount?: number;
+  readonly maxReferenceCount?: number;
+  readonly emptyPromptMessage?: string;
+  readonly referenceRequiredMessage?: string;
+  readonly submittedMessage?: string;
+  readonly downloadPrefix?: string;
 }): ImageWorkflowStudioController {
   const { token, onBalanceRefresh } = args;
+  const requestIdPrefix = args.requestIdPrefix ?? "img-";
+  const requestFilter = args.requestFilter ?? includeEveryRequest;
+  const buildSubmissionPrompt = args.buildSubmissionPrompt ?? preservePrompt;
+  const requiredReferenceCount = args.requiredReferenceCount ?? 0;
+  const maxReferenceCount = Math.min(Math.max(args.maxReferenceCount ?? IMAGE_MAX_REFERENCE_COUNT, 1), IMAGE_MAX_REFERENCE_COUNT);
+  const emptyPromptMessage = args.emptyPromptMessage ?? "请输入提示词";
+  const referenceRequiredMessage = args.referenceRequiredMessage ?? "请先上传参考图";
+  const submittedMessage = args.submittedMessage ?? "生图任务已提交，后台生成中";
+  const downloadPrefix = args.downloadPrefix ?? "generated-image";
   const toast = useToast();
-  const [imageDraft, setImageDraft] = useState<ImageDraft>(DEFAULT_IMAGE_DRAFT);
+  const [imageDraft, setImageDraft] = useState<ImageDraft>(() => args.initialDraft ?? DEFAULT_IMAGE_DRAFT);
   const [preEditDraft, setPreEditDraft] = useState<ImageDraft | null>(null);
   const [tasks, setTasks] = useState<readonly ImageTask[]>([]);
   const [images, setImages] = useState<readonly WorkflowImageAsset[]>([]);
@@ -130,16 +152,17 @@ export function useImageWorkflowStudio(args: {
   const refreshImageState = useCallback(async (showFailureNotice: boolean) => {
     try {
       const state = await getWorkflowImageState(token);
-      const nextTasks = state.tasks.map(toImageTask);
-      setImages(state.images);
+      const scopedImages = state.images.filter((image) => requestFilter(image.requestId));
+      const nextTasks = state.tasks.filter((task) => requestFilter(task.requestId)).map(toImageTask);
+      setImages(scopedImages);
       setTasks(nextTasks);
 
       if (!hasInitializedImageState.current) {
         hasInitializedImageState.current = true;
         const initialTask = nextTasks.find(isActiveTask) ?? nextTasks[0] ?? null;
         const initialImage = initialTask
-          ? state.images.find((image) => image.requestId === initialTask.id) ?? null
-          : state.images[0] ?? null;
+          ? scopedImages.find((image) => image.requestId === initialTask.id) ?? null
+          : scopedImages[0] ?? null;
         if (initialTask || initialImage) {
           setSelectedRequestId(initialTask?.id ?? initialImage?.requestId ?? null);
           setSelectedImageId(initialImage?.id ?? null);
@@ -155,7 +178,7 @@ export function useImageWorkflowStudio(args: {
     } catch {
       if (showFailureNotice) setNotice("生图任务暂时无法加载");
     }
-  }, [token]);
+  }, [requestFilter, token]);
 
   // 模型切换会重新拉取 model 感知价格；请求计数器丢弃乱序返回的旧响应。
   const refreshImagePricing = useCallback(async (pricingModel: ImageModel) => {
@@ -213,7 +236,11 @@ export function useImageWorkflowStudio(args: {
   const submitImageDraft = (draft: ImageDraft, intent: ImageGenerationIntent, sourceImageAssetId: string | null) => {
     const trimmedPrompt = draft.prompt.trim();
     if (!trimmedPrompt) {
-      setError("请输入提示词");
+      setError(emptyPromptMessage);
+      return;
+    }
+    if (draft.referenceImages.length < requiredReferenceCount) {
+      setError(referenceRequiredMessage);
       return;
     }
 
@@ -227,16 +254,17 @@ export function useImageWorkflowStudio(args: {
       return;
     }
 
-    const requestId = createRequestId();
+    const effectivePrompt = buildSubmissionPrompt(trimmedPrompt);
+    const requestId = createRequestId(requestIdPrefix);
     const draftSize = buildImageSize(draft.aspectRatio, draft.resolution);
     const referenceAssetIds = Array.from(new Set([
       ...(sourceImageAssetId ? [sourceImageAssetId] : []),
       ...draft.referenceImages.map((image) => image.id),
-    ])).slice(0, IMAGE_MAX_REFERENCE_COUNT);
+    ])).slice(0, maxReferenceCount);
     const task: ImageTask = {
       ...createImageTask({
       id: requestId,
-      prompt: trimmedPrompt,
+      prompt: effectivePrompt,
       size: draftSize,
       count: parsedCount.value,
       createdAt: new Date().toISOString(),
@@ -269,7 +297,7 @@ export function useImageWorkflowStudio(args: {
         const result = await generateWorkflowImages(token, {
           requestId,
           model: draft.model,
-          prompt: trimmedPrompt,
+          prompt: effectivePrompt,
           size: draftSize,
           resolution: draft.resolution,
           referenceAssetIds,
@@ -277,9 +305,9 @@ export function useImageWorkflowStudio(args: {
           generationIntent: intent,
           count: parsedCount.value,
         });
-        setImages(result.recent);
+        setImages(result.recent.filter((image) => requestFilter(image.requestId)));
         setTasks((prev) => mergeTask(prev, toImageTask(result.task)));
-        toast.show("ok", "生图任务已提交，后台生成中");
+        toast.show("ok", submittedMessage);
         onBalanceRefresh?.();
       } catch (err) {
         const message = err instanceof ApiError && err.status === 402 ? "积分不足，请充值" : errorMessage(err, "创建生图任务失败");
@@ -299,7 +327,7 @@ export function useImageWorkflowStudio(args: {
   };
 
   const handleReferenceUpload = (file: File) => {
-    if (isUploadingReference || referenceImages.length >= IMAGE_MAX_REFERENCE_COUNT) return;
+    if (isUploadingReference || referenceImages.length >= maxReferenceCount) return;
     const mime = file.type.toLowerCase();
     if (!IMAGE_REFERENCE_MIME_TYPES.has(mime)) {
       setError("参考图仅支持 JPG、PNG、WEBP、BMP、TIFF 或 GIF");
@@ -320,7 +348,7 @@ export function useImageWorkflowStudio(args: {
           ...current,
           referenceImages: current.referenceImages.some((item) => item.id === asset.id)
             ? current.referenceImages
-            : [...current.referenceImages, asset].slice(0, IMAGE_MAX_REFERENCE_COUNT),
+            : [...current.referenceImages, asset].slice(0, maxReferenceCount),
         }));
         if (workspaceMode === "editing") setIsEditDirty(true);
         setNotice("参考图已上传，生成时将作为画面参考");
@@ -415,7 +443,7 @@ export function useImageWorkflowStudio(args: {
   const openSingleDownload = (image: WorkflowImageAsset) => {
     void downloadImageFile({
       url: image.originalUrl,
-      fileName: imageDownloadFileName({ prefix: "generated-image", url: image.originalUrl, mime: image.mime, index: image.requestIndex }),
+      fileName: imageDownloadFileName({ prefix: downloadPrefix, url: image.originalUrl, mime: image.mime, index: image.requestIndex }),
     }).then(() => toast.show("ok", "已开始下载原图")).catch((downloadError) => {
       const message = errorMessage(downloadError, "下载原图失败");
       setError(message);
@@ -497,7 +525,7 @@ export function useImageWorkflowStudio(args: {
   const handleRetryTask = (task: ImageTask) => {
     if (retryingRequestIds.current.has(task.id)) return;
     retryingRequestIds.current.add(task.id);
-    const requestId = createRequestId();
+    const requestId = createRequestId(requestIdPrefix);
     const intent = task.generationIntent ?? "new";
     const model = task.model && isImageModel(task.model) ? task.model : DEFAULT_IMAGE_MODEL;
     const retryTask: ImageTask = {
@@ -533,7 +561,7 @@ export function useImageWorkflowStudio(args: {
           generationIntent: intent,
           count: task.count,
         });
-        setImages(result.recent);
+        setImages(result.recent.filter((image) => requestFilter(image.requestId)));
         setTasks((prev) => mergeTask(prev, toImageTask(result.task)));
         toast.show("ok", "已按原参数重新提交");
         onBalanceRefresh?.();

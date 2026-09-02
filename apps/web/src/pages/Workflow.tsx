@@ -1,7 +1,7 @@
 /**
  * 工作流页面。P2.4 批次二把生图工作区的编排整体挪走之后,这里只剩三件事:
  *  - **外壳布局**:全屏模块与卡片模块两套容器类名(`FULLSCREEN_MODULES` / `studioWrapperClass`)。
- *  - **生图 Hub 的 tab**:生图 / 电商图 / 形象照 / 试衣共用一个全屏工作区,各 studio 常驻 DOM
+ *  - **生图 Hub 的 tab**:生图 / 电商图 / 商品提取 / 形象照 / 试衣共用一个全屏工作区,各 studio 常驻 DOM
  *    用 `hidden` 切换,表单内容零丢失;tab 集合由后台菜单开关决定。
  *  - **模块分发**:按 `activeModuleId` 落到对应 studio。
  *
@@ -27,9 +27,11 @@ import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio"
 import { LocalBusinessPromoWorkflowStudio } from "../components/workflow/LocalBusinessPromoWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
 import { PortraitWorkflowStudio } from "../components/workflow/PortraitWorkflowStudio";
+import { ProductExtractionWorkflowStudio } from "../components/workflow/ProductExtractionWorkflowStudio";
 import { ScheduledTaskStudio } from "../components/workflow/ScheduledTaskStudio";
 import { TryOnWorkflowStudio } from "../components/workflow/TryOnWorkflowStudio";
 import { useImageWorkflowStudio } from "../components/workflow/useImageWorkflowStudio";
+import { isGeneralImageRequestId } from "../components/workflow/productExtractionWorkflowModel";
 import { visibleImageHubTabs, type ClientMenuVisibility, type ImageHubTabId } from "../clientMenu";
 import type { EcomMainJob } from "../workflowEcomMainApi";
 import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
@@ -45,7 +47,7 @@ interface WorkflowProps {
 
 const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "commerce-long-image", "article-workflow", "codex-pet"]);
 export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, menuVisibility }: WorkflowProps) {
-  const image = useImageWorkflowStudio({ token, onBalanceRefresh });
+  const image = useImageWorkflowStudio({ token, onBalanceRefresh, requestFilter: isGeneralImageRequestId });
   const [commerceTab, setCommerceTab] = useState<"main" | "detail">("main");
   const [commerceLoadMainJob, setCommerceLoadMainJob] = useState<EcomMainJob | null>(null);
   const [commerceLoadDetailWorkflow, setCommerceLoadDetailWorkflow] = useState<WorkflowEcomWorkflow | null>(null);
@@ -92,14 +94,14 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
             </header>
           )}
           {isImageHub && imageTabs.length > 1 && (
-            <div className="flex-none px-4 pt-3 lg:px-6">
-              <div className="inline-flex rounded-[10px] bg-surface-muted p-1">
+            <div className="flex-none overflow-x-auto px-4 pt-3 [scrollbar-width:thin] lg:px-6">
+              <div className="inline-flex min-w-max rounded-[10px] bg-surface-muted p-1">
                 {imageTabs.map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setImageSubMode(tab.id)}
-                    className={`h-9 rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-surface text-ink shadow-sm" : "text-ink-secondary "}`}
+                    className={`h-9 flex-none whitespace-nowrap rounded-[8px] px-4 text-sm font-semibold transition ${imageSubMode === tab.id ? "bg-surface text-ink shadow-sm" : "text-ink-secondary "}`}
                   >
                     {tab.label}
                   </button>
@@ -142,6 +144,11 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
               setCommerceLoadDetailWorkflow(w);
             }}
           />
+              </div>
+              )}
+              {hasImageTab("product-extraction") && (
+              <div className={imageSubMode === "product-extraction" ? "min-h-0 xl:h-full" : "hidden"}>
+                <ProductExtractionWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
               </div>
               )}
               {hasImageTab("portrait") && (

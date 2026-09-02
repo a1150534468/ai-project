@@ -82,6 +82,7 @@ vi.mock("../components/workflow/ComicWorkflowStudio", () => ({ ComicWorkflowStud
 vi.mock("../components/workflow/ArticleWorkflowStudio", () => ({ ArticleWorkflowStudio: stub("article-studio") }));
 vi.mock("../components/workflow/ScheduledTaskStudio", () => ({ ScheduledTaskStudio: stub("scheduled-studio") }));
 vi.mock("../components/workflow/PortraitWorkflowStudio", () => ({ PortraitWorkflowStudio: stub("portrait-studio") }));
+vi.mock("../components/workflow/ProductExtractionWorkflowStudio", () => ({ ProductExtractionWorkflowStudio: stub("product-extraction-studio") }));
 vi.mock("../components/workflow/TryOnWorkflowStudio", () => ({ TryOnWorkflowStudio: stub("try-on-studio") }));
 vi.mock("../components/workflow/NovelWorkflowStudio", () => ({ NovelWorkflowStudio: stub("novel-studio") }));
 vi.mock("../components/workflow/LocalBusinessPromoWorkflowStudio", () => ({
@@ -280,21 +281,28 @@ describe("Workflow 生图 Hub 的 tab 切换", () => {
   it("后台只留一个 tab 时隐藏 tab 栏，其余 studio 不渲染", async () => {
     const scope = await mountWorkflow({
       activeModuleId: "image",
-      menuVisibility: { "workflow.image.ecom": false, "workflow.image.portrait": false, "workflow.image.try-on": false },
+      menuVisibility: {
+        "workflow.image.ecom": false,
+        "workflow.image.product-extraction": false,
+        "workflow.image.portrait": false,
+        "workflow.image.try-on": false,
+      },
     });
 
     expect(scope.querySelector('[data-testid="commerce-studio"]')).toBeNull();
+    expect(scope.querySelector('[data-testid="product-extraction-studio"]')).toBeNull();
     expect(scope.querySelector('[data-testid="portrait-studio"]')).toBeNull();
     expect(buttons(scope).some((button) => button.textContent?.trim() === "通用生图")).toBe(false);
     expect(scope.querySelector('[data-testid="image-studio"]')).toBeTruthy();
   });
 
-  it("四个 tab 全被后台关掉时给出「生图模块暂未开放」", async () => {
+  it("五个 tab 全被后台关掉时给出「生图模块暂未开放」", async () => {
     const scope = await mountWorkflow({
       activeModuleId: "image",
       menuVisibility: {
         "workflow.image.general": false,
         "workflow.image.ecom": false,
+        "workflow.image.product-extraction": false,
         "workflow.image.portrait": false,
         "workflow.image.try-on": false,
       },

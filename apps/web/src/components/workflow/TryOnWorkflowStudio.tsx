@@ -28,7 +28,7 @@ import {
 const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
 const POLL_MS = 3000;
 const URL_REFRESH_MS = 10 * 60 * 1000;
-const DEFAULT_CONSENT_VERSION = "try-on-consent-v1";
+const DEFAULT_CONSENT_VERSION = "try-on-consent-v2";
 const DEFAULT_MODEL = "doubao-seedream-5-0-260128";
 const FALLBACK_MODELS: readonly TryOnModel[] = [
   { value: DEFAULT_MODEL, label: "豆包 Seedream 5.0", supports1K: false, supports4K: true },
@@ -195,7 +195,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
         setTasks(state.tasks);
         setSelectedTaskId(state.tasks[0]?.id ?? null);
       } catch (loadError) {
-        if (!cancelled) setError(errorMessage(loadError, "服装试穿工作台加载失败"));
+        if (!cancelled) setError(errorMessage(loadError, "万物试穿工作台加载失败"));
       } finally {
         if (!cancelled) setIsBootstrapping(false);
       }
@@ -234,9 +234,9 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
     () => new Map(references.map((reference) => [reference.kind, reference])),
     [references],
   );
-  const garmentFront = referenceByKind.get("garment_front");
-  const garmentDetail = referenceByKind.get("garment_detail");
-  const modelReference = referenceByKind.get("model");
+  const targetItem = referenceByKind.get("garment_front");
+  const itemDetail = referenceByKind.get("garment_detail");
+  const subjectReference = referenceByKind.get("model");
   const models = options?.models.length ? options.models : FALLBACK_MODELS;
   const selectedModel = models.find((item) => item.value === model) ?? models[0];
   const resolutionOptions = HUMAN_RESOLUTION_OPTIONS.filter(
@@ -251,8 +251,8 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   const pointCost = pointRate == null ? null : pointRate * count;
   const busyInputs = Boolean(uploadingKind || deletingReferenceId || hasActiveTask);
   const canSubmit =
-    Boolean(garmentFront) &&
-    (!modelReference || authorizationAccepted) &&
+    Boolean(targetItem) &&
+    (!subjectReference || authorizationAccepted) &&
     !isSubmitting &&
     !uploadingKind &&
     !hasActiveTask;
@@ -310,12 +310,12 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   };
 
   const handleSubmit = () => {
-    if (!garmentFront) {
-      setError("请先上传一张服装正面图");
+    if (!targetItem) {
+      setError("请先上传一张目标素材图");
       return;
     }
-    if (modelReference && !authorizationAccepted) {
-      setError("请确认已获得模特人物授权");
+    if (subjectReference && !authorizationAccepted) {
+      setError("请确认主体图使用授权");
       return;
     }
     if (!canSubmit) return;
@@ -329,11 +329,11 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           aspectRatio,
           resolution,
           count,
-          garmentFrontAssetId: garmentFront.id,
-          ...(garmentDetail ? { garmentDetailAssetId: garmentDetail.id } : {}),
-          ...(modelReference
+          garmentFrontAssetId: targetItem.id,
+          ...(itemDetail ? { garmentDetailAssetId: itemDetail.id } : {}),
+          ...(subjectReference
             ? {
-                modelAssetId: modelReference.id,
+                modelAssetId: subjectReference.id,
                 authorizationAccepted: true as const,
                 consentVersion: options?.consentVersion ?? DEFAULT_CONSENT_VERSION,
               }
@@ -344,7 +344,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
         setSelectedTaskId(response.task.id);
         onBalanceRefresh?.();
       } catch (submitError) {
-        setError(errorMessage(submitError, "服装试穿生成失败"));
+        setError(errorMessage(submitError, "万物试穿生成失败"));
       } finally {
         setIsSubmitting(false);
       }
@@ -402,9 +402,9 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
-                <h2 className="mt-1 text-base font-semibold text-ink">服装试穿设置</h2>
+                <h2 className="mt-1 text-base font-semibold text-ink">万物试穿设置</h2>
               </div>
-              <Icon icon="mdi:tshirt-crew-outline" className="text-xl text-ink-tertiary" aria-hidden />
+              <Icon icon="mdi:auto-fix" className="text-xl text-ink-tertiary" aria-hidden />
             </div>
 
             <div className="mt-5">
@@ -412,38 +412,38 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               <div className="grid grid-cols-3 gap-2">
                 <ReferenceSlot
                   kind="garment_front"
-                  label="服装正面"
+                  label="目标素材"
                   required
-                  reference={garmentFront}
+                  reference={targetItem}
                   isUploading={uploadingKind === "garment_front"}
-                  isDeleting={deletingReferenceId === garmentFront?.id}
+                  isDeleting={deletingReferenceId === targetItem?.id}
                   disabled={busyInputs}
                   onFile={handleFile}
                   onDelete={handleDeleteReference}
                 />
                 <ReferenceSlot
                   kind="garment_detail"
-                  label="背面/细节"
-                  reference={garmentDetail}
+                  label="补充细节"
+                  reference={itemDetail}
                   isUploading={uploadingKind === "garment_detail"}
-                  isDeleting={deletingReferenceId === garmentDetail?.id}
+                  isDeleting={deletingReferenceId === itemDetail?.id}
                   disabled={busyInputs}
                   onFile={handleFile}
                   onDelete={handleDeleteReference}
                 />
                 <ReferenceSlot
                   kind="model"
-                  label="模特图"
-                  reference={modelReference}
+                  label="主体图"
+                  reference={subjectReference}
                   isUploading={uploadingKind === "model"}
-                  isDeleting={deletingReferenceId === modelReference?.id}
+                  isDeleting={deletingReferenceId === subjectReference?.id}
                   disabled={busyInputs}
                   onFile={handleFile}
                   onDelete={handleDeleteReference}
                 />
               </div>
               <p className="mt-2 text-[11px] leading-4 text-ink-tertiary">
-                服装正面清晰、无遮挡效果最佳；模特图不上传时由 AI 生成模特。
+                支持服饰、配件、发型、妆容、家具等素材；不上传主体图时由 AI 创建合适主体。
               </p>
               <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-tertiary">
                 <Icon icon="mdi:shield-lock-outline" aria-hidden />
@@ -462,7 +462,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 }}
                 disabled={hasActiveTask}
                 maxLength={1200}
-                placeholder="模特特征、场景、姿势或拍摄风格"
+                placeholder="应用位置、主体特征、场景或画面风格"
                 className="min-h-[92px] resize-y rounded-lg border border-hairline p-3 text-sm font-normal leading-5 disabled:bg-surface-muted"
               />
               <span className="text-right text-[10px] font-normal text-ink-tertiary">{description.length}/1200</span>
@@ -482,10 +482,10 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
               onCountChange={setCount}
             />
 
-            {modelReference && (
+            {subjectReference && (
               <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
                 <input
-                  aria-label="试穿模特授权确认"
+                  aria-label="试穿主体图授权确认"
                   type="checkbox"
                   checked={authorizationAccepted}
                   disabled={hasActiveTask}
@@ -495,7 +495,9 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                   }}
                   className="mt-0.5 h-4 w-4 accent-ink"
                 />
-                <span>我确认模特图为本人，或已获得本人明确授权，并同意用于本次 AI 服装试穿生成。</span>
+                <span>
+                  我确认主体图由本人所有或已获得合法授权；如含人物，已获得本人明确授权，并同意用于本次 AI 生成。
+                </span>
               </label>
             )}
             {error && (
@@ -507,8 +509,8 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           </div>
           <SubmitCostBar
             estimatedPointCost={pointCost}
-            submitLabel="生成试穿图"
-            submitIcon="mdi:tshirt-crew-outline"
+            submitLabel="生成试穿效果"
+            submitIcon="mdi:auto-fix"
             submitDisabled={!canSubmit}
             busy={isSubmitting}
             busyLabel="提交中"
@@ -520,10 +522,10 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4">
             <div className="flex min-w-0 items-center gap-2">
               <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-surface-inverse text-ink-inverse">
-                <Icon icon="mdi:tshirt-crew-outline" className="text-lg" aria-hidden />
+                <Icon icon="mdi:auto-fix" className="text-lg" aria-hidden />
               </span>
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-ink">服装试穿</h2>
+                <h2 className="truncate text-sm font-semibold text-ink">万物试穿</h2>
                 <p className="text-[11px] text-ink-tertiary">AI 生成预览</p>
               </div>
             </div>
@@ -552,7 +554,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                 <img
                   data-testid="try-on-preview"
                   src={selectedOutput.originalUrl}
-                  alt="AI 服装试穿预览"
+                  alt="AI 万物试穿预览"
                   className="max-h-full max-w-full rounded-[8px] object-contain shadow-[0_22px_70px_rgba(0,0,0,0.18)]"
                 />
                 <DownloadOverlayButton
@@ -563,10 +565,10 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             ) : selectedTask && isActive(selectedTask) ? (
               <div className="grid max-w-sm place-items-center text-center">
                 <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-sm">
-                  <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-brand-ink" aria-hidden />
+                  <Icon icon="mdi:auto-fix" className="text-4xl text-brand-ink" aria-hidden />
                   <span className="absolute inset-0 animate-ping rounded-full border border-brand/30" />
                 </span>
-                <p className="mt-5 text-base font-semibold text-ink">正在生成试穿图</p>
+                <p className="mt-5 text-base font-semibold text-ink">正在生成试穿效果</p>
                 <p className="mt-2 text-sm text-ink-secondary">
                   已完成 {selectedTask.completedCount}/{selectedTask.count}
                 </p>
@@ -582,10 +584,10 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             ) : (
               <div className="grid max-w-sm place-items-center text-center">
                 <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-surface/70">
-                  <Icon icon="mdi:tshirt-crew-outline" className="text-4xl text-ink-tertiary" aria-hidden />
+                  <Icon icon="mdi:auto-fix" className="text-4xl text-ink-tertiary" aria-hidden />
                 </span>
                 <p className="mt-5 text-base font-semibold text-ink-secondary">试穿效果预览</p>
-                <p className="mt-2 text-sm text-ink-tertiary">上传服装正面图并提交后，结果将在这里显示</p>
+                <p className="mt-2 text-sm text-ink-tertiary">上传目标素材并提交后，结果将在这里显示</p>
               </div>
             )}
             {selectedTask?.error && !isActive(selectedTask) && (
@@ -615,12 +617,12 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             </footer>
           )}
           <WorkflowHistoryStrip
-            ariaLabel="服装试穿生成历史"
+            ariaLabel="万物试穿生成历史"
             summary={`${tasks.length} 个任务`}
             emptyText="暂无生成记录"
             groups={tasks.map((task) => ({
               id: task.id,
-              title: task.description || (task.modelAssetId ? "指定模特试穿" : "AI 模特试穿"),
+              title: task.description || (task.modelAssetId ? "指定主体试穿" : "AI 主体试穿"),
               meta: `${STATUS_LABEL[task.status]} · ${formattedDate(task.createdAt)}`,
               items: task.outputs.length
                 ? task.outputs.map((output, index) => ({
@@ -639,7 +641,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                       alt: `${STATUS_LABEL[task.status]}的试穿任务`,
                       selected: selectedTask?.id === task.id,
                       isLoading: isActive(task),
-                      placeholderIcon: isActive(task) ? "mdi:loading" : "mdi:tshirt-crew-outline",
+                      placeholderIcon: isActive(task) ? "mdi:loading" : "mdi:auto-fix",
                       onSelect: () => {
                         setSelectedTaskId(task.id);
                         setSelectedOutputIndex(0);
@@ -656,19 +658,19 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
           <aside
             role="dialog"
             aria-modal="true"
-            aria-label="服装试穿任务队列"
+            aria-label="万物试穿任务队列"
             onClick={(event) => event.stopPropagation()}
             className="ml-auto flex h-full w-full flex-col bg-surface shadow-2xl sm:w-[320px]"
           >
             <div className="flex h-16 items-center justify-between border-b border-hairline-subtle px-4">
               <div>
                 <p className="text-xs font-semibold text-ink-secondary">任务状态</p>
-                <h2 className="text-base font-semibold text-ink">服装试穿任务</h2>
+                <h2 className="text-base font-semibold text-ink">万物试穿任务</h2>
               </div>
               <button
                 type="button"
                 onClick={() => setIsTaskDrawerOpen(false)}
-                aria-label="关闭服装试穿任务队列"
+                aria-label="关闭万物试穿任务队列"
                 className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"
               >
                 <Icon icon="mdi:close" className="text-xl" aria-hidden />
@@ -693,7 +695,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
                     >
                       <span className="flex justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-ink">
-                          {task.modelAssetId ? "指定模特试穿" : "AI 模特试穿"}
+                          {task.modelAssetId ? "指定主体试穿" : "AI 主体试穿"}
                         </span>
                         <span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span>
                       </span>
