@@ -12,10 +12,17 @@
 	}
 }
 
+# 两个 SPA 站点的 API 分支必须也写成 handle，才能和 SPA 兜底互斥。Caddy 不按书写顺序执行，
+# 而是按指令类型排序，handle 属于「路由分派」排在 reverse_proxy 之前 —— 所以只要兜底那块是
+# 无条件 handle，它就先接走**全部**请求，且 file_server 是终结处理器，后面的 reverse_proxy
+# 永远轮不到。表现是 POST /api/* 被静态文件服务回 405（Allow: GET, HEAD），GET /api/* 更隐蔽:
+# 静默返回 index.html。api.indz.site 那块没有 handle，所以一直是好的，容易误判成「只有前端坏」。
 http://{$APP_DOMAIN} {
 	import common
 	@api path /api/* /health /ready
-	reverse_proxy @api api:8090
+	handle @api {
+		reverse_proxy api:8090
+	}
 	handle {
 		root * /srv/web
 		try_files {path} /index.html
@@ -26,7 +33,9 @@ http://{$APP_DOMAIN} {
 http://{$ADMIN_DOMAIN} {
 	import common
 	@api path /api/* /health /ready
-	reverse_proxy @api api:8090
+	handle @api {
+		reverse_proxy api:8090
+	}
 	handle {
 		root * /srv/admin
 		try_files {path} /index.html
