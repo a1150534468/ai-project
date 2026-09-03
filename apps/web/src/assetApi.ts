@@ -2,7 +2,7 @@
  * 素材库读接口。只有一个端点：`GET /api/assets`。
  *
  * 这里的类型是 `apps/api/src/assets/asset-types.ts` 的手抄件 —— web 与 api 之间没有共享类型包
- * （见 portraitApi.ts 等 13 个模块的同样做法）。抄的时候两边字段必须逐字对齐，
+ * （见 kbApi.ts 等模块的同样做法）。抄的时候两边字段必须逐字对齐，
  * 尤其 `AssetItem` 里那堆 `| null`：服务端给的是 null 而不是 undefined，判空写法不能想当然。
  *
  * 响应是**裸** `{ items, nextCursor }`，没有 `{ success, data }` 外壳；`request()` 两种都吃，
@@ -19,9 +19,6 @@ export const ASSET_SOURCE_MODULES = [
   "reference",
   "video",
   "audio",
-  "dub",
-  "portrait",
-  "try-on",
   "codex-pet",
 ] as const;
 
@@ -33,7 +30,7 @@ export type AssetOrigin = "ai" | "upload";
 export type AssetMediaType = "image" | "video" | "audio" | "archive";
 
 export interface AssetItem {
-  /** `<源前缀>:<行 id>`（口播再加 `:<媒体列>`）。前端只当不透明字符串用，别去解析它。 */
+  /** `<源前缀>:<行 id>`。前端只当不透明字符串用，别去解析它。 */
   readonly id: string;
   readonly sourceModule: AssetSourceModule;
   readonly origin: AssetOrigin;

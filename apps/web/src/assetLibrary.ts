@@ -6,7 +6,7 @@
  *    与 `asset-sources.ts` 的 `AUDIO_KIND_RULES`）。前端必须有这张表：键集分页下，一个
  *    module 可能到第 5 页才出现第一条，靠「已加载的素材里有哪些 module」生成筛选项的话，
  *    前几页根本给不出该有的入口。表只管**显示**，准入判定仍然只有服务端说了算。
- *  - 翻页是累积的，同一条素材不能因为「游标停在某行、该行多条素材」而出现两次（口播一行三条）。
+ *  - 翻页是累积的，同一条素材不能因为「游标停在某行、该行多条素材」而出现两次。
  *  - 体积/时长服务端可能给 null（历史行没有 objectKey、图片没有时长），文案不能出现「null B」。
  */
 import type { AssetItem, AssetOrigin, AssetPage, AssetSourceModule } from "./assetApi";
@@ -33,24 +33,18 @@ export const ASSET_MODULE_LABELS: Readonly<Record<AssetSourceModule, string>> = 
   reference: "参考图",
   video: "AI 视频",
   audio: "音频",
-  dub: "数字人口播",
-  portrait: "形象照",
-  "try-on": "AI 试穿",
   "codex-pet": "桌宠",
 };
 
 /** 筛选项的展示顺序：先图、再视频音频、最后成品类。与服务端的枚举顺序无关。 */
 const MODULE_ORDER: readonly AssetSourceModule[] = [
   "image",
-  "portrait",
-  "try-on",
   "article",
   "ecom",
   "comic",
   "reference",
   "video",
   "audio",
-  "dub",
   "codex-pet",
 ];
 
@@ -68,9 +62,6 @@ const MODULE_ORIGINS: Readonly<Record<AssetSourceModule, readonly AssetOrigin[]>
   reference: ["upload"],
   video: ["ai"],
   audio: ["ai", "upload"],
-  dub: ["ai"],
-  portrait: ["ai"],
-  "try-on": ["ai"],
   "codex-pet": ["ai"],
 };
 

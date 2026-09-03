@@ -30,8 +30,8 @@ describe("listAssets", () => {
 
   it("四个参数都给时按 limit/cursor/sourceModule/origin 顺序拼", async () => {
     const fetchMock = stubOk();
-    await listAssets("t", { limit: 30, cursor: "c-1", sourceModule: "portrait", origin: "ai" });
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/assets?limit=30&cursor=c-1&sourceModule=portrait&origin=ai");
+    await listAssets("t", { limit: 30, cursor: "c-1", sourceModule: "codex-pet", origin: "ai" });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/assets?limit=30&cursor=c-1&sourceModule=codex-pet&origin=ai");
   });
 
   it("游标里的特殊字符做转义（base64url 不会带，但游标格式是服务端的事）", async () => {
@@ -61,7 +61,7 @@ describe("listAssets", () => {
 
   it("裸响应（没有 data 外壳）原样返回", async () => {
     const page = {
-      items: [{ id: "portrait:o1", sourceModule: "portrait", origin: "ai", mediaType: "image" }],
+      items: [{ id: "portrait:o1", sourceModule: "codex-pet", origin: "ai", mediaType: "image" }],
       nextCursor: "next",
     };
     stubOk(page);

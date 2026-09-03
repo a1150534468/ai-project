@@ -54,16 +54,13 @@ describe("分区与筛选项", () => {
     }
   });
 
-  it("AI 生成区：生图/形象照/试穿/文章配图/电商图/视频/音频/口播/桌宠", () => {
+  it("AI 生成区：生图/文章配图/电商图/视频/音频/桌宠", () => {
     expect(moduleFiltersForOrigin("ai")).toEqual([
       "image",
-      "portrait",
-      "try-on",
       "article",
       "ecom",
       "video",
       "audio",
-      "dub",
       "codex-pet",
     ]);
   });

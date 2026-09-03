@@ -85,18 +85,18 @@ describe("GET /api/assets 参数解析", () => {
 
   it("过滤参数原样透传", async () => {
     const app = await makeApp("user-1");
-    await app.inject({ method: "GET", url: "/api/assets?sourceModule=portrait&origin=upload" });
-    expect(listAssets.mock.calls[0]?.[1]).toMatchObject({ sourceModule: "portrait", origin: "upload" });
+    await app.inject({ method: "GET", url: "/api/assets?sourceModule=codex-pet&origin=upload" });
+    expect(listAssets.mock.calls[0]?.[1]).toMatchObject({ sourceModule: "codex-pet", origin: "upload" });
     await app.close();
   });
 
   it("合法游标解成 (createdAt, id)", async () => {
     const createdAt = new Date("2026-08-31T10:00:00.123Z");
-    const raw = encodeAssetCursor({ createdAt, id: "dub:p1:final" });
+    const raw = encodeAssetCursor({ createdAt, id: "video:v1" });
     const app = await makeApp("user-1");
     const response = await app.inject({ method: "GET", url: `/api/assets?cursor=${raw}` });
     expect(response.statusCode).toBe(200);
-    expect(listAssets.mock.calls[0]?.[1]).toMatchObject({ cursor: { createdAt, id: "dub:p1:final" } });
+    expect(listAssets.mock.calls[0]?.[1]).toMatchObject({ cursor: { createdAt, id: "video:v1" } });
     await app.close();
   });
 
@@ -133,11 +133,11 @@ describe("GET /api/assets 响应", () => {
   it("原样返回服务层给的一页（含 nextCursor）", async () => {
     const page: AssetPage = {
       items: [{
-        id: "portrait:o1",
-        sourceModule: "portrait",
+        id: "image:o1",
+        sourceModule: "image",
         origin: "ai",
         mediaType: "image",
-        title: "形象照 #1",
+        title: "生图 #1",
         url: "https://example.test/o1",
         thumbnailUrl: "https://example.test/o1",
         mime: "image/png",

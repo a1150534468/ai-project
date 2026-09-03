@@ -5,7 +5,7 @@
  *   1. 任意两个源前缀之间谁都不是谁的前缀 —— 跨源分支只比前缀就敢整段收/整段丢，全靠它；
  *   2. 因此「前缀比全局 id」与「拼出全 id 再比」结论一致，这里对全部前缀两两验证。
  * 哪天有人加一个叫 `image-hd:` 的源（`image:` 不是它的前缀，但 `image` 是），第 1 条依然成立；
- * 真正会踩的是加一个 `dub` 或 `image` 这种不带 `:` 的前缀，第 1 条会立刻红。
+ * 真正会踩的是加一个 `video` 或 `image` 这种不带 `:` 的前缀，第 1 条会立刻红。
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -74,7 +74,7 @@ describe("compareAssetKeysDesc", () => {
 });
 
 describe("isBelowCursor", () => {
-  const cursor = { createdAt: new Date(T1), id: "dub:p1:result" };
+  const cursor = { createdAt: new Date(T1), id: "video:p1:result" };
 
   it("没有游标时一律通过", () => {
     expect(isBelowCursor({ createdAt: T1, id: "image:z" }, null)).toBe(true);
@@ -86,12 +86,12 @@ describe("isBelowCursor", () => {
   });
 
   it("同一时间上严格按 id 比：游标那一条自己不通过", () => {
-    expect(isBelowCursor({ createdAt: T1, id: "dub:p1:result" }, cursor)).toBe(false);
+    expect(isBelowCursor({ createdAt: T1, id: "video:p1:result" }, cursor)).toBe(false);
     // 同一行的三个槽位在降序里是 result > final > audio：停在 result 时后两条都还没给过。
-    expect(isBelowCursor({ createdAt: T1, id: "dub:p1:final" }, cursor)).toBe(true);
-    expect(isBelowCursor({ createdAt: T1, id: "dub:p1:audio" }, cursor)).toBe(true);
+    expect(isBelowCursor({ createdAt: T1, id: "video:p1:final" }, cursor)).toBe(true);
+    expect(isBelowCursor({ createdAt: T1, id: "video:p1:audio" }, cursor)).toBe(true);
     // 已经给过的那条（id 更大）不会再来一次。
-    expect(isBelowCursor({ createdAt: T1, id: "dub:p1:z" }, cursor)).toBe(false);
+    expect(isBelowCursor({ createdAt: T1, id: "video:p1:z" }, cursor)).toBe(false);
   });
 });
 
@@ -103,9 +103,9 @@ describe("游标编解码", () => {
     expect(decoded?.id).toBe("image:abc");
   });
 
-  it("id 里带 `:`（口播的 `dub:<id>:<槽位>`）也原样往返", () => {
-    const cursor = { createdAt: new Date(T1), id: "dub:proj-1:final" };
-    expect(decodeAssetCursor(encodeAssetCursor(cursor))?.id).toBe("dub:proj-1:final");
+  it("id 里带 `:`（假想的 `video:<id>:<槽位>`）也原样往返", () => {
+    const cursor = { createdAt: new Date(T1), id: "video:proj-1:final" };
+    expect(decodeAssetCursor(encodeAssetCursor(cursor))?.id).toBe("video:proj-1:final");
   });
 
   it("编出来的是 URL 安全的（能直接进 query string）", () => {
@@ -144,7 +144,7 @@ describe("keysetWhere", () => {
   });
 
   it("同源：游标那一行连着捞回来（lte），因为一行可能产出多条素材", () => {
-    expect(keysetWhere({ createdAt, id: "dub:proj-1:final" }, "dub:")).toEqual({
+    expect(keysetWhere({ createdAt, id: "video:proj-1:final" }, "video:")).toEqual({
       OR: [
         { createdAt: { lt: createdAt } },
         { createdAt, id: { lte: "proj-1:final" } },
@@ -160,13 +160,13 @@ describe("keysetWhere", () => {
   });
 
   it("跨源：本源前缀更小 ⇒ 同一时间的行整段都在游标之后（lte）", () => {
-    // "image:" < "portrait:..."
-    expect(keysetWhere({ createdAt, id: "portrait:x" }, "image:")).toEqual({ createdAt: { lte: createdAt } });
+    // "codex-pet:" < "image:..."
+    expect(keysetWhere({ createdAt, id: "image:x" }, "codex-pet:")).toEqual({ createdAt: { lte: createdAt } });
   });
 
   it("跨源：本源前缀更大 ⇒ 同一时间的行整段都在游标之前（lt）", () => {
-    // "portrait:" > "image:..."
-    expect(keysetWhere({ createdAt, id: "image:x" }, "portrait:")).toEqual({ createdAt: { lt: createdAt } });
+    // "image:" > "codex-pet:..."
+    expect(keysetWhere({ createdAt, id: "codex-pet:x" }, "image:")).toEqual({ createdAt: { lt: createdAt } });
   });
 
   it("游标 id 是别人手改的、认不出前缀时也不炸（退化成纯字典序比较）", () => {

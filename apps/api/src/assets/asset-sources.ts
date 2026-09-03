@@ -1,11 +1,10 @@
 /**
- * 七个源适配器。每个把一张权威表的行翻成 `AssetItem`，**不新建表、不新开取件端点**。
+ * 四个源适配器。每个把一张权威表的行翻成 `AssetItem`，**不新建表、不新开取件端点**。
  *
  * 三条贯穿全文件的约束：
  *
- * 1. **URL 一律问原模块要。** 图片走 `imageBlobUrl`、形象照走 `portraitBlobUrl`、试穿走
- *    `tryOnBlobUrl`、宣传片音频走 `projectAudioBlobUrl`、桌宠走 `defaultArtifactPreviewUrl`，
- *    视频/口播本来就存的是可直接播的 URL。素材库自己签一条链接就等于第二套访问控制。
+ * 1. **URL 一律问原模块要。** 图片走 `imageBlobUrl`、桌宠走 `defaultArtifactPreviewUrl`，
+ *    视频/音频本来就存的是可直接播的 URL。素材库自己签一条链接就等于第二套访问控制。
  * 2. **准入条件必须落在 SQL 里。** 见 asset-classify.ts 的 `imageAdmissionWhere`：拉回内存
  *    再筛会让分页的「见底」判据失效。所以「音频按 kind 分区」也写成 `kind: { in: [...] }`，
  *    「口播只要有媒体列的项目」也写成 `OR` 而不是取回来再挑。
@@ -18,9 +17,6 @@ import type { PrismaClient } from "@ai-assistant/db";
 import { defaultArtifactPreviewUrl, isSafeRasterImageMime } from "../workflow/codex-pet/codex-pet-route-helpers.js";
 import type { CodexPetArtifactShape } from "../workflow/codex-pet/codex-pet-route-types.js";
 import { imageBlobUrl } from "../workflow/image/image-route-helpers.js";
-import { projectAudioBlobUrl } from "../workflow/local-business-promo/local-business-promo-media-access.js";
-import { portraitBlobUrl } from "../workflow/portrait/portrait-routes.js";
-import { tryOnBlobUrl } from "../workflow/try-on/try-on-routes.js";
 import { classifyImageRequestId, imageAdmissionWhere, imageGroupKey } from "./asset-classify.js";
 import { ASSET_SOURCE_ID_PREFIXES, keysetWhere } from "./asset-cursor.js";
 import type { AssetCursor, AssetItem, AssetOrigin, AssetSourceModule } from "./asset-types.js";
@@ -28,9 +24,6 @@ import type { AssetCursor, AssetItem, AssetOrigin, AssetSourceModule } from "./a
 export interface AssetSourceDeps {
   readonly prisma: PrismaClient;
   readonly imageBlobUrl: (imageId: string, objectKey: string) => string;
-  readonly portraitBlobUrl: (outputId: string, objectKey: string) => string;
-  readonly tryOnBlobUrl: (outputId: string, objectKey: string) => string;
-  readonly projectAudioBlobUrl: (projectId: string, objectKey: string, mime: string) => string;
   readonly codexPetArtifactUrl: (artifact: CodexPetArtifactRow) => string | null;
 }
 
@@ -162,9 +155,8 @@ const videoSource: AssetSource = {
  * 音频的三种角色（计划「音频的三种角色」一节）。表里没列出的 kind **不进** ——
  * 与未知 `ecom-` 前缀同一个取向：宁可漏，不要把中间件塞进用户素材库。
  *
- * `bgm` 归「我上传的」是按角色定的：它也可能来自内置预设（`source='local-bgm'`，
- * local-business-promo-audio-bgm-routes.ts:59）而不是真的上传，但对用户来说
- * 两者都是「我挑进来的背景音乐」，不是 AI 生成物。
+ * 这三种 kind 的生产者（宣传片剪辑）随 Phase 1 下线，`AudioAsset` 表按方案保留 ——
+ * 所以这一路现在只读得到存量行，规则表原样留着给将来的生产者用。
  */
 const AUDIO_KIND_RULES: Record<string, { readonly origin: AssetOrigin; readonly label: string }> = {
   narration: { origin: "ai", label: "AI 旁白" },
@@ -211,10 +203,9 @@ const audioSource: AssetSource = {
         origin: rule?.origin ?? "ai",
         mediaType: "audio" as const,
         title: assetTitle(metadataFilename(row.metadata) ?? row.textContent, rule?.label ?? "音频"),
-        // 与 serializeAudioAsset 同一套回落（local-business-promo-route-helpers.ts:98）。
-        url: row.objectKey && row.projectId
-          ? deps.projectAudioBlobUrl(row.projectId, row.objectKey, row.mime)
-          : row.originalUrl,
+        // 原来 objectKey + projectId 走的是宣传片自己的签名路由，那个模块随 Phase 1 下线，
+        // 素材库不新开取件端点（见文件头第 1 条），所以只剩 originalUrl 一条路。
+        url: row.originalUrl,
         thumbnailUrl: null,
         mime: row.mime,
         width: null,
@@ -223,181 +214,6 @@ const audioSource: AssetSource = {
         durationSec: row.durationSec,
         createdAt: row.createdAt.toISOString(),
         groupKey: row.projectId,
-        groupLabel: null,
-      };
-    });
-  },
-};
-
-/**
- * 口播项目的三个媒体列（计划裁定表第 4 行）：**只进媒体那半，`script` 不进**。
- * 一行最多产出三条素材，所以 id 要再带一段媒体列名 —— 键集分页对「一行多素材」的处理
- * 见 asset-cursor.ts 的 `keysetWhere`。
- */
-const DUB_MEDIA_SLOTS = [
-  { slot: "final", label: "口播成品视频", mediaType: "video", fallbackMime: "video/mp4" },
-  { slot: "result", label: "口播成片（混流前）", mediaType: "video", fallbackMime: "video/mp4" },
-  { slot: "audio", label: "口播配音", mediaType: "audio", fallbackMime: "audio/wav" },
-] as const;
-
-const URL_MIME_BY_EXTENSION: Record<string, string> = {
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  m4a: "audio/mp4",
-  mp4: "video/mp4",
-  mov: "video/quicktime",
-  webm: "video/webm",
-};
-
-/** 口播那三列只存 URL、没有 mime 列，只能按扩展名认；认不出来用槽位默认值。 */
-function mimeFromUrl(url: string, fallback: string): string {
-  const extension = url.split("?")[0]?.split(".").pop()?.toLowerCase();
-  return (extension && URL_MIME_BY_EXTENSION[extension]) || fallback;
-}
-
-const dubSource: AssetSource = {
-  key: "dub",
-  modules: ["dub"],
-  origins: ["ai"],
-  fetch: async (deps, query) => {
-    const rows = await deps.prisma.dubProject.findMany({
-      where: {
-        userId: query.userId,
-        AND: [
-          { OR: [{ finalVideoUrl: { not: null } }, { resultVideoUrl: { not: null } }, { audioUrl: { not: null } }] },
-          keysetWhere(query.cursor, P.dub),
-        ],
-      },
-      orderBy: [...ROW_ORDER],
-      take: query.take,
-      select: {
-        id: true,
-        title: true,
-        audioUrl: true,
-        audioDurationSec: true,
-        resultVideoUrl: true,
-        finalVideoUrl: true,
-        createdAt: true,
-      },
-    });
-    return rows.flatMap((row) => {
-      const urls = { final: row.finalVideoUrl, result: row.resultVideoUrl, audio: row.audioUrl };
-      return DUB_MEDIA_SLOTS.flatMap((media) => {
-        const url = urls[media.slot];
-        if (!url) return [];
-        return [{
-          id: `${P.dub}${row.id}:${media.slot}`,
-          sourceModule: "dub" as const,
-          origin: "ai" as const,
-          mediaType: media.mediaType,
-          title: `${assetTitle(row.title, "未命名口播")} · ${media.label}`,
-          url,
-          thumbnailUrl: null,
-          mime: mimeFromUrl(url, media.fallbackMime),
-          width: null,
-          height: null,
-          sizeBytes: null,
-          durationSec: media.slot === "audio" ? row.audioDurationSec : null,
-          // 项目 createdAt 而不是 updatedAt：改一次标题就换一次排序键的话，翻页会漏行也会重行。
-          createdAt: row.createdAt.toISOString(),
-          groupKey: row.id,
-          groupLabel: assetTitle(row.title, "未命名口播"),
-        }];
-      });
-    });
-  },
-};
-
-const portraitSource: AssetSource = {
-  key: "portrait",
-  modules: ["portrait"],
-  origins: ["ai"],
-  fetch: async (deps, query) => {
-    const rows = await deps.prisma.portraitOutput.findMany({
-      where: { userId: query.userId, AND: [keysetWhere(query.cursor, P.portrait)] },
-      orderBy: [...ROW_ORDER],
-      take: query.take,
-      select: {
-        id: true,
-        taskId: true,
-        requestIndex: true,
-        objectKey: true,
-        mime: true,
-        width: true,
-        height: true,
-        sizeBytes: true,
-        createdAt: true,
-      },
-    });
-    // 形象照没有单独的缩略图，与 portrait-routes.ts 的 serializeOutput 一样只有一条签名链接。
-    return rows.map((row) => {
-      const url = deps.portraitBlobUrl(row.id, row.objectKey);
-      return {
-        id: `${P.portrait}${row.id}`,
-        sourceModule: "portrait" as const,
-        origin: "ai" as const,
-        mediaType: "image" as const,
-        title: `形象照 #${row.requestIndex + 1}`,
-        url,
-        thumbnailUrl: url,
-        mime: row.mime,
-        width: row.width,
-        height: row.height,
-        sizeBytes: row.sizeBytes,
-        durationSec: null,
-        createdAt: row.createdAt.toISOString(),
-        groupKey: row.taskId,
-        groupLabel: null,
-      };
-    });
-  },
-};
-
-/**
- * 试穿输出与形象照同构（同样是 `taskId` + `requestIndex` + 唯一 `objectKey`），所以这一路是
- * portrait 那一路的镜像。但 `sourceModule` 是独立的 `try-on` 而不是并进 `portrait`：
- * 后台菜单里两者本来就是两个三级菜单（`workflow.image.portrait` / `workflow.image.try-on`），
- * 找试穿结果的人不该去「形象照」筛选项下面翻。
- */
-const tryOnSource: AssetSource = {
-  key: "tryOn",
-  modules: ["try-on"],
-  origins: ["ai"],
-  fetch: async (deps, query) => {
-    const rows = await deps.prisma.tryOnOutput.findMany({
-      where: { userId: query.userId, AND: [keysetWhere(query.cursor, P.tryOn)] },
-      orderBy: [...ROW_ORDER],
-      take: query.take,
-      select: {
-        id: true,
-        taskId: true,
-        requestIndex: true,
-        objectKey: true,
-        mime: true,
-        width: true,
-        height: true,
-        sizeBytes: true,
-        createdAt: true,
-      },
-    });
-    // 与 try-on-routes.ts 的 serializeOutput 一样：只有一条签名链接，没有单独的缩略图。
-    return rows.map((row) => {
-      const url = deps.tryOnBlobUrl(row.id, row.objectKey);
-      return {
-        id: `${P.tryOn}${row.id}`,
-        sourceModule: "try-on" as const,
-        origin: "ai" as const,
-        mediaType: "image" as const,
-        title: `试穿结果 #${row.requestIndex + 1}`,
-        url,
-        thumbnailUrl: url,
-        mime: row.mime,
-        width: row.width,
-        height: row.height,
-        sizeBytes: row.sizeBytes,
-        durationSec: null,
-        createdAt: row.createdAt.toISOString(),
-        groupKey: row.taskId,
         groupLabel: null,
       };
     });
@@ -489,9 +305,6 @@ export const ASSET_SOURCES: readonly AssetSource[] = [
   imageSource,
   videoSource,
   audioSource,
-  dubSource,
-  portraitSource,
-  tryOnSource,
   codexPetSource,
 ];
 
@@ -503,9 +316,6 @@ export function createAssetSourceDeps(prisma: PrismaClient): AssetSourceDeps {
   return {
     prisma,
     imageBlobUrl,
-    portraitBlobUrl: (outputId, objectKey) => portraitBlobUrl("output", outputId, objectKey),
-    tryOnBlobUrl: (outputId, objectKey) => tryOnBlobUrl("output", outputId, objectKey),
-    projectAudioBlobUrl,
     // 非光栅图（交付包 zip）拿不到预览链接，取件仍走桌宠自己那条限流的安装链接接口。
     codexPetArtifactUrl: (artifact) => defaultArtifactPreviewUrl(artifact, {}),
   };

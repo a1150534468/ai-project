@@ -119,11 +119,11 @@ function rowsAt(times: readonly string[], count: number, slots: readonly string[
 function makeSources() {
   return [
     fakeSource({ prefix: "image:", modules: ["image"], origins: ["ai"], rows: rowsAt(TIMES, 3, [""]) }),
-    fakeSource({ prefix: "portrait:", modules: ["portrait"], origins: ["ai"], rows: rowsAt(TIMES, 2, [""]) }),
-    // 一行三条：口播项目的 final/result/audio。
+    fakeSource({ prefix: "reference:", modules: ["reference"], origins: ["ai"], rows: rowsAt(TIMES, 2, [""]) }),
+    // 一行三条：键集分页对「一行多素材」的处理，用一个假源钉住（真源现在都是一行一条）。
     fakeSource({
-      prefix: "dub:",
-      modules: ["dub"],
+      prefix: "video:",
+      modules: ["video"],
       origins: ["ai"],
       rows: rowsAt([TIMES[2]!], 2, ["final", "result", "audio"]),
     }),
@@ -217,8 +217,8 @@ describe("过滤", () => {
   it("按 module 过滤时整源跳过：不该问的源一次都不问", async () => {
     const sources = makeSources();
     const spies = sources.map((source) => vi.spyOn(source, "fetch"));
-    const page = await listAssets(DEPS, { userId: "u1", limit: 50, sourceModule: "dub" }, sources);
-    expect(page.items.every((entry) => entry.id.startsWith("dub:"))).toBe(true);
+    const page = await listAssets(DEPS, { userId: "u1", limit: 50, sourceModule: "video" }, sources);
+    expect(page.items.every((entry) => entry.id.startsWith("video:"))).toBe(true);
     expect(page.items.length).toBe(6);
     expect(spies.map((spy) => spy.mock.calls.length)).toEqual([0, 0, 1, 0]);
   });
@@ -234,21 +234,21 @@ describe("过滤", () => {
   it("过滤条件透传给源（同一张表要在 SQL 里再裁一次）", async () => {
     const sources = makeSources();
     const spy = vi.spyOn(sources[2]!, "fetch");
-    await listAssets(DEPS, { userId: "u1", limit: 4, sourceModule: "dub", origin: "ai" }, sources);
+    await listAssets(DEPS, { userId: "u1", limit: 4, sourceModule: "video", origin: "ai" }, sources);
     expect(spy).toHaveBeenCalledWith(DEPS, {
       userId: "u1",
       cursor: null,
       take: 6,
-      sourceModule: "dub",
+      sourceModule: "video",
       origin: "ai",
     });
   });
 
   it("过滤后翻页依然不重不漏", async () => {
     const sources = makeSources();
-    const flat = (await walkAll(sources, 2, { sourceModule: "dub" })).flat();
+    const flat = (await walkAll(sources, 2, { sourceModule: "video" })).flat();
     expect(new Set(flat).size).toBe(flat.length);
-    expect(flat).toEqual(expectedOrder(sources).filter((id) => id.startsWith("dub:")));
+    expect(flat).toEqual(expectedOrder(sources).filter((id) => id.startsWith("video:")));
   });
 
   it("谁都不匹配时返回空页而不是全量", async () => {

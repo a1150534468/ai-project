@@ -16,9 +16,6 @@ export const ASSET_SOURCE_ID_PREFIXES = {
   image: "image:",
   video: "video:",
   audio: "audio:",
-  dub: "dub:",
-  portrait: "portrait:",
-  tryOn: "try-on:",
   codexPet: "codex-pet:",
 } as const;
 
