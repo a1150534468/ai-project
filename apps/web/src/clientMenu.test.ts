@@ -11,8 +11,8 @@ import {
 describe("clientMenu", () => {
   it("默认隐藏灰度中的 Codex 桌宠及其他工作流入口，其他入口显示", () => {
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.codex-pet")).toBe(false);
-    expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.report")).toBe(false);
-    expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.scheduled-task")).toBe(false);
+    expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.article-workflow")).toBe(false);
+    expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.ppt")).toBe(false);
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "workflow.image")).toBe(true);
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "nav.chat")).toBe(true);
   });
@@ -20,7 +20,6 @@ describe("clientMenu", () => {
   it("将普通页面映射到主菜单配置，工作流和充值由调用方单独判断", () => {
     expect(clientMenuKeyForView("models")).toBe("nav.models");
     expect(clientMenuKeyForView("workflow")).toBeNull();
-    expect(clientMenuKeyForView("report")).toBeNull();
     expect(clientMenuKeyForView("billing")).toBeNull();
   });
 
@@ -29,35 +28,15 @@ describe("clientMenu", () => {
   });
 
   it("生图模块页内 tab 按后台开关过滤", () => {
-    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual([
-      "general",
-      "ecom",
-      "product-extraction",
-      "portrait",
-      "try-on",
-    ]);
-    expect(visibleImageHubTabs({ "workflow.image.ecom": false }).map((tab) => tab.id)).toEqual([
-      "general",
-      "product-extraction",
-      "portrait",
-      "try-on",
-    ]);
+    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual(["general"]);
+    expect(visibleImageHubTabs({ "workflow.image.general": false }).map((tab) => tab.id)).toEqual([]);
   });
 
-  it("生图模块五个 tab 全关时二级入口一并隐藏", () => {
-    const allTabsOff = {
-      "workflow.image.general": false,
-      "workflow.image.ecom": false,
-      "workflow.image.product-extraction": false,
-      "workflow.image.portrait": false,
-      "workflow.image.try-on": false,
-    };
-    expect(isWorkflowSubVisible(allTabsOff, "image")).toBe(false);
-    expect(isWorkflowSubVisible({ "workflow.image.ecom": false }, "image")).toBe(true);
+  it("生图模块页内 tab 全关时二级入口一并隐藏", () => {
+    expect(isWorkflowSubVisible({ "workflow.image.general": false }, "image")).toBe(false);
+    expect(isWorkflowSubVisible(undefined, "image")).toBe(true);
     expect(isWorkflowSubVisible({ "workflow.image": false }, "image")).toBe(false);
     expect(isWorkflowSubVisible(undefined, "novel")).toBe(true);
     expect(isWorkflowSubVisible(undefined, "codex-pet")).toBe(false);
-    // 旧的电商图模块 id 落到生图模块的开关上
-    expect(isWorkflowSubVisible({ "workflow.image": false }, "commerce-long-image")).toBe(false);
   });
 });

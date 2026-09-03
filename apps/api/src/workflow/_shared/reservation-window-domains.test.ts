@@ -11,10 +11,8 @@ import {
   articleTextReservationTtlSeconds,
 } from "../article/article-workflow-shared.js";
 import { codexPetReservationTtlSeconds } from "../codex-pet/codex-pet-reservation-window.js";
-import { ecomImageReservationTtlSeconds } from "../ecom/ecom-route-helpers.js";
 import { imageReservationTtlSeconds, loadImageStaleTaskMs } from "../image/image-shared.js";
 import { novelReservationTtlSeconds } from "../novel/novel-reservation-window.js";
-import { portraitReservationTtlSeconds, portraitTaskStaleMs } from "../portrait/portrait-shared.js";
 
 const EMPTY_ENV: NodeJS.ProcessEnv = {};
 const GLOBAL_FALLBACK_SECONDS = BILLING_RECON_GLOBAL_TTL_MS / 1000;
@@ -28,13 +26,8 @@ const DOMAINS: readonly { readonly name: string; readonly ttlSeconds: number; re
   // 生图：卡单阈值按张，一笔预留要跨 张数 × 尝试次数 个心跳间隔。
   { name: "image", ttlSeconds: imageReservationTtlSeconds({ count: 1, maxAttempts: 1 }, EMPTY_ENV), staleMs: loadImageStaleTaskMs(EMPTY_ENV) },
   { name: "image(8×3)", ttlSeconds: imageReservationTtlSeconds({ count: 8, maxAttempts: 3 }, EMPTY_ENV), staleMs: loadImageStaleTaskMs(EMPTY_ENV) },
-  // 形象照 / 试衣：同一套重试预算与心跳语义，窗口口径共用 portrait 的。
-  { name: "portrait", ttlSeconds: portraitReservationTtlSeconds(1, EMPTY_ENV), staleMs: portraitTaskStaleMs(EMPTY_ENV) },
-  { name: "portrait(4)", ttlSeconds: portraitReservationTtlSeconds(4, EMPTY_ENV), staleMs: portraitTaskStaleMs(EMPTY_ENV) },
   // 图文：名义上是文本预留，实际窗口含全部出图批次。
   { name: "article", ttlSeconds: articleTextReservationTtlSeconds(EMPTY_ENV), staleMs: articleProjectStaleMs(EMPTY_ENV) },
-  // 电商：每次尝试各自预留，窗口是单张图的最坏耗时。
-  { name: "ecom", ttlSeconds: ecomImageReservationTtlSeconds({ maxAttempts: 2, retryDelayMs: 1_000 }, EMPTY_ENV) },
   // 小说：预留在建行时就下，结算要等 worker 生成完，窗口是显式的运维预算。
   { name: "novel", ttlSeconds: novelReservationTtlSeconds(EMPTY_ENV) },
   // 桌宠：运行 + 等授权 + 失败结算宽限。
@@ -64,13 +57,9 @@ describe("各域声明的预留有效期", () => {
     expect(imageReservationTtlSeconds({ count: 8, maxAttempts: 3 }, EMPTY_ENV)).toBeGreaterThan(
       imageReservationTtlSeconds({ count: 1, maxAttempts: 1 }, EMPTY_ENV),
     );
-    expect(portraitReservationTtlSeconds(4, EMPTY_ENV)).toBeGreaterThan(portraitReservationTtlSeconds(1, EMPTY_ENV));
-    expect(ecomImageReservationTtlSeconds({ maxAttempts: 3, retryDelayMs: 1_000 }, EMPTY_ENV)).toBeGreaterThan(
-      ecomImageReservationTtlSeconds({ maxAttempts: 2, retryDelayMs: 1_000 }, EMPTY_ENV),
-    );
   });
 
-  it("图文与电商显式不留续跑余量：它们的 reaper 是收尸/各自预留，不交回续跑", () => {
+  it("图文显式不留续跑余量：它的 reaper 是收尸，不交回续跑", () => {
     const maxImages = Math.max(...Object.values(ARTICLE_WORKFLOW_PLATFORM_CONFIGS).map((config) => config.maxImages));
     expect(articleTextReservationTtlSeconds(EMPTY_ENV)).toBe(
       reservationTtlSeconds({
@@ -80,9 +69,6 @@ describe("各域声明的预留有效期", () => {
         env: EMPTY_ENV,
       }),
     );
-    expect(
-      ecomImageReservationTtlSeconds({ maxAttempts: 2, retryDelayMs: 1_000 }, { BILLING_RESERVATION_RESUME_ALLOWANCE: "99" }),
-    ).toBe(ecomImageReservationTtlSeconds({ maxAttempts: 2, retryDelayMs: 1_000 }, EMPTY_ENV));
   });
 
   it("小说的 worker 停机预算可调，默认覆盖一周以上", () => {

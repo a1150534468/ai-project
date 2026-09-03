@@ -9,64 +9,26 @@ import Workflow from "./Workflow";
 import { ToastProvider } from "../motion";
 
 describe("Workflow image hub", () => {
-  it("keeps all five image studios mounted under separate tabs", () => {
+  it("生图 Hub 只剩通用生图一个 tab：不渲染 tab 栏，studio 直接铺开", () => {
     const html = renderToStaticMarkup(<ToastProvider><Workflow token="token" activeModuleId="image" /></ToastProvider>);
-    expect(html).toContain("通用生图");
-    expect(html).toContain("电商生图");
-    expect(html).toContain("商品提取");
-    expect(html).toContain("形象照");
-    expect(html).toContain("万物试穿");
-    expect(html).toContain('data-testid="portrait-studio"');
-    expect(html).toContain('data-testid="product-extraction-studio"');
-    expect(html).toContain('data-testid="try-on-studio"');
-    expect(html).toContain("产品资料");
-    expect(html).toContain("商品主图");
+    // 只有一个 tab 时 tab 栏整体不渲染，所以「通用生图」这个标签不该出现
+    expect(html).not.toContain("通用生图");
     expect(html).toContain("生成图片");
-    expect(html).toContain('aria-label="电商图生成历史"');
-    expect(html).toContain('aria-label="形象照生成历史"');
-    expect(html).toContain('aria-label="万物试穿生成历史"');
-    expect(html).toContain("生成概览");
-    expect(html).toMatch(/class="hidden"[^>]*><section data-testid="portrait-studio"/);
+    expect(html).not.toContain("生图模块暂未开放");
   });
 
-  it("后台关掉页内 tab 后不渲染对应 studio，只剩一个 tab 时隐藏 tab 栏", () => {
+  it("后台关掉通用生图后整页给出「暂未开放」而不是空白", () => {
     const html = renderToStaticMarkup(
       <ToastProvider>
         <Workflow
           token="token"
           activeModuleId="image"
-          menuVisibility={{
-            "workflow.image.ecom": false,
-            "workflow.image.product-extraction": false,
-            "workflow.image.portrait": false,
-            "workflow.image.try-on": false,
-          }}
+          menuVisibility={{ "workflow.image.general": false }}
         />
       </ToastProvider>,
     );
-    expect(html).not.toContain("电商生图");
-    expect(html).not.toContain("商品提取");
-    expect(html).not.toContain("形象照");
-    expect(html).not.toContain('data-testid="portrait-studio"');
-    expect(html).not.toContain('data-testid="product-extraction-studio"');
-    expect(html).not.toContain('data-testid="try-on-studio"');
-    expect(html).not.toContain("商品主图");
-    expect(html).toContain("生成图片");
-  });
-
-  it("当前 tab 被后台关掉时回落到第一个仍开启的 tab", () => {
-    const html = renderToStaticMarkup(
-      <ToastProvider>
-        <Workflow
-          token="token"
-          activeModuleId="commerce-long-image"
-          menuVisibility={{ "workflow.image.ecom": false }}
-        />
-      </ToastProvider>,
-    );
-    // 请求的是电商 tab，但它已关闭，落到通用生图
-    expect(html).not.toContain("商品主图");
-    expect(html).toMatch(/class="hidden"[^>]*><section data-testid="portrait-studio"/);
+    expect(html).toContain("生图模块暂未开放");
+    expect(html).not.toContain("生成图片");
   });
 });
 
@@ -241,120 +203,5 @@ describe("Workflow 通用生图计价与重试", () => {
     expect(generateCalls).toHaveLength(1);
 
     await act(async () => { releaseGenerate?.(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-  });
-});
-
-const MAIN_PRICING_PATH = "/api/workflow/ecom/main/pricing";
-
-function mainPricingBody(rate: number) {
-  return {
-    data: {
-      "1K": { resourceKey: "ecom_main_1k", displayName: "1K", rate },
-      "2K": { resourceKey: "ecom_main_2k", displayName: "2K", rate: rate * 2 },
-      "4K": { resourceKey: "ecom_main_4k", displayName: "4K", rate: rate * 4 },
-    },
-  };
-}
-
-/** 电商 tab 外壳依赖的只读接口：只需要空数据，测试关注的是尺寸门禁与计价。 */
-function ecomShellResponse(url: string) {
-  if (url.startsWith("/api/workflow/ecom/main/history")) return jsonResponse({ data: { jobs: [] } });
-  if (url.startsWith("/api/workflow/ecom/main/current")) return jsonResponse({ data: { job: null } });
-  if (url.startsWith("/api/workflow/ecom/history")) return jsonResponse({ data: { workflows: [] } });
-  if (url.startsWith("/api/workflow/ecom/current")) return jsonResponse({ data: { workflow: null } });
-  if (url.startsWith("/api/workflow/ecom/options")) return jsonResponse({ data: { platforms: [], templates: [] } });
-  if (url.startsWith("/api/workflow/ecom/pricing")) return jsonResponse({ data: {} });
-  if (url.startsWith("/api/workflow/images/references")) return jsonResponse({ data: { assets: [] } });
-  return new Response("{}", { status: 500 });
-}
-
-/** 三套 studio 常驻 DOM，模型/清晰度下拉重名，必须限定在主图设置的侧栏里查询。 */
-function mainStudioAside(scope: HTMLElement): HTMLElement {
-  const aside = Array.from(scope.querySelectorAll("aside")).find((element) => element.textContent?.includes("主图设置"));
-  if (!aside) throw new Error("ecom main studio aside missing");
-  return aside;
-}
-
-async function openEcomMainTab(scope: HTMLElement): Promise<HTMLElement> {
-  const ecomTab = buttons(scope).find((button) => button.textContent === "电商生图");
-  if (!ecomTab) throw new Error("ecom tab missing");
-  await act(async () => { ecomTab.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-  const mainTab = buttons(scope).find((button) => button.textContent?.includes("商品主图"));
-  if (!mainTab) throw new Error("main image tab missing");
-  await act(async () => { mainTab.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-  return mainStudioAside(scope);
-}
-
-async function pickOption(scope: HTMLElement, triggerText: string, optionText: string) {
-  const trigger = buttons(scope).find((button) => button.getAttribute("aria-haspopup") === "listbox" && button.textContent?.includes(triggerText));
-  if (!trigger) throw new Error(`select trigger missing: ${triggerText}`);
-  await act(async () => { trigger.click(); });
-  const option = buttons(scope).find((button) => button.getAttribute("role") === "option" && button.textContent?.includes(optionText));
-  if (!option) throw new Error(`select option missing: ${optionText}`);
-  await act(async () => { option.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-}
-
-function resolutionOptionLabels(scope: HTMLElement): string[] {
-  const trigger = buttons(scope).find((button) => button.getAttribute("aria-haspopup") === "listbox" && /^\s*(1K|2K)/.test(button.textContent ?? ""));
-  if (!trigger) throw new Error("resolution trigger missing");
-  act(() => { trigger.click(); });
-  const labels = buttons(scope)
-    .filter((button) => button.getAttribute("role") === "option" && /(1K|2K)/.test(button.textContent ?? ""))
-    .map((button) => button.textContent ?? "");
-  act(() => { trigger.click(); });
-  return labels;
-}
-
-describe("Workflow 电商主图尺寸门禁与计价", () => {
-  it("gpt-image-2 + 16:9 时 2K 档位从下拉里消失，且已选的 2K 自动回落到 1K", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.startsWith(PRICING_PATH)) return jsonResponse(pricingBody(20));
-      if (url.startsWith("/api/workflow/images/state")) return jsonResponse({ data: { images: [], tasks: [] } });
-      if (url.startsWith(MAIN_PRICING_PATH)) return jsonResponse(mainPricingBody(url.includes("gpt-image-2") ? 30 : 15));
-      return ecomShellResponse(url);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const scope = await mountHub();
-    const aside = await openEcomMainTab(scope);
-
-    expect(resolutionOptionLabels(aside)).toEqual(["1K 标清", "2K 高清"]);
-    await pickOption(aside, "1K 标清", "2K 高清");
-    await pickOption(aside, "Qwen Image 2.0 Pro", "GPT Image 2");
-    await pickOption(aside, "1:1 方图", "16:9 横图");
-
-    expect(resolutionOptionLabels(aside)).toEqual(["1K 标清"]);
-    // 2K 被服务端拒绝的组合下，已选档位回落到 1K：4 张 × 30 点
-    await waitFor(() => expect(aside.textContent).toContain("120 算力点"));
-  });
-
-  it("电商主图切模型后按新模型计价，乱序旧响应被丢弃", async () => {
-    let releaseFirst: (() => void) | null = null;
-    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.startsWith(PRICING_PATH)) return jsonResponse(pricingBody(20));
-      if (url.startsWith("/api/workflow/images/state")) return jsonResponse({ data: { images: [], tasks: [] } });
-      if (url.startsWith(MAIN_PRICING_PATH)) {
-        if (url.includes("qwen-image-2.0-pro")) {
-          await firstGate;
-          return jsonResponse(mainPricingBody(15));
-        }
-        return jsonResponse(mainPricingBody(30));
-      }
-      return ecomShellResponse(url);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const scope = await mountHub();
-    const aside = await openEcomMainTab(scope);
-    await pickOption(aside, "Qwen Image 2.0 Pro", "GPT Image 2");
-    // 默认 4 张 × 1K 30 点
-    await waitFor(() => expect(aside.textContent).toContain("120 算力点"));
-
-    await act(async () => { releaseFirst?.(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect(aside.textContent).toContain("120 算力点");
-    expect(aside.textContent).not.toContain("60 算力点");
   });
 });

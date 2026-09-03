@@ -34,7 +34,7 @@ if (shouldAutoloadEnv()) {
 //   1. 启动必需 —— 缺一个（或长度不达标）就拒绝启动（fail-fast），避免「跑到一半才炸」。
 //      服务与 worker 的必需集不同：只有 HTTP 服务会注册后台路由，见 SERVER_REQUIRED_ENV。
 //   2. 功能可选 —— 缺了对应功能降级/不可用，启动日志 warn 但不拦截；
-//      有等价回落 key 的（如 VIDEO_API_KEY→TOAPIS_API_KEY）不报，否则是假警报。
+//      有等价回落 key 的（如 EMBEDDING_API_KEY→BAILIAN_API_KEY）不报，否则是假警报。
 //   3. 有默认值的调参 —— 代码里已有默认值兜底，这里不管。
 
 export interface EnvRequirement {
@@ -43,7 +43,7 @@ export interface EnvRequirement {
   /**
    * 下游对这个值有长度硬要求时填。只判「非空」是不够的：
    * `auth/routes.ts:23`、`admin/routes.ts:27`、`image-routes.ts:279`、
-   * `local-business-promo-media-access.ts:7`、`codex-pet-storage.ts:96` 都写着
+   * `codex-pet-storage.ts:96` 都写着
    * `length < 32 → throw`，其中前两处是**插件注册期**抛的。
    * 配一个 8 字节的 SESSION_SECRET，非空校验会放行，然后 buildServer() 照样炸——
    * 那就白做了这层聚合校验。
@@ -90,13 +90,6 @@ export const OPTIONAL_FEATURE_ENV: ReadonlyArray<EnvRequirement> = [
     alternates: ["BAILIAN_API_KEY", "DASHSCOPE_API_KEY", "LLM_API_KEY"],
   },
   { key: "MIMO_API_KEY", hint: "音频合成（MIMO）" },
-  { key: "SKYHUMAN_API_TOKEN", hint: "视频数字人（SkyHuman）" },
-  {
-    key: "TOAPIS_API_KEY",
-    hint: "视频解析（toapis）",
-    // video-service.ts:149 读的是 `VIDEO_API_KEY ?? TOAPIS_API_KEY`，VIDEO_API_KEY 才是首选。
-    alternates: ["VIDEO_API_KEY"],
-  },
 ];
 
 /**

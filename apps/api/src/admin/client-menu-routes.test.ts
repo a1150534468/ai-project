@@ -39,12 +39,12 @@ beforeEach(() => {
 describe("client menu routes", () => {
   it("公开接口返回默认配置，并合并数据库覆盖值", async () => {
     mockPrisma.clientMenuVisibility.findMany.mockResolvedValue([
-      { key: "workflow.report", visible: true },
+      { key: "workflow.codex-pet", visible: true },
     ]);
     const app = await makeApp();
     const response = await app.inject({ method: "GET", url: "/api/client-menu" });
     expect(response.statusCode).toBe(200);
-    expect(response.json().data.find((item: { key: string }) => item.key === "workflow.report").visible).toBe(true);
+    expect(response.json().data.find((item: { key: string }) => item.key === "workflow.codex-pet").visible).toBe(true);
     expect(requireAdminCalls).toEqual(["ADMIN_MANAGE", "ADMIN_MANAGE"]);
     await app.close();
   });
@@ -53,20 +53,20 @@ describe("client menu routes", () => {
     const app = await makeApp();
     const response = await app.inject({
       method: "PATCH",
-      url: "/api/admin/client-menu/workflow.report",
+      url: "/api/admin/client-menu/workflow.codex-pet",
       payload: { visible: true },
     });
     expect(response.statusCode).toBe(200);
     expect(mockPrisma.clientMenuVisibility.upsert).toHaveBeenCalledWith({
-      where: { key: "workflow.report" },
-      create: { key: "workflow.report", visible: true },
+      where: { key: "workflow.codex-pet" },
+      create: { key: "workflow.codex-pet", visible: true },
       update: { visible: true },
     });
     expect(writeAudit).toHaveBeenCalledWith(
       mockPrisma,
       "admin-1",
       "CLIENT_MENU_VISIBILITY_UPDATE",
-      "workflow.report",
+      "workflow.codex-pet",
       { visible: true },
     );
     await app.close();

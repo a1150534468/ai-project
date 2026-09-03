@@ -10,8 +10,6 @@ function makeCtx(over: Partial<HubConnCtx> = {}): HubConnCtx {
     resolveTool: vi.fn(),
     rejectTool: vi.fn(),
     verifyToken: vi.fn(async () => ({ id: "dev1", userId: "u1" })),
-    onWechatInbound: vi.fn(async () => {}),
-    onWechatStatus: vi.fn(async () => {}),
     registered: false,
     deviceId: null,
     sessionId: null,

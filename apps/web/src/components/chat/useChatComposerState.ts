@@ -41,10 +41,9 @@ export function useChatComposerState(args: {
   readonly selectedModel: string;
   readonly preferredModel?: string;
   readonly onModelChange: (model: string) => void;
-  readonly onOpenToolMarket: () => void;
   readonly onSend: (payload: ChatSendPayload) => void;
 }) {
-  const { token, isLoading, selectedModel, preferredModel, onModelChange, onOpenToolMarket, onSend } = args;
+  const { token, isLoading, selectedModel, preferredModel, onModelChange, onSend } = args;
   const [input, setInput] = useState("");
   const [models, setModels] = useState<Array<{ model: string; displayName: string }>>([]);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
@@ -162,11 +161,6 @@ export function useChatComposerState(args: {
     );
   };
 
-  const openMarketFromPicker = () => {
-    setToolPickerOpen(false);
-    onOpenToolMarket();
-  };
-
   useEffect(() => {
     attachmentsRef.current = attachments;
   }, [attachments]);
@@ -268,7 +262,6 @@ export function useChatComposerState(args: {
     applyToolSelection,
     disableTools,
     toggleDraftTool,
-    openMarketFromPicker,
     draftSelectedToolIds,
     selectedModelLabel,
     modelPickerOpen,

@@ -4,7 +4,7 @@ import { useToast, errMsg, Field, Panel, Modal, useConfirm, Pill } from "../ui.j
 import type { Permission } from "../auth.js";
 import { can, loadSession } from "../auth.js";
 
-const GRANTABLE: Permission[] = ["BALANCE_ADJUST", "USER_MANAGE", "USER_BILLING_LOG_VIEW", "USER_DETAIL_VIEW", "ORDER_MANAGE", "REDEMPTION_MANAGE", "PRICING_MANAGE", "MODEL_MANAGE", "MEMBERSHIP_MANAGE", "ANNOUNCEMENT_MANAGE", "VIEW_ANALYTICS"];
+const GRANTABLE: Permission[] = ["BALANCE_ADJUST", "USER_MANAGE", "USER_BILLING_LOG_VIEW", "USER_DETAIL_VIEW", "ORDER_MANAGE", "REDEMPTION_MANAGE", "PRICING_MANAGE", "MODEL_MANAGE", "MEMBERSHIP_MANAGE", "ANNOUNCEMENT_MANAGE"];
 
 const PERMISSION_LABELS: Record<Permission, string> = {
   BALANCE_ADJUST: "余额调整",
@@ -17,7 +17,6 @@ const PERMISSION_LABELS: Record<Permission, string> = {
   MODEL_MANAGE: "模型管理",
   MEMBERSHIP_MANAGE: "会员管理",
   ANNOUNCEMENT_MANAGE: "公告管理",
-  VIEW_ANALYTICS: "查看分析",
   ADMIN_MANAGE: "管理员管理",
   KNOWLEDGE_MANAGE: "知识库管理",
   RESELLER_MANAGE: "代理管理"

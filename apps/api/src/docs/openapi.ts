@@ -1,7 +1,6 @@
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import type { FastifyInstance, FastifySchema, RouteOptions } from "fastify";
-import { billingTagDefinitions, buildBillingOpenApiPaths } from "./billing-openapi.js";
 
 type JsonSchema = Record<string, unknown>;
 
@@ -10,35 +9,25 @@ const tagDefinitions = [
   { name: "认证", description: "用户注册与登录" },
   { name: "对话", description: "AI 对话和会话记录" },
   { name: "智能体", description: "智能体创建、推荐和执行" },
-  { name: "智能体团队", description: "多智能体团队与运行编排" },
   { name: "长期记忆", description: "用户长期记忆、搜索与开关" },
   { name: "知识库", description: "用户知识库和文档管理" },
   { name: "工具市场", description: "工具市场、安装和卸载" },
   { name: "设备与连接器", description: "桌面设备配对、连接器和工具桥接" },
-  { name: "微信", description: "微信设备绑定" },
   { name: "计费与充值", description: "用户余额、充值、兑换和用量" },
   { name: "会员与 VIP", description: "会员购买、VIP 等级和模型市场" },
-  { name: "定时任务", description: "定时任务创建、更新和执行记录" },
   { name: "工作流 · 图片", description: "图片生成、提示词优化和素材管理" },
   { name: "工作流 · Codex 桌宠", description: "Codex v2 桌宠生成、实时进度、安装与知识库归档" },
-  { name: "工作流 · 视频", description: "视频生成、分析和素材管理" },
-  { name: "工作流 · 配音", description: "配音、数字人、BGM 和项目管理" },
-  { name: "工作流 · 电商", description: "电商主图、分镜和批量生成" },
-  { name: "工作流 · 本地商家", description: "本地商家宣传视频工作流" },
   { name: "工作流 · 小说", description: "小说工程、章节、资产和自动运行" },
-  { name: "工作流 · 漫剧", description: "漫剧项目、剧集、分镜和渲染" },
   { name: "工作流 · 文章", description: "文章生成、改写和配图" },
-  { name: "工作流 · 报告", description: "报告生成工作流" },
   { name: "工作流 · 批量生成", description: "内容提取和多维批量生成" },
   { name: "公告", description: "公开公告" },
   { name: "管理 · 管理员", description: "管理员账号与权限" },
   { name: "管理 · 用户", description: "用户、设备、余额和配额管理" },
   { name: "管理 · 内容", description: "公告、知识库和客户端菜单管理" },
   { name: "管理 · 计费", description: "订单、兑换码、模型、会员和资源价格" },
-  { name: "管理 · 数据分析", description: "运营指标、留存、销售和排行" },
+  { name: "管理 · 审计", description: "管理端操作日志" },
   { name: "管理 · 渠道", description: "渠道商和可见范围管理" },
   { name: "渠道商", description: "渠道商工作台接口" },
-  ...billingTagDefinitions,
 ];
 
 const publicRoutes = new Set([
@@ -49,7 +38,6 @@ const publicRoutes = new Set([
   "GET /api/announcements",
   "GET /api/client-menu",
   "GET /api/models",
-  "GET /api/tool-market",
 ]);
 
 const exactSummaries: Record<string, string> = {
@@ -419,31 +407,22 @@ function tagForPath(url: string): string {
   if (url === "/ws/connector" || url.startsWith("/api/device/")) return "设备与连接器";
   if (url.startsWith("/api/auth/")) return "认证";
   if (url.startsWith("/api/chat") || url.startsWith("/api/sessions")) return "对话";
-  if (url.startsWith("/api/agent-teams")) return "智能体团队";
   if (url.startsWith("/api/agents")) return "智能体";
   if (url.startsWith("/api/memory")) return "长期记忆";
   if (url.startsWith("/api/kb")) return "知识库";
   if (url.startsWith("/api/tool")) return "工具市场";
-  if (url.startsWith("/api/wechat")) return "微信";
   if (url.startsWith("/api/billing")) return "计费与充值";
   if (url.startsWith("/api/membership") || url.startsWith("/api/vip") || url.startsWith("/api/model-marketplace")) return "会员与 VIP";
-  if (url.startsWith("/api/scheduled-tasks")) return "定时任务";
-  if (url.startsWith("/api/workflow/images") || url.startsWith("/api/workflow/portraits") || url.startsWith("/api/workflow/try-ons")) return "工作流 · 图片";
+  if (url.startsWith("/api/workflow/images")) return "工作流 · 图片";
   if (url.startsWith("/api/workflow/codex-pets") || url.startsWith("/api/public/codex-pets")) return "工作流 · Codex 桌宠";
-  if (url.startsWith("/api/workflow/videos")) return "工作流 · 视频";
-  if (url.startsWith("/api/workflow/dub")) return "工作流 · 配音";
-  if (url.startsWith("/api/workflow/ecom")) return "工作流 · 电商";
-  if (url.startsWith("/api/workflow/local-business-promos")) return "工作流 · 本地商家";
   if (url.startsWith("/api/workflow/novels")) return "工作流 · 小说";
-  if (url.startsWith("/api/workflow/comics")) return "工作流 · 漫剧";
   if (url.startsWith("/api/workflow/article-workflow")) return "工作流 · 文章";
-  if (url.startsWith("/api/workflow/report")) return "工作流 · 报告";
   if (url === "/api/announcements") return "公告";
   if (url.startsWith("/api/reseller")) return "渠道商";
-  if (url.startsWith("/api/admin/analytics") || url.startsWith("/api/admin/audit")) return "管理 · 数据分析";
+  if (url.startsWith("/api/admin/audit")) return "管理 · 审计";
   if (url.startsWith("/api/admin/reseller")) return "管理 · 渠道";
   if (/^\/api\/admin\/(users|devices)/.test(url)) return "管理 · 用户";
-  if (/^\/api\/admin\/(kb|announcements|client-menu|dub)/.test(url)) return "管理 · 内容";
+  if (/^\/api\/admin\/(kb|announcements|client-menu)/.test(url)) return "管理 · 内容";
   if (/^\/api\/admin\/(codes|orders|models|resource-prices|config|membership-cards|vip-levels)/.test(url)) return "管理 · 计费";
   if (url.startsWith("/api/admin")) return "管理 · 管理员";
   return "系统";
@@ -583,31 +562,6 @@ export function documentRoute(schema: FastifySchema | undefined, url: string, ro
   };
 }
 
-function mergeBillingDocument(document: Record<string, unknown>): Record<string, unknown> {
-  const billingBaseUrl = process.env.BILLING_DOCS_BASE_URL ?? process.env.BILLING_BASE_URL ?? "http://localhost:8093";
-  const components = (document.components ?? {}) as Record<string, unknown>;
-  const securitySchemes = (components.securitySchemes ?? {}) as Record<string, unknown>;
-  return {
-    ...document,
-    paths: {
-      ...((document.paths ?? {}) as Record<string, unknown>),
-      ...buildBillingOpenApiPaths(billingBaseUrl),
-    },
-    components: {
-      ...components,
-      securitySchemes: {
-        ...securitySchemes,
-        billingInternalToken: {
-          type: "apiKey",
-          in: "header",
-          name: "X-Internal-Token",
-          description: "Billing 服务内部令牌（BILLING_INTERNAL_TOKEN）",
-        },
-      },
-    },
-  };
-}
-
 export function apiDocsEnabled(): boolean {
   return process.env.API_DOCS_ENABLED !== "false";
 }
@@ -656,12 +610,8 @@ export async function registerOpenApi(app: FastifyInstance): Promise<void> {
       },
     },
     transform: ({ schema, url, route }) => ({ schema: documentRoute(schema, url, route), url }),
-    transformObject: (document) => {
-      if ("openapiObject" in document) {
-        return mergeBillingDocument(document.openapiObject as Record<string, unknown>);
-      }
-      return document.swaggerObject;
-    },
+    transformObject: (document) =>
+      "openapiObject" in document ? document.openapiObject : document.swaggerObject,
   });
 }
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { can, loadSession, saveSession, clearSession, isReseller, type Session, type Permission } from "./auth.js";
+import { can, loadSession, saveSession, clearSession, type Session, type Permission } from "./auth.js";
 import * as api from "./api.js";
 import { useToast, errMsg } from "./ui.js";
 import { UsersPage } from "./pages/Users.js";
@@ -9,13 +9,9 @@ import { ModelsPage } from "./pages/Models.js";
 import { AnnouncementsPage } from "./pages/Announcements.js";
 import { AdminsPage } from "./pages/Admins.js";
 import { AuditPage } from "./pages/Audit.js";
-import { AnalyticsPage } from "./pages/Analytics.js";
 import { ResourcePricingPage } from "./pages/ResourcePricing.js";
 import { MembershipPage } from "./pages/Membership.js";
 import { KnowledgePage } from "./pages/Knowledge.js";
-import { ResellersPage } from "./pages/Resellers.js";
-import { ResellerVisibilityPage } from "./pages/ResellerVisibility.js";
-import { MyChannelPage } from "./pages/MyChannel.js";
 import { ClientMenusPage } from "./pages/ClientMenus.js";
 
 interface TabDef { key: string; label: string; perm: Permission; render: () => React.ReactNode; }
@@ -27,13 +23,6 @@ interface TabGroup {
 }
 
 const TAB_GROUPS: TabGroup[] = [
-  {
-    groupKey: "overview",
-    groupLabel: "概览",
-    items: [
-      { key: "analytics", label: "数据", perm: "VIEW_ANALYTICS", render: () => <AnalyticsPage /> },
-    ],
-  },
   {
     groupKey: "operations",
     groupLabel: "运营",
@@ -61,8 +50,6 @@ const TAB_GROUPS: TabGroup[] = [
     items: [
       { key: "admins", label: "管理员", perm: "ADMIN_MANAGE", render: () => <AdminsPage /> },
       { key: "audit", label: "审计", perm: "ADMIN_MANAGE", render: () => <AuditPage /> },
-      { key: "resellers", label: "代理", perm: "RESELLER_MANAGE", render: () => <ResellersPage /> },
-      { key: "resellervis", label: "代理可见项", perm: "RESELLER_MANAGE", render: () => <ResellerVisibilityPage /> },
     ],
   },
 ];
@@ -73,7 +60,6 @@ function getAllTabs(): TabDef[] {
 
 function getNavIcon(tabKey: string): React.ReactNode {
   const iconMap: Record<string, React.ReactNode> = {
-    analytics: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><polyline points="12 3 20 7.5 20 16.5 12 21 4 16.5 4 7.5 12 3"></polyline><polyline points="12 12 20 7.5"></polyline><polyline points="12 12 12 21"></polyline><polyline points="12 12 4 7.5"></polyline></svg>,
     users: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
     orders: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2z"></path><path d="M9 7h6"></path><path d="M9 11h6"></path><path d="M9 15h4"></path></svg>,
     codes: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>,
@@ -92,10 +78,6 @@ function getNavIcon(tabKey: string): React.ReactNode {
 export function App() {
   const [session, setSession] = useState<Session | null>(loadSession());
   if (!session) return <Login onLogin={setSession} />;
-
-  if (isReseller(session)) {
-    return <ResellerConsole session={session} onLogout={() => { clearSession(); setSession(null); }} />;
-  }
 
   const allTabs = getAllTabs();
   const visible = allTabs.filter((t) => can(session, t.perm));
@@ -261,44 +243,6 @@ function Shell({
       </div>
 
       {sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
-    </div>
-  );
-}
-
-function ResellerConsole({ session, onLogout }: { session: Session; onLogout: () => void }) {
-  return (
-    <div className="frame">
-      <aside className="side">
-        <div className="brand">
-          <div className="brand-logo">AI</div>
-          <div className="brand-info">
-            <div className="brand-name">AI 助手</div>
-            <div className="brand-desc">代理后台</div>
-          </div>
-        </div>
-
-        <div className="profile-zone">
-          <div className="profile-avatar">代</div>
-          <div className="profile-info">
-            <div className="profile-name">代理账号</div>
-            <div className="profile-role">{session.adminId}</div>
-          </div>
-          <button className="profile-logout" onClick={onLogout}>登出</button>
-        </div>
-      </aside>
-
-      <div className="right-col">
-        <header className="top">
-          <div className="top-breadcrumbs">
-            <span className="breadcrumb-page">我的渠道</span>
-          </div>
-          <h1 className="top-title">我的渠道</h1>
-        </header>
-
-        <main className="body">
-          <MyChannelPage />
-        </main>
-      </div>
     </div>
   );
 }

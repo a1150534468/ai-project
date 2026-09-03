@@ -1,9 +1,0 @@
-
-# 自带 Python 运行时二进制（由 scripts/fetch-pyruntime.mjs 拉取，不入库）
-resources/pyruntime/win/
-resources/pyruntime/mac/
-resources/pyruntime/linux/
-resources/pyruntime/*.zip
-
-# VC++ 运行库安装器（由 scripts/fetch-vcredist.mjs 拉取，不入库；installer.nsh 需入库）
-build/vc_redist.x64.exe

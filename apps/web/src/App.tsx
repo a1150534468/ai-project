@@ -20,17 +20,11 @@ import Register from "./components/Register";
 import Chat from "./pages/Chat";
 import Knowledge from "./pages/Knowledge";
 import Assets from "./pages/Assets";
-import ToolMarket from "./pages/ToolMarket";
 import Workflow from "./pages/Workflow";
-import Video from "./pages/Video";
-import DigitalHuman from "./pages/DigitalHuman";
-import Report from "./pages/Report";
-import AgentTeams from "./pages/AgentTeams";
 import Billing from "./pages/Billing";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 import ModelMarketplace from "./pages/ModelMarketplace";
-import WechatBind from "./pages/WechatBind";
 import { useConfirm } from "./components/ConfirmDialog";
 import { AgentPicker } from "./components/AgentPicker";
 import { RechargePrompt } from "./app/RechargePrompt";
@@ -118,10 +112,6 @@ export default function App() {
   };
 
   const renderContent = () => {
-    if (nav.view === "wechat") {
-      return <WechatBind token={token} />;
-    }
-
     if (nav.view === "memory") {
       return <Memory token={token} />;
     }
@@ -160,40 +150,12 @@ export default function App() {
       return <Assets token={token} />;
     }
 
-    if (nav.view === "tool-market") {
-      return <ToolMarket token={token} />;
-    }
-
     if (nav.view === "workflow") {
       return (
         <Workflow
           token={token}
           activeModuleId={nav.workflowModule}
           menuVisibility={nav.menuVisibility}
-          onBalanceRefresh={refreshBalance}
-        />
-      );
-    }
-
-    if (nav.view === "video") {
-      return <Video token={token} onBalanceRefresh={refreshBalance} />;
-    }
-
-    if (nav.view === "digital-human") {
-      return <DigitalHuman token={token} onBalanceRefresh={refreshBalance} />;
-    }
-
-    if (nav.view === "report") {
-      return <Report token={token} onBalanceRefresh={refreshBalance} />;
-    }
-
-    if (nav.view === "agent-teams") {
-      return (
-        <AgentTeams
-          token={token}
-          selectedModel={selectedModel}
-          preferredModel={preferredModel}
-          onModelChange={handlePreferredModelChange}
           onBalanceRefresh={refreshBalance}
         />
       );
@@ -217,7 +179,6 @@ export default function App() {
         selectedModel={selectedModel}
         preferredModel={preferredModel}
         onModelChange={handlePreferredModelChange}
-        onOpenToolMarket={() => setView("tool-market")}
         onSend={handleChatSend}
         agentPanelCollapsed={agentPanelCollapsed}
         onToggleAgentPanel={() => setAgentPanelCollapsed((v) => !v)}

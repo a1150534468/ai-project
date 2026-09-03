@@ -17,12 +17,6 @@ import {
   openSession,
   closeSession,
 } from "../device/service.js";
-import { createBillingClient } from "@ai-assistant/billing";
-import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
-import { runTurn } from "../agent/run.js";
-import { resolveBindingByDevice } from "../wechat/binding.js";
-import { runWechatTurn } from "../wechat/turn.js";
-import { handleWechatInbound, handleWechatStatus } from "../wechat/service.js";
 
 export interface HubConnCtx {
   send: (msg: HubMessage) => void;
@@ -38,8 +32,6 @@ export interface HubConnCtx {
   resolveTool: (deviceId: string, id: string, data: string) => Promise<void> | void;
   rejectTool: (deviceId: string, id: string, code: string, message: string) => Promise<void> | void;
   verifyToken: (token: string) => Promise<{ id: string; userId: string } | null>;
-  onWechatInbound: (deviceId: string, msg: import("@ai-assistant/connector-protocol").WechatInbound) => Promise<void>;
-  onWechatStatus: (deviceId: string, msg: import("@ai-assistant/connector-protocol").WechatStatus) => Promise<void>;
   log?: { info: (obj: unknown, msg?: string) => void; warn: (obj: unknown, msg?: string) => void };
   registered: boolean;
   deviceId: string | null;
@@ -54,18 +46,8 @@ export async function handleClientMessage(ctx: HubConnCtx, raw: string): Promise
     if (error instanceof SyntaxError) return;
     throw error;
   }
-  const rawType =
-    typeof (parsed as { type?: unknown })?.type === "string" ? (parsed as { type: string }).type : "";
-  if (rawType.startsWith("wechat.")) {
-    ctx.log?.info({ rawType, registered: ctx.registered }, "hub 收到 wechat.* 原始消息");
-  }
   const r = clientMessageSchema.safeParse(parsed);
-  if (!r.success) {
-    if (rawType.startsWith("wechat.")) {
-      ctx.log?.warn({ rawType, issues: r.error.issues.slice(0, 5) }, "hub wechat.* 消息 schema 校验失败被丢弃");
-    }
-    return;
-  }
+  if (!r.success) return;
   const msg = r.data;
 
   if (msg.type === "device.register") {
@@ -95,12 +77,6 @@ export async function handleClientMessage(ctx: HubConnCtx, raw: string): Promise
       break;
     case "hb.pong":
       await ctx.onHeartbeat(ctx.deviceId);
-      break;
-    case "wechat.inbound":
-      await ctx.onWechatInbound(ctx.deviceId, msg);
-      break;
-    case "wechat.status":
-      await ctx.onWechatStatus(ctx.deviceId, msg);
       break;
   }
 }
@@ -265,44 +241,6 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
   };
   kickRef = kick;
 
-  // ---- 微信服务装配 ----
-  const wechatBilling = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
-  const wechatLlm = createLlmClient(loadLlmConfig());
-  const wechatDeps = {
-    resolveBinding: (deviceId: string) => resolveBindingByDevice(prisma, deviceId),
-    runTurn: (
-      binding: import("../wechat/binding.js").ResolvedBinding,
-      text: string,
-      media: import("@ai-assistant/connector-protocol").WechatInbound["media"],
-    ) =>
-      runWechatTurn({
-        prisma,
-        billing: wechatBilling,
-        runTurn,
-        client: wechatLlm,
-        binding,
-        text,
-        media,
-      }),
-    sendToDevice: (deviceId: string, msg: import("@ai-assistant/connector-protocol").WechatSend) => {
-      const c = local.get(deviceId);
-      if (!c) return false;
-      c.send(msg);
-      return true;
-    },
-  };
-  const updateWechatOnline = async (deviceId: string, online: boolean, reason?: string) => {
-    await prisma.wechatBinding
-      .updateMany({
-        where: { deviceId },
-        data: { online, lastSeenAt: new Date() },
-      })
-      .catch(() => {});
-  };
-
   // 订阅本实例 inbox：处理远端发来的 invoke / result / disconnect
   await sub.subscribe(`ai-assistant:conn:inbox:${INSTANCE_ID}`);
   sub.on("message", (_ch, raw) => {
@@ -354,20 +292,6 @@ export async function registerHub(app: FastifyInstance): Promise<void> {
       verifyToken: async (token) => {
         const d = await verifyDeviceToken(prisma, token);
         return d ? { id: d.id, userId: d.userId } : null;
-      },
-      onWechatInbound: (deviceId, msg) => {
-        app.log.info(
-          { deviceId, from: msg.from, textLen: msg.text.length, media: msg.media.length, msgId: msg.msgId },
-          "wechat inbound 收到",
-        );
-        void updateWechatOnline(deviceId, true); // 收到消息=该绑定在线
-        return handleWechatInbound(wechatDeps, msg)
-          .then(() => app.log.info({ deviceId, from: msg.from }, "wechat inbound 已处理并下发回复"))
-          .catch((err) => app.log.error({ err, deviceId, from: msg.from }, "wechat inbound 处理失败"));
-      },
-      onWechatStatus: (_deviceId, msg) => {
-        app.log.info({ deviceId: msg.deviceId, state: msg.state }, "wechat status");
-        return handleWechatStatus(updateWechatOnline, msg);
       },
       onRegistered: async (deviceId, userId, appVersion, capabilities, tools) => {
         const replacedDeviceIds = await replaceOtherUserDevices(prisma, userId, deviceId);

@@ -10,7 +10,6 @@
     "dev": "bash scripts/dev-local.sh",
     "dev:infra": "docker compose -f docker-compose.dev.yml up -d --no-recreate postgres redis billing-postgres minio",
     "dev:infra:stop": "docker compose -f docker-compose.dev.yml stop",
-    "dev:desktop": "pnpm --filter @ai-assistant/desktop dev",
     "build": "turbo run build",
     "test": "turbo run test",
     "format": "biome format --write",

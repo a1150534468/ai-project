@@ -8,10 +8,10 @@ import { WorkflowFlyout } from "./WorkflowFlyout";
 import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { ThemeToggle } from "../ThemeToggle";
 
-export type ViewType = "chat" | "models" | "kb" | "assets" | "tool-market" | "workflow" | "video" | "digital-human" | "report" | "agent-teams" | "billing" | "memory" | "settings" | "wechat";
+export type ViewType = "chat" | "models" | "kb" | "assets" | "workflow" | "billing" | "memory" | "settings";
 
-/** 工作流二级菜单项 id：模块 id 或独立的 AI 智能报告页 */
-export type WorkflowSubId = WorkflowModuleId | "report";
+/** 工作流二级菜单项 id */
+export type WorkflowSubId = WorkflowModuleId;
 
 export interface NavItem {
   id: ViewType;
@@ -26,28 +26,12 @@ export interface WorkflowSubItem {
   developing: boolean;
 }
 
-const AI_REPORT_SUB_ITEM: WorkflowSubItem = {
-  id: "report",
-  label: "AI 智能报告",
-  icon: "mdi:file-chart-outline",
-  developing: false,
-};
-
-const WORKFLOW_MODULE_SUB_ITEMS: WorkflowSubItem[] = WORKFLOW_MODULES
-  .filter((m) => m.id !== "commerce-long-image")
-  .map((m) => ({
-    id: m.id,
-    label: m.title,
-    icon: m.icon,
-    developing: m.status !== "available",
-  }));
-
-/** AI 智能报告插入到模块列表正中间 */
-export const WORKFLOW_SUB_ITEMS: WorkflowSubItem[] = [
-  ...WORKFLOW_MODULE_SUB_ITEMS.slice(0, 3),
-  AI_REPORT_SUB_ITEM,
-  ...WORKFLOW_MODULE_SUB_ITEMS.slice(3),
-];
+export const WORKFLOW_SUB_ITEMS: WorkflowSubItem[] = WORKFLOW_MODULES.map((m) => ({
+  id: m.id,
+  label: m.title,
+  icon: m.icon,
+  developing: m.status !== "available",
+}));
 
 export const NAV_ITEMS: NavItem[] = [
   { id: "chat", label: "对话", icon: "mdi:chat-outline" },
@@ -55,12 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: "kb", label: "知识库", icon: "mdi:database-search-outline" },
   // 紧挨着知识库：知识归知识库、工作流产物归素材库，这条界限在导航上要看得见。
   { id: "assets", label: "素材库", icon: "mdi:folder-multiple-image" },
-  { id: "tool-market", label: "工具市场", icon: "mdi:toolbox-outline" },
   { id: "workflow", label: "工作流", icon: "mdi:view-dashboard-outline" },
-  { id: "video", label: "AI 视频", icon: "mdi:video-outline" },
-  { id: "digital-human", label: "数字人口播", icon: "mdi:account-voice" },
-  { id: "agent-teams", label: "Agent 团队", icon: "mdi:account-group-outline" },
-  { id: "wechat", label: "微信接入", icon: "mdi:wechat" },
   { id: "memory", label: "记忆", icon: "mdi:table-heart" },
   { id: "settings", label: "设置", icon: "mdi:cog-outline" },
 ];
@@ -70,9 +49,7 @@ export function isWorkflowSubActive(
   workflowModule: WorkflowModuleId | undefined,
   sub: WorkflowSubItem
 ): boolean {
-  return currentView === "report"
-    ? sub.id === "report"
-    : currentView === "workflow" && sub.id === workflowModule;
+  return currentView === "workflow" && sub.id === workflowModule;
 }
 
 interface NavRailProps {
@@ -100,8 +77,8 @@ export function NavRail({
 }: NavRailProps) {
   const reduce = useReducedMotion();
 
-  // 工作流二级菜单展开态：进入工作流/报告页时自动展开
-  const workflowGroupActive = currentView === "workflow" || currentView === "report";
+  // 工作流二级菜单展开态：进入工作流页时自动展开
+  const workflowGroupActive = currentView === "workflow";
   const [workflowOpen, setWorkflowOpen] = useState(workflowGroupActive);
   useEffect(() => {
     if (workflowGroupActive) setWorkflowOpen(true);

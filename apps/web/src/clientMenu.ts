@@ -9,23 +9,15 @@ export interface ClientMenuItem {
 export type ClientMenuVisibility = Readonly<Record<string, boolean>>;
 
 /** 生图模块页内 tab：后台按 workflow.image.* 单独开关。 */
-export type ImageHubTabId = "general" | "ecom" | "product-extraction" | "portrait" | "try-on";
+export type ImageHubTabId = "general";
 
 export const IMAGE_HUB_TABS: readonly { readonly id: ImageHubTabId; readonly label: string; readonly menuKey: string }[] = [
   { id: "general", label: "通用生图", menuKey: "workflow.image.general" },
-  { id: "ecom", label: "电商生图", menuKey: "workflow.image.ecom" },
-  { id: "product-extraction", label: "商品提取", menuKey: "workflow.image.product-extraction" },
-  { id: "portrait", label: "形象照", menuKey: "workflow.image.portrait" },
-  { id: "try-on", label: "万物试穿", menuKey: "workflow.image.try-on" },
 ] as const;
 
 const DEFAULT_HIDDEN_KEYS = [
   "workflow.codex-pet",
-  "workflow.report",
   "workflow.article-workflow",
-  "workflow.local-business-promo",
-  "workflow.ai-comic",
-  "workflow.scheduled-task",
   "workflow.ppt",
 ] as const;
 
@@ -48,33 +40,27 @@ export function visibleImageHubTabs(
 }
 
 /**
- * 工作流二级菜单是否显示。生图模块把五个 tab 合并进同一页面，
- * 五个 tab 全被后台关掉时整个入口也没有内容可展示，一并隐藏。
+ * 工作流二级菜单是否显示。生图模块把页内 tab 合并进同一页面，
+ * tab 全被后台关掉时整个入口也没有内容可展示，一并隐藏。
  */
 export function isWorkflowSubVisible(
   visibility: ClientMenuVisibility | undefined,
   subId: string,
 ): boolean {
-  const key = subId === "commerce-long-image" ? "workflow.image" : `workflow.${subId}`;
+  const key = `workflow.${subId}`;
   if (!isClientMenuVisible(visibility, key)) return false;
   return key !== "workflow.image" || visibleImageHubTabs(visibility).length > 0;
 }
 
 export function clientMenuKeyForView(view: ViewType): string | null {
-  return view === "billing" || view === "report" || view === "workflow"
-    ? null
-    : `nav.${view}`;
+  return view === "billing" || view === "workflow" ? null : `nav.${view}`;
 }
 
 const FALLBACK_VIEW_ORDER: readonly ViewType[] = [
   "chat",
   "models",
   "kb",
-  "tool-market",
-  "video",
-  "digital-human",
-  "agent-teams",
-  "wechat",
+  "assets",
   "memory",
   "settings",
 ];

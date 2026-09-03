@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Icon } from "@iconify/react";
-import { InAppSelect } from "../agent-teams/InAppSelect";
+import { InAppSelect } from "../ui/InAppSelect";
 import { SubmitCostBar } from "./SubmitCostBar";
 import type { WorkflowImageAsset } from "../../api";
 import {

@@ -2,7 +2,6 @@ import { createServer } from "node:http";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { assertRequiredEnv } from "../env.js";
 import { startCodexPetWorker } from "./codex-pet-worker.js";
-import { startLocalBusinessPromoWorker } from "./local-business-promo-worker.js";
 import { startNovelWorker } from "./novel-worker.js";
 import { isDirectWorkerEntrypoint, type StartedWorkerRuntime } from "./worker-runtime.js";
 import { withTimeout } from "../runtime/with-timeout.js";
@@ -73,7 +72,6 @@ async function startCombinedWorker(): Promise<void> {
   process.once("SIGINT", () => void close("SIGINT"));
 
   try {
-    runtimes.push(await startLocalBusinessPromoWorker());
     runtimes.push(await startNovelWorker({ healthPort: false }));
     runtimes.push(await startCodexPetWorker({ healthPort: false }));
     healthServer.listen(healthPort, "0.0.0.0");

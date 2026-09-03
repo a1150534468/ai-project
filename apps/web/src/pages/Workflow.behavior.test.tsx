@@ -6,7 +6,7 @@
  * 错误态(拉取失败 / 上传参考图校验 / 取消与重试)。
  *
  * **和同目录 `Workflow.image-hub.test.tsx` 的分工是刻意的**:那个文件用真实 studio + stub fetch,
- * 断言的是 studio 内部渲染出的文案(tab 标签、算力点、下拉档位)。本文件相反 —— 把 11 个 studio
+ * 断言的是 studio 内部渲染出的文案(tab 标签、算力点、下拉档位)。本文件相反 —— 把剩下的 studio
  * 全部换成探针,断言的是 **Workflow.tsx 自己算出来、往下传的那份 props**。拆分会把这段编排搬进
  * hook 或子组件,探针看到的 props 才是必须逐字不变的那个契约;studio 内部长什么样不是本文件的事。
  *
@@ -77,17 +77,8 @@ vi.mock("../components/workflow/CodexPetStudio", () => ({
   },
 }));
 
-vi.mock("../components/workflow/CommerceImageStudio", () => ({ CommerceImageStudio: stub("commerce-studio") }));
-vi.mock("../components/workflow/ComicWorkflowStudio", () => ({ ComicWorkflowStudio: stub("comic-studio") }));
 vi.mock("../components/workflow/ArticleWorkflowStudio", () => ({ ArticleWorkflowStudio: stub("article-studio") }));
-vi.mock("../components/workflow/ScheduledTaskStudio", () => ({ ScheduledTaskStudio: stub("scheduled-studio") }));
-vi.mock("../components/workflow/PortraitWorkflowStudio", () => ({ PortraitWorkflowStudio: stub("portrait-studio") }));
-vi.mock("../components/workflow/ProductExtractionWorkflowStudio", () => ({ ProductExtractionWorkflowStudio: stub("product-extraction-studio") }));
-vi.mock("../components/workflow/TryOnWorkflowStudio", () => ({ TryOnWorkflowStudio: stub("try-on-studio") }));
 vi.mock("../components/workflow/NovelWorkflowStudio", () => ({ NovelWorkflowStudio: stub("novel-studio") }));
-vi.mock("../components/workflow/LocalBusinessPromoWorkflowStudio", () => ({
-  LocalBusinessPromoWorkflowStudio: stub("local-promo-studio"),
-}));
 
 function price(rate: number) {
   return { resourceKey: `image_${rate}`, displayName: "档位", pricingType: "PER_CALL" as const, rate, perUnits: 1, enabled: true };
@@ -201,12 +192,6 @@ function buttons(scope: HTMLElement): HTMLButtonElement[] {
   return Array.from(scope.querySelectorAll("button"));
 }
 
-function tabButton(scope: HTMLElement, label: string): HTMLButtonElement {
-  const found = buttons(scope).find((button) => button.textContent?.trim() === label);
-  if (!found) throw new Error(`tab "${label}" missing`);
-  return found;
-}
-
 beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
   probes.imageStudioProps = null;
@@ -251,21 +236,16 @@ describe("Workflow 模块分派", () => {
   });
 
   it("非全屏模块渲染页头：面包屑 + 标题 + 描述都取自 WORKFLOW_MODULES", async () => {
-    const scope = await mountWorkflow({ activeModuleId: "scheduled-task" });
+    const scope = await mountWorkflow({ activeModuleId: "ppt" });
 
-    expect(scope.textContent).toContain("工作流 / 定时任务");
-    expect(scope.querySelector("h1")?.textContent).toBe("定时任务");
-    expect(scope.textContent).toContain("定时运行、周期触发、结果追踪");
-    expect(scope.querySelector('[data-testid="scheduled-studio"]')).toBeTruthy();
+    expect(scope.textContent).toContain("工作流 / PPT 助手");
+    expect(scope.querySelector("h1")?.textContent).toBe("PPT 助手");
+    expect(scope.textContent).toContain("大纲生成、页面规划、演示文稿");
   });
 
-  it.each([
-    ["ai-comic", "comic-studio"],
-    ["article-workflow", "article-studio"],
-    ["local-business-promo", "local-promo-studio"],
-  ] as const)("%s 分派到 %s", async (activeModuleId, testId) => {
-    const scope = await mountWorkflow({ activeModuleId });
-    expect(scope.querySelector(`[data-testid="${testId}"]`)).toBeTruthy();
+  it("多平台图文分派到 article-studio", async () => {
+    const scope = await mountWorkflow({ activeModuleId: "article-workflow" });
+    expect(scope.querySelector('[data-testid="article-studio"]')).toBeTruthy();
   });
 
   it("未实现的模块落到「模块开发中」占位而不是空白", async () => {
@@ -276,61 +256,20 @@ describe("Workflow 模块分派", () => {
   });
 });
 
-describe("Workflow 生图 Hub 的 tab 切换", () => {
-  it("四个 studio 常驻 DOM，用 hidden 切换，切 tab 不卸载", async () => {
+describe("Workflow 生图 Hub 的后台开关", () => {
+  it("只剩一个 tab 时不渲染 tab 栏，通用生图直接铺满", async () => {
     const scope = await mountWorkflow({ activeModuleId: "image" });
 
     const wrapper = (testId: string) => scope.querySelector(`[data-testid="${testId}"]`)?.parentElement?.className ?? "";
     expect(wrapper("image-studio")).not.toBe("hidden");
-    expect(wrapper("commerce-studio")).toBe("hidden");
-
-    await act(async () => {
-      tabButton(scope, "电商生图").click();
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    });
-
-    expect(wrapper("image-studio")).toBe("hidden");
-    expect(wrapper("commerce-studio")).not.toBe("hidden");
-    // 常驻意味着两边都还在 DOM 里，表单状态不会因为切 tab 丢失
-    expect(scope.querySelector('[data-testid="image-studio"]')).toBeTruthy();
-  });
-
-  it("从电商入口进来默认停在电商 tab", async () => {
-    const scope = await mountWorkflow({ activeModuleId: "commerce-long-image" });
-    const wrapper = (testId: string) => scope.querySelector(`[data-testid="${testId}"]`)?.parentElement?.className ?? "";
-
-    expect(wrapper("commerce-studio")).not.toBe("hidden");
-    expect(wrapper("image-studio")).toBe("hidden");
-  });
-
-  it("后台只留一个 tab 时隐藏 tab 栏，其余 studio 不渲染", async () => {
-    const scope = await mountWorkflow({
-      activeModuleId: "image",
-      menuVisibility: {
-        "workflow.image.ecom": false,
-        "workflow.image.product-extraction": false,
-        "workflow.image.portrait": false,
-        "workflow.image.try-on": false,
-      },
-    });
-
-    expect(scope.querySelector('[data-testid="commerce-studio"]')).toBeNull();
-    expect(scope.querySelector('[data-testid="product-extraction-studio"]')).toBeNull();
-    expect(scope.querySelector('[data-testid="portrait-studio"]')).toBeNull();
     expect(buttons(scope).some((button) => button.textContent?.trim() === "通用生图")).toBe(false);
     expect(scope.querySelector('[data-testid="image-studio"]')).toBeTruthy();
   });
 
-  it("五个 tab 全被后台关掉时给出「生图模块暂未开放」", async () => {
+  it("tab 全被后台关掉时给出「生图模块暂未开放」", async () => {
     const scope = await mountWorkflow({
       activeModuleId: "image",
-      menuVisibility: {
-        "workflow.image.general": false,
-        "workflow.image.ecom": false,
-        "workflow.image.product-extraction": false,
-        "workflow.image.portrait": false,
-        "workflow.image.try-on": false,
-      },
+      menuVisibility: { "workflow.image.general": false },
     });
 
     expect(scope.textContent).toContain("生图模块暂未开放");

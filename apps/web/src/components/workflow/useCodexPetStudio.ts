@@ -37,7 +37,7 @@ import type {
   CodexPetProjectSummary,
   CodexPetReferenceAsset,
 } from "../../codexPetApi";
-import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
+import { readFileAsInlineImage } from "./inlineImage";
 import {
   CODEX_PET_MAX_REFERENCES,
   EMPTY_CODEX_PET_DRAFT,

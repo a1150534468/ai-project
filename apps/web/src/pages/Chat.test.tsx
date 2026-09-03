@@ -44,7 +44,6 @@ function renderChat(container: Element, messages: ChatMessage[]) {
         isLoading={false}
         selectedModel="model-a"
         onModelChange={vi.fn()}
-        onOpenToolMarket={vi.fn()}
         onSend={vi.fn()}
       />,
     );
@@ -117,8 +116,7 @@ describe("Chat scrolling", () => {
           isLoading={false}
           selectedModel="model-a"
           onModelChange={vi.fn()}
-          onOpenToolMarket={vi.fn()}
-          onSend={vi.fn()}
+            onSend={vi.fn()}
         />,
       );
     });

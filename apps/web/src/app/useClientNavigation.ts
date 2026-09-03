@@ -59,22 +59,14 @@ export function useClientNavigation(token: string) {
     const mainKey = clientMenuKeyForView(view);
     const mainVisible = mainKey === null || isClientMenuVisible(menuVisibility, mainKey);
     const workflowVisible = isClientMenuVisible(menuVisibility, "nav.workflow");
-    const subVisible = view === "report"
-      ? isClientMenuVisible(menuVisibility, "workflow.report")
-      : view === "workflow"
-        ? isWorkflowSubVisible(menuVisibility, workflowModule)
-        : true;
-    if (!mainVisible || ((view === "workflow" || view === "report") && (!workflowVisible || !subVisible))) {
+    const subVisible = view === "workflow" ? isWorkflowSubVisible(menuVisibility, workflowModule) : true;
+    if (!mainVisible || (view === "workflow" && (!workflowVisible || !subVisible))) {
       setView(firstVisibleClientView(menuVisibility));
     }
   }, [menuVisibility, view, workflowModule]);
 
-  // 工作流二级菜单：AI 智能报告切到 report 页，其余切到对应工作流模块
+  // 工作流二级菜单：切到对应工作流模块
   const selectWorkflowSub = useCallback((id: WorkflowSubId) => {
-    if (id === "report") {
-      setView("report");
-      return;
-    }
     setWorkflowModule(id);
     setView("workflow");
   }, []);

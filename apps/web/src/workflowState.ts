@@ -1,12 +1,8 @@
 export type WorkflowModuleId =
   | "image"
   | "novel"
-  | "commerce-long-image"
   | "codex-pet"
-  | "local-business-promo"
   | "article-workflow"
-  | "ai-comic"
-  | "scheduled-task"
   | "ppt";
 
 export type WorkflowModuleStatus = "available" | "developing";
@@ -199,13 +195,6 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
     status: "available",
   },
   {
-    id: "commerce-long-image",
-    title: "AI 电商图",
-    description: "电商主图 + 详情长图，一次出图",
-    icon: "mdi:view-agenda-outline",
-    status: "available",
-  },
-  {
     id: "codex-pet",
     title: "Codex 桌宠工坊",
     description: "参考图或文字生成，可直接安装到 Codex",
@@ -217,27 +206,6 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
     title: "多平台图文工作流",
     description: "一篇原文或一个主题生成公众号 / 小红书 / 抖音三版内容，配图排版后可编辑复制",
     icon: "mdi:newspaper-variant-outline",
-    status: "available",
-  },
-  {
-    id: "local-business-promo",
-    title: "本地商家宣传剪辑",
-    description: "商家资料、口播文案、多段生成、成片拼接",
-    icon: "mdi:movie-open-play-outline",
-    status: "available",
-  },
-  {
-    id: "ai-comic",
-    title: "AI 漫剧",
-    description: "项目设定、脚本、资产、分镜、视频渲染",
-    icon: "mdi:filmstrip-box-multiple",
-    status: "available",
-  },
-  {
-    id: "scheduled-task",
-    title: "定时任务",
-    description: "定时运行、周期触发、结果追踪",
-    icon: "mdi:calendar-clock-outline",
     status: "available",
   },
   {

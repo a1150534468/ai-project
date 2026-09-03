@@ -20,8 +20,6 @@
         "CHATGPT_BASE_URL",
         "CHATGPT_MODELS",
         "DATABASE_URL",
-        "DUB_PARSE_CLIENT_ID",
-        "DUB_PARSE_SECRET_KEY",
         "EMBEDDING_API_KEY",
         "EMBEDDING_BASE_URL",
         "EMBEDDING_MODEL",
@@ -51,12 +49,7 @@
         "S3_REGION",
         "S3_SECRET_KEY",
         "SESSION_SECRET",
-        "SKYHUMAN_API_TOKEN",
-        "SKYHUMAN_BASE_URL",
-        "SKYHUMAN_CALLBACK_SECRET",
-        "TOAPIS_API_KEY",
-        "VIDEO_ANALYZE_MODEL",
-        "VIDEO_API_KEY"
+        "VIDEO_ANALYZE_MODEL"
       ]
     },
     "typecheck": { "dependsOn": ["^build"] }

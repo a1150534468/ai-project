@@ -20,7 +20,6 @@ export function ChatToolPicker({
   onClose,
   onApply,
   onDisable,
-  onOpenMarket,
 }: {
   readonly open: boolean;
   readonly tools: readonly InstalledTool[];
@@ -31,7 +30,6 @@ export function ChatToolPicker({
   readonly onClose: () => void;
   readonly onApply: () => void;
   readonly onDisable: () => void;
-  readonly onOpenMarket: () => void;
 }) {
   if (!open) return null;
 
@@ -52,13 +50,6 @@ export function ChatToolPicker({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onOpenMarket}
-              className="h-8 rounded-lg border border-hairline-subtle px-3 text-xs font-medium text-ink "
-            >
-              工具市场
-            </button>
             <button
               type="button"
               onClick={onClose}
@@ -115,14 +106,7 @@ export function ChatToolPicker({
                 <Icon icon="mdi:toolbox-outline" className="text-xl" aria-hidden />
               </div>
               <p className="text-sm font-semibold text-ink">暂无已安装工具</p>
-              <p className="mt-1 text-xs leading-5 text-ink-secondary">先到工具市场安装 skill，再回到对话中挂载使用。</p>
-              <button
-                type="button"
-                onClick={onOpenMarket}
-                className="mt-4 h-9 rounded-lg bg-surface-inverse px-4 text-xs font-medium text-ink-inverse "
-              >
-                打开工具市场
-              </button>
+              <p className="mt-1 text-xs leading-5 text-ink-secondary">先安装 skill，再回到对话中挂载使用。</p>
             </div>
           )}
         </div>

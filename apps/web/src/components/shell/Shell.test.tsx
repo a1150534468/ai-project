@@ -63,7 +63,7 @@ describe("Shell", () => {
       <Shell
         currentView="chat"
         onViewChange={vi.fn()}
-        menuVisibility={{ "nav.models": false, "workflow.report": false }}
+        menuVisibility={{ "nav.models": false, "workflow.novel": false }}
         {...baseProps}
       >
         <div />
@@ -71,7 +71,7 @@ describe("Shell", () => {
     );
 
     expect(html).not.toContain("模型广场");
-    expect(html).not.toContain("AI 智能报告");
+    expect(html).not.toContain("小说模块");
     expect(html).toContain("生图模块");
   });
 });

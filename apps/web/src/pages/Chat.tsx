@@ -46,7 +46,6 @@ interface ChatProps {
   selectedModel: string;
   preferredModel?: string;
   onModelChange: (model: string) => void;
-  onOpenToolMarket: () => void;
   onSend: (payload: ChatSendPayload) => void;
   agentPanelCollapsed?: boolean;
   onToggleAgentPanel?: () => void;
@@ -68,7 +67,6 @@ export default function Chat({
   selectedModel,
   preferredModel,
   onModelChange,
-  onOpenToolMarket,
   onSend,
   agentPanelCollapsed = false,
   onToggleAgentPanel,
@@ -79,7 +77,6 @@ export default function Chat({
     selectedModel,
     preferredModel,
     onModelChange,
-    onOpenToolMarket,
     onSend,
   });
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -308,7 +305,6 @@ export default function Chat({
         onClose={composer.closeToolPicker}
         onApply={composer.applyToolSelection}
         onDisable={composer.disableTools}
-        onOpenMarket={composer.openMarketFromPicker}
       />
 
       <ChatKnowledgePicker

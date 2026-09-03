@@ -4,12 +4,12 @@
  * `App.tsx`(752 行)拆分前的行为护栏。P2.4 批次二 Step 4 只允许「把 25 个 useState 按关注点
  * 分组进自定义 hook」、不许改路由机制,所以这里断言的全是**编排契约**:
  *  - 登录态:token 进 localStorage、getMe 401 清登录态、登出回登录页
- *  - 视图分派:14 个 view 分支各渲染谁、工作流二级菜单怎么落到 workflow / report
+ *  - 视图分派:每个 view 分支各渲染谁、工作流二级菜单怎么落到 workflow
  *  - 深链一次性:知识库 ↔ 桌宠的跳转意图,离开目标页就必须清掉
  *  - 会话流:发送 → session 事件把草稿键迁到真实 id → text / tool / reset / citation / error
  *  - 后台开关顶掉当前页时跳第一个可见页
  *
- * 14 个页面组件全部换成探针,断言的是 **App.tsx 自己算出来、往下传的那份 props**,不进页面
+ * 页面组件全部换成探针,断言的是 **App.tsx 自己算出来、往下传的那份 props**,不进页面
  * 内部找 DOM —— 拆分会把这段编排搬进 hook,探针看到的 props 才是必须逐字不变的契约。
  *
  * `probes.shell` / `probes.chat` 抓的是最后一次渲染的 props,回调直接从这里调用。
@@ -122,25 +122,18 @@ vi.mock("./pages/Knowledge", () => pageProbe("knowledge", "kb-page"));
 vi.mock("./pages/Assets", () => stub("assets-page"));
 vi.mock("./pages/Workflow", () => pageProbe("workflow", "workflow-page"));
 vi.mock("./pages/Settings", () => pageProbe("settings", "settings-page"));
-vi.mock("./pages/ToolMarket", () => stub("tool-market-page"));
-vi.mock("./pages/Video", () => stub("video-page"));
-vi.mock("./pages/DigitalHuman", () => stub("digital-human-page"));
-vi.mock("./pages/Report", () => stub("report-page"));
-vi.mock("./pages/AgentTeams", () => stub("agent-teams-page"));
 vi.mock("./pages/Billing", () => stub("billing-page"));
 vi.mock("./pages/Memory", () => stub("memory-page"));
 vi.mock("./pages/ModelMarketplace", () => stub("models-page"));
-vi.mock("./pages/WechatBind", () => stub("wechat-page"));
 
 let container: HTMLDivElement;
 let root: Root;
 let resolveStream: (() => void) | null = null;
 
-/** 默认放开三个灰度入口,否则可见性 effect 会立刻把 report / 桌宠页顶掉。 */
+/** 默认放开两个灰度入口,否则可见性 effect 会立刻把桌宠 / 图文页顶掉。 */
 function visibility(overrides: Record<string, boolean> = {}) {
   return {
     ...DEFAULT_CLIENT_MENU_VISIBILITY,
-    "workflow.report": true,
     "workflow.codex-pet": true,
     "workflow.article-workflow": true,
     ...overrides,
@@ -297,12 +290,8 @@ describe("App 视图分派", () => {
     expect(probes.chat?.error).toBe("");
   });
 
-  it("工作流二级菜单:报告走 report 页,模块走 workflow 页", async () => {
+  it("工作流二级菜单落到对应模块的 workflow 页", async () => {
     await mount();
-    await act(async () => {
-      probes.shell?.onSelectWorkflowSub("report");
-    });
-    expect(find("report-page")).not.toBeNull();
     await act(async () => {
       probes.shell?.onSelectWorkflowSub("article-workflow");
     });
@@ -311,15 +300,7 @@ describe("App 视图分派", () => {
     expect(probes.shell?.workflowModule).toBe("article-workflow");
   });
 
-  it("对话页可以跳到工具市场", async () => {
-    await mount();
-    await act(async () => {
-      probes.chat?.onOpenToolMarket();
-    });
-    expect(find("tool-market-page")).not.toBeNull();
-  });
-
-  // 素材库是 P3.2 新增的一级入口:走的是和其他 13 个页面同一套 view 分派,token 照样往下传。
+  // 素材库是 P3.2 新增的一级入口:走的是和其他页面同一套 view 分派,token 照样往下传。
   it("素材库是独立一级视图,拿到 token", async () => {
     await mount();
     await act(async () => {

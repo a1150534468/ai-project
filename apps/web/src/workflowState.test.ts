@@ -67,18 +67,14 @@ describe("workflowState", () => {
     expect(resolveImageVersionComparison({ ...completedEdit, status: "running" }, "candidate-v2")).toBeNull();
   });
 
-  it("marks image, novel, commerce, article workflow, local business promo, comic, and scheduled task modules available", () => {
+  it("marks image, novel, codex pet, and article workflow modules available", () => {
     const available = WORKFLOW_MODULES.filter((module) => module.status === "available");
 
     expect(available.map((module) => module.id)).toEqual([
       "image",
       "novel",
-      "commerce-long-image",
       "codex-pet",
       "article-workflow",
-      "local-business-promo",
-      "ai-comic",
-      "scheduled-task",
     ]);
     expect(WORKFLOW_MODULES.filter((module) => module.status === "developing")).toHaveLength(1);
   });

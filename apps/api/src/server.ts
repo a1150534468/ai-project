@@ -25,49 +25,24 @@ import { adminMembershipRoutes } from "./admin/membership-routes.js";
 import { adminKnowledgeRoutes } from "./admin/knowledge-routes.js";
 import { membershipUserRoutes } from "./membership/routes.js";
 import { agentRoutes } from "./agents/routes.js";
-import { agentTeamRoutes } from "./agent-teams/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image/index.js";
-import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
-import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
-import { videoWorkflowRoutes } from "./workflow/video/index.js";
-import { dubRoutes, startDubReaper, loadSkyhumanConfig, finalizeProjectVideo } from "./workflow/dub/index.js";
-import { adminDubRoutes } from "./admin/dub-routes.js";
-import {
-  startLocalBusinessPromoRefundReaper,
-  localBusinessPromoRoutes,
-} from "./workflow/local-business-promo/index.js";
 import { startArticleWorkflowReaper, articleWorkflowRoutes } from "./workflow/article/index.js";
-import { loadS3Config, getObjectToFile } from "./storage/s3.js";
-import { storeGeneratedVideo, storeVideoFile } from "./workflow/_shared/video-service.js";
 import { createBillingClient } from "@ai-assistant/billing";
-import { ecomHelpWriteRoutes, ecomMainImageRoutes, ecomWorkflowRoutes } from "./workflow/ecom/index.js";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { novelEngineRoutes } from "./novel/routes.js";
-import { comicProductionRoutes, comicWorkflowRoutes } from "./workflow/comic/index.js";
-import { reportRoutes } from "./workflow/report/index.js";
-import { analyticsRoutes } from "./admin/analytics-routes.js";
 import { adminResellerRoutes } from "./admin/reseller-routes.js";
 import { clientMenuRoutes } from "./admin/client-menu-routes.js";
 import { resellerRoutes } from "./reseller/routes.js";
 import { kbRoutes } from "./kb/routes.js";
 import { assetRoutes } from "./assets/asset-routes.js";
-import { wechatRoutes } from "./wechat/routes.js";
 import { verifyToken } from "./auth/token.js";
 import { registerHub } from "./connector/hub.js";
 import { startReaper } from "./connector/reaper.js";
-import { startAnalyticsRollup } from "./analytics/cron.js";
 import { startKbReaper } from "./kb/reaper.js";
 import { buildIndexDeps } from "./kb/deps.js";
 import { makeS3 } from "./storage/s3.js";
 import { seedPlatformChannel } from "./reseller/seed.js";
-import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
-import { scheduledRoutes } from "./scheduled/routes.js";
-import { startScheduledDispatcher } from "./scheduled/cron.js";
-import { runScheduledTask } from "./scheduled/executor.js";
-import { createRunAgent } from "./scheduled/agent-run.js";
-import { createEmailSender, type SmtpEnv } from "./scheduled/email/sender.js";
-import { createAiDraft } from "./scheduled/ai-draft-glue.js";
 import { apiDocsEnabled, registerOpenApi, registerOpenApiUi } from "./docs/openapi.js";
 import { withTimeout } from "./runtime/with-timeout.js";
 
@@ -147,33 +122,17 @@ export async function buildServer() {
 
   await app.register(authRoutes);
   await app.register(chatRoutes);
-  await app.register(wechatRoutes);
   await app.register(kbRoutes);
   await app.register(assetRoutes);
   await app.register(billingRoutes);
   await app.register(membershipUserRoutes);
   await app.register(agentRoutes, { redis: getRedis() });
-  await app.register(agentTeamRoutes);
   // 同上：传 redis 才起 image 的主动扫。之前 image 的续跑只挂在轮询接口上，
   // 用户关掉页面就没人推进了。
   await app.register((instance) => imageWorkflowRoutes(instance, { redis: getRedis() }));
-  // 传 redis 才会起人像的主动扫兜底（抢锁用），reaper 的清理挂在该插件自己的 onClose 上
-  await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
-  await app.register((instance) => tryOnWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }));
-  // 同上：传 redis 才起 video 的主动扫。video 是外部异步任务，兜底不是「超期即失败」，
-  // 而是拿 providerTaskId 向上游核对真实状态再决定续跑还是退款（见 video-reaper.ts）。
-  await app.register((instance) => videoWorkflowRoutes(instance, { redis: getRedis() }));
-  await app.register(dubRoutes);
-  await app.register(ecomWorkflowRoutes);
-  await app.register(localBusinessPromoRoutes);
-  await app.register(ecomMainImageRoutes);
-  await app.register(ecomHelpWriteRoutes);
   await app.register(novelWorkflowRoutes);
   await app.register(novelEngineRoutes);
-  await app.register(comicWorkflowRoutes);
-  await app.register(comicProductionRoutes);
-  await app.register((a) => reportRoutes(a, { prisma: getPrisma() }));
   await app.register(articleWorkflowRoutes);
   await app.register(memoryRoutes);
   await app.register(deviceRoutes);
@@ -187,23 +146,15 @@ export async function buildServer() {
   await app.register(adminAuditRoutes);
   await app.register(adminOrderRoutes);
   await app.register(resourceRoutes);
-  await app.register(adminDubRoutes);
   await app.register(announcementRoutes);
   await app.register(adminMembershipRoutes);
   await app.register(adminKnowledgeRoutes);
-  await app.register(analyticsRoutes);
   await app.register(adminResellerRoutes);
   await app.register(clientMenuRoutes);
   await app.register(resellerRoutes);
   await registerHub(app);
 
   const reaperTimer = startReaper(getPrisma(), getRedis());
-  const analyticsTimer = startAnalyticsRollup(getPrisma(), getRedis());
-  const localBusinessPromoRefundReaperTimer = startLocalBusinessPromoRefundReaper({
-    prisma: getPrisma(),
-    redis: getRedis(),
-    billing: createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! }),
-  });
   // 图文项目 reaper：崩溃/重启后把卡在 generating|revising 的项目置 failed 并退文本 reserve
   const articleWorkflowReaperTimer = startArticleWorkflowReaper({
     prisma: getPrisma(),
@@ -211,68 +162,7 @@ export async function buildServer() {
     billing: createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! }),
   });
 
-  const schedLlm = createLlmClient(loadLlmConfig());
-  const schedBilling = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
-
-  let schedTimer: NodeJS.Timeout | undefined;
-  if (process.env.NODE_ENV !== "test") {
-    const schedEmail = createEmailSender(process.env as unknown as SmtpEnv);
-    const schedRunAgent = createRunAgent({ prisma: getPrisma(), client: schedLlm });
-    schedTimer = startScheduledDispatcher(getPrisma(), getRedis(), (taskId, slotIso) =>
-      runScheduledTask(
-        { prisma: getPrisma(), redis: getRedis(), billing: schedBilling, emailSender: schedEmail, runAgent: schedRunAgent },
-        taskId,
-        slotIso,
-      ),
-    );
-  }
-
-  await app.register(scheduledRoutes, {
-    aiDraft: createAiDraft({ redis: getRedis(), billing: schedBilling, client: schedLlm }),
-  });
-
   if (docsEnabled) await registerOpenApiUi(app);
-
-  // 飞天数字人任务 reaper：仅在配置了 SKYHUMAN_API_TOKEN 时启动（未配置则该功能整体不可用，不拖垮服务）
-  if (process.env.SKYHUMAN_API_TOKEN) {
-    const dubFetch: typeof fetch = (...a) => fetch(...a);
-    const dubPrisma = getPrisma();
-    const dubGetObjectToFile = async (key: string, filePath: string) =>
-      getObjectToFile(makeS3(loadS3Config()), key, filePath, {
-        maxBytes: Number(process.env.VIDEO_MAX_BYTES) || 350 * 1024 * 1024,
-      });
-    const dubStoreVideoFile = async (a: { userId: string; filePath: string }) => {
-      const stored = await storeVideoFile({
-        userId: a.userId,
-        filename: "final.mp4",
-        mime: "video/mp4",
-        filePath: a.filePath,
-        folder: `dub/final/${a.userId}`,
-      });
-      return { url: stored.url, objectKey: stored.objectKey! };
-    };
-    startDubReaper({
-      prisma: dubPrisma,
-      redis: getRedis(),
-      billing: createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! }),
-      cfg: loadSkyhumanConfig(),
-      fetchFn: dubFetch,
-      storeVideo: async (a) => {
-        const s = await storeGeneratedVideo({ url: a.url, userId: a.userId, requestId: `dub-${a.taskId}`, requestIndex: 0, format: "mp4", fetchFn: dubFetch });
-        return { url: s.originalUrl, objectKey: s.objectKey ?? "" };
-      },
-      // 兜底路径同样叠 BGM：回调丢失时靠 reaper 完成项目收尾
-      finalizeProject: (a) => finalizeProjectVideo({
-        prisma: dubPrisma,
-        ...a,
-        getObjectToFile: dubGetObjectToFile,
-        storeVideoFile: dubStoreVideoFile,
-      }),
-    });
-  }
 
   // 启动 KB reaper（仅在非测试环境，且 S3/embedding 已配置）
   // 未配置则跳过：知识库索引不可用，但 api/聊天等照常启动（解耦，避免 KB 配置缺失拖垮整个服务）
@@ -288,9 +178,6 @@ export async function buildServer() {
 
   app.addHook("onClose", async () => {
     clearInterval(reaperTimer);
-    clearInterval(analyticsTimer);
-    if (schedTimer) clearInterval(schedTimer);
-    clearInterval(localBusinessPromoRefundReaperTimer);
     clearInterval(articleWorkflowReaperTimer);
     kbReaper?.stop();
   });

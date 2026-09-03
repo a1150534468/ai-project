@@ -64,7 +64,6 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 let onSend: ReturnType<typeof vi.fn>;
 let onModelChange: ReturnType<typeof vi.fn>;
-let onOpenToolMarket: ReturnType<typeof vi.fn>;
 
 function element(overrides: ChatOverrides = {}) {
   return (
@@ -74,7 +73,6 @@ function element(overrides: ChatOverrides = {}) {
       isLoading={false}
       selectedModel="model-a"
       onModelChange={onModelChange}
-      onOpenToolMarket={onOpenToolMarket}
       onSend={onSend}
       {...overrides}
     />
@@ -158,7 +156,6 @@ beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
   onSend = vi.fn();
   onModelChange = vi.fn();
-  onOpenToolMarket = vi.fn();
   apiMocks.listModels.mockResolvedValue([
     { model: "model-a", displayName: "模型甲" },
     { model: "model-b", displayName: "模型乙" },
@@ -481,16 +478,6 @@ describe("Chat 工具挂载", () => {
 
     await click(buttonByText(scope, "工具"));
     expect(scope.textContent).toContain("暂无已安装工具");
-  });
-
-  it("从弹层进工具市场：关闭弹层并回调", async () => {
-    const scope = await mountChat();
-
-    await click(buttonByText(scope, "工具"));
-    await click(buttonByText(scope, "工具市场"));
-
-    expect(onOpenToolMarket).toHaveBeenCalledTimes(1);
-    expect(scope.textContent).not.toContain("挂载工具");
   });
 
   it("关闭工具把已生效的选择一起清掉", async () => {

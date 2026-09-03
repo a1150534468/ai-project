@@ -41,7 +41,7 @@ import {
   type ImageWorkspaceMode,
 } from "../../workflowState";
 import type { DownloadDialogState } from "../ui/DownloadLinkDialog";
-import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
+import { readFileAsInlineImage } from "./inlineImage";
 import { downloadImageFile, imageDownloadFileName } from "./imageDownload";
 import type { ImageWorkflowStudioProps } from "./ImageWorkflowStudio";
 import {
