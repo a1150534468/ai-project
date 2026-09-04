@@ -128,6 +128,23 @@ A2~D 会撞同一块地板（`.tsx` 上是 `import` 行、`}` 行、`return (` �
 `toggleCollapsed`。这些行要「不一样」，只能改 props 名 —— 那就是改契约（`App.tsx` 与
 测试都按名字调），而且正是本文件禁止的「改名降低相似度」。**结论与 A1 同：到此为止。**
 
+**A3 第三次撞同一块地板，这次连「地板由什么构成」都数清了。** 22 个文件重写 + 6 个文件删除，
+范围内从 2,372 降到 **991**（净消 1,381 行：39,539 → 38,158），消掉 58%。残留最多的是
+`api.ts` 171 / `index.css` 81 / `chatAttachments.ts` 60。把 `motion/Toast.tsx` 那 36 行全列出来看
+（这个文件是彻底重写的，连状态结构都从 `{ items }` 拍平成数组了）：4 行空行、
+2 行 `import`、6 行是 JSX 属性各占一行（`initial="initial"` / `animate="animate"` /
+`exit="exit"` / `className="glass-card"`）、11 行是 `}` `)` `);` `</motion.div>`
+`</ToastCtx.Provider>` 这类收尾符号，剩下的是 `export function useToast(): ToastApi {` 起头那
+4 行 —— 那 4 行里的错误文案 `useToast 必须在 ToastProvider 内使用` 是对外契约，测试按它断言。
+`api.ts` 的 171 行同理：`streamChat(` 的 9 个参数一行一个、`export interface WorkflowImageAsset {`
+这种头行、`}` 收尾。`index.css` 的 81 行里有 `@tailwind base;` 三条指令和
+`height: 100%;` / `-webkit-font-smoothing: antialiased;` 这种只有一种写法的声明。
+
+**三批实测（A1 531 / A2 825 / A3 991）足够定案了**：地板 = 空行 + 收尾符号 + import +
+一行一个的 props/参数/属性/声明 + 契约字符串。这些行不构成可著作权的表达，
+判据必须改成「没有一行有语义的表达归属上游」，否则 A4~D 一样验收不了，
+而且再往下压只有两条路：改契约（props 名、错误文案、API 参数名）或做美化 pass，两条本文件都禁止。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -189,6 +206,7 @@ A2~D 会撞同一块地板（`.tsx` 上是 `import` 行、`}` 行、`return (` �
 | Phase 7+9+5+6 收尾 | `ef3ba7d` | 42,027 | 6,687 |
 | 批次 A1 | `d808589` | 41,184 | 6,687 |
 | 批次 A2 | `e292c27` | 39,539 | 6,687 |
+| 批次 A3 | `41cfa03` | 38,158 | 6,687 |
 | … | | | |
 | 全部完成 | | **6,687**（只剩 lockfile） | 6,687 |
 
