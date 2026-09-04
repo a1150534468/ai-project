@@ -211,7 +211,7 @@ git blame --line-porcelain HEAD -- <file> | grep -c '^491de0f'
 
 ## Phase 5 · Prisma model 收缩：97 → 58
 
-**删除 39 张表**
+**删除 40 张表**
 
 | 归属 | model |
 |---|---|
@@ -229,9 +229,16 @@ git blame --line-porcelain HEAD -- <file> | grep -c '^491de0f'
 | 报告 | `ReportTask` |
 | 视频 / 音频任务 | `VideoGenerationTask` `VideoMaterial` `AudioGenerationTask` |
 | 数据分析 | `MetricsDaily` `CohortDaily` |
+| 知识库配额 | `KbQuotaGrant`（2026-09-04 追加，见下方修正） |
 | 死表 | `LoginEvent`（全仓 0 处非测试引用） |
 
-**保留 58 张**：`User` `Session` `Admin` `AdminAudit` `Announcement` `ClientMenuVisibility` `Avatar` `UserAgent` / `Message` / `KnowledgeBase` `Document` `Chunk` `KbQuotaGrant` / `ImageAsset` `AudioAsset` `VideoAsset` / `ImageGenerationTask` / `Memory` / `Novel*` 33 张 / `CodexPet*` 6 张 / `ArticleWorkflowProject`
+**保留 57 张**：`User` `Session` `Admin` `AdminAudit` `Announcement` `ClientMenuVisibility` `Avatar` `UserAgent` / `Message` / `KnowledgeBase` `Document` `Chunk` / `ImageAsset` `AudioAsset` `VideoAsset` / `ImageGenerationTask` / `Memory` / `Novel*` 33 张 / `CodexPet*` 6 张 / `ArticleWorkflowProject`
+
+> **2026-09-04 修正：`KbQuotaGrant` 从保留清单挪进删除清单（58 → 57，删 40 张）。**
+> 你已确认「配额整体下线」—— HEAD 的 `effectiveQuota` 要靠 billing 取 `defaultBytes` /
+> `membershipBytes` 才算得出有效额度，计费下线后读侧无从重建；只留一张只写不读的授予表
+> 会让后台能点「授予额度」却毫无效果。Phase 2 已删掉 `POST /api/admin/users/:id/kb-quota`
+> 与 admin 前端的入口。
 
 **迁移策略**：新增一个 `drop_retired_modules` 迁移做 `DROP TABLE`。**历史 81 个迁移文件不动** —— 它们是线上库的真实演化记录，改了 `migrate deploy` 会对不上。代价是迁移目录里 2,571 行上游代码留着，理由写进 ADR。
 
@@ -507,7 +514,18 @@ HEAD 上 `pauseForImageApproval` 写的是
 
 ### ⚠️ Phase 2 摘出来两个「计划外」的坑，需要你拍板
 
-**① `GET /api/models` 没了，而方案 §3 把「模型」列在运营后台的保留项里。**
+**两项都已在 2026-09-04 由你答复并落地（commit 见下），下面保留原始分析备查。**
+
+- **①「模型」→ 选了「env 驱动的模型列表」。** 新增 `apps/api/src/models/routes.ts`：
+  `GET /api/models` 从 `LLM_MODELS` 读（逗号分隔的 `模型 id[:展示名]`），不配时回落到
+  `LLM_DEFAULT_MODEL` + 已配好凭据的 ChatGPT 旁路模型，**保证列表非空**（否则前端下拉是空的、
+  看起来像坏了）。保留：对话模型下拉、设置页偏好模型、模型广场（只读展示）。
+  下线：admin 的模型管理页、`MODEL_MANAGE` 权限（`PERMISSIONS` 6 → 5 项）、
+  `apps/admin/src/api.ts` 的 8 个模型端点客户端。代价是改模型要改配置 + 重启。
+- **②「知识库配额」→ 选了「整体下线」。** 删掉 `POST /api/admin/users/:id/kb-quota` 与
+  admin 前端的「调知识库」入口；**Phase 5 的保留清单同步改成 57 张，`KbQuotaGrant` 进删除清单**。
+
+**① 原始分析：`GET /api/models` 没了，而方案 §3 把「模型」列在运营后台的保留项里。**
 `admin/model-routes.ts` 的 8 个 handler 全是代理 billing 的 Go 服务，模型目录整张表在
 `ai_assistant_billing` 库里（Phase 6 要 DROP 的那个），主库 schema 里
 `showInMarketplace` / `contextLength` / `inputPricePerMillion` 零命中。所以它不是「摘计费」能救的，
@@ -520,7 +538,7 @@ HEAD 上 `pauseForImageApproval` 写的是
 - 同一簇还有 `chat/routes-model-gate.ts` 删掉后一起没了的：模型启用闸门、每模型 `maxOutputTokens`
   （`resolveModelMaxOutput`），客户端传任意 model 串会直达上游、输出上限退回全局默认。
 
-**② `KbQuotaGrant` 变成只写不读。** `POST /api/admin/users/:id/kb-quota` 还在写，
+**② 原始分析：`KbQuotaGrant` 变成只写不读。** `POST /api/admin/users/:id/kb-quota` 还在写，
 但读侧（`kb/quota.ts` 的有效额度计算）随配额校验一起删了 —— 而 HEAD 的 `effectiveQuota` 要靠 billing
 取 `defaultBytes` / `membershipBytes` 才算得出来，Phase 5 的保留表清单里又留着 `KbQuotaGrant`。
 三者对不上。没敢自己删那个端点（删了同时违反 Phase 5 并砍掉 4 条业务用例）。

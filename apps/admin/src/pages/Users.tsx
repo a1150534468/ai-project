@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../api.js";
-import { useToast, errMsg, Field, Modal, useConfirm, Pill } from "../ui.js";
+import { useToast, errMsg, useConfirm, Pill } from "../ui.js";
 import { can, loadSession } from "../auth.js";
 import { UserDetailModal } from "./UserDetailModal.js";
 
@@ -15,14 +15,9 @@ export function UsersPage() {
   const [pageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const loadSeqRef = useRef(0);
-  const [adjusting, setAdjusting] = useState(false);
   const { show, node: toastNode } = useToast();
   const { confirm, node: confirmNode } = useConfirm();
 
-  const [kbModal, setKbModal] = useState<api.AdminUser | null>(null);
-  const [kbBytes, setKbBytes] = useState("");
-  const [kbExpiresAt, setKbExpiresAt] = useState("");
-  const [kbNote, setKbNote] = useState("");
   const [detailModal, setDetailModal] = useState<{ userId: string } | null>(null);
   const canViewFullDetail = can(session, "USER_DETAIL_VIEW");
 
@@ -61,23 +56,6 @@ export function UsersPage() {
     catch (e) { show(errMsg(e), "err"); }
   };
 
-  const handleKbQuota = async () => {
-    if (!kbModal || adjusting) return;
-    const bytes = Number(kbBytes);
-    if (!Number.isInteger(bytes) || bytes <= 0) { show("请输入正整数", "err"); return; }
-    try {
-      setAdjusting(true);
-      await api.grantUserKbQuota(kbModal.id, { bytes, expiresAt: kbExpiresAt || undefined, note: kbNote || undefined });
-      show("已配额");
-      setKbModal(null);
-      setKbBytes("");
-      setKbExpiresAt("");
-      setKbNote("");
-      void load();
-    } catch (e) { show(errMsg(e), "err"); }
-    finally { setAdjusting(false); }
-  };
-
   return (
     <div>
       {toastNode}
@@ -100,7 +78,6 @@ export function UsersPage() {
                 {can(session, "USER_MANAGE") && (
                   <button className={`btn sm ${u.bannedAt ? "ghost" : "danger"}`} onClick={() => ban(u, !!u.bannedAt)}>{u.bannedAt ? "解封" : "封禁"}</button>
                 )}
-                {can(session, "KNOWLEDGE_MANAGE") && <button className="btn ghost sm" onClick={() => { setKbModal(u); setKbBytes(""); setKbExpiresAt(""); setKbNote(""); }}>调知识库</button>}
                 {canViewFullDetail && <button className="btn ghost sm" onClick={() => setDetailModal({ userId: u.id })}>详情</button>}
               </td>
             </tr>
@@ -114,25 +91,6 @@ export function UsersPage() {
         <button className="btn ghost sm" onClick={() => load(page + 1)} disabled={loading || page >= totalPages}>下一页</button>
       </div>
 
-      <Modal open={!!kbModal} title={kbModal ? `配置知识库配额 - ${kbModal.username}` : ""} onClose={() => setKbModal(null)}
-        footer={
-          <div className="modal-footer-actions">
-            <button className="btn ghost" onClick={() => setKbModal(null)}>取消</button>
-            <button className="btn" onClick={handleKbQuota} disabled={adjusting}>提交</button>
-          </div>
-        }>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <Field label="配额大小（字节，需>0）">
-            <input type="number" value={kbBytes} onChange={(e) => setKbBytes(e.target.value)} placeholder="如 1048576" />
-          </Field>
-          <Field label="过期时间（可选，ISO 格式）">
-            <input type="text" value={kbExpiresAt} onChange={(e) => setKbExpiresAt(e.target.value)} placeholder="如 2025-12-31T23:59:59Z" />
-          </Field>
-          <Field label="备注（可选）">
-            <textarea value={kbNote} onChange={(e) => setKbNote(e.target.value)} rows={2} />
-          </Field>
-        </div>
-      </Modal>
       <UserDetailModal
         userId={detailModal?.userId ?? null}
         onClose={() => setDetailModal(null)}

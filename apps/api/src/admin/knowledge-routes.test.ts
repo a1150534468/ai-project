@@ -28,14 +28,12 @@ vi.mock("../storage/s3.js", async () => {
 const prisma = getPrisma();
 let app: Awaited<ReturnType<typeof buildServer>>;
 let superAdminToken = "";
-let userManageToken = "";
 let noPermToken = "";
 
 // 收集清理用的 id
 const createdAdminIds: string[] = [];
 const createdKbIds: string[] = [];
 const createdUserIds: string[] = [];
-const createdGrantIds: string[] = [];
 
 beforeAll(async () => {
   process.env.SESSION_SECRET ??= "x".repeat(32);
@@ -70,16 +68,6 @@ beforeAll(async () => {
   });
   createdAdminIds.push(kbManageAdmin.id);
 
-  // 创建有 USER_MANAGE 的 admin
-  const userManageAdmin = await createAdmin(prisma, {
-    username: `kbadm_usermgr_${Date.now()}`,
-    password: "password123",
-    role: "admin",
-    permissions: ["USER_MANAGE"],
-  });
-  createdAdminIds.push(userManageAdmin.id);
-  userManageToken = signAdminToken(userManageAdmin.id, secret);
-
   // 创建无权限的 admin
   const noPerm = await createAdmin(prisma, {
     username: `kbadm_noperm_${Date.now()}`,
@@ -107,10 +95,6 @@ afterAll(async () => {
   for (const kbId of createdKbIds) {
     await prisma.knowledgeBase.deleteMany({ where: { id: kbId } });
   }
-  // 删 grant
-  for (const grantId of createdGrantIds) {
-    await prisma.kbQuotaGrant.deleteMany({ where: { id: grantId } });
-  }
   // 新用户会自动获得 AI 产物系统库。
   await prisma.knowledgeBase.deleteMany({ where: { userId: { in: createdUserIds } } });
   // 删 user
@@ -136,15 +120,6 @@ describe("admin 知识库管理路由", () => {
       expect(r.statusCode).toBe(403);
     });
 
-    it("无 USER_MANAGE 权限调配额端点返回 403", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/admin/users/test-user/kb-quota",
-        headers: { authorization: `Bearer ${noPermToken}`, "content-type": "application/json" },
-        payload: { bytes: 1000000 },
-      });
-      expect(r.statusCode).toBe(403);
-    });
   });
 
   describe("官方库 CRUD", () => {
@@ -355,106 +330,6 @@ describe("admin 知识库管理路由", () => {
         headers: { authorization: `Bearer ${superAdminToken}` },
       });
       expect(r.statusCode).toBe(404);
-    });
-  });
-
-  describe("用户配额管理", () => {
-    let testUser: any;
-
-    beforeEach(async () => {
-      testUser = await prisma.user.create({
-        data: { uid: `user_${Date.now()}`, username: `testuser_${Date.now()}`, passwordHash: "xxx" },
-      });
-      createdUserIds.push(testUser.id);
-    });
-
-    it("POST /api/admin/users/:id/kb-quota 给用户配额成功", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/admin/users/${testUser.id}/kb-quota`,
-        headers: { authorization: `Bearer ${userManageToken}`, "content-type": "application/json" },
-        payload: { bytes: 5000000, note: "admin grant" },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as any;
-      expect(body.success).toBe(true);
-      expect(body.data.bytes).toBe(5000000);
-      expect(body.data.source).toBe("ADMIN");
-      createdGrantIds.push(body.data.id);
-    });
-
-    it("POST /api/admin/users/:id/kb-quota bytes≤0 返回 400", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/admin/users/${testUser.id}/kb-quota`,
-        headers: { authorization: `Bearer ${userManageToken}`, "content-type": "application/json" },
-        payload: { bytes: 0 },
-      });
-      expect(r.statusCode).toBe(400);
-    });
-
-    it("POST /api/admin/users/:id/kb-quota 用户不存在返回 404", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/admin/users/${randomUUID()}/kb-quota`,
-        headers: { authorization: `Bearer ${userManageToken}`, "content-type": "application/json" },
-        payload: { bytes: 1000000 },
-      });
-      expect(r.statusCode).toBe(404);
-    });
-
-    it("POST /api/admin/users/:id/kb-quota 带 expiresAt 过期时间", async () => {
-      const futureDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/admin/users/${testUser.id}/kb-quota`,
-        headers: { authorization: `Bearer ${userManageToken}`, "content-type": "application/json" },
-        payload: { bytes: 1000000, expiresAt: futureDate },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as any;
-      expect(body.data.expiresAt).toBeDefined();
-      createdGrantIds.push(body.data.id);
-    });
-  });
-
-  describe("审计记录", () => {
-    it("KB_CREATE 审计", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/admin/kb",
-        headers: { authorization: `Bearer ${superAdminToken}`, "content-type": "application/json" },
-        payload: { name: "Audit Test KB" },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as any;
-      const kbId = body.data.id;
-      createdKbIds.push(kbId);
-
-      const audits = await prisma.adminAudit.findMany({
-        where: { action: "KB_CREATE", target: kbId },
-      });
-      expect(audits.length).toBeGreaterThan(0);
-    });
-
-    it("USER_KB_QUOTA_GRANT 审计", async () => {
-      const testUser = await prisma.user.create({
-        data: { uid: `user_audit_${Date.now()}`, username: `audituser_${Date.now()}`, passwordHash: "xxx" },
-      });
-      createdUserIds.push(testUser.id);
-
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/admin/users/${testUser.id}/kb-quota`,
-        headers: { authorization: `Bearer ${userManageToken}`, "content-type": "application/json" },
-        payload: { bytes: 1000000 },
-      });
-      expect(r.statusCode).toBe(200);
-
-      const audits = await prisma.adminAudit.findMany({
-        where: { action: "USER_KB_QUOTA_GRANT", target: testUser.id },
-      });
-      expect(audits.length).toBeGreaterThan(0);
     });
   });
 });

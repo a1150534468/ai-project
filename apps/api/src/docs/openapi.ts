@@ -8,6 +8,7 @@ const tagDefinitions = [
   { name: "系统", description: "服务健康检查和基础信息" },
   { name: "认证", description: "用户注册与登录" },
   { name: "对话", description: "AI 对话和会话记录" },
+  { name: "模型", description: "可用模型目录（配置驱动）" },
   { name: "智能体", description: "智能体创建、推荐和执行" },
   { name: "长期记忆", description: "用户长期记忆、搜索与开关" },
   { name: "知识库", description: "用户知识库和文档管理" },
@@ -45,7 +46,7 @@ const exactSummaries: Record<string, string> = {
   "GET /api/sessions": "查询会话列表",
   "GET /api/sessions/:id/messages": "查询会话消息",
   "DELETE /api/sessions/:id": "删除会话",
-  "GET /api/models": "查询可用模型",
+  "GET /api/models": "查询可用模型（数据源是 LLM_MODELS 配置，不是数据库）",
   "GET /api/client-menu": "查询客户端菜单",
   "GET /api/announcements": "查询当前公告",
   "GET /ws/connector": "建立桌面连接器 WebSocket",
@@ -347,6 +348,7 @@ function tagForPath(url: string): string {
   if (url === "/ws/connector" || url.startsWith("/api/device/")) return "设备与连接器";
   if (url.startsWith("/api/auth/")) return "认证";
   if (url.startsWith("/api/chat") || url.startsWith("/api/sessions")) return "对话";
+  if (url === "/api/models") return "模型";
   if (url.startsWith("/api/agents")) return "智能体";
   if (url.startsWith("/api/memory")) return "长期记忆";
   if (url.startsWith("/api/kb")) return "知识库";

@@ -12,6 +12,8 @@ data:
   LLM_PROVIDER: "bailian"
   BAILIAN_REGION: "cn-beijing"
   LLM_DEFAULT_MODEL: "qwen3.7-plus"
+  # GET /api/models 的可用模型目录（配置驱动，计费下线后不再有 DB 表）。
+  LLM_MODELS: "qwen3.7-plus:通义千问 3.7 Plus"
   CHAT_MULTIMODAL_MODEL: "qwen3.7-plus"
   EMBEDDING_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   EMBEDDING_MODEL: "text-embedding-v4"

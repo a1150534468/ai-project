@@ -60,65 +60,6 @@ export async function unbanUser(id: string): Promise<void> {
   await req("POST", `/api/admin/users/${id}/unban`);
 }
 
-// —— 模型 ——
-export interface ModelRow {
-  model: string;
-  displayName: string;
-  inputPriceRmbPerMillion: number;
-  outputPriceRmbPerMillion: number;
-  cacheInputPriceRmbPerMillion: number;
-  cacheOutputPriceRmbPerMillion: number;
-  description: string;
-  tags: string;
-  category: string;
-  contextLength: number;
-  maxOutputTokens: number;
-  useCases: string;
-  sortOrder: number;
-  showInMarketplace: boolean;
-  enabled: boolean;
-}
-export interface ModelStatsRow {
-  model: string;
-  displayName: string;
-  usageCount: number;
-  userCount: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheInputTokens: number;
-  cacheOutputTokens: number;
-}
-export async function listModels(): Promise<ModelRow[]> {
-  return (await req<{ data: ModelRow[] }>("GET", "/api/admin/models")).data;
-}
-export type UpsertModelRow = Pick<
-  ModelRow,
-  | "model"
-  | "displayName"
-  | "enabled"
-  | "inputPriceRmbPerMillion"
-  | "outputPriceRmbPerMillion"
-  | "cacheInputPriceRmbPerMillion"
-  | "cacheOutputPriceRmbPerMillion"
-> & Partial<Pick<ModelRow, "description" | "tags" | "category" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
-export async function upsertModel(a: UpsertModelRow): Promise<void> {
-  await req("POST", "/api/admin/models", a);
-}
-export type ModelMarketplacePatch = Partial<Pick<ModelRow, "description" | "tags" | "category" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
-export async function updateModelDisplay(model: string, displayName: string, enabled: boolean, patch: ModelMarketplacePatch = {}): Promise<void> {
-  await req("PATCH", "/api/admin/models/display", { model, displayName, enabled, ...patch });
-}
-export async function updateModelIdentity(a: { model: string; newModel: string; displayName: string; enabled: boolean }): Promise<void> {
-  await req("PATCH", "/api/admin/models/identity", a);
-}
-export async function deleteModel(model: string): Promise<void> {
-  await req("POST", "/api/admin/models/delete", { model });
-}
-export async function getModelStats(model: string): Promise<ModelStatsRow> {
-  const qs = new URLSearchParams({ model });
-  return (await req<{ data: ModelStatsRow }>("GET", `/api/admin/models/stats?${qs}`)).data;
-}
-
 // —— 公告 ——
 export interface Announcement {
   id: string;
@@ -285,6 +226,3 @@ export async function deleteKbDoc(kbId: string, docId: string): Promise<void> {
   await req("DELETE", `/api/admin/kb/${kbId}/documents/${docId}`);
 }
 
-export async function grantUserKbQuota(userId: string, a: { bytes: number; expiresAt?: string; note?: string }): Promise<void> {
-  await req("POST", `/api/admin/users/${userId}/kb-quota`, a);
-}

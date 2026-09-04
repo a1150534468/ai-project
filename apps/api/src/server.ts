@@ -16,6 +16,7 @@ import { adminAuditRoutes } from "./admin/audit-routes.js";
 import { announcementRoutes } from "./admin/announcement-routes.js";
 import { adminKnowledgeRoutes } from "./admin/knowledge-routes.js";
 import { agentRoutes } from "./agents/routes.js";
+import { modelRoutes } from "./models/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
 import { startArticleWorkflowReaper, articleWorkflowRoutes } from "./workflow/article/index.js";
@@ -111,6 +112,7 @@ export async function buildServer() {
   await app.register(chatRoutes);
   await app.register(kbRoutes);
   await app.register(assetRoutes);
+  await app.register(modelRoutes);
   await app.register(agentRoutes, { redis: getRedis() });
   // 同上：传 redis 才起 image 的主动扫。之前 image 的续跑只挂在轮询接口上，
   // 用户关掉页面就没人推进了。

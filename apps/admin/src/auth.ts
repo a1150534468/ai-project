@@ -1,7 +1,6 @@
 export type Permission =
   | "USER_MANAGE"
   | "USER_DETAIL_VIEW"
-  | "MODEL_MANAGE"
   | "ANNOUNCEMENT_MANAGE"
   | "ADMIN_MANAGE"
   | "KNOWLEDGE_MANAGE";

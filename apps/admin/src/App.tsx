@@ -3,7 +3,6 @@ import { can, loadSession, saveSession, clearSession, type Session, type Permiss
 import * as api from "./api.js";
 import { useToast, errMsg } from "./ui.js";
 import { UsersPage } from "./pages/Users.js";
-import { ModelsPage } from "./pages/Models.js";
 import { AnnouncementsPage } from "./pages/Announcements.js";
 import { AdminsPage } from "./pages/Admins.js";
 import { AuditPage } from "./pages/Audit.js";
@@ -31,7 +30,6 @@ const TAB_GROUPS: TabGroup[] = [
     groupKey: "config",
     groupLabel: "配置",
     items: [
-      { key: "models", label: "模型", perm: "MODEL_MANAGE", render: () => <ModelsPage /> },
       { key: "kb", label: "官方知识库", perm: "KNOWLEDGE_MANAGE", render: () => <KnowledgePage /> },
       { key: "clientmenu", label: "用户端菜单", perm: "ADMIN_MANAGE", render: () => <ClientMenusPage /> },
     ],

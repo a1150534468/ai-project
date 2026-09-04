@@ -19,12 +19,6 @@ const kbUpdateSchema = z.object({
   description: z.string().max(1000).optional(),
 });
 
-const userQuotaGrantSchema = z.object({
-  bytes: z.number().int().positive(), // 仅允许正数（扩容）
-  expiresAt: z.string().datetime().nullable().optional(),
-  note: z.string().max(500).optional(),
-});
-
 export async function adminKnowledgeRoutes(app: FastifyInstance) {
   const prisma = getPrisma();
   let s3: ReturnType<typeof makeS3> | null = null;
@@ -248,50 +242,6 @@ export async function adminKnowledgeRoutes(app: FastifyInstance) {
       await writeAudit(prisma, me.id, "KB_DOC_DELETE", id, { docId, name: doc.name });
 
       return reply.code(204).send();
-    },
-  );
-
-  // =====================
-  // 用户调配额（USER_MANAGE）
-  // =====================
-
-  // POST /api/admin/users/:id/kb-quota - 给用户配额
-  app.post(
-    "/api/admin/users/:id/kb-quota",
-    { preHandler: requireAdmin("USER_MANAGE") },
-    async (req, reply) => {
-      const { id: userId } = req.params as { id: string };
-      const p = userQuotaGrantSchema.safeParse(req.body);
-      if (!p.success) return reply.code(400).send({ error: "参数不合法" });
-
-      // 校验 bytes > 0
-      if (p.data.bytes <= 0) {
-        return reply.code(400).send({ error: "配额必须大于 0" });
-      }
-
-      // 校验用户存在
-      const user = await prisma.user.findUnique({ where: { id: userId } });
-      if (!user) {
-        return reply.code(404).send({ error: "用户不存在" });
-      }
-
-      const grant = await prisma.kbQuotaGrant.create({
-        data: {
-          userId,
-          bytes: p.data.bytes,
-          source: "ADMIN",
-          expiresAt: p.data.expiresAt ? new Date(p.data.expiresAt) : null,
-          note: p.data.note,
-        },
-      });
-
-      const me = (req as unknown as { admin: { id: string } }).admin;
-      await writeAudit(prisma, me.id, "USER_KB_QUOTA_GRANT", userId, {
-        bytes: grant.bytes,
-        expiresAt: grant.expiresAt,
-      });
-
-      return { success: true, data: grant };
     },
   );
 }
