@@ -1,4 +1,4 @@
-import { ApiError, readErrorBody } from "./apiError";
+import { ApiError } from "./apiError";
 
 /**
  * 统一 HTTP 客户端（P1.2）。
@@ -7,19 +7,19 @@ import { ApiError, readErrorBody } from "./apiError";
  * `authorization: Bearer ${token}` 与 `content-type`、各自判 `!response.ok`、
  * 各自解 `{ success, data }` 外壳，同一件事写了 124 遍。
  *
- * 错误与外壳都复用已有实现，不另造一套：`ApiError` / `readErrorBody` 来自
+ * 错误与外壳都复用已有实现，不另造一套：`ApiError`（连同它的 `fromResponse`）来自
  * `./apiError`，`unwrapData` 从 `api.ts` 搬过来并在此导出。
  *
  * 流式接口（SSE、`getReader()`）不要用 `request<T>()` —— 它读完整个 body 再
  * `JSON.parse`。走 `requestResponse()`：鉴权头与错误处理照样复用，body 留给调用方自己流式读。
  */
 
-/** token 在 localStorage 里的键；App.tsx 与本模块共用，避免两处各写一份字符串。 */
+/** token 在 localStorage 里的键；`app/useAuthSession.ts` 与本模块共用，避免两处各写一份字符串。 */
 export const AUTH_TOKEN_STORAGE_KEY = "ai_assistant_token";
 
 let currentToken: string | null = null;
 
-/** 由 App.tsx 在 token 状态变化时调用，让没有 token 参数的调用方也能取到。 */
+/** 由 `app/useAuthSession.ts` 在 token 变化时调用，让没有 token 参数的调用方也能取到。 */
 export function setAuthToken(token: string | null): void {
   currentToken = token && token.length > 0 ? token : null;
 }
@@ -34,7 +34,7 @@ function readStoredToken(): string | null {
   }
 }
 
-/** 集中处的 token：内存优先，其次 localStorage（首屏 App.tsx 还没挂载时也能取到）。 */
+/** 集中处的 token：内存优先，其次 localStorage（首屏 `useAuthSession` 那个 effect 还没跑时也能取到）。 */
 export function getAuthToken(): string | null {
   return currentToken ?? readStoredToken();
 }
@@ -83,10 +83,7 @@ export async function requestResponse(path: string, options: RequestOptions = {}
     signal,
     credentials,
   });
-  if (!response.ok) {
-    const failure = await readErrorBody(response, fallback);
-    throw new ApiError(failure.message, response.status, failure.data);
-  }
+  if (!response.ok) throw await ApiError.fromResponse(response, fallback);
   return response;
 }
 

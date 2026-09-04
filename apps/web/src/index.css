@@ -107,23 +107,27 @@ html[data-theme="dark"] {
 
 
 @layer base {
+  /* 三层高度一路 100%：#root 是 React 挂载点，断一层里面那套整屏 flex 布局就撑不开。 */
   html,
   body,
   #root {
     height: 100%;
   }
 
-  html {
+  /* html 与 body 都铺画布色：body 之外露出来的那圈（橡皮筋回弹、滚动溢出）才不会是白的。 */
+  html,
+  body {
     background: var(--apple-canvas);
   }
 
   body {
     @apply font-sans;
-    background: var(--apple-canvas);
     color: var(--apple-ink);
+    /* 整页不滚：滚动条一律由内部面板自己管，外框固定 */
+    overflow: hidden;
+    /* 关掉次像素抗锯齿，中文字形在深色底上才不会显胖 */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    overflow: hidden;
   }
 
   *,
@@ -154,22 +158,28 @@ html[data-theme="dark"] {
 }
 
 @layer components {
+  /*
+   * 这一层只留还有元素在用的类。原先另有六个从没被引用过的
+   * （.btn-secondary / .badge / .stat-value / .progress-bar / .progress-bar-fill / .card-body）：
+   * Tailwind 的 components 层本来就会按 content 扫描结果摇掉它们，编译产物里一条声明都没有，
+   * 删掉不改变任何一个字节的输出。另外两个 .sidebar-item / .sidebar-item.active 也没有元素挂，
+   * 只因为「active」这个候选词恰好出现在别处才被留在产物里，一起删。
+   */
+  /* 主按钮：胶囊形。三行分别是配色、形状字号、交互，改哪一类不用在一长串里数工具类。 */
   .btn-primary {
-    @apply bg-brand text-white rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 border-none cursor-pointer;
-  }
-
-  .btn-secondary {
-    @apply bg-surface-muted text-ink rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 border-none cursor-pointer;
+    @apply bg-brand text-white;
+    @apply rounded-full px-5 py-2 text-sm font-medium;
+    @apply border-none cursor-pointer transition-all duration-200;
   }
 
   .glass-card {
     @apply bg-surface rounded-xl2 border-none shadow-none;
   }
 
-  .badge {
-    @apply rounded-full text-xs px-2.5 py-0.5 font-medium;
-  }
-
+  /*
+   * 三种表单控件共用一套外观。颜色走 --apple-* 别名而不是 `@apply border-hairline`：
+   * 工具类会带上 --tw-*-opacity 那一层，这里用不着。
+   */
   input,
   textarea,
   select {
@@ -183,37 +193,14 @@ html[data-theme="dark"] {
   textarea:focus,
   select:focus {
     @apply border-brand outline-none;
+    /* 聚焦环用 box-shadow 而不是 outline：这样它会跟着圆角走 */
     box-shadow: 0 0 0 3px rgb(var(--color-brand) / 0.16);
   }
 
+  /* 页面大标题。字距收紧不是工具类能表达的，只能手写。 */
   .page-title {
     @apply text-[28px] font-bold text-ink;
     letter-spacing: -0.02em;
-  }
-
-  .stat-value {
-    @apply text-[32px] font-bold text-ink;
-    letter-spacing: -0.03em;
-  }
-
-  .progress-bar {
-    @apply h-1 rounded-sm bg-hairline-subtle;
-  }
-
-  .progress-bar-fill {
-    @apply h-1 rounded-sm bg-brand transition-all duration-300;
-  }
-
-  .sidebar-item {
-    @apply transition-all duration-200 border-l-0 text-ink-tertiary text-sm px-4 py-2.5 rounded-[10px] mx-2 my-0.5 cursor-pointer;
-  }
-
-  .sidebar-item.active {
-    @apply bg-surface-muted text-ink font-semibold;
-  }
-
-  .card-body {
-    @apply p-6;
   }
 
   /*
@@ -385,24 +372,17 @@ html[data-theme="dark"] .text-brand {
   color: rgb(var(--color-brand-ink));
 }
 
-/* 全局无障碍：尊重「减弱动态效果」偏好。
-   收敛所有纯 CSS 动画/过渡，补足 motion 库 MotionConfig 未接管的部分
-   （如各处 loading spinner、skeleton 的 animate-spin/pulse 等）。 */
+/*
+ * 纯 CSS 的入场动画。每段都把 @keyframes 紧跟在用它的类后面，
+ * 改一个不用翻到文件另一头找另一半。（Framer Motion 那侧由 MotionConfig 统一接管，不走这里。）
+ *
+ * 原先这里还有两段 payment-success-*（付款成功的圆环与对勾）以及它们的两组关键帧，
+ * 计费模块退役后没有任何元素再挂这两个类，一并删掉。
+ */
 
+/* 路由切换：整页轻微上浮淡入。 */
 .page-transition {
   animation: fadeIn 0.4s ease-out;
-}
-
-.memory-sheet-enter {
-  animation: memorySheetIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.payment-success-ring {
-  animation: paymentSuccessRing 360ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.payment-success-check {
-  animation: paymentSuccessCheck 520ms ease-out 120ms both;
 }
 
 @keyframes fadeIn {
@@ -416,6 +396,11 @@ html[data-theme="dark"] .text-brand {
   }
 }
 
+/* 移动端记忆抽屉：从屏幕下沿整张推上来。起始透明度不从 0 起，否则推上来的过程像在闪。 */
+.memory-sheet-enter {
+  animation: memorySheetIn 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @keyframes memorySheetIn {
   from {
     opacity: 0.92;
@@ -427,32 +412,12 @@ html[data-theme="dark"] .text-brand {
   }
 }
 
-@keyframes paymentSuccessRing {
-  from {
-    opacity: 0;
-    transform: scale(0.82);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes paymentSuccessCheck {
-  from {
-    opacity: 0;
-    transform: rotate(45deg) scale(0.72);
-  }
-  60% {
-    opacity: 1;
-    transform: rotate(45deg) scale(1.08);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(45deg) scale(1);
-  }
-}
-
+/*
+ * 无障碍：系统开了「减弱动态效果」就把 CSS 侧的动画全收掉。
+ * 第一条兜住所有元素（Tailwind 的 animate-spin / animate-pulse 这类也在内），
+ * 第二条把上面两段命名动画整个关掉 —— 只压时长的话，带位移的关键帧仍会在
+ * 0.01ms 里跳一下位置，直接 none 才是真的不动。
+ */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -463,10 +428,8 @@ html[data-theme="dark"] .text-brand {
     scroll-behavior: auto !important;
   }
 
-  .memory-sheet-enter,
   .page-transition,
-  .payment-success-ring,
-  .payment-success-check {
+  .memory-sheet-enter {
     animation: none;
   }
 }
