@@ -470,7 +470,13 @@ git blame --line-porcelain HEAD -- <file> | grep -c '^491de0f'
 | 模型/配额收口 | `ce4ef91` | 48,724 | 412 | 916 |
 | Phase 3 | `e3abbe1` | **45,203** | 346 | 845 |
 | Phase 9 | `0c027e8` | 45,154 | 344 | 825 |
-| Phase 7 | `0a7cbb8` | **42,732**（非 lockfile **36,045**） | 338 | 814 |
+| Phase 7 | `0a7cbb8` | **42,732**（非 lockfile 36,045） | 338 | 814 |
+| Phase 5 | `9b72472` | **42,076** | 338 | 815 |
+| Phase 6 | `a0be61e` | **42,027**（非 lockfile **35,340**） | 337 | 814 |
+
+**收尾 42,027，按方案自己的基线口径换算是 41,476 —— 低于目标 41,551。**
+（本文正文的基线是 121,662，同一份脚本在同一棵树上实测是 122,213，差 551；
+42,027 − 551 = 41,476。）schema.prisma 从 938 上游行降到 282，是 Phase 5 贡献的主要部分。
 
 **Phase 1 实际删掉 49,546 行 / 413 个文件**（方案估 49,149 / 444）。与清单的偏差三处，都写进了 commit message，摘要：
 
@@ -594,6 +600,32 @@ Phase 7 的两个文件删除 —— **子 agent 跑 `git rm` 会直接写索引
   lease+stale+cleanup），不是方案写的 7 个 —— 除 dub / video 外，portrait 与 local-business-promo 的
   refund reaper 也随模块一起删了。Phase 3 再删掉 connector 的，最终 4 个。等 Phase 3 做完一次改到位。
 
+### 六条验收标准逐条对账（2026-09-04 收尾）
+
+| # | 标准 | 结果 |
+|---|---|---|
+| 1 | 数字 ≤ 41,551 | ✅ **42,027**，按方案基线口径换算 **41,476** |
+| 2 | typecheck / build / test / k8s:validate 四条全过 | ✅ 8/8、2/2、1650 passed / 0 failed / 23 skipped、绿 |
+| 3 | 7 个模块功能不变 | ⚠️ 见下，服务端已验证，**UI 手工走查留给你** |
+| 4 | 源码里 `yun.claude` / `@yc/` 命中 0 | ✅ 0（docs 里剩的 15 处全是 ADR / 时间线史实） |
+| 5 | 每个 Phase 一个可 revert 的 commit，无跨 Phase 混提 | ✅ 12 个 commit，一处事故已修（见上） |
+| 6 | 兜底清单一致 | ✅ 实测 9 → 4 条链，已改（方案写的「9→7」是错的） |
+
+**第 2 条的细节**：测试从 2411 降到 1650，761 个差额逐项对得上（三个被删 workspace 167 +
+api 与 web 里随模块删掉的 594）；**skip 数一个没变（23）**，因为被删模块里没有 `.poc.` 文件。
+`scripts/check-test-report.mjs` 的假绿防护现在 ✅ 与新基线一致。
+
+**第 3 条**：服务端实测过 —— 起一个 api 进程，`/health` 与 `/ready` 都 ok
+（`/ready` 已不再探 billing），`/api/models` 返回新的 env 驱动目录（回落到
+`LLM_DEFAULT_MODEL` + `CHATGPT_MODELS` 那批，8 个模型），`/api/client-menu` 返回收缩后的菜单；
+7 个保留模块的路由全部 401（= 路由在、要鉴权，不是 404/500）：
+`/api/sessions` `/api/kb` `/api/assets` `/api/memory` `/api/agents`
+`/api/workflow/images/state` `/api/workflow/novels/projects`
+`/api/workflow/codex-pets/projects` `/api/workflow/article-workflow/projects`；
+已删模块的 7 条路由全部 404。**「生图和多平台图文的提交按钮必须还在」这个验收点由测试钉住**
+（`SubmitBar` 改名后两个调用点的用例都在跑）。**浏览器里逐个模块点一遍仍然需要你做** ——
+自动化能证明路由与 props 契约没坏，证明不了视觉与交互。
+
 ## 确认记录（2026-09-03，可开工）
 
 1. **两个待定文件已看过代码,结论写进 Phase 1**：`HumanImageGenerationFields.tsx` 确认删;`SubmitCostBar.tsx` **不能删**,它是整个提交栏,改到 Phase 2 只摘费用行
@@ -629,7 +661,8 @@ Phase 7 的两个文件删除 —— **子 agent 跑 `git rm` 会直接写索引
    | Phase 1 | ≤ 72,513 | ≤ 73,064 | **72,667** ✅（含提前量：`tool-market/` 387 行挪到 Phase 3） |
    | Phase 2 | ≤ 53,029 | ≤ 53,580 | **49,453** ✅（低了约 4,100） |
    | Phase 3 | ≤ 50,188 | ≤ 50,739 | **45,203** ✅（低了约 5,500） |
-   | Phase 7 | ≤ 41,551 | ≤ 42,102 | **42,732** ⚠️ 超 630 —— 全部来自 lockfile，见下 |
+   | Phase 7 | ≤ 41,551 | ≤ 42,102 | 42,732（Phase 5/6 未做时）|
+   | **Phase 5 + 6 收尾（全部做完）** | ≤ 41,551 | ≤ 42,102 | **42,027** ✅ 换算后 41,476 |
 
    **⚠️ 「重新生成 lockfile 让 8,545 行归零」这条机制上不成立，是本方案第二个量化错误。**
    `git blame` 认的是**内容**：`pnpm install` 只会删掉「随已删依赖消失的那些行」，没变的行仍然
@@ -642,7 +675,8 @@ Phase 7 的两个文件删除 —— **子 agent 跑 `git rm` 会直接写索引
    | | 上游行 | 其中 lockfile | 非 lockfile |
    |---|---|---|---|
    | 基线 | 122,213 | 8,545 | 113,668 |
-   | Phase 7 收尾 | 42,732 | 6,687 | **36,045** |
+   | Phase 7 收尾 | 42,732 | 6,687 | 36,045 |
+   | **Phase 6 收尾（全部做完）** | **42,027** | 6,687 | **35,340** |
    | 方案给 Phase 7 的目标 | 41,551 | 0（错） | 41,551 |
 
    **非 lockfile 的真实代码/文案比方案的目标低 5,506 行。** lockfile 是版本与哈希清单，
