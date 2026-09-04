@@ -467,6 +467,10 @@ git blame --line-porcelain HEAD -- <file> | grep -c '^491de0f'
 | Phase 1 | `1a4a0f2` | **72,667** | 560 | 1,087 |
 | Phase 4 | `92bdb30` | 72,667 | 560 | 1,087 |
 | Phase 2 | `ed5210c` | **49,453** | 413 | 915 |
+| 模型/配额收口 | `ce4ef91` | 48,724 | 412 | 916 |
+| Phase 3 | `e3abbe1` | **45,203** | 346 | 845 |
+| Phase 9 | `0c027e8` | 45,154 | 344 | 825 |
+| Phase 7 | `0a7cbb8` | **42,732**（非 lockfile **36,045**） | 338 | 814 |
 
 **Phase 1 实际删掉 49,546 行 / 413 个文件**（方案估 49,149 / 444）。与清单的偏差三处，都写进了 commit message，摘要：
 
@@ -543,8 +547,48 @@ HEAD 上 `pauseForImageApproval` 写的是
 取 `defaultBytes` / `membershipBytes` 才算得出来，Phase 5 的保留表清单里又留着 `KbQuotaGrant`。
 三者对不上。没敢自己删那个端点（删了同时违反 Phase 5 并砍掉 4 条业务用例）。
 
+### Phase 3 / 7 / 9 的落地要点
+
+**Phase 3**：`tool-market/`（Phase 1 记的提前量）一起走。桌宠专项按方案要求单独跑过 ——
+20 个文件 228 passed / 8 skipped，走服务端链路没被 connector 牵连。
+`chat/routes.ts` 的兜底文案不再提「电脑工具 / 上方工具调用记录」（那个 UI 没了，
+这条分支现在只可能由服务端内置 `get_time` 连续 256 轮触发），**但分支本身留着** ——
+`run.ts` 在 `stoppedByMaxIterations` 时不抛错，砍掉会让该轮静默 done 且不落库。
+
+**Phase 9**：多删了 `docs/fanout.md`（代码 Phase 1 就随模块走了，文档还留着 27 处 `@yc/`
+命令，openapi 里还挂着「工作流 · 批量生成」分组）。**史实一律保留** —— ADR-002 与
+chat/image/overview/pitfalls 里「yun-claude 底座期」的时间线全部不动，验收第 4 条按
+「受版本管理的**源码**里为 0」执行（实测源码 0 命中，docs 里剩的 15 处全是 ADR / 时间线）。
+`apps/api/.cc-tmp/` 的 15 个文件原来是被强制 add 进索引的（方案以为已被 .gitignore 覆盖），
+已 `git rm --cached` 脱离索引。新增 `LICENSE`（专有）与 `NOTICE`（67 个直接依赖的归属，
+许可从各包 package.json 实测读出）。**NOTICE 里两处要留意**：`gsap` 是 GreenSock 的
+「no charge」商用许可、**不是 OSS**；`jszip` 是 MIT OR GPL-3.0，按 MIT 一支用。
+
+**Phase 7**：Phase 6 名下的两项刻意没做（compose 的 billing 三件套、`50-billing.yaml` 与
+kustomization 里那行引用）。顺带清掉 6 个**零消费者**的 `_shared` 孤儿模块（逐个按符号名验过）：
+`safe-fetch`（113 上游行）、`vision-client`（97）、`workflow-media-loader`（56）、
+`image-delivered-tier`、`token-estimate`、`human-image-options` —— 它们是已删模块的共享件，
+带走 266 行，并让 `VIDEO_ANALYZE_MODEL` / `VIDEO_MAX_BYTES` / `MIMO_*` 这几族配置真正没了读取方。
+ci.yml 的安装 ffmpeg 那一步也删了（全仓已无 `hasFfmpeg` / `spawn("ffmpeg")` / `ffprobe` 消费者）。
+`docs` 的死链清零（原有 5 条指向已删文档）。
+
+**一处 commit 结构事故已修好**：Phase 9 的第一版 commit（`38d95ea`，已废弃）意外带进了
+Phase 7 的两个文件删除 —— **子 agent 跑 `git rm` 会直接写索引**，主进程随后 `git commit`
+就把它们一起提交了，还让 `pnpm k8s:validate` 在那个 commit 上是红的（删了
+`35-local-business-promo-worker.yaml` 却没删 kustomization 引用）。分支未 push，已用
+`reset --soft` + 剔除索引重提为 `0c027e8`，两个 Phase 重新分清。**以后用 workflow 并行改文件时，
+主进程提交前必须 `git diff --cached --name-only` 核一遍索引里有没有别的 Phase 的东西。**
+
 **待办（记在这里免得漏）**：
-- `.github/test-baseline.json` 的 `expectedWorkspaces` / `minPassed` / `maxSkipped` 三个数必须重测重写
+- ~~`.github/test-baseline.json` 三个数重测~~ → Phase 7 已做：`expectedWorkspaces` 10 → 7、
+  `minPassed` 2411 → 1650、`maxSkipped` 23 不变（被删模块里没有 `.poc.` 文件）。
+  761 个 passed 的差额逐项对得上：三个被删 workspace 共 167，其余 594 在 api 与 web
+  （api 1725 → 1035，**web 416 → 463 反而涨了 47**）。这次是本机实测值而非 CI 打印值，
+  三个已知差异逐条消掉了（ffmpeg 两边都没了、`S3_*` 显式 unset、DB 那一例实测全绿），
+  合并到 main 后以 CI 自己打印的数回填。
+- ~~兜底覆盖清单~~ → 已改：**实测 9 → 4 条链**（kb / image / article + 桌宠 lease+recovery，
+  另加 novel-worker 的 15s 主动恢复），不是方案写的 7 —— 除 dub / video 外，portrait、
+  local-business-promo 的 refund reaper 与 connector 的 reaper 也随模块走了。
   （desktop 整个 workspace 没了，api / web 删掉大量用例）。归 Phase 7「CI 收尾」一起做，用实测值。
 - 兜底覆盖清单（验收第 6 条）：reaper 从 9 个变成 **5 个**（connector / kb / article / image + 桌宠的
   lease+stale+cleanup），不是方案写的 7 个 —— 除 dub / video 外，portrait 与 local-business-promo 的
@@ -584,8 +628,25 @@ HEAD 上 `pauseForImageApproval` 写的是
    |---|---|---|---|
    | Phase 1 | ≤ 72,513 | ≤ 73,064 | **72,667** ✅（含提前量：`tool-market/` 387 行挪到 Phase 3） |
    | Phase 2 | ≤ 53,029 | ≤ 53,580 | **49,453** ✅（低了约 4,100） |
-   | Phase 3 | ≤ 50,188 | ≤ 50,739 | 待测（Phase 2 收尾已在门槛内） |
-   | Phase 7 | ≤ 41,551 | ≤ 42,102 | 待测 |
+   | Phase 3 | ≤ 50,188 | ≤ 50,739 | **45,203** ✅（低了约 5,500） |
+   | Phase 7 | ≤ 41,551 | ≤ 42,102 | **42,732** ⚠️ 超 630 —— 全部来自 lockfile，见下 |
+
+   **⚠️ 「重新生成 lockfile 让 8,545 行归零」这条机制上不成立，是本方案第二个量化错误。**
+   `git blame` 认的是**内容**：`pnpm install` 只会删掉「随已删依赖消失的那些行」，没变的行仍然
+   归属导入 commit。实测把 `pnpm-lock.yaml` 删掉从零重生成，产物与 `pnpm install --lockfile-only`
+   **逐字节一致**（pnpm 的 lockfile 输出是确定性的），所以这 6,687 行只能靠真的改依赖版本才会变，
+   而那是依赖升级、不是解耦。
+
+   按「除掉 lockfile」的口径看才是真实进度：
+
+   | | 上游行 | 其中 lockfile | 非 lockfile |
+   |---|---|---|---|
+   | 基线 | 122,213 | 8,545 | 113,668 |
+   | Phase 7 收尾 | 42,732 | 6,687 | **36,045** |
+   | 方案给 Phase 7 的目标 | 41,551 | 0（错） | 41,551 |
+
+   **非 lockfile 的真实代码/文案比方案的目标低 5,506 行。** lockfile 是版本与哈希清单，
+   方案自己也写着「无版权意义」，所以 Phase 8 的实际待重写量按 36,045 记，不是 42,732。
 
    Phase 4~6 对行数的影响没单独量过（Phase 5 删 39 个 model 会让 `schema.prisma` 的上游行再降一些），实测只要不高于上一行即可。
 
