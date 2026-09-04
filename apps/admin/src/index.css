@@ -1,43 +1,73 @@
-/* Design system tokens */
+/* 运营后台的整张样式表（apps/admin 只有这一张）。
+ *
+ * 三条约定，改之前先看一眼：
+ * 1. 章节顺序就是层叠顺序。「登录页」必须留在最后 —— .login-form button 与 button.btn
+ *    特异度相同（都是 0,1,1），只能靠写在后面压住它的内边距与字号。
+ * 2. 状态（:hover / .active）和断点（900 / 640 两档）就近嵌在各自组件里，不再另开
+ *    文件末尾的响应式大段；断点只有这两档，别加第三档。
+ * 3. 嵌套只用在「本来就是后代选择器」的地方，特异度与拍平写法一致。像 .nav-item 这种
+ *    裸类不往 .side 里塞 —— 那会把 0,1,0 抬成 0,2,0，跟 .nav-item.active 打平。
+ */
+
 :root {
-  /* Colors - backgrounds */
+  /* 底色与分隔线 */
   --bg: #f6f5f2;
   --surface: #ffffff;
   --surface2: #fbfaf8;
   --border: #e8e4dd;
   --line: #f0ede7;
+  --chip: #f0ede7;
 
-  /* Colors - text */
+  /* 文字三级灰 */
   --ink: #211e1a;
   --ink2: #6d685f;
   --ink3: #a39d92;
 
-  /* Colors - accent */
+  /* 主色 */
   --accent: #4f46e5;
   --accent2: #eef0fe;
-  --accent-ink: #3730a3;
+  --accent-hover: #4338ca;
+  --brand-grad: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
 
-  /* Colors - semantic */
+  /* 语义色，各配一个底色给徽标用 */
   --good: #15803d;
   --goodbg: #e8f5ec;
   --warn: #b45309;
   --warnbg: #fbeedd;
   --bad: #b91c1c;
   --badbg: #fbe9e9;
+  --bad-hover: #a01818;
 
-  /* Colors - sidebar */
+  /* 深色侧栏自成一套 */
   --side: #211f1b;
   --side2: #2c2a25;
   --side-ink: #cdc7bb;
   --side-ink2: #8b857a;
 
-  /* Fonts */
+  /* 字体：数字走等宽表格数字，正文跟随系统中文字体 */
   --num: 'Space Grotesk', ui-sans-serif, system-ui;
   --ui: ui-sans-serif, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
 
-  /* Spacing & radius */
+  /* 4px 栅格。7px / 9px / 6px 这类刻意的半格值直接写死，不进标度 */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+
+  /* 圆角 */
+  --r-sm: 4px;
   --r-ctl: 8px;
   --r-panel: 12px;
+  --r-pill: 999px;
+
+  /* 过渡、遮罩、焦点环、投影 */
+  --t: 0.2s ease;
+  --mask: rgba(0, 0, 0, 0.45);
+  --scrim: rgba(0, 0, 0, 0.5);
+  --focus-ring: 0 0 0 3px var(--accent2);
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.12);
 
   font-family: var(--ui);
   color: var(--ink);
@@ -49,204 +79,245 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--ink);
+  background: var(--bg);
 }
 
-.app {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 16px;
-}
+/* ═══ 框架：左侧栏 + 右侧「顶栏 / 正文」两段 ═══ */
 
-/* Frame layout */
 .frame {
+  position: fixed;
+  inset: 0;
   display: grid;
   grid-template-columns: 212px 1fr;
-  height: 100vh;
   width: 100vw;
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  height: 100vh;
   background: var(--bg);
+
+  & .side {
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background: var(--side);
+    border-right: 1px solid var(--side2);
+  }
+
+  & .right-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  & .top {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--sp-4);
+    align-items: center;
+    min-height: 60px;
+    padding: var(--sp-3) var(--sp-5);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+
+  & .body {
+    flex: 1;
+    padding: var(--sp-5) 22px;
+    overflow-y: auto;
+  }
+
+  /* 窄屏：栅格塌成一列，侧栏改成从左滑出的浮层 */
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+
+    & .side {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 200;
+      width: 212px;
+      height: 100vh;
+      transition: translate 0.3s ease;
+      translate: -100% 0;
+
+      &.open {
+        translate: 0 0;
+      }
+    }
+
+    & .body {
+      padding: var(--sp-4) var(--sp-3);
+    }
+  }
+
+  @media (max-width: 640px) {
+    & .body {
+      padding: var(--sp-3);
+    }
+  }
 }
 
-.frame .side {
-  background: var(--side);
-  border-right: 1px solid var(--side2);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  z-index: 100;
+/* ═══ 侧栏内部：品牌 / 导航 / 账号 ═══ */
+
+.side {
+  & .brand {
+    display: flex;
+    flex-shrink: 0;
+    gap: var(--sp-3);
+    align-items: center;
+    padding: var(--sp-4);
+    border-bottom: 1px solid var(--side2);
+
+    @media (max-width: 640px) {
+      padding: var(--sp-3);
+    }
+  }
+
+  & .brand-logo {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--brand-grad);
+    border-radius: var(--r-ctl);
+
+    @media (max-width: 640px) {
+      width: 32px;
+      height: 32px;
+      font-size: 16px;
+    }
+  }
+
+  & .brand-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  & .brand-name {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--side-ink);
+
+    @media (max-width: 640px) {
+      font-size: 12px;
+    }
+  }
+
+  & .brand-desc {
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--side-ink2);
+
+    @media (max-width: 640px) {
+      font-size: 10px;
+    }
+  }
 }
 
-.frame .right-col {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.frame .top {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 20px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 60px;
-  flex-shrink: 0;
-}
-
-.frame .body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px 22px;
-}
-
-/* Hide hamburger by default (desktop) */
-.hamburger {
-  display: none;
-}
-
-.sidebar-backdrop {
-  display: none;
-}
-
-/* Brand area */
-.side .brand {
-  padding: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--side2);
-  flex-shrink: 0;
-}
-
-.side .brand-logo {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.side .brand-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.side .brand-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--side-ink);
-  line-height: 1.2;
-}
-
-.side .brand-desc {
-  font-size: 11px;
-  color: var(--side-ink2);
-  margin-top: 2px;
-}
-
-/* Navigation container */
 .nav-container {
   flex: 1;
+  padding: var(--sp-3) 0;
   overflow-y: auto;
-  padding: 12px 0;
 }
 
-/* Group */
 .navgrp {
-  margin-bottom: 8px;
+  margin-bottom: var(--sp-2);
 }
 
 .navgrp-label {
+  display: block;
+  padding: var(--sp-2) var(--sp-3);
   font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
+  text-transform: uppercase;
   color: var(--side-ink2);
-  padding: 8px 12px;
-  display: block;
 }
 
-/* Navigation item */
 .nav-item {
   display: flex;
-  align-items: center;
   gap: 10px;
+  align-items: center;
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 13px;
+  text-align: left;
+  color: var(--side-ink);
+  cursor: pointer;
   background: none;
   border: none;
   border-left: 2px solid transparent;
-  color: var(--side-ink);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-  text-align: left;
-}
+  transition: background var(--t), color var(--t), border-color var(--t);
 
-.nav-item:hover:not(.active) {
-  background: var(--side2);
-  color: var(--side-ink);
-}
+  &:hover:not(.active) {
+    background: var(--side2);
+  }
 
-.nav-item.active {
-  background: var(--accent);
-  color: #fff;
-  border-left-color: var(--accent);
-  font-weight: 600;
+  &.active {
+    font-weight: 600;
+    color: #fff;
+    background: var(--accent);
+    border-left-color: var(--accent);
+  }
+
+  @media (max-width: 640px) {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
 }
 
 .nav-icon {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
+  width: 16px;
+  height: 16px;
   color: currentColor;
 }
 
 .nav-label {
   flex: 1;
   min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-/* Profile zone */
 .profile-zone {
-  border-top: 1px solid var(--side2);
-  padding: 12px;
   display: flex;
-  align-items: center;
-  gap: 10px;
   flex-shrink: 0;
+  gap: 10px;
+  align-items: center;
+  padding: var(--sp-3);
+  border-top: 1px solid var(--side2);
+
+  @media (max-width: 640px) {
+    padding: 10px;
+  }
 }
 
 .profile-avatar {
-  width: 32px;
-  height: 32px;
-  background: var(--accent);
-  border-radius: 50%;
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  width: 32px;
+  height: 32px;
   font-size: 12px;
   font-weight: 600;
-  flex-shrink: 0;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 50%;
+
+  @media (max-width: 640px) {
+    width: 28px;
+    height: 28px;
+    font-size: 11px;
+  }
 }
 
 .profile-info {
@@ -256,52 +327,46 @@ body {
 }
 
 .profile-name {
-  color: var(--side-ink);
   font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--side-ink);
 }
 
 .profile-role {
-  color: var(--side-ink2);
   font-size: 11px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--side-ink2);
 }
 
 .profile-logout {
-  background: none;
-  border: none;
+  flex-shrink: 0;
+  padding: var(--sp-1) var(--sp-2);
+  font-size: 11px;
+  white-space: nowrap;
   color: var(--side-ink);
   cursor: pointer;
-  padding: 4px 8px;
-  font-size: 11px;
-  border-radius: 4px;
-  transition: background 0.2s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  transition: background var(--t);
+
+  &:hover {
+    background: var(--side2);
+  }
 }
 
-.profile-logout:hover {
-  background: var(--side2);
-}
-
-/* Top bar breadcrumbs, title, actions */
-.top {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
+/* ═══ 顶栏：面包屑 + 标题 + 操作区 ═══ */
 
 .top-breadcrumbs {
+  display: flex;
   flex: 0 0 auto;
+  gap: 6px;
+  align-items: center;
   font-size: 12px;
   color: var(--ink3);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+
+  /* 手机上没横向空间，面包屑整条收掉，只留标题 */
+  @media (max-width: 640px) {
+    display: none;
+  }
 }
 
 .breadcrumb-group {
@@ -317,118 +382,144 @@ body {
 }
 
 .top-title {
+  flex: 1;
+  margin: 0;
   font-size: 18px;
   font-weight: 700;
-  margin: 0;
   color: var(--ink);
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+  @media (max-width: 900px) {
+    font-size: 16px;
+  }
+
+  @media (max-width: 640px) {
+    font-size: 14px;
+  }
 }
 
 .top-actions {
-  flex: 0 0 auto;
   display: flex;
+  flex: 0 0 auto;
+  gap: var(--sp-2);
   align-items: center;
-  gap: 8px;
 }
 
-/* Buttons */
+/* 侧栏与顶栏里的单行文字统一截断，别把栅格顶开 */
+.nav-label,
+.profile-name,
+.profile-role,
+.top-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* 汉堡键与背后的遮罩只在窄屏出现，宽屏两者都不渲染 */
+.hamburger {
+  display: none;
+
+  @media (max-width: 900px) {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    padding: var(--sp-1);
+    color: var(--ink);
+    cursor: pointer;
+    background: none;
+    border: none;
+
+    &:hover {
+      opacity: 0.7;
+    }
+  }
+}
+
+.sidebar-backdrop {
+  display: none;
+
+  @media (max-width: 900px) {
+    position: fixed;
+    inset: 0;
+    z-index: 150;
+    display: block;
+    background: var(--scrim);
+  }
+}
+
+/* ═══ 按钮 ═══ */
+
 button.btn {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--r-ctl);
   padding: 7px 14px;
-  cursor: pointer;
   font-size: 13px;
   font-weight: 500;
-  transition: background 0.2s ease;
+  color: #fff;
+  cursor: pointer;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--r-ctl);
+  transition: background var(--t);
+
+  &:hover:not(:disabled) {
+    background: var(--accent-hover);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  &.sm {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
 }
 
-button.btn:hover:not(:disabled) {
-  background: #4338ca;
-}
-
-button.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-button.btn.ghost {
-  background: #fff;
-  border: 1px solid var(--border);
-  color: var(--ink);
-}
-
-button.btn.ghost:hover:not(:disabled) {
-  background: var(--surface2);
-}
-
-/* Backward compatibility: .btn.gray maps to ghost */
+/* ghost 与 gray 是同一个外观：gray 是早期页面留下的别名，Users 页还在用 */
+button.btn.ghost,
 button.btn.gray {
+  color: var(--ink);
   background: #fff;
   border: 1px solid var(--border);
-  color: var(--ink);
 }
 
+button.btn.ghost:hover:not(:disabled),
 button.btn.gray:hover:not(:disabled) {
   background: var(--surface2);
 }
 
+/* danger 写在 ghost 之后：两者特异度相同，谁在后谁赢 —— 保持和改写前一致 */
 button.btn.danger {
   background: var(--bad);
+
+  &:hover:not(:disabled) {
+    background: var(--bad-hover);
+  }
 }
 
-button.btn.danger:hover:not(:disabled) {
-  background: #a01818;
-}
+/* ═══ 输入控件 ═══ */
 
-button.btn.sm {
-  padding: 5px 10px;
-  font-size: 12px;
-}
-
-/* Form controls */
 input,
 select,
 textarea {
+  padding: 7px 9px;
+  font-family: inherit;
+  font-size: 13px;
   border: 1px solid var(--border);
   border-radius: var(--r-ctl);
-  padding: 7px 9px;
-  font-size: 13px;
-  font-family: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color var(--t), box-shadow var(--t);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent2);
-}
-
-.input,
-.select,
-.textarea {
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
-  padding: 7px 9px;
-  font-size: 13px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.input:focus,
-.select:focus,
-.textarea:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent2);
+  box-shadow: var(--focus-ring);
 }
 
-/* Panels */
+/* ═══ 面板与卡片 ═══ */
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -436,54 +527,65 @@ textarea:focus {
 }
 
 .panel-h {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--line);
   display: flex;
   align-items: center;
+  padding: 14px var(--sp-4);
+  border-bottom: 1px solid var(--line);
+
+  & h3 {
+    margin: 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--ink);
+  }
 }
 
-.panel-h h3 {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--ink);
+/* 面板正文与标题右侧的操作区：原先写死在 ui.tsx 的内联样式里，收回样式表 */
+.panel-b {
+  padding: var(--sp-4);
 }
 
-/* Card (backward compat, also new look) */
+.panel-actions {
+  margin-left: auto;
+}
+
 .card {
+  padding: var(--sp-4);
+  margin-bottom: var(--sp-4);
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-panel);
-  padding: 16px;
-  margin-bottom: 16px;
 }
 
-/* Table */
+/* ═══ 表格 ═══
+ * .tbl 与裸 table 一视同仁：页面上两种写法都有，样式不能只认一种。
+ */
+
 .tbl,
 table {
   width: 100%;
-  border-collapse: collapse;
   font-size: 12.5px;
   background: var(--surface);
+  border-collapse: collapse;
 }
 
 .tbl th,
 table th {
+  padding: 9px var(--sp-4);
   font-size: 10.5px;
   font-weight: 600;
-  color: var(--ink3);
-  text-transform: uppercase;
   letter-spacing: 0.6px;
-  border-bottom: 1px solid var(--line);
-  padding: 9px 16px;
   text-align: left;
+  text-transform: uppercase;
+  color: var(--ink3);
+  border-bottom: 1px solid var(--line);
 }
 
 .tbl td,
 table td {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--line);
+  padding: 10px var(--sp-4);
   color: var(--ink);
+  border-bottom: 1px solid var(--line);
 }
 
 .tbl tr:hover td,
@@ -491,6 +593,7 @@ table tr:hover td {
   background: var(--surface2);
 }
 
+/* 数字列右对齐 + 等宽表格数字，翻页时列宽不跳 */
 .tbl .num,
 table .num {
   font-family: var(--num);
@@ -500,68 +603,80 @@ table .num {
 
 .tbl.compact th,
 .tbl.compact td {
-  padding: 8px 10px;
+  padding: var(--sp-2) 10px;
   font-size: 12px;
 }
 
-/* Pills / badges */
+/* ═══ 徽标与指标 ═══ */
+
 .pill {
   display: inline-flex;
-  border-radius: 999px;
+  gap: var(--sp-1);
+  align-items: center;
+  padding: 3px 9px;
   font-size: 11px;
   font-weight: 600;
-  padding: 3px 9px;
-  align-items: center;
-  gap: 4px;
-  background: #f0ede7;
   color: var(--ink2);
+  background: var(--chip);
+  border-radius: var(--r-pill);
+
+  /* kind="n"（中性）就是基础态本身，不再单列一条 */
+  &.g {
+    color: var(--good);
+    background: var(--goodbg);
+  }
+
+  &.w {
+    color: var(--warn);
+    background: var(--warnbg);
+  }
+
+  &.b {
+    color: var(--bad);
+    background: var(--badbg);
+  }
 }
 
-.pill.g {
-  background: var(--goodbg);
-  color: var(--good);
-}
-
-.pill.w {
-  background: var(--warnbg);
-  color: var(--warn);
-}
-
-.pill.b {
-  background: var(--badbg);
-  color: var(--bad);
-}
-
-.pill.n {
-  background: #f0ede7;
-  color: var(--ink2);
-}
-
-/* Stats grid */
+/* 1px 间隙 + 容器底色，直接把发丝分隔线描出来，不用给每张卡加边框 */
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 1px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
   overflow: hidden;
   background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
 }
 
-.analytics-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--sp-4);
+  background: var(--surface);
+
+  & .k {
+    font-size: 11.5px;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--ink2);
+  }
+
+  & .v {
+    font-family: var(--num);
+    font-size: 25px;
+    font-weight: 600;
+    font-feature-settings: 'tnum';
+    color: var(--ink);
+  }
 }
 
-.analytics-grid.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
+/* ═══ 用户详情弹窗里的分区与时间线 ═══ */
 
 .user-detail {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--sp-4);
 }
 
 .detail-section h4 {
@@ -573,7 +688,7 @@ table .num {
 .timeline-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 
 .timeline-item {
@@ -581,573 +696,305 @@ table .num {
   grid-template-columns: 150px 80px 1fr;
   gap: 10px;
   align-items: start;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface2);
+  padding: var(--sp-2) 10px;
   font-size: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+
+  /* 时间 / 类型 / 内容 三列在窄屏挤不开，改成竖排 */
+  @media (max-width: 900px) {
+    grid-template-columns: 1fr;
+  }
 }
 
 .timeline-title {
-  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--sp-1);
+  min-width: 0;
 }
 
 .timeline-title-text {
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  line-height: 1.55;
 }
 
+/* font: inherit 会顺手重置 font-size，所以 font-size 只能写在它后面 */
 .link-btn {
   align-self: flex-start;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
   padding: 0;
   font: inherit;
   font-size: 12px;
+  color: var(--accent);
   cursor: pointer;
-}
+  background: transparent;
+  border: 0;
 
-.link-btn:hover {
-  text-decoration: underline;
-}
-
-@media (max-width: 900px) {
-  .analytics-grid,
-  .analytics-grid.two {
-    grid-template-columns: 1fr;
-  }
-
-  .timeline-item {
-    grid-template-columns: 1fr;
+  &:hover {
+    text-decoration: underline;
   }
 }
 
-.stat {
-  background: var(--surface);
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
+/* ═══ 零散工具类 ═══ */
 
-.stat .k {
-  font-size: 11.5px;
-  color: var(--ink2);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-}
-
-.stat .v {
-  font-family: var(--num);
-  font-weight: 600;
-  font-size: 25px;
-  color: var(--ink);
-  font-feature-settings: 'tnum';
-}
-
-.stat .d {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ink3);
-}
-
-.stat .d.up {
-  color: var(--good);
-}
-
-.stat .d.down {
-  color: var(--bad);
-}
-
-/* Layout utilities */
+/* 页面里「一排筛选控件」的通用容器 */
 .row {
   display: flex;
-  gap: 8px;
-  align-items: center;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-bottom: var(--sp-3);
 }
 
 .muted {
   color: var(--ink3);
 }
 
-/* Toast notifications */
+/* Field 的外壳：标签在上、控件在下 */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: 13px;
+}
+
+/* ═══ toast ═══
+ * 右上角浮一条，2.5 秒后由 useToast 摘掉；入场动画靠每次自增的 key 重播。
+ */
+
 .toast {
   position: fixed;
-  top: 16px;
-  right: 16px;
-  padding: 10px 16px;
-  border-radius: var(--r-panel);
-  color: #fff;
-  font-size: 14px;
+  top: var(--sp-4);
+  right: var(--sp-4);
   z-index: 50;
-  animation: slideIn 0.3s ease;
+  padding: 10px var(--sp-4);
+  font-size: 14px;
+  color: #fff;
+  border-radius: var(--r-panel);
+  animation: toast-in 0.3s ease;
+
+  &.ok {
+    background: var(--good);
+  }
+
+  &.err {
+    background: var(--bad);
+  }
 }
 
-@keyframes slideIn {
+/* 只写 from：缺省的 to 就是元素自身的值（translate: none / opacity: 1） */
+@keyframes toast-in {
   from {
-    transform: translateX(400px);
     opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
+    translate: 400px 0;
   }
 }
 
-.toast.ok {
-  background: var(--good);
-}
+/* ═══ 弹窗 ═══
+ * 遮罩负责居中，卡片限高 80vh、把溢出让给 .modal-body 滚。
+ * 宽度由调用方经 style 传（ui.tsx 里唯一保留的内联样式），这里不写 width。
+ * 内部各块保持裸类写法 —— 原样式表就是裸类，塞进 .modal-card 会把 0,1,0 抬成 0,2,0。
+ */
 
-.toast.err {
-  background: var(--bad);
-}
-
-/* Modal */
 .modal-mask {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
+  inset: 0;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  background: var(--mask);
   backdrop-filter: blur(2px);
-  animation: fadeIn 0.2s ease;
+  animation: mask-in 0.2s ease;
 }
 
-@keyframes fadeIn {
+@keyframes mask-in {
   from {
     opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 
 .modal-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-panel);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12);
   display: flex;
   flex-direction: column;
   max-width: calc(100vw - 24px);
   max-height: 80vh;
   overflow: hidden;
-  animation: slideUp 0.3s ease;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-panel);
+  box-shadow: var(--shadow-modal);
+  animation: card-in 0.3s ease;
 }
 
-@keyframes slideUp {
+@keyframes card-in {
   from {
-    transform: translateY(20px);
     opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
+    translate: 0 20px;
   }
 }
 
 .modal-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
   display: flex;
+  gap: var(--sp-3);
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  padding: var(--sp-4) var(--sp-5);
+  border-bottom: 1px solid var(--line);
 }
 
 .modal-title {
+  flex: 1;
   margin: 0;
   font-size: 16px;
   font-weight: 600;
   color: var(--ink);
-  flex: 1;
 }
 
 .modal-close {
-  background: none;
-  border: none;
-  color: var(--ink2);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s ease, color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-}
+  padding: var(--sp-1) var(--sp-2);
+  font-size: 18px;
+  color: var(--ink2);
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: var(--r-sm);
+  transition: background var(--t), color var(--t);
 
-.modal-close:hover {
-  background: var(--surface2);
-  color: var(--ink);
+  &:hover {
+    color: var(--ink);
+    background: var(--surface2);
+  }
 }
 
 .modal-body {
   flex: 1;
-  overflow: auto;
-  padding: 20px;
+  padding: var(--sp-5);
   font-size: 13px;
   line-height: 1.6;
+  overflow: auto;
 }
 
-.panel svg {
-  display: block;
-  max-width: 100%;
-  height: auto;
+/* footer 自己就是右对齐的 flex 行；footer-actions 给「按钮组作为 children 传进来」的
+ * 调用方用（useConfirm 走这条），两层嵌着也不会打架。 */
+.modal-footer,
+.modal-footer-actions {
+  display: flex;
+  gap: var(--sp-2);
+  justify-content: flex-end;
 }
 
 .modal-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--line);
+  padding: var(--sp-4) var(--sp-5);
   background: var(--surface2);
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  border-top: 1px solid var(--line);
 }
 
-.modal-footer-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
+/* ═══ 登录页 ═══
+ * 必须留在文件最后：.login-form button 与 button.btn 特异度相同（都是 0,1,1），
+ * 靠源码顺序压住它的内边距与字号。往下追加新章节前先想清楚这一点。
+ */
 
-/* Drawer */
-.drawer-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1000;
-  animation: fadeIn 0.2s ease;
-}
-
-.drawer-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 420px;
-  height: 100vh;
-  background: var(--surface);
-  border-left: 1px solid var(--border);
-  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
-  display: flex;
-  flex-direction: column;
-  z-index: 1001;
-  animation: slideInRight 0.3s ease;
-}
-
-@keyframes slideInRight {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
-.drawer-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.drawer-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-  flex: 1;
-}
-
-.drawer-close {
-  background: none;
-  border: none;
-  color: var(--ink2);
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background 0.2s ease, color 0.2s ease;
+.login-page {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-}
-
-.drawer-close:hover {
-  background: var(--surface2);
-  color: var(--ink);
-}
-
-.drawer-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  font-size: 13px;
-}
-
-.drawer-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--line);
-  background: var(--surface2);
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  flex-shrink: 0;
-}
-
-/* Responsive drawer */
-@media (max-width: 640px) {
-  .drawer-panel {
-    width: 100%;
-    max-width: 100%;
-  }
-}
-
-/* Login page */
-.login-page {
   width: 100%;
   height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: var(--sp-4);
   background: linear-gradient(135deg, #f6f5f2 0%, #fbfaf8 100%);
-  padding: 16px;
 }
 
 .login-container {
+  width: 100%;
+  max-width: 360px;
+  padding: 40px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-panel);
-  padding: 40px;
-  width: 100%;
-  max-width: 360px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-card);
+
+  @media (max-width: 640px) {
+    padding: 32px var(--sp-5);
+  }
 }
 
 .login-brand {
-  text-align: center;
   margin-bottom: 32px;
-}
+  text-align: center;
 
-.login-brand .brand-logo {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #4f46e5 0%, #3730a3 100%);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 24px;
-  margin: 0 auto 16px;
-}
+  /* 复用侧栏那三个类名，但登录页要大一号，所以整套在这儿重写 */
+  & .brand-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    margin: 0 auto var(--sp-4);
+    font-size: 24px;
+    font-weight: 700;
+    color: #fff;
+    background: var(--brand-grad);
+    border-radius: var(--r-panel);
 
-.login-brand .brand-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0;
-  margin-bottom: 4px;
-}
+    @media (max-width: 640px) {
+      width: 48px;
+      height: 48px;
+      font-size: 20px;
+    }
+  }
 
-.login-brand .brand-desc {
-  font-size: 13px;
-  color: var(--ink2);
-  margin: 0;
+  & .brand-name {
+    margin: 0 0 var(--sp-1);
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--ink);
+
+    @media (max-width: 640px) {
+      font-size: 16px;
+    }
+  }
+
+  & .brand-desc {
+    margin: 0;
+    font-size: 13px;
+    color: var(--ink2);
+  }
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
+  gap: var(--sp-3);
 
-.login-form input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
-  font-size: 13px;
-  font-family: inherit;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
+  /* 只写与上面 input / button.btn 基础规则不同的那几条。边框、圆角、focus 环、
+   * hover 底色的值本来就一模一样，重复一遍只会多两处要同步维护的地方。 */
+  & input {
+    width: 100%;
+    padding: 10px var(--sp-3);
 
-.login-form input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent2);
-}
-
-.login-form input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.login-form button {
-  width: 100%;
-  padding: 10px 16px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--r-ctl);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.login-form button:hover:not(:disabled) {
-  background: #4338ca;
-}
-
-.login-form button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Responsive: tablet and mobile */
-@media (max-width: 900px) {
-  .frame {
-    grid-template-columns: 1fr;
+    &:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
   }
 
-  .frame .side {
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 212px;
-    height: 100vh;
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
-    z-index: 200;
-  }
-
-  .frame .side.open {
-    transform: translateX(0);
-  }
-
-  .sidebar-backdrop {
-    display: block;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 150;
-  }
-
-  .hamburger {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px;
-    color: var(--ink);
-    flex-shrink: 0;
-  }
-
-  .hamburger:hover {
-    opacity: 0.7;
-  }
-
-  .top-title {
-    font-size: 16px;
-  }
-
-  .frame .body {
-    padding: 16px 12px;
-  }
-}
-
-@media (max-width: 640px) {
-  .frame .brand {
-    padding: 12px;
-  }
-
-  .side .brand-logo {
-    width: 32px;
-    height: 32px;
-    font-size: 16px;
-  }
-
-  .side .brand-name {
-    font-size: 12px;
-  }
-
-  .side .brand-desc {
-    font-size: 10px;
-  }
-
-  .nav-item {
-    padding: 6px 10px;
-    font-size: 12px;
-  }
-
-  .profile-zone {
-    padding: 10px;
-  }
-
-  .profile-avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 11px;
-  }
-
-  .top {
-    padding: 10px 12px;
-    gap: 10px;
-    min-height: 50px;
-  }
-
-  .top-breadcrumbs {
-    display: none;
-  }
-
-  .top-title {
+  & button {
+    width: 100%;
+    padding: 10px var(--sp-4);
     font-size: 14px;
-  }
+    font-weight: 600;
 
-  .frame .body {
-    padding: 12px;
-  }
-
-  .login-container {
-    padding: 32px 20px;
-  }
-
-  .login-brand .brand-logo {
-    width: 48px;
-    height: 48px;
-    font-size: 20px;
-  }
-
-  .login-brand .brand-name {
-    font-size: 16px;
+    /* 通用按钮禁用态是 0.5，登录键刻意浅一档 */
+    &:disabled {
+      opacity: 0.6;
+    }
   }
 }

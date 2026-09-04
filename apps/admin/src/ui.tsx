@@ -1,34 +1,74 @@
-import { useState, useCallback, useEffect, ReactNode } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+
+/*
+ * 后台的一套 UI 原语：错误文案、toast、弹窗、确认、面板、徽标、指标卡。
+ * 只服务 apps/admin 内部。样式一律落在 index.css 的对应小节，这里不写内联样式
+ * （唯一例外是 Modal 的 width —— 它由调用方按内容宽度决定）。
+ */
+
+/** 拼 className：滤掉 false/空值，不留 "btn " 这种尾随空格。 */
+function cx(...parts: (string | false | null | undefined)[]): string {
+  return parts.filter(Boolean).join(" ");
+}
+
+const FALLBACK_ERROR = "操作失败";
+
+/** 把 catch 到的任意值收敛成一句能直接贴到 toast 上的话。 */
+export function errMsg(cause: unknown): string {
+  if (cause instanceof Error) return cause.message.trim() || FALLBACK_ERROR;
+  if (typeof cause === "string") return cause.trim() || FALLBACK_ERROR;
+  return FALLBACK_ERROR;
+}
+
+/* ——— toast ——— */
 
 export type ToastKind = "ok" | "err";
+
+const TOAST_MS = 2500;
+
+interface Toast {
+  /** 每次 show 自增，当 key 用，让入场动画重播 */
+  seq: number;
+  text: string;
+  kind: ToastKind;
+}
+
 export function useToast() {
-  const [msg, setMsg] = useState<{ text: string; kind: ToastKind } | null>(null);
-  const show = useCallback((text: string, kind: ToastKind = "ok") => {
-    setMsg({ text, kind });
-    setTimeout(() => setMsg(null), 2500);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopTimer = useCallback(() => {
+    if (timer.current === null) return;
+    clearTimeout(timer.current);
+    timer.current = null;
   }, []);
-  const node = msg ? <div className={`toast ${msg.kind}`}>{msg.text}</div> : null;
+
+  // 卸载时收掉还没到点的定时器，别往已销毁的组件里 setState
+  useEffect(() => stopTimer, [stopTimer]);
+
+  const show = useCallback(
+    (text: string, kind: ToastKind = "ok") => {
+      stopTimer();
+      setToast((prev) => ({ seq: (prev?.seq ?? 0) + 1, text, kind }));
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        setToast(null);
+      }, TOAST_MS);
+    },
+    [stopTimer],
+  );
+
+  const node = toast && (
+    <div key={toast.seq} className={cx("toast", toast.kind)} role="status">
+      {toast.text}
+    </div>
+  );
+
   return { show, node };
 }
 
-interface FieldProps {
-  label: string;
-  children: React.ReactNode;
-}
-export function Field({ label, children }: FieldProps) {
-  return (
-    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-      <span className="muted">{label}</span>
-      {children}
-    </label>
-  );
-}
+/* ——— 弹窗 ——— */
 
-export function errMsg(e: unknown): string {
-  return e instanceof Error ? e.message : "操作失败";
-}
-
-/* === Modal === */
 interface ModalProps {
   open: boolean;
   title: string;
@@ -38,72 +78,47 @@ interface ModalProps {
   width?: string;
 }
 
-export function Modal({ open, title, onClose, children, footer, width = "520px" }: ModalProps) {
+/** open 期间才挂 Esc 监听，关掉就摘掉。 */
+function useEscapeKey(open: boolean, onEscape: () => void): void {
   useEffect(() => {
     if (!open) return;
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onEscape();
     };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [open, onClose]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onEscape]);
+}
 
+export function Modal({ open, title, onClose, children, footer, width = "520px" }: ModalProps) {
+  useEscapeKey(open, onClose);
   if (!open) return null;
-
   return (
+    // 点遮罩关闭；卡片这层把冒泡截断，点卡片内部不会顺手关掉
     <div className="modal-mask" onClick={onClose}>
-      <div className="modal-card" style={{ width }} onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-card"
+        style={{ width }}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="modal-header">
           <h2 className="modal-title">{title}</h2>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
+          <button type="button" className="modal-close" aria-label="关闭" onClick={onClose}>
             ✕
           </button>
         </div>
         <div className="modal-body">{children}</div>
-        {footer && <div className="modal-footer">{footer}</div>}
+        {footer ? <div className="modal-footer">{footer}</div> : null}
       </div>
     </div>
   );
 }
 
-/* === Drawer === */
-interface DrawerProps {
-  open: boolean;
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  footer?: ReactNode;
-}
+/* ——— 确认 ——— */
 
-export function Drawer({ open, title, onClose, children, footer }: DrawerProps) {
-  useEffect(() => {
-    if (!open) return;
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", handleEsc);
-    return () => document.removeEventListener("keydown", handleEsc);
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  return (
-    <div className="drawer-mask" onClick={onClose}>
-      <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
-        <div className="drawer-header">
-          <h2 className="drawer-title">{title}</h2>
-          <button className="drawer-close" onClick={onClose} aria-label="Close">
-            ✕
-          </button>
-        </div>
-        <div className="drawer-body">{children}</div>
-        {footer && <div className="drawer-footer">{footer}</div>}
-      </div>
-    </div>
-  );
-}
-
-/* === useConfirm === */
 interface ConfirmOptions {
   title?: string;
   message: string;
@@ -111,112 +126,105 @@ interface ConfirmOptions {
   danger?: boolean;
 }
 
-interface ConfirmState {
-  open: boolean;
-  opts?: ConfirmOptions;
-  resolve?: (value: boolean) => void;
-}
-
+/**
+ * 把「弹个确认框」变成一次 await。
+ * 前一问还悬着又来一问时，旧 promise 按「取消」收尾 —— 否则它永远不 resolve，
+ * 调用方的 await 就卡在那里了。
+ */
 export function useConfirm() {
-  const [state, setState] = useState<ConfirmState>({ open: false });
+  const [asked, setAsked] = useState<ConfirmOptions | null>(null);
+  const reply = useRef<((ok: boolean) => void) | null>(null);
 
-  const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
-    return new Promise((resolve) => {
-      setState({ open: true, opts, resolve });
+  const settle = useCallback((ok: boolean) => {
+    const resolve = reply.current;
+    reply.current = null;
+    setAsked(null);
+    resolve?.(ok);
+  }, []);
+
+  const confirm = useCallback((opts: ConfirmOptions) => {
+    reply.current?.(false);
+    setAsked(opts);
+    return new Promise<boolean>((resolve) => {
+      reply.current = resolve;
     });
   }, []);
 
-  const handleConfirm = useCallback(() => {
-    if (state.resolve) state.resolve(true);
-    setState({ open: false });
-  }, [state.resolve]);
-
-  const handleCancel = useCallback(() => {
-    if (state.resolve) state.resolve(false);
-    setState({ open: false });
-  }, [state.resolve]);
-
-  const node = state.open && state.opts ? (
+  const node = asked && (
     <Modal
-      open={true}
-      title={state.opts.title || "确认"}
-      onClose={handleCancel}
+      open
+      title={asked.title || "确认"}
+      onClose={() => settle(false)}
       footer={
         <div className="modal-footer-actions">
-          <button className="btn ghost" onClick={handleCancel}>
+          <button type="button" className="btn ghost" onClick={() => settle(false)}>
             取消
           </button>
           <button
-            className={`btn ${state.opts.danger ? "danger" : ""}`}
-            onClick={handleConfirm}
+            type="button"
+            className={cx("btn", asked.danger && "danger")}
+            onClick={() => settle(true)}
           >
-            {state.opts.confirmText || "确认"}
+            {asked.confirmText || "确认"}
           </button>
         </div>
       }
     >
-      <p>{state.opts.message}</p>
+      <p>{asked.message}</p>
     </Modal>
-  ) : null;
+  );
 
   return { confirm, node };
 }
 
-/* === Pill === */
-interface PillProps {
-  kind: "g" | "w" | "b" | "n";
-  children: ReactNode;
-}
+/* ——— 静态外壳 ——— */
 
-export function Pill({ kind, children }: PillProps) {
-  return <span className={`pill ${kind}`}>{children}</span>;
-}
-
-/* === Panel === */
-interface PanelProps {
-  title: string;
-  actions?: ReactNode;
-  children: ReactNode;
-}
-
-export function Panel({ title, actions, children }: PanelProps) {
+/** 表单一行：标签在上、控件在下。 */
+export function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="panel">
-      <div className="panel-h">
-        <h3>{title}</h3>
-        {actions && <div style={{ marginLeft: "auto" }}>{actions}</div>}
-      </div>
-      <div style={{ padding: "16px" }}>{children}</div>
-    </div>
+    <label className="field">
+      <span className="muted">{label}</span>
+      {children}
+    </label>
   );
 }
 
-/* === Stat & StatStrip === */
-interface StatProps {
-  label: string;
-  value: string | number;
-  delta?: string | number;
-  dotColor?: "up" | "down";
+/** 状态徽标：g 成功 / w 警告 / b 失败 / n 中性。 */
+export function Pill({ kind, children }: { kind: "g" | "w" | "b" | "n"; children: ReactNode }) {
+  return <span className={cx("pill", kind)}>{children}</span>;
 }
 
-export function Stat({ label, value, delta, dotColor }: StatProps) {
+/** 带标题栏的内容面板，actions 贴在标题右侧。 */
+export function Panel({
+  title,
+  actions,
+  children,
+}: {
+  title: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="panel">
+      <header className="panel-h">
+        <h3>{title}</h3>
+        {actions ? <div className="panel-actions">{actions}</div> : null}
+      </header>
+      <div className="panel-b">{children}</div>
+    </section>
+  );
+}
+
+/** 单个指标；横排一组用 StatStrip 包起来，发丝分隔线由 .stats 的 1px 间隙画出。 */
+export function Stat({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="stat">
       <div className="k">{label}</div>
       <div className="v">{value}</div>
-      {delta !== undefined && (
-        <div className={`d ${dotColor || ""}`}>
-          {dotColor === "up" && "↑"} {dotColor === "down" && "↓"} {delta}
-        </div>
-      )}
     </div>
   );
 }
 
-interface StatStripProps {
-  children: ReactNode;
-}
-
-export function StatStrip({ children }: StatStripProps) {
+export function StatStrip({ children }: { children: ReactNode }) {
   return <div className="stats">{children}</div>;
 }
