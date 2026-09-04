@@ -1,13 +1,12 @@
 /**
  * 发送一轮对话:调 `streamChat`,把 SSE 事件翻成会话记录的写入。
  *
- * 从 `App.tsx` 原样搬出。五条不能动的规则:
+ * 从 `App.tsx` 原样搬出。四条不能动的规则:
  *  - **同一会话正在生成时不许再发**。重复发车会让两路流写同一个键,文本互相插队。
  *  - **`streamKey` 是可变的**。新对话发车时它是草稿键,收到 `session` 事件后整体搬到真实
  *    sessionId 上,后续所有事件都要写到搬完之后的键;闭包里必须用这个变量,不能捕获渲染时的值。
  *  - **`agentId` 只在新会话传**。续聊时后端按 sessionId 认 Agent,再传一次会被当成换 Agent。
  *  - **`effectiveModel` 以后端回的为准**。用户没显式选模型时,助手消息上要记后端实际用的那个。
- *  - **收车一定要刷余额**,无论成功失败:这一轮的算力点已经扣了。
  *
  * 这里刻意**每次渲染都返回新闭包**(和拆分前的内联函数一致):它捕获了 `sessionId`、
  * `activeSessionKey`、`runningSessionIds`、`activeAgent` 四个渲染期的值,memo 化就会拿到旧值。
@@ -29,12 +28,8 @@ export interface ChatSendPayload {
 export function useChatStream(args: {
   readonly token: string;
   readonly chat: ChatSessionsController;
-  /** 余额不足:上层弹充值提示 */
-  readonly onInsufficientBalance: () => void;
-  /** 一轮结束(成功或失败)都要刷一次余额 */
-  readonly onSettled: () => void;
 }) {
-  const { token, chat, onInsufficientBalance, onSettled } = args;
+  const { token, chat } = args;
   const { turn } = chat;
 
   return (payload: ChatSendPayload) => {
@@ -115,11 +110,8 @@ export function useChatStream(args: {
             }
 
             if (event === "error") {
-              const errData = data as { message?: string; code?: string };
+              const errData = data as { message?: string };
               turn.fail(streamKey, errData.message || "生成失败，请重试");
-              if (errData.code === "INSUFFICIENT_BALANCE") {
-                onInsufficientBalance();
-              }
             }
           },
           payload.model,
@@ -133,7 +125,6 @@ export function useChatStream(args: {
         turn.fail(streamKey, `发送失败: ${err instanceof Error ? err.message : "未知错误"}`);
       } finally {
         turn.end(streamKey, currentSessionId);
-        onSettled();
       }
     })();
   };

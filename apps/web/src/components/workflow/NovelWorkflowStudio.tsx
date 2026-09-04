@@ -17,7 +17,6 @@ import {
   type NovelProjectSummary,
   type NovelWorkbenchPayload,
 } from "../../api";
-import { ApiError } from "../../apiError";
 import { createDefaultNovelDraft, novelCreateGenre, novelCreateTitle, type NovelCreateDraft } from "./NovelCreatePage";
 import { NovelLibraryPage } from "../novel/NovelLibraryPage";
 import { NovelSetupWizard } from "../novel/NovelSetupWizard";
@@ -26,13 +25,11 @@ import { novelProjectIdFromHash } from "../../novelRoute";
 
 interface NovelWorkflowStudioProps {
   readonly token: string;
-  readonly onBalanceRefresh?: () => void;
 }
 
 type ChapterSaveStatus = "idle" | "saving" | "saved" | "error";
 
 function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError && error.status === 402) return "算力点不足，请充值后继续";
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -72,7 +69,7 @@ function projectWritingModel(detail: NovelProjectDetail | null): string {
   return typeof value === "string" ? value : "";
 }
 
-export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowStudioProps) {
+export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
   const [projects, setProjects] = useState<readonly NovelProjectSummary[]>([]);
   const [detail, setDetail] = useState<NovelProjectDetail | null>(null);
   const [workbench, setWorkbench] = useState<NovelWorkbenchPayload | null>(null);
@@ -274,7 +271,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     try {
       const run = await startNovelAssistedRun(token, detail.project.id, { chapterIndex: selectedChapter.chapterIndex, title: chapterTitle.trim(), summary: [chapterOutline, generationHint].filter(Boolean).join("\n\n"), targetChars: chars });
       setWatchedRunId(run.id);
-      setNotice("章节已交给独立 Novel Worker，运行进度会持续刷新"); onBalanceRefresh?.();
+      setNotice("章节已交给独立 Novel Worker，运行进度会持续刷新");
     } catch (reason) { setError(errorMessage(reason, "提交章节生成失败")); }
     finally { setBusy(""); }
   };
@@ -288,7 +285,6 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
       const task = await rewriteNovelChapterSelection(token, detail.project.id, selectedChapter.chapterIndex, payload);
       setDetail((current) => current && current.project.id === detail.project.id ? { ...current, tasks: [task, ...current.tasks.filter((item) => item.id !== task.id)] } : current);
       setNotice("局部改写已交给独立 Novel Worker；完成后会自动替换选区并保留旧版本");
-      onBalanceRefresh?.();
     } catch (reason) {
       setError(errorMessage(reason, "提交局部改写失败"));
       throw reason;
@@ -337,7 +333,7 @@ export function NovelWorkflowStudio({ token, onBalanceRefresh }: NovelWorkflowSt
     }
   };
 
-  if (view === "library" || !detail) return <><div data-novel-scroll-region="library" className="h-full min-h-0 overflow-y-auto overscroll-contain [scroll-padding-bottom:8rem] [scrollbar-gutter:stable] [scrollbar-width:thin]"><NovelLibraryPage projects={projects} loading={loading} draft={createDraft} isCreating={busy === "create"} error={error} onDraftChange={setCreateDraft} onCreate={() => void createProject()} onOpenProject={(id) => void openProject(id)} onDeleteProject={removeProject} /></div>{setupOpen && detail && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onProjectChanged={() => refreshProject(detail.project.id, true).then(() => undefined)} onBalanceRefresh={onBalanceRefresh} />}</>;
+  if (view === "library" || !detail) return <><div data-novel-scroll-region="library" className="h-full min-h-0 overflow-y-auto overscroll-contain [scroll-padding-bottom:8rem] [scrollbar-gutter:stable] [scrollbar-width:thin]"><NovelLibraryPage projects={projects} loading={loading} draft={createDraft} isCreating={busy === "create"} error={error} onDraftChange={setCreateDraft} onCreate={() => void createProject()} onOpenProject={(id) => void openProject(id)} onDeleteProject={removeProject} /></div>{setupOpen && detail && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onProjectChanged={() => refreshProject(detail.project.id, true).then(() => undefined)} />}</>;
 
-  return <><NovelWorkbenchShell token={token} detail={detail} workbench={workbench} selectedChapter={selectedChapter} selectedChapterId={selectedChapterId} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} chapterContent={chapterContent} targetChars={targetChars} saveStatus={chapterSaveStatus} isGenerating={busy === "generate"} isRewriting={busy === "rewrite"} isReviewSaving={reviewSaving} writingModel={projectWritingModel(detail)} isModelSaving={modelSaving} notice={notice} error={error} onBackToLibrary={() => { setView("library"); setDetail(null); setWorkbench(null); void loadProjects(); window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`); }} onOpenSetup={() => setSetupOpen(true)} onRefresh={() => void refreshProject(detail.project.id, true)} onSelectChapter={setSelectedChapterId} onCreateChapter={() => void createChapter()} onTitleChange={setChapterTitle} onSummaryChange={setChapterSummary} onOutlineChange={setChapterOutline} onGenerationHintChange={setGenerationHint} onContentChange={setChapterContent} onTargetCharsChange={setTargetChars} onGenerate={() => void generateChapter()} onRewrite={rewriteChapterSelection} onAnalyze={analyzeChapter} onSaveReview={saveReview} onVersionRestored={applyRestoredVersion} onWritingModelChange={(model, displayName) => void changeWritingModel(model, displayName)} />{setupOpen && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onProjectChanged={() => refreshProject(detail.project.id, true).then(() => undefined)} onBalanceRefresh={onBalanceRefresh} />}</>;
+  return <><NovelWorkbenchShell token={token} detail={detail} workbench={workbench} selectedChapter={selectedChapter} selectedChapterId={selectedChapterId} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} chapterContent={chapterContent} targetChars={targetChars} saveStatus={chapterSaveStatus} isGenerating={busy === "generate"} isRewriting={busy === "rewrite"} isReviewSaving={reviewSaving} writingModel={projectWritingModel(detail)} isModelSaving={modelSaving} notice={notice} error={error} onBackToLibrary={() => { setView("library"); setDetail(null); setWorkbench(null); void loadProjects(); window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`); }} onOpenSetup={() => setSetupOpen(true)} onRefresh={() => void refreshProject(detail.project.id, true)} onSelectChapter={setSelectedChapterId} onCreateChapter={() => void createChapter()} onTitleChange={setChapterTitle} onSummaryChange={setChapterSummary} onOutlineChange={setChapterOutline} onGenerationHintChange={setGenerationHint} onContentChange={setChapterContent} onTargetCharsChange={setTargetChars} onGenerate={() => void generateChapter()} onRewrite={rewriteChapterSelection} onAnalyze={analyzeChapter} onSaveReview={saveReview} onVersionRestored={applyRestoredVersion} onWritingModelChange={(model, displayName) => void changeWritingModel(model, displayName)} />{setupOpen && <NovelSetupWizard token={token} project={detail.project} onClose={() => setSetupOpen(false)} onCompleted={() => void finishSetup()} onProjectChanged={() => refreshProject(detail.project.id, true).then(() => undefined)} />}</>;
 }

@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Icon } from "@iconify/react";
-import { AnimatedNumber, BrandLogo, SpendBurst, spring, computeSpendBurst } from "../../motion";
+import { BrandLogo, spring } from "../../motion";
 import { WORKFLOW_MODULES, type WorkflowModuleId } from "../../workflowState";
 import { HoverPopover } from "./HoverPopover";
 import { WorkflowFlyout } from "./WorkflowFlyout";
 import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { ThemeToggle } from "../ThemeToggle";
 
-export type ViewType = "chat" | "models" | "kb" | "assets" | "workflow" | "billing" | "memory" | "settings";
+export type ViewType = "chat" | "models" | "kb" | "assets" | "workflow" | "memory" | "settings";
 
 /** 工作流二级菜单项 id */
 export type WorkflowSubId = WorkflowModuleId;
@@ -57,7 +57,6 @@ interface NavRailProps {
   onViewChange: (view: ViewType) => void;
   workflowModule?: WorkflowModuleId;
   onSelectWorkflowSub?: (id: WorkflowSubId) => void;
-  balance?: number | null;
   onLogout?: () => void;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
@@ -69,7 +68,6 @@ export function NavRail({
   onViewChange,
   workflowModule,
   onSelectWorkflowSub,
-  balance = null,
   onLogout,
   collapsed = false,
   onToggleCollapsed,
@@ -94,30 +92,6 @@ export function NavRail({
   const visibleWorkflowSubItems = WORKFLOW_SUB_ITEMS.filter((sub) =>
     isWorkflowSubVisible(menuVisibility, sub.id),
   );
-
-  // SpendBurst state
-  const [burstActive, setBurstActive] = useState(false);
-  const [burstAmount, setBurstAmount] = useState(0);
-  const [burstOriginX, setBurstOriginX] = useState(0);
-  const [burstOriginY, setBurstOriginY] = useState(0);
-  const prevBalanceRef = useRef<number | null>(null);
-  const balanceElementRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const amount = computeSpendBurst(prevBalanceRef.current, balance);
-    if (amount !== null && balanceElementRef.current) {
-      const rect = balanceElementRef.current.getBoundingClientRect();
-      setBurstAmount(amount);
-      setBurstOriginX(rect.left + rect.width / 2);
-      setBurstOriginY(rect.top + rect.height / 2);
-      setBurstActive(true);
-      timer = setTimeout(() => setBurstActive(false), 1000);
-    }
-    // 无论是否触发，总是更新 ref（关键修复）
-    prevBalanceRef.current = typeof balance === "number" ? balance : prevBalanceRef.current;
-    return () => { if (timer !== undefined) clearTimeout(timer); };
-  }, [balance]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -320,55 +294,11 @@ export function NavRail({
         </AnimatePresence>
       </nav>
 
-      {/* Bottom Card + Logout */}
+      {/* Theme Toggle + Logout */}
       <div className="flex-none border-t border-hairline-subtle">
         <div className={`border-b border-hairline-subtle ${collapsed ? "flex justify-center py-2.5" : "px-3 py-2"}`}>
           <ThemeToggle compact={collapsed} />
         </div>
-        {/* Balance Card */}
-        <HoverPopover
-          disabled={!collapsed}
-          content={
-            <div className="whitespace-nowrap rounded-md bg-surface-inverse px-2.5 py-1.5 text-[11px] text-ink-inverse shadow-lg">
-              {balance === null ? "同步中" : `${balance.toLocaleString("zh-CN")} 点 · 充值 ›`}
-            </div>
-          }
-        >
-          {collapsed ? (
-            <button
-              type="button"
-              className="w-full flex justify-center py-3 text-ink-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-              onClick={() => onViewChange("billing")}
-              aria-label="充值算力点"
-            >
-              <Icon icon="mdi:lightning-bolt-outline" className="text-lg" aria-hidden />
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="w-full p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 focus-visible:ring-inset"
-              onClick={() => onViewChange("billing")}
-              aria-label="充值算力点"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand/10 text-xs font-bold text-brand">
-                  <Icon icon="mdi:lightning-bolt-outline" className="text-lg" aria-hidden />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div ref={balanceElementRef} className="truncate text-sm font-medium text-ink">
-                    {balance === null ? "同步中" : <><AnimatedNumber value={balance} /> 点</>}
-                  </div>
-                  <p className="text-xs text-ink-secondary">算力点</p>
-                </div>
-                <span className="flex-none text-xs font-medium text-brand">充值</span>
-                <Icon icon="mdi:chevron-right" className="flex-none text-sm text-ink-tertiary" aria-hidden />
-              </div>
-            </button>
-          )}
-        </HoverPopover>
-
-        {/* SpendBurst particle effect */}
-        <SpendBurst amount={burstAmount} originX={burstOriginX} originY={burstOriginY} active={burstActive} />
 
         {/* Logout Button */}
         <div className={`flex-none border-t border-hairline-subtle ${collapsed ? "flex justify-center py-3" : "p-4"}`}>

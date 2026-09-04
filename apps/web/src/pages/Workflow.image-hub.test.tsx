@@ -11,8 +11,9 @@ import { ToastProvider } from "../motion";
 describe("Workflow image hub", () => {
   it("生图 Hub 只剩通用生图一个 tab：不渲染 tab 栏，studio 直接铺开", () => {
     const html = renderToStaticMarkup(<ToastProvider><Workflow token="token" activeModuleId="image" /></ToastProvider>);
-    // 只有一个 tab 时 tab 栏整体不渲染，所以「通用生图」这个标签不该出现
-    expect(html).not.toContain("通用生图");
+    // 只有一个 tab 时 tab 栏整体不渲染。注意不能断言全文没有「通用生图」——
+    // studio 自己的头部写着「通用生图工作台」，要看的是那个 tab 按钮没被渲染。
+    expect(html).not.toMatch(/<button[^>]*>通用生图<\/button>/);
     expect(html).toContain("生成图片");
     expect(html).not.toContain("生图模块暂未开放");
   });
@@ -31,18 +32,6 @@ describe("Workflow image hub", () => {
     expect(html).not.toContain("生成图片");
   });
 });
-
-const PRICING_PATH = "/api/workflow/images/pricing";
-
-function pricingBody(rate: number) {
-  return {
-    data: {
-      "1K": { resourceKey: "image_generation_1k", displayName: "1K", pricingType: "PER_CALL", rate, perUnits: 1, enabled: true },
-      "2K": { resourceKey: "image_generation_2k", displayName: "2K", pricingType: "PER_CALL", rate: rate * 2, perUnits: 1, enabled: true },
-      "4K": { resourceKey: "image_generation_4k", displayName: "4K", pricingType: "PER_CALL", rate: rate * 4, perUnits: 1, enabled: true },
-    },
-  };
-}
 
 function failedTask() {
   return {
@@ -106,77 +95,13 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("Workflow 通用生图计价与重试", () => {
-  it("切换模型后按新模型重新拉取计价，预估随模型价格变化", async () => {
-    const pricingCalls: string[] = [];
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.startsWith(PRICING_PATH)) {
-        pricingCalls.push(url);
-        return jsonResponse(pricingBody(url.includes("gpt-image-2") ? 45 : 20));
-      }
-      if (url.startsWith("/api/workflow/images/state")) return jsonResponse({ data: { images: [], tasks: [] } });
-      return new Response("{}", { status: 500 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const scope = await mountHub();
-    const studio = generalStudio(scope);
-    await waitFor(() => expect(pricingCalls.length).toBeGreaterThan(0));
-    expect(pricingCalls[0]).toBe(`${PRICING_PATH}?model=qwen-image-2.0-pro-2026-04-22`);
-    await waitFor(() => expect(studio.textContent).toContain("20 算力点"));
-
-    const modelTrigger = buttons(studio).find((button) => button.textContent?.includes("Qwen Image 2.0 Pro"));
-    if (!modelTrigger) throw new Error("model select trigger missing");
-    await act(async () => { modelTrigger.click(); });
-    const gptOption = buttons(studio).find((button) => button.getAttribute("role") === "option" && button.textContent?.includes("GPT Image 2"));
-    if (!gptOption) throw new Error("gpt model option missing");
-    await act(async () => { gptOption.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-
-    await waitFor(() => expect(pricingCalls).toContain(`${PRICING_PATH}?model=gpt-image-2`));
-    await waitFor(() => expect(studio.textContent).toContain("45 算力点"));
-  });
-
-  it("乱序返回的旧计价响应被丢弃，只认最后一次模型切换的价格", async () => {
-    let releaseFirst: (() => void) | null = null;
-    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.startsWith(PRICING_PATH)) {
-        if (url.includes("qwen-image-2.0-pro")) {
-          await firstGate;
-          return jsonResponse(pricingBody(20));
-        }
-        return jsonResponse(pricingBody(45));
-      }
-      if (url.startsWith("/api/workflow/images/state")) return jsonResponse({ data: { images: [], tasks: [] } });
-      return new Response("{}", { status: 500 });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const scope = await mountHub();
-    const studio = generalStudio(scope);
-    const modelTrigger = buttons(studio).find((button) => button.textContent?.includes("Qwen Image 2.0 Pro"));
-    if (!modelTrigger) throw new Error("model select trigger missing");
-    await act(async () => { modelTrigger.click(); });
-    const gptOption = buttons(studio).find((button) => button.getAttribute("role") === "option" && button.textContent?.includes("GPT Image 2"));
-    if (!gptOption) throw new Error("gpt model option missing");
-    await act(async () => { gptOption.click(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    await waitFor(() => expect(studio.textContent).toContain("45 算力点"));
-
-    // 旧模型的响应此刻才回来，不能盖掉新模型的价格
-    await act(async () => { releaseFirst?.(); await new Promise((resolve) => setTimeout(resolve, 0)); });
-    expect(studio.textContent).toContain("45 算力点");
-    expect(studio.textContent).not.toContain("20 算力点");
-  });
-
-  it("连点重新提交只预扣费一次：同一原任务的重试在飞行中被忽略", async () => {
+describe("Workflow 通用生图重试", () => {
+  it("连点重新提交只发一次请求：同一原任务的重试在飞行中被忽略", async () => {
     let releaseGenerate: (() => void) | null = null;
     const generateGate = new Promise<void>((resolve) => { releaseGenerate = resolve; });
     const generateCalls: string[] = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
-      if (url.startsWith(PRICING_PATH)) return jsonResponse(pricingBody(20));
       if (url.startsWith("/api/workflow/images/state")) return jsonResponse({ data: { images: [], tasks: [failedTask()] } });
       if (url === "/api/workflow/images/generate") {
         generateCalls.push(String(init?.body ?? ""));

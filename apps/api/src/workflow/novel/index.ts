@@ -13,10 +13,9 @@ export { buildNovelQualityDiagnostics, deriveNovelChapterAssets } from "./novel-
 export { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 export { createNovelGenerator } from "./novel-generation.js";
 export {
-  estimateReserveChars,
   refreshNovelVectorMemoryBestEffort,
   reserveAndCreateTask,
   runNovelTask,
 } from "./novel-task-runner.js";
-export type { BillingForNovels, NovelTaskRow } from "./novel-task-runner.js";
+export type { NovelTaskRow } from "./novel-task-runner.js";
 export { novelWorkflowRoutes } from "./novel-routes.js";

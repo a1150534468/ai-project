@@ -1,5 +1,4 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { createBillingClient } from "@ai-assistant/billing";
 import { completedNovelChapterCount } from "@ai-assistant/novel-workflow";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -139,21 +138,6 @@ const promptSchema = z.object({
 
 function json(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
-}
-
-let enabledModelCache: { expiresAt: number; models: Set<string> } | null = null;
-
-async function isEnabledPlatformModel(model: string): Promise<boolean> {
-  if (!model) return true;
-  if (!enabledModelCache || enabledModelCache.expiresAt < Date.now()) {
-    const billing = createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! });
-    const response = await billing.listModels();
-    enabledModelCache = {
-      expiresAt: Date.now() + 30_000,
-      models: new Set(response.data.filter((item) => item.enabled && !item.model.toLowerCase().includes("embedding")).map((item) => item.model)),
-    };
-  }
-  return enabledModelCache.models.has(model);
 }
 
 function snapshotRecord(value: unknown): Record<string, unknown> {
@@ -813,14 +797,6 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     const body = promptSchema.safeParse(req.body);
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, params.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
-    if (body.data.model) {
-      try {
-        if (!await isEnabledPlatformModel(body.data.model)) return reply.code(400).send({ error: "只能绑定管理员已启用的平台模型" });
-      } catch (error) {
-        app.log.warn({ err: error }, "failed to validate novel prompt model");
-        return reply.code(503).send({ error: "暂时无法校验平台模型，请稍后重试" });
-      }
-    }
     const template = await prisma.$transaction(async (tx) => {
       const current = await tx.novelPromptTemplate.findUnique({ where: { projectId_nodeKey: { projectId: params.data.projectId, nodeKey: body.data.nodeKey } } });
       const nextVersion = (current?.activeVersion ?? 0) + 1;

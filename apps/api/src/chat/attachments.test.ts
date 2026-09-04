@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCurrentUserContent,
-  estimateInputTokens,
   prepareChatAttachments,
   resolveChatModel,
 } from "./attachments.js";
@@ -48,10 +47,9 @@ describe("chat attachments", () => {
       { type: "text", text: "总结" },
       { type: "text", text: expect.stringContaining("hello world") },
     ]);
-    expect(estimateInputTokens("总结", prepared)).toBeGreaterThan(0);
   });
 
-  it("keeps images as image blocks and counts vision token estimate", async () => {
+  it("keeps images as image blocks", async () => {
     const prepared = await prepareChatAttachments([
       {
         name: "paste.png",
@@ -65,6 +63,5 @@ describe("chat attachments", () => {
     expect(prepared.hasImage).toBe(true);
     expect(prepared.imageCount).toBe(1);
     expect(prepared.blocks[0]).toMatchObject({ type: "image" });
-    expect(estimateInputTokens("", prepared)).toBeGreaterThanOrEqual(1000);
   });
 });

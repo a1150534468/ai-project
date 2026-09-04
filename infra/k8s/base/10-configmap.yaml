@@ -16,7 +16,6 @@ data:
   EMBEDDING_BASE_URL: "https://dashscope.aliyuncs.com/compatible-mode/v1"
   EMBEDDING_MODEL: "text-embedding-v4"
   EMBEDDING_DIM: "1024"
-  BILLING_BASE_URL: "http://billing:8093"
   CORS_ORIGIN: "https://app.example.com,https://admin.example.com"
   # 知识库对象存储（S3 兼容）；AK/SK 在 Secret。同资源池走内网 endpoint。
   S3_ENDPOINT: "http://s3.internal.example.com"
@@ -56,15 +55,3 @@ data:
   SKYHUMAN_BASE_URL: "https://skyhumanapi.pilihu.vip"
   SKYHUMAN_MAX_INFLIGHT: "3"
   MIMO_BASE_URL: "https://api.xiaomimimo.com/v1"
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: ai-assistant-billing-config
-  namespace: ai-assistant
-data:
-  BILLING_PORT: "8093"
-  # 易支付网关与回调基址非敏感；EPAY_PID/EPAY_KEY 在 Secret。
-  EPAY_GATEWAY: "https://zpayz.cn/"
-  # 回调 notify={base}/api/billing/epay/notify（ingress 已把该前缀转 billing）、return={base}/billing/return
-  PUBLIC_CALLBACK_BASE: "https://api.example.com"

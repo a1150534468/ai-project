@@ -32,11 +32,7 @@ export async function ensureJob(
       input: input as Prisma.InputJsonValue,
       maxAttempts,
     },
-    // A per-image run creates each job with one planned attempt. An explicit
-    // paid repair raises the durable job limit for that one job; never lower
-    // it again while resuming, or the approved logical attempt becomes
-    // unreachable before it reaches the ledger gate.
-    update: ctx.perImageBilling ? {} : { maxAttempts },
+    update: { maxAttempts },
   });
   // The schema stores denormalized ownership columns for efficient user
   // scoping.  Validate them whenever a job is resumed so a legacy/corrupt row
@@ -121,7 +117,7 @@ export async function failJobAttempt(
 
 export async function persistProviderMetadata(ctx: RunnerContext, job: CodexPetJob, result: ImageGenerationResult): Promise<void> {
   // Provider metadata is useful even when deterministic/visual QA rejects the
-  // image, so retain it independently of the successful-image billing flag.
+  // image, so retain it independently of the successful-image flag.
   await updateOwnedJob(ctx.prisma, ctx, job.id, {
     providerMetadata: providerMetadata(result) as Prisma.InputJsonValue,
   }, { workerId: ctx.workerId });
@@ -129,11 +125,10 @@ export async function persistProviderMetadata(ctx: RunnerContext, job: CodexPetJ
 
 /**
  * Mark the first user-visible image after its artifact is durably stored.
- * Base candidates count as successful images for the package cancellation
- * policy: once the run is waiting for base review it is no longer refundable.
- * The conditional update remains important because cancellation can be
- * requested while a provider request or artifact write is in flight. In that
- * case the earlier cancellation wins and the run stays refundable.
+ * Base candidates count as successful images, so a run waiting for base review
+ * already has one. The conditional update remains important because
+ * cancellation can be requested while a provider request or artifact write is
+ * in flight; in that case the earlier cancellation wins.
  */
 export async function markImageSucceeded(ctx: RunnerContext, job: CodexPetJob, result?: ImageGenerationResult): Promise<void> {
   const now = new Date();

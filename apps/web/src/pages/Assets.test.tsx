@@ -99,12 +99,12 @@ afterEach(() => {
 
 describe("素材库首屏", () => {
   it("默认拉「AI 生成」的第一页：不带游标、不带 module", async () => {
-    apiMocks.listAssets.mockResolvedValue(pageOf(["image:a", "portrait:b"]));
+    apiMocks.listAssets.mockResolvedValue(pageOf(["image:a", "video:b"]));
     await mount();
     expect(apiMocks.listAssets).toHaveBeenCalledTimes(1);
     expect(apiMocks.listAssets.mock.calls[0]?.[0]).toBe("t-1");
     expect(queryOf(0)).toEqual({ limit: 30, origin: "ai", sourceModule: null });
-    expect(cardIds()).toEqual(["image:a", "portrait:b"]);
+    expect(cardIds()).toEqual(["image:a", "video:b"]);
     expect(find("asset-count")?.textContent).toBe("已加载 2 条");
   });
 
@@ -145,9 +145,9 @@ describe("分区与筛选", () => {
 
   it("选 module 透传给接口，再点一次取消回到全部", async () => {
     await mount();
-    await click("asset-module-portrait");
-    expect(queryOf(1)).toMatchObject({ sourceModule: "portrait" });
-    await click("asset-module-portrait");
+    await click("asset-module-video");
+    expect(queryOf(1)).toMatchObject({ sourceModule: "video" });
+    await click("asset-module-video");
     expect(queryOf(2)).toMatchObject({ sourceModule: null });
   });
 
@@ -176,10 +176,10 @@ describe("翻页", () => {
   it("换筛选之后游标重置：新的第一页不带 cursor", async () => {
     apiMocks.listAssets.mockResolvedValueOnce(pageOf(["image:a"], "c-1"));
     await mount();
-    apiMocks.listAssets.mockResolvedValueOnce(pageOf(["portrait:x"], null));
-    await click("asset-module-portrait");
-    expect(queryOf(1)).toEqual({ limit: 30, origin: "ai", sourceModule: "portrait" });
-    expect(cardIds()).toEqual(["portrait:x"]);
+    apiMocks.listAssets.mockResolvedValueOnce(pageOf(["video:x"], null));
+    await click("asset-module-video");
+    expect(queryOf(1)).toEqual({ limit: 30, origin: "ai", sourceModule: "video" });
+    expect(cardIds()).toEqual(["video:x"]);
   });
 
   it("翻页失败只报错，已加载的那一页留在原地", async () => {
@@ -196,7 +196,7 @@ describe("翻页", () => {
 
 describe("取件", () => {
   it("点「获取链接」弹出取件弹窗，链接来自素材自己的 url", async () => {
-    apiMocks.listAssets.mockResolvedValue(pageOf(["portrait:o1"]));
+    apiMocks.listAssets.mockResolvedValue(pageOf(["video:o1"]));
     await mount();
     const button = Array.from(container.querySelectorAll("button")).find(
       (node) => node.textContent === "获取链接",
@@ -205,7 +205,7 @@ describe("取件", () => {
     await act(async () => button.click());
     const input = container.querySelector("input[readonly]");
     expect(input).not.toBeNull();
-    expect((input as HTMLInputElement).value).toBe("https://example.test/portrait:o1");
+    expect((input as HTMLInputElement).value).toBe("https://example.test/video:o1");
   });
 
   it("没有取件链接的素材，按钮是禁用的", async () => {

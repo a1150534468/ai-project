@@ -34,7 +34,6 @@ export interface AdminUser {
   username: string;
   bannedAt: string | null;
   createdAt: string;
-  balance: number | null;
 }
 export interface AdminUserPage {
   rows: AdminUser[];
@@ -60,122 +59,11 @@ export async function banUser(id: string): Promise<void> {
 export async function unbanUser(id: string): Promise<void> {
   await req("POST", `/api/admin/users/${id}/unban`);
 }
-export async function adjustBalance(
-  id: string,
-  delta: number,
-  reason: string,
-  idempotencyKey: string,
-  accountType: "points" | "video" = "points"
-): Promise<{ before: number; after: number }> {
-  return (await req<{ data: { before: number; after: number } }>("POST", `/api/admin/users/${id}/balance`, { delta, reason, accountType, idempotencyKey })).data;
-}
-
-export interface OrderUser {
-  id: string;
-  uid: string;
-  username: string;
-}
-export interface OrderRow {
-  id: number;
-  tradeNo: string;
-  userId: string;
-  amountFen: number;
-  points: number;
-  provider: string;
-  paymentMethod: string;
-  status: string;
-  kind: string;
-  cardId: number;
-  createdAt: string;
-  paidAt: string | null;
-  user: OrderUser | null;
-}
-export interface OrderSummary {
-  total: number;
-  successCount: number;
-  pendingCount: number;
-  closedCount: number;
-  successAmountFen: number;
-  successPoints: number;
-  payingUsers: number;
-}
-export interface OrderListParams {
-  user?: string;
-  userId?: string;
-  tradeNo?: string;
-  status?: string;
-  kind?: string;
-  paymentMethod?: string;
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
-}
-export interface OrderListResult {
-  data: OrderRow[];
-  total: number;
-  summary: OrderSummary;
-}
-export async function listOrders(params: OrderListParams = {}): Promise<OrderListResult> {
-  const sp = new URLSearchParams();
-  if (params.user) sp.set("user", params.user);
-  if (params.userId) sp.set("userId", params.userId);
-  if (params.tradeNo) sp.set("tradeNo", params.tradeNo);
-  if (params.status) sp.set("status", params.status);
-  if (params.kind) sp.set("kind", params.kind);
-  if (params.paymentMethod) sp.set("paymentMethod", params.paymentMethod);
-  if (params.from) sp.set("from", params.from);
-  if (params.to) sp.set("to", params.to);
-  if (params.limit) sp.set("limit", String(params.limit));
-  if (params.offset) sp.set("offset", String(params.offset));
-  const qs = sp.toString();
-  return req("GET", `/api/admin/orders${qs ? `?${qs}` : ""}`);
-}
-
-// —— 兑换码 ——
-export interface CodeRow {
-  code: string;
-  grantType: string;
-  grantPayload: string;
-  points: number;
-  status: string;
-  batchID: string;
-  usedBy: string;
-  expiresAt: string | null;
-  createdAt: string;
-  usedAt: string | null;
-}
-export async function listCodes(params: { status?: string; grantType?: string } = {}): Promise<CodeRow[]> {
-  const sp = new URLSearchParams();
-  if (params.status) sp.set("status", params.status);
-  if (params.grantType) sp.set("grantType", params.grantType);
-  const qs = sp.toString();
-  return (await req<{ data: CodeRow[] }>("GET", `/api/admin/codes${qs ? `?${qs}` : ""}`)).data;
-}
-export interface GenCodesArgs {
-  grantType: string;
-  grantPayload: string;
-  points?: number;
-  count: number;
-  expiresAt?: number;
-}
-export async function generateCodes(a: GenCodesArgs): Promise<string[]> {
-  return (await req<{ data: { codes: string[] } }>("POST", "/api/admin/codes", a)).data.codes;
-}
-export async function disableCode(code: string): Promise<void> {
-  await req("POST", "/api/admin/codes/disable", { code });
-}
 
 // —— 模型 ——
 export interface ModelRow {
   model: string;
   displayName: string;
-  modelRatio?: number;
-  completionRatio?: number;
-  inputPricePerMillion: number;
-  outputPricePerMillion: number;
-  cacheInputPricePerMillion: number;
-  cacheOutputPricePerMillion: number;
   inputPriceRmbPerMillion: number;
   outputPriceRmbPerMillion: number;
   cacheInputPriceRmbPerMillion: number;
@@ -193,7 +81,6 @@ export interface ModelRow {
 export interface ModelStatsRow {
   model: string;
   displayName: string;
-  totalPoints: number;
   usageCount: number;
   userCount: number;
   inputTokens: number;
@@ -216,12 +103,6 @@ export type UpsertModelRow = Pick<
 > & Partial<Pick<ModelRow, "description" | "tags" | "category" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
 export async function upsertModel(a: UpsertModelRow): Promise<void> {
   await req("POST", "/api/admin/models", a);
-}
-export async function updateModelPricing(
-  model: string,
-  pricing: Pick<ModelRow, "inputPriceRmbPerMillion" | "outputPriceRmbPerMillion" | "cacheInputPriceRmbPerMillion" | "cacheOutputPriceRmbPerMillion">
-): Promise<void> {
-  await req("PATCH", "/api/admin/models/pricing", { model, ...pricing });
 }
 export type ModelMarketplacePatch = Partial<Pick<ModelRow, "description" | "tags" | "category" | "contextLength" | "maxOutputTokens" | "useCases" | "sortOrder" | "showInMarketplace">>;
 export async function updateModelDisplay(model: string, displayName: string, enabled: boolean, patch: ModelMarketplacePatch = {}): Promise<void> {
@@ -314,96 +195,7 @@ export async function listAudit(limit = 100): Promise<AuditRow[]> {
   return (await req<{ data: AuditRow[] }>("GET", `/api/admin/audit?limit=${limit}`)).data;
 }
 
-// —— 数据分析 ——
-export interface AnalyticsOverview {
-  totalRegistered: number;
-  dau: number;
-  wau: number;
-  mau: number;
-  payingTotal: number;
-  paymentRate: number;
-  totalRevenueYuan: number;
-  arpu: number;
-  arppu: number;
-  totalBalance: number | null;
-  usersWithBalance: number | null;
-  videoPointsBalance: number | null;
-  onlineDevices: number;
-  onlineSecondsToday: number;
-  imageTasksToday: number;
-  imageTasksMonth: number;
-  imageTasksTotal: number;
-  generatedImagesToday: number;
-  generatedImagesMonth: number;
-  generatedImagesTotal: number;
-  kbUploadsToday: number;
-  kbUploadsMonth: number;
-  kbUploadsTotal: number;
-  kbUploadBytesTotal: number;
-}
-export interface DailyRow {
-  date: string;
-  registered: number;
-  dau: number;
-  wau: number;
-  mau: number;
-  revenueYuan: number;
-  grantedPoints: number;
-  consumedPoints: number;
-  newPayingUsers: number;
-  topupCount: number;
-  payingUsers: number;
-  rechargeUsageRatio: number | null;
-}
-export interface RankingRow {
-  key: string;
-  points: number;
-  tokens: number;
-  count: number;
-}
-export interface RankingsSummary {
-  users: RankingRow[];
-  models: RankingRow[];
-  features: RankingRow[];
-}
-export interface SalesRow {
-  key: string;
-  name: string;
-  orders: number;
-  users: number;
-  revenueFen: number;
-  points: number;
-}
-export interface SalesSummary {
-  memberships: SalesRow[];
-  rechargePackages: SalesRow[];
-}
-export interface CohortMatrix {
-  offsets: number[];
-  cohorts: { cohortDate: string; cohortSize: number; cells: Record<number, number | null> }[];
-}
-export async function analyticsOverview(): Promise<{ data: AnalyticsOverview | null; lastRolledAt: string | null }> {
-  return req("GET", "/api/admin/analytics/overview");
-}
-export async function analyticsDaily(days = 30): Promise<DailyRow[]> {
-  return (await req<{ data: DailyRow[] }>("GET", `/api/admin/analytics/daily?days=${days}`)).data;
-}
-export async function analyticsRetention(): Promise<CohortMatrix> {
-  return (await req<{ data: CohortMatrix }>("GET", "/api/admin/analytics/retention")).data;
-}
-export async function analyticsLtv(): Promise<CohortMatrix> {
-  return (await req<{ data: CohortMatrix }>("GET", "/api/admin/analytics/ltv")).data;
-}
-export async function analyticsRankings(days = 30): Promise<RankingsSummary> {
-  return (await req<{ data: RankingsSummary }>("GET", `/api/admin/analytics/rankings?days=${days}`)).data;
-}
-export async function analyticsSales(days = 30): Promise<SalesSummary> {
-  return (await req<{ data: SalesSummary }>("GET", `/api/admin/analytics/sales?days=${days}`)).data;
-}
-export async function analyticsRebuild(from: string, to: string): Promise<{ metricDays: number; cohorts: number }> {
-  return (await req<{ data: { metricDays: number; cohorts: number } }>("POST", "/api/admin/analytics/rebuild", { from, to })).data;
-}
-
+// —— 用户详情 ——
 export interface UserActivityPeriod {
   key: string;
   sessions: number;
@@ -413,53 +205,13 @@ export interface UserActivityPeriod {
   kbDocuments: number;
   imageTasks: number;
 }
-export interface VipSummary {
-  userId: string;
-  levelId: number;
-  levelName: string;
-  discountBps: number;
-  growthPoints: number;
-  nextLevelId: number | null;
-  nextLevelName: string;
-  nextThreshold: number;
-  pointsToNextLevel: number;
-  highestLevel: boolean;
-}
-export interface UserConsumptionRecord {
-  operationId: string;
-  type: string;
-  model: string;
-  displayName: string;
-  status: string;
-  reservedPoints: number;
-  actualPoints: number;
-  originalPoints: number;
-  vipLevelName: string;
-  vipDiscountBps: number;
-  vipSavedPoints: number;
-  vipGrowthPoints: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheInputTokens: number;
-  cacheOutputTokens: number;
-  createdAt: string;
-  settledAt: string | null;
-}
 export interface UserDetail {
-  user: Omit<AdminUser, "balance">;
+  user: AdminUser;
   kpis: {
     onlineToday: boolean;
     onlineDevices: number;
     loginCountToday: number;
-    todayToken: number;
     todayAgent: number;
-    totalToken: number;
-    todayRechargeYuan: number;
-    todayConsumptionPoints: number;
-    totalRechargeYuan: number;
-    totalConsumptionPoints: number;
-    balance: number | null;
-    currentMemberships: unknown[];
   };
   activity: UserActivityPeriod[];
   devices: Array<{
@@ -472,21 +224,10 @@ export interface UserDetail {
     createdAt: string;
     onlineSecondsToday: number;
   }>;
-  vipSummary: VipSummary | null;
-  consumptionRecords: UserConsumptionRecord[];
-  rechargeEvents: Array<{ paidAtDate: string; amountFen: number; points: number }>;
   timeline: Array<{ type: string; title: string; at: string; meta: string }>;
-}
-export interface UserBillingLog {
-  user: Omit<AdminUser, "balance">;
-  vipSummary: VipSummary | null;
-  consumptionRecords: UserConsumptionRecord[];
 }
 export async function getUserDetail(id: string): Promise<UserDetail> {
   return (await req<{ data: UserDetail }>("GET", `/api/admin/users/${id}/detail`)).data;
-}
-export async function getUserBillingLog(id: string): Promise<UserBillingLog> {
-  return (await req<{ data: UserBillingLog }>("GET", `/api/admin/users/${id}/billing-log`)).data;
 }
 
 // —— 知识库管理 ——
@@ -546,135 +287,4 @@ export async function deleteKbDoc(kbId: string, docId: string): Promise<void> {
 
 export async function grantUserKbQuota(userId: string, a: { bytes: number; expiresAt?: string; note?: string }): Promise<void> {
   await req("POST", `/api/admin/users/${userId}/kb-quota`, a);
-}
-
-// —— 月卡管理 ——
-export interface MembershipCardRow {
-  id: number;
-  name: string;
-  priceFen: number;
-  durationDays: number;
-  cadence: string;
-  grantPoints: number;
-  kbQuotaBytes?: number;
-  enabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-export async function listMembershipCards(): Promise<MembershipCardRow[]> {
-  return (await req<{ data: MembershipCardRow[] }>("GET", "/api/admin/membership-cards")).data;
-}
-export async function upsertMembershipCard(a: { id?: number; name: string; priceFen: number; durationDays: number; cadence: string; grantPoints: number; kbQuotaBytes?: number; enabled: boolean }): Promise<void> {
-  await req("POST", "/api/admin/membership-cards", a);
-}
-export async function deleteMembershipCard(id: number): Promise<void> {
-  await req("POST", "/api/admin/membership-cards/delete", { id });
-}
-
-export interface VipLevelRow {
-  id: number;
-  name: string;
-  sortOrder: number;
-  thresholdRmbFen: number;
-  thresholdPoints: number;
-  savedRechargeRatio: number;
-  discountBps: number;
-  enabled: boolean;
-  upgradeEnabled: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-export interface UpsertVipLevelArgs {
-  id?: number;
-  name: string;
-  sortOrder: number;
-  thresholdRmbFen: number;
-  discountBps: number;
-  enabled: boolean;
-  upgradeEnabled: boolean;
-}
-export async function listVipLevels(): Promise<VipLevelRow[]> {
-  return (await req<{ data: VipLevelRow[] }>("GET", "/api/admin/vip-levels")).data;
-}
-export async function upsertVipLevel(a: UpsertVipLevelArgs): Promise<void> {
-  await req("POST", "/api/admin/vip-levels", a);
-}
-export async function deleteVipLevel(id: number): Promise<void> {
-  await req("POST", "/api/admin/vip-levels/delete", { id });
-}
-
-// —— 资源计价 ——
-export interface ResourcePriceRow {
-  resourceKey: string;
-  displayName: string;
-  pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
-  rate: number;
-  outputRate?: number;
-  perUnits: number;
-  enabled: boolean;
-}
-export async function listResourcePrices(): Promise<ResourcePriceRow[]> {
-  return (await req<{ data: ResourcePriceRow[] }>("GET", "/api/admin/resource-prices")).data;
-}
-export async function upsertResourcePrice(a: ResourcePriceRow): Promise<void> {
-  await req("POST", "/api/admin/resource-prices", a);
-}
-export async function deleteResourcePrice(resourceKey: string): Promise<void> {
-  await req("POST", "/api/admin/resource-prices/delete", { resourceKey });
-}
-export async function getRechargeRatio(): Promise<number> {
-  return (await req<{ ratio: number }>("GET", "/api/admin/config/recharge-ratio")).ratio;
-}
-export async function setRechargeRatio(ratio: number): Promise<void> {
-  await req("PUT", "/api/admin/config/recharge-ratio", { ratio });
-}
-export interface RechargePackageRow {
-  id: string;
-  name: string;
-  amountFen: number;
-  points: number;
-  enabled: boolean;
-  sortOrder: number;
-}
-export async function listRechargePackages(): Promise<RechargePackageRow[]> {
-  return (await req<{ data: RechargePackageRow[] }>("GET", "/api/admin/config/recharge-packages")).data;
-}
-export async function setRechargePackages(packages: RechargePackageRow[]): Promise<void> {
-  await req("PUT", "/api/admin/config/recharge-packages", { packages });
-}
-
-// —— 分销代理（总台）——
-export interface ResellerRow {
-  channelId: string; code: string; commissionRate: number; enabled: boolean;
-  resellerId: string | null; username: string | null; disabled: boolean | null; createdAt: string;
-}
-export interface ChannelSummary { totalUsers: number; totalRechargeFen: number; commissionFen: number; }
-export interface ResellerVisibility { showRecharge: boolean; showConsumption: boolean; showMembership: boolean; showLastActive: boolean; }
-
-export async function listResellers(): Promise<ResellerRow[]> {
-  return (await req<{ data: ResellerRow[] }>("GET", "/api/admin/resellers")).data;
-}
-export async function createReseller(b: { username: string; password: string; code: string; commissionRate: number }): Promise<void> {
-  await req("POST", "/api/admin/resellers", b);
-}
-export async function updateReseller(channelId: string, b: { commissionRate?: number; enabled?: boolean }): Promise<void> {
-  await req("PATCH", `/api/admin/resellers/${channelId}`, b);
-}
-export async function resellerSummary(channelId: string): Promise<ChannelSummary> {
-  return (await req<{ data: ChannelSummary }>("GET", `/api/admin/resellers/${channelId}/summary`)).data;
-}
-export async function getResellerVisibility(): Promise<ResellerVisibility> {
-  return (await req<{ data: ResellerVisibility }>("GET", "/api/admin/reseller-visibility")).data;
-}
-export async function setResellerVisibility(b: Partial<ResellerVisibility>): Promise<ResellerVisibility> {
-  return (await req<{ data: ResellerVisibility }>("PUT", "/api/admin/reseller-visibility", b)).data;
-}
-
-// —— 代理自助 ——
-export async function myChannelSummary(): Promise<ChannelSummary> {
-  return (await req<{ data: ChannelSummary }>("GET", "/api/reseller/summary")).data;
-}
-export interface MyChannelUsers { rows: Record<string, unknown>[]; total: number; page: number; pageSize: number; }
-export async function myChannelUsers(page = 1, pageSize = 20): Promise<MyChannelUsers> {
-  return (await req<{ data: MyChannelUsers }>("GET", `/api/reseller/users?page=${page}&pageSize=${pageSize}`)).data;
 }

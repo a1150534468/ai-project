@@ -1,5 +1,5 @@
 /**
- * novel-task-runner 拆分后的执行层:`runNovelTask` 从领取任务到结算落库的整条主流程,
+ * novel-task-runner 拆分后的执行层:`runNovelTask` 从领取任务到写回落库的整条主流程,
  * 加上它独占的进度上报、取消检查、提示词模板渲染。
  *
  * `NovelTaskStoppedError`、它唯一的抛出点 `assertTaskActive`、以及唯一的 `instanceof` 捕获点
@@ -8,14 +8,14 @@
  * 生成失败。
  *
  * `assertTaskActive` 在四个点上被调:领取时、置 running 后、每个 chunk、以及输出结束时。
- * 少任何一处都会让"取消"在那一段时间内不生效,而模型仍在烧点数。
+ * 少任何一处都会让"取消"在那一段时间内不生效,而模型仍在继续输出。
  *
  * `waitTimer` / `waitHeartbeat` 这套心跳只在 `streamedChars === 0` 时上报等待秒数,首个 chunk
  * 到达就 `clearInterval` 并 await 掉在飞的那一次上报。`finally` 里再兜一次 clear —— 漏了它,
  * 生成失败的任务会留下一个永久 5 秒一次写库的定时器。
  *
- * catch 块里先 `refundResource` 再改任务状态,且两步都 `.catch(() => undefined)`:退款失败不能
- * 阻止任务被标记为失败,否则任务会永远停在 running 等兜底扫。
+ * catch 块里改任务状态那一步用 `.catch(() => undefined)` 收尾:写状态自己失败就交给兜底扫,
+ * 不再往外抛 —— 抛出去只会用写库错误顶掉真正的失败原因。
  *
  * 依赖方向:shared / context / persist → 本文件。不 import read,不 import 门面。
  */
@@ -25,10 +25,10 @@ import type { PrismaClient } from "@prisma/client";
 import { billableCharCount, parseRequiredGeneratedNovelValue } from "./novel-billable.js";
 import type { NovelGenerator } from "./novel-generation.js";
 import type { NovelPreparedRequest } from "./novel-prompts.js";
-import { NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS, type NovelTargetKind } from "./novel-types.js";
+import { NOVEL_TASK_STATUS, type NovelTargetKind } from "./novel-types.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
-import { findEnabledNovelModel, novelWritingModel } from "./novel-models.js";
-import { taskPayload, type BillingForNovels, type NovelTaskRow } from "./novel-task-shared.js";
+import { novelWritingModel } from "./novel-models.js";
+import { taskPayload, type NovelTaskRow } from "./novel-task-shared.js";
 import { buildChapterContextText } from "./novel-task-context.js";
 import { saveGeneratedResult } from "./novel-task-persist.js";
 
@@ -101,12 +101,11 @@ async function assertTaskActive(prisma: PrismaClient, taskId: string): Promise<N
 
 export async function runNovelTask(args: {
   readonly prisma: PrismaClient;
-  readonly billing: BillingForNovels;
   readonly generator: NovelGenerator;
   readonly task: NovelTaskRow;
   readonly onChunk?: (chunk: string) => Promise<void>;
 }): Promise<void> {
-  const { prisma, billing, generator } = args;
+  const { prisma, generator } = args;
   const latestBeforeRun = await prisma.novelTask.findUnique({ where: { id: args.task.id } });
   if (!latestBeforeRun || latestBeforeRun.status === NOVEL_TASK_STATUS.succeeded || latestBeforeRun.status === NOVEL_TASK_STATUS.failed || latestBeforeRun.status === NOVEL_TASK_STATUS.cancelled) return;
   try {
@@ -169,16 +168,7 @@ export async function runNovelTask(args: {
       where: { projectId_nodeKey: { projectId: project.id, nodeKey: promptNodeKey(targetKind) } },
     }) ?? null;
     const templateModel = template?.model || "";
-    let requestedModel = templateModel || novelWritingModel(project.generationPrefs);
-    if (requestedModel && billing.listModels) {
-      try {
-        const models = await billing.listModels();
-        const selected = findEnabledNovelModel(models.data, requestedModel);
-        if (!selected || (!templateModel && selected.showInMarketplace !== true)) requestedModel = "";
-      } catch {
-        requestedModel = "";
-      }
-    }
+    const requestedModel = templateModel || novelWritingModel(project.generationPrefs);
     await updateTaskProgress(prisma, task.id, {
       progressPercent: 32,
       progressStage: "generating",
@@ -306,23 +296,12 @@ export async function runNovelTask(args: {
     const parsed = parseRequiredGeneratedNovelValue(targetKind, result.text);
     const billableChars = billableCharCount(targetKind, parsed);
     await updateTaskProgress(prisma, task.id, {
-      progressPercent: 91,
-      progressStage: "settling",
-      progressMessage: "输出结构校验通过，正在核算本次生成用量",
-    });
-    const settled = await billing.settleResource({
-      operationId: task.operationId,
-      resourceKey: NOVEL_RESOURCE_KEY,
-      units: billableChars,
-    });
-    await updateTaskProgress(prisma, task.id, {
       progressPercent: 96,
       progressStage: "saving",
-      progressMessage: "用量核算完成，正在写入作品资料",
+      progressMessage: "正在写入作品资料",
     });
-    await saveGeneratedResult({ prisma, task, parsed, model: result.model, billableChars, settledPoints: settled.settled });
+    await saveGeneratedResult({ prisma, task, parsed, model: result.model, billableChars });
   } catch (error) {
-    await billing.refundResource(args.task.operationId).catch(() => undefined);
     const status = error instanceof NovelTaskStoppedError ? NOVEL_TASK_STATUS.cancelled : NOVEL_TASK_STATUS.failed;
     const message = status === NOVEL_TASK_STATUS.cancelled ? "用户已取消" : errorMessageOrFallback(error, "生成失败");
     await prisma.novelTask.update({

@@ -53,7 +53,7 @@ export function isWorkflowSubVisible(
 }
 
 export function clientMenuKeyForView(view: ViewType): string | null {
-  return view === "billing" || view === "workflow" ? null : `nav.${view}`;
+  return view === "workflow" ? null : `nav.${view}`;
 }
 
 const FALLBACK_VIEW_ORDER: readonly ViewType[] = [
@@ -65,11 +65,11 @@ const FALLBACK_VIEW_ORDER: readonly ViewType[] = [
   "settings",
 ];
 
-/** 当前页面被后台隐藏时，跳到第一个仍显示的主菜单；全关时保留充值页作为安全落点。 */
+/** 当前页面被后台隐藏时，跳到第一个仍显示的主菜单；全关时回落到对话页作为安全落点。 */
 export function firstVisibleClientView(visibility: ClientMenuVisibility): ViewType {
   return FALLBACK_VIEW_ORDER.find((view) =>
     isClientMenuVisible(visibility, `nav.${view}`),
-  ) ?? "billing";
+  ) ?? "chat";
 }
 
 export async function getClientMenuVisibility(token?: string): Promise<ClientMenuVisibility> {

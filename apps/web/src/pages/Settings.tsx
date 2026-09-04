@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Icon } from "@iconify/react";
 import { motion } from "motion/react";
 import { RippleButton, useToast, spring } from "../motion";
-import { getBalance, listModels } from "../api";
-import { formatBalanceLabel } from "../balanceSync";
+import { listModels } from "../api";
 import {
   THEME_CHANGE_EVENT,
   THEME_STORAGE_KEY,
@@ -14,7 +13,6 @@ import {
 } from "../theme";
 
 interface SettingsPageProps {
-  token: string;
   uid?: string;
   userName?: string;
   preferredModel?: string;
@@ -23,7 +21,6 @@ interface SettingsPageProps {
 }
 
 export default function SettingsPage({
-  token,
   uid = "未知用户",
   userName = "用户",
   preferredModel = "",
@@ -31,7 +28,6 @@ export default function SettingsPage({
   onLogout,
 }: SettingsPageProps) {
   const toast = useToast();
-  const [balance, setBalance] = useState<number | null>(null);
   const [models, setModels] = useState<Array<{ model: string; displayName: string }>>([]);
   const [selectedModel, setSelectedModel] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,10 +39,6 @@ export default function SettingsPage({
     const loadData = async () => {
       setLoading(true);
       try {
-        // 获取余额
-        const balanceData = await getBalance(token);
-        setBalance(balanceData.balance);
-
         // 获取模型列表
         const modelsList = await listModels();
         setModels(modelsList);
@@ -66,7 +58,7 @@ export default function SettingsPage({
     };
 
     loadData();
-  }, [preferredModel, token]);
+  }, [preferredModel]);
 
   useEffect(() => {
     const syncThemePreference = () => setThemePreference(getThemePreference());
@@ -136,15 +128,6 @@ export default function SettingsPage({
             <div className="pb-4 border-b border-hairline-subtle last:border-0">
               <p className="text-xs text-ink-secondary uppercase font-medium mb-2">用户名</p>
               <p className="text-sm text-ink">{userName}</p>
-            </div>
-
-            {/* Balance */}
-            <div className="pb-4 border-b border-hairline-subtle last:border-0">
-              <p className="text-xs text-ink-secondary uppercase font-medium mb-2">算力点余额</p>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-brand">{formatBalanceLabel(balance)}</span>
-              </div>
-              <p className="text-xs text-ink-tertiary mt-2">1 RMB = 100 点</p>
             </div>
           </div>
         </div>

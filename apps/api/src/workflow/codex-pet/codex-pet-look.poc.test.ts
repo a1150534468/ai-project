@@ -70,7 +70,6 @@ type LoadedPoc = {
     readonly projectName: string;
     readonly runId: string;
     readonly runStatus: string;
-    readonly billingRefundStatus: string;
     readonly requestedModel: string;
     readonly visualQaModel: string;
     readonly imageGenerationCallCount: number;
@@ -136,8 +135,8 @@ async function loadPocSource(): Promise<LoadedPoc> {
     include: { project: true },
   });
   if (!run?.selectedBaseArtifactId) throw new Error("POC source run has no approved canonical artifact");
-  if (run.status !== "failed" || run.billingRefundStatus !== "refunded") {
-    throw new Error("standalone look POC only accepts a failed and refunded source run");
+  if (run.status !== "failed") {
+    throw new Error("standalone look POC only accepts a failed source run");
   }
   if (run.requestedModel !== CODEX_PET_LOOK_POC_REQUESTED_MODEL) {
     throw new Error(`POC source run requested unexpected image model ${run.requestedModel}`);
@@ -244,7 +243,6 @@ async function loadPocSource(): Promise<LoadedPoc> {
       projectName: run.project.name,
       runId: run.id,
       runStatus: run.status,
-      billingRefundStatus: run.billingRefundStatus,
       requestedModel: run.requestedModel,
       visualQaModel: run.visualQaModel,
       imageGenerationCallCount: run.imageGenerationCallCount,
@@ -322,7 +320,6 @@ async function preparePocFiles(mode: "prepare" | "live", observedImageCalls = 0,
       projectId: loaded.source.projectId,
       projectName: loaded.source.projectName,
       status: loaded.source.runStatus,
-      billingRefundStatus: loaded.source.billingRefundStatus,
       requestedModel: loaded.source.requestedModel,
       visualQaModel: loaded.source.visualQaModel,
       chromaKey: loaded.identity.chromaKey,

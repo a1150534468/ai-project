@@ -34,11 +34,6 @@ const mocks = vi.hoisted(() => {
     agentPrompt: string | null;
   }> = [];
 
-  const mockBilling = {
-    listEnabledModels: vi.fn(),
-    reserve: vi.fn(),
-    settle: vi.fn(),
-  };
   const mockRunTurn = vi.fn();
   const mockRelease = vi.fn();
 
@@ -94,7 +89,6 @@ const mocks = vi.hoisted(() => {
   return {
     messages,
     sessions,
-    mockBilling,
     mockPrisma,
     mockRelease,
     mockRunTurn,
@@ -113,13 +107,7 @@ vi.mock("@ai-assistant/llm", () => ({
   loadLlmConfig: () => ({ defaultModel: "glm-5.2" }),
 }));
 
-vi.mock("@ai-assistant/billing", () => ({
-  InsufficientBalanceError: class InsufficientBalanceError extends Error {},
-  createBillingClient: () => mocks.mockBilling,
-}));
-
 vi.mock("../agent/run.js", () => ({
-  chatMaxOutputTokenBudget: () => 12345,
   ChatModelEmptyResponseError: mocks.MockChatModelEmptyResponseError,
   ChatModelStreamTimeoutError: mocks.MockChatModelStreamTimeoutError,
   runTurn: mocks.mockRunTurn,
@@ -162,16 +150,11 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.messages.length = 0;
   mocks.sessions.length = 0;
-  process.env.BILLING_BASE_URL = "http://billing";
-  process.env.BILLING_INTERNAL_TOKEN = "token";
-  mocks.mockBilling.listEnabledModels.mockResolvedValue({ data: [{ model: "glm-5.2" }] });
-  mocks.mockBilling.reserve.mockResolvedValue({});
-  mocks.mockBilling.settle.mockResolvedValue({});
   mocks.mockRunTurn.mockRejectedValue(new mocks.MockChatModelEmptyResponseError("CHAT_MODEL_EMPTY_RESPONSE"));
 });
 
 describe("聊天空响应保护", () => {
-  it("模型空响应时退回主对话预扣，并且不保存空助手消息", async () => {
+  it("模型空响应时不保存空助手消息", async () => {
     const app = await makeApp();
     const response = await app.inject({
       method: "POST",
@@ -183,17 +166,6 @@ describe("聊天空响应保护", () => {
     expect(response.body).toContain("event: error");
     expect(response.body).toContain("模型未返回内容，请重试");
     expect(response.body).not.toContain("event: done");
-    expect(mocks.mockBilling.reserve).toHaveBeenCalledTimes(1);
-    expect(mocks.mockBilling.reserve).toHaveBeenCalledWith(expect.objectContaining({
-      maxOutputTokens: 10000,
-    }));
-    expect(mocks.mockBilling.settle).toHaveBeenCalledWith(expect.objectContaining({
-      operationId: expect.stringMatching(/^turn:session-1:/),
-      userId: "user-1",
-      model: "glm-5.2",
-      inputTokens: 0,
-      outputTokens: 0,
-    }));
     expect(mocks.messages.filter((message) => message.role === "assistant")).toHaveLength(0);
     await app.close();
   });

@@ -156,8 +156,8 @@ async function loadLookBSource(): Promise<LoadedLookB> {
   }
 
   const run = await prisma.codexPetRun.findUnique({ where: { id: launch.sourceRunId }, include: { project: true } });
-  if (!run || run.status !== "failed" || run.billingRefundStatus !== "refunded") {
-    throw new Error("look-b POC only accepts the original failed/refunded R7 source run");
+  if (!run || run.status !== "failed") {
+    throw new Error("look-b POC only accepts the original failed R7 source run");
   }
   if (run.requestedModel !== CODEX_PET_LOOK_POC_REQUESTED_MODEL || run.visualQaModel !== "gpt-5.6-sol") {
     throw new Error("look-b POC source model contract is invalid");

@@ -72,15 +72,11 @@ function prismaMock(overrides: Record<string, unknown> = {}): PrismaClient {
   } as unknown as PrismaClient;
 }
 
-async function buildApp(
-  prisma: PrismaClient,
-  userId = "user-1",
-  billing: { refundResource: (operationId: string) => Promise<unknown> } = { refundResource: vi.fn(async () => ({ success: true })) },
-) {
+async function buildApp(prisma: PrismaClient, userId = "user-1") {
   const app = Fastify();
   app.decorateRequest("userId", "");
   app.addHook("preHandler", async (request) => { (request as typeof request & { userId: string }).userId = userId; });
-  await novelEngineRoutes(app, { prisma, billing });
+  await novelEngineRoutes(app, { prisma });
   return app;
 }
 
@@ -135,7 +131,6 @@ describe("novel engine routes", () => {
       output: null,
       error: null,
       workerId: "worker-1",
-      billingOperationId: null,
       startedAt: now,
       completedAt: null,
       createdAt: now,
@@ -272,9 +267,8 @@ describe("novel engine routes", () => {
     await app.close();
   });
 
-  it("cancels running steps and generation tasks and refunds their reservations", async () => {
+  it("cancels running steps and generation tasks", async () => {
     const writing = { ...run, status: "writing", currentStep: "writeChapter", currentChapter: 2 };
-    const refundResource = vi.fn(async () => ({ success: true }));
     const stepUpdateMany = vi.fn(async () => ({ count: 1 }));
     const taskUpdateMany = vi.fn(async () => ({ count: 1 }));
     const prisma = prismaMock({
@@ -287,17 +281,16 @@ describe("novel engine routes", () => {
         updateMany: stepUpdateMany,
       },
       novelTask: {
-        findMany: vi.fn(async () => [{ id: "task-running", operationId: "operation-running" }]),
+        findMany: vi.fn(async () => [{ id: "task-running" }]),
         updateMany: taskUpdateMany,
       },
     });
-    const app = await buildApp(prisma, "user-1", { refundResource });
+    const app = await buildApp(prisma, "user-1");
     const response = await app.inject({ method: "POST", url: `/api/workflow/novels/projects/${project.id}/runs/${run.id}/cancel` });
     expect(response.statusCode).toBe(200);
     expect(response.json().data.run.status).toBe("cancelled");
     expect(stepUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ status: { in: expect.arrayContaining(["queued", "running"]) } }) }));
     expect(taskUpdateMany).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "cancelled" }) }));
-    expect(refundResource).toHaveBeenCalledWith("operation-running");
     expect(mocks.appendNovelRunEvent).toHaveBeenCalledWith(expect.objectContaining({ type: "runStatusChanged", stage: "cancelled" }));
     await app.close();
   });

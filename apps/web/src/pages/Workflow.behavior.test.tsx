@@ -2,11 +2,11 @@
 
 /**
  * `Workflow.tsx`(829 行)拆分前的行为护栏。P2.4 批次二 Step 1 的四类路径:渲染(模块分派 /
- * 页头 / 开发中占位)、切换(生图 Hub 的页内 tab 与后台开关)、提交(生图校验 → 下单 → 402)、
+ * 页头 / 开发中占位)、切换(生图 Hub 的页内 tab 与后台开关)、提交(生图校验 → 下单)、
  * 错误态(拉取失败 / 上传参考图校验 / 取消与重试)。
  *
  * **和同目录 `Workflow.image-hub.test.tsx` 的分工是刻意的**:那个文件用真实 studio + stub fetch,
- * 断言的是 studio 内部渲染出的文案(tab 标签、算力点、下拉档位)。本文件相反 —— 把剩下的 studio
+ * 断言的是 studio 内部渲染出的文案(tab 标签、下拉档位)。本文件相反 —— 把剩下的 studio
  * 全部换成探针,断言的是 **Workflow.tsx 自己算出来、往下传的那份 props**。拆分会把这段编排搬进
  * hook 或子组件,探针看到的 props 才是必须逐字不变的那个契约;studio 内部长什么样不是本文件的事。
  *
@@ -24,13 +24,12 @@ import Workflow from "./Workflow";
 const apiMocks = vi.hoisted(() => ({
   cancelWorkflowImageTask: vi.fn(),
   generateWorkflowImages: vi.fn(),
-  getImageWorkflowPricing: vi.fn(),
   getWorkflowImageState: vi.fn(),
   optimizeWorkflowPrompt: vi.fn(),
   uploadWorkflowImageReference: vi.fn(),
 }));
 
-/** 只替换 Workflow.tsx 真正调用的 6 个函数,其余(含 ApiError 之外的类型与工具)保持真实实现。 */
+/** 只替换 Workflow.tsx 真正调用的 5 个函数,其余(含类型与工具)保持真实实现。 */
 vi.mock("../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api")>()),
   ...apiMocks,
@@ -59,7 +58,6 @@ vi.mock("../components/workflow/ImageWorkflowStudio", () => ({
         <p data-testid="image-size">{props.size}</p>
         <p data-testid="image-count">{props.countInput}</p>
         <p data-testid="image-mode">{props.workspaceMode}</p>
-        <p data-testid="image-cost">{String(props.estimatedPointCost)}</p>
         <p data-testid="image-generating">{`${String(props.isGenerating)}/${props.generatingCount}`}</p>
         <p data-testid="image-tasks">{props.tasks.map((task: any) => `${task.id}:${task.status}`).join(",")}</p>
         <p data-testid="image-selected">{`${String(props.selectedRequestId)}|${String(props.selectedImageId)}`}</p>
@@ -79,14 +77,6 @@ vi.mock("../components/workflow/CodexPetStudio", () => ({
 
 vi.mock("../components/workflow/ArticleWorkflowStudio", () => ({ ArticleWorkflowStudio: stub("article-studio") }));
 vi.mock("../components/workflow/NovelWorkflowStudio", () => ({ NovelWorkflowStudio: stub("novel-studio") }));
-
-function price(rate: number) {
-  return { resourceKey: `image_${rate}`, displayName: "档位", pricingType: "PER_CALL" as const, rate, perUnits: 1, enabled: true };
-}
-
-function pricing(rate: number) {
-  return { "1K": price(rate), "2K": price(rate * 2), "4K": price(rate * 4) };
-}
 
 function task(overrides: Partial<WorkflowImageTask> = {}): WorkflowImageTask {
   return {
@@ -128,7 +118,6 @@ type WorkflowOverrides = Partial<Parameters<typeof Workflow>[0]>;
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
-let onBalanceRefresh: ReturnType<typeof vi.fn>;
 
 async function mountWorkflow(overrides: WorkflowOverrides = {}): Promise<HTMLElement> {
   container = document.createElement("div");
@@ -137,7 +126,7 @@ async function mountWorkflow(overrides: WorkflowOverrides = {}): Promise<HTMLEle
   await act(async () => {
     root?.render(
       <ToastProvider>
-        <Workflow token="token" activeModuleId="image" onBalanceRefresh={onBalanceRefresh} {...overrides} />
+        <Workflow token="token" activeModuleId="image" {...overrides} />
       </ToastProvider>,
     );
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -196,9 +185,7 @@ beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
   probes.imageStudioProps = null;
   probes.codexPetProps = null;
-  onBalanceRefresh = vi.fn();
   apiMocks.getWorkflowImageState.mockResolvedValue({ images: [], tasks: [] });
-  apiMocks.getImageWorkflowPricing.mockResolvedValue(pricing(20));
   apiMocks.generateWorkflowImages.mockResolvedValue({ task: task({ status: "running" }), recent: [] });
   apiMocks.cancelWorkflowImageTask.mockResolvedValue(task({ status: "cancelled", error: "用户已取消" }));
   apiMocks.optimizeWorkflowPrompt.mockResolvedValue("优化后的提示词");
@@ -232,7 +219,6 @@ describe("Workflow 模块分派", () => {
     expect(scope.querySelector('[data-testid="codex-pet-studio"]')?.getAttribute("data-project")).toBe("pet-42");
     expect(scope.querySelector("h1")).toBeNull();
     expect(probes.codexPetProps?.token).toBe("token");
-    expect(probes.codexPetProps?.onBalanceRefresh).toBe(onBalanceRefresh);
   });
 
   it("非全屏模块渲染页头：面包屑 + 标题 + 描述都取自 WORKFLOW_MODULES", async () => {
@@ -278,13 +264,10 @@ describe("Workflow 生图 Hub 的后台开关", () => {
 });
 
 describe("Workflow 生图初始状态", () => {
-  it("挂载时按 token 拉一次任务状态与当前模型的计价", async () => {
+  it("挂载时按 token 拉一次任务状态", async () => {
     const scope = await mountWorkflow();
 
     expect(apiMocks.getWorkflowImageState).toHaveBeenCalledWith("token");
-    expect(apiMocks.getImageWorkflowPricing).toHaveBeenCalledWith("token", "qwen-image-2.0-pro-2026-04-22");
-    // 默认 1 张 × 1K 20 点
-    expect(probeText(scope, "image-cost")).toBe("20");
     expect(probeText(scope, "image-size")).toBe("1024x1024");
     expect(probeText(scope, "image-mode")).toBe("empty");
   });
@@ -308,29 +291,17 @@ describe("Workflow 生图初始状态", () => {
     expect(scope.querySelector('[data-testid="image-studio"]')).toBeTruthy();
   });
 
-  it("计价接口失败时预估留空而不是显示 0", async () => {
-    apiMocks.getImageWorkflowPricing.mockRejectedValue(new Error("计价不可用"));
+  it("换模型写回草稿", async () => {
     const scope = await mountWorkflow();
-
-    expect(probeText(scope, "image-cost")).toBe("null");
-  });
-
-  it("换模型会按新模型重新拉价，预估随之变化", async () => {
-    apiMocks.getImageWorkflowPricing.mockImplementation(async (_token: string, model?: string) =>
-      pricing(model === "gpt-image-2" ? 45 : 20));
-    const scope = await mountWorkflow();
-    expect(probeText(scope, "image-cost")).toBe("20");
 
     await invoke((props) => props.onModelChange("gpt-image-2"));
 
-    expect(apiMocks.getImageWorkflowPricing).toHaveBeenLastCalledWith("token", "gpt-image-2");
-    expect(probeText(scope, "image-cost")).toBe("45");
     expect(probeText(scope, "image-model")).toBe("gpt-image-2");
   });
 });
 
 describe("Workflow 生图提交", () => {
-  it("提交带上完整参数，成功后刷新余额并把服务端任务合并进列表", async () => {
+  it("提交带上完整参数，成功后把服务端任务合并进列表", async () => {
     apiMocks.generateWorkflowImages.mockResolvedValue({
       task: task({ requestId: "img-new", status: "running", count: 2 }),
       recent: [asset({ id: "asset-new", requestId: "img-new" })],
@@ -353,7 +324,6 @@ describe("Workflow 生图提交", () => {
       count: 2,
     });
     expect(String(payload.requestId)).toMatch(/^img-/);
-    expect(onBalanceRefresh).toHaveBeenCalledTimes(1);
     expect(probeText(scope, "image-tasks")).toContain("img-new:running");
     expect(probeText(scope, "image-error")).toBe("");
   });
@@ -378,25 +348,14 @@ describe("Workflow 生图提交", () => {
     expect(apiMocks.generateWorkflowImages).not.toHaveBeenCalled();
   });
 
-  it("402 被翻译成充值提示，且该任务标成 failed 而不是一直转圈", async () => {
-    const { ApiError } = await import("../apiError");
-    apiMocks.generateWorkflowImages.mockRejectedValue(new ApiError("insufficient points", 402));
-    const scope = await mountWorkflow();
-
-    await invoke((props) => props.onSubmit());
-
-    expect(probeText(scope, "image-error")).toBe("积分不足，请充值");
-    expect(probeText(scope, "image-tasks")).toContain(":failed");
-    expect(onBalanceRefresh).not.toHaveBeenCalled();
-  });
-
-  it("非 402 的下单失败保留上游文案", async () => {
+  it("下单失败保留上游文案，且该任务标成 failed 而不是一直转圈", async () => {
     apiMocks.generateWorkflowImages.mockRejectedValue(new Error("上游模型排队中"));
     const scope = await mountWorkflow();
 
     await invoke((props) => props.onSubmit());
 
     expect(probeText(scope, "image-error")).toBe("上游模型排队中");
+    expect(probeText(scope, "image-tasks")).toContain(":failed");
   });
 
   it("快捷张数按钮改草稿并清掉上一条错误", async () => {
@@ -409,7 +368,6 @@ describe("Workflow 生图提交", () => {
     await invoke((props) => props.onQuickCountChange(4));
     expect(probeText(scope, "image-count")).toBe("4");
     expect(probeText(scope, "image-error")).toBe("");
-    expect(probeText(scope, "image-cost")).toBe("80");
   });
 });
 
@@ -495,7 +453,7 @@ describe("Workflow 参考图上传", () => {
 });
 
 describe("Workflow 任务取消与重试", () => {
-  it("取消先本地置为 cancelled，再落到服务端并刷新余额", async () => {
+  it("取消先本地置为 cancelled，再落到服务端", async () => {
     apiMocks.getWorkflowImageState.mockResolvedValue({ images: [], tasks: [task()] });
     const scope = await mountWorkflow();
 
@@ -504,7 +462,6 @@ describe("Workflow 任务取消与重试", () => {
     expect(apiMocks.cancelWorkflowImageTask).toHaveBeenCalledWith("token", "img-1");
     expect(probeText(scope, "image-tasks")).toBe("img-1:cancelled");
     expect(probeText(scope, "image-notice")).toBe("已取消生图任务");
-    expect(onBalanceRefresh).toHaveBeenCalledTimes(1);
     // 收尾后不留 in-flight 标记，按钮不会永久禁用
     expect(probeText(scope, "image-cancelling")).toBe("");
   });
@@ -554,7 +511,6 @@ describe("Workflow 任务取消与重试", () => {
     });
     // 表单草稿不受重试影响
     expect(probeText(scope, "image-prompt")).toBe("表单里被改过的提示词");
-    expect(onBalanceRefresh).toHaveBeenCalledTimes(1);
   });
 
   it("同一个失败任务连点重试只发一次请求", async () => {

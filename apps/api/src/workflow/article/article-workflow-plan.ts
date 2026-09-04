@@ -47,7 +47,7 @@ function normalizeImages(
  * 把 LLM 产出的 html-fragment 计划归一化到平台约束内。
  *
  * 与 normalizeArticleWorkflowCaptionPlan 同样的取舍：一律归一化，不抛错。
- * 正文与配图都齐了却因为缺个标题整单失败，用户要白付一次文本费再重跑一遍。
+ * 正文与配图都齐了却因为缺个标题整单失败，用户要白等一次生成再重跑一遍。
  * 实测 preserve-text 模式下模型会守着「不增删正文」交回空 title（素材无独立标题时），
  * 提示词已修，这里是第二道兜底。
  */

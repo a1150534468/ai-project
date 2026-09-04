@@ -1,6 +1,5 @@
 import { hostname } from "node:os";
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import {
   completedNovelChapterCount,
@@ -13,10 +12,8 @@ import { nextPipelineStep, runStatusForStep } from "@ai-assistant/novel-workflow
 import {
   createNovelGenerator,
   buildNovelQualityDiagnostics,
-  estimateReserveChars,
   reserveAndCreateTask,
   runNovelTask,
-  type BillingForNovels,
   type NovelTaskRow,
   type NovelTargetKind,
 } from "../workflow/novel/index.js";
@@ -37,22 +34,13 @@ function safeMessage(error: unknown): string {
   return error instanceof Error ? error.message.slice(0, 500) : "小说引擎步骤失败";
 }
 
-function billingClient(): BillingForNovels {
-  return createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
-}
-
 async function runGeneratedTarget(args: {
   readonly prisma: PrismaClient;
-  readonly billing: BillingForNovels;
   readonly stepId: string;
   readonly projectId: string;
   readonly userId: string;
   readonly targetKind: NovelTargetKind;
   readonly payload: Record<string, unknown>;
-  readonly estimateChars: number;
   readonly onChunk?: (chunk: string) => Promise<void>;
 }) {
   let task: NovelTaskRow | null = await args.prisma.novelTask.findFirst({
@@ -62,19 +50,16 @@ async function runGeneratedTarget(args: {
   if (!task || task.status === "failed" || task.status === "cancelled") {
     task = await reserveAndCreateTask({
       prisma: args.prisma,
-      billing: args.billing,
       userId: args.userId,
       projectId: args.projectId,
       targetKind: args.targetKind,
       targetId: args.stepId,
       payload: args.payload,
-      estimateChars: args.estimateChars,
     });
   }
   if (task.status !== "succeeded") {
     await runNovelTask({
       prisma: args.prisma,
-      billing: args.billing,
       generator: createNovelGenerator(),
       task,
       onChunk: args.onChunk,
@@ -87,7 +72,6 @@ async function runGeneratedTarget(args: {
 
 async function executeStepBody(args: {
   readonly prisma: PrismaClient;
-  readonly billing: BillingForNovels;
   readonly step: {
     readonly id: string;
     readonly kind: string;
@@ -187,7 +171,6 @@ async function executeStepBody(args: {
     };
     const task = await runGeneratedTarget({
       prisma,
-      billing: args.billing,
       stepId: step.id,
       projectId: project.id,
       userId: step.run.userId,
@@ -198,7 +181,6 @@ async function executeStepBody(args: {
         summary: [chapter.outline || chapter.summary, revisionGuidance.length ? `本次为质量返修，必须解决：${revisionGuidance.join("；")}` : ""].filter(Boolean).join("\n"),
         targetChars: step.run.targetCharsPerChapter,
       },
-      estimateChars: estimateReserveChars("chapter", step.run.targetCharsPerChapter),
       onChunk: async (chunk) => {
         chunkBuffer += chunk;
         await emitChunk(false);
@@ -334,11 +316,9 @@ async function executeStepBody(args: {
 export async function executeNovelEngineStep(args: {
   readonly stepId: string;
   readonly prisma?: PrismaClient;
-  readonly billing?: BillingForNovels;
   readonly workerId?: string;
 }): Promise<void> {
   const prisma = args.prisma ?? getPrisma();
-  const billing = args.billing ?? billingClient();
   const workerId = args.workerId ?? `${hostname()}:${process.pid}`;
   const initial = await prisma.novelRunStep.findUnique({ where: { id: args.stepId }, include: { run: true } });
   if (!initial || initial.status === "succeeded" || initial.status === "cancelled") return;
@@ -384,7 +364,7 @@ export async function executeNovelEngineStep(args: {
   }, 30_000);
 
   try {
-    const output = await executeStepBody({ prisma, billing, step: initial });
+    const output = await executeStepBody({ prisma, step: initial });
     const committed = await prisma.$transaction(async (tx) => {
       const step = await tx.novelRunStep.updateMany({
         where: { id: initial.id, status: "running", workerId },
@@ -523,24 +503,6 @@ export async function executeNovelEngineStep(args: {
     });
   } catch (error) {
     const message = safeMessage(error);
-    if (error instanceof InsufficientBalanceError || (error instanceof Error && error.name === "InsufficientBalanceError")) {
-      await prisma.$transaction([
-        prisma.novelRunStep.update({ where: { id: initial.id }, data: { status: "queued", error: message, workerId: null } }),
-        prisma.novelRun.update({ where: { id: initial.runId }, data: { status: "paused", pauseRequested: true, error: message } }),
-        prisma.novelProject.update({ where: { id: initial.run.projectId }, data: { autopilotStatus: "paused" } }),
-      ]);
-      await appendNovelRunEvent({
-        prisma,
-        runId: initial.runId,
-        type: "balanceRequired",
-        stage: "paused",
-        step: initial.kind as NovelPipelineStepKind,
-        chapterNumber: initial.chapterNumber,
-        progress: 100,
-        payload: { error: message, code: "INSUFFICIENT_BALANCE" },
-      });
-      return;
-    }
     const latest = await prisma.novelRun.findUniqueOrThrow({ where: { id: initial.runId } });
     if (latest.cancelRequested || latest.status === "cancelled") {
       await prisma.$transaction([

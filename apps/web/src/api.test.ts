@@ -1,13 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   analyzeNovelChapter,
-  buyMembership,
   generateNovelChapter,
   generateNovelSetup,
   getNovelProject,
   getNovelWorkbench,
-  getImageWorkflowPricing,
-  getTopupOrder,
   rewriteNovelChapterSelection,
   saveNovelChapter,
   saveNovelChapterReview,
@@ -186,90 +183,6 @@ describe("novel workflow API", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/workflow/novels/projects/project-1/chapters/1/analyze",
       expect.objectContaining({ method: "POST" }),
-    );
-  });
-});
-
-const imagePricingPayload = {
-  "1K": { resourceKey: "image_generation_gpt_image_2_1k", displayName: "1K", pricingType: "PER_CALL", rate: 30, perUnits: 1, enabled: true },
-  "2K": { resourceKey: "image_generation_gpt_image_2_2k", displayName: "2K", pricingType: "PER_CALL", rate: 60, perUnits: 1, enabled: true },
-  "4K": { resourceKey: "image_generation_gpt_image_2_4k", displayName: "4K", pricingType: "PER_CALL", rate: 120, perUnits: 1, enabled: true },
-};
-
-describe("web api billing helpers", () => {
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  it("buyMembership sends the selected payment method", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ payUrl: "http://pay.url", tradeNo: "ai_mem" }), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await buyMembership("token", 1, "wxpay");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/membership/buy",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({ cardId: 1, method: "wxpay" }),
-      }),
-    );
-  });
-
-  it("getTopupOrder reads the current payment order status", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      data: {
-        tradeNo: "ai123",
-        userId: "u1",
-        amountFen: 10,
-        points: 10,
-        provider: "epay",
-        paymentMethod: "alipay",
-        status: "success",
-        kind: "points",
-        cardId: 0,
-        createdAt: "2026-07-02T08:45:36Z",
-        paidAt: "2026-07-02T08:45:47Z",
-      },
-    }), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const order = await getTopupOrder("token", "ai123");
-
-    expect(order.status).toBe("success");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/billing/topup/ai123",
-      expect.objectContaining({ method: "GET" }),
-    );
-  });
-
-  it("getImageWorkflowPricing 带上模型查询价格，让预估和实际扣费走同一条解析链", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: imagePricingPayload }), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const pricing = await getImageWorkflowPricing("token", "gpt-image-2");
-    expect(pricing["1K"].resourceKey).toBe("image_generation_gpt_image_2_1k");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/workflow/images/pricing?model=gpt-image-2",
-      expect.objectContaining({ method: "GET" }),
-    );
-  });
-
-  it("getImageWorkflowPricing 不传模型时不带 query，模型名做 URL 编码", async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: imagePricingPayload }), { status: 200 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    await getImageWorkflowPricing("token");
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/workflow/images/pricing",
-      expect.objectContaining({ method: "GET" }),
-    );
-
-    await getImageWorkflowPricing("token", "model/with space");
-    expect(fetchMock).toHaveBeenLastCalledWith(
-      "/api/workflow/images/pricing?model=model%2Fwith%20space",
-      expect.objectContaining({ method: "GET" }),
     );
   });
 });

@@ -142,7 +142,7 @@ describe('claim', () => {
 });
 
 describe('indexOnce', () => {
-  it('成功索引文档：USER 库计费', async () => {
+  it('成功索引文档：USER 库', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
@@ -151,7 +151,6 @@ describe('indexOnce', () => {
         sourceUri: 'memory://test',
         mime: 'text/plain',
         status: 'pending',
-        opId: `op-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
@@ -162,9 +161,6 @@ describe('indexOnce', () => {
       (sum, chunk) => sum + Math.max(5, Math.ceil(Buffer.byteLength(chunk || ' ', 'utf8') / 3)),
       0,
     );
-    const mockBilling = {
-      settle: vi.fn().mockResolvedValue({}),
-    };
 
     const deps: IndexDeps = {
       prisma,
@@ -179,8 +175,6 @@ describe('indexOnce', () => {
         vector: new Array(1024).fill(0.1),
         tokens: 5,
       }),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-1',
     };
 
@@ -207,18 +201,9 @@ describe('indexOnce', () => {
     expect(rawChunks.length).toBe(2);
     expect(rawChunks[0].embedding).toBeDefined();
     expect(rawChunks[0].embedding).toContain('0.1'); // 向量内容应该有 0.1
-
-    // 验证 settle 被调用且金额正确
-    expect(mockBilling.settle).toHaveBeenCalledWith({
-      operationId: doc.opId,
-      userId: testUser.id,
-      model: 'embedding-v1',
-      inputTokens: expectedTokens,
-      outputTokens: 0,
-    });
   });
 
-  it('瞬时失败在次数耗尽前回到 pending，成功重试只结算一次', async () => {
+  it('瞬时失败在次数耗尽前回到 pending，重试成功后置 indexed', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
@@ -226,14 +211,12 @@ describe('indexOnce', () => {
         sourceType: 'TEXT',
         sourceUri: 'memory://transient-then-success',
         status: 'pending',
-        opId: `op-transient-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
 
     const text = '第一次嵌入超时，第二次成功';
     let embedAttempts = 0;
-    const mockBilling = { settle: vi.fn().mockResolvedValue({}) };
     const deps: IndexDeps = {
       prisma,
       loadObject: vi.fn().mockResolvedValue({
@@ -248,8 +231,6 @@ describe('indexOnce', () => {
         if (embedAttempts === 1) throw new Error('Embedding upstream timeout');
         return { vector: new Array(1024).fill(0.4), tokens: 12 };
       }),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-transient-then-success',
     };
 
@@ -257,7 +238,6 @@ describe('indexOnce', () => {
 
     expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
       .toMatchObject({ status: 'pending', attempts: 1, error: 'Embedding upstream timeout' });
-    expect(mockBilling.settle).not.toHaveBeenCalled();
 
     await indexOnce(deps, doc.id, { maxAttempts: 3 });
 
@@ -265,15 +245,9 @@ describe('indexOnce', () => {
     expect(indexed).toMatchObject({ status: 'indexed', attempts: 2, chunkCount: 1, error: null });
     const chunks = await prisma.chunk.findMany({ where: { documentId: doc.id } });
     createdChunkIds.push(...chunks.map((chunk) => chunk.id));
-    expect(mockBilling.settle).toHaveBeenCalledTimes(1);
-    expect(mockBilling.settle).toHaveBeenCalledWith(expect.objectContaining({
-      operationId: doc.opId,
-      userId: testUser.id,
-      inputTokens: expect.any(Number),
-    }));
   });
 
-  it('瞬时失败达到最大尝试次数后进入 failed 并只释放一次预扣', async () => {
+  it('瞬时失败达到最大尝试次数后进入 failed', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
@@ -282,13 +256,11 @@ describe('indexOnce', () => {
         sourceUri: 'memory://transient-exhausted',
         status: 'pending',
         attempts: 1,
-        opId: `op-exhausted-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
 
     const text = '嵌入服务持续不可用';
-    const mockBilling = { settle: vi.fn().mockResolvedValue({}) };
     const deps: IndexDeps = {
       prisma,
       loadObject: vi.fn().mockResolvedValue({
@@ -299,8 +271,6 @@ describe('indexOnce', () => {
       parse: vi.fn().mockResolvedValue(text),
       chunk: vi.fn().mockReturnValue([text]),
       embed: vi.fn().mockRejectedValue(new Error('Embedding service unavailable')),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-transient-exhausted',
     };
 
@@ -308,14 +278,6 @@ describe('indexOnce', () => {
 
     expect(await prisma.document.findUniqueOrThrow({ where: { id: doc.id } }))
       .toMatchObject({ status: 'failed', attempts: 2, error: 'Embedding service unavailable' });
-    expect(mockBilling.settle).toHaveBeenCalledTimes(1);
-    expect(mockBilling.settle).toHaveBeenCalledWith({
-      operationId: doc.opId,
-      userId: testUser.id,
-      model: 'embedding-v1',
-      inputTokens: 0,
-      outputTokens: 0,
-    });
   });
 
   it('claim 失败时直接返回（防重复索引）', async () => {
@@ -331,15 +293,12 @@ describe('indexOnce', () => {
     });
     createdDocIds.push(doc.id);
 
-    const mockBilling = { settle: vi.fn() };
     const deps: IndexDeps = {
       prisma,
       loadObject: vi.fn(),
       parse: vi.fn(),
       chunk: vi.fn(),
       embed: vi.fn(),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-2',
     };
 
@@ -350,12 +309,10 @@ describe('indexOnce', () => {
     expect(unchanged?.status).toBe('indexing');
     expect(unchanged?.lockedBy).toBe('other-worker');
 
-    // 没有调用 settle
-    expect(mockBilling.settle).not.toHaveBeenCalled();
     expect(deps.parse).not.toHaveBeenCalled();
   });
 
-  it('解析失败（EmptyTextError）：status=failed，全额退款', async () => {
+  it('解析失败（EmptyTextError）：status=failed', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
@@ -363,14 +320,9 @@ describe('indexOnce', () => {
         sourceType: 'TEXT',
         sourceUri: 'memory://empty',
         status: 'pending',
-        opId: `op-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
-
-    const mockBilling = {
-      settle: vi.fn().mockResolvedValue({}),
-    };
 
     const deps: IndexDeps = {
       prisma,
@@ -382,8 +334,6 @@ describe('indexOnce', () => {
       parse: vi.fn().mockRejectedValue(new EmptyTextError('文本为空或仅空白')),
       chunk: vi.fn(),
       embed: vi.fn(),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-1',
     };
 
@@ -394,33 +344,20 @@ describe('indexOnce', () => {
     expect(failed?.error).toContain('文本为空');
     expect(failed?.lockedBy).toBeNull();
     expect(failed?.attempts).toBe(1); // 永久失败不进入重试循环
-
-    // 应该调用 settle 进行全额退款（inputTokens=0）
-    expect(mockBilling.settle).toHaveBeenCalledWith({
-      operationId: doc.opId,
-      userId: testUser.id,
-      model: 'embedding-v1',
-      inputTokens: 0,
-      outputTokens: 0,
-    });
   });
 
-  it('OFFICIAL 库成功索引但不计费', async () => {
+  it('OFFICIAL 库成功索引', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: officialKb.id,
         name: 'official.txt',
         sourceType: 'TEXT',
         status: 'pending',
-        opId: `op-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
 
     const mockText = '官方库文本';
-    const mockBilling = {
-      settle: vi.fn().mockResolvedValue({}),
-    };
 
     const deps: IndexDeps = {
       prisma,
@@ -435,8 +372,6 @@ describe('indexOnce', () => {
         vector: new Array(1024).fill(0.2),
         tokens: 3,
       }),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-1',
     };
 
@@ -445,34 +380,21 @@ describe('indexOnce', () => {
     const updated = await prisma.document.findUnique({ where: { id: doc.id } });
     expect(updated?.status).toBe('indexed');
     expect(updated?.chunkCount).toBe(1);
-
-    // OFFICIAL 库不应该调用 settle
-    expect(mockBilling.settle).not.toHaveBeenCalled();
   });
 
-  it('并发两次 indexOnce 同一 docId，only one embed+settle', async () => {
+  it('并发两次 indexOnce 同一 docId，only one embed', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
         name: 'concurrent.txt',
         sourceType: 'TEXT',
         status: 'pending',
-        opId: `op-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
 
     const mockText = '并发测试';
     let embedCalls = 0;
-    let settleCalls = 0;
-
-    const mockBilling = {
-      settle: vi.fn(async () => {
-        settleCalls++;
-        // 模拟一点处理时间
-        await new Promise((r) => setTimeout(r, 10));
-      }),
-    };
 
     const deps: IndexDeps = {
       prisma,
@@ -491,8 +413,6 @@ describe('indexOnce', () => {
           tokens: 2,
         };
       }),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-1',
     };
 
@@ -506,32 +426,26 @@ describe('indexOnce', () => {
     expect(r1).toBeUndefined();
     expect(r2).toBeUndefined();
 
-    // 但只有一个会成功 claim，所以只有一次 embed + settle
+    // 但只有一个会成功 claim，所以只有一次 embed
     expect(embedCalls).toBe(1);
-    expect(settleCalls).toBe(1);
-    expect(mockBilling.settle).toHaveBeenCalledTimes(1);
 
     const final = await prisma.document.findUnique({ where: { id: doc.id } });
     expect(final?.status).toBe('indexed');
     expect(final?.chunkCount).toBe(1);
   });
 
-  it('embed 瞬时出错：status=pending，保留预扣等待 reaper', async () => {
+  it('embed 瞬时出错：status=pending，等待 reaper 重试', async () => {
     const doc = await prisma.document.create({
       data: {
         kbId: userKb.id,
         name: 'embed-fail.txt',
         sourceType: 'TEXT',
         status: 'pending',
-        opId: `op-${Date.now()}`,
       },
     });
     createdDocIds.push(doc.id);
 
     const mockText = '嵌入失败测试';
-    const mockBilling = {
-      settle: vi.fn().mockResolvedValue({}),
-    };
 
     const deps: IndexDeps = {
       prisma,
@@ -543,8 +457,6 @@ describe('indexOnce', () => {
       parse: vi.fn().mockResolvedValue(mockText),
       chunk: vi.fn().mockReturnValue([mockText]),
       embed: vi.fn().mockRejectedValue(new Error('Embedding API error')),
-      billing: mockBilling,
-      embeddingModel: 'embedding-v1',
       workerId: 'worker-1',
     };
 
@@ -554,8 +466,5 @@ describe('indexOnce', () => {
     expect(pending?.status).toBe('pending');
     expect(pending?.attempts).toBe(1);
     expect(pending?.error).toContain('Embedding API error');
-
-    // 尚未进入终态，不提前退款；后续成功仍能使用同一 operationId 结算。
-    expect(mockBilling.settle).not.toHaveBeenCalled();
   });
 });

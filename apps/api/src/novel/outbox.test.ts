@@ -131,7 +131,7 @@ describe("novel outbox", () => {
   });
 
   // P0.6 查出的缺口：`targetId: null` 把 chapterRewrite 一起排除了（它 targetId 存的是章节 id，
-  // 不是 step id），于是卡死的改写任务既没人续跑、reserve 也没人退，还会把该章节的改写入口 409 锁死。
+  // 不是 step id），于是卡死的改写任务没人续跑，还会把该章节的改写入口 409 锁死。
   it("recovers a stuck chapterRewrite task but never one owned by an engine step", async () => {
     const { prisma, outboxUpsert, taskUpdate } = taskRecoveryPrisma([
       { id: "setup", projectId: "project-1", status: "queued", targetKind: "setupPlot", targetId: null, updatedAt: LONG_AGO },

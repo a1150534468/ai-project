@@ -1,18 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { requireUser } from "../../auth/require-user.js";
-import {
-  CODEX_PET_PER_IMAGE_BILLING_MODE,
-  codexPetExtraCallBudget,
-  prepareCodexPetExtraImageCall,
-} from "./codex-pet-call-ledger.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import {
   baseSelectionSchema,
   extraImageApprovalSchema,
-  isCodexPetPerImagePrice,
   isTerminalRunStatus,
   notifyEvent,
-  resolveIdempotencyKey,
   runParamsSchema,
   safeDiagnostic,
   serializeRun,
@@ -26,14 +19,11 @@ export function registerCodexPetRunReviewRoutes(app: FastifyInstance, ctx: Codex
   const {
     deps,
     prisma,
-    billing,
     enqueueRun,
     now,
     ownedProject,
     ownedRun,
-    price,
     createCancellation,
-    settleCancellationRefund,
   } = ctx;
 
   app.post("/api/workflow/codex-pets/projects/:projectId/runs/:runId/base-selection", { preHandler: requireUser }, async (request, reply) => {
@@ -51,9 +41,6 @@ export function registerCodexPetRunReviewRoutes(app: FastifyInstance, ctx: Codex
     if (project.status === "deleting") return reply.code(409).send({ error: "桌宠项目正在删除，不能修改主形象" });
 
     if ("regenerate" in body.data) {
-      if (run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
-        return reply.code(409).send({ error: "主形象候选已属于计划内调用；额外生成必须等待失败后逐次批准并单独计费" });
-      }
       if (run.status !== "awaiting_base_review" && run.status !== "base_generating") {
         return reply.code(409).send({ error: "只有等待主形象确认时才能重生候选" });
       }
@@ -340,7 +327,7 @@ export function registerCodexPetRunReviewRoutes(app: FastifyInstance, ctx: Codex
     const params = runParamsSchema.safeParse(request.params);
     if (!params.success) return reply.code(400).send({ error: "取消参数不合法" });
     try {
-      const result = await settleCancellationRefund(await createCancellation(userId, params.data.projectId, params.data.runId));
+      const result = await createCancellation(userId, params.data.projectId, params.data.runId);
       try {
         await deps.requestCancellation?.(result.run.id);
       } catch (error) {
@@ -368,121 +355,7 @@ export function registerCodexPetRunReviewRoutes(app: FastifyInstance, ctx: Codex
     const run = await ownedRun(userId, params.data.projectId, params.data.runId);
     if (!project || !run || project.latestRunId !== run.id) return reply.code(404).send({ error: "桌宠运行不存在" });
     if (project.status === CODEX_PET_LEGACY_READ_ONLY_STATUS || run.status === CODEX_PET_LEGACY_READ_ONLY_STATUS) {
-      return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能批准额外调用" });
-    }
-
-    if (run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
-      const approvalKey = resolveIdempotencyKey(request.headers["idempotency-key"], body.data.idempotencyKey);
-      if (!approvalKey.success) return reply.code(400).send({ error: "额外生图批准必须提供一致且合法的幂等键" });
-      if (run.status !== "awaiting_regeneration_approval" || project.status !== "awaiting_regeneration_approval" || !run.pendingImageJobKey) {
-        return reply.code(409).send({ error: "当前没有等待单次额外授权的生图调用" });
-      }
-      if (run.billingSettlementStatus !== "reserved") {
-        return reply.code(409).send({ error: "计划内调用额度尚未成功预留，不能批准额外调用" });
-      }
-      const pricing = await price().catch(() => null);
-      if (!pricing || !pricing.enabled || !isCodexPetPerImagePrice(pricing)) {
-        return reply.code(503).send({ error: "额外生图计费服务不可用" });
-      }
-      const job = await prisma.codexPetJob.findFirst({ where: { runId: run.id, projectId: project.id, userId, key: run.pendingImageJobKey } });
-      if (!job) return reply.code(409).send({ error: "等待批准的动作不存在" });
-      // Each approval used to raise only this job's own maxAttempts, so a row
-      // that kept failing could be re-approved without bound. Refused before
-      // charging, and counted from paid ledger rows so refunded transport
-      // failures do not consume the budget.
-      const budget = await codexPetExtraCallBudget({
-        prisma,
-        runId: run.id,
-        projectId: project.id,
-        userId,
-        jobKey: job.key,
-      });
-      if (budget.exhausted) {
-        // The run is parked in `awaiting_regeneration_approval`, which is not a
-        // terminal state: neither 失败续跑 (needs `failed`) nor 复制为新项目 (needs a
-        // terminal run) is reachable from here. Cancelling first is the only real
-        // way out, so name that step instead of an option the user cannot click.
-        return reply.code(409).send({
-          error: budget.exhausted === "job"
-            ? `该动作的额外生图次数已达上限（${budget.jobLimit} 次），请先取消本次运行，再复制为新项目重跑`
-            : `本次运行的额外生图次数已达上限（${budget.runLimit} 次），请先取消本次运行，再复制为新项目重跑`,
-          data: { extraCallBudget: budget },
-        });
-      }
-      const logicalAttempt = Math.max(1, job.attempt + 1);
-      let preparedExtra: { readonly operationId: string; readonly created: boolean } | undefined;
-      try {
-        preparedExtra = await prepareCodexPetExtraImageCall({
-          prisma,
-          runId: run.id,
-          projectId: project.id,
-          userId,
-          jobKey: job.key,
-          logicalAttempt,
-          requestedModel: run.requestedModel,
-          resourceKey: pricing.resourceKey,
-          points: pricing.rate,
-        });
-        if (!preparedExtra.created) {
-          return reply.code(202).send({
-            success: true,
-            data: { run: serializeRun(run as RunShape), approvalPending: true },
-            error: "该额外生图授权正在确认，未重复扣费或入队",
-            retryable: true,
-          });
-        }
-        await billing.chargeResource({ operationId: preparedExtra.operationId, userId, resourceKey: pricing.resourceKey, units: 1 });
-      } catch (error) {
-        if (preparedExtra?.created) {
-          await prisma.codexPetImageCall.updateMany({
-            where: { operationId: preparedExtra.operationId, status: "prepared" },
-            data: { status: "cancelled", error: safeDiagnostic(error), completedAt: now() },
-          }).catch(() => undefined);
-        }
-        const insufficient = error instanceof Error && error.name === "InsufficientBalanceError";
-        return reply.code(insufficient ? 402 : 503).send({ error: insufficient ? "积分不足，额外生图未获授权" : "额外生图扣费失败，未联系生图服务", retryable: !insufficient });
-      }
-      const updated = await prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe("SELECT pg_advisory_xact_lock(hashtext($1))", `codex-pet-extra:${run.id}:${approvalKey.value}`);
-        const current = await tx.codexPetRun.findFirst({ where: { id: run.id, projectId: project.id, userId, status: "awaiting_regeneration_approval" } });
-        if (!current || current.pendingImageJobKey !== job.key) return null;
-        const resumeStage = job.kind === "base_candidate" ? "base_generating" : "direction_generating";
-        await tx.codexPetJob.update({ where: { id: job.id }, data: { status: "queued", maxAttempts: logicalAttempt, workerId: null, completedAt: null, error: null } });
-        const next = await tx.codexPetRun.update({ where: { id: current.id }, data: {
-          status: resumeStage,
-          progressStage: resumeStage,
-          progressMessage: `已授权 ${job.key} 的 1 次额外 GPT Image 2 调用`,
-          pendingImageJobKey: null,
-          workerId: null,
-          heartbeatAt: null,
-          error: null,
-          completedAt: null,
-          lastEventSequence: { increment: 1 },
-        } });
-        await tx.codexPetProject.updateMany({ where: { id: project.id, userId, latestRunId: current.id }, data: { status: resumeStage } });
-        await tx.codexPetEvent.create({ data: {
-          projectId: project.id,
-          runId: current.id,
-          userId,
-          sequence: next.lastEventSequence,
-          type: "image.call.extra_approved",
-          stage: resumeStage,
-          jobKey: job.key,
-          message: `用户已授权 ${job.key} 的 1 次额外生图调用`,
-          progress: next.progressPercent,
-          payload: { jobKey: job.key, logicalAttempt, operationId: preparedExtra!.operationId, callKind: "extra" },
-        } });
-        return next;
-      });
-      if (!updated) return reply.code(409).send({ error: "额外授权状态已变化，请刷新后重试" });
-      try {
-        await enqueueRun(updated.id);
-      } catch (error) {
-        app.log.error({ error: safeDiagnostic(error), runId: updated.id }, "approved extra Codex pet image call enqueue failed");
-        return reply.code(503).send({ error: "额外授权已保存，任务暂未入队；可使用同一幂等键重试", retryable: true });
-      }
-      await notifyEvent(app, deps, updated.id);
-      return reply.code(202).send({ success: true, data: { run: serializeRun(updated as RunShape) } });
+      return reply.code(409).send({ error: "历史桌宠项目已归档为只读，不能批准生图调用" });
     }
 
     if (run.status === "direction_generating" && run.imageGenerationApprovalBudget === 1) {

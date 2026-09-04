@@ -27,20 +27,13 @@ const emptyPricing: RmbPricing = {
 export function ModelsPage() {
   const session = loadSession();
   const [rows, setRows] = useState<api.ModelRow[]>([]);
-  const [editPricing, setEditPricing] = useState<{ row: api.ModelRow; pricing: RmbPricing } | null>(null);
   const [editMeta, setEditMeta] = useState<{ row: api.ModelRow; draft: ModelMetaDraft } | null>(null);
   const [stats, setStats] = useState<api.ModelStatsRow | null>(null);
-  const [rechargeRatio, setRechargeRatio] = useState<number | null>(null);
   const { show, node } = useToast();
 
   const load = async () => {
     try {
-      const [models, ratio] = await Promise.all([
-        api.listModels(),
-        api.getRechargeRatio().catch(() => null),
-      ]);
-      setRows(models);
-      setRechargeRatio(ratio);
+      setRows(await api.listModels());
     } catch (error) {
       show(errMsg(error), "err");
     }
@@ -49,10 +42,6 @@ export function ModelsPage() {
   useEffect(() => {
     void load();
   }, []);
-
-  const openEditPricing = (row: api.ModelRow) => {
-    setEditPricing({ row, pricing: rmbPricingFromRow(row, rechargeRatio) });
-  };
 
   const openEditMeta = (row: api.ModelRow) => {
     setEditMeta({
@@ -69,22 +58,6 @@ export function ModelsPage() {
         category: row.category ?? "",
       },
     });
-  };
-
-  const savePricing = async () => {
-    if (!editPricing) return;
-    if (!isValidPricing(editPricing.pricing)) {
-      show("价格需填写非负数字", "err");
-      return;
-    }
-    try {
-      await api.updateModelPricing(editPricing.row.model, editPricing.pricing);
-      show("已更新计费");
-      setEditPricing(null);
-      void load();
-    } catch (error) {
-      show(errMsg(error), "err");
-    }
   };
 
   const saveMeta = async () => {
@@ -129,7 +102,7 @@ export function ModelsPage() {
   };
 
   const removeModel = async (row: api.ModelRow) => {
-    if (!globalThis.confirm(`确认删除模型配置“${row.displayName || row.model}”？历史扣费记录会保留。`)) return;
+    if (!globalThis.confirm(`确认删除模型配置“${row.displayName || row.model}”？`)) return;
     try {
       await api.deleteModel(row.model);
       show("已删除模型配置");
@@ -143,11 +116,10 @@ export function ModelsPage() {
     <div>
       {node}
       <div className="muted" style={{ marginBottom: 12, fontSize: 12 }}>
-        当前充值汇率：{rechargeRatio === null ? "—" : `${rechargeRatio} 算力点 / 元`}；模型只填写人民币价格，算力点价格自动换算。
+        模型只填写人民币价格。
       </div>
       {can(session, "MODEL_MANAGE") && (
         <UpsertModel
-          rechargeRatio={rechargeRatio}
           onDone={() => {
             show("已保存");
             void load();
@@ -169,7 +141,7 @@ export function ModelsPage() {
         </thead>
         <tbody>
           {rows.map((row) => {
-            const pricing = rmbPricingFromRow(row, rechargeRatio);
+            const pricing = rmbPricingFromRow(row);
             return (
               <tr key={row.model}>
                 <td>
@@ -193,13 +165,12 @@ export function ModelsPage() {
                     <span>{row.useCases ? clip(row.useCases, 56) : "未配置适用场景"}</span>
                   </div>
                 </td>
-                <td className="num">{formatPricePair(pricing.inputPriceRmbPerMillion, row.inputPricePerMillion)}</td>
-                <td className="num">{formatPricePair(pricing.outputPriceRmbPerMillion, row.outputPricePerMillion)}</td>
+                <td className="num">{formatRmb(pricing.inputPriceRmbPerMillion)}</td>
+                <td className="num">{formatRmb(pricing.outputPriceRmbPerMillion)}</td>
                 <td>
                   <div className="row" style={{ margin: 0 }}>
                     {can(session, "MODEL_MANAGE") && <button className="btn ghost sm" type="button" onClick={() => openStats(row)}>详情</button>}
                     {can(session, "MODEL_MANAGE") && <button className="btn ghost sm" type="button" onClick={() => openEditMeta(row)}>编辑</button>}
-                    {can(session, "PRICING_MANAGE") && <button className="btn sm" type="button" onClick={() => openEditPricing(row)}>改计费</button>}
                     {can(session, "MODEL_MANAGE") && <button className="btn danger sm" type="button" onClick={() => removeModel(row)}>删除</button>}
                   </div>
                 </td>
@@ -213,33 +184,6 @@ export function ModelsPage() {
           )}
         </tbody>
       </table>
-
-      <Modal
-        open={!!editPricing}
-        title="编辑模型计费"
-        onClose={() => setEditPricing(null)}
-        footer={
-          <div className="modal-footer-actions">
-            <button className="btn ghost" type="button" onClick={() => setEditPricing(null)}>取消</button>
-            <button className="btn" type="button" onClick={savePricing}>保存</button>
-          </div>
-        }
-      >
-        {editPricing && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <Field label="模型">
-              <span style={{ color: "var(--ink)" }}>{editPricing.row.displayName || "未命名模型"}</span>
-            </Field>
-            <div className="muted" style={{ fontSize: 12 }}>
-              当前模型广场信息将保持不变，计费调整不会清空 metadata。
-            </div>
-            <PricingFields
-              value={editPricing.pricing}
-              onChange={(pricing) => setEditPricing((current) => current ? { ...current, pricing } : current)}
-            />
-          </div>
-        )}
-      </Modal>
 
       <Modal
         open={!!editMeta}
@@ -299,7 +243,6 @@ export function ModelsPage() {
             <Field label="模型 ID"><code>{stats.model}</code></Field>
             <div className="card" style={{ margin: 0 }}>
               <div className="row" style={{ gap: 24 }}>
-                <Metric label="累计消耗" value={`${stats.totalPoints.toLocaleString()} 点`} />
                 <Metric label="调用次数" value={stats.usageCount.toLocaleString()} />
                 <Metric label="使用用户" value={stats.userCount.toLocaleString()} />
               </div>
@@ -320,11 +263,9 @@ export function ModelsPage() {
 }
 
 function UpsertModel({
-  rechargeRatio,
   onDone,
   onErr,
 }: {
-  rechargeRatio: number | null;
   onDone: () => void;
   onErr: (message: string) => void;
 }) {
@@ -420,7 +361,6 @@ function UpsertModel({
         <Field label="模型介绍"><textarea rows={3} value={description} onChange={(event) => setDescription(event.target.value)} /></Field>
         <Field label="适用场景"><textarea rows={3} value={useCases} onChange={(event) => setUseCases(event.target.value)} /></Field>
         <PricingFields value={pricing} onChange={setPricing} />
-        <Field label="换算预览"><span className="muted">{previewPoints(pricing, rechargeRatio)}</span></Field>
         <Field label="启用"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /></Field>
         <div className="row" style={{ alignItems: "end", gap: 8 }}>
           <button className="btn" type="button" disabled={!model.trim()} onClick={submit}>保存</button>
@@ -458,13 +398,12 @@ function PricingFields({
   );
 }
 
-function rmbPricingFromRow(row: api.ModelRow, ratio: number | null): RmbPricing {
-  const divisor = ratio && ratio > 0 ? ratio : 1;
+function rmbPricingFromRow(row: api.ModelRow): RmbPricing {
   return {
-    inputPriceRmbPerMillion: row.inputPriceRmbPerMillion ?? ((row.inputPricePerMillion ?? 0) / divisor),
-    outputPriceRmbPerMillion: row.outputPriceRmbPerMillion ?? ((row.outputPricePerMillion ?? 0) / divisor),
-    cacheInputPriceRmbPerMillion: row.cacheInputPriceRmbPerMillion ?? ((row.cacheInputPricePerMillion ?? 0) / divisor),
-    cacheOutputPriceRmbPerMillion: row.cacheOutputPriceRmbPerMillion ?? ((row.cacheOutputPricePerMillion ?? 0) / divisor),
+    inputPriceRmbPerMillion: row.inputPriceRmbPerMillion ?? 0,
+    outputPriceRmbPerMillion: row.outputPriceRmbPerMillion ?? 0,
+    cacheInputPriceRmbPerMillion: row.cacheInputPriceRmbPerMillion ?? 0,
+    cacheOutputPriceRmbPerMillion: row.cacheOutputPriceRmbPerMillion ?? 0,
   };
 }
 
@@ -472,21 +411,8 @@ function isValidPricing(pricing: RmbPricing): boolean {
   return Object.values(pricing).every((value) => Number.isFinite(value) && value >= 0);
 }
 
-function formatRate(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(6)));
-}
-
 function formatRmb(value: number): string {
   return `¥${Number(value.toFixed(6))}`;
-}
-
-function formatPricePair(rmb: number, points: number): string {
-  return `${formatRmb(rmb)} / ${formatRate(points)} 点`;
-}
-
-function previewPoints(value: RmbPricing, ratio: number | null): string {
-  if (!ratio) return "汇率不可用";
-  return `输入 ${formatRate(value.inputPriceRmbPerMillion * ratio)} 点，输出 ${formatRate(value.outputPriceRmbPerMillion * ratio)} 点`;
 }
 
 function clip(value: string, limit: number): string {

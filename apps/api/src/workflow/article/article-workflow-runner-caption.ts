@@ -36,7 +36,7 @@ function plannedCaptionImageManifest(
  * 小红书 / 抖音链路：一次 LLM 出「标题 + 文案 + 标签 + 配图计划」，然后只生图。
  *
  * 与公众号链路的差异都在这里：不排版、不过 HTML guard、bodyHtml 恒为空串。
- * 配图仍走注入的 populateImages，图片费回滚清单由调用方统一持有。
+ * 配图仍走注入的 populateImages，本文件不自己调 populateArticleWorkflowImages。
  */
 export async function materializeCaptionArticle(args: {
   readonly creationConfig: ArticleWorkflowCreationConfig;

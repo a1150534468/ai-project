@@ -104,7 +104,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!enabled)("Codex pet generated-board recovery", () => {
-  it("recovers two paid boards with one QA call and no image or billing mutation", async () => {
+  it("recovers two already-generated boards with one QA call and no new image call", async () => {
     const suffix = randomUUID();
     const user = await prisma.user.create({ data: {
       uid: `pet-generated-board-recovery-${suffix}`,
@@ -145,11 +145,6 @@ describe.skipIf(!enabled)("Codex pet generated-board recovery", () => {
       visualQaModel: project.visualQaModel,
       colorKey: "#ff00ff",
       imageGenerationCallCount: 10,
-      billingPoints: 200,
-      billingChargeStatus: "charged",
-      billingActivatedAt: now,
-      billingRefundStatus: "refunded",
-      billingRefundedAt: now,
       completedAt: now,
     } });
     await prisma.codexPetProject.update({ where: { id: project.id }, data: { latestRunId: run.id } });
@@ -274,9 +269,6 @@ describe.skipIf(!enabled)("Codex pet generated-board recovery", () => {
     expect(persistedRun).toMatchObject({
       status: "standard_generating",
       imageGenerationCallCount: 10,
-      billingPoints: 200,
-      billingChargeStatus: "charged",
-      billingRefundStatus: "refunded",
     });
     expect(persistedProject.status).toBe("standard_generating");
     expect(jobs.every((job) => job.status === "completed")).toBe(true);

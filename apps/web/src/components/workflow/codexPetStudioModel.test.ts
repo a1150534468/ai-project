@@ -24,8 +24,6 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     progressMessage: "归档中",
     autoContinue: false,
     colorKey: "#ff00ff",
-    billingPoints: 200,
-    billingRefundedAt: null,
     cancelRequested: false,
     hasSuccessfulImage: true,
     selectedBaseArtifactId: "base-1",

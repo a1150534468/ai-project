@@ -1,14 +1,11 @@
 import type { PrismaClient, Document } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import type { S3 } from "../storage/s3.js";
-import { putObject, deleteObject } from "../storage/s3.js";
+import { putObject } from "../storage/s3.js";
 import { assertSafeUrl, SsrfError } from "./url-fetch.js";
-import { assertQuota, type KbQuotaBilling } from "./service.js";
-import { loadEmbeddingConfig } from "../memory/embedding-client.js";
 
 export const KB_MAX_FILE_BYTES = parseInt(process.env.KB_MAX_FILE_BYTES ?? "20971520", 10); // 20MB
 export const KB_MAX_TEXT_CHARS = parseInt(process.env.KB_MAX_TEXT_CHARS ?? "200000", 10);
-export const KB_BYTES_PER_TOKEN = parseInt(process.env.KB_BYTES_PER_TOKEN ?? "3", 10);
 
 // 允许的文件后缀
 export const ALLOWED_FILE_EXTS = new Set([
@@ -121,9 +118,8 @@ export class IngestError extends Error {
 
 /**
  * 共享的文档摄取逻辑（支持 FILE/TEXT/URL）
- * 适用于 USER 库（计费）和 OFFICIAL 库（跳计费）
+ * USER 库与 OFFICIAL 库共用同一条路径
  *
- * @param skipQuotaCheck - true 时跳过 assertQuota 与 billing.reserve（OFFICIAL 库）；false 时执行计费路径（USER 库）
  * @returns IngestResult 包含 Document 和相关元数据
  * @throws IngestError 包含 statusCode 供路由使用
  */
@@ -137,16 +133,7 @@ export async function storeAndCreateDocument(
     file: () => Promise<{ filename: string; mimetype: string; toBuffer: () => Promise<Buffer> } | undefined>;
     body?: Record<string, unknown>;
   },
-  options: {
-    skipQuotaCheck?: boolean;
-    billing?: { reserve: (args: any) => Promise<any> } | null;
-    quotaBilling?: KbQuotaBilling;
-  } = {},
 ): Promise<IngestResult> {
-  const skipQuotaCheck = options.skipQuotaCheck ?? false;
-  const billing = options.billing;
-  const quotaBilling = options.quotaBilling;
-
   const isMultipart = req.isMultipart();
   const bodyObj = (req.body as Record<string, unknown>) || {};
   const hasText = typeof bodyObj.text === "string";
@@ -216,19 +203,7 @@ export async function storeAndCreateDocument(
       throw new IngestError("必须提供文件、text 或 url", 400);
     }
 
-    // 1. 配额校验（仅在非跳过时）
-    if (!skipQuotaCheck && quotaBilling && userId) {
-      try {
-        await assertQuota(prisma, quotaBilling, userId, sizeBytes);
-      } catch (err) {
-        if (err instanceof Error && err.name === "QuotaExceededError") {
-          throw new IngestError("存储空间不足", 402);
-        }
-        throw err;
-      }
-    }
-
-    // 2. 落存储（TEXT/FILE 到 S3，URL 只记录 URL）
+    // 1. 落存储（TEXT/FILE 到 S3，URL 只记录 URL）
     const docId = randomUUID();
     if ((sourceType === "TEXT" || sourceType === "FILE") && buf) {
       const s3Key = `kb/${kbId}/${docId}/${filename}`;
@@ -236,7 +211,7 @@ export async function storeAndCreateDocument(
       sourceUri = s3Key;
     }
 
-    // 3. 建 Document
+    // 2. 建 Document
     const doc = await prisma.document.create({
       data: {
         id: docId,
@@ -247,37 +222,8 @@ export async function storeAndCreateDocument(
         mime: sourceType !== "URL" ? mime : undefined,
         sizeBytes: sourceType !== "URL" ? sizeBytes : undefined,
         status: "pending",
-        opId: `kb:doc:${docId}`,
       },
     });
-
-    // 4. 预扣（仅在非跳过时，且为用户库）
-    if (!skipQuotaCheck && billing && userId) {
-      const estTokens = Math.max(1, Math.ceil(sizeBytes / KB_BYTES_PER_TOKEN) || 1);
-      try {
-        await billing.reserve({
-          operationId: doc.opId || `kb:doc:${docId}`,
-          userId,
-          type: "kb_index",
-          model: loadEmbeddingConfig().model,
-          inputTokens: estTokens,
-          maxOutputTokens: 0,
-        });
-      } catch (err) {
-        // 任何 reserve 失败都回滚已建 Document + 已落 S3 对象
-        await prisma.document.delete({ where: { id: docId } }).catch(() => {});
-        if (sourceUri && (sourceType === "TEXT" || sourceType === "FILE")) {
-          await deleteObject(s3, sourceUri).catch(() => {});
-        }
-
-        if (err instanceof Error && err.name === "InsufficientBalanceError") {
-          throw new IngestError("积分不足，请充值", 402);
-        }
-
-        // 其他异常（billing 不可达/5xx）→ 502
-        throw new IngestError("计费服务不可用", 502);
-      }
-    }
 
     return {
       doc,

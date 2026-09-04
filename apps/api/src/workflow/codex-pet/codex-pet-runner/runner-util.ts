@@ -2,7 +2,6 @@
 
 import { Buffer } from "node:buffer";
 import { PET_ROW_SPECS } from "@ai-assistant/codex-pet-pipeline";
-import { type CodexPetRun } from "@prisma/client";
 import { sanitizeCodexPetDiagnosticText } from "../codex-pet-events.js";
 import { type CodexPetActionPrompts } from "../codex-pet-prompts.js";
 import {
@@ -14,7 +13,6 @@ import {
 } from "./runner-types.js";
 import {
   type PetVisualQaConsensus,
-  codexPetImageMaxAttempts,
   codexPetVisualQaConsensusPasses,
 } from "../codex-pet-visual.js";
 import { type ImageBinaryInput, type ImageGenerationResult, classifyImageGenerationError } from "../../_shared/image-service.js";
@@ -56,10 +54,10 @@ export function safeError(error: unknown): string {
     return "图片服务无法接受当前参数或参考图，请检查图片格式与角色描述后复制为新项目重试";
   }
   if (classification.category === "authentication") {
-    return "图片生成服务配置异常，本次制作已停止并将按系统失败退款";
+    return "图片生成服务配置异常，本次制作已停止";
   }
   if (["rate_limit", "timeout", "upstream", "network"].includes(classification.category)) {
-    return "图片生成服务暂时不可用；本次请求未重试，运行已停止并将按系统失败退款";
+    return "图片生成服务暂时不可用；本次请求未重试，运行已停止";
   }
   return sanitizeCodexPetDiagnosticText(
     error instanceof Error && error.message ? error.message : "桌宠制作失败",
@@ -67,41 +65,7 @@ export function safeError(error: unknown): string {
   );
 }
 
-export function frozenPerImageCallPoints(snapshot: Record<string, unknown>, run: CodexPetRun): number {
-  const snapshotted = snapshot.perImageCallPoints;
-  if (typeof snapshotted === "number" && Number.isSafeInteger(snapshotted) && snapshotted > 0) {
-    return snapshotted;
-  }
-
-  // Rollout-era runs can resume only when their durable reservation proves an
-  // integral unit price. Never read mutable billing configuration here.
-  if (run.billingReservedUnits > 0
-    && run.billingReservedPoints > 0
-    && run.billingReservedPoints % run.billingReservedUnits === 0) {
-    return run.billingReservedPoints / run.billingReservedUnits;
-  }
-  throw new Error("Codex pet per-image run is missing a frozen per-call price");
-}
-
-/**
- * How many times one *already-paid* image call may be re-sent to the provider.
- *
- * This is the transport axis and it is deliberately independent of the board /
- * quality axis (`maxBoardAttempts`, `job.maxAttempts`), which is pinned to 1
- * under per-image billing because every redraw is a separately charged unit that
- * needs its own user approval. Conflating the two meant a single socket blip
- * parked the run and demanded a paid approval for work the user never chose to
- * redo — the failure shape where `look-cardinals` burned 6 extra calls on 6
- * consecutive socket errors. A transport retry re-enters the same ledger row, so
- * it costs the user nothing.
- *
- * `CODEX_PET_IMAGE_MAX_ATTEMPTS=1` still forces one-shot for acceptance runs.
- */
-export function configuredTransportAttempts(env: NodeJS.ProcessEnv): number {
-  return codexPetImageMaxAttempts(env);
-}
-
-// Both call sites of this value dispatch real billed image calls (the two base
+// Both call sites of this value dispatch real image calls (the two base
 // candidates, and the repair fan-out over standard rows). Concurrency > 1 makes
 // them compete for the same upstream relay quota, which self-inflicts the 429
 // that killed an earlier run. Serial by default; raise it only deliberately.
@@ -142,8 +106,8 @@ export async function mapWithConcurrency<T, R>(
     }
   });
   try {
-    // A terminal run/refund must not race a sibling that is still unwinding
-    // an upstream image request, QA call or artifact write. Abort on the first
+    // A terminal run must not race a sibling that is still unwinding an
+    // upstream image request, QA call or artifact write. Abort on the first
     // branch failure, then drain every branch before rethrowing that failure.
     await Promise.allSettled(runners);
   } finally {

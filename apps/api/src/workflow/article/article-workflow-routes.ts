@@ -1,4 +1,3 @@
-import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import type { FastifyInstance } from "fastify";
@@ -18,7 +17,6 @@ import {
   DEFAULT_ARTICLE_MODEL,
   scheduledRunner,
   ARTICLE_HISTORY_LIMIT,
-  type ArticleWorkflowBilling,
   type ArticleWorkflowRouteDeps,
 } from "./article-workflow-shared.js";
 import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
@@ -36,7 +34,6 @@ import {
   updateArticleWorkflowThemeSchema,
 } from "./article-workflow-schema.js";
 import { articleWorkflowCaptionSummary } from "./article-workflow-caption.js";
-import { resolveArticleWorkflowPricing } from "./article-workflow-pricing.js";
 import { findOwnedArticleWorkflowProject, updateArticleWorkflowProjectState } from "./article-workflow-store.js";
 import { applyArticleImageManifestToHtml, findArticleImageBySlot } from "./article-workflow-image-manifest.js";
 import {
@@ -61,28 +58,12 @@ import { errorMessageOrFallback } from "../_shared/error-message.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();
-  const billing = (deps.billing ??
-    createBillingClient({
-      baseUrl: process.env.BILLING_BASE_URL!,
-      token: process.env.BILLING_INTERNAL_TOKEN!,
-    })) as ArticleWorkflowBilling;
   const llm = deps.llm ?? createLlmClient(loadLlmConfig());
   const fetchFn = deps.fetchFn ?? fetch;
   const env = deps.env ?? process.env;
   const scheduleTask = deps.scheduleTask ?? scheduledRunner(app);
   const loadImageBlob = deps.loadImageBlob ?? ((objectKey: string) => getObject(makeS3(loadS3Config(env)), objectKey));
   const model = env.ARTICLE_WORKFLOW_MODEL?.trim() || env.LLM_DEFAULT_MODEL?.trim() || DEFAULT_ARTICLE_MODEL;
-
-  app.get("/api/workflow/article-workflow/pricing", async (req, reply) => {
-    const userId = authUserId(req as { userId?: string }, reply);
-    if (!userId) return;
-    try {
-      return { success: true, data: await resolveArticleWorkflowPricing(billing) };
-    } catch (error) {
-      app.log.error(error);
-      return reply.code(502).send({ error: "获取图文计价失败" });
-    }
-  });
 
   app.post("/api/workflow/article-workflow", async (req, reply) => {
     const userId = authUserId(req as { userId?: string }, reply);
@@ -102,7 +83,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const sourceText =
       creationConfig.mode === "topic" ? normalizeArticleWorkflowCreationSource(creationConfig) : parsed.data.sourceText;
 
-    // 一次导入 = 一个批次 = 每平台一行，每行独立生成、独立扣费、独立失败
+    // 一次导入 = 一个批次 = 每平台一行，每行独立生成、独立失败
     const batchId = randomUUID();
     const created: { projectId: string; platform: ArticleWorkflowPlatform }[] = [];
     for (const platform of parsed.data.platforms) {
@@ -142,7 +123,6 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       scheduleTask(() =>
         runInitialArticleWorkflowGeneration({
           prisma,
-          billing,
           llm,
           fetchFn,
           env,
@@ -380,7 +360,6 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     scheduleTask(() =>
       runInitialArticleWorkflowGeneration({
         prisma,
-        billing,
         llm,
         fetchFn,
         env,
@@ -432,7 +411,6 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     scheduleTask(() =>
       runArticleWorkflowRewrite({
         prisma,
-        billing,
         llm,
         fetchFn,
         env,
@@ -476,7 +454,6 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     try {
       const nextImage = await generateArticleWorkflowImageAsset({
         prisma,
-        billing,
         fetchFn,
         env,
         userId,
@@ -600,7 +577,6 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     scheduleTask(() =>
       runArticleWorkflowMissingImages({
         prisma,
-        billing,
         llm,
         fetchFn,
         env,

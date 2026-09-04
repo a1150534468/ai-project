@@ -49,10 +49,10 @@ function upstreamStatus(error: unknown): number | null {
 }
 
 /**
- * Unknown failures get a bounded retry because storage, network, embedding,
- * billing and database clients often surface transport failures as a plain
- * Error. Known bad input is terminal immediately, while HTTP client errors
- * are terminal except for the conventional transient status codes.
+ * Unknown failures get a bounded retry because storage, network, embedding and
+ * database clients often surface transport failures as a plain Error. Known bad
+ * input is terminal immediately, while HTTP client errors are terminal except
+ * for the conventional transient status codes.
  */
 function isRetryableIndexError(error: unknown): boolean {
   if (error instanceof PermanentIndexError || error instanceof EmptyTextError) return false;
@@ -126,22 +126,6 @@ export interface IndexDeps {
    * 嵌入单个块，返回向量 + token 数
    */
   embed: (input: string) => Promise<{ vector: number[]; tokens: number }>;
-  /**
-   * 计费客户端
-   */
-  billing: {
-    settle: (arg: {
-      operationId: string;
-      userId: string;
-      model: string;
-      inputTokens: number;
-      outputTokens: number;
-    }) => Promise<unknown>;
-  };
-  /**
-   * 嵌入模型名（用于计费）
-   */
-  embeddingModel: string;
   /** 向量维度，必须与数据库 vector(N) 一致。 */
   embeddingDimension?: number;
   /**
@@ -205,20 +189,18 @@ export async function claim(
  *
  * 步骤：
  * 1. claim 抢占文档
- * 2. 读 Document + KnowledgeBase（获取 ownerType/userId）
+ * 2. 读 Document
  * 3. loadObject 拿 buf/mime/filename
  * 4. parse 解析到文本
  * 5. chunk 分块
  * 6. 并发 embed（上限 KB_EMBED_CONCURRENCY）
  * 7. 事务内：delete 旧 Chunk + 用 raw SQL 插入新 Chunk
- * 8. 计费 settle（仅 USER 库）
- * 9. 置 status='indexed'
+ * 8. 置 status='indexed'
  *
  * 失败分支：
  * - 确定性的输入/结构错误立即 failed；
  * - 瞬时错误在 attempts < maxAttempts 时回到 pending，交 reaper 重试；
  * - 瞬时错误耗尽次数后 failed。
- * 仅终态失败才释放 USER 库预扣，避免一次瞬时失败先退款、后续成功却无法结算。
  */
 export async function indexOnce(
   deps: IndexDeps,
@@ -235,17 +217,14 @@ export async function indexOnce(
   }
 
   try {
-    // 2. 读 Document + KnowledgeBase
+    // 2. 读 Document
     const doc = await prisma.document.findUnique({
       where: { id: docId },
-      include: { kb: true },
     });
 
     if (!doc) {
       throw new Error(`Document not found: ${docId}`);
     }
-
-    const kb = doc.kb;
 
     // 3. loadObject 拿内容
     const { buf, mime, filename } = await deps.loadObject({
@@ -311,31 +290,7 @@ export async function indexOnce(
       }
     });
 
-    // 8. 计费 settle（仅 USER 库）
-    // 原先这里排除了 `doc.sourceModule` 非空的文档 —— 自动归档的产物算平台能力,
-    // 不向用户收索引费。P1.2 之后产物不再进知识库,能走到索引的只有用户自己上传
-    // 的文档,豁免条件永远为真,留着只会掩盖「有产物又在偷偷进库」这种回归。
-    // P5.2 起 `sourceModule` 这一列本身也没了,所以那个豁免连写都写不出来。
-    if (kb.ownerType === 'USER' && kb.userId) {
-      try {
-        await deps.billing.settle({
-          operationId: doc.opId ?? docId,
-          userId: kb.userId,
-          model: deps.embeddingModel,
-          inputTokens: totalTokens,
-          outputTokens: 0,
-        });
-      } catch (settleErr) {
-        // 保持同一个 operationId 并交给有界重试；billing 端的幂等键
-        // 可以覆盖“服务端已提交但客户端超时”的不确定结果。
-        throw new Error(
-          `Billing settlement failed: ${settleErr instanceof Error ? settleErr.message : String(settleErr)}`,
-          { cause: settleErr },
-        );
-      }
-    }
-
-    // 9. 置 indexed
+    // 8. 置 indexed
     await prisma.document.update({
       where: { id: docId },
       data: {
@@ -356,7 +311,6 @@ export async function indexOnce(
           : 'Unknown error';
     const doc = await prisma.document.findUnique({
       where: { id: docId },
-      include: { kb: true },
     });
 
     // 文档可能在索引过程中被用户删除；没有终态需要再写。
@@ -374,22 +328,5 @@ export async function indexOnce(
         lockedAt: null,
       },
     });
-
-    // 瞬时失败期间保留原预扣；成功或最终失败只结算一次。
-    // 同 P1.2：产物不再进知识库，`sourceModule` 豁免不再有对应的文档（该列已随 P5.2 删除）。
-    if (!willRetry && doc.kb.ownerType === 'USER' && doc.kb.userId) {
-      try {
-        await deps.billing.settle({
-          operationId: doc.opId ?? docId,
-          userId: doc.kb.userId,
-          model: deps.embeddingModel,
-          inputTokens: 0,
-          outputTokens: 0,
-        });
-      } catch (refundErr) {
-        // 最终失败已经持久化；退款 API 使用相同 operationId，调用方可按
-        // 现有 billing 对账机制安全重放，不把永久失败重新送进索引 reaper。
-      }
-    }
   }
 }

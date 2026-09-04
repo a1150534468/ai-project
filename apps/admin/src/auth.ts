@@ -1,22 +1,15 @@
 export type Permission =
-  | "BALANCE_ADJUST"
   | "USER_MANAGE"
-  | "USER_BILLING_LOG_VIEW"
   | "USER_DETAIL_VIEW"
-  | "ORDER_MANAGE"
-  | "REDEMPTION_MANAGE"
-  | "PRICING_MANAGE"
   | "MODEL_MANAGE"
-  | "MEMBERSHIP_MANAGE"
   | "ANNOUNCEMENT_MANAGE"
   | "ADMIN_MANAGE"
-  | "KNOWLEDGE_MANAGE"
-  | "RESELLER_MANAGE";
+  | "KNOWLEDGE_MANAGE";
 
 export interface Session {
   token: string;
   adminId: string;
-  role: "super_admin" | "admin" | "reseller";
+  role: "super_admin" | "admin";
   permissions: Permission[];
 }
 
@@ -44,8 +37,4 @@ export function saveSession(s: Session): void {
 
 export function clearSession(): void {
   sessionStorage.removeItem(KEY);
-}
-
-export function isReseller(s: Session | null): boolean {
-  return s?.role === "reseller";
 }

@@ -115,23 +115,6 @@ async function callLlmText(args: {
   return textFromMessage(response);
 }
 
-export function estimateArticleWorkflowReserveUnits(args: {
-  readonly sourceText: string;
-  readonly creationConfig?: ArticleWorkflowCreationConfig;
-  readonly currentHtml?: string;
-  readonly currentCaption?: string;
-  readonly instruction?: string;
-}): number {
-  return Math.max(
-    1000,
-    args.sourceText.length
-      + (args.creationConfig ? JSON.stringify(args.creationConfig).length : 0)
-      + (args.currentHtml?.length ?? 0)
-      + (args.currentCaption?.length ?? 0)
-      + (args.instruction?.length ?? 0),
-  );
-}
-
 export async function generateArticleWorkflowPlan(args: {
   readonly creationConfig?: ArticleWorkflowCreationConfig;
   readonly llm: LlmClientLike;

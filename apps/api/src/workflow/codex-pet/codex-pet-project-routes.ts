@@ -6,7 +6,6 @@ import {
   CODEX_PET_MODEL_CONTRACT_VERSION,
   CODEX_PET_VISUAL_QA_MODEL,
 } from "./codex-pet-model-contract.js";
-import { codexPetExtraCallBudgetFromCalls } from "./codex-pet-call-ledger.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import {
   ACTIVE_RUN_STATUSES,
@@ -38,7 +37,6 @@ export function registerCodexPetProjectRoutes(app: FastifyInstance, ctx: CodexPe
     ownedProject,
     validateReferenceAssets,
     createCancellation,
-    settleCancellationRefund,
   } = ctx;
 
   app.get("/api/workflow/codex-pets/projects", { preHandler: requireUser }, async (request, reply) => {
@@ -129,14 +127,6 @@ export function registerCodexPetProjectRoutes(app: FastifyInstance, ctx: CodexPe
     const jobs = latestRun
       ? await prisma.codexPetJob.findMany({ where: { runId: latestRun.id, projectId: project.id, userId }, orderBy: { createdAt: "asc" } })
       : [];
-    const ledgerDelegate = (prisma as unknown as {
-      codexPetImageCall?: {
-        findMany: (args: unknown) => Promise<Array<Record<string, unknown>>>;
-      };
-    }).codexPetImageCall;
-    const imageCalls = latestRun && ledgerDelegate
-      ? await ledgerDelegate.findMany({ where: { runId: latestRun.id, projectId: project.id, userId }, orderBy: { createdAt: "asc" } })
-      : [];
     const serializedArtifacts = await Promise.all(artifacts
       .filter((artifact) => artifact.status !== "superseded")
       .map((artifact) => serializeArtifact(
@@ -164,29 +154,6 @@ export function registerCodexPetProjectRoutes(app: FastifyInstance, ctx: CodexPe
           runs: runs.map((run) => serializeRun(run as RunShape, ownedRunIds)),
           artifacts: serializedArtifacts,
           jobs: jobs.map(serializeJob),
-          imageCalls: imageCalls.map((call) => ({
-            id: String(call.id),
-            jobKey: String(call.jobKey),
-            logicalAttempt: Number(call.logicalAttempt),
-            callKind: String(call.callKind),
-            purpose: String(call.purpose),
-            requestedModel: String(call.requestedModel),
-            actualModel: typeof call.actualModel === "string" ? call.actualModel : null,
-            status: String(call.status),
-            points: Number(call.points ?? 0),
-            sentAt: call.sentAt instanceof Date ? call.sentAt.toISOString() : null,
-            completedAt: call.completedAt instanceof Date ? call.completedAt.toISOString() : null,
-            error: typeof call.error === "string" ? call.error : null,
-          })),
-          // Sent with the run so the approval panel can state the remaining paid
-          // repair attempts up front, instead of letting the user discover the cap
-          // by being refused after a click.
-          extraCallBudget: latestRun
-            ? codexPetExtraCallBudgetFromCalls(
-              imageCalls.map((call) => ({ callKind: String(call.callKind), status: String(call.status), jobKey: String(call.jobKey) })),
-              latestRun.pendingImageJobKey ?? null,
-            )
-            : null,
         },
       },
     };
@@ -211,7 +178,7 @@ export function registerCodexPetProjectRoutes(app: FastifyInstance, ctx: CodexPe
       orderBy: { createdAt: "desc" },
     });
     if (project.status === "draft" && blockingRun) {
-      return reply.code(409).send({ error: "桌宠制作正在等待扣费或执行，不能修改输入" });
+      return reply.code(409).send({ error: "桌宠制作正在排队或执行，不能修改输入" });
     }
     if (!(EDITABLE_PROJECT_STATUSES as readonly string[]).includes(project.status)) {
       return reply.code(409).send({ error: "只有草稿或等待主形象确认的项目可以修改" });
@@ -374,15 +341,15 @@ export function registerCodexPetProjectRoutes(app: FastifyInstance, ctx: CodexPe
       for (const run of stillRunning) {
         if (isActiveRunStatus(run.status)) {
           try {
-            const cancellation = await settleCancellationRefund(await createCancellation(userId, project.id, run.id));
+            const cancellation = await createCancellation(userId, project.id, run.id);
             waitingForWorker ||= Boolean(cancellation.run.workerId);
             await notifyEvent(app, deps, run.id);
           } catch (error) {
             if ((error as Error).message !== "CODEX_PET_RUN_TERMINAL") {
               // The soft-delete marker is already committed. Keep DELETE
-              // successful and let persisted project/run state plus billing
-              // maintenance converge instead of exposing a stale history row
-              // after a transient cancellation/refund failure.
+              // successful and let persisted project/run state converge instead
+              // of exposing a stale history row after a transient cancellation
+              // failure.
               app.log.warn({ error: safeDiagnostic(error), runId: run.id }, "Codex pet soft-delete cancellation deferred");
             }
           }

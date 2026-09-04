@@ -18,9 +18,6 @@ function makePrisma(input: {
     progressStage: "awaiting_direction_review",
     progressPercent: 86,
     progressMessage: "等待继续",
-    billingMode: "legacy_package_v1",
-    billingPoints: 2600,
-    billingRefundStatus: "none",
     workerId: null,
     cancelRequested: false,
     pendingImageJobKey: "look-b",
@@ -45,7 +42,7 @@ function makePrisma(input: {
     codexPetRun: {
       findUnique: async ({ where }: { readonly where: { readonly id: string } }) => where.id === run.id ? { ...run } : null,
       updateMany: async ({ where, data }: { readonly where: Record<string, unknown>; readonly data: Record<string, unknown> }) => {
-        if (where.id !== run.id || where.status !== run.status || where.workerId !== run.workerId || where.cancelRequested !== run.cancelRequested || where.billingMode !== run.billingMode) return { count: 0 };
+        if (where.id !== run.id || where.status !== run.status || where.workerId !== run.workerId || where.cancelRequested !== run.cancelRequested) return { count: 0 };
         Object.assign(run, data);
         return { count: 1 };
       },
@@ -70,7 +67,7 @@ function makePrisma(input: {
 }
 
 describe("Codex pet legacy read-only archive", () => {
-  it("archives an inactive legacy run while preserving billing, provenance, and original state", async () => {
+  it("archives an inactive legacy run while preserving provenance and original state", async () => {
     const { prisma, run, project, events } = makePrisma();
     const at = new Date("2026-07-24T05:00:00.000Z");
 
@@ -89,9 +86,6 @@ describe("Codex pet legacy read-only archive", () => {
     expect(run).toMatchObject({
       status: CODEX_PET_LEGACY_READ_ONLY_STATUS,
       progressStage: CODEX_PET_LEGACY_READ_ONLY_STATUS,
-      billingMode: "legacy_package_v1",
-      billingPoints: 2600,
-      billingRefundStatus: "none",
       pendingImageJobKey: null,
       imageGenerationApprovalBudget: 0,
       completedAt: at,
@@ -115,22 +109,22 @@ describe("Codex pet legacy read-only archive", () => {
     })]);
   });
 
-  it("refuses a live or per-image run without changing its historical record", async () => {
+  it("refuses a live run without changing its historical record", async () => {
     const { prisma, run, project, events } = makePrisma({
-      run: { workerId: "worker-1", billingMode: "per_image_call_v1" },
+      run: { workerId: "worker-1" },
     });
 
     await expect(archiveCodexPetLegacyRuns({ prisma, runIds: ["run-legacy"] }))
-      .rejects.toThrow("does not use legacy billing");
+      .rejects.toThrow("still has a worker lease");
 
     expect(run.status).toBe("awaiting_direction_review");
     expect(project.status).toBe("awaiting_direction_review");
     expect(events).toEqual([]);
   });
 
-  it("archives a terminal legacy failure without changing its billing receipt", async () => {
+  it("archives a terminal legacy failure without moving its completion time", async () => {
     const { prisma, run, project, events } = makePrisma({
-      run: { status: "failed", billingPoints: 0, billingRefundStatus: "refunded", completedAt: new Date("2026-07-24T02:00:00.000Z") },
+      run: { status: "failed", completedAt: new Date("2026-07-24T02:00:00.000Z") },
       project: { status: "failed" },
     });
 
@@ -138,9 +132,6 @@ describe("Codex pet legacy read-only archive", () => {
 
     expect(run).toMatchObject({
       status: CODEX_PET_LEGACY_READ_ONLY_STATUS,
-      billingMode: "legacy_package_v1",
-      billingPoints: 0,
-      billingRefundStatus: "refunded",
       completedAt: new Date("2026-07-24T02:00:00.000Z"),
     });
     expect(events).toHaveLength(1);

@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 export const CODEX_PET_LEGACY_READ_ONLY_STATUS = "legacy_read_only";
-export const CODEX_PET_LEGACY_BILLING_MODE = "legacy_package_v1";
 
 const ARCHIVABLE_LEGACY_STATUSES = new Set([
   "queued",
@@ -35,9 +34,8 @@ export interface CodexPetLegacyArchiveResult {
 
 /**
  * Archives explicitly selected, inactive legacy runs without changing their
- * provider provenance, artifacts, jobs, or billing receipts. A row lock and
- * strict preconditions prevent this administrative operation from racing a
- * live worker or silently archiving a new per-image run.
+ * provider provenance, artifacts or jobs. A row lock and strict preconditions
+ * prevent this administrative operation from racing a live worker.
  */
 export async function archiveCodexPetLegacyRuns(input: {
   readonly prisma: PrismaClient;
@@ -69,9 +67,6 @@ export async function archiveCodexPetLegacyRuns(input: {
           eventSequence: existingEvent?.sequence ?? run.lastEventSequence,
         });
         continue;
-      }
-      if (run.billingMode !== CODEX_PET_LEGACY_BILLING_MODE) {
-        throw new Error(`Codex pet run ${runId} does not use legacy billing`);
       }
       if (!ARCHIVABLE_LEGACY_STATUSES.has(run.status)) {
         throw new Error(`Codex pet run ${runId} is not an archivable legacy run`);
@@ -108,13 +103,12 @@ export async function archiveCodexPetLegacyRuns(input: {
           status: run.status,
           workerId: null,
           cancelRequested: false,
-          billingMode: CODEX_PET_LEGACY_BILLING_MODE,
         },
         data: {
           inputSnapshot,
           status: CODEX_PET_LEGACY_READ_ONLY_STATUS,
           progressStage: CODEX_PET_LEGACY_READ_ONLY_STATUS,
-          progressMessage: "历史运行已归档为只读，保留产物、模型来源和账本",
+          progressMessage: "历史运行已归档为只读，保留产物与模型来源",
           pendingImageJobKey: null,
           imageGenerationApprovalBudget: 0,
           completedAt: run.completedAt ?? at,
@@ -135,7 +129,7 @@ export async function archiveCodexPetLegacyRuns(input: {
           sequence: eventSequence,
           type: "run.legacy_read_only_archived",
           stage: CODEX_PET_LEGACY_READ_ONLY_STATUS,
-          message: "历史运行已归档为只读，未改变账本、产物或模型来源",
+          message: "历史运行已归档为只读，未改变产物或模型来源",
           progress: run.progressPercent,
           payload: {
             originalRunStatus: run.status,

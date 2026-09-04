@@ -2,14 +2,7 @@ import type { ReactNode } from "react";
 import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
 
-export interface SubmitCostBarProps {
-  readonly estimatedPointCost: number | null;
-  /** 默认「预计消耗」 */
-  readonly costLabel?: string;
-  /** 无法预估精确点数时可提供业务化摘要，例如「3 个平台分别计费」。 */
-  readonly costValue?: ReactNode;
-  /** 费用旁的补充说明，如「母版 20 + 分段 2×20」 */
-  readonly costDetail?: string;
+export interface SubmitBarProps {
   readonly submitLabel: string;
   readonly submitIcon?: string;
   readonly submitDisabled?: boolean;
@@ -22,18 +15,10 @@ export interface SubmitCostBarProps {
   readonly children?: ReactNode;
 }
 
-/** 三个生图工作台共用的 sticky 底部「预计消耗 + 提交」栏。 */
-export function SubmitCostBar(props: SubmitCostBarProps) {
+/** 三个生图工作台共用的 sticky 底部提交栏。 */
+export function SubmitBar(props: SubmitBarProps) {
   return (
     <div className="sticky bottom-0 z-10 border-t border-hairline-subtle bg-surface/95 px-4 py-3 backdrop-blur lg:px-5">
-      <div className="mb-2 flex min-h-5 items-center justify-between gap-3 text-xs font-semibold text-ink-secondary">
-        <span>{props.costLabel ?? "预计消耗"}</span>
-        <span className="inline-flex items-center gap-1 text-ink">
-          <Icon icon="mdi:diamond-stone" className="text-sm text-brand-ink" aria-hidden />
-          {props.costValue ?? (props.estimatedPointCost === null ? "--" : `${props.estimatedPointCost} 算力点`)}
-          {props.costDetail ? <span className="font-normal text-ink-tertiary">（{props.costDetail}）</span> : null}
-        </span>
-      </div>
       {props.children}
       {props.actions ?? (
         <RippleButton

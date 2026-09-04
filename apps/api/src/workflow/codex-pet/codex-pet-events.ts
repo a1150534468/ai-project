@@ -25,7 +25,6 @@ export const CODEX_PET_EVENT_TYPES = [
   "run.completed",
   "run.failed",
   "run.cancelled",
-  "billing.refunded",
 ] as const;
 
 export type CodexPetEventType = (typeof CODEX_PET_EVENT_TYPES)[number];

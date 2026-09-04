@@ -1,5 +1,4 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
-import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import {
   codexPetGateRowJobKey,
   readCodexPetGateFailureSnapshot,
@@ -23,41 +22,6 @@ function record(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : {};
 }
 
-export interface ContinuationBillingShape {
-  readonly billingMode: string;
-  readonly billingChargeStatus: string;
-  readonly billingRefundStatus: string;
-  readonly billingRefundedAt: Date | null;
-  readonly billingSettlementStatus: string;
-}
-
-/**
- * A continuation must never replay work the user has not paid for, so each
- * billing mode has its own proof that the money side is safe to reuse.
- *
- * Legacy package runs charge up front and refund on failure, so the proof is a
- * completed refund. Per-image runs neither charge up front nor refund — they
- * hold a reservation and settle once. For them the proof is an *unsettled*
- * reservation: settlement is irreversible and closes every resume path, so a
- * still-reserved run is exactly the one that can be continued. Requiring the
- * legacy refund columns here (as this module originally did) rejected every
- * per-image run, which is why a fixable failure had no continuation path at all.
- */
-export function continuationBillingBlocked(run: ContinuationBillingShape): string | null {
-  if (run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE) {
-    if (run.billingSettlementStatus !== "reserved") {
-      return "按次计费续跑只允许调用额度仍处于预留中的失败运行（已结清的运行不能续跑）";
-    }
-    return null;
-  }
-  if (run.billingChargeStatus !== "charged"
-    || run.billingRefundStatus !== "refunded"
-    || !run.billingRefundedAt) {
-    return "失败续跑只允许已退款的失败运行";
-  }
-  return null;
-}
-
 /** Deterministic checkpoints that only re-derive from board output. Clearing
  * them costs no provider call and is what makes the row reset actually reach the
  * assembled artifacts: `standard-atlas` would otherwise hand back its stale
@@ -77,10 +41,7 @@ interface GateScopedResetJob {
  *
  * The board is `completed`, so nothing else in the pipeline would redo it: the
  * runner returns a completed board verbatim. Marking it failed with its output
- * detached is the reset. The attempt counter is deliberately preserved under
- * per-image billing, because it is the ledger's logical-attempt key — a redo has
- * to arrive as a *new* attempt so it is charged and approved rather than
- * colliding with the call the user already paid for.
+ * detached is the reset.
  */
 async function resetGateScopedJobs(
   tx: Prisma.TransactionClient,
@@ -88,7 +49,6 @@ async function resetGateScopedJobs(
     readonly runId: string;
     readonly projectId: string;
     readonly userId: string;
-    readonly perImageBilling: boolean;
     readonly jobs: readonly GateScopedResetJob[];
     readonly gate: string;
     readonly now: Date;
@@ -112,12 +72,7 @@ async function resetGateScopedJobs(
       data: {
         status: "failed",
         error: `${input.gate} 闸门指认该动作组需要重做`,
-        // One more attempt, so the ledger sees a fresh logical attempt and the
-        // per-image gate can ask the user to approve (and pay for) the redo.
-        // Never lower a durable limit an approval already raised.
-        ...(input.perImageBilling
-          ? { maxAttempts: Math.max(job.attempt + 1, 1) }
-          : { attempt: 0 }),
+        attempt: 0,
         output: Prisma.DbNull,
         outputArtifactIds: [],
         providerMetadata: Prisma.DbNull,
@@ -128,8 +83,8 @@ async function resetGateScopedJobs(
     });
   }
   // Reassembly must be forced only when a standard row actually changed; a
-  // direction-only scope leaves the intermediate atlas (and the paid cardinal
-  // board derived from it) untouched.
+  // direction-only scope leaves the intermediate atlas (and the cardinal board
+  // derived from it) untouched.
   const standardRowChanged = input.jobs.some((job) => job.kind === "standard_row");
   if (!standardRowChanged) return;
   const derived = await tx.codexPetJob.findMany({
@@ -231,8 +186,6 @@ export async function initializeCodexPetTargetedBoardRetry(
     }
     const snapshot = record(run.inputSnapshot);
     const existing = record(snapshot.targetedBoardRetry);
-    const targetedBillingBlocked = continuationBillingBlocked(run);
-    if (targetedBillingBlocked) throw new Error(targetedBillingBlocked);
     if (run.status !== "failed"
       || run.workerId
       || run.cancelRequested
@@ -442,10 +395,10 @@ export async function initializeCodexPetTargetedBoardRetry(
 }
 
 /**
- * Unlock one failed/refunded run after a board-prompt upgrade without creating
- * a project, charging again, or contacting any provider. The normal runner
- * owns the actual replay and its input-revision CAS resets only stale failed
- * board jobs when execution is explicitly started later.
+ * Unlock one failed run after a board-prompt upgrade without creating a project
+ * or contacting any provider. The normal runner owns the actual replay and its
+ * input-revision CAS resets only stale failed board jobs when execution is
+ * explicitly started later.
  */
 export async function initializeCodexPetFailedContinuation(
   input: CodexPetFailedContinuationInput,
@@ -483,13 +436,10 @@ export async function initializeCodexPetFailedContinuation(
       }
     }
 
-    const billingBlocked = continuationBillingBlocked(run);
-    if (billingBlocked) throw new Error(billingBlocked);
     if (run.status !== "failed"
-      || !run.billingActivatedAt
       || run.workerId
       || run.cancelRequested) {
-      throw new Error("失败续跑只允许已激活计费、无 lease 且未取消的失败运行");
+      throw new Error("失败续跑只允许无 lease 且未取消的失败运行");
     }
     if (run.project.latestRunId !== run.id
       || run.project.status !== "failed"
@@ -556,7 +506,6 @@ export async function initializeCodexPetFailedContinuation(
         runId: run.id,
         projectId: run.projectId,
         userId: run.userId,
-        perImageBilling: run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE,
         jobs: gateScopedJobs,
         gate: gateFailure!.gate,
         now,

@@ -17,8 +17,8 @@ export type { CodexPetStudioProps };
 
 export function CodexPetStudio(props: CodexPetStudioProps) {
   const studio = useCodexPetStudio(props);
-  const { draft, pricing, error, notice } = studio.state;
-  const { plannedCallLimit, reservedPointsQuote } = studio.derived;
+  const { draft, error, notice } = studio.state;
+  const { plannedCallLimit } = studio.derived;
 
   return (
     <section className="flex xl:h-full min-h-0 flex-col gap-3" data-testid="codex-pet-studio">
@@ -39,7 +39,7 @@ export function CodexPetStudio(props: CodexPetStudioProps) {
             GPT Image 2 · Pixel · AI 质检{draft.qualityInspectionEnabled ? "已开启" : "关闭"}
           </span>
           <span className="rounded-full bg-surface-inverse px-3 py-1.5 font-semibold text-ink-inverse">
-            {pricing ? `最多 ${plannedCallLimit} 次计划内调用 · ${pricing.rate} 积分/次 · 预留 ${reservedPointsQuote}` : "调用价格加载中"}
+            最多 {plannedCallLimit} 次计划内调用
           </span>
         </div>
       </div>

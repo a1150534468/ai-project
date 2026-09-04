@@ -2,14 +2,13 @@
  * 桌宠工坊的状态与动作层。`CodexPetStudio.tsx` 1991 行里的 state / effect / handler 全在这里,
  * 三个面板只读这个 controller,不再各自持有状态。
  *
- * **每个动作开头那句 `if (... || interactionLocked) return;` 都不是装饰。** 桌宠一轮跑十几分钟且
- * 按次计费,重复提交的代价是真扣积分:
+ * **每个动作开头那句 `if (... || interactionLocked) return;` 都不是装饰。** 桌宠一轮跑十几分钟,
+ * 重复提交会真的多开一轮运行:
  *  - `runIdempotencyKeyRef` / `continuationIdempotencyKeyRef` 让"启动"和"续跑"在失败重试时复用同一把
  *    幂等键,成功后才置空——所以连点两次不会开出两轮运行。
  *  - `detailRevisionRef` + `selectedProjectIdRef` 是一对乱序护栏:任何异步回写落地前都要对一次
  *    "我拉的还是当前选中的项目吗、这期间 detail 有没有被别人换过",否则快速切项目会把 A 的详情
  *    盖到 B 上,更糟的是让「保存草稿」用 A 的输入去 PATCH B。
- *  - `terminalBalanceRefreshRef` 保证同一个 run 的同一个终态只刷一次余额。
  *
  * `persistDraft` 与 `handleStart` 的校验强度**故意不同**:存草稿不要求视觉输入(允许先存名字风格,
  * 回头再补图),开始制作才走完整校验。这不是漏检,是两个动作的语义差别。
@@ -31,7 +30,6 @@ import type {
   CodexPetActionPromptKey,
   CodexPetBaseSelection,
   CodexPetModelOptions,
-  CodexPetPricing,
   CodexPetProject,
   CodexPetProjectDetail,
   CodexPetProjectSummary,
@@ -67,7 +65,6 @@ import {
 } from "./codexPetStudioFormat";
 import {
   deriveCodexPetArtifacts,
-  deriveCodexPetBilling,
   deriveCodexPetRunGates,
   upsertProjectSummary,
 } from "./codexPetStudioDerived";
@@ -76,7 +73,6 @@ import { useCodexPetRunStream } from "./useCodexPetRunStream";
 export interface CodexPetStudioProps {
   readonly token: string;
   readonly initialProjectId?: string | null;
-  readonly onBalanceRefresh?: () => void;
   readonly onInstallUrl?: (url: string) => void;
   readonly client?: CodexPetStudioClient;
 }
@@ -92,7 +88,6 @@ const STREAM_LABELS: Record<string, string> = {
 export function useCodexPetStudio({
   token,
   initialProjectId,
-  onBalanceRefresh,
   onInstallUrl,
   client = DEFAULT_CODEX_PET_STUDIO_CLIENT,
 }: CodexPetStudioProps) {
@@ -101,7 +96,6 @@ export function useCodexPetStudio({
   const [detail, setDetail] = useState<CodexPetProjectDetail | null>(null);
   const [draft, setDraft] = useState<CodexPetDraft>(EMPTY_CODEX_PET_DRAFT);
   const [selectedActionPrompt, setSelectedActionPrompt] = useState<CodexPetActionPromptKey>("idle");
-  const [pricing, setPricing] = useState<CodexPetPricing | null>(null);
   const [modelOptions, setModelOptions] = useState<CodexPetModelOptions>({
     visualModels: [{ model: CODEX_PET_VISUAL_QA_MODEL, displayName: "GPT-5.6 Sol" }],
     imageModels: [{ model: CODEX_PET_IMAGE_MODEL, displayName: "GPT Image 2" }],
@@ -121,13 +115,11 @@ export function useCodexPetStudio({
   const createIdempotencyKeyRef = useRef(makeCodexPetIdempotencyKey("project"));
   const runIdempotencyKeyRef = useRef<{ readonly projectId: string; readonly key: string } | null>(null);
   const continuationIdempotencyKeyRef = useRef<{ readonly runId: string; readonly key: string } | null>(null);
-  const terminalBalanceRefreshRef = useRef<{ readonly runId: string; readonly status: string } | null>(null);
 
   selectedProjectIdRef.current = selectedProjectId;
 
   const latestRun = detail?.latestRun ?? null;
   const artifactView = useMemo(() => deriveCodexPetArtifacts(detail, latestRun), [detail, latestRun]);
-  const billing = useMemo(() => deriveCodexPetBilling(detail, latestRun, pricing), [detail, latestRun, pricing]);
   const gates = useMemo(() => deriveCodexPetRunGates(detail, latestRun), [detail, latestRun]);
   const { baseCandidates } = artifactView;
   const {
@@ -219,14 +211,11 @@ export function useCodexPetStudio({
   useEffect(() => {
     let disposed = false;
     void (async () => {
-      const [pricingResult, projectsResult, modelOptionsResult] = await Promise.allSettled([
-        client.getPricing(token),
+      const [projectsResult, modelOptionsResult] = await Promise.allSettled([
         client.listProjects(token),
         (client.getModelOptions ?? codexPetApi.getCodexPetModelOptions)(token),
       ]);
       if (disposed) return;
-      if (pricingResult.status === "fulfilled") setPricing(pricingResult.value);
-      else setNotice("套餐价格暂时无法加载，开始制作前请稍后重试");
       if (projectsResult.status === "fulfilled") {
         setProjects(projectsResult.value);
         if (selectedProjectIdRef.current === undefined) {
@@ -286,14 +275,6 @@ export function useCodexPetStudio({
     });
   }, [baseCandidates, latestRun?.selectedBaseArtifactId]);
 
-  useEffect(() => {
-    if (!latestRun || !TERMINAL_RUN_STATUSES.has(latestRun.status)) return;
-    const last = terminalBalanceRefreshRef.current;
-    if (last?.runId === latestRun.id && last.status === latestRun.status) return;
-    terminalBalanceRefreshRef.current = { runId: latestRun.id, status: latestRun.status };
-    onBalanceRefresh?.();
-  }, [latestRun?.id, latestRun?.status, onBalanceRefresh]);
-
   const updateDraft = <K extends keyof CodexPetDraft>(key: K, value: CodexPetDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }));
     clearFeedback();
@@ -338,9 +319,9 @@ export function useCodexPetStudio({
   };
 
   const persistDraft = async (): Promise<CodexPetProject> => {
-    // Saving a draft is deliberately less strict than starting a billable
-    // run.  This allows a user to save the name/style first and add visual
-    // input in a later edit; handleStart performs the required-input gate.
+    // Saving a draft is deliberately less strict than starting a run.  This
+    // allows a user to save the name/style first and add visual input in a
+    // later edit; handleStart performs the required-input gate.
     const validationError = validateCodexPetDraft(draft, { requireVisualInput: false });
     if (validationError) throw new Error(validationError);
     const currentProjectId = selectedProjectIdRef.current;
@@ -367,7 +348,7 @@ export function useCodexPetStudio({
     const regeneratesCandidates = projectStatus === "awaiting_base_review";
     void persistDraft()
       .then(async () => {
-        setNotice(regeneratesCandidates ? "输入已保存，正在重新生成主形象候选" : "草稿已保存，尚未扣费");
+        setNotice(regeneratesCandidates ? "输入已保存，正在重新生成主形象候选" : "草稿已保存");
         // The PATCH response includes the project while the run is reset by
         // the server. Refresh immediately so stale candidates cannot remain
         // selectable until the next 2.5-second fallback poll.
@@ -384,10 +365,6 @@ export function useCodexPetStudio({
       setError(validationError);
       return;
     }
-    if (!pricing?.enabled) {
-      setError("桌宠套餐当前不可用，请等待管理员开启后再试");
-      return;
-    }
     clearFeedback();
     setBusyAction("starting");
     void (async () => {
@@ -401,7 +378,6 @@ export function useCodexPetStudio({
         runIdempotencyKeyRef.current = null;
         applyDetail({ project: started.project, latestRun: started.run, runs: [started.run], artifacts: [], jobs: [] }, false);
         setNotice("制作任务已提交，实时进度已连接");
-        onBalanceRefresh?.();
         void refreshSelectedProject(true);
       } catch (startError) {
         setError(codexPetErrorMessage(startError, "启动桌宠制作失败"));
@@ -464,7 +440,6 @@ export function useCodexPetStudio({
         continuationIdempotencyKeyRef.current = null;
         applyDetail({ project: continued.project, latestRun: continued.run, runs: [continued.run, run], artifacts: detail?.artifacts ?? [], jobs: [] }, false);
         setNotice("候选 1 已保留；候选 2 的 429 重试等待单次额外调用授权");
-        onBalanceRefresh?.();
         void refreshSelectedProject(true);
       })
       .catch((continuationError: unknown) => setError(codexPetErrorMessage(continuationError, "续跑失败的 GPT 桌宠项目失败")))
@@ -477,7 +452,7 @@ export function useCodexPetStudio({
     if (!project || !run || !canResumeGateFailure || interactionLocked) return;
     const confirmed = typeof window === "undefined" || window.confirm(
       `将只重做闸门指认的动作组：${resumableGateRowLabels}。`
-      + "\n这些动作组的旧画面会作废，重做仍在本次预留额度内，但每次重出图都要单独授权一次付费调用。确认继续？",
+      + "\n这些动作组的旧画面会作废，但每次重出图都要单独授权一次调用。确认继续？",
     );
     if (!confirmed) return;
     clearFeedback();
@@ -486,7 +461,6 @@ export function useCodexPetStudio({
       .then((resumed) => {
         applyDetail({ project: resumed.project, latestRun: resumed.run, runs: [resumed.run], artifacts: detail?.artifacts ?? [], jobs: [] }, false);
         setNotice(`已排队重做：${resumableGateRowLabels}；每次重出图仍需单独授权`);
-        onBalanceRefresh?.();
         void refreshSelectedProject(true);
       })
       .catch((resumeError: unknown) => setError(codexPetErrorMessage(resumeError, "重做闸门指认的动作组失败")))
@@ -503,7 +477,7 @@ export function useCodexPetStudio({
         && !TERMINAL_RUN_STATUSES.has(project.status));
     const confirmed = typeof window === "undefined" || window.confirm(
       projectMayBeRunning
-        ? "项目仍可能在运行。删除后会停止制作并处理退款；项目数据和产物会保留，但不再显示在历史中。确认删除？"
+        ? "项目仍可能在运行。删除后会停止制作；项目数据和产物会保留，但不再显示在历史中。确认删除？"
         : "删除后项目将从历史中隐藏，项目数据和产物仍会保留。确认删除？",
     );
     if (!confirmed) return;
@@ -558,23 +532,17 @@ export function useCodexPetStudio({
     const project = detail?.project;
     const run = latestRun;
     if (!project || !run || !gates.runIsCancellable || interactionLocked) return;
-    // Per-image billing does not settle all-or-nothing: cancelling charges the
-    // planned calls that already reached the provider and refunds the rest of the
-    // reservation. The old "全额退款 / 不退款" wording was wrong in both directions.
-    const refundText = `按次计费：已发出的 ${billing.settledPlannedUnits} 次计划内生图会照常结算，`
-      + `未发出的部分预计退回 ${billing.projectedRefundPoints ?? 0} 积分。`;
-    if (typeof window !== "undefined" && !window.confirm(`${refundText}确认取消本次制作？`)) return;
+    if (typeof window !== "undefined" && !window.confirm("已发出的生图不会撤回。确认取消本次制作？")) return;
     clearFeedback();
     setBusyAction("cancelling");
     void client.cancelRun(token, project.id, run.id)
       .then((cancelled) => {
         setDetail((current) => current ? { ...current, latestRun: cancelled } : current);
         setNotice("已提交取消请求，Worker 会在安全检查点停止");
-        onBalanceRefresh?.();
         // The cancel response is an acknowledgement, not necessarily the
-        // terminal run/project state.  Refresh immediately so project history,
-        // billing/refund fields, and the latest-run pointer cannot remain stale
-        // after the worker finishes the cancellation handshake.
+        // terminal run/project state.  Refresh immediately so project history
+        // and the latest-run pointer cannot remain stale after the worker
+        // finishes the cancellation handshake.
         void refreshSelectedProject(true);
       })
       .catch((cancelError: unknown) => setError(codexPetErrorMessage(cancelError, "取消桌宠制作失败")))
@@ -654,7 +622,7 @@ export function useCodexPetStudio({
     const copiedName = Array.from(`${copied.name}${suffix}`).slice(0, 30).join("");
     startNewProject();
     setDraft({ ...copied, name: copiedName });
-    setNotice("已复制输入信息为新草稿，保存前不会扣费");
+    setNotice("已复制输入信息为新草稿");
   };
 
   return {
@@ -664,7 +632,6 @@ export function useCodexPetStudio({
       detail,
       draft,
       selectedActionPrompt,
-      pricing,
       modelOptions,
       events,
       streamState,
@@ -682,7 +649,6 @@ export function useCodexPetStudio({
     derived: {
       latestRun,
       ...artifactView,
-      ...billing,
       ...gates,
       deliveryReady,
       modelContractState,

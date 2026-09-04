@@ -8,7 +8,6 @@ const prisma = getPrisma();
 let app: Awaited<ReturnType<typeof buildServer>>;
 let token = "";
 let noPermToken = "";
-let billingLogToken = "";
 let detailToken = "";
 const createdAdminIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -41,15 +40,6 @@ beforeAll(async () => {
   });
   noPermToken = signAdminToken(a2.id, process.env.ADMIN_SESSION_SECRET!);
   createdAdminIds.push(a2.id);
-
-  const billingAdmin = await createAdmin(prisma, {
-    username: `adm_bill_${Date.now()}`,
-    password: "pw12345678",
-    role: "admin",
-    permissions: ["USER_BILLING_LOG_VIEW"],
-  });
-  billingLogToken = signAdminToken(billingAdmin.id, process.env.ADMIN_SESSION_SECRET!);
-  createdAdminIds.push(billingAdmin.id);
 
   const detailAdmin = await createAdmin(prisma, {
     username: `adm_detail_${Date.now()}`,
@@ -191,29 +181,6 @@ describe("admin 用户管理", () => {
     expect(r.statusCode).toBe(403);
   });
 
-  it("扣费日志权限只能查看单用户扣费日志", async () => {
-    const user = await prisma.user.create({
-      data: { uid: uniqueUid(), username: `byadm_bill_${Date.now()}`, passwordHash: "x" },
-    });
-    createdUserIds.push(user.id);
-    const billing = await app.inject({
-      method: "GET",
-      url: `/api/admin/users/${user.id}/billing-log`,
-      headers: { authorization: `Bearer ${billingLogToken}` },
-    });
-    expect(billing.statusCode).toBe(200);
-    expect(Array.isArray(billing.json().data.consumptionRecords)).toBe(true);
-    expect(billing.json().data.kpis).toBeUndefined();
-    expect(billing.json().data.timeline).toBeUndefined();
-
-    const detail = await app.inject({
-      method: "GET",
-      url: `/api/admin/users/${user.id}/detail`,
-      headers: { authorization: `Bearer ${billingLogToken}` },
-    });
-    expect(detail.statusCode).toBe(403);
-  });
-
   it("完整详情权限可以查看完整用户详情", async () => {
     const user = await prisma.user.create({
       data: { uid: uniqueUid(), username: `byadm_full_${Date.now()}`, passwordHash: "x" },
@@ -227,7 +194,6 @@ describe("admin 用户管理", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().data.kpis).toBeDefined();
     expect(Array.isArray(r.json().data.timeline)).toBe(true);
-    expect(Array.isArray(r.json().data.consumptionRecords)).toBe(true);
   });
 });
 

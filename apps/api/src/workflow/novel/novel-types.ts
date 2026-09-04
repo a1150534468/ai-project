@@ -12,6 +12,3 @@ export const NOVEL_TASK_STATUS = {
 } as const;
 
 export type NovelTaskStatus = (typeof NOVEL_TASK_STATUS)[keyof typeof NOVEL_TASK_STATUS];
-
-export const NOVEL_RESOURCE_KEY = "novel_text_output";
-export const NOVEL_COVER_RESOURCE_KEY = "novel_cover_generation";

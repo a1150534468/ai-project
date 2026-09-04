@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as api from "../api.js";
 import { useToast, errMsg, Field, Modal, useConfirm, Pill } from "../ui.js";
 import { can, loadSession } from "../auth.js";
-import { UserDetailModal, type UserDetailMode } from "./UserDetailModal.js";
+import { UserDetailModal } from "./UserDetailModal.js";
 
 export function UsersPage() {
   const session = loadSession();
@@ -19,18 +19,12 @@ export function UsersPage() {
   const { show, node: toastNode } = useToast();
   const { confirm, node: confirmNode } = useConfirm();
 
-  const [adjustModal, setAdjustModal] = useState<api.AdminUser | null>(null);
-  const [adjustDelta, setAdjustDelta] = useState("");
-  const [adjustReason, setAdjustReason] = useState("");
-  const [adjustAccount, setAdjustAccount] = useState<"points" | "video">("points");
-
   const [kbModal, setKbModal] = useState<api.AdminUser | null>(null);
   const [kbBytes, setKbBytes] = useState("");
   const [kbExpiresAt, setKbExpiresAt] = useState("");
   const [kbNote, setKbNote] = useState("");
-  const [detailModal, setDetailModal] = useState<{ userId: string; mode: UserDetailMode } | null>(null);
+  const [detailModal, setDetailModal] = useState<{ userId: string } | null>(null);
   const canViewFullDetail = can(session, "USER_DETAIL_VIEW");
-  const canViewBillingLog = can(session, "USER_BILLING_LOG_VIEW") || canViewFullDetail;
 
   const load = async (targetPage = page, term = committedQ) => {
     const seq = ++loadSeqRef.current;
@@ -67,26 +61,6 @@ export function UsersPage() {
     catch (e) { show(errMsg(e), "err"); }
   };
 
-  const handleAdjust = async () => {
-    if (!adjustModal || adjusting) return;
-    const delta = Number(adjustDelta);
-    if (!Number.isInteger(delta) || delta === 0) { show("请输入非 0 整数", "err"); return; }
-    const reason = adjustReason.trim();
-    if (!reason) { show("原因必填", "err"); return; }
-    try {
-      setAdjusting(true);
-      const r = await api.adjustBalance(adjustModal.id, delta, reason, crypto.randomUUID(), adjustAccount);
-      const unit = adjustAccount === "video" ? "视频点" : "算力点";
-      show(`完成（${unit}）：${r.before} → ${r.after}`);
-      setAdjustModal(null);
-      setAdjustDelta("");
-      setAdjustReason("");
-      setAdjustAccount("points");
-      void load();
-    } catch (e) { show(errMsg(e), "err"); }
-    finally { setAdjusting(false); }
-  };
-
   const handleKbQuota = async () => {
     if (!kbModal || adjusting) return;
     const bytes = Number(kbBytes);
@@ -114,27 +88,24 @@ export function UsersPage() {
         <CreateUser onDone={() => { show("已创建"); void load(); }} onErr={(m) => show(m, "err")} />
       </div>
       <table>
-        <thead><tr><th>UID</th><th>用户名</th><th>余额</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
+        <thead><tr><th>UID</th><th>用户名</th><th>状态</th><th>注册时间</th><th>操作</th></tr></thead>
         <tbody>
           {rows.map((u) => (
             <tr key={u.id}>
               <td>{u.uid}</td>
               <td>{u.username}</td>
-              <td className="num">{u.balance ?? <span className="muted">—</span>}</td>
               <td><Pill kind={u.bannedAt ? "b" : "g"}>{u.bannedAt ? "已封禁" : "正常"}</Pill></td>
               <td className="muted">{new Date(u.createdAt).toLocaleString()}</td>
               <td className="row" style={{ margin: 0, gap: 4 }}>
                 {can(session, "USER_MANAGE") && (
                   <button className={`btn sm ${u.bannedAt ? "ghost" : "danger"}`} onClick={() => ban(u, !!u.bannedAt)}>{u.bannedAt ? "解封" : "封禁"}</button>
                 )}
-                {can(session, "BALANCE_ADJUST") && <button className="btn sm" onClick={() => { setAdjustModal(u); setAdjustDelta(""); setAdjustReason(""); }} disabled={adjusting}>调余额</button>}
                 {can(session, "KNOWLEDGE_MANAGE") && <button className="btn ghost sm" onClick={() => { setKbModal(u); setKbBytes(""); setKbExpiresAt(""); setKbNote(""); }}>调知识库</button>}
-                {canViewFullDetail && <button className="btn ghost sm" onClick={() => setDetailModal({ userId: u.id, mode: "full" })}>详情</button>}
-                {!canViewFullDetail && canViewBillingLog && <button className="btn ghost sm" onClick={() => setDetailModal({ userId: u.id, mode: "billing" })}>扣费日志</button>}
+                {canViewFullDetail && <button className="btn ghost sm" onClick={() => setDetailModal({ userId: u.id })}>详情</button>}
               </td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td colSpan={6} className="muted">无数据</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={5} className="muted">无数据</td></tr>}
         </tbody>
       </table>
       <div className="row" style={{ alignItems: "center", gap: 8 }}>
@@ -142,29 +113,6 @@ export function UsersPage() {
         <span className="muted">第 {page} / {totalPages} 页 · 共 {total} 人</span>
         <button className="btn ghost sm" onClick={() => load(page + 1)} disabled={loading || page >= totalPages}>下一页</button>
       </div>
-
-      <Modal open={!!adjustModal} title={adjustModal ? `调整余额 - ${adjustModal.username}` : ""} onClose={() => setAdjustModal(null)}
-        footer={
-          <div className="modal-footer-actions">
-            <button className="btn ghost" onClick={() => setAdjustModal(null)}>取消</button>
-            <button className="btn" onClick={handleAdjust} disabled={adjusting}>提交</button>
-          </div>
-        }>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <Field label="账户类型">
-            <select value={adjustAccount} onChange={(e) => setAdjustAccount(e.target.value === "video" ? "video" : "points")}>
-              <option value="points">算力点</option>
-              <option value="video">视频点</option>
-            </select>
-          </Field>
-          <Field label="调整数额（正加负减，整数）">
-            <input type="number" value={adjustDelta} onChange={(e) => setAdjustDelta(e.target.value)} placeholder="如 100 或 -50" />
-          </Field>
-          <Field label="调整原因">
-            <textarea value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} placeholder="必填" rows={3} />
-          </Field>
-        </div>
-      </Modal>
 
       <Modal open={!!kbModal} title={kbModal ? `配置知识库配额 - ${kbModal.username}` : ""} onClose={() => setKbModal(null)}
         footer={
@@ -187,7 +135,6 @@ export function UsersPage() {
       </Modal>
       <UserDetailModal
         userId={detailModal?.userId ?? null}
-        mode={detailModal?.mode ?? "full"}
         onClose={() => setDetailModal(null)}
         onError={(m) => show(m, "err")}
       />

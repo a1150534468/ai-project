@@ -15,7 +15,6 @@ import {
   type ImageGenerationConfig,
 } from "../_shared/image-service.js";
 import { IMAGE_TASK_STATUS, type ImageGenerationTaskRow } from "./image-shared.js";
-import { settleImageTaskBilling } from "./image-billing.js";
 import {
   activeGenerationTasks,
   assertImageTaskRunning,
@@ -26,11 +25,10 @@ import {
   tryLoadImageGenerationConfig,
   updateTask,
 } from "./image-route-helpers.js";
-import type { BillingForImages, ScheduleTask } from "./image-route-types.js";
+import type { ScheduleTask } from "./image-route-types.js";
 
 export async function runImageGenerationTask(args: {
   readonly prisma: PrismaClient;
-  readonly billing: BillingForImages;
   readonly fetchFn: typeof fetch;
   readonly cfg: ImageGenerationConfig;
   readonly task: ImageGenerationTaskRow;
@@ -38,9 +36,8 @@ export async function runImageGenerationTask(args: {
   readonly maxAttempts?: number;
   readonly signal: AbortSignal;
   readonly onAttemptFailure?: (error: unknown, attempt: number) => void;
-  readonly onBillingError?: (error: unknown, operationId: string) => void;
 }): Promise<void> {
-  const { prisma, billing, fetchFn, cfg, task } = args;
+  const { prisma, fetchFn, cfg, task } = args;
   try {
     await assertImageTaskRunning(prisma, task.id);
     const existing = await prisma.imageAsset.findMany({
@@ -56,7 +53,7 @@ export async function runImageGenerationTask(args: {
     let completedCount = existing.length;
     await updateTask(prisma, task.id, { status: IMAGE_TASK_STATUS.running, completedCount, error: null });
 
-    // allSettled：任何分支失败也要等其余分支完全静止（含入库）再进入终态结算，避免少算已入库图片
+    // allSettled：任何分支失败也要等其余分支完全静止（含入库）再进入终态，避免漏记已入库图片
     const branchResults = await Promise.allSettled(missingIndexes.map(async (requestIndex) => {
       const stored = await retryUntilSuccess(async () => {
         await assertImageTaskRunning(prisma, task.id);
@@ -132,16 +129,9 @@ export async function runImageGenerationTask(args: {
       completedCount: generated.length,
       error: null,
     });
-    await settleImageTaskBilling({
-      prisma,
-      billing,
-      taskId: task.id,
-      reason: "completed",
-      onBillingError: args.onBillingError,
-    });
   } catch (error) {
     if (error instanceof ImageTaskStoppedError) {
-      // 取消由 cancel 路由负责结算，这里只兜底刷新状态
+      // 取消已由 cancel 路由写成终态，这里只兜底刷新状态
       if (error.status === IMAGE_TASK_STATUS.cancelled) {
         await updateTask(prisma, task.id, {
           status: IMAGE_TASK_STATUS.cancelled,
@@ -150,19 +140,12 @@ export async function runImageGenerationTask(args: {
       }
       return;
     }
-    // 取消触发的 AbortError 会以普通错误抛出：任务已是 cancelled 时不得改写为 failed，也不结算（取消路由负责）
+    // 取消触发的 AbortError 会以普通错误抛出：任务已是 cancelled 时不得改写为 failed
     const latest = await prisma.imageGenerationTask.findUnique({ where: { id: task.id } }).catch(() => null);
     if (latest?.status === IMAGE_TASK_STATUS.cancelled) return;
     await updateTask(prisma, task.id, {
       status: IMAGE_TASK_STATUS.failed,
       error: safeErrorMessage(error),
-    }).catch(() => undefined);
-    await settleImageTaskBilling({
-      prisma,
-      billing,
-      taskId: task.id,
-      reason: "failed",
-      onBillingError: args.onBillingError,
     }).catch(() => undefined);
     throw error;
   }
@@ -202,7 +185,6 @@ export async function claimStaleTask(prisma: PrismaClient, task: ImageGeneration
 
 export async function resumeStaleTasks(args: {
   readonly prisma: PrismaClient;
-  readonly billing: BillingForImages;
   readonly fetchFn: typeof fetch;
   readonly tasks: readonly ImageGenerationTaskRow[];
   readonly scheduleTask: ScheduleTask;
@@ -211,7 +193,6 @@ export async function resumeStaleTasks(args: {
   readonly staleTaskMs: number;
   readonly onResume: (task: ImageGenerationTaskRow) => void;
   readonly onAttemptFailure: (task: ImageGenerationTaskRow, error: unknown, attempt: number) => void;
-  readonly onBillingError?: (task: ImageGenerationTaskRow, error: unknown, operationId: string) => void;
 }): Promise<number> {
   const staleTasks = args.tasks.filter((task) =>
     !activeGenerationTasks.has(task.requestId) && isStaleRunningTask(task, args.staleTaskMs)
@@ -225,7 +206,6 @@ export async function resumeStaleTasks(args: {
     scheduleImageTask(args.scheduleTask, async (signal) => {
       await runImageGenerationTask({
         prisma: args.prisma,
-        billing: args.billing,
         fetchFn: args.fetchFn,
         cfg,
         task: claimed,
@@ -233,7 +213,6 @@ export async function resumeStaleTasks(args: {
         maxAttempts: args.maxAttempts,
         signal,
         onAttemptFailure: (error, attempt) => args.onAttemptFailure(claimed, error, attempt),
-        onBillingError: (error, operationId) => args.onBillingError?.(claimed, error, operationId),
       });
     }, claimed.requestId);
     return 1;

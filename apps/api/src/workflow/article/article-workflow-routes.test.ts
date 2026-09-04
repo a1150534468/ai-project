@@ -146,10 +146,12 @@ describe("article-workflow routes", () => {
     expect(prisma.__state.projects.map((row) => row.status)).toEqual(["ready", "ready", "ready"]);
   });
 
-  it("keeps the other platforms running when one row's reserve fails on balance", async () => {
+  it("keeps the other platforms running when one row's generation fails", async () => {
     const scheduled: (() => Promise<void>)[] = [];
-    const { app, prisma, billing } = await buildArticleWorkflowApp({
+    const { app, prisma } = await buildArticleWorkflowApp({
       llmResponses: [
+        // 只有公众号那一行拿到不可解析的计划，两条 caption 行照常跑完
+        createArticleWorkflowLlmResponse("这不是 JSON"),
         createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
         createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowCaptionPlan())),
       ],
@@ -157,8 +159,6 @@ describe("article-workflow routes", () => {
         scheduled.push(work);
       },
     });
-    // 扣费发生在异步 runner 里，不在 create 请求里：余额不足只能让那一行 failed
-    billing.reserveResource.mockRejectedValueOnce(new Error("余额不足"));
 
     const response = await app.inject({
       method: "POST",
@@ -177,11 +177,9 @@ describe("article-workflow routes", () => {
 
     for (const work of scheduled) await work();
 
+    // 每行独立生成、独立失败：一行崩了不影响其余两行
     expect(prisma.__state.projects.map((row) => row.status)).toEqual(["failed", "ready", "ready"]);
-    expect(prisma.__state.projects[0]?.error).toContain("余额不足");
-    // 没 reserve 成功就没有可退的单，也不该留悬空 operationId
-    expect(billing.refundResource).not.toHaveBeenCalled();
-    expect(prisma.__state.projects[0]?.billingOperationId ?? null).toBeNull();
+    expect(prisma.__state.projects[0]?.error).toContain("模型返回结构不符合要求");
     expect(prisma.__state.projects[1]?.captionText).toContain("第一次用就回不去了");
   });
 
@@ -423,7 +421,7 @@ describe("article-workflow routes", () => {
     expect(prisma.__state.projects).toHaveLength(2);
   });
 
-  it("saves edited html via PATCH without charging", async () => {
+  it("saves edited html via PATCH", async () => {
     const prisma = createArticleWorkflowPrismaMock({
       projects: [{
         id: "p-1",
@@ -444,7 +442,7 @@ describe("article-workflow routes", () => {
         updatedAt: new Date("2026-07-08T05:00:00.000Z"),
       }],
     });
-    const { app, billing } = await buildArticleWorkflowApp({ prisma });
+    const { app } = await buildArticleWorkflowApp({ prisma });
 
     const response = await app.inject({
       method: "PATCH",
@@ -465,8 +463,6 @@ describe("article-workflow routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().data.title).toBe("新标题");
     expect(response.json().data.bodyHtml).toContain("cover.png");
-    expect(billing.reserveResource).not.toHaveBeenCalled();
-    expect(billing.chargeResource).not.toHaveBeenCalled();
   });
 
   it("拒绝把正文整体清空的保存，库里内容不变", async () => {
@@ -558,7 +554,7 @@ describe("article-workflow routes", () => {
         createdAt: new Date("2026-07-08T05:00:00.000Z"), updatedAt: new Date("2026-07-08T05:00:00.000Z"),
       }],
     });
-    const { app, billing } = await buildArticleWorkflowApp({ prisma });
+    const { app } = await buildArticleWorkflowApp({ prisma });
 
     const response = await app.inject({
       method: "PATCH",
@@ -578,7 +574,6 @@ describe("article-workflow routes", () => {
     expect(data.tags).toEqual(["咖啡机", "居家"]);
     expect(data.bodyHtml).toBe("");
     expect(data.summary).toBe("新文案第一行");
-    expect(billing.reserveResource).not.toHaveBeenCalled();
   });
 
   it("downgrades preserve-text rewrite to polish-text on caption platforms", async () => {
@@ -822,7 +817,7 @@ describe("article-workflow routes", () => {
       payload: {},
     });
 
-    // 成品行要改稿走 rewrite，不该借重试白跑一次扣费
+    // 成品行要改稿走 rewrite，不该借重试白跑一次生成
     expect(response.statusCode).toBe(409);
     expect(prisma.__state.projects[0]?.bodyHtml).toContain("data-ai-assistant-image-slot");
   });

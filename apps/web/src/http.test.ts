@@ -76,11 +76,11 @@ describe("http", () => {
   });
 
   it("非 2xx 抛 ApiError，带上后端文案、状态码与结构化 data", async () => {
-    vi.stubGlobal("fetch", mockFetch(json({ error: "算力点不足", data: { remaining: 3 } }, 402)));
+    vi.stubGlobal("fetch", mockFetch(json({ error: "额外重画次数已用尽", data: { remaining: 3 } }, 409)));
     await expect(request("/api/x", { token: "t" })).rejects.toMatchObject({
       name: "ApiError",
-      status: 402,
-      message: "算力点不足",
+      status: 409,
+      message: "额外重画次数已用尽",
       data: { remaining: 3 },
     });
   });

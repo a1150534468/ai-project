@@ -25,13 +25,11 @@ import {
   deleteArticleWorkflowProject,
   generateArticleWorkflowImages,
   getArticleWorkflowBatch,
-  getArticleWorkflowPricing,
   getArticleWorkflowProject,
   listArticleWorkflowHistory,
   regenerateArticleWorkflowImage,
   retryArticleWorkflowProject,
   rewriteArticleWorkflowProject,
-  type ArticleWorkflowPricing,
   type ArticleWorkflowProject,
   type ArticleWorkflowProjectSummary,
 } from "../../workflowArticleApi";
@@ -73,7 +71,6 @@ function withClonedManifest(project: ArticleWorkflowProject): ArticleWorkflowPro
 
 export function useArticleWorkflowStudio({
   token,
-  onBalanceRefresh,
   initialHistory,
   initialProject = null,
   initialBootstrapping,
@@ -89,7 +86,6 @@ export function useArticleWorkflowStudio({
   const [activePlatform, setActivePlatform] = useState<ArticleWorkflowPlatform | null>(
     initialProject?.platform ?? null,
   );
-  const [pricing, setPricing] = useState<ArticleWorkflowPricing | null>(null);
   const [applyingTheme, setApplyingTheme] = useState(false);
   const [creating, setCreating] = useState(false);
   const [rewriting, setRewriting] = useState(false);
@@ -191,14 +187,6 @@ export function useArticleWorkflowStudio({
     setHistory(await listArticleWorkflowHistory(token));
   }, [token]);
 
-  const refreshPricing = useCallback(async () => {
-    try {
-      setPricing(await getArticleWorkflowPricing(token));
-    } catch {
-      setPricing(null);
-    }
-  }, [token]);
-
   /** 批次载入；存量无 batchId 的行退回单项目接口 */
   const loadBatch = useCallback(
     async (args: ArticleWorkflowLoadBatchArgs) => {
@@ -223,19 +211,18 @@ export function useArticleWorkflowStudio({
   useEffect(() => {
     if (initialHistory) {
       setBootstrapping(false);
-      void refreshPricing();
       return;
     }
     void (async () => {
       try {
-        await Promise.all([refreshHistory(), refreshPricing()]);
+        await refreshHistory();
       } catch {
         setError("加载图文工作台失败");
       } finally {
         setBootstrapping(false);
       }
     })();
-  }, [initialHistory, refreshHistory, refreshPricing]);
+  }, [initialHistory, refreshHistory]);
 
   useArticleWorkflowBatchPolling({
     batchProjects,
@@ -244,7 +231,6 @@ export function useArticleWorkflowStudio({
     refreshHistory,
     setError,
     setNotice,
-    onBalanceRefresh,
   });
 
   const { saving, saveProject } = useArticleWorkflowSave({
@@ -478,7 +464,6 @@ export function useArticleWorkflowStudio({
         setNotice("图片已更新");
         toast.show("ok", "图片已更新");
         await refreshHistory();
-        onBalanceRefresh?.();
       } catch (err) {
         const message = err instanceof Error ? err.message : "图片重生失败";
         setError(message);
@@ -523,7 +508,7 @@ export function useArticleWorkflowStudio({
     })();
   };
 
-  /** 应用预览态主题到项目：后端按 bodyMarkdown + 新主题重渲正文，不计费。 */
+  /** 应用预览态主题到项目：后端按 bodyMarkdown + 新主题重渲正文。 */
   const handleApplyTheme = () => {
     if (!project) return;
     const theme = creationForm.previewTheme ?? project.theme;
@@ -571,7 +556,6 @@ export function useArticleWorkflowStudio({
     selectedPlatforms,
     dirtyPlatforms,
     project,
-    pricing,
     titleDraft,
     summaryDraft,
     bodyHtmlDraft,

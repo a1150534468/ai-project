@@ -1,7 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { requireUser } from "../../auth/require-user.js";
 import { createNovelGenerator, type NovelGenerator } from "./novel-generation.js";
@@ -11,60 +10,26 @@ import { buildNovelReviewPayload, estimateNovelModificationRate } from "./novel-
 import { syncNovelContinuityAssetsForChapter } from "../../novel/continuity-assets.js";
 import { syncNovelNarrativeLedgersForChapter } from "../../novel/narrative-ledger.js";
 import { dispatchNovelOutboxBatch } from "../../novel/outbox.js";
-import { NOVEL_COVER_RESOURCE_KEY, NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS } from "./novel-types.js";
+import { NOVEL_TASK_STATUS } from "./novel-types.js";
 import { getNovelWorkbench, serializeNovelWorkbenchChapter } from "./novel-workbench.js";
-import { findEnabledNovelModel, withNovelWritingModel } from "./novel-models.js";
+import { withNovelWritingModel } from "./novel-models.js";
 import {
-  estimateReserveChars,
   getProjectDetail,
   nextChapterIndex,
   refreshNovelVectorMemoryBestEffort,
   reserveAndCreateTask,
   runNovelTask,
   serializeTask,
-  type BillingForNovels,
   type NovelTaskRow,
 } from "./novel-task-runner.js";
 
 type ScheduleTask = (work: () => Promise<void>) => void;
 
-interface NovelResourcePriceRow {
-  readonly resourceKey: string;
-  readonly displayName: string;
-  readonly pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
-  readonly rate: number;
-  readonly perUnits: number;
-  readonly enabled: boolean;
-}
-
-type NovelWorkflowBilling = BillingForNovels & {
-  readonly listResourcePrices?: () => Promise<{ data: NovelResourcePriceRow[] }>;
-};
-
 interface NovelWorkflowRouteDeps {
   readonly prisma?: PrismaClient;
-  readonly billing?: NovelWorkflowBilling;
   readonly generator?: NovelGenerator;
   readonly scheduleTask?: ScheduleTask;
 }
-
-const DEFAULT_NOVEL_TEXT_PRICE: NovelResourcePriceRow = {
-  resourceKey: NOVEL_RESOURCE_KEY,
-  displayName: "小说文字生成",
-  pricingType: "PER_UNIT",
-  rate: 1,
-  perUnits: 1000,
-  enabled: true,
-};
-
-const DEFAULT_NOVEL_COVER_PRICE: NovelResourcePriceRow = {
-  resourceKey: NOVEL_COVER_RESOURCE_KEY,
-  displayName: "小说封面生成",
-  pricingType: "PER_CALL",
-  rate: 10,
-  perUnits: 1,
-  enabled: true,
-};
 
 const projectParamsSchema = z.object({ projectId: z.string().trim().min(1) });
 const taskParamsSchema = z.object({ taskId: z.string().trim().min(1) });
@@ -124,11 +89,6 @@ async function findOwnedProject(prisma: PrismaClient, userId: string, projectId:
   return prisma.novelProject.findFirst({ where: { id: projectId, userId } });
 }
 
-function billingUnavailable(app: FastifyInstance, error: unknown, message: string) {
-  app.log.error(error);
-  return { error: message };
-}
-
 function jsonValue(value: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull {
   return value === null || value === undefined ? Prisma.JsonNull : value as Prisma.InputJsonValue;
 }
@@ -137,56 +97,22 @@ function jsonStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-function resourcePrice(rows: readonly NovelResourcePriceRow[], fallback: NovelResourcePriceRow): NovelResourcePriceRow {
-  const found = rows.find((row) => row.resourceKey === fallback.resourceKey);
-  return found ? { ...fallback, ...found, resourceKey: fallback.resourceKey } : fallback;
-}
-
 export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkflowRouteDeps = {}) {
-  // 本文件 18 个路由全部必须登录，挂插件级。
+  // 本文件 17 个路由全部必须登录，挂插件级。
   app.addHook("preHandler", requireUser);
 
   const prisma = deps.prisma ?? getPrisma();
-  const billing = deps.billing ?? createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
   const generator = deps.generator ?? createNovelGenerator();
   const scheduleTask = deps.scheduleTask;
   const taskDelivery = scheduleTask ? "inline" as const : "worker-outbox" as const;
 
   function enqueue(task: NovelTaskRow): void {
     if (scheduleTask) {
-      scheduleTask(() => runNovelTask({ prisma, billing, generator, task }));
+      scheduleTask(() => runNovelTask({ prisma, generator, task }));
       return;
     }
     void dispatchNovelOutboxBatch(prisma).catch((error) => app.log.error(error));
   }
-
-  app.get("/api/workflow/novels/pricing", async (req, reply) => {
-    const userId = req.userId;
-    if (!billing.listResourcePrices) {
-      return {
-        success: true,
-        data: {
-          novelText: DEFAULT_NOVEL_TEXT_PRICE,
-          cover: DEFAULT_NOVEL_COVER_PRICE,
-        },
-      };
-    }
-    try {
-      const rows = (await billing.listResourcePrices()).data ?? [];
-      return {
-        success: true,
-        data: {
-          novelText: resourcePrice(rows, DEFAULT_NOVEL_TEXT_PRICE),
-          cover: resourcePrice(rows, DEFAULT_NOVEL_COVER_PRICE),
-        },
-      };
-    } catch (error) {
-      return reply.code(502).send(billingUnavailable(app, error, "获取小说计价失败"));
-    }
-  });
 
   app.get("/api/workflow/novels/projects", async (req, reply) => {
     const userId = req.userId;
@@ -271,18 +197,6 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     if (!params.success || !body.success) return reply.code(400).send({ error: "参数不合法" });
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
-    if (body.data.writingModel) {
-      if (!billing.listModels) return reply.code(503).send({ error: "模型目录暂不可用" });
-      try {
-        const models = await billing.listModels();
-        const selected = findEnabledNovelModel(models.data, body.data.writingModel);
-        if (!selected || selected.showInMarketplace !== true) {
-          return reply.code(400).send({ error: "所选模型当前不可用于小说创作" });
-        }
-      } catch (error) {
-        return reply.code(502).send(billingUnavailable(app, error, "获取模型目录失败"));
-      }
-    }
     await prisma.novelProject.update({
       where: { id: project.id },
       data: {
@@ -333,14 +247,9 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const targetKind = ({ bible: "setupBible", characters: "setupCharacters", locations: "setupLocations", plot: "setupPlot" } as const)[params.data.setupKind];
     const active = await prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind, status: { in: ["queued", "running"] } } });
     if (active) return reply.code(409).send({ error: "该设置步骤正在生成" });
-    try {
-      const task = await reserveAndCreateTask({ prisma, billing, userId, projectId: project.id, targetKind, payload: { prompt: body.data.prompt, ...(targetKind === "setupPlot" ? { targetCount: project.targetChapters } : {}) }, estimateChars: estimateReserveChars(targetKind, undefined, project.targetChapters), delivery: taskDelivery });
-      enqueue(task);
-      return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
-    } catch (error) {
-      if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });
-      return reply.code(502).send(billingUnavailable(app, error, "创建新书设置任务失败"));
-    }
+    const task = await reserveAndCreateTask({ prisma, userId, projectId: project.id, targetKind, payload: { prompt: body.data.prompt, ...(targetKind === "setupPlot" ? { targetCount: project.targetChapters } : {}) }, delivery: taskDelivery });
+    enqueue(task);
+    return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
   });
 
   app.post("/api/workflow/novels/projects/:projectId/chapters/generate", async (req, reply) => {
@@ -351,23 +260,16 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     const chapterIndex = body.data.chapterIndex ?? await nextChapterIndex(prisma, project.id);
-    try {
-      const task = await reserveAndCreateTask({
-        prisma,
-        billing,
-        userId,
-        projectId: project.id,
-        targetKind: "chapter",
-        payload: { ...body.data, chapterIndex },
-        estimateChars: estimateReserveChars("chapter", body.data.targetChars),
-        delivery: taskDelivery,
-      });
-      enqueue(task);
-      return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
-    } catch (error) {
-      if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });
-      return reply.code(502).send(billingUnavailable(app, error, "创建章节任务失败"));
-    }
+    const task = await reserveAndCreateTask({
+      prisma,
+      userId,
+      projectId: project.id,
+      targetKind: "chapter",
+      payload: { ...body.data, chapterIndex },
+      delivery: taskDelivery,
+    });
+    enqueue(task);
+    return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
   });
 
   app.put("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex", async (req, reply) => {
@@ -453,35 +355,28 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     });
     if (active) return reply.code(409).send({ error: "该章节已有局部改写任务正在运行" });
     const targetChars = Math.max(200, Math.min(visibleCharCount(selectedText), 6000));
-    try {
-      const task = await reserveAndCreateTask({
-        prisma,
-        billing,
-        userId,
-        projectId: project.id,
-        targetKind: "chapterRewrite",
-        targetId: chapter.id,
-        payload: {
-          chapterIndex: chapter.chapterIndex,
-          title: chapter.title,
-          summary: selectedText,
-          selectedText,
-          selectionStart,
-          selectionEnd,
-          selectionBefore: chapter.content.slice(Math.max(0, selectionStart - 1500), selectionStart),
-          selectionAfter: chapter.content.slice(selectionEnd, selectionEnd + 1500),
-          prompt: instruction,
-          targetChars,
-        },
-        estimateChars: estimateReserveChars("chapterRewrite", targetChars),
-        delivery: taskDelivery,
-      });
-      enqueue(task);
-      return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
-    } catch (error) {
-      if (error instanceof InsufficientBalanceError) return reply.code(402).send({ error: "积分不足，请充值" });
-      return reply.code(502).send(billingUnavailable(app, error, "创建局部改写任务失败"));
-    }
+    const task = await reserveAndCreateTask({
+      prisma,
+      userId,
+      projectId: project.id,
+      targetKind: "chapterRewrite",
+      targetId: chapter.id,
+      payload: {
+        chapterIndex: chapter.chapterIndex,
+        title: chapter.title,
+        summary: selectedText,
+        selectedText,
+        selectionStart,
+        selectionEnd,
+        selectionBefore: chapter.content.slice(Math.max(0, selectionStart - 1500), selectionStart),
+        selectionAfter: chapter.content.slice(selectionEnd, selectionEnd + 1500),
+        prompt: instruction,
+        targetChars,
+      },
+      delivery: taskDelivery,
+    });
+    enqueue(task);
+    return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
   });
 
   app.get("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex/versions", async (req, reply) => {
@@ -688,9 +583,6 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const updated = await prisma.novelTask.update({
       where: { id: task.id },
       data: { status: NOVEL_TASK_STATUS.cancelled, error: "用户已取消", cancelledAt: new Date() },
-    });
-    await billing.refundResource(task.operationId).catch((error) => {
-      app.log.warn({ err: error, taskId: task.id }, "novel task cancellation refund failed");
     });
     return { success: true, data: { task: serializeTask(updated) } };
   });

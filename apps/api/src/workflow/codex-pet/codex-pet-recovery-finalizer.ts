@@ -18,7 +18,6 @@ import {
   validateStandardPetAtlas,
   type PetFramesByState,
 } from "@ai-assistant/codex-pet-pipeline";
-import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "./codex-pet-call-ledger.js";
 import { CODEX_PET_MODEL_CONTRACT_VERSION, codexPetVisualQaRouteForModel } from "./codex-pet-model-contract.js";
 import { persistOrResumeCodexPetFinalPackage, type CodexPetFinalPackageSeed } from "./codex-pet-packaging.js";
 import type { CodexPetArtifactStore } from "./codex-pet-runner.js";
@@ -368,10 +367,10 @@ export async function buildCodexPetRecoverySeed(input: CodexPetRecoveryBuildInpu
 }
 
 /**
- * Create a fresh, zero-charge packaging run for an already failed/refunded
- * source run. The source run is never mutated and no provider is contacted.
- * Building the seed first binds the new run to the exact approved bytes and
- * QA evidence that the caller is about to finalize.
+ * Create a fresh packaging run for an already failed source run. The source run
+ * is never mutated and no provider is contacted. Building the seed first binds
+ * the new run to the exact approved bytes and QA evidence that the caller is
+ * about to finalize.
  */
 export async function initializeCodexPetRecoveryRun(input: CodexPetRecoveryRunInput): Promise<CodexPetRecoveryRunResult> {
   const built = await buildCodexPetRecoverySeed(input);
@@ -411,20 +410,11 @@ export async function initializeCodexPetRecoveryRun(input: CodexPetRecoveryRunIn
     if (source.qualityInspectionEnabled !== input.qualityInspectionEnabled) {
       throw new Error("恢复证据与源运行的质检开关不一致");
     }
-    // The precondition is that the source run is terminal and its money is
-    // already closed out, so a zero-charge recovery cannot double-bill.
-    // "Closed out" differs by billing mode: a points/package run is refunded,
-    // while a per-image run is charged per real call and settled — those calls
-    // genuinely happened and produced the approved atlas, so there is nothing
-    // to refund and `refunded` is unreachable for it.
-    const financiallyClosed = source.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE
-      ? source.billingSettlementStatus === "settled" && Boolean(source.billingSettledAt)
-      : source.billingRefundStatus === "refunded" && Boolean(source.billingRefundedAt);
+    // The precondition is that the source run is terminal and unowned.
     if (source.status !== "failed"
-      || !financiallyClosed
       || source.cancelRequested
       || source.workerId) {
-      throw new Error("恢复只允许从已失败且账务已结清的无 lease 源运行开始");
+      throw new Error("恢复只允许从已失败的无 lease 源运行开始");
     }
     if (source.project.deletedAt || source.project.status === "deleting") {
       throw new Error("恢复源项目已删除或正在删除");
@@ -493,9 +483,6 @@ export async function initializeCodexPetRecoveryRun(input: CodexPetRecoveryRunIn
         progressMessage: "正在恢复已通过质检的 Codex 安装包",
         autoContinue: false,
         colorKey: input.chromaKey,
-        billingPoints: 0,
-        billingChargeStatus: "not_required",
-        billingRefundStatus: "none",
         hasSuccessfulImage: true,
         requestedModel: source.requestedModel,
         visualQaModel: source.visualQaModel,

@@ -28,7 +28,6 @@ export type ProjectRow = {
   progressPercent: number;
   progressMessage: string | null;
   error: string | null;
-  billingOperationId?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -261,13 +260,6 @@ export function createArticleWorkflowPrismaMock(seed?: {
   };
 }
 
-type BillingCallArgs = {
-  operationId: string;
-  userId: string;
-  resourceKey: string;
-  units: number;
-};
-
 export function createArticleWorkflowLlmResponse(text: string) {
   return {
     content: [{ type: "text", text }],
@@ -285,14 +277,6 @@ export async function buildArticleWorkflowApp(args?: {
   envPatch?: Record<string, string>;
   /** 关掉默认注入的登录态，验「不带会话」的路径 */
   anonymous?: boolean;
-  priceRows?: readonly {
-    resourceKey: string;
-    displayName: string;
-    pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
-    rate: number;
-    perUnits: number;
-    enabled: boolean;
-  }[];
 }) {
   const prisma = args?.prisma ?? createArticleWorkflowPrismaMock();
   const llmResponses = [
@@ -301,13 +285,6 @@ export async function buildArticleWorkflowApp(args?: {
       createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
     ]),
   ];
-  const billing = {
-    reserveResource: vi.fn(async (_args: BillingCallArgs) => ({ reserved: 1 })),
-    settleResource: vi.fn(async (_args: Omit<BillingCallArgs, "userId">) => ({ settled: 1 })),
-    chargeResource: vi.fn(async (_args: BillingCallArgs) => ({ charged: 1 })),
-    refundResource: vi.fn(async (_operationId: string) => ({ success: true })),
-    listResourcePrices: vi.fn(async () => ({ data: [...(args?.priceRows ?? [])] })),
-  };
   const llm = {
     messages: {
       create: vi.fn(async () => {
@@ -326,7 +303,6 @@ export async function buildArticleWorkflowApp(args?: {
   await app.register((instance) =>
     articleWorkflowRoutes(instance, {
       prisma: prisma as never,
-      billing: billing as never,
       llm: llm as never,
       fetchFn:
         args?.fetchFn ??
@@ -354,5 +330,5 @@ export async function buildArticleWorkflowApp(args?: {
       },
     }),
   );
-  return { app, prisma, billing, llm };
+  return { app, prisma, llm };
 }

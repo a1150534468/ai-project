@@ -33,96 +33,17 @@ describe("admin api 客户端", () => {
     await expect(api.listUsers()).rejects.toBeInstanceOf(api.ForbiddenError);
   });
 
-  it("VIP 等级接口和模型 metadata 字段会正确透传", async () => {
+  it("模型 metadata 字段会正确透传", async () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
     globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       calls.push({ input, init });
-      const url = String(input);
-      if (url.includes("/api/admin/vip-levels") && init?.method === "GET") {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ data: [{ id: 1, name: "普通会员", discountBps: 10000 }] }),
-        } as Response;
-      }
-      if (url.includes("/api/admin/users/u1/detail")) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            data: {
-              user: { id: "u1", uid: "10000001", username: "alice", bannedAt: null, createdAt: "2026-07-01T00:00:00Z" },
-              kpis: {
-                onlineToday: false,
-                onlineDevices: 0,
-                loginCountToday: 0,
-                todayToken: 0,
-                todayAgent: 0,
-                totalToken: 0,
-                todayRechargeYuan: 0,
-                todayConsumptionPoints: 0,
-                totalRechargeYuan: 0,
-                totalConsumptionPoints: 0,
-                balance: 10,
-                currentMemberships: [],
-              },
-              vipSummary: {
-                userId: "u1",
-                levelId: 2,
-                levelName: "银卡会员",
-                discountBps: 9000,
-                growthPoints: 10000,
-                nextLevelId: 3,
-                nextLevelName: "金卡会员",
-                nextThreshold: 30000,
-                pointsToNextLevel: 20000,
-                highestLevel: false,
-              },
-              activity: [],
-              devices: [],
-              consumptionRecords: [{
-                operationId: "op1",
-                type: "chat",
-                model: "glm-4.5",
-                displayName: "GLM 4.5",
-                status: "settled",
-                reservedPoints: 120,
-                actualPoints: 90,
-                originalPoints: 100,
-                vipLevelName: "银卡会员",
-                vipDiscountBps: 9000,
-                vipSavedPoints: 10,
-                vipGrowthPoints: 90,
-                inputTokens: 1,
-                outputTokens: 2,
-                cacheInputTokens: 0,
-                cacheOutputTokens: 0,
-                createdAt: "2026-07-01T00:00:00Z",
-                settledAt: "2026-07-01T00:01:00Z",
-              }],
-              rechargeEvents: [],
-              timeline: [],
-            },
-          }),
-        } as Response;
-      }
       return {
         ok: true,
         status: 200,
-        json: async () => ({ success: true, data: { id: 2, name: "银卡会员", discountBps: 9000 } }),
+        json: async () => ({ success: true }),
       } as Response;
     }) as typeof fetch;
 
-    await api.listVipLevels();
-    await api.upsertVipLevel({
-      name: "银卡会员",
-      sortOrder: 10,
-      thresholdRmbFen: 10000,
-      discountBps: 9000,
-      enabled: true,
-      upgradeEnabled: true,
-    });
-    await api.deleteVipLevel(2);
     await api.upsertModel({
       model: "glm-4.5",
       displayName: "GLM 4.5",
@@ -142,18 +63,9 @@ describe("admin api 客户端", () => {
       tags: "chat",
       showInMarketplace: true,
     });
-    const detail = await api.getUserDetail("u1");
 
-    expect(calls[0]?.input).toBe("/api/admin/vip-levels");
-    expect(calls[1]?.init?.body).toBe(JSON.stringify({
-      name: "银卡会员",
-      sortOrder: 10,
-      thresholdRmbFen: 10000,
-      discountBps: 9000,
-      enabled: true,
-      upgradeEnabled: true,
-    }));
-    expect(calls[3]?.init?.body).toBe(JSON.stringify({
+    expect(calls[0]?.input).toBe("/api/admin/models");
+    expect(calls[0]?.init?.body).toBe(JSON.stringify({
       model: "glm-4.5",
       displayName: "GLM 4.5",
       enabled: true,
@@ -168,16 +80,12 @@ describe("admin api 客户端", () => {
       sortOrder: 10,
       showInMarketplace: true,
     }));
-    expect(calls[4]?.init?.body).toBe(JSON.stringify({
+    expect(calls[1]?.init?.body).toBe(JSON.stringify({
       model: "glm-4.5",
       displayName: "GLM 4.5",
       enabled: true,
       tags: "chat",
       showInMarketplace: true,
     }));
-    expect(detail.vipSummary).not.toBeNull();
-    expect(detail.vipSummary?.levelName).toBe("银卡会员");
-    expect(detail.consumptionRecords[0]?.originalPoints).toBe(100);
-    expect(detail.consumptionRecords[0]?.vipGrowthPoints).toBe(90);
   });
 });

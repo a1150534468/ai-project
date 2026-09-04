@@ -26,11 +26,9 @@ import type {
   CodexPetRouteDeps,
   EventShape,
   ProjectShape,
-  ResourcePrice,
   RunShape,
 } from "./codex-pet-route-types.js";
 
-export const CODEX_PET_RESOURCE_KEY = "codex_pet_v2_package";
 export const CODEX_PET_PUBLIC_ARTIFACT_PURPOSE = "codex-pet-install";
 export const CODEX_PET_PREVIEW_ARTIFACT_PURPOSE = "codex-pet-preview";
 export const CODEX_PET_INSTALL_URL_TTL_SECONDS = 30 * 60;
@@ -51,14 +49,10 @@ export const SAFE_RASTER_IMAGE_MIMES = new Set([
   "image/avif",
 ]);
 
-export const DEFAULT_PRICE = {
-  resourceKey: CODEX_PET_RESOURCE_KEY,
-  displayName: "Codex v2 桌宠生图调用",
-  pricingType: "PER_UNIT" as const,
-  rate: 200,
-  perUnits: 1,
-  enabled: true,
-};
+/**
+ * 一次运行计划内的真实生图调用上限，冻结在 run 行上供工作台展示「已用/上限」。
+ */
+export const CODEX_PET_PLANNED_IMAGE_CALL_LIMIT = 14;
 
 export const ACTIVE_RUN_STATUSES = [
   "queued",
@@ -74,11 +68,11 @@ export const ACTIVE_RUN_STATUSES = [
 ] as const;
 
 // A run parked on `awaiting_regeneration_approval` is not *running*, but it is
-// still wake-able: approving it dispatches paid image calls immediately. Any
-// check that asks "does this account already have a run that could hit the
-// relay?" must therefore include it. Leaving it out of the new-run block let a
-// user start a second run and then approve the parked one, putting two runs on
-// the same upstream quota at once — the 429 shape that killed an earlier run.
+// still wake-able: approving it dispatches image calls immediately. Any check
+// that asks "does this account already have a run that could hit the relay?"
+// must therefore include it. Leaving it out of the new-run block let a user
+// start a second run and then approve the parked one, putting two runs on the
+// same upstream quota at once — the 429 shape that killed an earlier run.
 export const BLOCKING_RUN_STATUSES = [...ACTIVE_RUN_STATUSES, "awaiting_regeneration_approval"] as const;
 
 export const TERMINAL_RUN_STATUSES = ["ready", "failed", "cancelled", CODEX_PET_LEGACY_READ_ONLY_STATUS] as const;
@@ -144,7 +138,6 @@ export const updateProjectSchema = projectFieldsSchema.partial().superRefine((va
 });
 
 export const startRunSchema = z.object({ idempotencyKey: idempotencyKeySchema.optional() }).default({});
-export const failedContinuationSchema = z.object({ idempotencyKey: idempotencyKeySchema.optional() }).default({});
 export const gateFailureResumeSchema = z.object({ reason: z.string().trim().min(1).max(500).optional() }).default({});
 export const baseSelectionSchema = z.union([
   z.object({ artifactId: idSchema }).strict(),
@@ -251,22 +244,6 @@ export function serializeRun(run: RunShape, ownedRunIds: ReadonlySet<string> | n
     progressMessage: run.progressMessage,
     autoContinue: run.autoContinue,
     colorKey: run.colorKey,
-    billingPoints: run.billingPoints,
-    billingMode: run.billingMode,
-    billingResourceKey: run.billingResourceKey,
-    billingReservedUnits: run.billingReservedUnits,
-    billingSettledUnits: run.billingSettledUnits,
-    billingReservedPoints: run.billingReservedPoints,
-    billingSettledPoints: run.billingSettledPoints,
-    billingSettlementStatus: run.billingSettlementStatus,
-    billingChargeStatus: run.billingChargeStatus,
-    billingChargeAttemptCount: run.billingChargeAttemptCount,
-    billingChargeError: run.billingChargeError,
-    billingChargeNextRetryAt: safeDate(run.billingChargeNextRetryAt),
-    billingChargedAt: safeDate(run.billingChargedAt),
-    billingActivatedAt: safeDate(run.billingActivatedAt),
-    billingRefundedAt: safeDate(run.billingRefundedAt),
-    billingRefundStatus: run.billingRefundStatus,
     cancelRequested: run.cancelRequested,
     hasSuccessfulImage: run.hasSuccessfulImage,
     selectedBaseArtifactId: run.selectedBaseArtifactId,
@@ -298,8 +275,8 @@ export function serializeRun(run: RunShape, ownedRunIds: ReadonlySet<string> | n
     usage: run.usage,
     lastEventSequence: run.lastEventSequence,
     // A gate that named its action groups leaves the failure resumable inside the
-    // same paid run. Publishing the scope is what lets the panel offer that resume
-    // instead of only "copy to a new project and pay for everything again".
+    // same run. Publishing the scope is what lets the panel offer that resume
+    // instead of only "copy to a new project and start over".
     resumableGateRows: [...(readCodexPetGateFailureSnapshot(run.inputSnapshot)?.rows ?? [])],
     error: run.error,
     startedAt: safeDate(run.startedAt),
@@ -484,20 +461,6 @@ export function resolveIdempotencyKey(
   if (normalizedHeader && body && normalizedHeader !== body) return { success: false };
   const parsed = idempotencyKeySchema.safeParse(body ?? normalizedHeader);
   return parsed.success ? { success: true, value: parsed.data } : { success: false };
-}
-
-export function resolvePricing(rows: readonly ResourcePrice[]): ResourcePrice {
-  const configured = rows.find((row) => row.resourceKey === CODEX_PET_RESOURCE_KEY);
-  return configured
-    ? { ...DEFAULT_PRICE, ...configured, resourceKey: CODEX_PET_RESOURCE_KEY }
-    : DEFAULT_PRICE;
-}
-
-export function isCodexPetPerImagePrice(pricing: ResourcePrice): boolean {
-  return pricing.pricingType === "PER_UNIT"
-    && pricing.perUnits === 1
-    && Number.isFinite(pricing.rate)
-    && pricing.rate > 0;
 }
 
 export function signingSecret(deps: CodexPetRouteDeps): string {

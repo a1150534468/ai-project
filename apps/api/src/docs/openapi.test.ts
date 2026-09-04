@@ -9,7 +9,7 @@ afterEach(async () => {
 });
 
 describe("OpenAPI documentation", () => {
-  it("exposes Swagger UI and a merged main/Billing OpenAPI document", async () => {
+  it("exposes Swagger UI and the main OpenAPI document", async () => {
     const app = Fastify();
     apps.push(app);
 
@@ -33,7 +33,6 @@ describe("OpenAPI documentation", () => {
     ]);
     const registerSchema = document.paths["/api/auth/register"].post.requestBody.content["application/json"].schema;
     expect(registerSchema.required).toEqual(["username", "password"]);
-    expect(registerSchema.properties).not.toHaveProperty("channelCode");
 
     expect(document.paths["/api/admin/users/{id}/detail"].get.tags).toEqual(["管理 · 用户"]);
     expect(document.paths["/api/admin/users/{id}/detail"].get.security).toEqual([{ adminBearerAuth: [] }]);
@@ -42,11 +41,6 @@ describe("OpenAPI documentation", () => {
       in: "path",
       required: true,
     });
-
-    expect(document.paths["/resource/charge"].post.tags).toEqual(["Billing · 资源计费"]);
-    expect(document.paths["/resource/charge"].post.security).toEqual([{ billingInternalToken: [] }]);
-    expect(document.paths["/resource/charge"].post.servers[0].url).toContain("8093");
-    expect(document.components.securitySchemes.billingInternalToken.name).toBe("X-Internal-Token");
 
     const ui = await app.inject({ method: "GET", url: "/docs/" });
     expect(ui.statusCode).toBe(200);

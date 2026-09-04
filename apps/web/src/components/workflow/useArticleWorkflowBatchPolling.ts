@@ -33,9 +33,8 @@ export function useArticleWorkflowBatchPolling(args: {
   readonly refreshHistory: () => Promise<void>;
   readonly setError: (value: string) => void;
   readonly setNotice: (value: string) => void;
-  readonly onBalanceRefresh?: () => void;
 }) {
-  const { batchProjects, batchBusy, loadBatch, refreshHistory, setError, setNotice, onBalanceRefresh } = args;
+  const { batchProjects, batchBusy, loadBatch, refreshHistory, setError, setNotice } = args;
   const pollBatchId = batchProjects[0]?.batchId ?? null;
   const pollProjectId =
     batchProjects.find((item) => isBusyArticleWorkflowStatus(item.status))?.id ?? batchProjects[0]?.id ?? "";
@@ -64,12 +63,11 @@ export function useArticleWorkflowBatchPolling(args: {
             const names = imageFailures.map((item) => shortPlatformLabel(item.platform)).join("、");
             setError(`${names}配图失败：${imageFailures[0]?.error || "未知原因"}`);
           }
-          onBalanceRefresh?.();
         } catch (err) {
           setError(err instanceof Error ? err.message : "刷新项目失败");
         }
       })();
     }, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [batchBusy, loadBatch, onBalanceRefresh, pollBatchId, pollProjectId, refreshHistory, setError, setNotice]);
+  }, [batchBusy, loadBatch, pollBatchId, pollProjectId, refreshHistory, setError, setNotice]);
 }

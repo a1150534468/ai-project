@@ -25,7 +25,6 @@ import { AUTH_TOKEN_STORAGE_KEY } from "./http";
 
 const apiMocks = vi.hoisted(() => ({
   deleteSession: vi.fn(),
-  getBalance: vi.fn(),
   getMe: vi.fn(),
   getSessionMessages: vi.fn(),
   listAgents: vi.fn(),
@@ -33,7 +32,7 @@ const apiMocks = vi.hoisted(() => ({
   streamChat: vi.fn(),
 }));
 
-/** 只替换 App.tsx 真正调用的 7 个接口,其余(类型、工具函数)保持真实实现。 */
+/** 只替换 App.tsx 真正调用的 6 个接口,其余(类型、工具函数)保持真实实现。 */
 vi.mock("./api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./api")>()),
   ...apiMocks,
@@ -122,7 +121,6 @@ vi.mock("./pages/Knowledge", () => pageProbe("knowledge", "kb-page"));
 vi.mock("./pages/Assets", () => stub("assets-page"));
 vi.mock("./pages/Workflow", () => pageProbe("workflow", "workflow-page"));
 vi.mock("./pages/Settings", () => pageProbe("settings", "settings-page"));
-vi.mock("./pages/Billing", () => stub("billing-page"));
 vi.mock("./pages/Memory", () => stub("memory-page"));
 vi.mock("./pages/ModelMarketplace", () => stub("models-page"));
 
@@ -204,7 +202,6 @@ beforeEach(() => {
   probes.streamArgs = [];
   probes.emit = null;
   resolveStream = null;
-  apiMocks.getBalance.mockResolvedValue({ balance: 120 });
   apiMocks.getMe.mockResolvedValue({ uid: "u-1", username: "alice" });
   apiMocks.listAgents.mockResolvedValue({
     presets: [{ id: "preset-1", name: "写作助手", description: "", icon: "mdi:pen", type: "preset" }],
@@ -249,8 +246,6 @@ describe("App 登录态", () => {
     await flush();
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe("t-new");
     expect(find("shell")).not.toBeNull();
-    expect(apiMocks.getBalance).toHaveBeenCalledWith("t-new");
-    expect(probes.shell?.balance).toBe(120);
   });
 
   it("登出清掉 token 与 localStorage", async () => {
@@ -424,39 +419,23 @@ describe("App 会话流事件", () => {
     expect(probes.chat?.error).toBe("");
   });
 
-  it("流结束后清掉运行标记并刷新余额", async () => {
+  it("流结束后清掉运行标记", async () => {
     await mount();
     await send();
-    apiMocks.getBalance.mockResolvedValue({ balance: 80 });
     await act(async () => {
       resolveStream?.();
     });
     await flush();
     expect(probes.chat?.isLoading).toBe(false);
-    expect(probes.shell?.balance).toBe(80);
   });
 });
 
 describe("App 会话流错误", () => {
-  it("余额不足的错误弹充值提示,去充值跳计费页", async () => {
-    await mount();
-    await send();
-    await emit("error", { message: "余额不足", code: "INSUFFICIENT_BALANCE" });
-    expect(probes.chat?.error).toBe("余额不足");
-    expect(container.textContent).toContain("当前算力点余额不足");
-    const recharge = [...container.querySelectorAll("button")].find((item) => item.textContent === "去充值");
-    await act(async () => {
-      recharge?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(find("billing-page")).not.toBeNull();
-  });
-
-  it("普通错误只写进当前会话,不弹充值提示", async () => {
+  it("错误只写进当前会话", async () => {
     await mount();
     await send();
     await emit("error", { message: "模型超时" });
     expect(probes.chat?.error).toBe("模型超时");
-    expect(container.textContent).not.toContain("当前算力点余额不足");
   });
 
   it("streamChat 抛错时给出发送失败提示", async () => {

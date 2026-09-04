@@ -1,10 +1,6 @@
 /**
  * chat/routes.ts 拆分后的运行期常量与环境变量读取。
  *
- * `CHAT_RESERVE_OUTPUT_TOKENS` 是预扣口径,不是输出上限:真正的单次输出上限由
- * routes-model-gate.ts 的 `resolveModelMaxOutput` 从计费侧配置读。改这个常量只会改变"先冻结多少
- * 点数",最终结算仍按实际用量多退少补。
- *
  * `DEFAULT_KB_*` 四个默认值都能被同名环境变量覆盖(`KB_TOPK` / `KB_MIN_SCORE` /
  * `KB_MAX_CONTEXT_CHUNKS` / `KB_MAX_CHUNKS_PER_DOCUMENT`),覆盖发生在路由里而不是这里 —— 这里
  * 只给"没配置时"的落点。
@@ -18,8 +14,6 @@
  * 依赖方向:本文件是叶子,不 import 任何本仓模块。
  */
 
-// 预扣统一按 10000 token 的输出价计算（Go 侧按模型输出单价换算成算力点）。
-export const CHAT_RESERVE_OUTPUT_TOKENS = 10_000;
 export const DEFAULT_KB_MIN_SCORE = 0.35;
 export const DEFAULT_KB_TOPK = 8;
 export const DEFAULT_KB_MAX_CONTEXT_CHUNKS = 4;

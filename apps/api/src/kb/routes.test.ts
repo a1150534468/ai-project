@@ -4,18 +4,6 @@ import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { signToken } from "../auth/token.js";
 import { generateUniqueUid } from "../auth/uid.js";
-import * as billingModule from "@ai-assistant/billing";
-
-// Mock @ai-assistant/billing 在模块顶层
-vi.mock("@ai-assistant/billing", () => ({
-  createBillingClient: vi.fn(),
-  InsufficientBalanceError: class extends Error {
-    name = "InsufficientBalanceError";
-    constructor() {
-      super("积分不足");
-    }
-  },
-}));
 
 // Mock indexOnce 避免真实索引
 vi.mock("./indexer.js", () => ({
@@ -49,21 +37,11 @@ beforeAll(async () => {
   process.env.LLM_API_KEY ??= "test-key";
   process.env.EMBEDDING_MODEL ??= "test-embedding-model";
   process.env.ADMIN_SESSION_SECRET ??= "y".repeat(32);
-  process.env.BILLING_BASE_URL ??= "http://localhost:1";
-  process.env.BILLING_INTERNAL_TOKEN ??= "t";
   // S3 配置（可指向 MinIO 或其他 S3 兼容存储，仅用于测试）
   process.env.S3_ENDPOINT ??= "http://localhost:9000";
   process.env.S3_BUCKET ??= "test-kb";
   process.env.S3_ACCESS_KEY ??= "test-s3-access-key";
   process.env.S3_SECRET_KEY ??= "test-s3-secret-key";
-
-  // 设置默认 mock
-  vi.mocked(billingModule.createBillingClient).mockReturnValue({
-    reserve: vi.fn().mockResolvedValue({ opId: "mock-op-id" }),
-    settle: vi.fn().mockResolvedValue({ settled: true }),
-    getUserKbQuota: vi.fn().mockResolvedValue({ membershipBytes: 1000000, defaultBytes: 1000000 }),
-    listEnabledModels: vi.fn().mockResolvedValue({ data: [{ model: "gpt-4" }] }),
-  } as any);
 
   const uid = await generateUniqueUid(async (u) => Boolean(await prisma.user.findUnique({ where: { uid: u } })));
   const u = await prisma.user.create({ data: { uid, username: `kb_${Date.now()}`, passwordHash: "x" } });
@@ -205,18 +183,6 @@ describe("知识库路由", () => {
 
       const found = await prisma.knowledgeBase.findUnique({ where: { id: kb.id } });
       expect(found).toBeNull();
-    });
-  });
-
-  describe("知识库配额包已下线", () => {
-    it("购买端点返回 404", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/kb/quota/buy",
-        headers: { authorization: auth },
-        payload: { packageId: "removed" },
-      });
-      expect(r.statusCode).toBe(404);
     });
   });
 
@@ -461,107 +427,12 @@ describe("知识库路由", () => {
         payload: { text: longText, name: "test.txt" },
       });
       expect(r.statusCode).toBe(400);
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("配额不足 402", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-
-      // 不改变 billing mock，直接测试：限额 1GB，文本超过 100KB 应该会因为估值超过配额而失败
-      // 或者使用默认大配额，仅测试文本超长。这里用简化的测试
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { text: "x".repeat(300000), name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(400);
       expect(r.json().error).toContain("文本过长");
 
       await prisma.knowledgeBase.delete({ where: { id: kb.id } });
     });
 
-    it("reserve 不足 402 且回滚", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-
-      // 为这个测试创建新 app（billing mock 返回 reserve 失败）
-      const InsufficientBalanceError = (billingModule as any).InsufficientBalanceError;
-      vi.mocked(billingModule.createBillingClient).mockReturnValue({
-        reserve: vi.fn().mockRejectedValue(new InsufficientBalanceError()),
-        settle: vi.fn().mockResolvedValue({}),
-        getUserKbQuota: vi.fn().mockResolvedValue({ membershipBytes: 1000000, defaultBytes: 1000000 }),
-        listEnabledModels: vi.fn().mockResolvedValue({ data: [] }),
-      } as any);
-
-      const testApp = await buildServer();
-      await testApp.ready();
-
-      const r = await testApp.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { text: "hello world", name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(402);
-      expect(r.json().error).toContain("积分");
-
-      // 验证 Document 被完整回滚（DB 查不到）
-      const docs = await prisma.document.findMany({ where: { kbId: kb.id } });
-      expect(docs.length).toBe(0);
-
-      await testApp.close();
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("reserve 服务异常 502 且回滚", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-
-      // 为这个测试创建新 app（billing mock 返回普通错误）
-      vi.mocked(billingModule.createBillingClient).mockReturnValue({
-        reserve: vi.fn().mockRejectedValue(new Error("billing service unavailable")),
-        settle: vi.fn().mockResolvedValue({}),
-        getUserKbQuota: vi.fn().mockResolvedValue({ membershipBytes: 1000000, defaultBytes: 1000000 }),
-        listEnabledModels: vi.fn().mockResolvedValue({ data: [] }),
-      } as any);
-
-      const testApp = await buildServer();
-      await testApp.ready();
-
-      const r = await testApp.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { text: "hello world", name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(502);
-      expect(r.json().error).toContain("计费服务");
-
-      // 验证 Document 同样被回滚
-      const docs = await prisma.document.findMany({ where: { kbId: kb.id } });
-      expect(docs.length).toBe(0);
-
-      await testApp.close();
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
     it("文本成功上传 200", async () => {
-      // 恢复默认 mock（reserve 成功）
-      vi.mocked(billingModule.createBillingClient).mockReturnValue({
-        reserve: vi.fn().mockResolvedValue({ opId: "mock-op-id" }),
-        settle: vi.fn().mockResolvedValue({ settled: true }),
-        getUserKbQuota: vi
-          .fn()
-          .mockResolvedValue({ membershipBytes: 1000000, defaultBytes: 1000000 }),
-        listEnabledModels: vi.fn().mockResolvedValue({ data: [] }),
-      } as any);
-
       const kb = await prisma.knowledgeBase.create({
         data: { ownerType: "USER", userId, name: "My KB" },
       });

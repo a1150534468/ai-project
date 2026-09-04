@@ -3,11 +3,11 @@
  * 这里只剩三件事 ——「谁在登录」「现在看哪一页」「每一页要哪些 props」:
  *  - 登录态 / 账号信息 → `useAuthSession`
  *  - 视图 + 工作流子模块 + 跨页深链 + 后台菜单可见性 → `useClientNavigation`
- *  - 余额 + Agent 列表 → `useAccountOverview`
+ *  - Agent 列表 → `useAccountOverview`
  *  - 会话记录 + 切换/删除/开新对话 → `useChatSessions`
  *  - 发送一轮对话(SSE 事件机) → `useChatStream`
  *
- * 视图切换仍然是 `ViewType` 字符串(本计划不引入 react-router),`renderContent` 的 14 个分支
+ * 视图切换仍然是 `ViewType` 字符串(本计划不引入 react-router),`renderContent` 的分支
  * 就是唯一的路由表。
  *
  * **hook 的调用顺序有意义**:`useAuthSession` 必须排第一 —— 它那个把 token 同步进 `http.ts`
@@ -21,13 +21,11 @@ import Chat from "./pages/Chat";
 import Knowledge from "./pages/Knowledge";
 import Assets from "./pages/Assets";
 import Workflow from "./pages/Workflow";
-import Billing from "./pages/Billing";
 import Memory from "./pages/Memory";
 import Settings from "./pages/Settings";
 import ModelMarketplace from "./pages/ModelMarketplace";
 import { useConfirm } from "./components/ConfirmDialog";
 import { AgentPicker } from "./components/AgentPicker";
-import { RechargePrompt } from "./app/RechargePrompt";
 import { useAccountOverview } from "./app/useAccountOverview";
 import { useAuthSession } from "./app/useAuthSession";
 import { useChatSessions } from "./app/useChatSessions";
@@ -39,13 +37,12 @@ export default function App() {
   const nav = useClientNavigation(token);
   const account = useAccountOverview(token);
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
-  const [rechargePromptOpen, setRechargePromptOpen] = useState(false);
   const [agentPanelCollapsed, setAgentPanelCollapsed] = useState(false);
   const [preferredModel, setPreferredModel] = useState(() => localStorage.getItem("preferredModel") ?? "");
   const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem("preferredModel") ?? "");
   const { confirm, Dialog } = useConfirm();
   const { setView } = nav;
-  const { refreshAgents, refreshBalance, refreshBalanceQuietly, setBalance } = account;
+  const { refreshAgents } = account;
 
   const handleOpenAgentPicker = useCallback(() => {
     setView("chat");
@@ -70,12 +67,7 @@ export default function App() {
     onActiveSessionDeleted: handleOpenAgentPicker,
   });
 
-  const handleChatSend = useChatStream({
-    token,
-    chat,
-    onInsufficientBalance: () => setRechargePromptOpen(true),
-    onSettled: refreshBalanceQuietly,
-  });
+  const handleChatSend = useChatStream({ token, chat });
 
   const { refreshSessions } = chat;
   const handleAgentsChanged = useCallback(async () => {
@@ -119,7 +111,6 @@ export default function App() {
     if (nav.view === "settings") {
       return (
         <Settings
-          token={token}
           uid={me?.uid}
           userName={me?.username}
           preferredModel={preferredModel}
@@ -130,11 +121,7 @@ export default function App() {
     }
 
     if (nav.view === "models") {
-      return <ModelMarketplace token={token} />;
-    }
-
-    if (nav.view === "billing") {
-      return <Billing token={token} onBalanceChange={setBalance} />;
+      return <ModelMarketplace />;
     }
 
     if (nav.view === "kb") {
@@ -156,7 +143,6 @@ export default function App() {
           token={token}
           activeModuleId={nav.workflowModule}
           menuVisibility={nav.menuVisibility}
-          onBalanceRefresh={refreshBalance}
         />
       );
     }
@@ -193,7 +179,6 @@ export default function App() {
         onViewChange={setView}
         workflowModule={nav.workflowModule}
         onSelectWorkflowSub={nav.selectWorkflowSub}
-        balance={account.balance}
         onLogout={() => setToken("")}
         token={token}
         agents={account.agents}
@@ -219,14 +204,6 @@ export default function App() {
         onSelect={(agent) => {
           chat.startAgentSession(agent);
           void refreshAgents().catch(() => {});
-        }}
-      />
-      <RechargePrompt
-        open={rechargePromptOpen}
-        onClose={() => setRechargePromptOpen(false)}
-        onRecharge={() => {
-          setRechargePromptOpen(false);
-          setView("billing");
         }}
       />
     </>

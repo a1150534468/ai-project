@@ -38,7 +38,6 @@ export interface ImageWorkflowStudioProps {
   readonly generatingCount: number;
   readonly cancellingTaskIds?: readonly string[];
   readonly isOptimizingPrompt: boolean;
-  readonly estimatedPointCost?: number | null;
   readonly referenceImages: readonly WorkflowImageAsset[];
   readonly isUploadingReference: boolean;
   readonly onPromptChange: (value: string) => void;
@@ -97,7 +96,6 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
         error={props.error}
         notice={props.notice}
         isOptimizingPrompt={props.isOptimizingPrompt}
-        estimatedPointCost={props.estimatedPointCost ?? null}
         referenceImages={props.referenceImages}
         isUploadingReference={props.isUploadingReference}
         isEditing={mode === "editing"}

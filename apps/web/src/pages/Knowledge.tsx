@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
-import type { KnowledgeBase, KbDocument, KbQuotaData } from "../api";
+import type { KnowledgeBase, KbDocument } from "../api";
 import {
   listKb,
   createKb,
@@ -10,7 +10,6 @@ import {
   getKbDocument,
   addKbFile,
   deleteKbDocument,
-  getKbQuota,
 } from "../api";
 import { RippleButton, Stagger, StaggerItem, useToast } from "../motion";
 
@@ -27,7 +26,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
   const [kbDocuments, setKbDocuments] = useState<KbDocument[]>([]);
   const [kbNewName, setKbNewName] = useState("");
   const [kbNewDescription, setKbNewDescription] = useState("");
-  const [kbQuota, setKbQuota] = useState<KbQuotaData | undefined>();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
   const [kbUploadFiles, setKbUploadFiles] = useState<readonly File[]>([]);
@@ -62,8 +60,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
       setLoading(true);
       const kbs = await listKb(token);
       setKbList(kbs);
-      const quota = await getKbQuota(token);
-      setKbQuota(quota);
     } catch (err) {
       setMessage(`加载知识库失败: ${err instanceof Error ? err.message : "未知错误"}`);
     } finally {
@@ -266,44 +262,6 @@ export default function Knowledge({ token, onViewChange }: KnowledgePageProps) {
           返回对话
         </button>
       </div>
-
-      {/* Quota Card */}
-      {kbQuota && (
-        <div className="glass-card p-6 rounded-xl space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-ink uppercase tracking-wider">配额使用</h3>
-            <span className="text-xs font-medium text-ink-secondary">
-              {formatBytes(kbQuota.used)} / {formatBytes(kbQuota.effective)}
-            </span>
-          </div>
-
-          {/* Progress bar */}
-          <div className="w-full bg-surface-muted rounded-full h-2.5 overflow-hidden">
-            <div
-              className="h-full bg-brand rounded-full"
-              style={{
-                width: `${Math.min((kbQuota.used / kbQuota.effective) * 100, 100)}%`,
-              }}
-            />
-          </div>
-
-          {/* Breakdown */}
-          <div className="grid grid-cols-3 gap-4 pt-2">
-            <div className="p-3 bg-surface-subtle rounded-lg">
-              <p className="text-xs font-bold text-ink-secondary uppercase mb-1">默认配额</p>
-              <p className="text-sm font-medium text-ink">{formatBytes(kbQuota.breakdown.defaultBytes)}</p>
-            </div>
-            <div className="p-3 bg-surface-subtle rounded-lg">
-              <p className="text-xs font-bold text-ink-secondary uppercase mb-1">会员配额</p>
-              <p className="text-sm font-medium text-ink">{formatBytes(kbQuota.breakdown.membershipBytes)}</p>
-            </div>
-            <div className="p-3 bg-surface-subtle rounded-lg">
-              <p className="text-xs font-bold text-ink-secondary uppercase mb-1">额外配额</p>
-              <p className="text-sm font-medium text-ink">{formatBytes(kbQuota.breakdown.grantBytes)}</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="grid grid-cols-12 gap-6">
         {/* Left panel: Create KB & List */}

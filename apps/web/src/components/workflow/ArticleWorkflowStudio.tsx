@@ -59,7 +59,6 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
       generationMode={state.generationMode}
       generateImages={state.generateImages}
       selectedPlatforms={state.selectedPlatforms}
-      pricing={state.pricing}
       creating={state.creating}
       canGenerate={state.canGenerate}
       onCreationDraftChange={state.setCreationDraft}
@@ -186,7 +185,6 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
             rewriteInstruction={state.rewriteInstruction}
             rewriteGenerationMode={state.rewriteGenerationMode}
             rewriteRegenerateImages={state.rewriteRegenerateImages}
-            pricing={state.pricing}
             rewriting={state.rewriting}
             retryingProjectId={state.retryingProjectId}
             regeneratingSlot={state.regeneratingSlot}

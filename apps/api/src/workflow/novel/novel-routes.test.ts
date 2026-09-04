@@ -1,5 +1,4 @@
 import Fastify from "fastify";
-import { InsufficientBalanceError } from "@ai-assistant/billing";
 import type { PrismaClient } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { novelWorkflowRoutes } from "./novel-routes.js";
@@ -188,18 +187,8 @@ function createPrismaMock() {
   return { prisma: prisma as PrismaClient, rows: { projects, bibles, worldDimensions, styleNotes, chapters, versions, tasks } };
 }
 
-function createBillingMock(overrides: Record<string, unknown> = {}) {
-  return {
-    reserveResource: vi.fn(async () => ({ reserved: 10_000 })),
-    settleResource: vi.fn(async () => ({ settled: 10 })),
-    refundResource: vi.fn(async () => ({ success: true })),
-    ...overrides,
-  };
-}
-
 async function createApp(options: {
   prisma: PrismaClient;
-  billing: ReturnType<typeof createBillingMock>;
   generator?: ReturnType<typeof vi.fn>;
   scheduled?: Promise<void>[];
   userId?: string;
@@ -209,7 +198,6 @@ async function createApp(options: {
   app.addHook("onRequest", async (request) => { request.userId = options.userId ?? "user-1"; });
   await app.register(novelWorkflowRoutes, {
     prisma: options.prisma,
-    billing: options.billing as never,
     generator: options.generator ?? vi.fn(async () => ({ text: "正文", model: "server-model" })),
     scheduleTask: (work: () => Promise<void>) => options.scheduled?.push(work()),
   });
@@ -221,7 +209,7 @@ describe("PlotPilot novel workflow routes", () => {
 
   it("creates a premise-first project and its locked Bible without legacy sections", async () => {
     const state = createPrismaMock();
-    const app = await createApp({ prisma: state.prisma, billing: createBillingMock() });
+    const app = await createApp({ prisma: state.prisma });
     const response = await app.inject({
       method: "POST",
       url: "/api/workflow/novels/projects",
@@ -242,24 +230,14 @@ describe("PlotPilot novel workflow routes", () => {
     await app.close();
   });
 
-  it("stores only a marketplace model compatible with novel generation", async () => {
+  it("stores the chosen writing model in generation prefs", async () => {
     const state = createPrismaMock();
     state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: {}, generationPrefs: { temperature: 0.7 }, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 5, setupCompleted: true, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
-    const billing = createBillingMock({
-      listModels: vi.fn(async () => ({ data: [
-        { model: "qwen3.7-plus", enabled: true, tags: "chat,anthropic", showInMarketplace: true },
-        { model: "preview-only", enabled: true, tags: "chat,openai-only", showInMarketplace: true },
-      ] })),
-    });
-    const app = await createApp({ prisma: state.prisma, billing });
+    const app = await createApp({ prisma: state.prisma });
 
     const selected = await app.inject({ method: "PATCH", url: "/api/workflow/novels/projects/project-1", payload: { writingModel: "qwen3.7-plus" } });
     expect(selected.statusCode).toBe(200);
     expect(selected.json().data.project.generationPrefs).toEqual({ temperature: 0.7, writingModel: "qwen3.7-plus" });
-
-    const incompatible = await app.inject({ method: "PATCH", url: "/api/workflow/novels/projects/project-1", payload: { writingModel: "preview-only" } });
-    expect(incompatible.statusCode).toBe(400);
-    expect(state.rows.projects[0].generationPrefs.writingModel).toBe("qwen3.7-plus");
     await app.close();
   });
 
@@ -284,8 +262,7 @@ describe("PlotPilot novel workflow routes", () => {
       return { model: "server-model", text: generatedText };
     });
     const scheduled: Promise<void>[] = [];
-    const billing = createBillingMock({ listModels: vi.fn(async () => ({ data: [{ model: "qwen3.7-plus", enabled: true, tags: "chat,anthropic", showInMarketplace: true }] })) });
-    const app = await createApp({ prisma: state.prisma, billing, generator, scheduled });
+    const app = await createApp({ prisma: state.prisma, generator, scheduled });
     const modelSwitch = await app.inject({ method: "PATCH", url: "/api/workflow/novels/projects/project-1", payload: { writingModel: "qwen3.7-plus" } });
     expect(modelSwitch.statusCode).toBe(200);
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/setup/bible/generate", payload: { prompt: "冷峻克制" } });
@@ -305,7 +282,7 @@ describe("PlotPilot novel workflow routes", () => {
   it("persists execution plan and micro-beats with an edited chapter", async () => {
     const state = createPrismaMock();
     state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: {}, generationPrefs: {}, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 5, setupCompleted: true, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
-    const app = await createApp({ prisma: state.prisma, billing: createBillingMock() });
+    const app = await createApp({ prisma: state.prisma });
     const response = await app.inject({
       method: "PUT",
       url: "/api/workflow/novels/projects/project-1/chapters/1",
@@ -319,14 +296,13 @@ describe("PlotPilot novel workflow routes", () => {
     await app.close();
   });
 
-  it("rewrites only the selected prose, snapshots the old chapter, and settles visible output chars", async () => {
+  it("rewrites only the selected prose, snapshots the old chapter, and records visible output chars", async () => {
     const state = createPrismaMock();
     state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: {}, generationPrefs: {}, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 5, setupCompleted: true, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
     state.rows.chapters.push({ id: "chapter-1", projectId: "project-1", volumeIndex: 1, chapterIndex: 1, title: "寒泉院", summary: "入院", content: "雪夜里，她推开门。风从院中扑来。", rawContent: "雪夜里，她推开门。风从院中扑来。", openThreads: [], reviewStatus: "approved", reviewedAt: fixedNow, billableChars: 16, updatedAt: fixedNow });
     const generator = vi.fn(async () => ({ text: "她用肩膀撞开腐朽的木门", model: "server-model" }));
-    const billing = createBillingMock();
     const scheduled: Promise<void>[] = [];
-    const app = await createApp({ prisma: state.prisma, billing, generator, scheduled });
+    const app = await createApp({ prisma: state.prisma, generator, scheduled });
     const content = state.rows.chapters[0].content as string;
     const selectedText = "她推开门";
     const selectionStart = content.indexOf(selectedText);
@@ -343,20 +319,19 @@ describe("PlotPilot novel workflow routes", () => {
     expect(state.rows.chapters[0]).toMatchObject({ reviewStatus: "pending", reviewedAt: null, lastTaskId: "task-1" });
     expect(state.rows.versions).toHaveLength(1);
     expect(state.rows.versions[0].content).toBe(content);
-    expect(billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ units: 11 }));
     expect(state.rows.tasks[0].status).toBe("succeeded");
+    expect(state.rows.tasks[0].resultPayload).toMatchObject({ billableChars: 11 });
     await app.close();
   });
 
-  it("refunds a rewrite instead of overwriting prose that changed while the worker was generating", async () => {
+  it("fails a rewrite instead of overwriting prose that changed while the worker was generating", async () => {
     const state = createPrismaMock();
     state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: {}, generationPrefs: {}, narrativeContract: {}, targetChapters: 100, targetCharsPerChapter: 3000, setupStage: 5, setupCompleted: true, storyPhase: "opening", autopilotStatus: "idle", currentBranch: "main", status: "active", createdAt: fixedNow, updatedAt: fixedNow });
     state.rows.chapters.push({ id: "chapter-1", projectId: "project-1", volumeIndex: 1, chapterIndex: 1, title: "寒泉院", summary: "入院", content: "她推开门。", rawContent: "她推开门。", openThreads: [], reviewStatus: "pending", reviewedAt: null, billableChars: 5, updatedAt: fixedNow });
     let finishGeneration: ((value: { text: string; model: string }) => void) | undefined;
     const generator = vi.fn(() => new Promise<{ text: string; model: string }>((resolve) => { finishGeneration = resolve; }));
-    const billing = createBillingMock();
     const scheduled: Promise<void>[] = [];
-    const app = await createApp({ prisma: state.prisma, billing, generator, scheduled });
+    const app = await createApp({ prisma: state.prisma, generator, scheduled });
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/chapters/1/rewrite", payload: { selectedText: "她推开门", selectionStart: 0, selectionEnd: 4, instruction: "增强动作" } });
     expect(response.statusCode).toBe(202);
     await vi.waitFor(() => expect(generator).toHaveBeenCalledOnce());
@@ -366,39 +341,25 @@ describe("PlotPilot novel workflow routes", () => {
     expect(state.rows.chapters[0].content).toBe("作者已经重写了整段。");
     expect(state.rows.versions).toHaveLength(0);
     expect(state.rows.tasks[0]).toMatchObject({ status: "failed", error: "章节正文已变化，请重新选择需要改写的内容" });
-    expect(billing.refundResource).toHaveBeenCalledWith(state.rows.tasks[0].operationId);
     await app.close();
   });
 
   it("does not expose the removed eight-stage API", async () => {
     const state = createPrismaMock();
-    const app = await createApp({ prisma: state.prisma, billing: createBillingMock() });
+    const app = await createApp({ prisma: state.prisma });
     const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/stages/world/generate", payload: {} });
     expect(response.statusCode).toBe(404);
     await app.close();
   });
 
-  it("returns 402 before creating a generation task when balance is insufficient", async () => {
-    const state = createPrismaMock();
-    state.rows.projects.push({ id: "project-1", userId: "user-1", title: "寒泉烬", genre: "东方玄幻", premise: "沈氏后人追查家族旧案。", settings: {}, setupCompleted: false, status: "active", createdAt: fixedNow, updatedAt: fixedNow });
-    const billing = createBillingMock({ reserveResource: vi.fn(async () => { throw new InsufficientBalanceError(); }) });
-    const app = await createApp({ prisma: state.prisma, billing });
-    const response = await app.inject({ method: "POST", url: "/api/workflow/novels/projects/project-1/setup/characters/generate", payload: {} });
-    expect(response.statusCode).toBe(402);
-    expect(state.rows.tasks).toHaveLength(0);
-    await app.close();
-  });
-
   /**
-   * P1.1 把这 18 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
+   * P1.1 把这 17 个路由的内联 401 守卫换成了插件级 requireUser preHandler。
    * 本文件此前 401 断言数为 0 —— 守卫删掉也是全绿。这条钉住它。
    */
-  it("未登录时返回 401，且不碰计费和数据库", async () => {
+  it("未登录时返回 401，且不碰数据库", async () => {
     const state = createPrismaMock();
-    const billing = createBillingMock();
-    const app = await createApp({ prisma: state.prisma, billing, userId: "" });
+    const app = await createApp({ prisma: state.prisma, userId: "" });
     const cases = [
-      { method: "GET" as const, url: "/api/workflow/novels/pricing" },
       { method: "GET" as const, url: "/api/workflow/novels/projects" },
       { method: "POST" as const, url: "/api/workflow/novels/projects" },
       { method: "GET" as const, url: "/api/workflow/novels/projects/project-1" },
@@ -413,7 +374,6 @@ describe("PlotPilot novel workflow routes", () => {
       expect(response.statusCode, `${one.method} ${one.url}`).toBe(401);
       expect(response.json(), `${one.method} ${one.url}`).toEqual({ error: "未登录" });
     }
-    expect(billing.reserveResource).not.toHaveBeenCalled();
     expect(state.rows.tasks).toHaveLength(0);
     await app.close();
   });

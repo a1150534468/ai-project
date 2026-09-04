@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { Icon } from "@iconify/react";
 import { InAppSelect } from "../ui/InAppSelect";
-import { SubmitCostBar } from "./SubmitCostBar";
+import { SubmitBar } from "./SubmitBar";
 import type { WorkflowImageAsset } from "../../api";
 import {
   IMAGE_ASPECT_RATIO_OPTIONS,
@@ -29,7 +29,6 @@ export interface ImageGenerationControlsProps {
   readonly error: string;
   readonly notice: string;
   readonly isOptimizingPrompt: boolean;
-  readonly estimatedPointCost: number | null;
   readonly referenceImages: readonly WorkflowImageAsset[];
   readonly isUploadingReference: boolean;
   readonly isEditing: boolean;
@@ -221,8 +220,7 @@ export function ImageGenerationControls(props: ImageGenerationControlsProps) {
         {props.notice && !props.error && <p className="mt-4 rounded-lg bg-brand-soft px-3 py-2 text-sm text-brand-ink">{props.notice}</p>}
       </div>
 
-      <SubmitCostBar
-        estimatedPointCost={props.estimatedPointCost}
+      <SubmitBar
         submitLabel={props.isEditing ? "生成新版本" : "生成图片"}
         submitIcon={props.isEditing ? "mdi:source-branch" : "mdi:image-plus-outline"}
         onSubmit={props.onSubmit}

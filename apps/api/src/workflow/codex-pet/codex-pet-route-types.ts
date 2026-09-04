@@ -2,45 +2,6 @@ import type { Buffer } from "node:buffer";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
-export type ResourcePrice = {
-  readonly resourceKey: string;
-  readonly displayName: string;
-  readonly pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
-  readonly rate: number;
-  readonly perUnits: number;
-  readonly enabled: boolean;
-};
-
-export interface CodexPetBilling {
-  readonly chargeResource: (args: {
-    readonly operationId: string;
-    readonly userId: string;
-    readonly resourceKey: string;
-    readonly units: number;
-  }) => Promise<{ readonly charged: number }>;
-  readonly reserveResource?: (args: {
-    readonly operationId: string;
-    readonly userId: string;
-    readonly resourceKey: string;
-    readonly units: number;
-  }) => Promise<{ readonly reserved: number }>;
-  readonly settleResource?: (args: {
-    readonly operationId: string;
-    readonly resourceKey: string;
-    readonly units: number;
-  }) => Promise<{ readonly settled: number }>;
-  readonly refundResource: (operationId: string) => Promise<{ readonly success: boolean }>;
-  readonly listResourcePrices?: () => Promise<{ readonly data: readonly ResourcePrice[] }>;
-  readonly listEnabledModels?: () => Promise<{
-    readonly data: readonly {
-      readonly model: string;
-      readonly displayName: string;
-      readonly maxOutputTokens?: number;
-      readonly tags?: string;
-    }[];
-  }>;
-}
-
 export interface CodexPetArtifactShape {
   readonly id: string;
   readonly projectId: string;
@@ -62,7 +23,6 @@ export interface CodexPetArtifactShape {
 
 export interface CodexPetRouteDeps {
   readonly prisma?: PrismaClient;
-  readonly billing?: CodexPetBilling;
   /** Must enqueue BullMQ with jobId=runId. */
   readonly enqueueRun?: (runId: string) => Promise<void>;
   /** Wakes a local/remote worker so AbortSignal and the persisted flag both take effect. */
@@ -135,23 +95,6 @@ export type RunShape = {
   readonly progressMessage: string | null;
   readonly autoContinue: boolean;
   readonly colorKey: string | null;
-  readonly billingOperationId: string | null;
-  readonly billingMode: string;
-  readonly billingResourceKey: string | null;
-  readonly billingReservedUnits: number;
-  readonly billingSettledUnits: number;
-  readonly billingReservedPoints: number;
-  readonly billingSettledPoints: number;
-  readonly billingSettlementStatus: string;
-  readonly billingPoints: number;
-  readonly billingChargeStatus: string;
-  readonly billingChargeAttemptCount: number;
-  readonly billingChargeError: string | null;
-  readonly billingChargeNextRetryAt: Date | null;
-  readonly billingChargedAt: Date | null;
-  readonly billingActivatedAt: Date | null;
-  readonly billingRefundedAt: Date | null;
-  readonly billingRefundStatus: string;
   readonly cancelRequested: boolean;
   readonly hasSuccessfulImage: boolean;
   readonly selectedBaseArtifactId: string | null;

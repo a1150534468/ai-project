@@ -1,9 +1,8 @@
 /**
- * novel-task-runner 拆分后的落库层:开头的"预留点数 + 建任务"(`reserveAndCreateTask`)与
+ * novel-task-runner 拆分后的落库层:开头的"建任务"(`reserveAndCreateTask`)与
  * 结尾的"结果写回作品资料"(`saveGeneratedResult`)。
  *
- * 两个函数放一起是因为它们是同一笔账的两端:`reserveAndCreateTask` 先预留再建单,建单失败
- * 必须 `refundResource` 退款 —— 少了那个 catch,用户点一次失败的生成就永久少一笔点数。
+ * 两个函数放一起是因为它们是同一条任务的两端:一个建出 queued 行,一个把它改成 succeeded。
  *
  * `reserveAndCreateTask` 的建单与 outbox 写在同一个 `$transaction` 里:任务行存在而 outbox
  * 缺失会得到一条永远没人接的 queued 任务,反过来则会让 worker 取到不存在的 taskId。
@@ -20,81 +19,63 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { formatGeneratedNovelDisplayText, resolveNovelChapterTitle, visibleCharCount } from "./novel-billable.js";
-import { NOVEL_RESOURCE_KEY, NOVEL_TASK_STATUS, type NovelTargetKind } from "./novel-types.js";
+import { NOVEL_TASK_STATUS, type NovelTargetKind } from "./novel-types.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload } from "./novel-review.js";
 import { syncNovelContinuityAssetsForChapter } from "../../novel/continuity-assets.js";
 import { syncNovelNarrativeLedgersForChapter } from "../../novel/narrative-ledger.js";
 import { syncNovelSetupAssets } from "../../novel/structured-sync.js";
 import { isPlainObject } from "../../runtime/records.js";
-import { novelReservationTtlSeconds } from "./novel-reservation-window.js";
 import {
   isSetupTargetKind,
   jsonValue,
   operationId,
   taskPayload,
-  type BillingForNovels,
   type NovelTaskRow,
 } from "./novel-task-shared.js";
 import { loadNovelGenerationContextPayload, refreshNovelVectorMemoryBestEffort } from "./novel-task-context.js";
 
 export async function reserveAndCreateTask(args: {
   readonly prisma: PrismaClient;
-  readonly billing: BillingForNovels;
   readonly userId: string;
   readonly projectId: string;
   readonly targetKind: NovelTargetKind;
   readonly targetId?: string | null;
   readonly payload: Record<string, unknown>;
-  readonly estimateChars: number;
   readonly delivery?: "inline" | "worker-outbox";
 }): Promise<NovelTaskRow> {
   const opId = operationId();
-  await args.billing.reserveResource({
-    operationId: opId,
-    userId: args.userId,
-    resourceKey: NOVEL_RESOURCE_KEY,
-    units: args.estimateChars,
-    // 预留在这里就下，结算却要等 worker 生成完：不声明有效期的话 billing 的 10 分钟兜底
-    // 会在等待期间把它按 actual=0 关账，之后 settle 静默返回 0（见 novel-reservation-window.ts）。
-    reservationTtlSeconds: novelReservationTtlSeconds(),
-  });
-  try {
-    return await args.prisma.$transaction(async (tx) => {
-      const task = await tx.novelTask.create({
+  return await args.prisma.$transaction(async (tx) => {
+    const task = await tx.novelTask.create({
+      data: {
+        projectId: args.projectId,
+        userId: args.userId,
+        kind: "generate",
+        targetKind: args.targetKind,
+        targetId: args.targetId ?? null,
+        status: NOVEL_TASK_STATUS.queued,
+        progressPercent: 0,
+        progressStage: "queued",
+        progressMessage: "任务已入队，等待 Novel Worker 接收",
+        progressPreview: "",
+        streamedChars: 0,
+        requestPayload: jsonValue(args.payload),
+        operationId: opId,
+      },
+    });
+    if (args.delivery === "worker-outbox") {
+      await tx.novelCommandOutbox.create({
         data: {
           projectId: args.projectId,
-          userId: args.userId,
-          kind: "generate",
-          targetKind: args.targetKind,
-          targetId: args.targetId ?? null,
-          status: NOVEL_TASK_STATUS.queued,
-          progressPercent: 0,
-          progressStage: "queued",
-          progressMessage: "任务已入队，等待 Novel Worker 接收",
-          progressPreview: "",
-          streamedChars: 0,
-          requestPayload: jsonValue(args.payload),
-          operationId: opId,
+          taskId: task.id,
+          payload: { type: "generation-task", taskId: task.id },
+          priority: 1,
+          jobName: "generation-task",
         },
       });
-      if (args.delivery === "worker-outbox") {
-        await tx.novelCommandOutbox.create({
-          data: {
-            projectId: args.projectId,
-            taskId: task.id,
-            payload: { type: "generation-task", taskId: task.id },
-            priority: 1,
-            jobName: "generation-task",
-          },
-        });
-      }
-      return task;
-    });
-  } catch (error) {
-    await args.billing.refundResource(opId).catch(() => undefined);
-    throw error;
-  }
+    }
+    return task;
+  });
 }
 
 export async function saveGeneratedResult(args: {
@@ -103,7 +84,6 @@ export async function saveGeneratedResult(args: {
   readonly parsed: unknown;
   readonly model: string;
   readonly billableChars: number;
-  readonly settledPoints: number;
 }): Promise<void> {
   const { prisma, task } = args;
   const targetKind = task.targetKind as NovelTargetKind;
@@ -275,7 +255,7 @@ export async function saveGeneratedResult(args: {
         progressPercent: 100,
         progressStage: "completed",
         progressMessage: "生成结果已校验并写入作品资料",
-        resultPayload: { model: args.model, billableChars, settledPoints: args.settledPoints },
+        resultPayload: { model: args.model, billableChars },
         completedAt: new Date(),
       },
     });

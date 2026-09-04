@@ -72,8 +72,8 @@ describe("article-workflow retry", () => {
     expect(sleep).toHaveBeenCalledTimes(2);
   });
 
-  it("caps image attempts lower than text so a charged image can't burn three upstream calls", async () => {
-    // gptimage 网关 ~60s 断连，断连时上游可能已经出图；扣费只发生一次，放大要封顶
+  it("caps image attempts lower than text so one image can't burn three upstream calls", async () => {
+    // gptimage 网关 ~60s 断连，断连时上游可能已经出图；重试只会让它白跑，放大要封顶
     expect(ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS).toBeLessThan(ARTICLE_RETRY_MAX_ATTEMPTS);
 
     const work = vi.fn(async () => {

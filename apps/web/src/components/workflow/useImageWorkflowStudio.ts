@@ -1,30 +1,25 @@
 /**
- * 生图工作区的全部编排:24 个状态、3 个 ref、4 个副作用,以及提交 / 重试 / 取消 / 编辑 / 下载每个动作。
+ * 生图工作区的全部编排:19 个状态、2 个 ref、3 个副作用,以及提交 / 重试 / 取消 / 编辑 / 下载每个动作。
  * P2.4 批次二从 `pages/Workflow.tsx` 原样搬出 —— 页面只留「布局 + Hub tab + 模块分发」。
  *
- * 五条不能动的规则:
+ * 四条不能动的规则:
  *  - **返回的 `studioProps` 必须逐字覆盖 `ImageWorkflowStudioProps`**:护栏
  *    `pages/Workflow.behavior.test.tsx` 用探针抓住 `<ImageWorkflowStudio>` 实际收到的那份 props,
  *    改名或改算法都会被照出来;这里显式标注返回类型,就是把这份契约钉在类型层面。
  *  - **首屏只自动选一次**:`hasInitializedImageState` 置位之后,后续每轮轮询都不许再动用户的选中项。
- *  - **价格请求按序号丢弃乱序响应**:`pricingRequestSeq` 只认最后一次请求的结果,
- *    否则快速切模型时会显示上一个模型的单价。
  *  - **重试严格按原任务参数重建**,既不读当前草稿也不改草稿;同一个原任务在飞行中直接忽略
- *    (`retryingRequestIds`),不然连点会重复预扣费。
+ *    (`retryingRequestIds`),不然连点会重复下单。
  *  - **轮询只在有活跃任务时挂定时器**,并随 `tasks` 变化重建 —— 任务全部结束必须停下来。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cancelWorkflowImageTask,
   generateWorkflowImages,
-  getImageWorkflowPricing,
   getWorkflowImageState,
   optimizeWorkflowPrompt,
   uploadWorkflowImageReference,
-  type ImageWorkflowPricing,
   type WorkflowImageAsset,
 } from "../../api";
-import { ApiError } from "../../apiError";
 import { useToast } from "../../motion";
 import {
   advanceImageTaskStatus,
@@ -36,7 +31,6 @@ import {
   resolveImageSubmissionContext,
   resolveImageVersionComparison,
   type ImageGenerationIntent,
-  type ImageModel,
   type ImageTask,
   type ImageWorkspaceMode,
 } from "../../workflowState";
@@ -73,7 +67,6 @@ const preservePrompt = (prompt: string): string => prompt;
 
 export function useImageWorkflowStudio(args: {
   readonly token: string;
-  readonly onBalanceRefresh?: () => void;
   readonly initialDraft?: ImageDraft;
   readonly requestIdPrefix?: string;
   readonly requestFilter?: (requestId: string) => boolean;
@@ -85,7 +78,7 @@ export function useImageWorkflowStudio(args: {
   readonly submittedMessage?: string;
   readonly downloadPrefix?: string;
 }): ImageWorkflowStudioController {
-  const { token, onBalanceRefresh } = args;
+  const { token } = args;
   const requestIdPrefix = args.requestIdPrefix ?? "img-";
   const requestFilter = args.requestFilter ?? includeEveryRequest;
   const buildSubmissionPrompt = args.buildSubmissionPrompt ?? preservePrompt;
@@ -110,26 +103,17 @@ export function useImageWorkflowStudio(args: {
   const [imageGenerationIntent, setImageGenerationIntent] = useState<ImageGenerationIntent>("new");
   const [pendingVersionRequestId, setPendingVersionRequestId] = useState<string | null>(null);
   const hasInitializedImageState = useRef(false);
-  const pricingRequestSeq = useRef(0);
   const retryingRequestIds = useRef<Set<string>>(new Set());
   const [isOptimizingPrompt, setIsOptimizingPrompt] = useState(false);
   const [isUploadingReference, setIsUploadingReference] = useState(false);
   const [cancellingTaskIds, setCancellingTaskIds] = useState<readonly string[]>([]);
   const [downloadDialog, setDownloadDialog] = useState<DownloadDialogState | null>(null);
-  const [imagePricing, setImagePricing] = useState<ImageWorkflowPricing | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const { prompt, model: imageModel, aspectRatio, resolution, countInput, referenceImages } = imageDraft;
   const parsedQuickCount = Number.parseInt(countInput, 10);
   const selectedQuickCount = [1, 2, 4, 8].includes(parsedQuickCount) ? parsedQuickCount : 0;
   const size = buildImageSize(aspectRatio, resolution);
-  const estimatedImagePointCost = useMemo(() => {
-    const rate = imagePricing?.[resolution]?.rate;
-    if (rate == null) return null;
-    const parsed = parseImageCount(countInput);
-    const count = parsed.ok ? parsed.value : 1;
-    return rate * count;
-  }, [imagePricing, resolution, countInput]);
   const previewTasks = useMemo(
     () => selectedRequestId ? tasks.filter((task) => task.id === selectedRequestId) : tasks.filter(isActiveTask),
     [selectedRequestId, tasks],
@@ -180,25 +164,9 @@ export function useImageWorkflowStudio(args: {
     }
   }, [requestFilter, token]);
 
-  // 模型切换会重新拉取 model 感知价格；请求计数器丢弃乱序返回的旧响应。
-  const refreshImagePricing = useCallback(async (pricingModel: ImageModel) => {
-    const seq = pricingRequestSeq.current + 1;
-    pricingRequestSeq.current = seq;
-    try {
-      const next = await getImageWorkflowPricing(token, pricingModel);
-      if (seq === pricingRequestSeq.current) setImagePricing(next);
-    } catch {
-      if (seq === pricingRequestSeq.current) setImagePricing(null);
-    }
-  }, [token]);
-
   useEffect(() => {
     void refreshImageState(true);
   }, [refreshImageState]);
-
-  useEffect(() => {
-    void refreshImagePricing(imageModel);
-  }, [refreshImagePricing, imageModel]);
 
   useEffect(() => {
     if (!tasks.some(isActiveTask)) return undefined;
@@ -308,9 +276,8 @@ export function useImageWorkflowStudio(args: {
         setImages(result.recent.filter((image) => requestFilter(image.requestId)));
         setTasks((prev) => mergeTask(prev, toImageTask(result.task)));
         toast.show("ok", submittedMessage);
-        onBalanceRefresh?.();
       } catch (err) {
-        const message = err instanceof ApiError && err.status === 402 ? "积分不足，请充值" : errorMessage(err, "创建生图任务失败");
+        const message = errorMessage(err, "创建生图任务失败");
         setError(message);
         toast.show("err", message);
         setTasks((prev) => prev.map((item) => (item.id === requestId
@@ -428,7 +395,6 @@ export function useImageWorkflowStudio(args: {
         setTasks((prev) => mergeTask(prev, toImageTask(cancelled)));
         setNotice("已取消生图任务");
         toast.show("ok", "任务已取消");
-        onBalanceRefresh?.();
       } catch (err) {
         const msg = err instanceof Error ? err.message : "取消生图任务失败";
         setError(msg);
@@ -521,7 +487,7 @@ export function useImageWorkflowStudio(args: {
   };
 
   // 失败重试严格按原任务参数重建请求，不读取当前表单草稿，也不改动表单状态。
-  // 同一个原任务的重试在飞行中直接忽略，避免连点重复预扣费。
+  // 同一个原任务的重试在飞行中直接忽略，避免连点重复下单。
   const handleRetryTask = (task: ImageTask) => {
     if (retryingRequestIds.current.has(task.id)) return;
     retryingRequestIds.current.add(task.id);
@@ -564,9 +530,8 @@ export function useImageWorkflowStudio(args: {
         setImages(result.recent.filter((image) => requestFilter(image.requestId)));
         setTasks((prev) => mergeTask(prev, toImageTask(result.task)));
         toast.show("ok", "已按原参数重新提交");
-        onBalanceRefresh?.();
       } catch (err) {
-        const message = err instanceof ApiError && err.status === 402 ? "积分不足，请充值" : errorMessage(err, "创建生图任务失败");
+        const message = errorMessage(err, "创建生图任务失败");
         setError(message);
         toast.show("err", message);
         setTasks((prev) => prev.map((item) => (item.id === requestId
@@ -619,7 +584,6 @@ export function useImageWorkflowStudio(args: {
       generatingCount: previewGeneratingCount,
       cancellingTaskIds,
       isOptimizingPrompt,
-      estimatedPointCost: estimatedImagePointCost,
       referenceImages,
       isUploadingReference,
       onPromptChange: (value) => {

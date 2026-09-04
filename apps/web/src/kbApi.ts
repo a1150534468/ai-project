@@ -95,17 +95,3 @@ export async function addKbFile(token: string, kbId: string, file: File): Promis
 export async function deleteKbDocument(token: string, kbId: string, docId: string): Promise<void> {
   await request(`/api/kb/${kbId}/documents/${docId}`, { method: "DELETE", token, fallback: "删除文档失败" });
 }
-
-export interface KbQuotaData {
-  effective: number;
-  used: number;
-  breakdown: {
-    defaultBytes: number;
-    membershipBytes: number;
-    grantBytes: number;
-  };
-}
-
-export async function getKbQuota(token: string): Promise<KbQuotaData> {
-  return request<KbQuotaData>("/api/kb/quota", { token, fallback: "获取配额失败" });
-}

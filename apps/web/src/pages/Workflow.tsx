@@ -27,14 +27,13 @@ import { WORKFLOW_MODULES, type WorkflowModuleId } from "../workflowState";
 interface WorkflowProps {
   readonly token: string;
   readonly activeModuleId: WorkflowModuleId;
-  readonly onBalanceRefresh?: () => void;
   readonly initialCodexPetProjectId?: string | null;
   readonly menuVisibility?: ClientMenuVisibility;
 }
 
 const FULLSCREEN_MODULES = new Set<WorkflowModuleId>(["novel", "image", "article-workflow", "codex-pet"]);
-export default function Workflow({ token, activeModuleId, onBalanceRefresh, initialCodexPetProjectId, menuVisibility }: WorkflowProps) {
-  const image = useImageWorkflowStudio({ token, onBalanceRefresh });
+export default function Workflow({ token, activeModuleId, initialCodexPetProjectId, menuVisibility }: WorkflowProps) {
+  const image = useImageWorkflowStudio({ token });
   const activeModule = WORKFLOW_MODULES.find((module) => module.id === activeModuleId) ?? WORKFLOW_MODULES[0];
   const isFullscreen = FULLSCREEN_MODULES.has(activeModuleId);
   const showModuleHeader = activeModuleId !== "novel" && activeModuleId !== "codex-pet";
@@ -87,15 +86,14 @@ export default function Workflow({ token, activeModuleId, onBalanceRefresh, init
               )}
             </>
         ) : activeModuleId === "novel" ? (
-          <NovelWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
+          <NovelWorkflowStudio token={token} />
         ) : activeModuleId === "codex-pet" ? (
           <CodexPetStudio
             token={token}
             initialProjectId={initialCodexPetProjectId}
-            onBalanceRefresh={onBalanceRefresh}
           />
         ) : activeModuleId === "article-workflow" ? (
-          <ArticleWorkflowStudio token={token} onBalanceRefresh={onBalanceRefresh} />
+          <ArticleWorkflowStudio token={token} />
         ) : (
           <section className="rounded-[14px] border border-hairline-subtle bg-surface p-8 text-center text-ink-secondary">
             <Icon icon="mdi:hammer-wrench" className="mx-auto mb-3 text-3xl text-ink-tertiary" aria-hidden />

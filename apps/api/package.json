@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@ai-assistant/article-workflow": "workspace:*",
-    "@ai-assistant/billing": "workspace:*",
     "@ai-assistant/connector-protocol": "workspace:*",
     "@ai-assistant/codex-pet-pipeline": "workspace:*",
     "@ai-assistant/db": "workspace:*",

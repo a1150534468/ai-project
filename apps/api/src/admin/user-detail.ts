@@ -1,8 +1,5 @@
 import type { PrismaClient } from "@ai-assistant/db";
-import type { createBillingClient } from "@ai-assistant/billing";
 import { listDevicesForAdmin } from "../device/service.js";
-
-type Billing = ReturnType<typeof createBillingClient>;
 
 interface AdminUserBasic {
   id: string;
@@ -12,27 +9,9 @@ interface AdminUserBasic {
   createdAt: Date;
 }
 
-export async function buildAdminUserBillingLog(billing: Billing, user: AdminUserBasic) {
-  const [usage, vipSummary] = await Promise.all([
-    billing.listUsage(user.id, 100).then((r) => r.data).catch(() => []),
-    billing.getVipSummary(user.id).then((r) => r.data).catch(() => null),
-  ]);
-  return {
-    user,
-    vipSummary,
-    consumptionRecords: usage,
-  };
-}
-
-export async function buildAdminUserDetail(prisma: PrismaClient, billing: Billing, user: AdminUserBasic) {
+export async function buildAdminUserDetail(prisma: PrismaClient, user: AdminUserBasic) {
   const today = todayUTC();
-  const [billingSummary, balance, memberships, usage, vipSummary, rechargeEvents, activity, timeline] = await Promise.all([
-    billing.analyticsUserSummary(user.id, today).then((r) => r.data).catch(() => null),
-    billing.getBalance(user.id).then((r) => r.balance).catch(() => null),
-    billing.myMemberships(user.id).then((r) => r.data).catch(() => []),
-    billing.listUsage(user.id, 100).then((r) => r.data).catch(() => []),
-    billing.getVipSummary(user.id).then((r) => r.data).catch(() => null),
-    billing.revenueByUsers([user.id]).then((r) => r.data[user.id] ?? []).catch(() => []),
+  const [activity, timeline] = await Promise.all([
     userActivityDetail(prisma, user.id, today),
     userTimeline(prisma, user.id),
   ]);
@@ -43,22 +22,11 @@ export async function buildAdminUserDetail(prisma: PrismaClient, billing: Billin
       onlineToday: activity.onlineDevices > 0,
       onlineDevices: activity.onlineDevices,
       loginCountToday: activity.loginCountToday,
-      todayToken: billingSummary?.todayTokens ?? 0,
       todayAgent: activity.todayAgents,
-      totalToken: billingSummary?.totalTokens ?? 0,
-      todayRechargeYuan: (billingSummary?.todayRechargeFen ?? 0) / 100,
-      todayConsumptionPoints: billingSummary?.todayConsumptionPoints ?? 0,
-      totalRechargeYuan: (billingSummary?.totalRechargeFen ?? 0) / 100,
-      totalConsumptionPoints: billingSummary?.totalConsumptionPoints ?? 0,
-      balance,
-      currentMemberships: memberships,
     },
     activity: activity.periods,
     devices: activity.devices,
-    vipSummary,
-    consumptionRecords: usage,
-    rechargeEvents,
-    timeline: mergeTimeline(timeline, usage, rechargeEvents),
+    timeline: timeline.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 80),
   };
 }
 
@@ -241,26 +209,4 @@ async function listImageTasks(prisma: PrismaClient, userId: string) {
   } catch {
     return [];
   }
-}
-
-function mergeTimeline(
-  base: { type: string; title: string; at: string; meta: string }[],
-  usage: { operationId: string; type: string; model: string; displayName?: string; actualPoints: number; settledAt: string | null; createdAt: string }[],
-  rechargeEvents: { paidAtDate: string; amountFen: number; points: number }[],
-) {
-  const usageEvents = usage.map((row) => ({
-    type: "consume",
-    title: `${row.type} · ${row.displayName || row.model} · ${row.actualPoints} 点`,
-    at: row.settledAt ?? row.createdAt,
-    meta: row.operationId,
-  }));
-  const rechargeTimeline = rechargeEvents.map((row) => ({
-    type: "recharge",
-    title: `充值 ¥${(row.amountFen / 100).toFixed(2)} · ${row.points} 点`,
-    at: `${row.paidAtDate}T00:00:00.000Z`,
-    meta: row.paidAtDate,
-  }));
-  return [...base, ...usageEvents, ...rechargeTimeline]
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, 80);
 }

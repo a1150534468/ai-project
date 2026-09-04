@@ -7,11 +7,7 @@
  *    删掉它等于让历史项目的那一格永久空着。
  *  - `shortDate` / `formatBytes` 对非法值回落成原值而不是抛错:这些值来自上游产物元数据,
  *    渲染路径上抛错会把整块工作台打黑。
- *
- * 原文件里的 `refundStatusLabel` 没有搬过来——它自 2026-08 起就没有任何调用点(渲染退款状态的
- * 是「预计退回」那一行),搬过来只会变成一个没人用的导出。
  */
-import { ApiError } from "../../apiError";
 import type { CodexPetArtifact, CodexPetEvent, CodexPetRun } from "../../codexPetApi";
 import { CODEX_PET_STANDARD_STATES, codexPetValidationPassed } from "./codexPetStudioModel";
 
@@ -52,7 +48,6 @@ export const DETAIL_REFRESH_EVENTS = new Set([
   "run.completed",
   "run.failed",
   "run.cancelled",
-  "billing.refunded",
 ]);
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -80,11 +75,9 @@ export const EVENT_LABELS: Record<string, string> = {
   "run.failed": "桌宠制作失败",
   "run.cancellation_requested": "已请求取消桌宠制作",
   "run.cancelled": "桌宠制作已取消",
-  "billing.refunded": "积分已退款",
 };
 
 export function codexPetErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof ApiError && error.status === 402) return "积分不足，请充值后再开始制作";
   return error instanceof Error && error.message ? error.message : fallback;
 }
 

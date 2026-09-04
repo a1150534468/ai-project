@@ -17,10 +17,9 @@ describe("clientMenu", () => {
     expect(isClientMenuVisible(DEFAULT_CLIENT_MENU_VISIBILITY, "nav.chat")).toBe(true);
   });
 
-  it("将普通页面映射到主菜单配置，工作流和充值由调用方单独判断", () => {
+  it("将普通页面映射到主菜单配置，工作流由调用方单独判断", () => {
     expect(clientMenuKeyForView("models")).toBe("nav.models");
     expect(clientMenuKeyForView("workflow")).toBeNull();
-    expect(clientMenuKeyForView("billing")).toBeNull();
   });
 
   it("当前入口隐藏后选择仍显示的主菜单作为落点", () => {

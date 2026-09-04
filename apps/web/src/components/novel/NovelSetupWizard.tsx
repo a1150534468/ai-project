@@ -164,7 +164,7 @@ function ProjectFileActions({ token, projectId, onImported }: { readonly token: 
   return <section data-testid="novel-project-file-actions" className="rounded-2xl border border-hairline-subtle bg-surface p-5 text-left shadow-sm"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="flex items-center gap-2 text-sm font-semibold text-ink"><Icon icon="mdi:file-swap-outline" className="text-lg text-brand-ink" />作品导入与导出</h3><p className="mt-1 text-xs leading-5 text-ink-tertiary">导入 Markdown/TXT 会先创建检查点再替换章节；导出按当前章节顺序生成整书文件。</p></div><div className="flex flex-wrap gap-2"><label className={`flex h-9 cursor-pointer items-center rounded-lg border border-brand/30 px-3 text-xs font-semibold text-brand-ink ${busy ? "pointer-events-none opacity-50" : ""}`}><Icon icon="mdi:upload-outline" className="mr-1" />{busy === "import" ? "导入中" : "导入 Markdown / TXT"}<input aria-label="导入 Markdown 或 TXT" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFile(file); event.target.value = ""; }} /></label>{(["markdown", "docx", "epub", "pdf"] as const).map((format) => <button key={format} type="button" disabled={Boolean(busy)} onClick={() => void download(format)} className="h-9 rounded-lg border border-hairline px-3 text-xs font-semibold uppercase text-ink-secondary disabled:opacity-50">{busy === `export:${format}` ? "导出中" : format}</button>)}</div></div>{error && <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger-ink">{error}</p>}{notice && <p className="mt-3 rounded-lg bg-brand-soft px-3 py-2 text-xs text-brand-ink">{notice}</p>}</section>;
 }
 
-export function NovelSetupWizard({ token, project, onClose, onCompleted, onProjectChanged, onBalanceRefresh }: { readonly token: string; readonly project: NovelProjectDetail["project"]; readonly onClose: () => void; readonly onCompleted: () => void; readonly onProjectChanged?: () => void | Promise<void>; readonly onBalanceRefresh?: () => void }) {
+export function NovelSetupWizard({ token, project, onClose, onCompleted, onProjectChanged }: { readonly token: string; readonly project: NovelProjectDetail["project"]; readonly onClose: () => void; readonly onCompleted: () => void; readonly onProjectChanged?: () => void | Promise<void> }) {
   const [setup, setSetup] = useState<NovelSetupPayload | null>(null);
   const [step, setStep] = useState(Math.max(1, Math.min(5, project.setupStage || 1)));
   const [editor, setEditor] = useState("");
@@ -205,7 +205,7 @@ export function NovelSetupWizard({ token, project, onClose, onCompleted, onProje
   const generate = async () => {
     if (!kind) return;
     setBusy("generate"); setError("");
-    try { await generateNovelSetup(token, project.id, kind, prompt); await load(); onBalanceRefresh?.(); }
+    try { await generateNovelSetup(token, project.id, kind, prompt); await load(); }
     catch (reason) { setError(reason instanceof Error ? reason.message : "生成失败"); }
     finally { setBusy(""); }
   };

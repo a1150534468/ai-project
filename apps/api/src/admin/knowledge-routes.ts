@@ -1,12 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
-import { createBillingClient } from "@ai-assistant/billing";
 import { requireAdmin } from "./guard.js";
 import { writeAudit } from "./audit.js";
 import { createKb, deleteKb } from "../kb/service.js";
 import { storeAndCreateDocument, IngestError } from "../kb/ingest.js";
-import { makeS3, deleteObject, deletePrefix } from "../storage/s3.js";
+import { makeS3, deleteObject } from "../storage/s3.js";
 import { buildIndexDeps } from "../kb/deps.js";
 import { indexOnce } from "../kb/indexer.js";
 
@@ -35,11 +34,6 @@ export async function adminKnowledgeRoutes(app: FastifyInstance) {
     }
     return s3;
   };
-
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
 
   // =====================
   // 官方知识库 CRUD
@@ -171,7 +165,7 @@ export async function adminKnowledgeRoutes(app: FastifyInstance) {
     },
   );
 
-  // POST /api/admin/kb/:id/documents - 加文档到官方库（跳计费）
+  // POST /api/admin/kb/:id/documents - 加文档到官方库
   app.post(
     "/api/admin/kb/:id/documents",
     { preHandler: requireAdmin("KNOWLEDGE_MANAGE") },
@@ -195,11 +189,6 @@ export async function adminKnowledgeRoutes(app: FastifyInstance) {
             file: () => req.file(),
             body: (req.body as Record<string, unknown>) || {},
           },
-          {
-            skipQuotaCheck: true, // 官方库跳计费
-            billing: null,
-            quotaBilling: undefined,
-          }
         );
 
         // 触发索引（best-effort）

@@ -6,12 +6,12 @@ const plain: Session = { token: "t", adminId: "b", role: "admin", permissions: [
 
 describe("can 权限门禁", () => {
   it("super_admin 永真", () => {
-    expect(can(sa, "BALANCE_ADJUST")).toBe(true);
+    expect(can(sa, "KNOWLEDGE_MANAGE")).toBe(true);
     expect(can(sa, "ADMIN_MANAGE")).toBe(true);
   });
   it("普通 admin 仅其授予集", () => {
     expect(can(plain, "USER_MANAGE")).toBe(true);
-    expect(can(plain, "BALANCE_ADJUST")).toBe(false);
+    expect(can(plain, "KNOWLEDGE_MANAGE")).toBe(false);
     expect(can(plain, "ADMIN_MANAGE")).toBe(false);
   });
   it("无 session 全 false", () => {

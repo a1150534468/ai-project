@@ -11,20 +11,6 @@
 import type { NovelRunEvent, NovelRunSnapshot } from "@ai-assistant/novel-workflow/contracts";
 import { type HttpMethod, request, requestResponse } from "./http";
 
-export interface NovelWorkflowResourcePrice {
-  resourceKey: string;
-  displayName: string;
-  pricingType: "PER_CALL" | "PER_UNIT";
-  rate: number;
-  perUnits: number;
-  enabled: boolean;
-}
-
-export interface NovelWorkflowPricing {
-  novelText: NovelWorkflowResourcePrice;
-  cover: NovelWorkflowResourcePrice;
-}
-
 export interface NovelProjectSummary {
   id: string;
   title: string;
@@ -165,10 +151,6 @@ export interface CreateNovelProjectPayload {
   specialRequirements?: string;
   targetChapters: number;
   targetCharsPerChapter: number;
-}
-
-export async function getNovelWorkflowPricing(token: string): Promise<NovelWorkflowPricing> {
-  return request<NovelWorkflowPricing>("/api/workflow/novels/pricing", { token, fallback: "获取小说计价失败" });
 }
 
 export async function listNovelProjects(token: string): Promise<NovelProjectSummary[]> {

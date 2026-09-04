@@ -5,8 +5,7 @@ import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { requireUser } from "./require-user.js";
 import { signToken } from "./token.js";
-import { generateUniquePrefixedUid } from "./uid.js";
-import { getPlatformChannelCode } from "../reseller/seed.js";
+import { generateUniqueUid } from "./uid.js";
 
 const registerSchema = z.object({
   username: z.string().min(3).max(32),
@@ -27,23 +26,13 @@ export async function authRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const { username, password } = parsed.data;
 
-    const platformCode = getPlatformChannelCode();
-    const channel = await prisma.channel.findUnique({ where: { code: platformCode } });
-    if (!channel || channel.ownerType !== "PLATFORM" || !channel.enabled) {
-      req.log.error({ platformCode }, "默认平台注册渠道不可用");
-      return reply.code(503).send({ error: "注册服务暂不可用" });
-    }
-
     if (await prisma.user.findUnique({ where: { username } })) {
       return reply.code(409).send({ error: "用户名已被占用" });
     }
-    const uid = await generateUniquePrefixedUid(
-      channel.code,
-      async (u) => Boolean(await prisma.user.findUnique({ where: { uid: u } }))
-    );
+    const uid = await generateUniqueUid(async (u) => Boolean(await prisma.user.findUnique({ where: { uid: u } })));
     const passwordHash = await argon2.hash(password);
     const user = await prisma.user.create({
-      data: { uid, username, passwordHash, memoryEnabled: true, channelId: channel.id },
+      data: { uid, username, passwordHash, memoryEnabled: true },
     });
     return { token: signToken(user.id, secret), userId: user.id, uid: user.uid };
   });

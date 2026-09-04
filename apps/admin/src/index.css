@@ -449,32 +449,6 @@ textarea:focus {
   color: var(--ink);
 }
 
-.subtabs {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--surface);
-}
-
-.subtab {
-  border: 0;
-  background: transparent;
-  color: var(--ink2);
-  border-radius: 8px;
-  padding: 8px 12px;
-  font-size: 12.5px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.subtab.active {
-  background: var(--surface2);
-  color: var(--ink);
-  box-shadow: inset 0 0 0 1px var(--line);
-}
-
 /* Card (backward compat, also new look) */
 .card {
   background: var(--surface);
@@ -695,33 +669,6 @@ table .num {
 
 .stat .d.down {
   color: var(--bad);
-}
-
-/* Segmented control */
-.seg {
-  display: inline-flex;
-  border: 1px solid var(--border);
-  border-radius: var(--r-ctl);
-  background: #fff;
-  padding: 2px;
-  gap: 2px;
-}
-
-.seg button {
-  background: #fff;
-  border: none;
-  color: var(--ink2);
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.seg button.on {
-  background: var(--accent2);
-  color: var(--accent-ink);
-  font-weight: 600;
 }
 
 /* Layout utilities */

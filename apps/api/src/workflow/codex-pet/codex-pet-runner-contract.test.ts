@@ -141,9 +141,8 @@ describe("Codex pet terminal gate repair scope", () => {
 
 /**
  * A board verdict is the conjunction of every cell, so one broken pose used to
- * throw away seven good paid poses. Under per-image billing each redraw costs a
- * fresh user approval, which makes reusing the clean slots the difference between
- * a bounded repair and a run that burns its budget on the same eight poses.
+ * throw away seven good poses. Reusing the clean slots is the difference between
+ * a bounded repair and a run that burns its attempts on the same eight poses.
  */
 describe("Codex pet pose board salvage bookkeeping", () => {
   type Extracted = Parameters<typeof poseBoardSlotHealth>[0];
@@ -248,8 +247,8 @@ describe("Codex pet pose board salvage bookkeeping", () => {
 });
 
 /**
- * Per-image billing runs one attempt per invocation, so the in-memory donor never
- * survives to the approved retry. The durable board artifact is the only carrier,
+ * A run that pauses for approval after one attempt never carries its in-memory
+ * donor to the approved retry. The durable board artifact is the only carrier,
  * which makes this loader the whole salvage path in production.
  */
 describe("Codex pet durable pose board donor", () => {

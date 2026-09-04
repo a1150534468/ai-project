@@ -1,7 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { completedNovelChapterCount, nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import { novelAssistedRunSchema, novelAutopilotStartSchema } from "@ai-assistant/novel-workflow/contracts";
@@ -31,13 +30,8 @@ function activeRunConflict(error: unknown): boolean {
 
 export async function novelEngineRoutes(app: FastifyInstance, options: {
   prisma?: PrismaClient;
-  billing?: { refundResource: (operationId: string) => Promise<unknown> };
 } = {}) {
   const prisma = options.prisma ?? getPrisma();
-  const billing = options.billing ?? createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
 
   // 本文件 10 个路由全部必须登录，挂插件级。
   // 注意下面 registerNovelResourceRoutes / registerNovelExportRoutes 是直接调用而非
@@ -201,7 +195,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
     const stepIds = activeSteps.map((step) => step.id);
     const activeTasks = stepIds.length ? await prisma.novelTask.findMany({
       where: { targetId: { in: stepIds }, status: { in: ["queued", "running"] } },
-      select: { id: true, operationId: true },
+      select: { id: true },
     }) : [];
     const cancelledAt = new Date();
     const [, updated] = await prisma.$transaction([
@@ -211,9 +205,6 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
       prisma.novelCommandOutbox.updateMany({ where: { runId: run.id, status: { in: ["pending", "dispatching"] } }, data: { status: "cancelled", lastError: "用户已取消" } }),
       prisma.novelProject.update({ where: { id: run.projectId }, data: { autopilotStatus: "cancelled" } }),
     ]);
-    await Promise.all(activeTasks.map((task) => billing.refundResource(task.operationId).catch((error) => {
-      app.log.warn({ err: error, taskId: task.id, runId: run.id }, "novel run cancellation refund failed");
-    })));
     await appendNovelRunEvent({ prisma, runId: run.id, type: "runStatusChanged", stage: "cancelled", step: null, chapterNumber: run.currentChapter, progress: 100, payload: { reason: "cancelRequested" } });
     return { success: true, data: { run: serializeNovelRun(updated) } };
   });

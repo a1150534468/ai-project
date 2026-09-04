@@ -13,8 +13,6 @@ const tagDefinitions = [
   { name: "知识库", description: "用户知识库和文档管理" },
   { name: "工具市场", description: "工具市场、安装和卸载" },
   { name: "设备与连接器", description: "桌面设备配对、连接器和工具桥接" },
-  { name: "计费与充值", description: "用户余额、充值、兑换和用量" },
-  { name: "会员与 VIP", description: "会员购买、VIP 等级和模型市场" },
   { name: "工作流 · 图片", description: "图片生成、提示词优化和素材管理" },
   { name: "工作流 · Codex 桌宠", description: "Codex v2 桌宠生成、实时进度、安装与知识库归档" },
   { name: "工作流 · 小说", description: "小说工程、章节、资产和自动运行" },
@@ -22,12 +20,9 @@ const tagDefinitions = [
   { name: "工作流 · 批量生成", description: "内容提取和多维批量生成" },
   { name: "公告", description: "公开公告" },
   { name: "管理 · 管理员", description: "管理员账号与权限" },
-  { name: "管理 · 用户", description: "用户、设备、余额和配额管理" },
+  { name: "管理 · 用户", description: "用户、设备和配额管理" },
   { name: "管理 · 内容", description: "公告、知识库和客户端菜单管理" },
-  { name: "管理 · 计费", description: "订单、兑换码、模型、会员和资源价格" },
   { name: "管理 · 审计", description: "管理端操作日志" },
-  { name: "管理 · 渠道", description: "渠道商和可见范围管理" },
-  { name: "渠道商", description: "渠道商工作台接口" },
 ];
 
 const publicRoutes = new Set([
@@ -53,22 +48,8 @@ const exactSummaries: Record<string, string> = {
   "GET /api/models": "查询可用模型",
   "GET /api/client-menu": "查询客户端菜单",
   "GET /api/announcements": "查询当前公告",
-  "POST /api/billing/topup": "创建充值订单",
-  "GET /api/billing/topup/:tradeNo": "查询充值订单状态",
-  "GET /api/billing/balance": "查询当前用户余额",
-  "GET /api/billing/points-detail": "查询算力点明细",
-  "GET /api/billing/usage": "查询用量记录",
-  "POST /api/billing/redeem": "兑换权益码",
-  "GET /api/billing/recharge-packages": "查询充值套餐",
-  "GET /api/billing/recharge-ratio": "查询充值比例",
-  "GET /api/membership/cards": "查询会员卡",
-  "POST /api/membership/buy": "购买会员",
-  "GET /api/membership/mine": "查询我的会员记录",
-  "GET /api/vip/me": "查询我的 VIP 信息",
-  "GET /api/model-marketplace": "查询模型市场",
   "GET /ws/connector": "建立桌面连接器 WebSocket",
   "POST /api/workflow/dub/skyhuman/callback": "接收数字人服务回调",
-  "GET /api/workflow/codex-pets/pricing": "查询 Codex 桌宠套餐价格",
   "GET /api/workflow/codex-pets/models": "查询 Codex 桌宠可选生图与视觉质检模型",
   "GET /api/workflow/codex-pets/projects": "查询 Codex 桌宠项目列表",
   "POST /api/workflow/codex-pets/projects": "创建 Codex 桌宠草稿",
@@ -110,9 +91,6 @@ const actionNames: Record<string, string> = {
   revoke: "撤销",
   disable: "禁用",
   delete: "删除",
-  buy: "购买",
-  redeem: "兑换",
-  topup: "充值",
   confirm: "确认",
   "confirm-team": "确认团队",
   complete: "完成设置",
@@ -134,17 +112,8 @@ const resourceNames: Record<string, string> = {
   audit: "审计日志",
   users: "用户",
   devices: "设备",
-  codes: "兑换码",
-  orders: "订单",
   models: "模型",
   analytics: "数据分析",
-  "resource-prices": "资源价格",
-  "recharge-packages": "充值套餐",
-  "recharge-ratio": "充值比例",
-  "membership-cards": "会员卡",
-  "vip-levels": "VIP 等级",
-  resellers: "渠道商",
-  "reseller-visibility": "渠道可见范围",
   "client-menu": "客户端菜单",
   kb: "知识库",
   documents: "文档",
@@ -231,32 +200,6 @@ const bodySchemas: Record<string, JsonSchema> = {
     properties: {
       username: { type: "string", description: "管理员用户名" },
       password: { type: "string", format: "password", description: "管理员密码" },
-    },
-  },
-  "POST /api/billing/topup": {
-    type: "object",
-    additionalProperties: false,
-    required: ["method"],
-    properties: {
-      amountFen: { type: "integer", minimum: 1, description: "自定义充值金额，单位：分；与 packageId 二选一" },
-      packageId: { type: "string", description: "充值套餐 ID；与 amountFen 二选一" },
-      method: { type: "string", enum: ["alipay", "wxpay"], description: "支付方式" },
-      accountType: { type: "string", enum: ["points", "video"], default: "points", description: "充值账户" },
-    },
-  },
-  "POST /api/billing/redeem": {
-    type: "object",
-    additionalProperties: false,
-    required: ["code"],
-    properties: { code: { type: "string", minLength: 4, maxLength: 64, description: "兑换码" } },
-  },
-  "POST /api/membership/buy": {
-    type: "object",
-    additionalProperties: false,
-    required: ["cardId"],
-    properties: {
-      cardId: { type: "integer", minimum: 1, description: "会员卡 ID" },
-      method: { type: "string", enum: ["alipay", "wxpay"], default: "alipay", description: "支付方式" },
     },
   },
   "POST /api/device/pair": {
@@ -376,14 +319,11 @@ const querySchemas: Array<[RegExp, JsonSchema]> = [
     sig: { type: "string", minLength: 32, description: "HMAC 签名" },
     purpose: { type: "string", enum: ["install", "preview"], default: "install" },
   }, ["exp", "sig"])],
-  [/^\/api\/billing\/usage$/, objectSchema({ limit: { type: "integer", minimum: 1, maximum: 100, default: 20, description: "返回条数" } })],
   [/^\/api\/memory\/search$/, objectSchema({ q: { type: "string", description: "搜索关键词" } }, ["q"])],
   [/^\/api\/admin\/analytics\/(daily|rankings|sales)$/, objectSchema({ days: { type: "integer", minimum: 1, maximum: 180, default: 30, description: "统计天数" } })],
   [/^\/api\/admin\/analytics\/(retention|ltv)$/, objectSchema({ from: { type: "string", format: "date", description: "开始日期" }, to: { type: "string", format: "date", description: "结束日期" } })],
   [/^\/api\/admin\/audit$/, objectSchema({ adminId: { type: "string" }, action: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 500 } })],
-  [/^\/api\/admin\/codes$/, objectSchema({ status: { type: "string" }, grantType: { type: "string" }, batchId: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 500 } })],
   [/^\/api\/admin\/users$/, objectSchema({ q: { type: "string", description: "用户名或 UID 关键词（不区分大小写）" }, page: { type: "integer", minimum: 1, default: 1 }, pageSize: { type: "integer", minimum: 1, maximum: 100, default: 20 } })],
-  [/^\/api\/reseller\/users$/, objectSchema({ page: { type: "integer", minimum: 1, default: 1 }, pageSize: { type: "integer", minimum: 1, maximum: 100, default: 20 } })],
   [/\/events$/, objectSchema({ after: { type: "integer", minimum: 0, description: "从指定事件序号后读取" } })],
   [/\/events\/stream$/, objectSchema({ after: { type: "integer", minimum: 0, description: "从指定事件序号后建立 SSE" } })],
 ];
@@ -411,19 +351,14 @@ function tagForPath(url: string): string {
   if (url.startsWith("/api/memory")) return "长期记忆";
   if (url.startsWith("/api/kb")) return "知识库";
   if (url.startsWith("/api/tool")) return "工具市场";
-  if (url.startsWith("/api/billing")) return "计费与充值";
-  if (url.startsWith("/api/membership") || url.startsWith("/api/vip") || url.startsWith("/api/model-marketplace")) return "会员与 VIP";
   if (url.startsWith("/api/workflow/images")) return "工作流 · 图片";
   if (url.startsWith("/api/workflow/codex-pets") || url.startsWith("/api/public/codex-pets")) return "工作流 · Codex 桌宠";
   if (url.startsWith("/api/workflow/novels")) return "工作流 · 小说";
   if (url.startsWith("/api/workflow/article-workflow")) return "工作流 · 文章";
   if (url === "/api/announcements") return "公告";
-  if (url.startsWith("/api/reseller")) return "渠道商";
   if (url.startsWith("/api/admin/audit")) return "管理 · 审计";
-  if (url.startsWith("/api/admin/reseller")) return "管理 · 渠道";
   if (/^\/api\/admin\/(users|devices)/.test(url)) return "管理 · 用户";
   if (/^\/api\/admin\/(kb|announcements|client-menu)/.test(url)) return "管理 · 内容";
-  if (/^\/api\/admin\/(codes|orders|models|resource-prices|config|membership-cards|vip-levels)/.test(url)) return "管理 · 计费";
   if (url.startsWith("/api/admin")) return "管理 · 管理员";
   return "系统";
 }
@@ -474,7 +409,6 @@ function securityForRoute(method: string, url: string): ReadonlyArray<Record<str
   if (url === "/ws/connector") return [{ connectorProtocolToken: [] }];
   if (url === "/api/workflow/dub/skyhuman/callback") return [{ callbackSecret: [] }];
   if (url.startsWith("/api/admin/")) return [{ adminBearerAuth: [] }];
-  if (url.startsWith("/api/reseller/")) return [{ resellerBearerAuth: [] }];
   return [{ bearerAuth: [] }];
 }
 
@@ -483,7 +417,6 @@ function descriptionForRoute(method: string, url: string): string {
   const notes: string[] = [];
   if (!security.length) notes.push("公开接口，无需登录。");
   else if (security.some((item) => "adminBearerAuth" in item)) notes.push("需要管理员 JWT，并可能受细粒度权限控制。");
-  else if (security.some((item) => "resellerBearerAuth" in item)) notes.push("需要具备渠道商权限的管理员 JWT。");
   else if (security.some((item) => "bearerAuth" in item)) notes.push("需要用户 JWT；可使用 Authorization Bearer 或登录 Cookie。");
   if (url === "/ws/connector") notes.push("该地址使用 WebSocket 升级；设备 Token 在连接后的注册消息中提交，Swagger UI 不能直接调试 WebSocket。");
   if (url.endsWith("/events/stream")) notes.push("响应类型为 text/event-stream（SSE）。");
@@ -574,9 +507,9 @@ export async function registerOpenApi(app: FastifyInstance): Promise<void> {
         title: "AI 助手 API",
         version: "1.0.0",
         description: [
-          "AI 助手主 API 与 Billing 内部服务的统一接口文档。",
+          "AI 助手主 API 接口文档。",
           "",
-          "主 API 默认地址为 `http://localhost:8090`；Billing 默认地址为 `http://localhost:8093`。",
+          "主 API 默认地址为 `http://localhost:8090`。",
           "在右上角 **Authorize** 中填写 Token 后可直接调试。请勿在共享环境中填写生产密钥。",
         ].join("\n"),
       },
@@ -586,7 +519,6 @@ export async function registerOpenApi(app: FastifyInstance): Promise<void> {
         securitySchemes: {
           bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "普通用户登录返回的 JWT" },
           adminBearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "管理员登录返回的 JWT" },
-          resellerBearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "具备渠道商权限的管理员 JWT" },
           connectorProtocolToken: { type: "apiKey", in: "header", name: "X-Device-Token", description: "仅用于说明设备连接器认证；实际在 WebSocket 注册消息中发送" },
           callbackSecret: { type: "apiKey", in: "query", name: "secret", description: "数字人平台回调密钥" },
         },

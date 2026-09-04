@@ -83,7 +83,7 @@ export interface CodexPetGeneratedBoardRecoveryResult {
 
 /**
  * Reprocess already-paid provider outputs after a deterministic extractor fix.
- * This path never generates an image, changes billing, or creates a new run.
+ * This path never generates an image or creates a new run.
  */
 export async function recoverCodexPetGeneratedBoards(
   input: CodexPetGeneratedBoardRecoveryInput,
@@ -130,9 +130,6 @@ export async function recoverCodexPetGeneratedBoards(
     && targetedRetry.state === "running-right"
     && input.boards.every((board) => board.state === "running-right");
   if (run.status !== "failed"
-    || run.billingChargeStatus !== "charged"
-    || run.billingRefundStatus !== "refunded"
-    || !run.billingRefundedAt
     || run.workerId
     || run.cancelRequested
     || run.project.latestRunId !== run.id
@@ -446,7 +443,7 @@ export async function recoverCodexPetGeneratedBoards(
           type: "run.generated_boards_recovered",
           stage: "standard_generating",
           progress: Math.max(25, freshRun.progressPercent),
-          message: "已复用已付费动作板，未发起新的生图调用",
+          message: "已复用既有动作板，未发起新的生图调用",
           payload: {
             schemaVersion: RECOVERY_SCHEMA_VERSION,
             recoveredJobKeys: requestedJobKeys,

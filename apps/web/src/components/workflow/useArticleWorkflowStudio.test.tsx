@@ -19,7 +19,6 @@ const api = vi.hoisted(() => ({
   deleteArticleWorkflowProject: vi.fn(),
   generateArticleWorkflowImages: vi.fn(),
   getArticleWorkflowBatch: vi.fn(),
-  getArticleWorkflowPricing: vi.fn(),
   getArticleWorkflowProject: vi.fn(),
   listArticleWorkflowHistory: vi.fn(),
   regenerateArticleWorkflowImage: vi.fn(),
@@ -106,7 +105,6 @@ async function mountBatch(rows: readonly ReturnType<typeof project>[]) {
 }
 
 beforeEach(() => {
-  api.getArticleWorkflowPricing.mockResolvedValue(null);
   api.listArticleWorkflowHistory.mockResolvedValue([]);
 });
 
@@ -163,14 +161,13 @@ describe("草稿与脏标记按平台隔离", () => {
 });
 
 describe("批次轮询", () => {
-  it("回填时保住正在编辑的平台草稿，全部落地后报完成并刷新余额", async () => {
+  it("回填时保住正在编辑的平台草稿，全部落地后报完成", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    const onBalanceRefresh = vi.fn();
     api.getArticleWorkflowBatch.mockResolvedValue({
       batchId: "batch-1",
       projects: [project(), xiaohongshu({ status: "generating", progressMessage: "生成中" })],
     });
-    const studio = await mountStudio({ onBalanceRefresh });
+    const studio = await mountStudio();
     await act(async () => {
       studio().handleSelectBatch({ key: "batch:batch-1", batchId: "batch-1", projectId: "article-1" });
     });
@@ -192,7 +189,6 @@ describe("批次轮询", () => {
     expect(studio().dirtyPlatforms).toEqual(["wechat"]);
     expect(studio().batchBusy).toBe(false);
     expect(studio().notice).toBe("2 个平台已生成");
-    expect(onBalanceRefresh).toHaveBeenCalled();
   });
 
   it("轮询到失败行把失败原因写进 error", async () => {

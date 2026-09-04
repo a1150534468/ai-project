@@ -44,7 +44,7 @@ function normalizeImages(
 /**
  * 把 LLM 产出的 caption 计划裁剪到平台硬限制内。
  *
- * 一律归一化，不抛错：LLM 超字数是常态，为此整单失败会让用户白付一次文本费。
+ * 一律归一化，不抛错：LLM 超字数是常态，为此整单失败会让用户白等一次生成。
  */
 export function normalizeArticleWorkflowCaptionPlan(args: {
   readonly plan: ArticleWorkflowCaptionPlan;

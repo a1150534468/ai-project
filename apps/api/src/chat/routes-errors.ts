@@ -12,7 +12,8 @@
  * request id、账号信息甚至 key 片段。
  *
  * `BAILIAN_MODEL_ALIASES` 只在 provider === "bailian" 时生效,anthropic 走原名。新增别名往这里加,
- * 不要在路由里就地改 model 字符串 —— 计费用的是别名前的 `billingModel`,两边一混就会按错的模型计价。
+ * 不要在路由里就地改 model 字符串 —— `session` 事件与消息落库记的都是别名前的模型名,两边一混,
+ * 库里存的模型就跟实际调用的对不上。
  *
  * 依赖方向:本文件是叶子,只依赖 ../agent/run.js 的两个错误类。
  */

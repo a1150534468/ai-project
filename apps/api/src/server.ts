@@ -7,33 +7,21 @@ import multipart from "@fastify/multipart";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { authRoutes } from "./auth/routes.js";
 import { chatRoutes } from "./chat/routes.js";
-import { billingRoutes } from "./billing/routes.js";
 import { memoryRoutes } from "./memory/routes.js";
 import { deviceRoutes } from "./device/routes.js";
 import { toolRoutes } from "./tools/routes.js";
 import { adminRoutes } from "./admin/routes.js";
 import { adminUserRoutes } from "./admin/user-routes.js";
-import { adminCodeRoutes } from "./admin/code-routes.js";
-import { adminBalanceRoutes } from "./admin/balance-routes.js";
-import { adminModelRoutes } from "./admin/model-routes.js";
-import { adminVipRoutes } from "./admin/vip-routes.js";
 import { adminAuditRoutes } from "./admin/audit-routes.js";
-import { adminOrderRoutes } from "./admin/order-routes.js";
-import { resourceRoutes } from "./admin/resource-routes.js";
 import { announcementRoutes } from "./admin/announcement-routes.js";
-import { adminMembershipRoutes } from "./admin/membership-routes.js";
 import { adminKnowledgeRoutes } from "./admin/knowledge-routes.js";
-import { membershipUserRoutes } from "./membership/routes.js";
 import { agentRoutes } from "./agents/routes.js";
 import { imageWorkflowRoutes } from "./workflow/image/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
 import { startArticleWorkflowReaper, articleWorkflowRoutes } from "./workflow/article/index.js";
-import { createBillingClient } from "@ai-assistant/billing";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { novelEngineRoutes } from "./novel/routes.js";
-import { adminResellerRoutes } from "./admin/reseller-routes.js";
 import { clientMenuRoutes } from "./admin/client-menu-routes.js";
-import { resellerRoutes } from "./reseller/routes.js";
 import { kbRoutes } from "./kb/routes.js";
 import { assetRoutes } from "./assets/asset-routes.js";
 import { verifyToken } from "./auth/token.js";
@@ -42,7 +30,6 @@ import { startReaper } from "./connector/reaper.js";
 import { startKbReaper } from "./kb/reaper.js";
 import { buildIndexDeps } from "./kb/deps.js";
 import { makeS3 } from "./storage/s3.js";
-import { seedPlatformChannel } from "./reseller/seed.js";
 import { apiDocsEnabled, registerOpenApi, registerOpenApiUi } from "./docs/openapi.js";
 import { withTimeout } from "./runtime/with-timeout.js";
 
@@ -124,8 +111,6 @@ export async function buildServer() {
   await app.register(chatRoutes);
   await app.register(kbRoutes);
   await app.register(assetRoutes);
-  await app.register(billingRoutes);
-  await app.register(membershipUserRoutes);
   await app.register(agentRoutes, { redis: getRedis() });
   // 同上：传 redis 才起 image 的主动扫。之前 image 的续跑只挂在轮询接口上，
   // 用户关掉页面就没人推进了。
@@ -139,27 +124,17 @@ export async function buildServer() {
   await app.register(toolRoutes);
   await app.register(adminRoutes);
   await app.register(adminUserRoutes);
-  await app.register(adminCodeRoutes);
-  await app.register(adminBalanceRoutes);
-  await app.register(adminModelRoutes);
-  await app.register(adminVipRoutes);
   await app.register(adminAuditRoutes);
-  await app.register(adminOrderRoutes);
-  await app.register(resourceRoutes);
   await app.register(announcementRoutes);
-  await app.register(adminMembershipRoutes);
   await app.register(adminKnowledgeRoutes);
-  await app.register(adminResellerRoutes);
   await app.register(clientMenuRoutes);
-  await app.register(resellerRoutes);
   await registerHub(app);
 
   const reaperTimer = startReaper(getPrisma(), getRedis());
-  // 图文项目 reaper：崩溃/重启后把卡在 generating|revising 的项目置 failed 并退文本 reserve
+  // 图文项目 reaper：崩溃/重启后把卡在 generating|revising 的项目置 failed
   const articleWorkflowReaperTimer = startArticleWorkflowReaper({
     prisma: getPrisma(),
     redis: getRedis(),
-    billing: createBillingClient({ baseUrl: process.env.BILLING_BASE_URL!, token: process.env.BILLING_INTERNAL_TOKEN! }),
   });
 
   if (docsEnabled) await registerOpenApiUi(app);
@@ -203,15 +178,11 @@ export async function buildServer() {
   });
   app.get("/ready", async (_req, reply) => {
     try {
-      const billingBaseUrl = process.env.BILLING_BASE_URL?.replace(/\/+$/, "");
-      if (!billingBaseUrl) throw new Error("BILLING_BASE_URL is required");
-      const [, redisResult, billingResponse] = await Promise.all([
+      const [, redisResult] = await Promise.all([
         withTimeout(getPrisma().$queryRawUnsafe("SELECT 1"), 2_000, "PostgreSQL readiness check"),
         withTimeout(getRedis().ping(), 2_000, "Redis readiness check"),
-        fetch(`${billingBaseUrl}/health`, { signal: AbortSignal.timeout(2_000) }),
       ]);
       if (redisResult !== "PONG") throw new Error("Redis ping failed");
-      if (!billingResponse.ok) throw new Error(`Billing health returned ${billingResponse.status}`);
       return { ok: true };
     } catch (error) {
       app.log.warn({ err: error }, "readiness check failed");
@@ -229,7 +200,6 @@ if (process.argv[1]?.endsWith("server.ts") || process.argv[1]?.endsWith("server.
   warnMissingOptionalEnv();
   const port = Number(process.env.PORT ?? 8090);
   buildServer().then(async (app) => {
-    await seedPlatformChannel(getPrisma());
     app.listen({ port, host: "0.0.0.0" });
 
     // 优雅关闭：关 server、断开 PG/Redis 连接，避免连接泄漏

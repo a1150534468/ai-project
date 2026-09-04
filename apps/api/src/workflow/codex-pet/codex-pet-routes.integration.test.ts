@@ -2,12 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getPrisma } from "@ai-assistant/db";
 import Fastify from "fastify";
 import { afterAll, describe, expect, it, vi } from "vitest";
-import { CODEX_PET_PLANNED_IMAGE_CALL_LIMIT } from "./codex-pet-call-ledger.js";
-import { codexPetReservationTtlSeconds } from "./codex-pet-reservation-window.js";
-import {
-  CODEX_PET_RESOURCE_KEY,
-  codexPetRoutes,
-} from "./codex-pet-routes.js";
+import { codexPetRoutes } from "./codex-pet-routes.js";
 
 const prisma = getPrisma();
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -21,7 +16,7 @@ afterAll(async () => {
 });
 
 describe.skipIf(!enabled)("Codex pet start route database integration", () => {
-  it("acquires the real PostgreSQL advisory lock, charges once, and queues the run", async () => {
+  it("acquires the real PostgreSQL advisory lock and queues the run once", async () => {
     const suffix = randomUUID();
     const user = await prisma.user.create({
       data: {
@@ -41,10 +36,6 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
       },
     });
 
-    // 按次计费合同：启动只预留 14 次调用额度，实际张数由 Worker 结算。
-    const chargeResource = vi.fn(async () => ({ charged: 200 }));
-    const reserveResource = vi.fn(async () => ({ reserved: 200 * CODEX_PET_PLANNED_IMAGE_CALL_LIMIT }));
-    const settleResource = vi.fn(async () => ({ settled: 200 }));
     const enqueueRun = vi.fn(async () => undefined);
     const app = Fastify({ logger: false });
     app.decorateRequest("userId", "");
@@ -54,22 +45,6 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
     });
     await app.register(codexPetRoutes, {
       prisma,
-      billing: {
-        chargeResource,
-        reserveResource,
-        settleResource,
-        refundResource: vi.fn(async () => ({ success: true })),
-        listResourcePrices: vi.fn(async () => ({
-          data: [{
-            resourceKey: CODEX_PET_RESOURCE_KEY,
-            displayName: "Codex 桌宠",
-            pricingType: "PER_UNIT" as const,
-            rate: 200,
-            perUnits: 1,
-            enabled: true,
-          }],
-        })),
-      },
       enqueueRun,
       enqueueProjectCleanup: vi.fn(async () => undefined),
       notifyRunEvent: vi.fn(async () => undefined),
@@ -100,16 +75,6 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
       };
       expect(body.success).toBe(true);
       expect(body.data.run.status).toBe("queued");
-      expect(chargeResource).not.toHaveBeenCalled();
-      expect(reserveResource).toHaveBeenCalledTimes(1);
-      expect(reserveResource).toHaveBeenCalledWith({
-        operationId: `codex-pet:run:${body.data.run.id}:planned-images`,
-        userId: user.id,
-        resourceKey: CODEX_PET_RESOURCE_KEY,
-        units: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
-        // 桌宠预留要跨越等授权 + 结算宽限，必须显式声明有效期
-        reservationTtlSeconds: codexPetReservationTtlSeconds(),
-      });
       expect(enqueueRun).toHaveBeenCalledWith(body.data.run.id);
 
       const [storedRun, storedProject, queuedEvent] = await Promise.all([
@@ -121,10 +86,7 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
         userId: user.id,
         projectId: project.id,
         status: "queued",
-        billingChargeStatus: "reserved",
-        billingSettlementStatus: "reserved",
-        billingReservedUnits: CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
-        billingReservedPoints: 200 * CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+        plannedImageCallLimit: 14,
       });
       expect(storedProject).toMatchObject({ status: "queued", latestRunId: body.data.run.id });
       expect(queuedEvent).not.toBeNull();
@@ -141,8 +103,7 @@ describe.skipIf(!enabled)("Codex pet start route database integration", () => {
       expect(replay.statusCode).toBe(200);
       expect((replay.json() as { data: { run: { id: string } } }).data.run.id).toBe(body.data.run.id);
       expect(await prisma.codexPetRun.count({ where: { projectId: project.id } })).toBe(1);
-      expect(reserveResource).toHaveBeenCalledTimes(1);
-      expect(chargeResource).not.toHaveBeenCalled();
+      expect(enqueueRun).toHaveBeenCalledTimes(2);
     } finally {
       await app.close();
     }

@@ -6,7 +6,7 @@
  * 插件的 cancel 路由从里面取出来 abort，两边 import 的是同一个模块实例才对得上。
  * 谁再在自己文件里 new 一个 Map，取消就会静默失效（abort 到了另一张表上）。
  *
- * 本文件不 import billing / task-runner，方向是单向的：helpers ← billing ← task-runner ← routes。
+ * 本文件不 import task-runner，方向是单向的：helpers ← task-runner ← routes。
  */
 
 import { Buffer } from "node:buffer";
@@ -28,8 +28,6 @@ import {
 } from "../_shared/image-service.js";
 import type {
   ImageTaskStatus,
-  OptimizedPromptResult,
-  PromptOptimizationUsage,
   RetryOptions,
 } from "./image-route-types.js";
 
@@ -95,9 +93,6 @@ export const imageTaskParamsSchema = z.object({
   requestId: z.string().trim().min(8).max(128).regex(/^[A-Za-z0-9._:-]+$/),
 });
 
-export const imagePricingQuerySchema = z.object({
-  model: z.string().trim().min(1).max(128).optional(),
-});
 export class ImageTaskStoppedError extends Error {
   readonly status: string;
 
@@ -278,34 +273,12 @@ export function stripPromptFence(text: string): string {
     .trim();
 }
 
-export function estimatePromptOptimizationInputTokens(prompt: string): number {
-  return Math.max(1, Math.ceil((prompt.length + 120) / 3));
-}
-
-export function fallbackPromptOptimizationUsage(sourcePrompt: string, optimizedPrompt: string): PromptOptimizationUsage {
-  return {
-    inputTokens: estimatePromptOptimizationInputTokens(sourcePrompt),
-    outputTokens: Math.max(1, Math.ceil(optimizedPrompt.length / 3)),
-  };
-}
-
 export function resolvePromptOptimizerModel(env: NodeJS.ProcessEnv = process.env): string {
   return (env.IMAGE_PROMPT_OPTIMIZER_MODEL ?? DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL).trim()
     || DEFAULT_IMAGE_PROMPT_OPTIMIZER_MODEL;
 }
 
-export function normalizeOptimizedPromptResult(sourcePrompt: string, result: string | OptimizedPromptResult): OptimizedPromptResult {
-  if (typeof result === "string") {
-    return {
-      prompt: result,
-      model: resolvePromptOptimizerModel(),
-      usage: fallbackPromptOptimizationUsage(sourcePrompt, result),
-    };
-  }
-  return result;
-}
-
-export async function optimizeImagePrompt(prompt: string): Promise<OptimizedPromptResult> {
+export async function optimizeImagePrompt(prompt: string): Promise<string> {
   const cfg = loadLlmConfig();
   const client = createLlmClient(cfg);
   const model = resolvePromptOptimizerModel();
@@ -325,16 +298,7 @@ export async function optimizeImagePrompt(prompt: string): Promise<OptimizedProm
     .trim();
   const optimized = stripPromptFence(text);
   if (!optimized) throw new Error("empty optimized prompt");
-  const sliced = optimized.slice(0, 4000);
-  const usage = response.usage;
-  return {
-    prompt: sliced,
-    model,
-    usage: {
-      inputTokens: usage?.input_tokens ?? estimatePromptOptimizationInputTokens(prompt),
-      outputTokens: usage?.output_tokens ?? Math.max(1, Math.ceil(sliced.length / 3)),
-    },
-  };
+  return optimized.slice(0, 4000);
 }
 
 export async function updateTask(

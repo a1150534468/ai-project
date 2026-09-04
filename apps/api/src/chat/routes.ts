@@ -1,31 +1,26 @@
 /**
- * 聊天路由:`POST /api/chat`(SSE 一轮对话)+ 三条会话读写路由。原文件 817 行,把模块级的
- * schema、错误翻译、工具展示、运行期常量、模型闸门共 757 行里的 216 行搬到 5 个同域文件,
- * 本文件只留下 fastify 插件本体。
+ * 聊天路由:`POST /api/chat`(SSE 一轮对话)+ 三条会话读写路由。原文件把模块级的
+ * schema、错误翻译、工具展示、运行期常量搬到 4 个同域文件,本文件只留下 fastify 插件本体。
  *
  * **本文件刻意不做成纯 re-export 门面**(与 image-routes.ts / video-routes.ts 同一处理):
- * 插件闭包持有 `prisma` / `redis` / `client` / `billing`,四条路由全靠它们。要把路由再拆走就得
- * 先造一层 ctx 间接,行数不会更少,只会多一层。它的导出面仍是**恰好 4 个名字**
- * (`chatRoutes` / `chatModelErrorMessage` / `providerModelId` / `__setEnabledForTest`),
- * 所以 `routes.test.ts` / `routes-errors.test.ts` / `routes.empty-response.test.ts` / `server.ts`
- * 一行不改 —— 后三个名字由文件末尾的 re-export 原样转出。
+ * 插件闭包持有 `prisma` / `redis` / `client`,四条路由全靠它们。要把路由再拆走就得
+ * 先造一层 ctx 间接,行数不会更少,只会多一层。它的导出面是**恰好 3 个名字**
+ * (`chatRoutes` / `chatModelErrorMessage` / `providerModelId`),后两个由文件末尾的
+ * re-export 原样转出,`routes-errors.test.ts` 就从本文件认这两个名字。
  *
  * 分工:
  *  - routes-schemas.ts      请求体校验(bodySchema 及其附件子 schema)
  *  - routes-errors.ts       上游错误翻译 + 百炼模型别名
  *  - routes-tool-summary.ts 工具事件 → SSE 载荷
- *  - routes-runtime.ts      预扣口径 / KB 默认值 / 心跳间隔 / 环境变量读取
- *  - routes-model-gate.ts   进程级启用集缓存与模型上限
+ *  - routes-runtime.ts      KB 默认值 / 心跳间隔 / 环境变量读取
  *
- * 五个新文件都是叶子,依赖方向单向:五个叶子 → 本文件。
+ * 四个新文件都是叶子,依赖方向单向:四个叶子 → 本文件。
  *
  * `POST /api/chat` 里几处顺序不能动:
- *  - 封禁校验与模型校验都在 `acquireSessionLock` **之前**,因为它们是无副作用的 4xx。放到取锁之后
+ *  - 封禁校验在 `acquireSessionLock` **之前**,因为它是无副作用的 4xx。放到取锁之后
  *    会让一次注定失败的请求把会话锁占满一个 TTL。
- *  - `send("session", ...)` 必须在 reserve 之前发,前端靠它拿到 sessionId;余额不足时那条
- *    `INSUFFICIENT_BALANCE` 才有会话可挂。
- *  - `settleReservedTurnAsNoCharge` 带 `reservedTurnSettled` 幂等位,catch 与 finally 都可能走到它。
- *    正常结算后置位,所以不会把已收的钱又退一次。
+ *  - `send("session", ...)` 必须是第一条 SSE,前端靠它拿到 sessionId;后面任何一条 `error`
+ *    事件都得有会话可挂。
  *  - `finally` 里 `clearInterval` → `release()` → `reply.raw.end()` 三件事都必须做:漏心跳会留下
  *    永久 15s 一次写 SSE 的定时器,漏 release 会让该会话在锁 TTL 内一直 409。
  */
@@ -35,12 +30,10 @@ import { requireUser } from "../auth/require-user.js";
 import { getPrisma } from "@ai-assistant/db";
 import { getRedis } from "@ai-assistant/db";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
-import { createBillingClient, InsufficientBalanceError } from "@ai-assistant/billing";
 import { runTurn } from "../agent/run.js";
 import { execTool as execDefaultTool } from "../agent/tools.js";
 import { acquireSessionLock } from "./lock.js";
-import { loadEmbeddingConfig } from "../memory/embedding-client.js";
-import { billableEmbed } from "../memory/embedding-billing.js";
+import { embed, loadEmbeddingConfig } from "../memory/embedding-client.js";
 import { search, addTurn } from "../memory/memory-service.js";
 import {
   dedupeKbCitations,
@@ -59,7 +52,6 @@ import { parseDeviceTools, selectMountedTools, type InstalledToolSummary } from 
 import { iconForAgentId, resolveAgent, type AgentRuntime } from "../agents/service.js";
 import {
   buildCurrentUserContent,
-  estimateInputTokens,
   isImageMime,
   prepareChatAttachments,
   resolveChatModel,
@@ -70,7 +62,6 @@ import { bodySchema } from "./routes-schemas.js";
 import { chatModelErrorMessage, providerModelId, type ChatErrorProvider } from "./routes-errors.js";
 import { TOOL_LABELS, toToolPayload } from "./routes-tool-summary.js";
 import {
-  CHAT_RESERVE_OUTPUT_TOKENS,
   DEFAULT_KB_MAX_CHUNKS_PER_DOCUMENT,
   DEFAULT_KB_MAX_CONTEXT_CHUNKS,
   DEFAULT_KB_MIN_SCORE,
@@ -79,11 +70,9 @@ import {
   positiveNumberEnv,
   SSE_HEARTBEAT_MS,
 } from "./routes-runtime.js";
-import { isModelEnabled, resolveModelMaxOutput } from "./routes-model-gate.js";
 
-// 导出面与拆分前逐字一致,这三个名字原样转出,不新增也不减少。
+// 这两个名字原样转出,routes-errors.test.ts 从本文件 import 它们。
 export { chatModelErrorMessage, providerModelId } from "./routes-errors.js";
-export { __setEnabledForTest } from "./routes-model-gate.js";
 
 export async function chatRoutes(app: FastifyInstance) {
   // 本文件 4 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
@@ -94,10 +83,6 @@ export async function chatRoutes(app: FastifyInstance) {
   const redis = getRedis();
   const cfg = loadLlmConfig();
   const client = createLlmClient(cfg);
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
 
   app.post("/api/chat", async (req, reply) => {
     const userId = req.userId;
@@ -144,18 +129,15 @@ export async function chatRoutes(app: FastifyInstance) {
     const u0 = await prisma.user.findUnique({ where: { id: userId }, select: { bannedAt: true } });
     if (u0?.bannedAt) return reply.code(403).send({ error: "账号已被封禁" });
 
-    // 模型校验：取锁前，无副作用 400
+    // 模型解析：取锁前，纯计算无副作用
     const requestedModel = parsed.data.model ?? cfg.defaultModel;
     const hasImageAttachment = parsed.data.attachments.some((a) => a.kind === "image" || isImageMime(a.mime));
     const modelResolution = resolveChatModel(requestedModel, hasImageAttachment);
-    const billingModel = modelResolution.model;
-    const model = providerModelId(billingModel, cfg.provider);
-    const errorProvider: ChatErrorProvider = cfg.modelRoutes?.some((route) => route.model === billingModel)
+    const resolvedModel = modelResolution.model;
+    const model = providerModelId(resolvedModel, cfg.provider);
+    const errorProvider: ChatErrorProvider = cfg.modelRoutes?.some((route) => route.model === resolvedModel)
       ? "ai-pixel"
       : cfg.provider;
-    if (!(await isModelEnabled(billing, billingModel))) {
-      return reply.code(400).send({ error: "模型不可用" });
-    }
 
     const release = await acquireSessionLock(redis, sessionId);
     if (!release) return reply.code(409).send({ error: "该会话正在处理中" });
@@ -193,27 +175,11 @@ export async function chatRoutes(app: FastifyInstance) {
       agentId: sessionAgent?.agentId,
       agentName: sessionAgent?.agentName,
       agentIcon: sessionAgent?.agentIcon,
-      model: billingModel,
+      model: resolvedModel,
       providerModel: model,
       requestedModel,
       fallbackReason: modelResolution.fallbackReason,
     });
-
-    let reservedTurn: { operationId: string; userId: string; model: string } | null = null;
-    let reservedTurnSettled = false;
-    const settleReservedTurnAsNoCharge = async () => {
-      if (!reservedTurn || reservedTurnSettled) return;
-      reservedTurnSettled = true;
-      await billing.settle({
-        operationId: reservedTurn.operationId,
-        userId: reservedTurn.userId,
-        model: reservedTurn.model,
-        inputTokens: 0,
-        outputTokens: 0,
-      }).catch((settleErr) => {
-        app.log.warn({ err: settleErr, operationId: reservedTurn?.operationId }, "failed to refund reserved chat turn");
-      });
-    };
 
     try {
       const preparedAttachments = await prepareChatAttachments(parsed.data.attachments).catch((err) => {
@@ -224,29 +190,6 @@ export async function chatRoutes(app: FastifyInstance) {
 
       const storedUserContent = `${parsed.data.message.trim()}${preparedAttachments.storedLabel}`.trim() || "[附件]";
       const queryText = `${parsed.data.message.trim()}\n${preparedAttachments.searchableText}`.trim() || storedUserContent;
-
-      // 生成幂等键
-      const turnId = `turn:${sessionId}:${Date.now()}`;
-
-      try {
-        await billing.reserve({
-          operationId: turnId,
-          userId,
-          type: "chat",
-          model: billingModel,
-          inputTokens: estimateInputTokens(parsed.data.message, preparedAttachments),
-          maxOutputTokens: CHAT_RESERVE_OUTPUT_TOKENS,
-        });
-        reservedTurn = { operationId: turnId, userId, model: billingModel };
-      } catch (e) {
-        if (e instanceof InsufficientBalanceError) {
-          send("error", { message: "余额不足，请充值算力点", code: "INSUFFICIENT_BALANCE" });
-          await release();
-          reply.raw.end();
-          return;
-        }
-        throw e;
-      }
 
       // 持久化用户消息
       const userMessage = await prisma.message.create({
@@ -289,13 +232,7 @@ export async function chatRoutes(app: FastifyInstance) {
       if (user?.memoryEnabled || shouldSearchKb) {
         try {
           const embCfg = loadEmbeddingConfig();
-          const embedResult = await billableEmbed({
-            billing,
-            cfg: embCfg,
-            userId,
-            operationId: `${turnId}:embedding`,
-            input: queryText,
-          });
+          const embedResult = await embed(embCfg, queryText);
           queryVector = embedResult.vector;
 
           // 记忆检索（使用预计算向量）
@@ -313,17 +250,8 @@ export async function chatRoutes(app: FastifyInstance) {
               systemPrompt = systemPrompt ? `${systemPrompt}\n\n${memoryBlock}` : memoryBlock;
             }
           }
-        } catch (error) {
-          if (error instanceof InsufficientBalanceError) {
-            await settleReservedTurnAsNoCharge();
-            send("error", { message: "余额不足，请充值算力点", code: "INSUFFICIENT_BALANCE" });
-            return;
-          }
-          if (error instanceof Error && error.message.startsWith("billing ")) {
-            await settleReservedTurnAsNoCharge();
-            send("error", { message: "计费服务不可用" });
-            return;
-          }
+        } catch {
+          // embed 失败降级（不阻塞聊天）：没有向量就跳过记忆与 KB 注入
           queryVector = undefined;
         }
       }
@@ -439,11 +367,9 @@ export async function chatRoutes(app: FastifyInstance) {
         send("device", { deviceId: active.id, tools: mounted.tools.map((tool) => tool.name) });
       }
 
-      const modelMaxOutput = resolveModelMaxOutput(billingModel);
       const result = await runTurn({
         client,
         model,
-        maxOutputTokens: modelMaxOutput > 0 ? modelMaxOutput : undefined,
         history,
         system: systemPrompt,
         tools: chatTools,
@@ -480,20 +406,10 @@ export async function chatRoutes(app: FastifyInstance) {
         });
       }
 
-      // 结算：按实际 token 用量结算，多退少补
-      await billing.settle({
-        operationId: turnId,
-        userId,
-        model: billingModel,
-        inputTokens: result.usage.inputTokens,
-        outputTokens: result.usage.outputTokens,
-      });
-      reservedTurnSettled = true;
-
       // 持久化助手回复
       if (assistantText) {
         await prisma.message.create({
-          data: { sessionId, role: "assistant", content: assistantText, model: billingModel },
+          data: { sessionId, role: "assistant", content: assistantText, model: resolvedModel },
         });
       }
       send("done", { sessionId });
@@ -513,7 +429,6 @@ export async function chatRoutes(app: FastifyInstance) {
         })();
       }
     } catch (err) {
-      await settleReservedTurnAsNoCharge();
       app.log.error(err);
       const message = chatModelErrorMessage(err, errorProvider);
       send("error", { message });

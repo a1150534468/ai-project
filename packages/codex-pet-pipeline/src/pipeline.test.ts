@@ -975,7 +975,7 @@ describe("codex pet deterministic pipeline", () => {
     expect(overflowing.sourceBounds!.width + fragment!.bounds.width).toBeLessThan(slotWidth);
 
     // The other six slots are untouched, which is why the run kept salvaging
-    // them and re-billing only these two.
+    // them and regenerating only these two.
     for (const index of [2, 3, 4, 5, 6, 7]) {
       expect(extracted.diagnostics[index]!.edgePixels).toBe(0);
       expect(extracted.diagnostics[index]!.componentCount).toBe(1);

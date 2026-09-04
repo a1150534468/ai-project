@@ -113,14 +113,14 @@ export function CodexPetStudioWorkbench({ studio }: { readonly studio: CodexPetS
             <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-warning/30 bg-warning/10 px-3 py-3">
               <div className="min-w-0">
                 <p className="text-xs font-semibold text-warning-ink">{latestRun.status === "awaiting_regeneration_approval" ? "额外真实生图等待批准" : "下一张真实生图已暂停"}</p>
-                <p className="mt-0.5 text-[10px] leading-4 text-warning-ink">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，额外调用单独计费，失败后不会自动重画。</p>
+                <p className="mt-0.5 text-[10px] leading-4 text-warning-ink">待生成：{latestRun.pendingImageJobKey || "方向任务"}。每次批准只允许 1 次调用，额外调用需要单独批准，失败后不会自动重画。</p>
                 {/* Show the cap before the click. Users used to learn it only
                     from a refusal, which is the moment it helps least. */}
                 {derived.extraCallBudget && (
                   <p className="mt-0.5 text-[10px] font-semibold leading-4 text-warning-ink" data-testid="codex-pet-extra-call-budget">
                     {derived.extraCallBudgetExhausted
-                      ? `付费重画次数已用尽（本动作 ${derived.extraCallBudget.jobUsed}/${derived.extraCallBudget.jobLimit} · 本次运行 ${derived.extraCallBudget.runUsed}/${derived.extraCallBudget.runLimit}），请先取消本次运行，再复制为新项目重跑。`
-                      : `付费重画次数：本动作 ${derived.extraCallBudget.jobUsed}/${derived.extraCallBudget.jobLimit} · 本次运行 ${derived.extraCallBudget.runUsed}/${derived.extraCallBudget.runLimit}`}
+                      ? `额外重画次数已用尽（本动作 ${derived.extraCallBudget.jobUsed}/${derived.extraCallBudget.jobLimit} · 本次运行 ${derived.extraCallBudget.runUsed}/${derived.extraCallBudget.runLimit}），请先取消本次运行，再复制为新项目重跑。`
+                      : `额外重画次数：本动作 ${derived.extraCallBudget.jobUsed}/${derived.extraCallBudget.jobLimit} · 本次运行 ${derived.extraCallBudget.runUsed}/${derived.extraCallBudget.runLimit}`}
                   </p>
                 )}
               </div>

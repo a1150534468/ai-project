@@ -144,7 +144,7 @@ export function buildArticleWorkflowLayoutSystemPrompt(): string {
     "Output fragment HTML only. Never output html/head/body/meta/title/link/style/script/comments.",
     "Use strict inline CSS only. Never depend on classes or external stylesheets.",
     // 这份清单必须逐个列出来。早先只写「WeChat-safe article tags only」，模型给了完全合理的
-    // <h2>，服务端 guard 直接判整单失败——配图钱都花完了才失败。约束要可执行，不能靠模型猜。
+    // <h2>，服务端 guard 直接判整单失败——配图都出完了才失败。约束要可执行，不能靠模型猜。
     `The ONLY tags you may output are: ${ARTICLE_WORKFLOW_HTML_TAGS.join(", ")}. Any other tag will be rejected.`,
     `The ONLY attributes you may output are: ${ARTICLE_WORKFLOW_HTML_ATTRS.join(", ")}.`,
     "Avoid risky layout techniques such as position, float, z-index, transform, filter, negative margins, or fixed heights.",

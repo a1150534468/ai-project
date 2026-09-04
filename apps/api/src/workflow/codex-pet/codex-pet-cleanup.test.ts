@@ -8,10 +8,6 @@ function fixture(options: {
   projectMissing?: boolean;
   projectStatus?: string;
   runStatus?: string;
-  chargeStatus?: string;
-  refundStatus?: string;
-  refundedAt?: Date | null;
-  activatedAt?: Date | null;
   deletedAt?: Date | null;
 } = {}) {
   const tx = {
@@ -25,10 +21,6 @@ function fixture(options: {
         id: "run-1",
         status: options.runStatus ?? "ready",
         workerId: options.live ? "worker-1" : null,
-        billingChargeStatus: options.chargeStatus ?? "charged",
-        billingActivatedAt: options.activatedAt === undefined ? new Date("2026-07-18T00:00:00.000Z") : options.activatedAt,
-        billingRefundedAt: options.refundedAt ?? null,
-        billingRefundStatus: options.refundStatus ?? "none",
       }]),
     },
     codexPetArtifact: { findMany: vi.fn(async () => [{
@@ -76,20 +68,6 @@ describe("Codex pet durable project cleanup", () => {
       .rejects.toBeInstanceOf(CodexPetCleanupPendingError);
     expect(value.send).not.toHaveBeenCalled();
     expect(value.tx.codexPetProject.deleteMany).not.toHaveBeenCalled();
-  });
-
-  it("keeps the durable receipt while a charge or refund is unsettled", async () => {
-    for (const options of [
-      { chargeStatus: "uncertain" },
-      { chargeStatus: "charged", refundStatus: "pending" },
-      { chargeStatus: "charged", refundStatus: "failed" },
-    ]) {
-      const value = fixture(options);
-      await expect(executeCodexPetProjectCleanup({ prisma: value.prisma, s3: value.s3, userId: "user-1", projectId: "project-1", persistObjectRefs: value.persistObjectRefs }))
-        .rejects.toBeInstanceOf(CodexPetCleanupPendingError);
-      expect(value.send).not.toHaveBeenCalled();
-      expect(value.tx.codexPetProject.deleteMany).not.toHaveBeenCalled();
-    }
   });
 
   it("persists the object plan, deletes the project, then deletes private objects", async () => {

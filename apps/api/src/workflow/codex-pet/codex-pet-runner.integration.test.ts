@@ -10,7 +10,6 @@ import { DOUBAO_IMAGE_MODEL, GPT_IMAGE_MODEL, ImageGenerationUpstreamError } fro
 import { codexPetFinalPackageInputRevision } from "./codex-pet-packaging.js";
 import { buildStandardRowPrompt } from "./codex-pet-prompts.js";
 import { CODEX_PET_BOARD_PROMPT_VERSION, CodexPetLeaseLostError, codexPetBoardInputRevision, codexPetStandardRowPromptVersion, executeCodexPetRun, type CodexPetArtifactStore } from "./codex-pet-runner.js";
-import { CODEX_PET_GPT_FAILED_CONTINUATION_SCHEMA_VERSION } from "./codex-pet-gpt-continuation.js";
 import type { GeneratedPetVisual, PetVisualQaConsensus, PetVisualQaVerdict } from "./codex-pet-visual.js";
 
 const prisma = getPrisma();
@@ -230,12 +229,6 @@ async function seed(autoContinue: boolean, options: {
       qualityInspectionEnabled: true,
     },
     autoContinue,
-    billingOperationId: `codex-pet:test-${suffix}`,
-    billingPoints: 200,
-    billingChargeStatus: "charged",
-    billingChargeAttemptCount: 1,
-    billingChargedAt: new Date(),
-    billingActivatedAt: new Date(),
     imageGenerationApprovalBudget: options.imageGenerationApprovalBudget ?? 100,
     requestedModel: options.imageModel ?? GPT_IMAGE_MODEL,
     qualityInspectionEnabled: true,
@@ -320,10 +313,6 @@ function runnerDeps(store: ReturnType<typeof memoryArtifactStore>, consensus = v
         .toBuffer(),
       mime: asset.mime,
     })),
-    billing: {
-      refundResource: vi.fn(async () => ({ success: true })),
-      settleResource: vi.fn(async ({ units }: { units: number }) => ({ settled: units * 200 })),
-    },
     visual: {
       generate: vi.fn(async (input: { prompt: string; onAttempt?: (attempt: number) => Promise<void> | void }) => {
         await input.onAttempt?.(1);
@@ -419,7 +408,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(failedRun).toMatchObject({
       status: "failed",
       workerId: null,
-      billingRefundStatus: "refunded",
       imageGenerationCallCount: 4,
     });
     expect(idleBefore).toMatchObject({
@@ -579,7 +567,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
   }, 120_000);
 
-  it("runs the GPT-only default path with fourteen ledgered calls and no visual QA calls", async () => {
+  it("runs the GPT-only default path with fourteen image calls and no visual QA calls", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
@@ -592,14 +580,8 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       prisma.codexPetRun.update({
         where: { id: seeded.run.id },
         data: {
-          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false, perImageCallPoints: 200 } as Prisma.InputJsonObject,
+          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false } as Prisma.InputJsonObject,
           qualityInspectionEnabled: false,
-          billingMode: "per_image_call_v1",
-          billingResourceKey: "codex_pet_v2_package",
-          billingReservedUnits: 14,
-          billingReservedPoints: 2800,
-          billingSettlementStatus: "reserved",
-          billingChargeStatus: "reserved",
           plannedImageCallLimit: 14,
           imageGenerationApprovalBudget: 0,
         },
@@ -610,12 +592,10 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       prompt: string;
       size?: string;
       references?: readonly unknown[];
-      onRequestDispatching?: (attempt: number) => Promise<void> | void;
-      onRequestSent?: (attempt: number) => Promise<void> | void;
+      onAttempt?: (attempt: number) => Promise<void> | void;
     }) => {
       generatedRequests.push({ prompt: input.prompt, size: input.size, referenceCount: input.references?.length ?? 0 });
-      await input.onRequestDispatching?.(1);
-      await input.onRequestSent?.(1);
+      await input.onAttempt?.(1);
       return syntheticVisual(input.prompt);
     }) as never;
 
@@ -636,20 +616,12 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
       .resolves.toEqual({ status: "ready", runId: seeded.run.id });
 
-    const [run, calls] = await Promise.all([
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetImageCall.findMany({ where: { runId: seeded.run.id }, orderBy: { sentAt: "asc" } }),
-    ]);
+    const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
     expect(run).toMatchObject({
       status: "ready",
       qualityInspectionEnabled: false,
       imageGenerationCallCount: 14,
-      billingSettledUnits: 14,
-      billingSettledPoints: 2800,
-      billingSettlementStatus: "settled",
     });
-    expect(calls).toHaveLength(14);
-    expect(calls.every((call) => call.callKind === "planned" && call.status === "succeeded" && call.requestedModel === GPT_IMAGE_MODEL && call.points === 200)).toBe(true);
     const directionRequests = generatedRequests.filter(({ prompt }) => (
       prompt.includes("Generate exactly four separated cardinal looking poses")
       || prompt.includes("Direction order:")
@@ -657,309 +629,12 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(directionRequests).toHaveLength(3);
     expect(directionRequests.every(({ size }) => size === "1024x688")).toBe(true);
     expect(directionRequests.find(({ prompt }) => prompt.includes("cardinal looking poses"))?.referenceCount).toBe(2);
-    expect(deps.billing.settleResource).toHaveBeenCalledWith(expect.objectContaining({ units: 14 }));
     expect(deps.visual.qa).not.toHaveBeenCalled();
     expect(deps.visual.qaConsensus).not.toHaveBeenCalled();
     expect(deps.visual.blindQa).not.toHaveBeenCalled();
     expect(deps.visual.directionSemantics).not.toHaveBeenCalled();
     expect(deps.visual.lookMechanics).not.toHaveBeenCalled();
     expect(deps.visual.identityGuide).not.toHaveBeenCalled();
-  }, 120_000);
-
-  it("pauses an exhausted per-image row-10 registration repair for one approved extra call", async () => {
-    const seeded = await seed(false);
-    const store = memoryArtifactStore();
-    const deps = runnerDeps(store);
-    const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
-    await prisma.$transaction([
-      prisma.codexPetProject.update({
-        where: { id: seeded.project.id },
-        data: { qualityInspectionEnabled: false },
-      }),
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: {
-          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false, perImageCallPoints: 200 } as Prisma.InputJsonObject,
-          qualityInspectionEnabled: false,
-          billingMode: "per_image_call_v1",
-          billingResourceKey: "codex_pet_v2_package",
-          billingReservedUnits: 14,
-          billingReservedPoints: 2800,
-          billingSettlementStatus: "reserved",
-          billingChargeStatus: "reserved",
-          plannedImageCallLimit: 14,
-          imageGenerationApprovalBudget: 0,
-        },
-      }),
-    ]);
-    const row10Prompts: string[] = [];
-    deps.visual.generate = vi.fn(async (input: {
-      prompt: string;
-      onRequestDispatching?: (attempt: number) => Promise<void> | void;
-      onRequestSent?: (attempt: number) => Promise<void> | void;
-    }) => {
-      await input.onRequestDispatching?.(1);
-      await input.onRequestSent?.(1);
-      if (input.prompt.includes("Direction order: 180, 202.5")) {
-        row10Prompts.push(input.prompt);
-        return syntheticVisual(input.prompt, undefined, row10Prompts.length === 1 ? 0.9 : undefined);
-      }
-      return syntheticVisual(input.prompt);
-    }) as never;
-
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "awaiting_base_review", runId: seeded.run.id });
-    const selected = await prisma.codexPetArtifact.findFirstOrThrow({
-      where: { runId: seeded.run.id, kind: "base_candidate", status: "ready" },
-      orderBy: { createdAt: "asc" },
-    });
-    await prisma.$transaction([
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: { selectedBaseArtifactId: selected.id, status: "standard_generating", progressStage: "standard_generating" },
-      }),
-      prisma.codexPetProject.update({ where: { id: seeded.project.id }, data: { status: "standard_generating" } }),
-    ]);
-
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "awaiting_regeneration_approval", runId: seeded.run.id });
-    const [paused, pausedLookB, registration] = await Promise.all([
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } }),
-      prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-b-registration" } } }),
-    ]);
-    expect(paused).toMatchObject({ status: "awaiting_regeneration_approval", pendingImageJobKey: "look-b" });
-    expect(pausedLookB).toMatchObject({ status: "awaiting_approval", attempt: 1, maxAttempts: 1 });
-    expect(registration.error).toContain("registered-frame-outside-safe-margin");
-
-    await prisma.$transaction([
-      prisma.codexPetImageCall.create({ data: {
-        projectId: seeded.project.id,
-        runId: seeded.run.id,
-        userId: seeded.user.id,
-        jobKey: "look-b",
-        logicalAttempt: 2,
-        callKind: "extra",
-        purpose: "repair",
-        requestedModel: GPT_IMAGE_MODEL,
-        operationId: `codex-pet:run:${seeded.run.id}:image:look-b:2:extra`,
-        status: "prepared",
-        resourceKey: "codex_pet_v2_package",
-        points: 200,
-      } }),
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: {
-          status: "direction_generating",
-          progressStage: "direction_generating",
-          pendingImageJobKey: null,
-          workerId: null,
-          heartbeatAt: null,
-        },
-      }),
-      prisma.codexPetProject.update({ where: { id: seeded.project.id }, data: { status: "direction_generating" } }),
-      prisma.codexPetJob.update({
-        where: { id: pausedLookB.id },
-        data: { status: "queued", maxAttempts: 2, workerId: null, completedAt: null, error: null },
-      }),
-    ]);
-
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps: { ...deps, workerId: "approved-row-10-repair" } }))
-      .resolves.toEqual({ status: "ready", runId: seeded.run.id });
-    expect(row10Prompts).toHaveLength(2);
-    expect(row10Prompts[1]).toContain("Persisted registration diagnostics");
-    expect(await prisma.codexPetImageCall.count({ where: { runId: seeded.run.id, callKind: "planned" } })).toBe(14);
-    expect(await prisma.codexPetImageCall.count({ where: { runId: seeded.run.id, callKind: "extra" } })).toBe(1);
-  }, 120_000);
-
-  it("reuses the first base artifact and sends only the approved extra call for a continued base 429", async () => {
-    const seeded = await seed(false);
-    const store = memoryArtifactStore();
-    const sourceBaseJob = await prisma.codexPetJob.create({ data: {
-      projectId: seeded.project.id,
-      runId: seeded.run.id,
-      userId: seeded.user.id,
-      key: "base-candidate-1",
-      kind: "base_candidate",
-      status: "completed",
-      attempt: 1,
-      maxAttempts: 1,
-    } });
-    const sourceBaseVisual = await syntheticVisual("main character candidate");
-    const sourceBase = await store.put({
-      userId: seeded.user.id,
-      projectId: seeded.project.id,
-      runId: seeded.run.id,
-      jobId: sourceBaseJob.id,
-      kind: "base_candidate",
-      name: "主形象候选 1",
-      buffer: sourceBaseVisual.buffer,
-      mime: sourceBaseVisual.mime,
-      metadata: {
-        requestedModel: GPT_IMAGE_MODEL,
-        actualModel: "gpt-image-2-codex",
-        upstreamRequestId: "source-request-1",
-      },
-    });
-    await prisma.codexPetJob.update({
-      where: { id: sourceBaseJob.id },
-      data: { outputArtifactIds: [sourceBase.id], completedAt: new Date() },
-    });
-    await prisma.codexPetJob.create({ data: {
-      projectId: seeded.project.id,
-      runId: seeded.run.id,
-      userId: seeded.user.id,
-      key: "base-candidate-2",
-      kind: "base_candidate",
-      status: "failed",
-      attempt: 1,
-      maxAttempts: 1,
-      error: "image relay 429 Concurrency limit exceeded",
-      completedAt: new Date(),
-    } });
-    await prisma.codexPetRun.update({ where: { id: seeded.run.id }, data: {
-      status: "failed",
-      progressStage: "failed",
-      progressMessage: "image relay 429 Concurrency limit exceeded",
-      billingMode: "per_image_call_v1",
-      billingResourceKey: "codex_pet_v2_package",
-      billingReservedUnits: 14,
-      billingSettledUnits: 2,
-      billingReservedPoints: 2_800,
-      billingSettledPoints: 400,
-      billingSettlementStatus: "settled",
-      billingChargeStatus: "reserved",
-      qualityInspectionEnabled: false,
-      imageGenerationCallCount: 2,
-      plannedImageCallLimit: 14,
-      hasSuccessfulImage: true,
-      actualModels: ["gpt-image-2-codex"],
-      completedAt: new Date(),
-    } });
-
-    const continuation = await prisma.codexPetRun.create({ data: {
-      projectId: seeded.project.id,
-      userId: seeded.user.id,
-      idempotencyKey: `continuation-${randomUUID()}`,
-      inputSnapshot: {
-        name: seeded.project.name,
-        description: seeded.project.description,
-        prompt: seeded.project.prompt,
-        stylePreset: seeded.project.stylePreset,
-        referenceAssetIds: [],
-        modelContractVersion: "gpt-only-quality-optional-v3",
-        requestedModel: GPT_IMAGE_MODEL,
-        visualQaModel: "gpt-5.6-sol",
-        qualityInspectionEnabled: false,
-        billingMode: "per_image_call_v1",
-        perImageCallPoints: 200,
-        maxBoardAttemptsPerJob: 1,
-        gptFailedContinuation: {
-          schemaVersion: CODEX_PET_GPT_FAILED_CONTINUATION_SCHEMA_VERSION,
-          sourceRunId: seeded.run.id,
-          sourceBaseArtifactId: sourceBase.id,
-          retryJobKey: "base-candidate-2",
-          sourcePlannedCallCount: 2,
-          plannedCallsRemaining: 12,
-        },
-      },
-      status: "base_generating",
-      progressStage: "base_generating",
-      progressPercent: 8,
-      autoContinue: false,
-      billingOperationId: `codex-pet:test-continuation-${randomUUID()}`,
-      billingMode: "per_image_call_v1",
-      billingResourceKey: "codex_pet_v2_package",
-      billingReservedUnits: 12,
-      billingReservedPoints: 2_400,
-      billingSettlementStatus: "reserved",
-      billingChargeStatus: "reserved",
-      billingActivatedAt: new Date(),
-      requestedModel: GPT_IMAGE_MODEL,
-      visualQaModel: "gpt-5.6-sol",
-      qualityInspectionEnabled: false,
-      plannedImageCallLimit: 14,
-      hasSuccessfulImage: true,
-      actualModels: ["gpt-image-2-codex"],
-      startedAt: new Date(),
-    } });
-    await prisma.codexPetJob.create({ data: {
-      projectId: seeded.project.id,
-      runId: continuation.id,
-      userId: seeded.user.id,
-      key: "base-candidate-2",
-      kind: "base_candidate",
-      status: "queued",
-      attempt: 0,
-      maxAttempts: 1,
-    } });
-    await prisma.codexPetImageCall.create({ data: {
-      projectId: seeded.project.id,
-      runId: continuation.id,
-      userId: seeded.user.id,
-      jobKey: "base-candidate-2",
-      logicalAttempt: 1,
-      callKind: "extra",
-      purpose: "repair",
-      requestedModel: GPT_IMAGE_MODEL,
-      operationId: `codex-pet:run:${continuation.id}:image:base-candidate-2:1:extra`,
-      status: "prepared",
-      resourceKey: "codex_pet_v2_package",
-      points: 200,
-    } });
-    await prisma.codexPetProject.update({ where: { id: seeded.project.id }, data: {
-      latestRunId: continuation.id,
-      status: "base_generating",
-      qualityInspectionEnabled: false,
-    } });
-
-    const deps = runnerDeps(store);
-    Object.assign(deps.env, { CODEX_PET_MAX_BOARD_ATTEMPTS: "1" });
-    deps.visual.generate = vi.fn(async (input: {
-      prompt: string;
-      onRequestDispatching?: (attempt: number) => Promise<void> | void;
-      onRequestSent?: (attempt: number) => Promise<void> | void;
-    }) => {
-      await input.onRequestDispatching?.(1);
-      await input.onRequestSent?.(1);
-      return syntheticVisual(input.prompt);
-    }) as never;
-
-    await expect(executeCodexPetRun({ runId: continuation.id, deps }))
-      .resolves.toEqual({ status: "awaiting_base_review", runId: continuation.id });
-
-    const [sourceAfter, continuedAfter, jobsAfter, artifactsAfter, callsAfter] = await Promise.all([
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: continuation.id } }),
-      prisma.codexPetJob.findMany({ where: { runId: continuation.id }, orderBy: { key: "asc" } }),
-      prisma.codexPetArtifact.findMany({ where: { runId: continuation.id, kind: "base_candidate", status: "ready" } }),
-      prisma.codexPetImageCall.findMany({ where: { runId: continuation.id } }),
-    ]);
-    expect(deps.visual.generate).toHaveBeenCalledOnce();
-    expect(sourceAfter).toMatchObject({ status: "failed", imageGenerationCallCount: 2, billingSettledUnits: 2 });
-    expect(continuedAfter).toMatchObject({
-      status: "awaiting_base_review",
-      imageGenerationCallCount: 1,
-      billingSettlementStatus: "reserved",
-      selectedBaseArtifactId: null,
-    });
-    expect(jobsAfter).toMatchObject([
-      { key: "base-candidate-1", status: "completed", attempt: 0 },
-      { key: "base-candidate-2", status: "completed", attempt: 1 },
-    ]);
-    expect(artifactsAfter).toHaveLength(2);
-    expect(artifactsAfter.find((artifact) => artifact.name.includes("复用"))?.metadata).toMatchObject({
-      reusedFrom: { runId: seeded.run.id, artifactId: sourceBase.id, providerCallReused: true },
-    });
-    expect(callsAfter).toMatchObject([{
-      jobKey: "base-candidate-2",
-      logicalAttempt: 1,
-      callKind: "extra",
-      status: "succeeded",
-      actualModel: "gpt-image-2-codex",
-      sentAt: expect.any(Date),
-    }]);
-    expect(deps.visual.qa).not.toHaveBeenCalled();
   }, 120_000);
 
   it("runs all visual groups, packages v2 and delivers ready without touching the knowledge base", async () => {
@@ -1152,7 +827,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     // CodexPetRun.knowledgeDocumentId 那一列也退役了，这条按属主数文档的断言就是
     // 现在唯一也是更强的钉子——不管用什么键，这个用户名下什么文档都没被写出来。
     expect(await prisma.document.count({ where: { kb: { userId: run.userId } } })).toBe(0);
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
     expect(await executeCodexPetRun({ runId: run.id, deps: { ...deps, workerId: "identity-guide-replay-worker" } }))
       .toEqual({ status: "ready", runId: run.id });
@@ -1196,7 +870,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
         spritesheetArtifactId: null,
         packageArtifactId: null,
         previewArtifactId: null,
-        billingRefundedAt: null,
       });
       const interruptedJob = await prisma.codexPetJob.findUniqueOrThrow({
         where: { runId_key: { runId: seeded.run.id, key: "final-package" } },
@@ -1262,8 +935,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       mocks.forEach((mock, index) => expect(mock.mock.calls).toHaveLength(callCounts[index]!));
 
       const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-      expect(run).toMatchObject({ status: "ready", progressPercent: 100, billingRefundedAt: null });
-      expect(deps.billing.refundResource).not.toHaveBeenCalled();
+      expect(run).toMatchObject({ status: "ready", progressPercent: 100 });
       expect(await prisma.document.count({ where: { kb: { userId: run.userId } } })).toBe(0);
       expect(await prisma.codexPetEvent.count({ where: { runId: run.id, type: "package.ready" } })).toBe(0);
 
@@ -1285,189 +957,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     }
   }, 240_000);
 
-  it("pauses a per-image base 429 for one approved retry instead of failing the run", async () => {
-    const seeded = await seed(false);
-    const store = memoryArtifactStore();
-    const deps = runnerDeps(store);
-    Object.assign(deps.env, { CODEX_PET_VISUAL_CONCURRENCY: "1" });
-    const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
-    await prisma.$transaction([
-      prisma.codexPetProject.update({
-        where: { id: seeded.project.id },
-        data: { qualityInspectionEnabled: false },
-      }),
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: {
-          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false, perImageCallPoints: 200 } as Prisma.InputJsonObject,
-          qualityInspectionEnabled: false,
-          billingMode: "per_image_call_v1",
-          billingResourceKey: "codex_pet_v2_package",
-          billingReservedUnits: 14,
-          billingReservedPoints: 2800,
-          billingSettlementStatus: "reserved",
-          billingChargeStatus: "reserved",
-          plannedImageCallLimit: 14,
-          imageGenerationApprovalBudget: 0,
-        },
-      }),
-    ]);
-    deps.visual.generate = vi.fn(async (input: {
-      onRequestDispatching?: (attempt: number) => Promise<void> | void;
-      onRequestSent?: (attempt: number) => Promise<void> | void;
-    }) => {
-      await input.onRequestDispatching?.(1);
-      await input.onRequestSent?.(1);
-      throw new ImageGenerationUpstreamError(
-        429,
-        "Concurrency limit exceeded for account",
-        "rate_limit_exceeded",
-        "rate_limit",
-        "req-base-rate-limit-1",
-      );
-    }) as never;
-
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "awaiting_regeneration_approval", runId: seeded.run.id });
-
-    const [run, calls, jobs] = await Promise.all([
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetImageCall.findMany({ where: { runId: seeded.run.id } }),
-      prisma.codexPetJob.findMany({ where: { runId: seeded.run.id }, orderBy: { key: "asc" } }),
-    ]);
-    expect(run).toMatchObject({
-      status: "awaiting_regeneration_approval",
-      pendingImageJobKey: "base-candidate-1",
-      imageGenerationCallCount: 1,
-      billingSettlementStatus: "reserved",
-      workerId: null,
-      error: null,
-    });
-    expect(calls).toMatchObject([{
-      jobKey: "base-candidate-1",
-      logicalAttempt: 1,
-      callKind: "planned",
-      status: "failed",
-      upstreamRequestId: "req-base-rate-limit-1",
-    }]);
-    expect(jobs).toHaveLength(1);
-    expect(jobs[0]).toMatchObject({ key: "base-candidate-1", status: "awaiting_approval", attempt: 1 });
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
-    expect(deps.billing.settleResource).not.toHaveBeenCalled();
-  }, 30_000);
-
-  it("refunds an approved extra call that fails at the provider instead of keeping its points", async () => {
-    const seeded = await seed(false);
-    const store = memoryArtifactStore();
-    const deps = runnerDeps(store);
-    Object.assign(deps.env, { CODEX_PET_VISUAL_CONCURRENCY: "1" });
-    const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
-    await prisma.$transaction([
-      prisma.codexPetProject.update({
-        where: { id: seeded.project.id },
-        data: { qualityInspectionEnabled: false },
-      }),
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: {
-          inputSnapshot: { ...snapshot, qualityInspectionEnabled: false, perImageCallPoints: 200 } as Prisma.InputJsonObject,
-          qualityInspectionEnabled: false,
-          billingMode: "per_image_call_v1",
-          billingResourceKey: "codex_pet_v2_package",
-          billingReservedUnits: 14,
-          billingReservedPoints: 2800,
-          billingSettlementStatus: "reserved",
-          billingChargeStatus: "reserved",
-          plannedImageCallLimit: 14,
-          imageGenerationApprovalBudget: 0,
-        },
-      }),
-    ]);
-    deps.visual.generate = vi.fn(async (input: {
-      onRequestDispatching?: (attempt: number) => Promise<void> | void;
-      onRequestSent?: (attempt: number) => Promise<void> | void;
-    }) => {
-      await input.onRequestDispatching?.(1);
-      await input.onRequestSent?.(1);
-      throw new ImageGenerationUpstreamError(
-        429,
-        "Concurrency limit exceeded for account",
-        "rate_limit_exceeded",
-        "rate_limit",
-        "req-extra-refund-1",
-      );
-    }) as never;
-
-    await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
-      .resolves.toEqual({ status: "awaiting_regeneration_approval", runId: seeded.run.id });
-    const pausedJob = await prisma.codexPetJob.findUniqueOrThrow({
-      where: { runId_key: { runId: seeded.run.id, key: "base-candidate-1" } },
-    });
-
-    // Mirror the approve-next-image route: the extra unit is charged up front,
-    // so its ledger row exists before the provider is ever called again.
-    const extraOperationId = `codex-pet:run:${seeded.run.id}:image:base-candidate-1:2:extra`;
-    await prisma.$transaction([
-      prisma.codexPetImageCall.create({ data: {
-        projectId: seeded.project.id,
-        runId: seeded.run.id,
-        userId: seeded.user.id,
-        jobKey: "base-candidate-1",
-        logicalAttempt: 2,
-        callKind: "extra",
-        purpose: "repair",
-        requestedModel: GPT_IMAGE_MODEL,
-        operationId: extraOperationId,
-        status: "prepared",
-        resourceKey: "codex_pet_v2_package",
-        points: 200,
-      } }),
-      prisma.codexPetRun.update({
-        where: { id: seeded.run.id },
-        data: {
-          status: "base_generating",
-          progressStage: "base_generating",
-          pendingImageJobKey: null,
-          workerId: null,
-          heartbeatAt: null,
-        },
-      }),
-      prisma.codexPetJob.update({
-        where: { id: pausedJob.id },
-        data: { status: "queued", maxAttempts: 2, workerId: null, completedAt: null, error: null },
-      }),
-    ]);
-
-    await executeCodexPetRun({ runId: seeded.run.id, deps: { ...deps, workerId: "approved-extra-refund" } });
-
-    const [run, extraCall, plannedCall] = await Promise.all([
-      prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }),
-      prisma.codexPetImageCall.findUniqueOrThrow({
-        where: { runId_jobKey_logicalAttempt: { runId: seeded.run.id, jobKey: "base-candidate-1", logicalAttempt: 2 } },
-      }),
-      prisma.codexPetImageCall.findUniqueOrThrow({
-        where: { runId_jobKey_logicalAttempt: { runId: seeded.run.id, jobKey: "base-candidate-1", logicalAttempt: 1 } },
-      }),
-    ]);
-    expect(extraCall).toMatchObject({
-      callKind: "extra",
-      status: "failed",
-      refundStatus: "refunded",
-      refundError: null,
-      upstreamRequestId: "req-extra-refund-1",
-    });
-    expect(extraCall.refundedAt).toBeInstanceOf(Date);
-    expect(deps.billing.refundResource).toHaveBeenCalledWith(extraOperationId);
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
-    // The planned call failed at the provider too, so it is neither settled by
-    // the runner (a resumable failure defers settlement) nor silently billed.
-    expect(plannedCall).toMatchObject({ callKind: "planned", status: "failed", refundStatus: "none" });
-    expect(run.billingSettledUnits).toBe(0);
-    expect(run.billingSettledPoints).toBe(0);
-    expect(deps.billing.settleResource).not.toHaveBeenCalled();
-  }, 30_000);
-
-  it("keeps a zero-charge recovery at packaging until final-package bytes are recoverable", async () => {
+  it("keeps a recovery run at packaging until final-package bytes are recoverable", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
@@ -1491,9 +981,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
           progressPercent: 94,
           progressMessage: "正在恢复已通过质检的 Codex 安装包",
           colorKey: "#ff00ff",
-          billingChargeStatus: "not_required",
-          billingPoints: 0,
-          billingActivatedAt: null,
           imageGenerationApprovalBudget: 0,
           workerId: null,
           heartbeatAt: null,
@@ -1529,10 +1016,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       status: "packaging",
       progressStage: "packaging",
       progressPercent: 94,
-      billingChargeStatus: "not_required",
-      billingPoints: 0,
-      billingRefundStatus: "none",
-      billingRefundedAt: null,
       workerId: null,
       heartbeatAt: null,
       error: null,
@@ -1542,7 +1025,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(await prisma.codexPetJob.findUnique({
       where: { runId_key: { runId: seeded.run.id, key: "final-package" } },
     })).toBeNull();
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
     const report = completeDeliveryValidationReport();
     const binding = codexPetFinalPackageInputRevision({ finalAtlas: Buffer.from("not-yet-checkpointed"), report });
@@ -1583,8 +1065,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       where: { runId_key: { runId: seeded.run.id, key: "final-package" } },
     })).toMatchObject({ status: "queued", attempt: 0, workerId: null, error: null });
     expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }))
-      .toMatchObject({ status: "packaging", workerId: null, billingRefundStatus: "none" });
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
+      .toMatchObject({ status: "packaging", workerId: null });
   }, 120_000);
 
   it("resumes from the persisted registered row-9 artifact without regenerating or re-fitting it", async () => {
@@ -1976,7 +1457,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(runningLeftJob.input).not.toMatchObject({ derivation: "per-frame-mirror-preserve-order" });
   }, 120_000);
 
-  it("pauses for base review, resumes from persisted candidate jobs, and does not charge again", async () => {
+  it("pauses for base review and resumes from persisted candidate jobs without regenerating", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
@@ -2114,7 +1595,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(guidedPrompts.every((prompt) => prompt.includes(IDENTITY_GUIDE))).toBe(true);
   }, 120_000);
 
-  it("rejects and refunds an active legacy run without the GPT-only model contract", async () => {
+  it("fails an active legacy run without the GPT-only model contract", async () => {
     const seeded = await seed(true);
     const deps = runnerDeps(memoryArtifactStore());
     const snapshot = seeded.run.inputSnapshot as Record<string, unknown>;
@@ -2127,8 +1608,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
       .rejects.toThrow("missing the required gpt-only-quality-optional-v3 model contract");
     expect(await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } }))
-      .toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+      .toMatchObject({ status: "failed" });
   }, 30_000);
 
   it("uses one approved direction call, pauses on failure, and resumes without regenerating passed standard rows", async () => {
@@ -2169,7 +1649,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(await prisma.codexPetJob.findUniqueOrThrow({ where: { runId_key: { runId: seeded.run.id, key: "look-a" } } }))
       .toMatchObject({ status: "awaiting_approval", attempt: 1 });
     expect(await prisma.codexPetJob.findUnique({ where: { runId_key: { runId: seeded.run.id, key: "look-b" } } })).toBeNull();
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
 
     const callCountBeforeResume = generate.mock.calls.length;
     rejectLookA = false;
@@ -2227,40 +1706,38 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(run.imageGenerationCallCount).toBe(directionGenerate.mock.calls.length);
   }, 30_000);
 
-  it("cancels before the first image and refunds the fixed package", async () => {
+  it("persists cancelled before the first image even when terminal events fail", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
     const persistEvent = deps.appendEvent;
     deps.appendEvent = vi.fn(async (input) => {
-      if (input.type === "run.cancelled" || input.type === "billing.refunded") throw new Error("terminal event store unavailable");
+      if (input.type === "run.cancelled") throw new Error("terminal event store unavailable");
       return persistEvent(input);
     });
     await prisma.codexPetRun.update({ where: { id: seeded.run.id }, data: { cancelRequested: true } });
     expect((await executeCodexPetRun({ runId: seeded.run.id, deps })).status).toBe("cancelled");
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run.billingRefundedAt).not.toBeNull();
-    expect(run.billingRefundStatus).toBe("refunded");
+    expect(run).toMatchObject({ status: "cancelled", progressStage: "cancelled", workerId: null });
+    expect(run.completedAt).not.toBeNull();
   });
 
-  it("persists failed/refunded even when terminal events fail", async () => {
+  it("persists failed even when terminal events fail", async () => {
     const seeded = await seed(false);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
     deps.visual.generate = vi.fn(async () => { throw new Error("synthetic provider failure"); }) as never;
     const persistEvent = deps.appendEvent;
     deps.appendEvent = vi.fn(async (input) => {
-      if (input.type === "run.failed" || input.type === "billing.refunded") throw new Error("terminal event store unavailable");
+      if (input.type === "run.failed") throw new Error("terminal event store unavailable");
       return persistEvent(input);
     });
 
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps })).rejects.toThrow("synthetic provider failure");
 
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
-    expect(run.billingRefundedAt).not.toBeNull();
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
+    expect(run).toMatchObject({ status: "failed", progressStage: "failed", workerId: null });
+    expect(run.completedAt).not.toBeNull();
   });
 
   it("preserves the originating base transport failure while cancelling only its sibling", async () => {
@@ -2312,10 +1789,9 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     expect(terminalJobEvent).toMatchObject({ stage: "failed", payload: { failureKind: "terminal" } });
     expect((terminalJobEvent?.payload as Record<string, unknown> | null)?.retryKind).toBeUndefined();
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   });
 
-  it("does not start a paid running-right sibling when the idle gate fails", async () => {
+  it("does not start the running-right sibling when the idle gate fails", async () => {
     const seeded = await seed(true);
     const baseStore = memoryArtifactStore();
     let terminalEventSeen = false;
@@ -2343,15 +1819,11 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
     const persistEvent = deps.appendEvent;
     deps.appendEvent = vi.fn(async (input) => {
-      if (input.type === "run.failed" || input.type === "billing.refunded") {
+      if (input.type === "run.failed") {
         terminalEventSeen = true;
         lifecycle.push(input.type);
       }
       return persistEvent(input);
-    });
-    deps.billing.refundResource = vi.fn(async () => {
-      lifecycle.push("refund.called");
-      return { success: true };
     });
 
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps }))
@@ -2359,11 +1831,10 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
     expect(lifecycle).not.toContain("running-right.started");
     expect(lifecycle.indexOf("idle.failed")).toBeLessThan(lifecycle.indexOf("run.failed"));
-    expect(lifecycle.indexOf("run.failed")).toBeLessThan(lifecycle.indexOf("refund.called"));
     expect(artifactWritesAfterTerminal).toEqual([]);
 
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
+    expect(run).toMatchObject({ status: "failed" });
     expect(run.completedAt).not.toBeNull();
     expect(await prisma.codexPetArtifact.count({
       where: { runId: run.id, kind: "pose_board" },
@@ -2388,12 +1859,11 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     });
     const failedIndex = events.findIndex((event) => event.type === "run.failed");
     expect(failedIndex).toBeGreaterThanOrEqual(0);
-    expect(events.slice(failedIndex + 1).map((event) => event.type)).toEqual(["billing.refunded"]);
+    expect(events.slice(failedIndex + 1)).toEqual([]);
     expect(events.some((event, index) => index > failedIndex && event.jobKey === "row-idle")).toBe(false);
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   }, 30_000);
 
-  it("turns moderation failures into an actionable user message and refunds", async () => {
+  it("turns moderation failures into an actionable user message", async () => {
     const seeded = await seed(false);
     const deps = runnerDeps(memoryArtifactStore());
     deps.visual.generate = vi.fn(async () => {
@@ -2410,10 +1880,9 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       .rejects.toMatchObject({ category: "moderation", retryable: false });
 
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
-    expect(run).toMatchObject({ status: "failed", billingRefundStatus: "refunded" });
+    expect(run).toMatchObject({ status: "failed" });
     expect(run.error).toContain("请修改提示词或更换参考图");
     expect(run.error).not.toContain("prompt was blocked");
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
     const failedEvent = await prisma.codexPetEvent.findFirstOrThrow({
       where: { runId: seeded.run.id, type: "run.failed" },
       orderBy: { sequence: "desc" },
@@ -2428,8 +1897,8 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     const [cancelledSeed, failedSeed] = await Promise.all([seed(false), seed(false)]);
     const terminalAt = new Date();
     await Promise.all([
-      prisma.codexPetRun.update({ where: { id: cancelledSeed.run.id }, data: { status: "cancelled", progressStage: "cancelled", cancelRequested: true, billingRefundStatus: "refunded", billingRefundedAt: terminalAt, completedAt: terminalAt } }),
-      prisma.codexPetRun.update({ where: { id: failedSeed.run.id }, data: { status: "failed", progressStage: "failed", billingRefundStatus: "refunded", billingRefundedAt: terminalAt, completedAt: terminalAt } }),
+      prisma.codexPetRun.update({ where: { id: cancelledSeed.run.id }, data: { status: "cancelled", progressStage: "cancelled", cancelRequested: true, completedAt: terminalAt } }),
+      prisma.codexPetRun.update({ where: { id: failedSeed.run.id }, data: { status: "failed", progressStage: "failed", completedAt: terminalAt } }),
     ]);
     const cancelledDeps = runnerDeps(memoryArtifactStore());
     const failedDeps = runnerDeps(memoryArtifactStore());
@@ -2439,8 +1908,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
 
     expect(cancelledDeps.visual.generate).not.toHaveBeenCalled();
     expect(failedDeps.visual.generate).not.toHaveBeenCalled();
-    expect(cancelledDeps.billing.refundResource).not.toHaveBeenCalled();
-    expect(failedDeps.billing.refundResource).not.toHaveBeenCalled();
     expect(await prisma.codexPetEvent.count({ where: { runId: { in: [cancelledSeed.run.id, failedSeed.run.id] } } })).toBe(0);
   });
 
@@ -2449,7 +1916,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
   // 已交付不重试、按归属 reconcile 已有 Document、陈旧 worker 竞态。那套
   // 持久化重试机制是为「登记到知识库」这一个动作建的,写入删了它也就没了。
   // 留下的判据只有一条:崩在 archiving 的运行仍能被新 worker 接走并走到
-  // ready,过程中不建任何 Document、不建归档任务、不退款。
+  // ready,过程中不建任何 Document、不建归档任务。
   it("passes a crashed archiving run straight through to ready without creating a knowledge document", async () => {
     const seeded = await seed(true);
     await seedArchivingDeliverables(seeded);
@@ -2478,7 +1945,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
       status: "ready",
       progressStage: "ready",
       progressPercent: 100,
-      billingRefundStatus: "none",
       workerId: null,
       error: null,
     });
@@ -2486,7 +1952,6 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(archiveJobs).toBe(0);
     expect(documents).toBe(0);
     expect(await prisma.knowledgeBase.count({ where: { userId: seeded.user.id } })).toBe(0);
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
     expect(deps.visual.generate).not.toHaveBeenCalled();
   });
 
@@ -2547,11 +2012,9 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     expect(run.status).toBe("failed");
     expect(run.selectedBaseArtifactId).toBeNull();
     expect(run.hasSuccessfulImage).toBe(true);
-    expect(run.billingRefundStatus).toBe("refunded");
-    expect(deps.billing.refundResource).toHaveBeenCalledOnce();
   }, 120_000);
 
-  it("does not refund after base candidates exist when cancellation wins during later visual QA", async () => {
+  it("cancels the run when cancellation wins during later visual QA", async () => {
     const seeded = await seed(true);
     const store = memoryArtifactStore();
     const deps = runnerDeps(store);
@@ -2567,8 +2030,7 @@ describe.skipIf(!enabled)("Codex pet runner database integration", () => {
     await expect(executeCodexPetRun({ runId: seeded.run.id, deps })).resolves.toMatchObject({ status: "cancelled", runId: seeded.run.id });
     const run = await prisma.codexPetRun.findUniqueOrThrow({ where: { id: seeded.run.id } });
     expect(run.hasSuccessfulImage).toBe(true);
-    expect(run.billingRefundStatus).toBe("none");
-    expect(deps.billing.refundResource).not.toHaveBeenCalled();
+    expect(run.status).toBe("cancelled");
   }, 120_000);
 
   it("retries the independent row-10 gate before starting final assembly", async () => {

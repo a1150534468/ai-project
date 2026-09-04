@@ -45,7 +45,7 @@ function missingManifest() {
 describe("article workflow split image generation", () => {
   it("creates topic copy with image prompts and empty slots without calling the image service", async () => {
     let scheduledTask: (() => Promise<void>) | null = null;
-    const { app, prisma, billing, llm } = await buildArticleWorkflowApp({
+    const { app, prisma, llm } = await buildArticleWorkflowApp({
       llmResponses: [
         createArticleWorkflowLlmResponse(JSON.stringify(buildArticleWorkflowPlan())),
         createArticleWorkflowLlmResponse(buildArticleWorkflowHtml()),
@@ -82,7 +82,7 @@ describe("article workflow split image generation", () => {
     ]));
     expect(project.bodyHtml).toContain('data-ai-assistant-image-slot="cover"');
     expect(project.bodyHtml).not.toContain('<img src=""');
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(prisma.imageAsset.create).not.toHaveBeenCalled();
 
     const calls = llm.messages.create.mock.calls as unknown as Array<[
       { messages?: Array<{ content?: string }> },
@@ -116,7 +116,7 @@ describe("article workflow split image generation", () => {
         updatedAt: new Date("2026-07-30T08:00:00.000Z"),
       }],
     });
-    const { app, billing } = await buildArticleWorkflowApp({
+    const { app } = await buildArticleWorkflowApp({
       prisma,
       scheduleTask: (work) => {
         scheduledTask = work;
@@ -138,7 +138,8 @@ describe("article workflow split image generation", () => {
     expect(manifest[0]?.imageUrl).toBe("https://example.test/existing.png");
     expect(manifest[1]?.imageUrl).not.toBe("");
     expect(project.bodyHtml).toContain("https://example.test/existing.png");
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    // 只补缺的那一张：已有封面不重出
+    expect(prisma.imageAsset.create).toHaveBeenCalledTimes(1);
 
     const repeated = await app.inject({
       method: "POST",
@@ -146,10 +147,10 @@ describe("article workflow split image generation", () => {
     });
     expect(repeated.statusCode).toBe(200);
     expect(repeated.json().data.queued).toBe(false);
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
+    expect(prisma.imageAsset.create).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps confirmed copy ready and refunds the image charge when image generation fails", async () => {
+  it("keeps confirmed copy ready when image generation fails", async () => {
     let scheduledTask: (() => Promise<void>) | null = null;
     const prisma = createArticleWorkflowPrismaMock({
       projects: [{
@@ -172,7 +173,7 @@ describe("article workflow split image generation", () => {
         updatedAt: new Date("2026-07-30T08:00:00.000Z"),
       }],
     });
-    const { app, billing } = await buildArticleWorkflowApp({
+    const { app } = await buildArticleWorkflowApp({
       prisma,
       fetchFn: vi.fn(async () => new Response("upstream unavailable", { status: 503 })) as unknown as typeof fetch,
       scheduleTask: (work) => {
@@ -192,19 +193,16 @@ describe("article workflow split image generation", () => {
     expect(project.progressStage).toBe("ready");
     expect(project.captionText).toBe("先确认并保留的文案。");
     expect(project.error).toContain("503");
-    expect(billing.chargeResource).toHaveBeenCalledTimes(1);
-    expect(billing.refundResource).toHaveBeenCalledTimes(1);
-    expect(billing.reserveResource).not.toHaveBeenCalled();
   });
 
-  it("refunds text billing and never starts images when imitation output is too similar", async () => {
+  it("fails the row and never starts images when imitation output is too similar", async () => {
     let scheduledTask: (() => Promise<void>) | null = null;
     const copied = "这是一段用于验证模仿文案原创保护是否正常工作的参考内容".repeat(4);
     const plan = {
       ...buildArticleWorkflowPlan(),
       bodyMarkdown: copied,
     };
-    const { app, prisma, billing } = await buildArticleWorkflowApp({
+    const { app, prisma } = await buildArticleWorkflowApp({
       llmResponses: [createArticleWorkflowLlmResponse(JSON.stringify(plan))],
       scheduleTask: (work) => {
         scheduledTask = work;
@@ -233,8 +231,6 @@ describe("article workflow split image generation", () => {
 
     expect(prisma.__state.projects[0]?.status).toBe("failed");
     expect(prisma.__state.projects[0]?.error).toContain("与参考文案过于相似");
-    expect(billing.reserveResource).toHaveBeenCalledTimes(1);
-    expect(billing.refundResource).toHaveBeenCalledTimes(1);
-    expect(billing.chargeResource).not.toHaveBeenCalled();
+    expect(prisma.imageAsset.create).not.toHaveBeenCalled();
   });
 });

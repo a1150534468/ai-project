@@ -26,7 +26,6 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   progressPercent: number;
   progressMessage: string | null;
   error: string | null;
-  billingOperationId: string | null;
 }>;
 
 /**
@@ -49,14 +48,13 @@ function articleWorkflowStateData(data: ArticleWorkflowProjectStatePatch) {
     progressPercent: data.progressPercent,
     progressMessage: data.progressMessage,
     error: data.error,
-    billingOperationId: data.billingOperationId,
   };
 }
 
 /**
  * 终态写入的受保护变体：只在项目仍处于 generating|revising 时生效。
  * 返回 false 表示 reaper 已抢先把项目置 failed（进程曾卡死超过阈值），
- * 此时调用方必须跳过结算——reserve 已被 reaper 退款，再 settle 就是双结算。
+ * 此时调用方必须跳过终态写入——失败现场要留住，不能被迟到的成品覆盖。
  */
 export async function finalizeArticleWorkflowProjectState(
   prisma: PrismaClient,

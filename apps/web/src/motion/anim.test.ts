@@ -6,7 +6,6 @@ import {
   toastReducer,
   type ToastState,
   shouldRenderDecoration,
-  computeSpendBurst,
 } from "./anim";
 
 describe("easeOutCubic", () => {
@@ -63,25 +62,5 @@ describe("shouldRenderDecoration", () => {
   it("is false when reduced motion is requested", () => {
     expect(shouldRenderDecoration(true)).toBe(false);
     expect(shouldRenderDecoration(false)).toBe(true);
-  });
-});
-
-describe("computeSpendBurst", () => {
-  it("returns null on initial load (null -> number)", () => {
-    expect(computeSpendBurst(null, 100)).toBeNull();
-  });
-  it("returns null when balance increases (recharge)", () => {
-    expect(computeSpendBurst(100, 150)).toBeNull();
-    expect(computeSpendBurst(90, 95)).toBeNull();
-  });
-  it("returns null when unchanged", () => {
-    expect(computeSpendBurst(100, 100)).toBeNull();
-  });
-  it("returns the positive deduction when balance decreases", () => {
-    expect(computeSpendBurst(100, 90)).toBe(10);
-    expect(computeSpendBurst(95, 85)).toBe(10);
-  });
-  it("returns null when next is not a number", () => {
-    expect(computeSpendBurst(100, null)).toBeNull();
   });
 });

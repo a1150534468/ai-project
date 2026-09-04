@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
-import { getPlatformChannelCode, seedPlatformChannel } from "../reseller/seed.js";
 
 const prisma = getPrisma();
 let app: Awaited<ReturnType<typeof buildServer>>;
@@ -28,15 +27,8 @@ afterAll(async () => {
 describe("auth 身份重构", () => {
   let uid = "";
   let token = "";
-  let defaultChannelId = "";
 
-  beforeAll(async () => {
-    await seedPlatformChannel(prisma);
-    const channel = await prisma.channel.findUniqueOrThrow({ where: { code: getPlatformChannelCode() } });
-    defaultChannelId = channel.id;
-  });
-
-  it("注册无需注册码并自动绑定默认平台渠道", async () => {
+  it("注册无需注册码", async () => {
     const r = await app.inject({
       method: "POST",
       url: "/api/auth/register",
@@ -44,13 +36,12 @@ describe("auth 身份重构", () => {
     });
     expect(r.statusCode).toBe(200);
     uid = r.json().uid;
-    expect(uid).toMatch(new RegExp(`^${getPlatformChannelCode()}-\\d{8}$`));
+    expect(uid).toMatch(/^\d{8}$/);
     const user = await prisma.user.findUnique({
       where: { uid },
-      select: { memoryEnabled: true, channelId: true },
+      select: { memoryEnabled: true },
     });
     expect(user?.memoryEnabled).toBe(true);
-    expect(user?.channelId).toBe(defaultChannelId);
   });
   it("用户名重复 409", async () => {
     const r = await app.inject({

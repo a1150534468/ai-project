@@ -283,7 +283,7 @@ export function CodexPetStudioInputPanel({ studio }: { readonly studio: CodexPet
           </label>
 
           <div className="rounded-[10px] bg-surface-subtle px-3 py-2.5 text-[10px] leading-4 text-ink-secondary">
-            正常路径最多 {derived.plannedCallLimit} 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准与计费。上传即表示你拥有参考图与角色的使用权。
+            正常路径最多 {derived.plannedCallLimit} 次计划内 GPT Image 2 调用；AI 质检默认关闭，任何额外调用都需要单独批准。上传即表示你拥有参考图与角色的使用权。
           </div>
 
           <div className="grid grid-cols-2 gap-2">
@@ -297,10 +297,10 @@ export function CodexPetStudioInputPanel({ studio }: { readonly studio: CodexPet
             </PrimaryButton>
             <PrimaryButton
               icon={busyAction === "starting" ? "mdi:loading" : "mdi:creation"}
-              disabled={interactionLocked || !canStart || state.pricing?.enabled !== true}
+              disabled={interactionLocked || !canStart}
               onClick={actions.handleStart}
             >
-              开始制作{derived.reservedPointsQuote === null ? "" : ` · 预留 ${derived.reservedPointsQuote}`}
+              开始制作
             </PrimaryButton>
           </div>
 

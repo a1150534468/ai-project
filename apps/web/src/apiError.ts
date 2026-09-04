@@ -5,9 +5,9 @@ export class ApiError extends Error {
    * The `data` object a structured error response carried, when it had one.
    *
    * Some endpoints answer a refusal with the state that caused it — the codex-pet
-   * 409 returns the remaining paid-repair budget — and a caller that keeps only
-   * `message` + `status` throws that away, leaving the UI unable to say how far
-   * over the cap the user is.
+   * 409 returns the remaining extra-repair call budget — and a caller that keeps
+   * only `message` + `status` throws that away, leaving the UI unable to say how
+   * far over the cap the user is.
    */
   readonly data: Record<string, unknown> | null;
 

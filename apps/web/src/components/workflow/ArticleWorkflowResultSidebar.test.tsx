@@ -41,7 +41,6 @@ describe("ArticleWorkflowResultTools image scope", () => {
         rewriteInstruction=""
         rewriteGenerationMode="polish-text"
         rewriteRegenerateImages={false}
-        pricing={null}
         rewriting={false}
         retryingProjectId={null}
         regeneratingSlot={null}

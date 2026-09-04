@@ -211,8 +211,6 @@ export async function generateCodexPetVisual(input: {
   readonly signal?: AbortSignal;
   readonly maxAttempts?: number;
   readonly onAttempt?: (attempt: number) => Promise<void> | void;
-  readonly onRequestDispatching?: (attempt: number) => Promise<void> | void;
-  readonly onRequestSent?: (attempt: number) => Promise<void> | void;
   readonly onRetry?: (error: unknown, attempt: number) => Promise<void> | void;
 }): Promise<GeneratedPetVisual> {
   const env = input.env ?? process.env;
@@ -251,8 +249,6 @@ export async function generateCodexPetVisual(input: {
               fetchFn,
               env,
               signal: input.signal,
-              onRequestDispatching: () => input.onRequestDispatching?.(attempt),
-              onRequestSent: () => input.onRequestSent?.(attempt),
             })
           : callImageGenerationDetailed({
               config,
@@ -263,8 +259,6 @@ export async function generateCodexPetVisual(input: {
               fetchFn,
               env,
               signal: input.signal,
-              onRequestDispatching: () => input.onRequestDispatching?.(attempt),
-              onRequestSent: () => input.onRequestSent?.(attempt),
             }),
       });
       assertCodexPetImageModel(provider, requestedModel);

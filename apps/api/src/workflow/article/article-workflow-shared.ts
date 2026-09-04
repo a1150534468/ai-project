@@ -14,7 +14,6 @@ import {
 import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, articleWorkflowRetryDelayMs } from "./article-workflow-retry.js";
 import { loadImageAttemptTimeoutMs } from "../_shared/image-service.js";
 import { imageDispatchWorstWaitMs } from "../_shared/image-dispatch-gate.js";
-import { reservationTtlSeconds } from "../_shared/reservation-window.js";
 
 export const DEFAULT_ARTICLE_MODEL = "MiniMax-M3";
 export const ARTICLE_MAX_SOURCE_LENGTH = 200_000;
@@ -27,7 +26,6 @@ export const ARTICLE_HISTORY_LIMIT = 60;
 export const ARTICLE_COVER_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.coverSize;
 export const ARTICLE_INLINE_IMAGE_SIZE = ARTICLE_WORKFLOW_PLATFORM_CONFIGS.wechat.inlineSize;
 export const ARTICLE_IMAGE_BATCH_SIZE = 2;
-export const ARTICLE_WORKFLOW_TEXT_RESOURCE_KEY = "article_workflow_text_output";
 /**
  * 卡死判定的兜底阈值，仅在算不出真实上限时使用。
  * 真实阈值走 {@link articleProjectStaleMs}——它按当前的出图超时与重试预算推导。
@@ -55,62 +53,8 @@ export function articleProjectStaleMs(env: NodeJS.ProcessEnv = process.env): num
   return Math.max(ARTICLE_PROJECT_STALE_MS, worstChunkMs);
 }
 
-/**
- * 文本预留的有效期（秒）。注意这笔预留的名字骗人：`runReservedArticleTextTask` 的 work
- * 里连出图一起跑，所以窗口是「一次文本生成 + 全部出图批次」，不是纯文本那几十秒——
- * 默认配置下光一个出图批次的上限就有 54 分钟，远超 billing 的 10 分钟全局兜底。
- *
- * 心跳间隔用 {@link articleProjectStaleMs}（每写一次进度刷新），要跨过的间隔数 =
- * 1 次文本 + 出图批次数（平台上限张数按 ARTICLE_IMAGE_BATCH_SIZE 分批）。
- * 续跑余量传 0：本域的 reaper 是**抢占置 failed 再退款**，从不交回续跑，
- * 所以预留寿命被 reaper 自己封顶，不需要给续跑留额外间隔。
- */
-export function articleTextReservationTtlSeconds(env: NodeJS.ProcessEnv = process.env): number {
-  const maxImages = Math.max(
-    ...Object.values(ARTICLE_WORKFLOW_PLATFORM_CONFIGS).map((config) => config.maxImages),
-  );
-  return reservationTtlSeconds({
-    perHeartbeatMs: articleProjectStaleMs(env),
-    heartbeats: 1 + Math.ceil(maxImages / ARTICLE_IMAGE_BATCH_SIZE),
-    resumeAllowance: 0,
-    env,
-  });
-}
-
 export type FetchLike = typeof fetch;
 export type ScheduleTask = (work: () => Promise<void>) => void;
-
-export interface ArticleWorkflowBilling {
-  readonly reserveResource: (args: {
-    operationId: string;
-    userId: string;
-    resourceKey: string;
-    units: number;
-    reservationTtlSeconds?: number;
-  }) => Promise<{ reserved: number }>;
-  readonly settleResource: (args: {
-    operationId: string;
-    resourceKey: string;
-    units: number;
-  }) => Promise<{ settled: number }>;
-  readonly chargeResource: (args: {
-    operationId: string;
-    userId: string;
-    resourceKey: string;
-    units: number;
-  }) => Promise<{ charged: number }>;
-  readonly refundResource: (operationId: string) => Promise<{ success: boolean }>;
-  readonly listResourcePrices?: () => Promise<{
-    data: {
-      resourceKey: string;
-      displayName: string;
-      pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
-      rate: number;
-      perUnits: number;
-      enabled: boolean;
-    }[];
-  }>;
-}
 
 export interface LlmClientLike {
   readonly messages: {
@@ -123,7 +67,6 @@ export interface LlmClientLike {
 
 export interface ArticleWorkflowRouteDeps {
   readonly prisma?: PrismaClient;
-  readonly billing?: ArticleWorkflowBilling;
   readonly llm?: LlmClientLike;
   readonly fetchFn?: FetchLike;
   readonly scheduleTask?: ScheduleTask;

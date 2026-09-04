@@ -45,8 +45,6 @@ export async function deferRecoveryPackaging(ctx: RunnerContext): Promise<CodexP
         userId: ctx.project.userId,
         workerId: ctx.workerId,
         status: "packaging",
-        billingChargeStatus: "not_required",
-        billingPoints: 0,
         cancelRequested: false,
       },
       data: {
@@ -75,7 +73,7 @@ export async function continueAfterDurablePackaging(
 ): Promise<CodexPetExecutionResult> {
   // The Job, all final artifact ids, validation report and archiving stage are
   // already committed atomically. Realtime events are a best-effort view of
-  // that database truth and must never downgrade or refund a valid package.
+  // that database truth and must never downgrade a valid package.
   await emit(ctx, "package.ready", "packaging", 98, "Codex v2 安装包已生成", {
     spritesheetArtifactId: packaged.spritesheetArtifactId,
     packageArtifactId: packaged.packageArtifactId,

@@ -1,7 +1,6 @@
 // 由 codex-pet-runner.ts 纯移动而来（P3.1 阶段 1，租约、事件与阶段推进）。
 
 import { type CodexPetRun, type Prisma, type PrismaClient } from "@prisma/client";
-import { CODEX_PET_PER_IMAGE_BILLING_MODE } from "../codex-pet-call-ledger.js";
 import { type CodexPetRunStage } from "../codex-pet-events.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
@@ -123,7 +122,6 @@ export async function claimRunLease(
   env: NodeJS.ProcessEnv,
   expectedProjectId?: string,
   expectedUserId?: string,
-  zeroChargeRecovery = false,
 ): Promise<{ claimed: boolean; run: RunnerRunWithProject | null }> {
   const now = new Date();
   const staleBefore = new Date(now.getTime() - staleRunMs(env));
@@ -134,22 +132,10 @@ export async function claimRunLease(
         ...(expectedProjectId ? { projectId: expectedProjectId } : {}),
         ...(expectedUserId ? { userId: expectedUserId } : {}),
         status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-        AND: [
-          zeroChargeRecovery
-            ? { billingChargeStatus: "not_required", billingPoints: 0 }
-            : {
-                OR: [
-                  { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
-                  { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
-                ],
-              },
-          {
-            OR: [
-              { workerId: null },
-              { heartbeatAt: null },
-              { heartbeatAt: { lt: staleBefore } },
-            ],
-          },
+        OR: [
+          { workerId: null },
+          { heartbeatAt: null },
+          { heartbeatAt: { lt: staleBefore } },
         ],
       },
       data: {

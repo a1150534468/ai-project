@@ -15,21 +15,15 @@ async function startCombinedWorker(): Promise<void> {
   const healthServer = createServer(async (req, res) => {
     let postgres = false;
     let redis = false;
-    let billing = false;
     if (ready && !closing) {
-      const billingBaseUrl = process.env.BILLING_BASE_URL?.replace(/\/+$/, "");
-      const [postgresResult, redisResult, billingResult] = await Promise.allSettled([
+      const [postgresResult, redisResult] = await Promise.allSettled([
         withTimeout(getPrisma().$queryRawUnsafe("SELECT 1"), 2_000, "PostgreSQL health check"),
         withTimeout(getRedis().ping(), 2_000, "Redis health check"),
-        billingBaseUrl
-          ? fetch(`${billingBaseUrl}/health`, { signal: AbortSignal.timeout(2_000) })
-          : Promise.reject(new Error("BILLING_BASE_URL is required")),
       ]);
       postgres = postgresResult.status === "fulfilled";
       redis = redisResult.status === "fulfilled" && redisResult.value === "PONG";
-      billing = billingResult.status === "fulfilled" && billingResult.value.ok;
     }
-    const healthy = ready && !closing && postgres && redis && billing;
+    const healthy = ready && !closing && postgres && redis;
     const memory = process.memoryUsage();
     res.writeHead(healthy ? 200 : 503, { "Content-Type": "application/json" });
     res.end(
@@ -37,7 +31,7 @@ async function startCombinedWorker(): Promise<void> {
         ok: healthy,
         worker: "combined",
         queues: runtimes.map((runtime) => runtime.name),
-        dependencies: { postgres, redis, billing },
+        dependencies: { postgres, redis },
         uptimeSec: Math.floor(process.uptime()),
         memory: {
           rss: memory.rss,

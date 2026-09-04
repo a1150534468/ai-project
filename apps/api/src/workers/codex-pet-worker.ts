@@ -1,24 +1,21 @@
 /**
- * codex-pet 工作进程的入口。原本这一个文件是 1158 行(指标 + 兜底 + 结算 + 编排 + 进程入口),
- * P2.4 拆分后按依赖方向分成五个文件,这里只留编排与入口:
+ * codex-pet 工作进程的入口。原本这一个文件是 1158 行(指标 + 兜底 + 编排 + 进程入口),
+ * P2.4 拆分后按依赖方向分成四个文件,这里只留编排与入口:
  *
  * - `codex-pet-worker-support.ts`   env 读正数、异常裁成安全诊断串(叶子)
  * - `codex-pet-worker-metrics.ts`   WorkerMetrics、事件 → 指标增量、/metrics 与 health server
- * - `codex-pet-worker-recovery.ts`  量表刷新、产物清理、软删项目与卡死运行重投、抢占释放
- * - `codex-pet-worker-billing.ts`   授权超时取消、按张预留结算、计费意图补偿激活
+ * - `codex-pet-worker-recovery.ts`  量表刷新、产物清理、软删项目与卡死运行重投、等授权超时收尸、抢占释放
  *
  * 本文件**不能**变成纯 re-export 门面:`infra/k8s/base/37-codex-pet-worker.yaml` 与
  * package.json 的 `worker:codex-pet` 都按这个路径起进程,底部的 `isDirectWorkerEntrypoint`
  * 守卫必须留在这里;`env.test.ts` 还钉着"这个文件里出现 assertRequiredEnv()"。
  *
- * 对外导出面与拆分前逐字一致,仍是 20 个名字 —— `codex-pet-worker.test.ts` 与
- * `combined-worker.ts` 一行都不用改。新代码要用更细的层就直接 import 对应文件,
- * 不要往这里补 re-export。
+ * 对外导出面是 17 个名字 —— `codex-pet-worker.test.ts` 与 `combined-worker.ts` 都按这份
+ * 门面 import。新代码要用更细的层就直接 import 对应文件,不要往这里补 re-export。
  */
 
 import { assertRequiredEnv } from "../env.js";
 import { randomUUID } from "node:crypto";
-import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { getObject, makeS3 } from "../storage/s3.js";
 import {
@@ -35,7 +32,6 @@ import {
   createCodexPetArtifactStore,
   assertCodexPetImageRoute,
   installCodexPetUpstreamDnsOverride,
-  CODEX_PET_PER_IMAGE_BILLING_MODE,
   assertCodexPetVisualQaRoute,
 } from "../workflow/codex-pet/index.js";
 import { isVerifiedWorkflowImageObjectKeyForUser } from "../workflow/_shared/image-service.js";
@@ -58,17 +54,13 @@ import {
 } from "./codex-pet-worker-metrics.js";
 import {
   cleanupExpiredCodexPetArtifacts,
+  expireParkedCodexPetRuns,
   observeProviderArtifacts,
   recoverDeletingProjects,
   recoverStaleRuns,
   refreshDatabaseGauges,
   releasePreemptedRuns,
 } from "./codex-pet-worker-recovery.js";
-import {
-  expireParkedCodexPetRuns,
-  reconcileBillingIntents,
-  reconcilePerImageBillingSettlements,
-} from "./codex-pet-worker-billing.js";
 
 export type {
   CodexPetProviderMetricDelta,
@@ -87,16 +79,11 @@ export {
 } from "./codex-pet-worker-metrics.js";
 export {
   cleanupExpiredCodexPetArtifacts,
+  expireParkedCodexPetRuns,
   recoverDeletingProjects,
   recoverStaleRuns,
   releasePreemptedRuns,
 } from "./codex-pet-worker-recovery.js";
-export {
-  CODEX_PET_FAILED_SETTLEMENT_GRACE_MS,
-  CODEX_PET_PARKED_APPROVAL_EXPIRY_MS,
-  expireParkedCodexPetRuns,
-  reconcilePerImageBillingSettlements,
-} from "./codex-pet-worker-billing.js";
 
 export async function startCodexPetWorker(options: {
   readonly healthPort?: number | false;
@@ -124,10 +111,6 @@ export async function startCodexPetWorker(options: {
   }
   const s3 = makeS3();
   const artifacts = createCodexPetArtifactStore({ prisma, s3 });
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
   const metrics = createCodexPetWorkerMetrics();
   await refreshDatabaseGauges(prisma, metrics);
   let ready = false;
@@ -146,11 +129,6 @@ export async function startCodexPetWorker(options: {
     stageDurations.set(active.stage, metric);
     stageStartedAt.delete(runId);
   };
-  const activated = await reconcileBillingIntents(prisma, billing);
-  metrics.billingActivated += activated;
-  if (activated) console.info(`[codex-pet-worker] activated ${activated} billed runs`);
-  const settled = await reconcilePerImageBillingSettlements({ prisma, billing });
-  if (settled) console.info(`[codex-pet-worker] settled ${settled} per-image billed runs`);
   const recovered = await recoverStaleRuns();
   metrics.staleRunsRecovered += recovered;
   if (recovered) console.info(`[codex-pet-worker] recovered ${recovered} queued/stale runs`);
@@ -173,20 +151,6 @@ export async function startCodexPetWorker(options: {
     // delivery's heartbeat overwrite a newer owner's lease.
     const workerLeaseId = `bull:${job.id ?? runId}:${randomUUID().slice(0, 12)}`;
     const controller = new AbortController();
-    const eligible = await prisma.codexPetRun.findFirst({
-      where: {
-        id: runId,
-        OR: [
-          { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
-          { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
-        ],
-      },
-      select: { id: true },
-    });
-    // A producer from an older deployment may enqueue before activation. Drop
-    // that Bull delivery without touching workflow state; maintenance requeues
-    // the same runId after the durable billing saga activates it.
-    if (!eligible) return { status: "billing_pending", runId };
     // BullMQ normally de-duplicates by jobId, but a stale-run recovery or a
     // rolling restart can briefly deliver the same run to two processors in
     // one worker process.  Keep the shutdown registry one-to-one with the
@@ -201,10 +165,6 @@ export async function startCodexPetWorker(options: {
           id: runId,
           workerId: workerLeaseId,
           status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-          OR: [
-            { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
-            { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
-          ],
         },
         data: { heartbeatAt: new Date() },
       }).catch(() => undefined);
@@ -260,7 +220,6 @@ export async function startCodexPetWorker(options: {
             }
             return event;
           },
-          billing,
           loadReferenceAsset: async (asset) => {
             if (!asset.objectKey) throw new Error("桌宠参考图必须来自已验证的私有对象存储");
             if (!isVerifiedWorkflowImageObjectKeyForUser(asset.objectKey, asset.userId)) throw new Error("参考图对象键不在所属用户的工作流命名空间");
@@ -326,13 +285,9 @@ export async function startCodexPetWorker(options: {
       metrics.maintenancePasses += 1;
       const now = new Date();
       await refreshDatabaseGauges(prisma, metrics);
-      metrics.billingActivated += await reconcileBillingIntents(prisma, billing);
-      const settled = await reconcilePerImageBillingSettlements({ prisma, billing });
-      if (settled) console.info(`[codex-pet-worker] settled ${settled} per-image billed runs`);
       metrics.staleRunsRecovered += await recoverStaleRuns();
       const expiredParked = await expireParkedCodexPetRuns({
         prisma,
-        billing,
         now: () => now,
         onError: (error, runId) => console.warn(
           `[codex-pet-worker] parked run ${runId} expiry deferred: ${safeWorkerError(error)}`,
@@ -348,64 +303,16 @@ export async function startCodexPetWorker(options: {
       });
       metrics.deletingProjectsRecovered += deletionRecovery.enqueued;
       metrics.deletingProjectRecoveryFailed += deletionRecovery.failed;
-      const [refunds, artifactCleanup] = await Promise.all([
-        prisma.codexPetRun.findMany({
-          where: {
-            billingChargeStatus: "charged",
-            billingRefundedAt: null,
-            billingOperationId: { not: null },
-            billingRefundStatus: { in: ["pending", "failed"] },
-            OR: [{ billingRefundNextRetryAt: null }, { billingRefundNextRetryAt: { lte: now } }],
-          },
-          take: 50,
-        }),
-        cleanupExpiredCodexPetArtifacts({
-          prisma,
-          s3,
-          now,
-          onError: (error) => console.warn(
-            `[codex-pet-worker] artifact cleanup failed: ${safeWorkerError(error)}`,
-          ),
-        }),
-      ]);
+      const artifactCleanup = await cleanupExpiredCodexPetArtifacts({
+        prisma,
+        s3,
+        now,
+        onError: (error) => console.warn(
+          `[codex-pet-worker] artifact cleanup failed: ${safeWorkerError(error)}`,
+        ),
+      });
       metrics.artifactsCleaned += artifactCleanup.deleted;
       metrics.artifactCleanupFailed += artifactCleanup.failed;
-      for (const run of refunds) {
-        try {
-          const result = await billing.refundResource(run.billingOperationId!);
-          if (!result.success) throw new Error("billing refund was not accepted");
-          // Multiple worker replicas/API cancellation can observe the same
-          // durable intent.  The external refund is idempotent by operationId;
-          // only the process that wins this conditional transition owns the
-          // receipt event and metric.
-          const transitioned = await prisma.codexPetRun.updateMany({
-            where: {
-              id: run.id,
-              billingRefundedAt: null,
-              billingRefundStatus: { in: ["pending", "failed"] },
-            },
-            data: { billingRefundedAt: now, billingRefundStatus: "refunded", billingRefundError: null, billingRefundLastAttemptAt: now, billingRefundRetryCount: { increment: 1 }, billingRefundNextRetryAt: null },
-          });
-          if (transitioned.count !== 1) continue;
-          metrics.billingRefunded += 1;
-          // The receipt is authoritative; a realtime event failure must not
-          // turn an already completed refund back into a pending retry.
-          await appendCodexPetEvent({ prisma, runId: run.id, type: "billing.refunded", stage: run.status, progress: run.progressPercent, message: "套餐积分已全额退回", payload: { retry: true } }).catch(() => undefined);
-        } catch (error) {
-          const retryCount = run.billingRefundRetryCount + 1;
-          // If another process completed the refund while this external call
-          // failed, never overwrite its authoritative receipt with pending.
-          const deferred = await prisma.codexPetRun.updateMany({
-            where: {
-              id: run.id,
-              billingRefundedAt: null,
-              billingRefundStatus: { in: ["pending", "failed"] },
-            },
-            data: { billingRefundStatus: "pending", billingRefundError: safeWorkerError(error), billingRefundLastAttemptAt: now, billingRefundRetryCount: retryCount, billingRefundNextRetryAt: new Date(Date.now() + Math.min(24 * 60 * 60_000, 30_000 * 2 ** Math.min(retryCount, 8))) },
-          });
-          if (deferred.count === 1) metrics.billingRefundFailed += 1;
-        }
-      }
       lastMaintenanceAt = Date.now();
     })()
       .catch((error) => console.error(`[codex-pet-worker] maintenance pass failed: ${safeWorkerError(error)}`))

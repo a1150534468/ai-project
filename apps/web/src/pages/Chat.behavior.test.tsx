@@ -306,8 +306,8 @@ describe("Chat 提交", () => {
 
 describe("Chat 错误态", () => {
   it("空态下把 error 渲染成横幅", async () => {
-    const scope = await mountChat({ error: "积分不足，请充值" });
-    expect(scope.textContent).toContain("积分不足，请充值");
+    const scope = await mountChat({ error: "上游模型不可用" });
+    expect(scope.textContent).toContain("上游模型不可用");
   });
 
   it("有消息时错误横幅出现在底部输入区上方", async () => {

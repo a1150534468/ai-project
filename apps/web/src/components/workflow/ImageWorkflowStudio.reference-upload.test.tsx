@@ -23,7 +23,6 @@ function props(overrides: Partial<ComponentProps<typeof ImageWorkflowStudio>> = 
     isGenerating: false,
     generatingCount: 0,
     isOptimizingPrompt: false,
-    estimatedPointCost: 10,
     referenceImages: [],
     isUploadingReference: false,
     onPromptChange: vi.fn(),

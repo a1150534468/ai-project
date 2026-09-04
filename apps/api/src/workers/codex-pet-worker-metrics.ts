@@ -20,9 +20,6 @@ export type WorkerMetrics = {
   runsCompleted: number;
   runsFailed: number;
   runsCancelled: number;
-  billingActivated: number;
-  billingRefunded: number;
-  billingRefundFailed: number;
   staleRunsRecovered: number;
   parkedRunsExpired: number;
   deletingProjectsRecovered: number;
@@ -58,7 +55,6 @@ export type WorkerMetrics = {
   databaseReadyRuns: number;
   databaseFailedRuns: number;
   databaseCancelledRuns: number;
-  databaseRefundedRuns: number;
 };
 
 export function createCodexPetWorkerMetrics(): WorkerMetrics {
@@ -67,9 +63,6 @@ export function createCodexPetWorkerMetrics(): WorkerMetrics {
     runsCompleted: 0,
     runsFailed: 0,
     runsCancelled: 0,
-    billingActivated: 0,
-    billingRefunded: 0,
-    billingRefundFailed: 0,
     staleRunsRecovered: 0,
     parkedRunsExpired: 0,
     deletingProjectsRecovered: 0,
@@ -105,7 +98,6 @@ export function createCodexPetWorkerMetrics(): WorkerMetrics {
     databaseReadyRuns: 0,
     databaseFailedRuns: 0,
     databaseCancelledRuns: 0,
-    databaseRefundedRuns: 0,
   };
 }
 

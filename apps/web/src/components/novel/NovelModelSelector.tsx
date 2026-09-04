@@ -1,33 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import { listModelMarketplace, type ModelMarketplaceRow } from "../../api";
+import { listModels } from "../../api";
 
-function modelTags(model: ModelMarketplaceRow): Set<string> {
-  return new Set(model.tags.split(",").map((tag) => tag.trim().toLowerCase()).filter(Boolean));
-}
-
-function supportsNovelGeneration(model: ModelMarketplaceRow): boolean {
-  return !model.model.toLowerCase().includes("embedding") && !modelTags(model).has("openai-only");
-}
-
-function sortedModels(rows: readonly ModelMarketplaceRow[]): ModelMarketplaceRow[] {
-  return [...rows]
-    .filter((model) => model.enabled && model.showInMarketplace)
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.displayName.localeCompare(b.displayName));
+interface NovelModelOption {
+  readonly model: string;
+  readonly displayName: string;
 }
 
 export function NovelModelSelector({
-  token,
   value,
   saving,
   onChange,
 }: {
-  readonly token: string;
   readonly value: string;
   readonly saving: boolean;
   readonly onChange: (model: string, displayName: string) => void;
 }) {
-  const [models, setModels] = useState<ModelMarketplaceRow[]>([]);
+  const [models, setModels] = useState<readonly NovelModelOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -35,9 +24,9 @@ export function NovelModelSelector({
     let cancelled = false;
     setLoading(true);
     setError("");
-    void listModelMarketplace(token)
-      .then((result) => {
-        if (!cancelled) setModels(sortedModels(result.data));
+    void listModels()
+      .then((rows) => {
+        if (!cancelled) setModels(rows);
       })
       .catch((reason) => {
         if (!cancelled) setError(reason instanceof Error ? reason.message : "模型列表加载失败");
@@ -46,7 +35,7 @@ export function NovelModelSelector({
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [token]);
+  }, []);
 
   const selectedKnown = useMemo(() => !value || models.some((model) => model.model === value), [models, value]);
   const title = error || "项目默认写作模型；提示词节点单独绑定的模型优先。切换仅影响尚未开始的生成任务，当前任务不受影响";
@@ -69,8 +58,8 @@ export function NovelModelSelector({
         <option value="">系统默认</option>
         {!selectedKnown && <option value={value}>{value}（已不可选）</option>}
         {models.map((model) => (
-          <option key={model.model} value={model.model} disabled={!supportsNovelGeneration(model)}>
-            {model.displayName || model.model}{supportsNovelGeneration(model) ? "" : "（小说暂不支持）"}
+          <option key={model.model} value={model.model}>
+            {model.displayName || model.model}
           </option>
         ))}
       </select>

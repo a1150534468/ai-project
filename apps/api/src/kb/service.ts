@@ -9,19 +9,6 @@ export class ForbiddenError extends Error {
   }
 }
 
-export class QuotaExceededError extends Error {
-  constructor(message: string = "Quota exceeded") {
-    super(message);
-    this.name = "QuotaExceededError";
-  }
-}
-
-export interface KbQuotaBilling {
-  getUserKbQuota(
-    userId: string
-  ): Promise<{ membershipBytes: number; defaultBytes: number }>;
-}
-
 type Prisma = PrismaClient;
 
 /**
@@ -192,69 +179,4 @@ export async function assertKbReadable(
   throw new ForbiddenError(
     `KB ${kbId} is not readable by user ${userId}`
   );
-}
-
-/**
- * Calculate total bytes used by a user in non-failed documents.
- * Sum of Document.sizeBytes where status != 'failed' and KnowledgeBase.userId = userId.
- */
-export async function usedBytes(
-  prisma: Prisma,
-  userId: string
-): Promise<number> {
-  const result = await prisma.document.aggregate({
-    _sum: { sizeBytes: true },
-    where: {
-      kb: { userId },
-      status: { not: "failed" },
-    },
-  });
-
-  return result._sum.sizeBytes ?? 0;
-}
-
-/**
- * Calculate effective quota for a user.
- * = defaultBytes + membershipBytes + sum of non-expired PURCHASE/ADMIN grants
- */
-export async function effectiveQuota(
-  prisma: Prisma,
-  billing: KbQuotaBilling,
-  userId: string
-): Promise<number> {
-  const { defaultBytes, membershipBytes } =
-    await billing.getUserKbQuota(userId);
-
-  const now = new Date();
-  const grantResult = await prisma.kbQuotaGrant.aggregate({
-    _sum: { bytes: true },
-    where: {
-      userId,
-      OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
-    },
-  });
-
-  const grantBytes = grantResult._sum.bytes ?? 0;
-
-  return defaultBytes + membershipBytes + grantBytes;
-}
-
-/**
- * Assert that adding `addBytes` would not exceed the user's effective quota.
- * Throws QuotaExceededError if usedBytes + addBytes > effectiveQuota.
- */
-export async function assertQuota(
-  prisma: Prisma,
-  billing: KbQuotaBilling,
-  userId: string,
-  addBytes: number
-): Promise<void> {
-  const used = await usedBytes(prisma, userId);
-  const effective = await effectiveQuota(prisma, billing, userId);
-
-  if (used + addBytes > effective) {
-    throw new QuotaExceededError(
-      `Quota exceeded: ${used + addBytes} > ${effective}`
-    );
-  }
 }

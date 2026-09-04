@@ -14,9 +14,9 @@ export const CODEX_PET_IMAGE_MODELS = [
 ] as const;
 export type CodexPetImageModel = typeof CODEX_PET_IMAGE_MODELS[number];
 /**
- * Fallback only. The authoritative value is the backend constant, served on the
- * pricing payload as `plannedImageCallLimit` and frozen per run on the run row;
- * read those first and use this only before either has loaded.
+ * Fallback only. The authoritative value is the backend constant, frozen per run
+ * on the run row as `plannedImageCallLimit`; read that first and use this only
+ * before the run row has loaded.
  */
 export const CODEX_PET_PLANNED_IMAGE_CALL_LIMIT = 14 as const;
 export const CODEX_PET_VISUAL_QA_MODEL = "gpt-5.6-sol" as const;
@@ -66,17 +66,6 @@ export type CodexPetProjectStatus =
   | "deleting";
 
 export type CodexPetRunStatus = Exclude<CodexPetProjectStatus, "draft" | "deleting">;
-
-export interface CodexPetPricing {
-  readonly resourceKey: string;
-  readonly displayName: string;
-  readonly pricingType: "PER_UNIT";
-  readonly rate: number;
-  readonly perUnits: number;
-  readonly enabled: boolean;
-  readonly plannedImageCallLimit?: number;
-  readonly includedBaseCandidates?: number;
-}
 
 export interface CodexPetProjectSummary {
   readonly id: string;
@@ -134,22 +123,6 @@ export interface CodexPetRun {
   readonly progressMessage: string | null;
   readonly autoContinue: boolean;
   readonly colorKey: string | null;
-  readonly billingPoints: number;
-  readonly billingMode?: string;
-  readonly billingResourceKey?: string | null;
-  readonly billingReservedUnits?: number;
-  readonly billingSettledUnits?: number;
-  readonly billingReservedPoints?: number;
-  readonly billingSettledPoints?: number;
-  readonly billingSettlementStatus?: string;
-  readonly billingChargeStatus?: string;
-  readonly billingChargeAttemptCount?: number;
-  readonly billingChargeError?: string | null;
-  readonly billingChargeNextRetryAt?: string | null;
-  readonly billingChargedAt?: string | null;
-  readonly billingActivatedAt?: string | null;
-  readonly billingRefundedAt: string | null;
-  readonly billingRefundStatus?: string;
   readonly cancelRequested: boolean;
   readonly hasSuccessfulImage: boolean;
   readonly selectedBaseArtifactId: string | null;
@@ -236,7 +209,7 @@ export interface CodexPetProjectDetail {
   readonly extraCallBudget?: CodexPetExtraCallBudget | null;
 }
 
-/** Paid repair attempts already committed, against the per-action and per-run caps. */
+/** 已用掉的额外重画次数，对应每个动作组与每次运行的上限。 */
 export interface CodexPetExtraCallBudget {
   readonly jobUsed: number;
   readonly jobLimit: number;
@@ -254,7 +227,6 @@ export interface CodexPetImageCall {
   readonly requestedModel: string;
   readonly actualModel: string | null;
   readonly status: string;
-  readonly points: number;
   readonly sentAt: string | null;
   readonly completedAt: string | null;
   readonly error: string | null;
@@ -325,15 +297,6 @@ async function requestCodexPet<T>(args: {
   });
   if (response.status === 204) return undefined as T;
   return unwrapData(await response.json() as T | { readonly data: T });
-}
-
-export async function getCodexPetPricing(token: string): Promise<CodexPetPricing> {
-  const data = await requestCodexPet<CodexPetPricing | { readonly pricing: CodexPetPricing }>({
-    token,
-    path: "/pricing",
-    fallback: "获取桌宠套餐价格失败",
-  });
-  return "pricing" in data ? data.pricing : data;
 }
 
 export async function getCodexPetModelOptions(token: string): Promise<CodexPetModelOptions> {

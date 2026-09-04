@@ -49,7 +49,7 @@ describe("normalizeArticleWorkflowPlan", () => {
   it("title 为空时从正文兜一个，而不是整单失败", () => {
     // 回归：preserve-text 是默认模式，其提示词要求「不增删正文」，
     // 遇到无独立标题的纯正文素材，模型会交回空 title。
-    // 此前 schema 的 min(1) 会让整单失败，用户白付一次文本费。
+    // 此前 schema 的 min(1) 会让整单失败，用户白等一次生成。
     const result = normalizeArticleWorkflowPlan({
       plan: planWith({ title: "", bodyMarkdown: "小米澎程定档了\n\n更多细节在后面。" }),
       config: wechat,

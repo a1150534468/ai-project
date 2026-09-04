@@ -1,6 +1,6 @@
 /**
  * 拆分 image-routes.ts 时抽出的类型层：原来这些接口就写在插件文件顶部，
- * 现在 routes / billing / task-runner 三处都要用。
+ * 现在 routes / task-runner 两处都要用。
  *
  * 只放类型，不放任何运行时代码——本文件编译产物为空，谁 import 都不会多出副作用。
  */
@@ -8,38 +8,15 @@
 import type { Buffer } from "node:buffer";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
-import type { WorkflowResourcePriceRow } from "../_shared/workflow-pricing.js";
 import type { IMAGE_TASK_STATUS } from "./image-shared.js";
-
-export interface BillingForImages {
-  reserveResource: (args: { operationId: string; userId: string; resourceKey: string; units: number; reservationTtlSeconds?: number }) => Promise<{ reserved: number }>;
-  settleResource: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
-  refundResource: (operationId: string) => Promise<{ success: boolean }>;
-  reserve: (args: { operationId: string; userId: string; type: string; model: string; inputTokens: number; maxOutputTokens: number }) => Promise<{ reserved: number }>;
-  settle: (args: { operationId: string; userId: string; model: string; inputTokens: number; outputTokens: number; cacheInputTokens?: number; cacheOutputTokens?: number }) => Promise<{ settled: number }>;
-  listResourcePrices?: () => Promise<{ data: WorkflowResourcePriceRow[] }>;
-}
 
 export type ScheduleTask = (work: () => Promise<void>) => void;
 export type ImageTaskStatus = typeof IMAGE_TASK_STATUS[keyof typeof IMAGE_TASK_STATUS];
-export interface PromptOptimizationUsage {
-  readonly inputTokens: number;
-  readonly outputTokens: number;
-  readonly cacheInputTokens?: number;
-  readonly cacheOutputTokens?: number;
-}
 
-export interface OptimizedPromptResult {
-  readonly prompt: string;
-  readonly model: string;
-  readonly usage: PromptOptimizationUsage;
-}
-
-export type PromptOptimizer = (prompt: string) => Promise<string | OptimizedPromptResult>;
+export type PromptOptimizer = (prompt: string) => Promise<string>;
 
 export interface ImageWorkflowRouteDeps {
   readonly prisma?: PrismaClient;
-  readonly billing?: BillingForImages;
   readonly fetchFn?: typeof fetch;
   readonly promptOptimizer?: PromptOptimizer;
   readonly scheduleTask?: ScheduleTask;

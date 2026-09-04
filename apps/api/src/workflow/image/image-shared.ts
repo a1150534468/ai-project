@@ -3,12 +3,11 @@
  *
  * 单独一个文件的唯一原因是破循环导入：image-routes 要 import reaper 来起定时器，
  * reaper 又要用 routes 里的状态常量与阈值。让两边都只依赖本文件；本文件只许依赖
- * 「自己谁也不 import」的叶子模块（image-dispatch-gate.ts / reservation-window.ts
- * 都是这样的），这样循环从根上不成立。形状对齐 portrait-shared.ts / article-workflow-shared.ts。
+ * 「自己谁也不 import」的叶子模块（image-dispatch-gate.ts 就是这样的），
+ * 这样循环从根上不成立。形状对齐 portrait-shared.ts / article-workflow-shared.ts。
  */
 
 import { DEFAULT_IMAGE_UPSTREAM_QUEUE_WAIT_MS } from "../_shared/image-dispatch-gate.js";
-import { reservationTtlSeconds } from "../_shared/reservation-window.js";
 
 const DEFAULT_RETRY_DELAY_MS = 3000;
 const DEFAULT_ATTEMPT_TIMEOUT_MS = 600_000;
@@ -19,25 +18,6 @@ export const IMAGE_TASK_STATUS = {
   failed: "failed",
   cancelled: "cancelled",
 } as const;
-
-/**
- * 终态。写完这些之后不会再有 runner 推进这一行；`running` 是唯一的非终态。
- *
- * 注意对账扫的是**这一组**，不是 running：漏账的行恰恰是
- * 「状态已经写成终态、但结算没落地」的，拿非终态去扫对账永远是零行
- * （这一点计划里写错了，见 P0.4 执行记录）。
- */
-export const IMAGE_TERMINAL_STATUSES = [
-  IMAGE_TASK_STATUS.completed,
-  IMAGE_TASK_STATUS.failed,
-  IMAGE_TASK_STATUS.cancelled,
-] as const;
-
-/** 还没结算掉的预留状态。settling 由 reconcile 自己再判一次是否真卡住。 */
-export const IMAGE_UNSETTLED_BILLING_STATUSES = ["reserved", "settle_failed", "settling"] as const;
-
-/** 进程崩在 settling 的预留：超过该时长视为无人认领，可重置回 reserved 再结算。 */
-export const SETTLING_STALE_MS = 10 * 60_000;
 
 /**
  * 卡单判定阈值。
@@ -63,32 +43,12 @@ export function loadImageStaleTaskMs(env: NodeJS.ProcessEnv = process.env): numb
 }
 
 /**
- * 预留有效期（秒）。一笔预留从建行一直持有到任务终态结算，跨越 count 张图 × 每张的全部
- * 重试，远超 billing 的 10 分钟全局兜底（默认取值下单次尝试超时本身就是 600s），
- * 不声明就会在运行途中被按 actual=0 关账，之后每次结算都静默返回 0。
- *
- * 心跳是「每次重试写一行」，所以心跳间隔用 {@link loadImageStaleTaskMs}，
- * 要跨过的间隔数 = 张数 × 单张尝试次数（闸门会把并发扇出压成接近串行，按最坏算）。
- * maxAttempts 由调用方传入：那个 loader 在 image-routes 里，本文件不能反向依赖它。
- */
-export function imageReservationTtlSeconds(
-  args: { readonly count: number; readonly maxAttempts: number },
-  env: NodeJS.ProcessEnv = process.env,
-): number {
-  return reservationTtlSeconds({
-    perHeartbeatMs: loadImageStaleTaskMs(env),
-    heartbeats: Math.max(1, args.count) * Math.max(1, args.maxAttempts),
-    env,
-  });
-}
-
-/**
  * 任务行。放在这里是为了让 image-reaper **完全不 import image-routes**——
  * 它只需要把整行透传回去，类型跟着行走就够，循环导入从根上不存在。
  *
  * reaper 的 findMany 一律不加 `select`：这个接口是数据库行的结构子集，
  * 加了 select 会让透传的行缺列，而缺的列编译期看不出来
- * （runImageGenerationTask 要 referenceAssetIds / count / billingResourceKey）。
+ * （runImageGenerationTask 要 referenceAssetIds / count）。
  */
 export interface ImageGenerationTaskRow {
   readonly id: string;
@@ -104,12 +64,6 @@ export interface ImageGenerationTaskRow {
   readonly status: string;
   readonly completedCount: number;
   readonly error: string | null;
-  // 旧任务（升级前创建）没有这些列的值：billingMode 缺省视为 "charge"。
-  readonly billingMode?: string;
-  readonly billingResourceKey?: string | null;
-  readonly billingReservedUnits?: number;
-  readonly billingSettledUnits?: number | null;
-  readonly billingStatus?: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }

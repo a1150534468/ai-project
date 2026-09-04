@@ -18,11 +18,9 @@ import {
   sanitizeCodexPetDirectionRepairPrompt,
 } from "../codex-pet-prompts.js";
 import {
-  completeImageGenerationAttempt,
   consumeImageGenerationApproval,
-  prepareImageGenerationDispatch,
   recordImageGenerationAttempt,
-} from "./runner-billing.js";
+} from "./runner-image-approval.js";
 import {
   ensureJob,
   failJobAttempt,
@@ -45,7 +43,6 @@ import {
 } from "./runner-types.js";
 import {
   asRecord,
-  configuredTransportAttempts,
   imageFailureMetadata,
   imageInput,
   providerMetadata,
@@ -177,8 +174,8 @@ export function poseBoardSalvageMetadata(salvage: { readonly goodSourceSlots: re
 /**
  * Recover a salvage donor written by an earlier process.
  *
- * Per-image billing runs one attempt per invocation: the in-memory donor never
- * survives to the approved retry, so the durable board artifact is the only
+ * A run that pauses for approval after one attempt never carries its in-memory
+ * donor to the approved retry, so the durable board artifact is the only
  * carrier. The donor is scoped to the job's current `inputRevision` because a
  * changed dependency invalidates the old pixels along with the old attempt
  * budget.
@@ -536,7 +533,7 @@ export async function runBoardJob(ctx: RunnerContext, input: {
     const completed = await completedBoardJob(ctx, job);
     if (completed) {
       // A process may have crashed after persisting a passed job but before
-      // the billing-success marker in an older deployment. Reconcile that
+      // the successful-image marker in an older deployment. Reconcile that
       // durable passed result when resuming, without treating a merely
       // generated/failed board as a success.
       const run = await currentRun(ctx);
@@ -579,10 +576,8 @@ export async function runBoardJob(ctx: RunnerContext, input: {
     : Math.max(1, job.attempt + 1);
   const workflowStage = input.workflowStage
     ?? (input.qaKind === "row" ? "standard_generating" : "direction_generating");
-  const requiresSingleCallApproval = ctx.perImageBilling || (
-    ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0"
-    && (input.qaKind === "directions" || workflowStage === "validating")
-  );
+  const requiresSingleCallApproval = ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0"
+    && (input.qaKind === "directions" || workflowStage === "validating");
   for (let attempt = firstAttempt; attempt <= job.maxAttempts; attempt += 1) {
     await checkCancelled(ctx);
     job = await startJob(ctx, job, attempt, input.progress, `${input.qaContext}${attempt > 1 ? `（自动修复 ${attempt - 1}/${job.maxAttempts}）` : ""}`);
@@ -591,7 +586,7 @@ export async function runBoardJob(ctx: RunnerContext, input: {
     // provider request could have started. A missing budget still raises the
     // approval-required signal and is converted into an awaiting-review pause
     // by the outer runner without contacting the model.
-    if (!ctx.perImageBilling && requiresSingleCallApproval) await consumeImageGenerationApproval(ctx, input.key);
+    if (requiresSingleCallApproval) await consumeImageGenerationApproval(ctx, input.key);
     try {
       const repairReferences = codexPetRepairGenerationReferences(ctx.imageModel, input.references, previousFailedBoard);
       const attachPreviousFailedBoard = repairReferences.length > input.references.length;
@@ -613,27 +608,18 @@ export async function runBoardJob(ctx: RunnerContext, input: {
         quality: "low",
         env: ctx.env,
         signal: ctx.signal,
-        // Per-image billing retries the transport inside the one paid unit; the
-        // legacy approval gate keeps its one-shot semantics because there each
-        // provider attempt consumes a separate approval.
-        maxAttempts: ctx.perImageBilling
-          ? configuredTransportAttempts(ctx.env)
-          : requiresSingleCallApproval || job.maxAttempts === 1 || ctx.maxBoardAttempts === 1
-            ? 1
-            : undefined,
-        onAttempt: ctx.perImageBilling ? undefined : (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, attempt, providerAttempt),
-        onRequestDispatching: ctx.perImageBilling
-          ? (transportAttempt) => prepareImageGenerationDispatch(ctx, input.key, attempt, transportAttempt)
+        // The approval gate keeps its one-shot semantics: there each provider
+        // attempt consumes a separate approval.
+        maxAttempts: requiresSingleCallApproval || job.maxAttempts === 1 || ctx.maxBoardAttempts === 1
+          ? 1
           : undefined,
-        onRequestSent: ctx.perImageBilling ? (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, attempt, providerAttempt) : undefined,
+        onAttempt: (providerAttempt) => recordImageGenerationAttempt(ctx, input.key, providerAttempt),
         onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", workflowStage, input.progress, "上游生图调用重试中", {
           transportAttempt,
           retryKind: "transport",
-          ...(ctx.perImageBilling ? { withinPaidCall: true } : {}),
           ...imageFailureMetadata(error),
         }, input.key),
       });
-      await completeImageGenerationAttempt(ctx, input.key, attempt, generated.provider);
       await checkCancelled(ctx);
       const boardMetadata = {
         ...providerMetadata(generated.provider),
@@ -714,7 +700,7 @@ export async function runBoardJob(ctx: RunnerContext, input: {
               },
               expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
             });
-            await emit(ctx, "validation.warning", workflowStage, input.progress, `${input.qaContext}复用了上一次调用的 ${candidateSlots.length} 个合格格位，未额外付费生图`, {
+            await emit(ctx, "validation.warning", workflowStage, input.progress, `${input.qaContext}复用了上一次调用的 ${candidateSlots.length} 个合格格位，未额外生图`, {
               retryKind: "salvage",
               salvagedSourceSlots: [...candidateSlots],
               salvagedFromAttempt: salvage.attempt,
@@ -869,9 +855,9 @@ export async function runBoardJob(ctx: RunnerContext, input: {
         }
         previousFailedBoard = board;
         // Record this board's clean cells so the next attempt can splice them
-        // back in instead of paying for eight poses to fix one. The donor board
-        // must stay loadable, so the pixels live on the artifact and the slot
-        // map lives in its metadata.
+        // back in instead of regenerating eight poses to fix one. The donor
+        // board must stay loadable, so the pixels live on the artifact and the
+        // slot map lives in its metadata.
         const health = poseBoardSlotHealth(extracted, input);
         const candidate: PoseBoardSalvage = {
           board,
@@ -937,8 +923,7 @@ export async function runBoardJob(ctx: RunnerContext, input: {
         continue;
       }
       // Only now has this image passed both deterministic extraction and the
-      // visual action/identity gate.  A generated-but-rejected board must not
-      // affect the cancellation refund decision.
+      // visual action/identity gate.
       const qaProvenance = ctx.qualityInspectionEnabled
         ? assertCodexPetVisualQaProvenance(qa.modelProvenance, ctx.visualQaModel, input.key)
         : { enabled: false, requestedModel: null, actualModels: [], routes: [] };
@@ -1027,7 +1012,6 @@ export async function runBoardJob(ctx: RunnerContext, input: {
       await emit(ctx, "job.completed", eventStage, input.progress, `${input.qaContext}已通过检查`, { attempt, warnings: qa.warnings }, input.key);
       return { job, frames: extracted.frames, frameArtifacts, board, boardArtifact, mirrorSafe: qa.mirrorSafe, qa };
     } catch (error) {
-      await completeImageGenerationAttempt(ctx, input.key, attempt, undefined, error).catch(() => undefined);
       if (error instanceof CodexPetImageApprovalRequiredError) throw error;
       if (error instanceof CodexPetLeaseLostError || ctx.signal?.reason instanceof CodexPetLeaseLostError) throw new CodexPetLeaseLostError();
       if (error instanceof CodexPetCancelledError || ctx.signal?.aborted) throw new CodexPetCancelledError();

@@ -74,7 +74,7 @@ export const articleWorkflowCreationConfigSchema = z.discriminatedUnion("mode", 
  * html-fragment 计划。
  *
  * title 允许为空串，由 normalizeArticleWorkflowPlan 从正文兜出一个——
- * 正文与配图都齐了却因为缺个标题整单失败，用户要白付一次文本费再重跑，
+ * 正文与配图都齐了却因为缺个标题整单失败，用户要白等一次生成再重跑，
  * 这与 caption 链路「一律归一化，不抛错」的取舍保持一致。
  */
 export const articleWorkflowPlanSchema = z.object({
@@ -95,7 +95,7 @@ export const articleWorkflowPlanSchema = z.object({
 
 /**
  * caption 计划：字数上限收得比平台硬限制宽，让 LLM 的轻微超标先落地，
- * 再由 normalizeArticleWorkflowCaptionPlan 按平台裁剪——超字数重跑的钱不该由用户出。
+ * 再由 normalizeArticleWorkflowCaptionPlan 按平台裁剪——不该为几个字的超标让用户重跑一遍。
  */
 export const articleWorkflowCaptionPlanSchema = z.object({
   title: z.string().trim().min(1).max(200),

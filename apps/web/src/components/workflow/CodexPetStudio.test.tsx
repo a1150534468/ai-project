@@ -8,7 +8,6 @@ import type {
   CodexPetArtifact,
   CodexPetEvent,
   CodexPetJob,
-  CodexPetPricing,
   CodexPetProject,
   CodexPetProjectDetail,
   CodexPetProjectSummary,
@@ -20,16 +19,6 @@ import {
   CODEX_PET_STREAM_RECONNECT_MS,
 } from "./codexPetStudioModel";
 import { CodexPetStudio, type CodexPetStudioClient } from "./CodexPetStudio";
-
-const pricing: CodexPetPricing = {
-  resourceKey: "codex_pet_v2_package",
-  displayName: "Codex 桌宠 v2 生图调用",
-  pricingType: "PER_UNIT",
-  rate: 200,
-  perUnits: 1,
-  enabled: true,
-  includedBaseCandidates: 2,
-};
 
 function makeProject(overrides: Partial<CodexPetProject> = {}): CodexPetProject {
   return {
@@ -76,14 +65,6 @@ function makeRun(overrides: Partial<CodexPetRun> = {}): CodexPetRun {
     progressMessage: "请选择主形象",
     autoContinue: false,
     colorKey: "#ff00ff",
-    billingPoints: 0,
-    billingMode: "per_image_call_v1",
-    billingReservedUnits: 14,
-    billingSettledUnits: 0,
-    billingReservedPoints: 2800,
-    billingSettledPoints: 0,
-    billingSettlementStatus: "reserved",
-    billingRefundedAt: null,
     cancelRequested: false,
     hasSuccessfulImage: true,
     selectedBaseArtifactId: null,
@@ -167,7 +148,6 @@ function makeClient(args: {
   const project = args.project ?? makeProject();
   const detail = args.detail ?? { project, latestRun: null, runs: [], artifacts: [], jobs: [] };
   return {
-    getPricing: vi.fn().mockResolvedValue(pricing),
     listProjects: vi.fn().mockResolvedValue([summary(project)]),
     createProject: vi.fn().mockResolvedValue(project),
     getProject: vi.fn().mockResolvedValue(detail),
@@ -534,8 +514,6 @@ describe("CodexPetStudio", () => {
       status: "failed",
       progressStage: "failed",
       error: "image relay 429 Concurrency limit exceeded",
-      billingMode: "per_image_call_v1",
-      billingSettlementStatus: "settled",
       qualityInspectionEnabled: false,
       hasSuccessfulImage: true,
       selectedBaseArtifactId: null,

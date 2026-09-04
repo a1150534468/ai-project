@@ -1,9 +1,6 @@
 /**
- * 桌宠工坊右栏:阶段进度 / 视觉任务 / 计费与归档 / 实时事件 / 运行诊断。
+ * 桌宠工坊右栏:阶段进度 / 视觉任务 / 运行与归档 / 实时事件 / 运行诊断。
  * 从 `CodexPetStudio.tsx` 的 JSX 原样搬出。
- *
- * 「已预留积分」和「预计退回」两行的注释一并搬来:前者不许在前端复算计划内调用数,后者不许用
- * `reserved - settled`。这两条都是把用户看哭过的显示错误。
  */
 import { Icon } from "@iconify/react";
 import { CODEX_PET_PLANNED_IMAGE_CALL_LIMIT } from "../../codexPetApi";
@@ -14,7 +11,7 @@ import type { CodexPetStudioController } from "./useCodexPetStudio";
 
 export function CodexPetStudioRunSidebar({ studio }: { readonly studio: CodexPetStudioController }) {
   const { state, derived } = studio;
-  const { detail, events, streamState, pricing } = state;
+  const { detail, events, streamState } = state;
   const { latestRun, progress, lastEvent } = derived;
 
   return (
@@ -88,30 +85,9 @@ export function CodexPetStudioRunSidebar({ studio }: { readonly studio: CodexPet
           ))}
         </div>
       </Card>
-      <Card ariaLabel="计费与知识库归档">
-        <CardTitle icon="mdi:database-check-outline" title="计费与归档" />
+      <Card ariaLabel="运行与知识库归档">
+        <CardTitle icon="mdi:database-check-outline" title="运行与归档" />
         <div className="space-y-2.5 p-4 text-[11px]">
-          <div className="flex items-center justify-between">
-            <span className="text-ink-tertiary">已预留积分</span>
-            <span className="font-semibold text-ink">
-              {/* Never restate the planned-call count locally: it is a backend
-                  constant served with the price, and a stale copy here would
-                  quote a reservation the user is not actually charged. */}
-              {latestRun ? `${latestRun.billingReservedPoints ?? 0} 积分` : pricing ? `${pricing.rate * (pricing.plannedImageCallLimit ?? 0)} 积分` : "—"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-ink-tertiary">已结算积分</span>
-            <span className="font-semibold text-ink">{latestRun ? `${latestRun.billingSettledPoints ?? 0} 积分` : "—"}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-ink-tertiary">预计退回</span>
-            {/* Settlement happens once, at the end. Before that `settled` is 0,
-                so `reserved - settled` reads as a full refund even though every
-                dispatched planned call will be charged. Project from the ledger
-                instead, on the same unit rule the backend settles by. */}
-            <span className="font-semibold text-ink">{latestRun ? `${derived.projectedRefundPoints ?? 0} 积分${latestRun.billingSettlementStatus === "settled" ? "" : "（预估）"}` : "—"}</span>
-          </div>
           {derived.packageArtifact && (
             <div className="flex items-center justify-between">
               <span className="text-ink-tertiary">兼容包大小</span>

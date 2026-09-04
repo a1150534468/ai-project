@@ -14,7 +14,6 @@ import {
 } from "@ai-assistant/article-workflow";
 import { assertArticleWorkflowImitationOriginality } from "./article-workflow-creation.js";
 import type { PrismaClient } from "@prisma/client";
-import { runReservedArticleTextTask } from "./article-workflow-billing.js";
 import { assertArticleWorkflowHtmlFragment, repairArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";
 import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
 import { renderDeterministicArticleBodyHtmlGuarded } from "./article-workflow-deterministic.js";
@@ -25,7 +24,6 @@ import {
 } from "./article-workflow-image-manifest.js";
 import { populateArticleWorkflowImages } from "./article-workflow-images.js";
 import {
-  estimateArticleWorkflowReserveUnits,
   generateArticleWorkflowPlan,
   renderArticleWorkflowBodyHtml,
 } from "./article-workflow-llm.js";
@@ -36,7 +34,7 @@ import type { ArticleProjectRow, ArticleWorkflowRouteDeps } from "./article-work
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { finalizeArticleWorkflowProjectState, updateArticleWorkflowProjectState } from "./article-workflow-store.js";
 
-type RunnerDeps = Required<Pick<ArticleWorkflowRouteDeps, "billing" | "llm" | "fetchFn" | "env">> & {
+type RunnerDeps = Required<Pick<ArticleWorkflowRouteDeps, "llm" | "fetchFn" | "env">> & {
   readonly prisma: PrismaClient;
 };
 
@@ -105,8 +103,8 @@ export interface MaterializedArticle {
 /**
  * 两条产物链路共用的配图填充器。
  *
- * 由 materializeArticleWorkflow 注入，内部已绑好 onCharged 收集器与平台配置——
- * 图片费回滚清单必须只有一份，caption 链路不允许自己再调一次 populateArticleWorkflowImages。
+ * 由 materializeArticleWorkflow 注入，内部已绑好平台配置——
+ * caption 链路不允许自己再调一次 populateArticleWorkflowImages。
  */
 export type PopulateArticleImages = (args: {
   readonly imageManifest: readonly ArticleWorkflowImageAsset[];
@@ -128,7 +126,6 @@ async function commitReadyArticleProject(
     progressPercent: 100,
     progressMessage: args.progressMessage,
     error: null,
-    billingOperationId: null,
     title: args.result.title,
     summary: args.result.summary,
     generationMode: args.generationMode,
@@ -155,7 +152,6 @@ async function finalizeFailedArticleProject(
     progressPercent: 100,
     progressMessage: args.progressMessage,
     error: errorMessageOrFallback(args.error, "文章生成失败"),
-    billingOperationId: null,
   }).catch(() => false);
   if (!committed) {
     console.warn(`[article-workflow] 失败终态写入被跳过（reaper 已收割）project=${projectId}`);
@@ -182,86 +178,47 @@ async function materializeArticleWorkflow(
     readonly regenerateImages: boolean;
     readonly generateImages: boolean;
     readonly model: string;
-    /** 写 ready 终态；返回 false 表示已被 reaper 抢占，reserve 将退款而非结算 */
+    /** 写 ready 终态；返回 false 表示已被 reaper 抢占，成品不再交付给用户 */
     readonly commit: (result: MaterializedArticle) => Promise<boolean>;
   },
 ): Promise<MaterializedArticle> {
   const platformConfig = articleWorkflowPlatformConfig(args.platform);
-  // 已扣款的图片 operationId：整单没能交付（抛错或终态被 reaper 抢占）就逐个退回，
-  // 收集器放在 work 之外，图片批次自身抛错时也不丢清单
-  const chargedImageOperationIds: string[] = [];
-  const refundChargedImages = async (): Promise<void> => {
-    for (const operationId of chargedImageOperationIds) {
-      await args.billing.refundResource(operationId).catch(() => undefined);
-    }
-  };
-  return runReservedArticleTextTask({
-    billing: args.billing,
-    commitResult: async (result) => {
-      const committed = await args.commit(result);
-      // reaper 已把项目置 failed，成品不会交付给用户，图片费同样要退
-      if (!committed) await refundChargedImages();
-      return committed;
-    },
-    userId: args.userId,
-    projectId: args.projectId,
-    units: estimateArticleWorkflowReserveUnits({
-      sourceText: args.sourceText,
-      creationConfig: args.creationConfig,
-      currentHtml: args.currentHtml,
-      currentCaption: args.currentCaption,
-      instruction: args.instruction,
-    }),
-    // 落库供 reaper 在进程崩溃后退款；终态写入时清空
-    onReserved: async (operationId) => {
-      await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
-        billingOperationId: operationId,
-      });
-    },
-    work: async () => {
-      const populateImages: PopulateArticleImages = ({ imageManifest, onProgress }) =>
-        populateArticleWorkflowImages({
-          prisma: args.prisma,
-          billing: args.billing,
-          fetchFn: args.fetchFn,
-          env: args.env,
-          userId: args.userId,
-          projectId: args.projectId,
-          imageManifest,
-          platformConfig,
-          force: args.regenerateImages,
-          onCharged: (operationId) => chargedImageOperationIds.push(operationId),
-          onProgress,
-        });
+  const populateImages: PopulateArticleImages = ({ imageManifest, onProgress }) =>
+    populateArticleWorkflowImages({
+      prisma: args.prisma,
+      fetchFn: args.fetchFn,
+      env: args.env,
+      userId: args.userId,
+      projectId: args.projectId,
+      imageManifest,
+      platformConfig,
+      force: args.regenerateImages,
+      onProgress,
+    });
 
-      try {
-        if (platformConfig.outputKind === "caption") {
-          return await materializeCaptionArticle({
-            creationConfig: args.creationConfig,
-            prisma: args.prisma,
-            llm: args.llm,
-            model: args.model,
-            projectId: args.projectId,
-            platform: args.platform,
-            platformConfig,
-            sourceFormat: args.sourceFormat,
-            sourceText: args.sourceText,
-            currentCaption: args.currentCaption,
-            currentImages: args.currentImages,
-            regenerateImages: args.regenerateImages,
-            generateImages: args.generateImages,
-            instruction: args.instruction,
-            populateImages,
-          });
-        }
-        return await materializeHtmlFragmentArticle({ ...args, platformConfig, populateImages });
-      } catch (error) {
-        // 整单失败：已扣的图片费逐个退回（billing 按 operationId 幂等），再重抛给外层置 failed
-        await refundChargedImages();
-        throw error;
-      }
-    },
-  });
+  const result =
+    platformConfig.outputKind === "caption"
+      ? await materializeCaptionArticle({
+          creationConfig: args.creationConfig,
+          prisma: args.prisma,
+          llm: args.llm,
+          model: args.model,
+          projectId: args.projectId,
+          platform: args.platform,
+          platformConfig,
+          sourceFormat: args.sourceFormat,
+          sourceText: args.sourceText,
+          currentCaption: args.currentCaption,
+          currentImages: args.currentImages,
+          regenerateImages: args.regenerateImages,
+          generateImages: args.generateImages,
+          instruction: args.instruction,
+          populateImages,
+        })
+      : await materializeHtmlFragmentArticle({ ...args, platformConfig, populateImages });
+  // 终态写入受 reaper 抢占保护：commit 返回 false 时不再写，失败现场留给用户
+  await args.commit(result);
+  return result;
 }
 
 async function materializeHtmlFragmentArticle(
@@ -386,7 +343,7 @@ async function materializeHtmlFragmentArticle(
       bodyMarkdown,
       imageManifest,
     });
-    // 先修到词汇表以内再硬校验：排版是最后一步，配图钱已经花了，
+    // 先修到词汇表以内再硬校验：排版是最后一步，配图已经出完了，
     // 不该因为模型多写一个 <h2> 就让整行 failed。修的都是不动可见文字的操作。
     const guardedHtml = assertArticleWorkflowHtmlFragment({
       html: repairArticleWorkflowHtmlFragment(rawHtml),
@@ -524,11 +481,9 @@ export async function runArticleWorkflowMissingImages(
     return;
   }
 
-  const chargedOperationIds: string[] = [];
   try {
     const imageManifest = await populateArticleWorkflowImages({
       prisma: args.prisma,
-      billing: args.billing,
       fetchFn: args.fetchFn,
       env: args.env,
       userId: args.project.userId,
@@ -536,7 +491,6 @@ export async function runArticleWorkflowMissingImages(
       imageManifest: current.imageManifest,
       platformConfig: articleWorkflowPlatformConfig(current.platform),
       force: false,
-      onCharged: (operationId) => chargedOperationIds.push(operationId),
       onProgress: async (completed, total) => {
         await updateArticleWorkflowProjectState(args.prisma, args.project.id, {
           status: "revising",
@@ -562,7 +516,7 @@ export async function runArticleWorkflowMissingImages(
       platformConfig.outputKind === "caption"
         ? current.bodyHtml
         : (deterministicHtml ?? applyArticleImageManifestToHtml(current.bodyHtml, imageManifest));
-    const committed = await finalizeArticleWorkflowProjectState(args.prisma, args.project.id, {
+    await finalizeArticleWorkflowProjectState(args.prisma, args.project.id, {
       bodyHtml,
       imageManifestJson: imageManifest,
       status: "ready",
@@ -571,15 +525,7 @@ export async function runArticleWorkflowMissingImages(
       progressMessage: "配图已生成",
       error: null,
     });
-    if (!committed) {
-      for (const operationId of chargedOperationIds) {
-        await args.billing.refundResource(operationId).catch(() => undefined);
-      }
-    }
   } catch (error) {
-    for (const operationId of chargedOperationIds) {
-      await args.billing.refundResource(operationId).catch(() => undefined);
-    }
     await finalizeArticleWorkflowProjectState(args.prisma, args.project.id, {
       status: "ready",
       progressStage: "ready",

@@ -6,11 +6,7 @@ import { type CodexPetArtifact, type CodexPetJob, Prisma } from "@prisma/client"
 import { codexPetGptFailedContinuationSnapshot } from "../codex-pet-gpt-continuation.js";
 import { CodexPetModelContractError } from "../codex-pet-model-contract.js";
 import { buildBaseChoiceQaContext, buildBasePetPrompt, buildVisualQaPrompt } from "../codex-pet-prompts.js";
-import {
-  completeImageGenerationAttempt,
-  prepareImageGenerationDispatch,
-  recordImageGenerationAttempt,
-} from "./runner-billing.js";
+import { recordImageGenerationAttempt } from "./runner-image-approval.js";
 import {
   ensureJob,
   failJobAttempt,
@@ -23,7 +19,6 @@ import { checkCancelled, currentRun, emit, updateOwnedJob } from "./runner-lease
 import { assertCodexPetVisualQaProvenance } from "./runner-provenance.js";
 import {
   CodexPetCancelledError,
-  CodexPetImageApprovalRequiredError,
   CodexPetLeaseLostError,
   IDENTITY_GUIDE_VERSION,
   INTERMEDIATE_TTL_MS,
@@ -31,13 +26,11 @@ import {
 } from "./runner-types.js";
 import {
   asRecord,
-  configuredTransportAttempts,
   imageFailureMetadata,
   providerMetadata,
   safeError,
 } from "./runner-util.js";
 import { type CodexPetVisualModelProvenance, codexPetVisualQaVerdictPasses } from "../codex-pet-visual.js";
-import { classifyImageGenerationError } from "../../_shared/image-service.js";
 
 export async function reuseGptContinuationBaseCandidate(
   ctx: RunnerContext,
@@ -142,22 +135,13 @@ export async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: 
       quality: "low",
       env: ctx.env,
       signal: ctx.signal,
-      // Transport retries stay inside this one charged unit; only a quality
-      // redraw costs another approval.
-      maxAttempts: ctx.perImageBilling ? configuredTransportAttempts(ctx.env) : undefined,
-      onAttempt: ctx.perImageBilling ? undefined : (providerAttempt) => recordImageGenerationAttempt(ctx, key, attempt, providerAttempt),
-      onRequestDispatching: ctx.perImageBilling
-        ? (transportAttempt) => prepareImageGenerationDispatch(ctx, key, attempt, transportAttempt)
-        : undefined,
-      onRequestSent: ctx.perImageBilling ? (providerAttempt) => recordImageGenerationAttempt(ctx, key, attempt, providerAttempt) : undefined,
+      onAttempt: (providerAttempt) => recordImageGenerationAttempt(ctx, key, providerAttempt),
       onRetry: async (error, transportAttempt) => emit(ctx, "job.retrying", "base_generating", 8, "生图服务暂时不可用，正在重试", {
         transportAttempt,
         retryKind: "transport",
-        ...(ctx.perImageBilling ? { withinPaidCall: true } : {}),
         ...imageFailureMetadata(error),
       }, key),
     });
-    await completeImageGenerationAttempt(ctx, key, attempt, generated.provider);
     await checkCancelled(ctx);
     const artifact = await ctx.artifacts.put({
       userId: ctx.project.userId,
@@ -172,23 +156,14 @@ export async function generateBaseCandidate(ctx: RunnerContext, candidateIndex: 
       expiresAt: new Date(Date.now() + INTERMEDIATE_TTL_MS),
     });
     // A stored base candidate is already a successful, user-visible image.
-    // Persist this before releasing the run into awaiting_base_review so a
-    // cancellation from that state follows the documented no-refund branch.
+    // Persist this before releasing the run into awaiting_base_review.
     await markImageSucceeded(ctx, job, generated.provider);
     job = await ctx.prisma.codexPetJob.update({ where: { id: job.id }, data: { status: "completed", outputArtifactIds: [artifact.id], completedAt: new Date(), workerId: null } });
     await emit(ctx, "preview.ready", "base_generating", 10, `主形象候选 ${candidateIndex} 已生成`, { artifactId: artifact.id }, key);
     await emit(ctx, "job.completed", "base_generating", 10, `主形象候选 ${candidateIndex} 已完成`, { artifactId: artifact.id }, key);
     return { artifact, buffer: generated.buffer };
   } catch (error) {
-    await completeImageGenerationAttempt(ctx, key, attempt, undefined, error).catch(() => undefined);
-    const failure = classifyImageGenerationError(error);
     await failJobAttempt(ctx, job, attempt, safeError(error), 10, true, imageFailureMetadata(error));
-    if (ctx.perImageBilling && failure.category === "rate_limit") {
-      throw new CodexPetImageApprovalRequiredError(
-        key,
-        `上游并发额度暂不可用，${key} 已暂停；需要单次授权后重试`,
-      );
-    }
     throw error;
   }
 }
@@ -218,7 +193,7 @@ export async function selectBaseAutomatically(ctx: RunnerContext, candidates: re
   // Never silently pick a visually rejected candidate.  Continuing with the
   // highest numeric score would produce a run whose canonical identity was
   // explicitly rejected by every reviewer.  The caller treats this as a
-  // terminal workflow error (and therefore refunds the package).
+  // terminal workflow error.
   if (verdicts.length === 0 || verdicts.every((verdict) => !eligible(verdict))) {
     const qaArtifact = await putJsonArtifact(ctx, {
       jobId: job.id,

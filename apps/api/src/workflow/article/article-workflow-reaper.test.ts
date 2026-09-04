@@ -3,7 +3,7 @@ import { reapStaleArticleWorkflowProjects } from "./article-workflow-reaper.js";
 import { ARTICLE_PROJECT_STALE_MS, articleProjectStaleMs } from "./article-workflow-shared.js";
 import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS } from "./article-workflow-retry.js";
 
-type StuckRow = { id: string; status: string; billingOperationId: string | null };
+type StuckRow = { id: string; status: string };
 
 function fakePrisma(rows: StuckRow[], claimCount = 1) {
   const articleWorkflowProject = {
@@ -13,18 +13,11 @@ function fakePrisma(rows: StuckRow[], claimCount = 1) {
   return { prisma: { articleWorkflowProject } as never, articleWorkflowProject };
 }
 
-function fakeBilling() {
-  return { refundResource: vi.fn(async (_operationId: string) => ({ success: true })) };
-}
-
 describe("reapStaleArticleWorkflowProjects", () => {
-  it("超期 generating 项目置 failed 并退款", async () => {
-    const { prisma, articleWorkflowProject } = fakePrisma([
-      { id: "p1", status: "generating", billingOperationId: "article-text:p1:abc" },
-    ]);
-    const billing = fakeBilling();
+  it("超期 generating 项目置 failed", async () => {
+    const { prisma, articleWorkflowProject } = fakePrisma([{ id: "p1", status: "generating" }]);
 
-    const reaped = await reapStaleArticleWorkflowProjects({ prisma, billing, staleMs: 1_000, now: () => 100_000 });
+    const reaped = await reapStaleArticleWorkflowProjects({ prisma, staleMs: 1_000, now: () => 100_000 });
 
     expect(reaped).toBe(1);
     const where = articleWorkflowProject.findMany.mock.calls[0]![0].where as {
@@ -37,51 +30,29 @@ describe("reapStaleArticleWorkflowProjects", () => {
       where: { id: "p1", status: "generating" },
       data: { status: "failed", progressStage: "failed", progressPercent: 100 },
     });
-    expect(billing.refundResource).toHaveBeenCalledWith("article-text:p1:abc");
   });
 
-  it("抢占失败（count=0）不退款", async () => {
-    const { prisma } = fakePrisma([{ id: "p1", status: "generating", billingOperationId: "op" }], 0);
-    const billing = fakeBilling();
+  it("抢占失败（count=0）不计入收尸", async () => {
+    const { prisma } = fakePrisma([{ id: "p1", status: "generating" }], 0);
 
-    const reaped = await reapStaleArticleWorkflowProjects({ prisma, billing, staleMs: 1_000, now: () => 100_000 });
+    const reaped = await reapStaleArticleWorkflowProjects({ prisma, staleMs: 1_000, now: () => 100_000 });
 
     expect(reaped).toBe(0);
-    expect(billing.refundResource).not.toHaveBeenCalled();
   });
 
-  it("无 billingOperationId 只置 failed 不退款", async () => {
+  it("多行同时超期时逐行收尸，generating 与 revising 一视同仁", async () => {
     const { prisma, articleWorkflowProject } = fakePrisma([
-      { id: "p1", status: "revising", billingOperationId: null },
+      { id: "p1", status: "generating" },
+      { id: "p2", status: "revising" },
     ]);
-    const billing = fakeBilling();
 
-    const reaped = await reapStaleArticleWorkflowProjects({ prisma, billing, staleMs: 1_000, now: () => 100_000 });
-
-    expect(reaped).toBe(1);
-    expect(articleWorkflowProject.updateMany.mock.calls[0]![0]).toMatchObject({
-      where: { id: "p1", status: "revising" },
-    });
-    expect(billing.refundResource).not.toHaveBeenCalled();
-  });
-
-  it("退款失败不影响其余项目收尸", async () => {
-    const { prisma, articleWorkflowProject } = fakePrisma([
-      { id: "p1", status: "generating", billingOperationId: "op1" },
-      { id: "p2", status: "revising", billingOperationId: "op2" },
-    ]);
-    const billing = {
-      refundResource: vi.fn(async (operationId: string) => {
-        if (operationId === "op1") throw new Error("billing down");
-        return { success: true };
-      }),
-    };
-
-    const reaped = await reapStaleArticleWorkflowProjects({ prisma, billing, staleMs: 1_000, now: () => 100_000 });
+    const reaped = await reapStaleArticleWorkflowProjects({ prisma, staleMs: 1_000, now: () => 100_000 });
 
     expect(reaped).toBe(2);
     expect(articleWorkflowProject.updateMany).toHaveBeenCalledTimes(2);
-    expect(billing.refundResource).toHaveBeenCalledTimes(2);
+    expect(articleWorkflowProject.updateMany.mock.calls[1]![0]).toMatchObject({
+      where: { id: "p2", status: "revising" },
+    });
   });
 
   it("默认阈值盖住一个出图批次的最坏耗时，不误杀在跑的项目", async () => {
@@ -92,8 +63,7 @@ describe("reapStaleArticleWorkflowProjects", () => {
     expect(articleProjectStaleMs(env)).toBeGreaterThan(worstChunkMs);
 
     const { prisma, articleWorkflowProject } = fakePrisma([]);
-    const billing = fakeBilling();
-    await reapStaleArticleWorkflowProjects({ prisma, billing, env, now: () => 10_000_000 });
+    await reapStaleArticleWorkflowProjects({ prisma, env, now: () => 10_000_000 });
     const where = articleWorkflowProject.findMany.mock.calls[0]![0].where as { updatedAt: { lt: Date } };
     expect(where.updatedAt.lt).toEqual(new Date(10_000_000 - articleProjectStaleMs(env)));
   });

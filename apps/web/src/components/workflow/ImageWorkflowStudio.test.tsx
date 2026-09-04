@@ -61,7 +61,6 @@ function makeHistoryImage(index: number): WorkflowImageAsset {
 function renderStudio({
   images = [],
   previewImages = [],
-  estimatedPointCost = null,
   isTaskDrawerOpen = false,
   workspaceMode,
   selectedImageId,
@@ -70,7 +69,6 @@ function renderStudio({
 }: {
   readonly images?: readonly WorkflowImageAsset[];
   readonly previewImages?: readonly WorkflowImageAsset[];
-  readonly estimatedPointCost?: number | null;
   readonly isTaskDrawerOpen?: boolean;
   readonly workspaceMode?: "empty" | "result" | "editing" | "comparing";
   readonly selectedImageId?: string | null;
@@ -99,7 +97,6 @@ function renderStudio({
       isGenerating={true}
       generatingCount={1}
       isOptimizingPrompt={false}
-      estimatedPointCost={estimatedPointCost}
       referenceImages={[]}
       isUploadingReference={false}
       onPromptChange={vi.fn()}
@@ -162,11 +159,6 @@ describe("ImageWorkflowStudio", () => {
     expect(html).toContain("1:1");
     expect(html).toContain("1K");
     expect(html).toContain("Qwen Image 2.0 Pro");
-  });
-
-  it("renders estimated point cost hint when pricing is available", () => {
-    expect(renderStudio({ estimatedPointCost: 40 })).toContain("算力点");
-    expect(renderStudio({ estimatedPointCost: null })).not.toContain("算力点");
   });
 
   it("keeps historical images out of the preview until selected", () => {

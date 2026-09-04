@@ -288,15 +288,15 @@ describe.skipIf(!enabled)("Codex pet R7 real zero-image recovery", () => {
     await prisma.$disconnect();
   });
 
-  it("finishes the refunded GPT run without another image generation call", async () => {
+  it("finishes the failed GPT run without another image generation call", async () => {
     await mkdir(OUTPUT_DIR, { recursive: true });
     const source = await prisma.codexPetRun.findUnique({
       where: { id: SOURCE_RUN_ID },
       include: { project: true },
     });
     if (!source || source.projectId !== PROJECT_ID) throw new Error("R7 source run is unavailable");
-    if (source.status !== "failed" || source.billingRefundStatus !== "refunded" || source.workerId) {
-      throw new Error("R7 source run is not in the immutable failed/refunded state");
+    if (source.status !== "failed" || source.workerId) {
+      throw new Error("R7 source run is not in the immutable failed state");
     }
     if (source.requestedModel !== "gpt-image-2" || source.visualQaModel !== EXPECTED_VISUAL_MODEL
       || source.colorKey !== "#ff00ff" || source.imageGenerationCallCount !== 24) {
@@ -627,11 +627,8 @@ describe.skipIf(!enabled)("Codex pet R7 real zero-image recovery", () => {
       prisma.codexPetProject.findUniqueOrThrow({ where: { id: PROJECT_ID } }),
     ]);
     expect(sourceAfter.status).toBe("failed");
-    expect(sourceAfter.billingRefundStatus).toBe("refunded");
     expect(sourceAfter.imageGenerationCallCount).toBe(24);
     expect(recovery.status).toBe("ready");
-    expect(recovery.billingPoints).toBe(0);
-    expect(recovery.billingChargeStatus).toBe("not_required");
     expect(recovery.imageGenerationCallCount).toBe(EXPECTED_IMAGE_CALLS);
     // 这里原先断言 knowledgeDocumentId 非空。P1.2 之后交付根本不写知识库，这条断言
     // 从那时就该错了，只因为 RUN_CODEX_PET_R7_RECOVERY 这道开关默认关着才一直没跑到。

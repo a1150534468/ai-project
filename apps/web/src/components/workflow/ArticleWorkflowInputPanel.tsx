@@ -7,19 +7,16 @@ import {
   type ArticleWorkflowPlatform,
   type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
-import type { ArticleWorkflowPricing } from "../../workflowArticleApi";
 import { ArticleWorkflowCreationCanvas } from "./ArticleWorkflowCreationCanvas";
 import { ArticleWorkflowThemePicker } from "./ArticleWorkflowThemePicker";
 import type { ArticleWorkflowCreationDraft } from "./articleWorkflowCreationDraft";
-import { articleWorkflowPricingText } from "./articleWorkflowStudioModel";
-import { SubmitCostBar } from "./SubmitCostBar";
+import { SubmitBar } from "./SubmitBar";
 
 interface ArticleWorkflowInputPanelProps {
   readonly creationDraft: ArticleWorkflowCreationDraft;
   readonly generationMode: ArticleWorkflowGenerationMode;
   readonly generateImages: boolean;
   readonly selectedPlatforms: readonly ArticleWorkflowPlatform[];
-  readonly pricing: ArticleWorkflowPricing | null;
   readonly creating: boolean;
   readonly canGenerate: boolean;
   readonly onGenerationModeChange: (value: ArticleWorkflowGenerationMode) => void;
@@ -191,27 +188,9 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
             />
           </fieldset>
         )}
-
-        <details className="group mt-4 border-t border-hairline-subtle pt-3">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-ink-secondary marker:content-none">
-            <span>计费规则</span>
-            <Icon icon="mdi:chevron-down" className="text-base transition group-open:rotate-180" aria-hidden />
-          </summary>
-          <p className="mt-2 text-[11px] leading-5 text-ink-tertiary">
-            文本 {articleWorkflowPricingText(props.pricing?.text, "每 1000 字 1 点")}；配图{" "}
-            {articleWorkflowPricingText(props.pricing?.image1k, "按 1K 生图价格")}。失败任务自动退费。
-          </p>
-        </details>
       </div>
 
-      <SubmitCostBar
-        estimatedPointCost={null}
-        costLabel="计费方式"
-        costValue={
-          props.generateImages
-            ? `${props.selectedPlatforms.length} 个平台分别计费`
-            : `先生成 ${props.selectedPlatforms.length} 个平台文案`
-        }
+      <SubmitBar
         submitLabel={`生成 ${props.selectedPlatforms.length} 个平台${props.generateImages ? "图文" : "文案"}`}
         submitIcon="mdi:auto-fix"
         submitDisabled={!props.canGenerate}

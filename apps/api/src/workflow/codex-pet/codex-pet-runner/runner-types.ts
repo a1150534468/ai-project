@@ -37,8 +37,6 @@ export const CODEX_PET_ACTIVE_STATUSES = [
   "awaiting_direction_review", "validating", "repairing", "packaging", "archiving",
 ] as const;
 
-export const CODEX_PET_RESOURCE_KEY = "codex_pet_v2_package";
-
 export const INTERMEDIATE_TTL_MS = 7 * 24 * 60 * 60_000;
 
 export const DEFAULT_STALE_RUN_MS = 15 * 60_000;
@@ -72,6 +70,13 @@ export class CodexPetLeaseLostError extends Error {
   }
 }
 
+/**
+ * `awaiting_regeneration_approval` 保留在联合里但**已经不再产生**：HEAD 上它只在
+ * `perImageBilling` 为真时用（`pauseForImageApproval` 的三元），按张计费下线后
+ * 「等一次授权」一律停到 `awaiting_direction_review`。留着它是因为库里可能还有停在
+ * 这个状态的存量 run —— `codex-pet-worker-recovery` 的暂停态收尸、
+ * `BLOCKING_RUN_STATUSES`、以及 `executeCodexPetRun` 开头那道终态早返回都还认它。
+ */
 export type CodexPetExecutionStatus = "awaiting_base_review" | "awaiting_direction_review" | "awaiting_regeneration_approval" | "packaging" | "archiving" | "ready" | "failed" | "cancelled" | typeof CODEX_PET_LEGACY_READ_ONLY_STATUS | "busy";
 
 export interface CodexPetExecutionResult {
@@ -115,10 +120,6 @@ export interface CodexPetRunnerDeps {
   readonly artifacts: CodexPetArtifactStore;
   readonly appendEvent: (input: CodexPetEventInput) => Promise<unknown>;
   readonly loadReferenceAsset: (asset: ImageAsset) => Promise<{ buffer: Buffer; mime: string }>;
-  readonly billing: {
-    refundResource(operationId: string): Promise<{ success: boolean }>;
-    settleResource?: (args: { operationId: string; resourceKey: string; units: number }) => Promise<{ settled: number }>;
-  };
   readonly visual?: {
     generate?: typeof generateCodexPetVisual;
     qa?: typeof runCodexPetVisualQa;
@@ -141,8 +142,6 @@ export interface RunnerContext extends CodexPetRunnerDeps {
   readonly imageModel: string;
   readonly visualQaModel: string;
   readonly qualityInspectionEnabled: boolean;
-  readonly perImageBilling: boolean;
-  readonly perImageCallPoints: number;
   readonly maxBoardAttempts: number;
   readonly identity: CodexPetVisualIdentity;
   readonly referenceAssetIds: readonly string[];
@@ -231,8 +230,8 @@ export type StandardRepairRow = Exclude<FinalRepairRow, "look-a" | "look-b">;
  *
  * The in-process repair loop is bounded, so exhausting it ends the run. Carrying
  * the row scope out to `finalizeFailure` lets the failure be recorded as
- * continuable work instead of an opaque wall: the user can resume the same paid
- * run and redo exactly those rows.
+ * continuable work instead of an opaque wall: the user can resume the same run
+ * and redo exactly those rows.
  */
 export class CodexPetGateFailureError extends Error {
   constructor(

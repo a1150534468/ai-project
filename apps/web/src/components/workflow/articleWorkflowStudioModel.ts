@@ -1,13 +1,11 @@
 import type { ArticleWorkflowImageAsset } from "@ai-assistant/article-workflow";
 import type {
-  ArticleWorkflowPricingRow,
   ArticleWorkflowProject,
   ArticleWorkflowProjectSummary,
 } from "../../workflowArticleApi";
 
 export interface ArticleWorkflowStudioProps {
   readonly token: string;
-  readonly onBalanceRefresh?: () => void;
   readonly initialHistory?: readonly ArticleWorkflowProjectSummary[];
   readonly initialProject?: ArticleWorkflowProject | null;
   readonly initialBootstrapping?: boolean;
@@ -53,16 +51,6 @@ export function formatArticleWorkflowTime(value: string): string {
       minute: "2-digit",
       hour12: false,
     }).format(date);
-}
-
-export function articleWorkflowPricingText(
-  row: ArticleWorkflowPricingRow | null | undefined,
-  fallback: string,
-): string {
-  if (!row) return fallback;
-  return row.pricingType === "PER_UNIT"
-    ? `每 ${row.perUnits} 单位 ${row.rate} 点`
-    : `${row.rate} 点/次`;
 }
 
 export function cloneImageManifest(imageManifest: readonly ArticleWorkflowImageAsset[]): readonly ArticleWorkflowImageAsset[] {

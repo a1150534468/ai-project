@@ -10,7 +10,6 @@ const api = vi.hoisted(() => ({
   deleteArticleWorkflowProject: vi.fn(),
   generateArticleWorkflowImages: vi.fn(),
   getArticleWorkflowBatch: vi.fn(),
-  getArticleWorkflowPricing: vi.fn(),
   getArticleWorkflowProject: vi.fn(),
   listArticleWorkflowHistory: vi.fn(),
   regenerateArticleWorkflowImage: vi.fn(),
@@ -63,7 +62,7 @@ async function renderStudio(project: ReturnType<typeof captionProject>) {
       />
     </ToastProvider>,
   );
-  // 挂载时会拉一次计价，等它落地再断言，免得 act 告警
+  // 挂载后还有异步副作用要落地，先冲一次微任务再断言，免得 act 告警
   await act(async () => { await Promise.resolve(); });
   return result;
 }
@@ -74,7 +73,6 @@ function enterEditMode() {
 
 beforeEach(() => {
   api.deleteArticleWorkflowProject.mockResolvedValue({ deleted: 1, batchId: "batch-1" });
-  api.getArticleWorkflowPricing.mockResolvedValue(null);
   api.listArticleWorkflowHistory.mockResolvedValue([]);
 });
 
@@ -100,7 +98,7 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     await renderStudio(captionProject());
 
-    // 后端存的 error 要能直接看到，不然「哪一行扣费失败、为什么」全靠猜
+    // 后端存的 error 要能直接看到，不然「哪一行失败了、为什么」全靠猜
     expect(screen.getByRole("alert").textContent).toContain("403 Access to model denied");
 
     enterEditMode();
@@ -200,7 +198,7 @@ describe("ArticleWorkflowStudio 失败行处理", () => {
     expect(screen.getByLabelText("重新生成要求")).toBeTruthy();
   });
 
-  it("后补图请求进行中禁用按钮，避免重复提交和重复计费", async () => {
+  it("后补图请求进行中禁用按钮，避免重复提交", async () => {
     let release = (): void => undefined;
     api.generateArticleWorkflowImages.mockImplementation(
       () => new Promise((resolve) => {

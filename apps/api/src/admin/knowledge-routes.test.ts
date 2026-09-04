@@ -4,18 +4,6 @@ import { getPrisma } from "@ai-assistant/db";
 import { buildServer } from "../server.js";
 import { signAdminToken } from "./token.js";
 import { createAdmin } from "./service.js";
-import * as billingModule from "@ai-assistant/billing";
-
-// Mock @ai-assistant/billing 在模块顶层
-vi.mock("@ai-assistant/billing", () => ({
-  createBillingClient: vi.fn(),
-  InsufficientBalanceError: class extends Error {
-    name = "InsufficientBalanceError";
-    constructor() {
-      super("积分不足");
-    }
-  },
-}));
 
 // Mock indexOnce 避免真实索引
 vi.mock("../kb/indexer.js", () => ({
@@ -56,20 +44,10 @@ beforeAll(async () => {
   process.env.LLM_API_KEY ??= "test-key";
   process.env.EMBEDDING_MODEL ??= "test-embedding-model";
   process.env.ADMIN_SESSION_SECRET ??= "y".repeat(32);
-  process.env.BILLING_BASE_URL ??= "http://localhost:1";
-  process.env.BILLING_INTERNAL_TOKEN ??= "internal-token";
   process.env.S3_ENDPOINT ??= "http://localhost:9000";
   process.env.S3_BUCKET ??= "test-kb";
   process.env.S3_ACCESS_KEY ??= "test-s3-access-key";
   process.env.S3_SECRET_KEY ??= "test-s3-secret-key";
-
-  // 设置默认 mock
-  vi.mocked(billingModule.createBillingClient).mockReturnValue({
-    reserve: vi.fn().mockResolvedValue({ opId: "mock-op-id" }),
-    settle: vi.fn().mockResolvedValue({ settled: true }),
-    getUserKbQuota: vi.fn().mockResolvedValue({ membershipBytes: 1000000, defaultBytes: 1000000 }),
-    listMembershipCards: vi.fn().mockResolvedValue({ data: [] }),
-  } as any);
 
   const secret = process.env.ADMIN_SESSION_SECRET!;
 
@@ -317,12 +295,7 @@ describe("admin 知识库管理路由", () => {
       expect(r.statusCode).toBe(404);
     });
 
-    it("POST /api/admin/kb/:id/documents 加文本文档，不调 billing.reserve", async () => {
-      // 获取 mock 的 createBillingClient 函数
-      const createBillingMock = vi.mocked(billingModule.createBillingClient);
-      // 获取上次调用返回的 mock billing 实例
-      const mockBilling = createBillingMock.mock.results[0]?.value;
-
+    it("POST /api/admin/kb/:id/documents 加文本文档", async () => {
       const r = await app.inject({
         method: "POST",
         url: `/api/admin/kb/${officialKb.id}/documents`,
@@ -334,11 +307,6 @@ describe("admin 知识库管理路由", () => {
       expect(body.success).toBe(true);
       expect(body.data.id).toBeDefined();
       expect(body.data.status).toBe("pending");
-
-      // 核心验证：reserve 未被调用（skipQuotaCheck=true）
-      if (mockBilling && mockBilling.reserve) {
-        expect(mockBilling.reserve).toHaveBeenCalledTimes(0);
-      }
     });
 
     it("DELETE /api/admin/kb/:id/documents/:docId 删文档成功", async () => {
@@ -384,17 +352,6 @@ describe("admin 知识库管理路由", () => {
       const r = await app.inject({
         method: "DELETE",
         url: `/api/admin/kb/${userKb.id}/documents/${userDoc.id}`,
-        headers: { authorization: `Bearer ${superAdminToken}` },
-      });
-      expect(r.statusCode).toBe(404);
-    });
-  });
-
-  describe("配额包已下线", () => {
-    it("不再注册配额包管理端点", async () => {
-      const r = await app.inject({
-        method: "GET",
-        url: "/api/admin/kb-quota-packages",
         headers: { authorization: `Bearer ${superAdminToken}` },
       });
       expect(r.statusCode).toBe(404);

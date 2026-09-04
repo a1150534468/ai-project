@@ -151,8 +151,3 @@ export function buildCurrentUserContent(
     ...prepared.blocks,
   ];
 }
-
-export function estimateInputTokens(message: string, prepared: PreparedChatAttachments): number {
-  const textTokens = Math.ceil(`${message}\n${prepared.searchableText}`.length / 3);
-  return textTokens + prepared.imageCount * 1000;
-}

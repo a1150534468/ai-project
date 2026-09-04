@@ -2,7 +2,6 @@ import type { FastifyInstance } from "fastify";
 import { requireUser } from "../auth/require-user.js";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
-import { createBillingClient } from "@ai-assistant/billing";
 import {
   createKb,
   listKbsForUser,
@@ -10,13 +9,11 @@ import {
   deleteKb,
   assertKbOwner,
   assertKbReadable,
-  type KbQuotaBilling,
 } from "./service.js";
 import { buildIndexDeps } from "./deps.js";
 import { indexOnce } from "./indexer.js";
 import { storeAndCreateDocument, IngestError } from "./ingest.js";
 import { makeS3, deleteObject } from "../storage/s3.js";
-import { myQuota } from "./quota.js";
 
 const createKbSchema = z.object({
   name: z.string().min(1).max(255),
@@ -29,7 +26,7 @@ const renameKbSchema = z.object({
 });
 
 export async function kbRoutes(app: FastifyInstance) {
-  // 本文件 9 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
+  // 本文件 8 个路由全部必须登录，挂插件级。钩子和它保护的路由同文件，
   // 这样测试单独注册本文件时守卫不会凭空消失。
   app.addHook("preHandler", requireUser);
 
@@ -40,15 +37,6 @@ export async function kbRoutes(app: FastifyInstance) {
       s3 = makeS3();
     }
     return s3;
-  };
-
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
-
-  const quotaBilling: KbQuotaBilling = {
-    getUserKbQuota: (userId) => billing.getUserKbQuota(userId),
   };
 
   // GET /api/kb
@@ -223,11 +211,6 @@ export async function kbRoutes(app: FastifyInstance) {
           isMultipart: () => req.isMultipart(),
           file: () => req.file(),
           body: (req.body as Record<string, unknown>) || {},
-        },
-        {
-          skipQuotaCheck: false, // 用户库计费
-          billing,
-          quotaBilling,
         }
       );
 
@@ -246,19 +229,6 @@ export async function kbRoutes(app: FastifyInstance) {
       if (err instanceof IngestError) {
         return reply.code(err.statusCode).send({ error: err.message });
       }
-      app.log.error(err);
-      throw err;
-    }
-  });
-
-  // GET /api/kb/quota
-  app.get("/api/kb/quota", async (req, reply) => {
-    const userId = req.userId;
-
-    try {
-      const quota = await myQuota(prisma, quotaBilling, userId);
-      return reply.send({ success: true, data: quota });
-    } catch (err) {
       app.log.error(err);
       throw err;
     }

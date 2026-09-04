@@ -62,11 +62,11 @@ describe("collectEnvProblems", () => {
     expect(collectEnvProblems(REQUIRED_ENV, { ...validEnv(), DATABASE_URL: "x" })).toEqual([]);
   });
 
-  it("有等价回落 key 时不报缺失（VIDEO_API_KEY 顶 TOAPIS_API_KEY）", () => {
-    const toapis = OPTIONAL_FEATURE_ENV.filter((item) => item.key === "TOAPIS_API_KEY");
-    expect(toapis).toHaveLength(1);
-    expect(collectEnvProblems(toapis, {})).toHaveLength(1);
-    expect(collectEnvProblems(toapis, { VIDEO_API_KEY: "k" })).toEqual([]);
+  it("有等价回落 key 时不报缺失（BAILIAN_API_KEY 顶 EMBEDDING_API_KEY）", () => {
+    const embedding = OPTIONAL_FEATURE_ENV.filter((item) => item.key === "EMBEDDING_API_KEY");
+    expect(embedding).toHaveLength(1);
+    expect(collectEnvProblems(embedding, {})).toHaveLength(1);
+    expect(collectEnvProblems(embedding, { BAILIAN_API_KEY: "k" })).toEqual([]);
   });
 });
 
@@ -104,13 +104,13 @@ describe("必需集的构成", () => {
     }
   });
 
-  it("五个真实进程入口都调用了启动校验", () => {
+  it("四个真实进程入口都调用了启动校验", () => {
+    // 原本是五个，本地商家宣传剪辑的 worker 随模块在解耦 Phase 1 删掉了。
     const entries: ReadonlyArray<[file: string, call: string]> = [
       ["server.ts", "assertRequiredEnv(SERVER_REQUIRED_ENV)"],
       ["workers/combined-worker.ts", "assertRequiredEnv()"],
       ["workers/codex-pet-worker.ts", "assertRequiredEnv()"],
       ["workers/novel-worker.ts", "assertRequiredEnv()"],
-      ["workers/local-business-promo-worker.ts", "assertRequiredEnv()"],
     ];
     for (const [file, call] of entries) {
       // 先剥掉整行注释：否则把调用注释掉（而不是删掉）能骗过这条断言。

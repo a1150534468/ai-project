@@ -1,8 +1,8 @@
 /**
  * 桌宠工坊的可注入 API 客户端。从 `CodexPetStudio.tsx` 原样搬出。
  *
- * **这 18 个方法名是测试契约的一部分**:`CodexPetStudio.test.tsx` 靠 `makeClient()` 整体替换
- * 这个对象来驱动编排,任何改名都会同时改掉测试的桩,等于把护栏一起挪走。所以此文件只搬不改。
+ * **这 17 个方法名是测试契约的一部分**:`CodexPetStudio.test.tsx` 靠 `makeClient()` 整体替换
+ * 这个对象来驱动编排,任何改名都会同时改掉测试的桩,等于把护栏一起挪走。
  */
 import * as codexPetApi from "../../codexPetApi";
 import type {
@@ -11,7 +11,6 @@ import type {
   CodexPetEvent,
   CodexPetInstallLink,
   CodexPetModelOptions,
-  CodexPetPricing,
   CodexPetProject,
   CodexPetProjectDetail,
   CodexPetProjectSummary,
@@ -21,7 +20,6 @@ import type {
 } from "../../codexPetApi";
 
 export interface CodexPetStudioClient {
-  readonly getPricing: (token: string) => Promise<CodexPetPricing>;
   readonly getModelOptions?: (token: string) => Promise<CodexPetModelOptions>;
   readonly listProjects: (token: string) => Promise<readonly CodexPetProjectSummary[]>;
   readonly createProject: (token: string, payload: CodexPetCreatePayload) => Promise<CodexPetProject>;
@@ -53,7 +51,6 @@ export interface CodexPetStudioClient {
 }
 
 export const DEFAULT_CODEX_PET_STUDIO_CLIENT: CodexPetStudioClient = {
-  getPricing: codexPetApi.getCodexPetPricing,
   getModelOptions: codexPetApi.getCodexPetModelOptions,
   listProjects: codexPetApi.listCodexPetProjects,
   createProject: codexPetApi.createCodexPetProject,

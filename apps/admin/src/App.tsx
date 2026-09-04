@@ -3,14 +3,10 @@ import { can, loadSession, saveSession, clearSession, type Session, type Permiss
 import * as api from "./api.js";
 import { useToast, errMsg } from "./ui.js";
 import { UsersPage } from "./pages/Users.js";
-import { OrdersPage } from "./pages/Orders.js";
-import { CodesPage } from "./pages/Codes.js";
 import { ModelsPage } from "./pages/Models.js";
 import { AnnouncementsPage } from "./pages/Announcements.js";
 import { AdminsPage } from "./pages/Admins.js";
 import { AuditPage } from "./pages/Audit.js";
-import { ResourcePricingPage } from "./pages/ResourcePricing.js";
-import { MembershipPage } from "./pages/Membership.js";
 import { KnowledgePage } from "./pages/Knowledge.js";
 import { ClientMenusPage } from "./pages/ClientMenus.js";
 
@@ -28,9 +24,6 @@ const TAB_GROUPS: TabGroup[] = [
     groupLabel: "运营",
     items: [
       { key: "users", label: "用户", perm: "USER_MANAGE", render: () => <UsersPage /> },
-      { key: "orders", label: "订单", perm: "ORDER_MANAGE", render: () => <OrdersPage /> },
-      { key: "codes", label: "兑换码", perm: "REDEMPTION_MANAGE", render: () => <CodesPage /> },
-      { key: "membership", label: "月卡", perm: "MEMBERSHIP_MANAGE", render: () => <MembershipPage /> },
       { key: "ann", label: "公告", perm: "ANNOUNCEMENT_MANAGE", render: () => <AnnouncementsPage /> },
     ],
   },
@@ -39,7 +32,6 @@ const TAB_GROUPS: TabGroup[] = [
     groupLabel: "配置",
     items: [
       { key: "models", label: "模型", perm: "MODEL_MANAGE", render: () => <ModelsPage /> },
-      { key: "respricing", label: "计费配置", perm: "PRICING_MANAGE", render: () => <ResourcePricingPage /> },
       { key: "kb", label: "官方知识库", perm: "KNOWLEDGE_MANAGE", render: () => <KnowledgePage /> },
       { key: "clientmenu", label: "用户端菜单", perm: "ADMIN_MANAGE", render: () => <ClientMenusPage /> },
     ],
@@ -61,11 +53,7 @@ function getAllTabs(): TabDef[] {
 function getNavIcon(tabKey: string): React.ReactNode {
   const iconMap: Record<string, React.ReactNode> = {
     users: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>,
-    orders: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2z"></path><path d="M9 7h6"></path><path d="M9 11h6"></path><path d="M9 15h4"></path></svg>,
-    codes: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>,
     models: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
-    respricing: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>,
-    membership: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>,
     kb: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>,
     clientmenu: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><circle cx="3" cy="6" r="1"></circle><circle cx="3" cy="12" r="1"></circle><circle cx="3" cy="18" r="1"></circle></svg>,
     ann: <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>,

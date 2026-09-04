@@ -1,13 +1,11 @@
 /**
- * 桌宠工坊的派生选择器。全是纯函数,输入只有 `detail` / `latestRun` / `pricing`,
+ * 桌宠工坊的派生选择器。全是纯函数,输入只有 `detail` / `latestRun`,
  * 所以既能在 hook 里被 `useMemo` 包住,也能被面板直接调用。
  *
- * 三条不能动的取值规则(原文件的注释一并搬来,因为它们记的都是真实事故):
+ * 两条不能动的取值规则(原文件的注释一并搬来,因为它们记的都是真实事故):
  *  - **所有视觉一律按当前 run 过滤**。`detail.artifacts` 是跨 run 的有界历史,不过滤会让上一轮的
  *    候选/预览出现在本轮工作台里,甚至让一次失败的 run 看起来像可交付。
  *  - **姿势板等过程产物不是交付物**(7 天 TTL),只出现在诊断折叠区;那里为空是正常的。
- *  - **「预计退回」必须按账本里真实发出的计划内调用数算**,不能用 `reserved - settled`:
- *    结算只在收尾发生一次,在那之前 `settled` 恒为 0,那个减法会把"全额退款"写在用户脸上。
  */
 import {
   CODEX_PET_IMAGE_MODEL,
@@ -16,7 +14,6 @@ import {
 import type {
   CodexPetArtifact,
   CodexPetExtraCallBudget,
-  CodexPetPricing,
   CodexPetProject,
   CodexPetProjectDetail,
   CodexPetProjectStatus,
@@ -134,49 +131,6 @@ export function deriveCodexPetArtifacts(
   };
 }
 
-export interface CodexPetBillingView {
-  readonly settledPlannedUnits: number;
-  readonly projectedRefundPoints: number | null;
-  readonly plannedCallLimit: number;
-  readonly reservedPointsQuote: number | null;
-  readonly extraCallBudget: CodexPetExtraCallBudget | null;
-  readonly extraCallBudgetExhausted: boolean;
-}
-
-export function deriveCodexPetBilling(
-  detail: CodexPetProjectDetail | null,
-  latestRun: CodexPetRun | null,
-  pricing: CodexPetPricing | null,
-): CodexPetBillingView {
-  // Per-image billing settles the planned reservation by the number of calls that
-  // actually reached the provider and did not fail — the same rule as the backend's
-  // four settlement sites. Extra calls are charged separately and are never part of
-  // this reservation, so they are excluded here too.
-  const settledPlannedUnits = (detail?.imageCalls ?? []).filter((call) => (
-    call.callKind === "planned" && call.sentAt !== null && call.status !== "failed"
-  )).length;
-  const extraCallBudget = detail?.extraCallBudget ?? null;
-  // The reservation is `rate * plannedImageCallLimit`, and the limit is a backend
-  // constant served with the price. Hard-coding 14 here meant a backend change to
-  // the plan would quote the user a reservation the backend never charges.
-  const plannedCallLimit = pricing?.plannedImageCallLimit
-    ?? latestRun?.plannedImageCallLimit
-    ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT;
-
-  return {
-    settledPlannedUnits,
-    projectedRefundPoints: latestRun
-      ? latestRun.billingSettlementStatus === "settled"
-        ? Math.max(0, (latestRun.billingReservedPoints ?? 0) - (latestRun.billingSettledPoints ?? 0))
-        : Math.max(0, ((latestRun.billingReservedUnits ?? 0) - settledPlannedUnits)) * (pricing?.rate ?? 0)
-      : null,
-    plannedCallLimit,
-    reservedPointsQuote: pricing ? pricing.rate * plannedCallLimit : null,
-    extraCallBudget,
-    extraCallBudgetExhausted: Boolean(extraCallBudget?.exhausted),
-  };
-}
-
 export interface CodexPetRunGateView {
   readonly projectStatus: CodexPetProjectStatus;
   readonly historicalImageModel: string | null;
@@ -188,6 +142,9 @@ export interface CodexPetRunGateView {
   readonly resumableGateRows: readonly string[];
   readonly canResumeGateFailure: boolean;
   readonly resumableGateRowLabels: string;
+  readonly plannedCallLimit: number;
+  readonly extraCallBudget: CodexPetExtraCallBudget | null;
+  readonly extraCallBudgetExhausted: boolean;
 }
 
 export function deriveCodexPetRunGates(
@@ -198,7 +155,6 @@ export function deriveCodexPetRunGates(
   const runIsTerminal = runIsTerminalStatus(latestRun);
   const canContinueFailedBase = Boolean(latestRun
     && latestRun.status === "failed"
-    && latestRun.billingMode === "per_image_call_v1"
     && latestRun.requestedModel === CODEX_PET_IMAGE_MODEL
     && latestRun.qualityInspectionEnabled === false
     && latestRun.hasSuccessfulImage
@@ -207,6 +163,7 @@ export function deriveCodexPetRunGates(
     && latestRun.plannedImageCallLimit === CODEX_PET_PLANNED_IMAGE_CALL_LIMIT);
   // 闸门在失败时把「该重做哪几组动作」写进了快照，后端据此原地重置那几个画板。
   const resumableGateRows = latestRun?.status === "failed" ? latestRun.resumableGateRows ?? [] : [];
+  const extraCallBudget = detail?.extraCallBudget ?? null;
 
   return {
     projectStatus,
@@ -221,5 +178,9 @@ export function deriveCodexPetRunGates(
     resumableGateRows,
     canResumeGateFailure: resumableGateRows.length > 0 && !canContinueFailedBase,
     resumableGateRowLabels: resumableGateRows.map((row) => GATE_ROW_LABELS[row] ?? row).join("、"),
+    // 计划内调用数是后端常量，启动时冻结在 run 行上；本地不许另写一份。
+    plannedCallLimit: latestRun?.plannedImageCallLimit ?? CODEX_PET_PLANNED_IMAGE_CALL_LIMIT,
+    extraCallBudget,
+    extraCallBudgetExhausted: Boolean(extraCallBudget?.exhausted),
   };
 }

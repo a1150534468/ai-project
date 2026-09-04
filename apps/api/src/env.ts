@@ -67,7 +67,7 @@ export const REQUIRED_ENV: ReadonlyArray<EnvRequirement> = [
  */
 export const SERVER_REQUIRED_ENV: ReadonlyArray<EnvRequirement> = [
   ...REQUIRED_ENV,
-  { key: "ADMIN_SESSION_SECRET", hint: "后台 JWT 签名密钥（admin/reseller guard 用）", minLength: 32 },
+  { key: "ADMIN_SESSION_SECRET", hint: "后台 JWT 签名密钥（admin guard 用）", minLength: 32 },
 ];
 
 /** 功能可选：缺了则对应能力降级/不可用，仅 warn。 */

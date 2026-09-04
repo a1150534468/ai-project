@@ -1,6 +1,5 @@
 import { assertRequiredEnv } from "../env.js";
 import { createServer } from "node:http";
-import { createBillingClient } from "@ai-assistant/billing";
 import { getPrisma } from "@ai-assistant/db";
 import { createNovelGenerator, runNovelTask } from "../workflow/novel/index.js";
 import {
@@ -18,10 +17,6 @@ export async function startNovelWorker(
 ): Promise<StartedWorkerRuntime> {
   assertRequiredEnv();
   const prisma = getPrisma();
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
   const generator = createNovelGenerator();
   let ready = false;
   let lastDispatchAt = 0;
@@ -35,7 +30,7 @@ export async function startNovelWorker(
       if (!task) return;
       await withNovelProjectLock({
         projectId: task.projectId,
-        work: () => runNovelTask({ prisma, billing, generator, task }),
+        work: () => runNovelTask({ prisma, generator, task }),
       });
     } else {
       const stepId = job.data.stepId;
@@ -46,7 +41,7 @@ export async function startNovelWorker(
       if (!step) return;
       await withNovelProjectLock({
         projectId: step.run.projectId,
-        work: () => executeNovelEngineStep({ stepId, prisma, billing }),
+        work: () => executeNovelEngineStep({ stepId, prisma }),
       });
     }
     await dispatchNovelOutboxBatch(prisma);

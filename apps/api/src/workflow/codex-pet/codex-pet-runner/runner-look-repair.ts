@@ -120,7 +120,7 @@ async function runLookRepairLoop(ctx: RunnerContext, input: {
       if (state.gate.pass) return;
       if (state.row.job.attempt >= state.row.job.maxAttempts) {
         const message = `${options.exhaustedPrefix}：${state.gate.failures.join("；") || "方向语义或连续性失败"}`;
-        if (options.budgetExhausted === "approval-gate" && (ctx.perImageBilling || ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0")) {
+        if (options.budgetExhausted === "approval-gate" && ctx.env.CODEX_PET_IMAGE_APPROVAL_GATE !== "0") {
           throw new CodexPetImageApprovalRequiredError(input.row, `${message}，需要确认后才能重新生成`);
         }
         throw new Error(message);

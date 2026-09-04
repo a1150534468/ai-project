@@ -1,5 +1,4 @@
 import { getPrisma } from "@ai-assistant/db";
-import { createBillingClient } from "@ai-assistant/billing";
 import { getObject, type S3 } from "../storage/s3.js";
 import { fetchUrl } from "./url-fetch.js";
 import { parseDocument } from "./parse.js";
@@ -11,17 +10,13 @@ import type { IndexDeps } from "./indexer.js";
 
 /**
  * 构建索引依赖（工厂函数）
- * 装配真实的 S3/fetchUrl/parse/chunk/embed/billing 实现
+ * 装配真实的 S3/fetchUrl/parse/chunk/embed 实现
  * 供 routes 与后续 reaper/indexer 复用
  */
 export async function buildIndexDeps(
   s3: S3
 ): Promise<IndexDeps> {
   const prisma = getPrisma();
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
   const embCfg = loadEmbeddingConfig();
 
   return {
@@ -57,10 +52,6 @@ export async function buildIndexDeps(
         maxChunks: parseInt(process.env.KB_MAX_CHUNKS ?? "2000", 10),
       }),
     embed: async (input) => embed(embCfg, input),
-    billing: {
-      settle: (arg) => billing.settle(arg),
-    },
-    embeddingModel: embCfg.model,
     embeddingDimension: embCfg.dimension,
     workerId: `${process.pid}-${os.hostname()}-${randomUUID()}`,
   };

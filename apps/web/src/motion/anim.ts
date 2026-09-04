@@ -47,13 +47,3 @@ export const toastReducer = (state: ToastState, action: ToastAction): ToastState
 // 装饰性动效（粒子/纸屑/光扫/漂浮）在 reduced-motion 下不渲染。
 export const shouldRenderDecoration = (reducedMotion: boolean | null): boolean =>
   reducedMotion !== true;
-
-// 计算扣点粒子应显示的扣减量；仅当由数字变小时返回正数，否则 null。
-export const computeSpendBurst = (
-  prev: number | null,
-  next: number | null,
-): number | null => {
-  if (prev === null || typeof next !== "number") return null;
-  if (next >= prev) return null;
-  return prev - next;
-};

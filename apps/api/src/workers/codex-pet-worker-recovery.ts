@@ -1,15 +1,15 @@
 /**
  * codex-pet-worker 拆分后的兜底层:数据库量表刷新、上游用量观测、过期产物清理、
- * 软删项目重投、卡死运行重投,以及优雅停机时释放被抢占的运行。
+ * 软删项目重投、卡死运行重投、等授权超时收尸,以及优雅停机时释放被抢占的运行。
  *
  * 每个函数都能独立跑一遍(入参对象里 prisma / enqueue / now / deleteArtifact 都可注入),
- * 启动时与维护循环各调一次。它们只读写自己那张表,**不做结算** —— 结算在 billing 那侧。
+ * 启动时与维护循环各调一次。它们只读写自己那张表。
  *
  * `recoverStaleRuns` 故意把 awaiting_base_review / awaiting_direction_review /
  * awaiting_regeneration_approval 三个暂停态排除在外:那些运行在等人,不是卡死,
- * 重投会把等待中的授权直接顶掉。
+ * 重投会把等待中的授权直接顶掉。等不到人的那些交给 `expireParkedCodexPetRuns` 收尸。
  *
- * 依赖方向:support / metrics → 本文件 → codex-pet-worker.ts。不 import billing。
+ * 依赖方向:support / metrics → 本文件 → codex-pet-worker.ts。
  */
 
 import { getPrisma } from "@ai-assistant/db";
@@ -17,13 +17,22 @@ import type { PrismaClient } from "@prisma/client";
 import type { S3 } from "../storage/s3.js";
 import {
   CODEX_PET_ACTIVE_STATUSES,
-  CODEX_PET_PER_IMAGE_BILLING_MODE,
   deleteCodexPetArtifact,
   enqueueCodexPetProjectCleanup,
   enqueueCodexPetRun,
 } from "../workflow/codex-pet/index.js";
 import { positiveNumber } from "./codex-pet-worker-support.js";
 import { codexPetProviderMetricDelta, type WorkerMetrics } from "./codex-pet-worker-metrics.js";
+
+/**
+ * 一次运行可以停在 `awaiting_regeneration_approval` 等人多久。等不到就收尸,否则
+ * 运行会永远停在那个暂停态里 —— `recoverStaleRuns` 有意不碰等授权的运行(没人授权
+ * 的活不该被重投),所以没有这个上限的话那份等待就没有尽头。
+ */
+const CODEX_PET_PARKED_APPROVAL_EXPIRY_MS = positiveNumber(
+  "CODEX_PET_PARKED_APPROVAL_EXPIRY_MS",
+  7 * 24 * 60 * 60_000,
+);
 
 export async function observeProviderArtifacts(input: {
   readonly prisma: PrismaClient;
@@ -98,7 +107,6 @@ export async function refreshDatabaseGauges(prisma: PrismaClient, metrics: Worke
     databaseReadyRuns,
     databaseFailedRuns,
     databaseCancelledRuns,
-    databaseRefundedRuns,
   ] = await Promise.all([
     prisma.codexPetRun.count({ where: { status: { in: [...CODEX_PET_ACTIVE_STATUSES] } } }),
     prisma.codexPetRun.count({ where: { status: "archiving" } }),
@@ -114,7 +122,6 @@ export async function refreshDatabaseGauges(prisma: PrismaClient, metrics: Worke
     prisma.codexPetRun.count({ where: { status: "ready" } }),
     prisma.codexPetRun.count({ where: { status: "failed" } }),
     prisma.codexPetRun.count({ where: { status: "cancelled" } }),
-    prisma.codexPetRun.count({ where: { billingRefundedAt: { not: null } } }),
   ]);
   metrics.activeRuns = activeRuns;
   metrics.archivingRuns = archivingRuns;
@@ -123,7 +130,6 @@ export async function refreshDatabaseGauges(prisma: PrismaClient, metrics: Worke
   metrics.databaseReadyRuns = databaseReadyRuns;
   metrics.databaseFailedRuns = databaseFailedRuns;
   metrics.databaseCancelledRuns = databaseCancelledRuns;
-  metrics.databaseRefundedRuns = databaseRefundedRuns;
 }
 
 export async function recoverDeletingProjects(input: {
@@ -176,28 +182,93 @@ export async function recoverStaleRuns(input: {
   const runs = await prisma.codexPetRun.findMany({
     where: {
       status: { in: [...CODEX_PET_ACTIVE_STATUSES].filter((status) => !pausedStatuses.has(status)) },
-      AND: [
-        {
-          OR: [
-            { billingChargeStatus: "charged", billingActivatedAt: { not: null } },
-            { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" },
-          ],
-        },
-        {
-          OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }, { status: "queued" }],
-        },
-      ],
+      OR: [{ heartbeatAt: null }, { heartbeatAt: { lt: staleBefore } }, { status: "queued" }],
       // A cancellation requested while a worker owns the lease intentionally
       // leaves the run active until that worker reaches a safe checkpoint.
       // If the worker dies first, the persisted flag must still be recovered;
-      // executeCodexPetRun will claim the stale lease and immediately settle
-      // the cancellation/refund instead of leaving the run stuck forever.
+      // executeCodexPetRun will claim the stale lease and immediately honour
+      // the cancellation instead of leaving the run stuck forever.
     },
     select: { id: true },
     take: 500,
   });
   await Promise.all(runs.map((run) => enqueue(run.id).catch(() => undefined)));
   return runs.length;
+}
+
+/**
+ * 把等重出图授权等过了上限的运行取消掉。
+ *
+ * 只翻状态并把原因写进事件流 —— 这是用户自己也能手动做的同一次转移,产物一律原样留着。
+ */
+export async function expireParkedCodexPetRuns(input: {
+  readonly prisma: PrismaClient;
+  readonly now?: () => Date;
+  readonly limit?: number;
+  readonly expiryMs?: number;
+  readonly onError?: (error: unknown, runId: string) => void;
+}): Promise<number> {
+  const now = input.now ?? (() => new Date());
+  const expiryMs = Math.max(0, input.expiryMs ?? CODEX_PET_PARKED_APPROVAL_EXPIRY_MS);
+  const parkedBefore = new Date(now().getTime() - expiryMs);
+  const candidates = await input.prisma.codexPetRun.findMany({
+    where: {
+      status: "awaiting_regeneration_approval",
+      // A worker still holding the lease is mid-transition; leave it alone.
+      workerId: null,
+      updatedAt: { lte: parkedBefore },
+    },
+    select: { id: true, projectId: true, userId: true, progressPercent: true },
+    take: Math.min(200, Math.max(1, input.limit ?? 50)),
+  });
+  let cancelled = 0;
+  for (const run of candidates) {
+    try {
+      const expiredAt = now();
+      const changed = await input.prisma.$transaction(async (tx) => {
+        await tx.$queryRawUnsafe('SELECT "id" FROM "CodexPetRun" WHERE "id" = $1 FOR UPDATE', run.id);
+        const updated = await tx.codexPetRun.updateMany({
+          where: { id: run.id, status: "awaiting_regeneration_approval", workerId: null },
+          data: {
+            cancelRequested: true,
+            status: "cancelled",
+            progressStage: "cancelled",
+            progressMessage: "等待授权超时，已自动取消",
+            completedAt: expiredAt,
+            lastEventSequence: { increment: 1 },
+          },
+        });
+        if (updated.count === 0) return false;
+        const fresh = await tx.codexPetRun.findUniqueOrThrow({
+          where: { id: run.id },
+          select: { lastEventSequence: true, progressPercent: true },
+        });
+        await tx.codexPetEvent.create({
+          data: {
+            projectId: run.projectId,
+            runId: run.id,
+            userId: run.userId,
+            sequence: fresh.lastEventSequence,
+            type: "run.cancelled",
+            stage: "cancelled",
+            message: "等待重出图授权超时，已自动取消",
+            progress: fresh.progressPercent,
+            payload: { reason: "approval_expired", expiryMs },
+          },
+        });
+        await tx.codexPetProject.updateMany({
+          where: { id: run.projectId, userId: run.userId, latestRunId: run.id, status: { not: "deleting" } },
+          data: { status: "cancelled" },
+        });
+        return true;
+      });
+      if (!changed) continue;
+      cancelled += 1;
+    } catch (error) {
+      input.onError?.(error, run.id);
+    }
+  }
+  return cancelled;
 }
 
 export async function releasePreemptedRuns(input: {

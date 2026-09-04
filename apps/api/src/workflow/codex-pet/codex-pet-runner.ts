@@ -36,12 +36,6 @@ import {
   isAllowedCodexPetImageProvenance,
   isAllowedCodexPetVisualModel,
 } from "./codex-pet-model-contract.js";
-import {
-  CODEX_PET_PER_IMAGE_BILLING_MODE,
-  CodexPetImageCallAlreadySentError,
-  CodexPetImageCallApprovalRequiredError,
-  CodexPetImageCallLimitError,
-} from "./codex-pet-call-ledger.js";
 import { CODEX_PET_LEGACY_READ_ONLY_STATUS } from "./codex-pet-read-only-archive.js";
 import {
   buildCardinalPrompt,
@@ -80,7 +74,6 @@ import {
   finalizeClaimedSetupFailure,
   handleCancelled,
   handleImageApprovalRequired,
-  handleImageCallLedgerPause,
   handleLeaseLost,
   handlePackagingDeferred,
   handleUnexpectedFailure,
@@ -132,7 +125,6 @@ import {
   codexPetShouldMirrorRunningLeft,
   configuredVisualConcurrency,
   customizedStandardActionStates,
-  frozenPerImageCallPoints,
   imageInput,
   isCodexPetRecoverySnapshot,
   mapWithConcurrency,
@@ -182,7 +174,6 @@ export { codexPetShouldMirrorRunningLeft } from "./codex-pet-runner/runner-util.
 export {
   CODEX_PET_ACTIVE_STATUSES,
   CODEX_PET_IDLE_BOARD_PROMPT_VERSION,
-  CODEX_PET_RESOURCE_KEY,
   type CodexPetArtifactPutInput,
   type CodexPetArtifactStore,
   type CodexPetEventInput,
@@ -460,9 +451,8 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   };
   // Assembling the intermediate is the first moment all nine action groups are
   // graded together. A rejection here names its cells, so regenerate only the
-  // implicated groups instead of failing a run that already paid for eleven
-  // boards; each repair is one extra call that the caller still has to approve
-  // under per-image billing.
+  // implicated groups instead of failing a run that already produced eleven
+  // boards.
   const standardAtlasMaxAttempts = 2;
   let assembledStandard: Awaited<ReturnType<typeof storeStandardAtlas>> | null = null;
   for (let standardAttempt = 1; standardAttempt <= standardAtlasMaxAttempts; standardAttempt += 1) {
@@ -1067,8 +1057,8 @@ async function executeRun(ctx: RunnerContext): Promise<CodexPetExecutionResult> 
   const packaged = await createCodexPetPackage({ id: petId, displayName: ctx.identity.name, description: ctx.identity.description, spritesheet: finalAtlas });
   // Re-open the exact ZIP bytes that will be persisted.  This closes the
   // validation gap between the pre-package PNG checks and the WebP/ZIP bytes
-  // consumed by Codex, and makes a malformed package a normal refundable run
-  // failure instead of a deliverable that only fails at install time.
+  // consumed by Codex, and makes a malformed package a normal run failure
+  // instead of a deliverable that only fails at install time.
   const inspectedPackage = await inspectCodexPetZip(packaged.zip);
   if (inspectedPackage.manifest.spriteVersionNumber !== 2 || inspectedPackage.manifest.spritesheetPath !== "spritesheet.webp") {
     throw new Error("Codex v2 安装包结构验证失败");
@@ -1213,21 +1203,18 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   }
   // BullMQ delivery is at-least-once and older retained failed jobs may be
   // observed during an upgrade. Terminal database state is authoritative: a
-  // failed/refunded or API-cancelled run must never regenerate artifacts,
-  // emit another terminal event, or attempt another refund.
+  // failed or API-cancelled run must never regenerate artifacts or emit
+  // another terminal event.
   if (initialRun.status === "ready" || initialRun.status === "failed" || initialRun.status === "cancelled" || initialRun.status === CODEX_PET_LEGACY_READ_ONLY_STATUS || initialRun.status === "awaiting_direction_review" || initialRun.status === "awaiting_regeneration_approval") {
     return { status: initialRun.status, runId: initialRun.id };
   }
   const initialSnapshot = asRecord(initialRun.inputSnapshot);
   const initialQualityInspectionEnabled = typeof initialSnapshot.qualityInspectionEnabled === "boolean"
     ? initialSnapshot.qualityInspectionEnabled
-    : typeof initialRun.qualityInspectionEnabled === "boolean"
-      ? initialRun.qualityInspectionEnabled
-      : initialRun.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE ? false : true;
-  const zeroChargeRecovery = ["packaging", "archiving"].includes(initialRun.status)
-    && isCodexPetRecoverySnapshot(initialRun.inputSnapshot)
-    && initialRun.billingChargeStatus === "not_required"
-    && initialRun.billingPoints === 0;
+    : initialRun.qualityInspectionEnabled;
+  // 恢复运行只打包已批准的字节，不需要重新加载参考图。
+  const recoveryPackagingResume = ["packaging", "archiving"].includes(initialRun.status)
+    && isCodexPetRecoverySnapshot(initialRun.inputSnapshot);
   const initialVisualQaModel = typeof initialSnapshot.visualQaModel === "string"
     ? initialSnapshot.visualQaModel.trim()
     : "";
@@ -1248,14 +1235,6 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     && !initialRun.cancelRequested) {
     return { status: "awaiting_base_review", runId: initialRun.id };
   }
-  // Queue delivery must never start visual work before the external package
-  // charge is durably confirmed and the activation transaction has committed.
-  const initialBillingActivated = initialRun.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE
-    ? initialRun.billingSettlementStatus === "reserved"
-    : initialRun.billingChargeStatus === "charged" && Boolean(initialRun.billingActivatedAt);
-  if (!zeroChargeRecovery && !initialBillingActivated) {
-    throw new Error("Codex pet run billing is not activated");
-  }
   // A caller that does not supply a worker identity is generally a direct
   // invocation (tests, maintenance, or a one-off repair). Give each such
   // invocation a unique lease token so two concurrent calls in one process
@@ -1269,7 +1248,6 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     env,
     initialRun.projectId,
     initialRun.userId,
-    zeroChargeRecovery,
   );
   if (!claimed.claimed) {
     const fresh = claimed.run;
@@ -1278,9 +1256,8 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
       return { status: fresh.status, runId: fresh.id };
     }
     // Another live worker owns the run. Do not invoke finalizeFailure or
-    // cancellation here; doing so would race the owner and could trigger a
-    // duplicate refund. The queue/maintenance pass will retry after a stale
-    // lease expires if necessary.
+    // cancellation here; doing so would race the owner. The queue/maintenance
+    // pass will retry after a stale lease expires if necessary.
     return { status: "busy", runId: fresh.id };
   }
   const run = claimed.run;
@@ -1291,27 +1268,23 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   const snapshottedVisualQaModel = typeof snapshot.visualQaModel === "string" ? snapshot.visualQaModel.trim() : "";
   const qualityInspectionEnabled = typeof snapshot.qualityInspectionEnabled === "boolean"
     ? snapshot.qualityInspectionEnabled
-    : typeof run.qualityInspectionEnabled === "boolean"
-      ? run.qualityInspectionEnabled
-      : run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE ? false : true;
+    : run.qualityInspectionEnabled;
   const visualQaModel = qualityInspectionEnabled
     ? resolveCodexPetVisualQaModel(env, snapshottedVisualQaModel || run.visualQaModel || undefined)
     : "";
   const imageModel = snapshottedImageModel || run.requestedModel;
   const failedContinuation = asRecord(snapshot.failedContinuation);
   const snapshottedMaxBoardAttempts = failedContinuation.maxBoardAttemptsPerJob;
-  const perImageBilling = run.billingMode === CODEX_PET_PER_IMAGE_BILLING_MODE;
-  const perImageCallPoints = perImageBilling ? frozenPerImageCallPoints(snapshot, run) : 0;
-  const maxBoardAttempts = perImageBilling ? 1 : codexPetMaxBoardAttempts(env, snapshottedMaxBoardAttempts);
+  const maxBoardAttempts = codexPetMaxBoardAttempts(env, snapshottedMaxBoardAttempts);
   // All visual calls in this run use the snapshotted project choice. Keeping
   // it in the context environment lets the existing visual helpers and their
   // injected test clients share one durable route without consulting the
   // mutable process default.
   const visualEnv = qualityInspectionEnabled ? { ...env, PET_VISUAL_QA_MODEL: visualQaModel } : env;
   // Recovery packaging is bound to already-approved bytes and never needs to
-  // reload user references. Avoid making a zero-charge recovery depend on
+  // reload user references. Avoid making a recovery resume depend on
   // reference-object availability after the original run has finished.
-  const referenceAssetIds = zeroChargeRecovery ? [] : Array.isArray(snapshot.referenceAssetIds)
+  const referenceAssetIds = recoveryPackagingResume ? [] : Array.isArray(snapshot.referenceAssetIds)
     ? snapshot.referenceAssetIds.filter((value): value is string => typeof value === "string")
     : [...run.project.referenceAssetIds];
   const snapshotString = (key: string, fallback: string) => typeof snapshot[key] === "string" ? snapshot[key] as string : fallback;
@@ -1354,7 +1327,7 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     }
   } catch (error) {
     if (!(error instanceof CodexPetLeaseLostError)) {
-      await finalizeClaimedSetupFailure({ prisma: deps.prisma, appendEvent: deps.appendEvent, billing: deps.billing, project: run.project, runId: run.id, workerId, error }).catch(() => undefined);
+      await finalizeClaimedSetupFailure({ prisma: deps.prisma, appendEvent: deps.appendEvent, project: run.project, runId: run.id, workerId, error }).catch(() => undefined);
     }
     throw error;
   }
@@ -1384,11 +1357,6 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
         id: run.id,
         workerId,
         status: { in: [...CODEX_PET_ACTIVE_STATUSES] },
-        ...(zeroChargeRecovery
-          ? { billingChargeStatus: "not_required", billingPoints: 0 }
-          : perImageBilling
-            ? { billingMode: CODEX_PET_PER_IMAGE_BILLING_MODE, billingSettlementStatus: "reserved" }
-            : { billingChargeStatus: "charged", billingActivatedAt: { not: null } }),
       },
       data: { heartbeatAt: new Date() },
     }).then((updated) => {
@@ -1405,8 +1373,6 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
     imageModel,
     visualQaModel,
     qualityInspectionEnabled,
-    perImageBilling,
-    perImageCallPoints,
     maxBoardAttempts,
     referenceAssetIds,
     identity: {
@@ -1427,9 +1393,6 @@ export async function executeCodexPetRun(input: { runId: string; deps: CodexPetR
   } catch (error) {
     if (error instanceof CodexPetImageApprovalRequiredError) {
       return await handleImageApprovalRequired(ctx, error);
-    }
-    if (error instanceof CodexPetImageCallLimitError || error instanceof CodexPetImageCallApprovalRequiredError || error instanceof CodexPetImageCallAlreadySentError) {
-      return await handleImageCallLedgerPause(ctx, error);
     }
     if (error instanceof CodexPetPackagingDeferredError) {
       return await handlePackagingDeferred(ctx, error);

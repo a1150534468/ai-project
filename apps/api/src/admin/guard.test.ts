@@ -21,7 +21,7 @@ describe("checkAdminAuth", () => {
   });
 
   it("权限不足 → 403", async () => {
-    const r = await checkAdminAuth("a1", async () => adminFix, "BALANCE_ADJUST");
+    const r = await checkAdminAuth("a1", async () => adminFix, "ADMIN_MANAGE");
     expect(r.code).toBe(403);
   });
 

@@ -24,18 +24,16 @@ describe("errorMessageOrFallback", () => {
   });
 
   it("兜底文案本身不受截断长度影响", () => {
-    expect(errorMessageOrFallback(null, "余额不足，请充值", 3)).toBe("余额不足，请充值");
+    expect(errorMessageOrFallback(null, "生成失败，请稍后重试", 3)).toBe("生成失败，请稍后重试");
   });
 
-  it("InsufficientBalanceError 的 message 本就是中文提示，透传即为原提示语", () => {
-    // packages/billing 里 message 固定为「余额不足，请充值」，
-    // 所以 portrait / try-on 原先那条 instanceof 分支是重复的。
-    class InsufficientBalanceError extends Error {
+  it("上游异常自带中文 message 时透传，不套兜底文案", () => {
+    class UpstreamRejectedError extends Error {
       constructor() {
-        super("余额不足，请充值");
-        this.name = "InsufficientBalanceError";
+        super("上游模型拒绝了这次请求");
+        this.name = "UpstreamRejectedError";
       }
     }
-    expect(errorMessageOrFallback(new InsufficientBalanceError(), "人像生成失败", 300)).toBe("余额不足，请充值");
+    expect(errorMessageOrFallback(new UpstreamRejectedError(), "人像生成失败", 300)).toBe("上游模型拒绝了这次请求");
   });
 });

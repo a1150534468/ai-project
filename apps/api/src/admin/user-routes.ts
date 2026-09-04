@@ -2,10 +2,9 @@ import type { FastifyInstance } from "fastify";
 import argon2 from "argon2";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
-import { createBillingClient } from "@ai-assistant/billing";
 import { requireAdmin } from "./guard.js";
 import { writeAudit } from "./audit.js";
-import { buildAdminUserBillingLog, buildAdminUserDetail } from "./user-detail.js";
+import { buildAdminUserDetail } from "./user-detail.js";
 import { generateUniqueUid } from "../auth/uid.js";
 import { kickDevice } from "../connector/hub.js";
 import { revokeDeviceByAdmin, listDevicesForAdmin } from "../device/service.js";
@@ -17,10 +16,6 @@ const createUserSchema = z.object({
 
 export async function adminUserRoutes(app: FastifyInstance) {
   const prisma = getPrisma();
-  const billing = createBillingClient({
-    baseUrl: process.env.BILLING_BASE_URL!,
-    token: process.env.BILLING_INTERNAL_TOKEN!,
-  });
 
   app.get(
     "/api/admin/users",
@@ -57,17 +52,9 @@ export async function adminUserRoutes(app: FastifyInstance) {
           },
         }),
       ]);
-      // 合并 billing 余额（批量，单次调用；billing 故障降级为 balance=null 不阻塞）
-      let balances: Record<string, number> = {};
-      try {
-        const r = await billing.batchBalances(data.map((u) => u.id));
-        balances = r.balances;
-      } catch {
-        balances = {};
-      }
       return {
         success: true,
-        data: data.map((u) => ({ ...u, balance: balances[u.id] ?? null })),
+        data,
         total,
         page,
         pageSize,
@@ -148,24 +135,6 @@ export async function adminUserRoutes(app: FastifyInstance) {
   );
 
   app.get(
-    "/api/admin/users/:id/billing-log",
-    { preHandler: requireAdmin("USER_BILLING_LOG_VIEW") },
-    async (req, reply) => {
-      const { id } = req.params as { id: string };
-      const user = await prisma.user.findUnique({
-        where: { id },
-        select: { id: true, uid: true, username: true, bannedAt: true, createdAt: true },
-      });
-      if (!user) return reply.code(404).send({ error: "用户不存在" });
-
-      return {
-        success: true,
-        data: await buildAdminUserBillingLog(billing, user),
-      };
-    },
-  );
-
-  app.get(
     "/api/admin/users/:id/detail",
     { preHandler: requireAdmin("USER_DETAIL_VIEW") },
     async (req, reply) => {
@@ -178,7 +147,7 @@ export async function adminUserRoutes(app: FastifyInstance) {
 
       return {
         success: true,
-        data: await buildAdminUserDetail(prisma, billing, user),
+        data: await buildAdminUserDetail(prisma, user),
       };
     },
   );

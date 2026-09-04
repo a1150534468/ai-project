@@ -3,7 +3,6 @@ import type { PrismaClient } from "@prisma/client";
 import { deleteObject, makeS3, type S3 } from "../../storage/s3.js";
 import { codexPetBullConnection } from "./codex-pet-queue.js";
 import { isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
-import { codexPetBillingBlocksProjectDeletion } from "./codex-pet-billing.js";
 
 export const CODEX_PET_CLEANUP_QUEUE_NAME = "codex-pet-project-cleanup";
 
@@ -27,7 +26,7 @@ export interface CodexPetCleanupObjectRef {
 
 export class CodexPetCleanupPendingError extends Error {
   constructor(projectId: string) {
-    super(`Codex pet project ${projectId} still has live work or unsettled billing`);
+    super(`Codex pet project ${projectId} still has live work`);
     this.name = "CodexPetCleanupPendingError";
   }
 }
@@ -125,15 +124,9 @@ export async function executeCodexPetProjectCleanup(args: {
       id: true,
       status: true,
       workerId: true,
-      billingChargeStatus: true,
-      billingActivatedAt: true,
-      billingRefundedAt: true,
-      billingRefundStatus: true,
     },
   });
-  if (runs.some((run) => CODEX_PET_NON_TERMINAL_RUN_STATUSES.has(run.status)
-    || Boolean(run.workerId)
-    || codexPetBillingBlocksProjectDeletion(run))) {
+  if (runs.some((run) => CODEX_PET_NON_TERMINAL_RUN_STATUSES.has(run.status) || Boolean(run.workerId))) {
     throw new CodexPetCleanupPendingError(project.id);
   }
   const artifacts = await args.prisma.codexPetArtifact.findMany({

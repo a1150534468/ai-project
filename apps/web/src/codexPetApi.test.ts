@@ -38,8 +38,6 @@ const run: CodexPetRun = {
   progressMessage: "排队中",
   autoContinue: false,
   colorKey: null,
-  billingPoints: 200,
-  billingRefundedAt: null,
   cancelRequested: false,
   hasSuccessfulImage: false,
   selectedBaseArtifactId: null,
@@ -84,7 +82,7 @@ describe("codex pet API", () => {
     }));
   });
 
-  it("uses encoded project paths and the same idempotency key when starting a paid run", async () => {
+  it("uses encoded project paths and the same idempotency key when starting a run", async () => {
     const startedProject = { ...project, latestRunId: run.id, status: "queued" as const };
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: { project: startedProject, run } }), { status: 202 }));
 

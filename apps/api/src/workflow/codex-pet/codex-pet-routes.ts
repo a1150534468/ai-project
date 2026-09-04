@@ -15,7 +15,6 @@ export {
   CODEX_PET_PREVIEW_ARTIFACT_PURPOSE,
   CODEX_PET_PREVIEW_URL_TTL_SECONDS,
   CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
-  CODEX_PET_RESOURCE_KEY,
   codexPetRunEventChannel,
   deriveCodexPetRunId,
   formatCodexPetSseEvent,
@@ -23,7 +22,7 @@ export {
   validateCodexPetReferenceAsset,
   verifyCodexPetArtifactSignature,
 } from "./codex-pet-route-helpers.js";
-export type { CodexPetArtifactShape, CodexPetBilling, CodexPetRouteDeps } from "./codex-pet-route-types.js";
+export type { CodexPetArtifactShape, CodexPetRouteDeps } from "./codex-pet-route-types.js";
 
 // 门面：对外契约（导出符号与路由注册顺序）与拆分前逐字一致。原来 2961 行的插件
 // 体被按路由分组搬进同目录的兄弟文件，测试与外部 import 一行都没有改。

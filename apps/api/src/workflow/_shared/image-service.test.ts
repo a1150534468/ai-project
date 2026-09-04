@@ -777,7 +777,7 @@ describe("image service", () => {
     });
   });
 
-  it("measures the delivered pixels of a real image so billing can settle by tier", async () => {
+  it("measures the delivered pixels of a real image so callers can record the delivered tier", async () => {
     const png = await sharp({ create: { width: 1086, height: 1448, channels: 3, background: "#406080" } }).png().toBuffer();
     const stored = await storeWorkflowImage({
       image: { kind: "b64", b64: png.toString("base64"), mime: "image/png" },

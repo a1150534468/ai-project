@@ -18,7 +18,6 @@ interface ShellProps {
   onViewChange: (view: ViewType) => void;
   workflowModule?: WorkflowModuleId;
   onSelectWorkflowSub?: (id: WorkflowSubId) => void;
-  balance?: number | null;
   onLogout?: () => void;
   token: string;
   agents: { presets: AgentOption[]; custom: AgentOption[] };
@@ -40,7 +39,6 @@ export default function Shell({
   onViewChange,
   workflowModule,
   onSelectWorkflowSub,
-  balance = null,
   onLogout,
   token,
   agents,
@@ -91,7 +89,6 @@ export default function Shell({
           onViewChange={onViewChange}
           workflowModule={workflowModule}
           onSelectWorkflowSub={onSelectWorkflowSub}
-          balance={balance}
           onLogout={onLogout}
           collapsed={collapsed}
           onToggleCollapsed={toggleCollapsed}

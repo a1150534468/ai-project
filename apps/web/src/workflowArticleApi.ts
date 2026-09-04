@@ -4,7 +4,6 @@ import type {
   ArticleWorkflowGalleryMode,
   ArticleWorkflowGenerationMode,
   ArticleWorkflowImageAsset,
-  ArticleWorkflowOutputKind,
   ArticleWorkflowPlatform,
   ArticleWorkflowProjectStatus,
   ArticleWorkflowSourceFormat,
@@ -49,29 +48,6 @@ export interface ArticleWorkflowProject extends ArticleWorkflowProjectSummary {
 export interface ArticleWorkflowBatch {
   readonly batchId: string;
   readonly projects: readonly ArticleWorkflowProject[];
-}
-
-export interface ArticleWorkflowPricingRow {
-  readonly resourceKey: string;
-  readonly displayName: string;
-  readonly pricingType: "PER_CALL" | "PER_UNIT" | "VIDEO_IO";
-  readonly rate: number;
-  readonly perUnits: number;
-  readonly enabled: boolean;
-}
-
-export interface ArticleWorkflowPlatformPricing {
-  readonly platform: ArticleWorkflowPlatform;
-  readonly label: string;
-  readonly outputKind: ArticleWorkflowOutputKind;
-  readonly maxImages: number;
-}
-
-export interface ArticleWorkflowPricing {
-  readonly text: ArticleWorkflowPricingRow;
-  readonly image1k: ArticleWorkflowPricingRow;
-  readonly maxImages: number;
-  readonly platforms: readonly ArticleWorkflowPlatformPricing[];
 }
 
 type RequestMethod = "GET" | "POST" | "PATCH" | "DELETE";
@@ -146,15 +122,6 @@ export function listArticleWorkflowHistory(token: string): Promise<readonly Arti
     path: "/api/workflow/article-workflow/history",
     method: "GET",
     fallback: "获取历史项目失败",
-  });
-}
-
-export function getArticleWorkflowPricing(token: string): Promise<ArticleWorkflowPricing> {
-  return requestArticleWorkflow({
-    token,
-    path: "/api/workflow/article-workflow/pricing",
-    method: "GET",
-    fallback: "获取图文计价失败",
   });
 }
 
