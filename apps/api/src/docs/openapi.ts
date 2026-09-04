@@ -16,7 +16,6 @@ const tagDefinitions = [
   { name: "工作流 · Codex 桌宠", description: "Codex v2 桌宠生成、实时进度、安装与知识库归档" },
   { name: "工作流 · 小说", description: "小说工程、章节、资产和自动运行" },
   { name: "工作流 · 文章", description: "文章生成、改写和配图" },
-  { name: "工作流 · 批量生成", description: "内容提取和多维批量生成" },
   { name: "公告", description: "公开公告" },
   { name: "管理 · 管理员", description: "管理员账号与权限" },
   { name: "管理 · 用户", description: "用户和配额管理" },

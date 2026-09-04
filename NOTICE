@@ -1,0 +1,73 @@
+# NOTICE
+
+本产品包含以下第三方开源组件。各组件的版权与许可归其各自所有人所有；本文件不改变、
+不限制、也不扩大这些许可所授予的权利。完整许可正文随各组件的包一起分发，位于
+`node_modules/<包名>/LICENSE`。
+
+本仓库自身的许可见同目录 `LICENSE`（专有 / 保留所有权利）。
+
+> **为什么要有这个文件**：`apps/web` 与 `apps/admin` 的构建产物会打包上面这些库并发送到
+> 每一个用户的浏览器 —— 那就是「分发」。MIT / BSD / Apache-2.0 都要求分发时保留版权
+> 声明与许可文本，所以这份归属清单与是否开源无关，产品上线那天就已经生效了。
+> 清单按**直接依赖**列（间接依赖随各自包一起分发其许可正文）。
+
+## Apache License 2.0
+
+- `@aws-sdk/client-s3` — Amazon Web Services
+- `@prisma/client`、`prisma` — Prisma Data, Inc.
+- `echarts` — The Apache Software Foundation
+- `pdf-parse`
+- `sharp` — Lovell Fuller and contributors
+- `typescript` — Microsoft Corporation
+- `xlsx` — SheetJS LLC
+
+## MIT License
+
+- `@anthropic-ai/sdk` — Anthropic, PBC
+- `@fastify/cookie`、`@fastify/cors`、`@fastify/multipart`、`@fastify/swagger`、
+  `@fastify/swagger-ui`、`@fastify/websocket`、`fastify` — The Fastify team
+- `@iconify/react` — Iconify OÜ
+- `@napi-rs/canvas` — LongYinan
+- `@testing-library/jest-dom`、`@testing-library/react` — Kent C. Dodds and contributors
+- `@vitejs/plugin-react`、`vite`、`vitest` — Evan You / Vite & Vitest contributors
+- `@xmldom/xmldom` — xmldom contributors
+- `argon2` — Ranieri Althoff
+- `autoprefixer`、`postcss` — Andrey Sitnik
+- `bullmq` — Taskforce.sh Inc.
+- `croner` — Hexagon
+- `docx` — Dolan Miu
+- `fast-xml-parser` — Amit Kumar Gupta
+- `form-data` — Felix Geisendörfer
+- `ioredis` — Zihua Li
+- `ipaddr.js` — whitequark
+- `jsdom` — jsdom contributors
+- `markdown-it`、`markdown-it-mark` — markdown-it contributors
+- `motion` — Motion / Framer
+- `pdfkit` — Devon Govett
+- `react`、`react-dom` — Meta Platforms, Inc. and affiliates
+- `react-markdown`、`rehype-sanitize`、`remark-gfm`、`remark-parse`、`remark-stringify`、
+  `unified` — Titus Wormer and unified collective
+- `react-use-measure` — Paul Henschel
+- `squire-rte` — Neil Jenkins
+- `tailwindcss` — Tailwind Labs, Inc.
+- `tsx` — Hiroki Osame
+- `turbo` — Vercel, Inc.
+- `undici` — Node.js contributors
+- `zod` — Colin McDonnell
+
+## 其它许可
+
+- `@biomejs/biome` — MIT OR Apache-2.0，Biome Developers and Contributors（仅开发期使用）
+- `jszip` — MIT OR GPL-3.0-or-later，Stuart Knightley（**本项目按 MIT 一支使用**）
+- `mammoth` — BSD-2-Clause，Michael Williamson
+- `jsonrepair` — ISC，Jos de Jong
+- `qrcode.react` — ISC，Paul O'Shannessy
+- `nodemailer` — MIT-0，Andris Reinman
+- `gsap` — GreenSock 标准「no charge」许可（非开源，见 <https://gsap.com/standard-license>）。
+  **注意这一项不是 OSS**：商业分发前需要自行确认当前用法是否仍在免费档范围内。
+
+## 已随模块下线、不再包含的第三方参考
+
+- 微信接入曾参考 `zhayujie/chatgpt-on-wechat`（MIT）。该模块已于 2026-09 随解耦
+  Phase 1 整体删除，仓库中已无其代码，故不再需要保留该归属。若将来重新引入，
+  必须把这条归属加回本文件。

@@ -132,7 +132,7 @@ Worker 启动时和定时器里都会跑 `recoverInterruptedNovelSteps`（`runni
 
 ### 7.7 迁移「假通过」——包名过滤器失效
 - **现象**：按历史计划跑测试，命令「通过」了却其实没跑到小说用例。
-- **根因**：包名已从 `@yc/*` 迁到 `@ai-assistant/*`，旧的 `--filter` 过滤器匹配不到，等于空跑；另外全量 API 测试里依赖 `DATABASE_URL` 的集成用例会因未加载 `.env` 而报错，容易和真实回归混淆。
+- **根因**：包名已从旧的 `yc` 前缀迁到 `@ai-assistant/*`，旧的 `--filter` 过滤器匹配不到，等于空跑；另外全量 API 测试里依赖 `DATABASE_URL` 的集成用例会因未加载 `.env` 而报错，容易和真实回归混淆。
 - **修法**：改用当前包名和精确的 Vitest 文件入口跑；加载 `.env` 后区分环境问题与真实回归。
 - **预防**：迁移后不能只信历史命令，一切以当前仓库为准；注意「假通过」。
 
@@ -1245,14 +1245,14 @@ Worker 启动时和定时器里都会跑 `recoverInterruptedNovelSteps`（`runni
 
 **架构：** 保持 `ai project` 作为唯一可写仓库，并扩展当前 TypeScript/Fastify/Prisma/React 小说工作流。fqxs 仅作为只读的产品与算法参考，将上下文构建、章节后处理、审阅、事实、伏笔和工作台信号迁移为聚焦的 TypeScript 模块，并接入现有 `NovelProject`、`NovelSection`、`NovelChapter`、`NovelTask` 与计费流程。
 
-**技术栈：** TypeScript、Fastify、Prisma/Postgres、Vitest、React、Tailwind、Iconify、现有 `@yc/llm`、现有 `@yc/billing`。
+**技术栈：** TypeScript、Fastify、Prisma/Postgres、Vitest、React、Tailwind、Iconify、现有 `@ai-assistant/llm`。
 
 ---
 
 #### 不可协商的约束
 
 - 只在 `/Users/z/code/ai project` 内工作。
-- 将 `/Users/z/code/jshl/yun-claude` 和 `/Users/z/code/fqxs` 视为只读参考。
+- 不引用仓外的上游代码库（本模块的解耦已在 2026-09 完成，见 docs/decisions.md 的 ADR-012）。
 - 不复制 `.env`、API key、供应商 token、私有凭据或密钥清单。
 - 不引入 Django、FastAPI、Celery、AntD 或 fqxs provider-manager 代码。
 - 不替换现有小说工作流，只做扩展。
@@ -1434,7 +1434,7 @@ foreshadowItems NovelForeshadowItem[]
 运行：
 
 ```bash
-pnpm --filter @yc/db migrate -- --name novel_workbench_assets
+pnpm --filter @ai-assistant/db migrate -- --name novel_workbench_assets
 ```
 
 预期：
@@ -1448,7 +1448,7 @@ The following migration(s) have been created and applied
 运行：
 
 ```bash
-pnpm --filter @yc/db generate
+pnpm --filter @ai-assistant/db generate
 ```
 
 预期：
@@ -1650,7 +1650,7 @@ export interface NovelGenerationContextPayload {
 运行：
 
 ```bash
-pnpm --filter @yc/api typecheck
+pnpm --filter @ai-assistant/api typecheck
 ```
 
 在下游导入前的预期结果：
@@ -1716,7 +1716,7 @@ describe("novel text analysis", () => {
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-text-analysis
+pnpm --filter @ai-assistant/api test -- novel-text-analysis
 ```
 
 预期：
@@ -1898,7 +1898,7 @@ export function buildNovelQualityDiagnostics(content: string): NovelQualityDiagn
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-text-analysis
+pnpm --filter @ai-assistant/api test -- novel-text-analysis
 ```
 
 预期：
@@ -1985,7 +1985,7 @@ describe("novel postprocess", () => {
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-postprocess novel-review
+pnpm --filter @ai-assistant/api test -- novel-postprocess novel-review
 ```
 
 预期：
@@ -2207,7 +2207,7 @@ export function buildNovelChapterPostprocessPayload(args: {
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-postprocess novel-review
+pnpm --filter @ai-assistant/api test -- novel-postprocess novel-review
 ```
 
 预期：
@@ -2277,7 +2277,7 @@ describe("novel context builder", () => {
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-context-builder
+pnpm --filter @ai-assistant/api test -- novel-context-builder
 ```
 
 预期：
@@ -2445,7 +2445,7 @@ export function buildNovelEnhancedContextText(payload: NovelGenerationContextPay
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-context-builder
+pnpm --filter @ai-assistant/api test -- novel-context-builder
 ```
 
 预期：
@@ -2546,7 +2546,7 @@ novelForeshadowItem: {
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-routes
+pnpm --filter @ai-assistant/api test -- novel-routes
 ```
 
 预期：
@@ -2612,7 +2612,7 @@ function extractKnownNamesFromSections(sections: readonly { kind: string; displa
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-routes
+pnpm --filter @ai-assistant/api test -- novel-routes
 ```
 
 预期：
@@ -2791,7 +2791,7 @@ const reviewChapterSchema = z.object({
 运行：
 
 ```bash
-pnpm --filter @yc/api test -- novel-routes
+pnpm --filter @ai-assistant/api test -- novel-routes
 ```
 
 预期：
@@ -2876,7 +2876,7 @@ it("requests chapter analysis refresh", async () => {
 运行：
 
 ```bash
-pnpm --filter @yc/web test -- api
+pnpm --filter @ai-assistant/web test -- api
 ```
 
 预期：
@@ -2965,7 +2965,7 @@ export async function analyzeNovelChapter(token: string, projectId: string, chap
 运行：
 
 ```bash
-pnpm --filter @yc/web test -- api
+pnpm --filter @ai-assistant/web test -- api
 ```
 
 预期：
@@ -3155,7 +3155,7 @@ export function NovelWorkbenchSignals({ workbench }: { readonly workbench: Novel
 运行：
 
 ```bash
-pnpm --filter @yc/web test -- NovelWorkflowStudio
+pnpm --filter @ai-assistant/web test -- NovelWorkflowStudio
 ```
 
 预期：
@@ -3179,7 +3179,7 @@ git commit -m "feat: add novel workbench panels"
 - [ ] **步骤 1：运行 API 小说测试**
 
 ```bash
-pnpm --filter @yc/api test -- novel
+pnpm --filter @ai-assistant/api test -- novel
 ```
 
 预期：
@@ -3191,7 +3191,7 @@ PASS
 - [ ] **步骤 2：运行 Web 小说测试**
 
 ```bash
-pnpm --filter @yc/web test -- NovelWorkflowStudio novel
+pnpm --filter @ai-assistant/web test -- NovelWorkflowStudio novel
 ```
 
 预期：
@@ -3247,7 +3247,7 @@ git remote -v
 预期：
 
 ```text
-Remote 指向新的私有 ai project 仓库，而不是 /Users/z/code/jshl/yun-claude。
+Remote 指向本仓库（私有 ai project），不指向任何仓外的上游库。
 ```
 
 - [ ] **步骤 7：最终提交或推送**

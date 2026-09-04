@@ -1,0 +1,26 @@
+Copyright (c) 2026 the ai project authors. All rights reserved.
+
+专有软件 · 保留所有权利 / Proprietary — All Rights Reserved
+
+本软件及其源代码、文档与相关资产为版权所有人的专有财产。未经版权所有人事先书面
+许可，任何人不得复制、修改、合并、发布、分发、再许可、出售本软件的全部或任何部分，
+亦不得对其进行反向工程、反编译或反汇编。
+
+本仓库未授予任何形式的开源许可。仓库处于私有状态这一事实本身不构成任何许可。
+
+第三方组件的版权与许可归其各自所有人，见同目录 NOTICE 文件。
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+为什么是「专有」而不是某个开源许可：截至本文件加入时（2026-09-04），HEAD 上仍有约
+4.5 万行代码逐字节来自一个未授予许可的上游仓库（见 docs/decisions.md 的 ADR-002 与
+ADR-012）。给这些代码套 MIT/Apache 等于签一份签不了的授权书。清理进度见
+docs/superpowers/plans/2026-09-03-decouple-from-yun-claude.md；将来若改用开源许可，
+换掉本文件内容即可，其余不受影响。
