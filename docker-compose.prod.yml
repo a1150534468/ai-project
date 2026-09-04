@@ -34,33 +34,6 @@ services:
       retries: 10
     logging: *default-logging
 
-  billing-postgres:
-    image: postgres:17
-    restart: unless-stopped
-    command:
-      - postgres
-      - -c
-      - shared_buffers=32MB
-      - -c
-      - work_mem=2MB
-      - -c
-      - maintenance_work_mem=32MB
-      - -c
-      - max_connections=10
-    environment:
-      POSTGRES_USER: ai_assistant_billing
-      POSTGRES_PASSWORD: ${BILLING_POSTGRES_PASSWORD:?BILLING_POSTGRES_PASSWORD is required}
-      POSTGRES_DB: ai_assistant_billing
-    volumes:
-      - billing_postgres_data:/var/lib/postgresql/data
-    shm_size: 64mb
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ai_assistant_billing -d ai_assistant_billing"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    logging: *default-logging
-
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -81,45 +54,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    logging: *default-logging
-
-  billing:
-    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-billing:${IMAGE_TAG:-latest}
-    build:
-      context: services/billing
-      dockerfile: ../../infra/docker/billing/Dockerfile
-    restart: unless-stopped
-    env_file: ${ENV_FILE:-.env.production}
-    environment:
-      BILLING_DATABASE_URL: ${BILLING_DATABASE_URL:?BILLING_DATABASE_URL is required}
-      BILLING_INTERNAL_TOKEN: ${BILLING_INTERNAL_TOKEN:?BILLING_INTERNAL_TOKEN is required}
-      BILLING_PORT: "8093"
-      BILLING_DB_MAX_OPEN_CONNS: ${BILLING_DB_MAX_OPEN_CONNS:-5}
-      BILLING_DB_MAX_IDLE_CONNS: ${BILLING_DB_MAX_IDLE_CONNS:-2}
-      PUBLIC_CALLBACK_BASE: https://${BILLING_DOMAIN:?BILLING_DOMAIN is required}
-      GIN_MODE: release
-    depends_on:
-      billing-postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "/billing", "healthcheck"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    logging: *default-logging
-
-  billing-migrate:
-    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/${IMAGE_NAMESPACE:?IMAGE_NAMESPACE is required}/ai-assistant-billing:${IMAGE_TAG:-latest}
-    command: ["migrate"]
-    profiles: ["tools"]
-    env_file: ${ENV_FILE:-.env.production}
-    environment:
-      BILLING_DATABASE_URL: ${BILLING_DATABASE_URL:?BILLING_DATABASE_URL is required}
-      BILLING_DB_MAX_OPEN_CONNS: ${BILLING_DB_MAX_OPEN_CONNS:-5}
-      BILLING_DB_MAX_IDLE_CONNS: ${BILLING_DB_MAX_IDLE_CONNS:-2}
-    depends_on:
-      billing-postgres:
-        condition: service_healthy
     logging: *default-logging
 
   migrate:
@@ -149,8 +83,6 @@ services:
       PORT: "8090"
       DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
       REDIS_URL: redis://redis:6379
-      BILLING_BASE_URL: http://billing:8093
-      BILLING_INTERNAL_TOKEN: ${BILLING_INTERNAL_TOKEN:?BILLING_INTERNAL_TOKEN is required}
       CORS_ORIGIN: https://${APP_DOMAIN:?APP_DOMAIN is required},https://${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
       API_PUBLIC_BASE_URL: https://${API_DOMAIN:?API_DOMAIN is required}
       CODEX_PET_PUBLIC_BASE_URL: https://${API_DOMAIN}
@@ -164,8 +96,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      billing:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8090/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -185,8 +115,6 @@ services:
       NODE_OPTIONS: --max-old-space-size=640
       DATABASE_URL: ${WORKER_DATABASE_URL:?WORKER_DATABASE_URL is required}
       REDIS_URL: redis://redis:6379
-      BILLING_BASE_URL: http://billing:8093
-      BILLING_INTERNAL_TOKEN: ${BILLING_INTERNAL_TOKEN:?BILLING_INTERNAL_TOKEN is required}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
       HEAVY_TASK_CONCURRENCY: ${HEAVY_TASK_CONCURRENCY:-1}
       WORKER_HEALTH_PORT: "8091"
@@ -200,8 +128,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      billing:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8091/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
@@ -221,13 +147,10 @@ services:
       APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is required}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:?ADMIN_DOMAIN is required}
       API_DOMAIN: ${API_DOMAIN:?API_DOMAIN is required}
-      BILLING_DOMAIN: ${BILLING_DOMAIN:?BILLING_DOMAIN is required}
     ports:
       - "127.0.0.1:${GATEWAY_HTTP_PORT:-18080}:80"
     depends_on:
       api:
-        condition: service_healthy
-      billing:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]
@@ -238,6 +161,5 @@ services:
 
 volumes:
   main_postgres_data:
-  billing_postgres_data:
   redis_data:
   media_tmp:

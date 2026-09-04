@@ -10,7 +10,6 @@ resources:
   - 37-codex-pet-worker.yaml
   - 40-web.yaml
   - 45-admin.yaml
-  - 50-billing.yaml
   - 60-ingress.yaml
   - 70-migrate-job.yaml
   - 90-resourcequota.yaml
