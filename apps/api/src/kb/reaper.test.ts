@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { getPrisma } from '@ai-assistant/db';
-import type { User, KnowledgeBase } from '@prisma/client';
+import type { PrismaClient, User, KnowledgeBase } from '@prisma/client';
 import { indexOnce, EmptyTextError, type IndexDeps } from './indexer.js';
 import { reapOnce, startKbReaper } from './reaper.js';
 
@@ -423,43 +423,92 @@ describe('reapOnce', () => {
 });
 
 describe('startKbReaper', () => {
-  it('启动停止周期任务', async () => {
-    const mockRunIndex = vi.fn(async () => {
-      // Mock
-    });
+  /**
+   * 这一组不碰真库：reapOnce 只用到 document.findMany，桩掉它就能定死「一轮该处理几篇」。
+   * 原来那条用例用真库 + 真定时器，睡 250ms 再 stop()，然后断言 stop 前后调用数相等 ——
+   * 前面的用例在库里留下十几篇 pending，一轮要跑十几次 runIndex，机器一忙
+   * stop() 就正好落在某一轮中间，那一轮继续把剩下的做完，断言就炸（CI 上实测 10 → 20）。
+   * 现在用 fake timers 推 tick，行为本身也修了：stop() 会让在跑的那一轮就地收手。
+   */
+  function stubPrisma(docIds: readonly string[]) {
+    return {
+      document: { findMany: async () => docIds.map((id) => ({ id })) },
+    } as unknown as PrismaClient;
+  }
 
-    const reaper = startKbReaper(
-      {
-        prisma,
-        loadObject: async () => ({ buf: Buffer.from(''), mime: '', filename: '' }),
-        parse: async () => '',
-        chunk: () => [],
-        embed: async () => ({ vector: new Array(1024).fill(0), tokens: 0 }),
-        workerId: 'test-worker',
-      },
-      {
-        intervalMs: 100, // Short interval for testing
-        leaseMs: 300000,
-        maxAttempts: 3,
-        batchSize: 20,
-        runIndex: mockRunIndex,
-      },
-    );
+  function stubDeps(docIds: readonly string[]): IndexDeps {
+    return {
+      prisma: stubPrisma(docIds),
+      loadObject: async () => ({ buf: Buffer.from(''), mime: '', filename: '' }),
+      parse: async () => '',
+      chunk: () => [],
+      embed: async () => ({ vector: new Array(1024).fill(0), tokens: 0 }),
+      workerId: 'test-worker',
+    };
+  }
 
-    // Wait a bit for cycles to run
-    await new Promise((resolve) => setTimeout(resolve, 250));
+  const OPTS = { intervalMs: 100, leaseMs: 300000, maxAttempts: 3, batchSize: 20 };
 
-    // Should have called at least once (maybe twice depending on timing)
-    expect(mockRunIndex.mock.calls.length).toBeGreaterThanOrEqual(0);
+  it('每个 tick 跑一轮，stop() 之后不再起新的一轮', async () => {
+    vi.useFakeTimers();
+    try {
+      const runIndex = vi.fn(async () => {});
+      const reaper = startKbReaper(stubDeps(['a', 'b']), { ...OPTS, runIndex });
 
-    reaper.stop();
+      await vi.advanceTimersByTimeAsync(100);
+      expect(runIndex).toHaveBeenCalledTimes(2); // 一轮两篇
 
-    // Wait to ensure no more cycles
-    const callsBefore = mockRunIndex.mock.calls.length;
-    await new Promise((resolve) => setTimeout(resolve, 150));
-    const callsAfter = mockRunIndex.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(100);
+      expect(runIndex).toHaveBeenCalledTimes(4);
 
-    // Should be equal (no more calls after stop)
-    expect(callsAfter).toBe(callsBefore);
+      reaper.stop();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(runIndex).toHaveBeenCalledTimes(4);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stop() 之后正在跑的那一轮就地收手，不把整批做完', async () => {
+    vi.useFakeTimers();
+    try {
+      let reaper!: { stop: () => void };
+      // 第一篇处理完就停：剩下两篇一篇都不许再碰
+      const runIndex = vi.fn(async () => {
+        reaper.stop();
+      });
+      reaper = startKbReaper(stubDeps(['a', 'b', 'c']), { ...OPTS, runIndex });
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(runIndex).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('上一轮没跑完就跳过这个 tick，两轮不并发', async () => {
+    vi.useFakeTimers();
+    try {
+      let release = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const runIndex = vi.fn(async () => {
+        await gate;
+      });
+      const reaper = startKbReaper(stubDeps(['a']), { ...OPTS, runIndex });
+
+      await vi.advanceTimersByTimeAsync(100); // 第一轮开跑，卡在闸门上
+      await vi.advanceTimersByTimeAsync(500); // 又过去五个 tick
+      expect(runIndex).toHaveBeenCalledTimes(1);
+
+      release();
+      await vi.advanceTimersByTimeAsync(100); // 放开之后，下一个 tick 才接着跑
+      expect(runIndex).toHaveBeenCalledTimes(2);
+
+      reaper.stop();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

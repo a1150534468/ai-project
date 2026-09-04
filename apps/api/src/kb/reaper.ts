@@ -9,7 +9,6 @@ export interface ReaperOpts {
   batchSize?: number;
   runIndex?: (docId: string) => Promise<void>;
 }
-
 /**
  * Single reaper pass: find candidates and run indexOnce for each.
  * Exported for testing (no need to wait for interval).
@@ -20,6 +19,9 @@ export interface ReaperOpts {
  *
  * Errors in individual runIndex calls are caught and logged, not propagated.
  *
+ * shouldStop is polled before each document: the caller can cut a batch short
+ * (e.g. the reaper was stopped mid-cycle) without waiting for all batchSize items.
+ *
  * @returns Number of documents processed
  */
 export async function reapOnce(
@@ -29,6 +31,7 @@ export async function reapOnce(
     maxAttempts: number;
     batchSize: number;
     runIndex: (docId: string) => Promise<void>;
+    shouldStop?: () => boolean;
   },
 ): Promise<number> {
   const now = new Date();
@@ -52,6 +55,8 @@ export async function reapOnce(
 
   let processed = 0;
   for (const doc of candidates) {
+    if (opts.shouldStop?.()) break;
+
     try {
       await opts.runIndex(doc.id);
       processed++;
@@ -72,6 +77,15 @@ export async function reapOnce(
  * failures remain failed and are intentionally excluded from this loop.
  * Errors are logged, not propagated. Does not block between cycles.
  *
+ * Two things the bare setInterval got wrong:
+ * - cycles could overlap. A cycle takes as long as batchSize embeddings take,
+ *   which is easily more than intervalMs; two live cycles then race for the same
+ *   documents and only the DB lease keeps them apart. A tick that finds the
+ *   previous cycle still running is skipped instead.
+ * - stop() only cancelled future ticks. The cycle already in flight kept indexing
+ *   for the rest of its batch, i.e. past server shutdown and its prisma pool.
+ *   It now bails out between documents.
+ *
  * @returns { stop: () => void } to stop the reaper
  */
 export function startKbReaper(
@@ -84,17 +98,34 @@ export function startKbReaper(
   const batchSize = opts?.batchSize ?? 20;
   const runIndex = opts?.runIndex ?? ((docId: string) => indexOnce(deps, docId, { maxAttempts }));
 
+  let stopped = false;
+  let running = false;
+
   const timer = setInterval(async () => {
+    if (stopped || running) return;
+
+    running = true;
     try {
-      await reapOnce(deps.prisma, { leaseMs, maxAttempts, batchSize, runIndex });
+      await reapOnce(deps.prisma, {
+        leaseMs,
+        maxAttempts,
+        batchSize,
+        runIndex,
+        shouldStop: () => stopped,
+      });
     } catch (err) {
       const errorMsg =
         err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error';
       console.error(`[reaper] Cycle failed: ${errorMsg}`);
+    } finally {
+      running = false;
     }
   }, intervalMs);
 
   return {
-    stop: () => clearInterval(timer),
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
   };
 }
