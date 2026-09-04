@@ -1,8 +1,6 @@
 import { useState } from "react";
-import { Icon } from "@iconify/react";
 import { register } from "../api";
-import { BrandLogo, RippleButton } from "../motion";
-import { ThemeToggle } from "./ThemeToggle";
+import { AuthField, AuthScreen, AuthSwitch } from "./AuthScreen";
 
 interface RegisterProps {
   onAuthed: (token: string) => void;
@@ -10,171 +8,92 @@ interface RegisterProps {
   isLoading?: boolean;
 }
 
+interface Draft {
+  readonly username: string;
+  readonly password: string;
+  readonly confirm: string;
+}
+
+/**
+ * 前端这一道只为「少跑一趟网络」，真正说了算的是后端；顺序照着填表顺序来，
+ * 第一条不过就把话说给用户听，不一次抖出三条。
+ */
+const RULES: readonly { readonly ok: (draft: Draft) => boolean; readonly message: string }[] = [
+  { ok: (d) => d.username.trim() !== "", message: "请输入用户名" },
+  { ok: (d) => d.username.length >= 3 && d.username.length <= 32, message: "用户名长度需 3-32 字符" },
+  { ok: (d) => d.password.trim() !== "", message: "请输入密码" },
+  { ok: (d) => d.password.length >= 8, message: "密码长度至少 8 字符" },
+  { ok: (d) => d.confirm.trim() !== "", message: "请确认密码" },
+  { ok: (d) => d.password === d.confirm, message: "两次输入的密码不一致" },
+];
+
+function firstProblem(draft: Draft): string | null {
+  return RULES.find((rule) => !rule.ok(draft))?.message ?? null;
+}
+
 export default function Register({ onAuthed, onSwitchToLogin, isLoading = false }: RegisterProps) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [draft, setDraft] = useState<Draft>({ username: "", password: "", confirm: "" });
   const [error, setError] = useState("");
 
-  const handleRegister = async () => {
-    try {
-      setError("");
+  const edit = (patch: Partial<Draft>) => setDraft((prev) => ({ ...prev, ...patch }));
 
-      // Validation
-      if (!username.trim()) {
-        setError("请输入用户名");
-        return;
-      }
-      if (username.length < 3 || username.length > 32) {
-        setError("用户名长度需 3-32 字符");
-        return;
-      }
-      if (!password.trim()) {
-        setError("请输入密码");
-        return;
-      }
-      if (password.length < 8) {
-        setError("密码长度至少 8 字符");
-        return;
-      }
-      if (!confirmPassword.trim()) {
-        setError("请确认密码");
-        return;
-      }
-      if (password !== confirmPassword) {
-        setError("两次输入的密码不一致");
-        return;
-      }
-      const token = await register(username, password);
-      onAuthed(token);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "注册出错，请稍后重试"
-      );
+  const submit = async () => {
+    setError("");
+    const problem = firstProblem(draft);
+    if (problem !== null) {
+      setError(problem);
+      return;
+    }
+    try {
+      onAuthed(await register(draft.username, draft.password));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "注册出错，请稍后重试");
     }
   };
 
+  const send = () => void submit();
+
   return (
-    <div className="auth-shell min-h-screen bg-surface-muted flex items-center justify-center overflow-y-auto p-4 py-8">
-      <ThemeToggle compact className="fixed right-5 top-5 z-10" />
-      <div className="w-full max-w-[420px]">
-        {/* Logo & Branding */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-5">
-            <BrandLogo size={52} />
-          </div>
-          <h1 className="text-[34px] font-semibold leading-tight text-ink mb-2">AI 助手</h1>
-          <p className="text-ink-secondary text-[15px]">您的全能 AI 助手</p>
-        </div>
-
-        {/* Register Card */}
-        <div className="auth-card bg-surface rounded-[18px] p-7 sm:p-8 border border-hairline-subtle">
-          <h2 className="text-xl font-semibold text-ink mb-6">创建账户</h2>
-
-          {/* Input Fields */}
-          <div className="space-y-4 mb-6">
-            {/* Username Input */}
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                用户名
-              </label>
-              <div className="relative">
-                <Icon
-                  icon="mdi:account-outline"
-                  className="absolute left-3 top-3.5 text-ink-tertiary"
-                />
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                  placeholder="3-32 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
-                />
-              </div>
-            </div>
-
-            {/* Password Input */}
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                密码
-              </label>
-              <div className="relative">
-                <Icon
-                  icon="mdi:lock-outline"
-                  className="absolute left-3 top-3.5 text-ink-tertiary"
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                  placeholder="至少 8 个字符"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
-                />
-              </div>
-            </div>
-
-            {/* Confirm Password Input */}
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                确认密码
-              </label>
-              <div className="relative">
-                <Icon
-                  icon="mdi:lock-check-outline"
-                  className="absolute left-3 top-3.5 text-ink-tertiary"
-                />
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-                  placeholder="再输入一遍密码"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-3 bg-danger/10 border border-danger/30 rounded-lg">
-              <p className="text-sm text-danger-ink flex items-center">
-                <Icon icon="mdi:alert-circle" className="mr-2" />
-                {error}
-              </p>
-            </div>
-          )}
-
-          {/* Register Button */}
-          <RippleButton
-            onClick={handleRegister}
-            disabled={isLoading}
-            className="w-full bg-brand disabled:bg-hairline disabled:text-ink-tertiary text-white font-normal py-3 rounded-full transition-transform active:scale-[0.98] disabled:shadow-none"
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center">
-                <Icon icon="mdi:loading" className="animate-spin mr-2" />
-                注册中...
-              </span>
-            ) : (
-              "创建账户"
-            )}
-          </RippleButton>
-
-          {/* Footer */}
-          <p className="text-xs text-ink-secondary text-center mt-6">
-            已有账户？{" "}
-            <button
-              onClick={onSwitchToLogin}
-              className="text-brand font-medium"
-            >
-              去登录
-            </button>
-          </p>
-        </div>
-      </div>
-    </div>
+    <AuthScreen
+      scroll
+      title="创建账户"
+      error={error}
+      busy={isLoading}
+      submitLabel="创建账户"
+      busyLabel="注册中..."
+      onSubmit={send}
+      footer={
+        <>
+          已有账户？ <AuthSwitch onClick={onSwitchToLogin}>去登录</AuthSwitch>
+        </>
+      }
+    >
+      <AuthField
+        label="用户名"
+        icon="mdi:account-outline"
+        value={draft.username}
+        placeholder="3-32 个字符"
+        onChange={(username) => edit({ username })}
+        onSubmit={send}
+      />
+      <AuthField
+        label="密码"
+        icon="mdi:lock-outline"
+        type="password"
+        value={draft.password}
+        placeholder="至少 8 个字符"
+        onChange={(password) => edit({ password })}
+        onSubmit={send}
+      />
+      <AuthField
+        label="确认密码"
+        icon="mdi:lock-check-outline"
+        type="password"
+        value={draft.confirm}
+        placeholder="再输入一遍密码"
+        onChange={(confirm) => edit({ confirm })}
+        onSubmit={send}
+      />
+    </AuthScreen>
   );
 }

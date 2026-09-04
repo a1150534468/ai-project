@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { Icon } from "@iconify/react";
-import { BrandLogo, RippleButton } from "../motion";
 import { ApiError } from "../apiError";
 import { request } from "../http";
-import { ThemeToggle } from "./ThemeToggle";
+import { AuthField, AuthScreen, AuthSwitch } from "./AuthScreen";
 
 interface LoginProps {
   onLogin: (token: string) => void;
@@ -16,137 +14,67 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
 
-  const handleLogin = async () => {
+  const submit = async () => {
+    setError("");
+    if (identifier.trim() === "") {
+      setError("请输入用户名或 UID");
+      return;
+    }
+    if (password.trim() === "") {
+      setError("请输入密码");
+      return;
+    }
     try {
-      setError("");
-      if (!identifier.trim()) {
-        setError("请输入用户名或 UID");
-        return;
-      }
-      if (!password.trim()) {
-        setError("请输入密码");
-        return;
-      }
-
-      // 显式 token: null——登录页不该带上 localStorage 里可能残留的旧 token。
+      // 显式 token: null —— 登录页不该带上 localStorage 里可能残留的旧 token。
       const data = await request<{ token: string }>("/api/auth/login", {
         method: "POST",
         token: null,
         body: { identifier, password },
       });
       onLogin(data.token);
-    } catch (err) {
-      // 后端的原始报错不往界面上抛，凭据错误统一提示，避免泄露账号是否存在。
-      if (err instanceof ApiError) {
+    } catch (failure) {
+      // 后端的原始报错不往界面上抛：凭据错误统一提示，别泄露账号存不存在。
+      if (failure instanceof ApiError) {
         setError("登录失败，请检查用户名和密码");
         return;
       }
-      setError(
-        err instanceof Error ? err.message : "登录出错，请稍后重试"
-      );
+      setError(failure instanceof Error ? failure.message : "登录出错，请稍后重试");
     }
   };
 
+  const send = () => void submit();
+
   return (
-    <div className="auth-shell min-h-screen bg-surface-muted flex items-center justify-center p-4">
-      <ThemeToggle compact className="fixed right-5 top-5 z-10" />
-      <div className="w-full max-w-[420px]">
-        {/* Logo & Branding */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-5">
-            <BrandLogo size={52} />
-          </div>
-          <h1 className="text-[34px] font-semibold leading-tight text-ink mb-2">AI 助手</h1>
-          <p className="text-ink-secondary text-[15px]">您的全能 AI 助手</p>
-        </div>
-
-        {/* Login Card */}
-        <div className="auth-card bg-surface rounded-[18px] p-7 sm:p-8 border border-hairline-subtle">
-          <h2 className="text-xl font-semibold text-ink mb-6">登录账户</h2>
-
-          {/* Input Fields */}
-          <div className="space-y-4 mb-6">
-            {/* Identifier Input */}
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                用户名 / UID
-              </label>
-              <div className="relative">
-                <Icon
-                  icon="mdi:account-outline"
-                  className="absolute left-3 top-3.5 text-ink-tertiary"
-                />
-                <input
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  placeholder="输入用户名或 UID"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
-                />
-              </div>
-            </div>
-
-            {/* Password Input */}
-            <div>
-              <label className="block text-sm font-medium text-ink mb-2">
-                密码
-              </label>
-              <div className="relative">
-                <Icon
-                  icon="mdi:lock-outline"
-                  className="absolute left-3 top-3.5 text-ink-tertiary"
-                />
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-                  placeholder="输入密码"
-                  className="w-full pl-10 pr-4 py-3 rounded-[11px] border border-hairline-subtle focus:border-brand focus:ring-2 focus:ring-brand/20 outline-none transition-all bg-surface"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {error && (
-            <div className="mb-6 p-3 bg-danger/10 border border-danger/30 rounded-lg">
-              <p className="text-sm text-danger-ink flex items-center">
-                <Icon icon="mdi:alert-circle" className="mr-2" />
-                {error}
-              </p>
-            </div>
-          )}
-
-          {/* Login Button */}
-          <RippleButton
-            onClick={handleLogin}
-            disabled={isLoading}
-            className="w-full bg-brand disabled:bg-hairline disabled:text-ink-tertiary text-white font-normal py-3 rounded-full transition-transform active:scale-[0.98] disabled:shadow-none"
-          >
-            {isLoading ? (
-              <span className="flex items-center justify-center">
-                <Icon icon="mdi:loading" className="animate-spin mr-2" />
-                登录中...
-              </span>
-            ) : (
-              "登录"
-            )}
-          </RippleButton>
-
-          {/* Footer */}
-          <p className="text-xs text-ink-secondary text-center mt-6">
-            没有账户？{" "}
-            <button
-              onClick={onSwitchToRegister}
-              className="text-brand font-medium"
-            >
-              去注册
-            </button>
-          </p>
-        </div>
-      </div>
-    </div>
+    <AuthScreen
+      title="登录账户"
+      error={error}
+      busy={isLoading}
+      submitLabel="登录"
+      busyLabel="登录中..."
+      onSubmit={send}
+      footer={
+        <>
+          没有账户？ <AuthSwitch onClick={onSwitchToRegister}>去注册</AuthSwitch>
+        </>
+      }
+    >
+      <AuthField
+        label="用户名 / UID"
+        icon="mdi:account-outline"
+        value={identifier}
+        placeholder="输入用户名或 UID"
+        onChange={setIdentifier}
+        onSubmit={send}
+      />
+      <AuthField
+        label="密码"
+        icon="mdi:lock-outline"
+        type="password"
+        value={password}
+        placeholder="输入密码"
+        onChange={setPassword}
+        onSubmit={send}
+      />
+    </AuthScreen>
   );
 }

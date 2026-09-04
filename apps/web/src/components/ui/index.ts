@@ -3,7 +3,7 @@
  * 每个都是「一份 *Class() 类名工厂 + 一层薄组件壳」，样式的真身在工厂里，
  * 好让 motion/RippleButton 这种只加动效的组件也能直接复用（className={buttonClass(...)}）。
  *
- * 同目录的 DownloadLinkDialog / sliding-number 是成品业务组件，不从这里导出，
+ * 同目录的 DownloadLinkDialog / InAppSelect 是成品业务组件，不从这里导出，
  * 免得任何 import 都顺带把 motion 那一坨拖进来。
  */
 export { cx } from "./cx";
