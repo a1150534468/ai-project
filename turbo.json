@@ -36,8 +36,6 @@
         "LLM_BASE_URL",
         "LLM_DEFAULT_MODEL",
         "LLM_MODELS",
-        "MIMO_API_KEY",
-        "MIMO_BASE_URL",
         "REDIS_URL",
         "S3_ACCESS_KEY",
         "S3_BUCKET",
@@ -46,8 +44,7 @@
         "S3_PUBLIC_BASE_URL",
         "S3_REGION",
         "S3_SECRET_KEY",
-        "SESSION_SECRET",
-        "VIDEO_ANALYZE_MODEL"
+        "SESSION_SECRET"
       ]
     },
     "typecheck": { "dependsOn": ["^build"] }

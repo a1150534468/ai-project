@@ -31,7 +31,7 @@ const DEFAULT_IMAGE_MODEL = QWEN_IMAGE_MODEL;
 - **GPT Image** 走 **OpenAI Images 兼容协议** `/v1/images/generations`（默认 `https://api.ai-pixel.online/...`），凭据 `GPT_IMAGE_API_KEY`。
 - **豆包 Seedream 4.5 文生图** 走火山 Ark 原生图片接口，凭据 `ARK_API_KEY`。
 
-「双轨但单一服务」是刻意的：电商、桌宠等模块只需要依赖这一个 `image-service`，不各自造生图客户端，避免多套实现漂移（这正是电商模块整改时反复强调的，见 [ecom.md](ecom.md)）。
+「双轨但单一服务」是刻意的：电商、桌宠等模块只需要依赖这一个 `image-service`，不各自造生图客户端，避免多套实现漂移（这正是电商模块整改时反复强调的；电商模块已于 2026-09 随解耦删除）。
 
 ### 2.2 参考图 = 图片编辑（edits），端点靠推导
 

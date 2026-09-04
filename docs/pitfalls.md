@@ -68,7 +68,7 @@
 - **现象**：本地商家宣传（promo）业务线曾出现退款与并发状态同步问题（yun-claude 07-08 多次修复）。
 - **根因**：轮询、上游回调、reaper 三个入口各自处理终态，容易重复结算或漏退款。
 - **修法**：把 finalize 收敛成**一个幂等函数**，三个入口共用（如 `workflow/dub-finalize.ts` + `dub-reaper.ts`）；以 `operationId` 作幂等键。
-- **预防**：所有付费异步任务遵循统一的「reserve → 执行 → settle/refund」计费包裹范式，finalize 必须幂等。详见 [billing.md](./billing.md)。
+- **预防**：所有付费异步任务遵循统一的「reserve → 执行 → settle/refund」计费包裹范式，finalize 必须幂等。计费已于 2026-09 整块下线（ADR-012），此范式仅作历史参考。
 
 ### 按「请求参数」计费，上游却缩水交付
 
@@ -129,7 +129,7 @@
 
 - **现象**（桌宠 `cpr_2def…`，**已修 + 已补收**）：8 张图全部成功交付，运行的 `billingSettledPoints = 0`，账本 `actual_points = 0`，HTTP 200、无 error、**没有任何一条报错**。TS 侧还显示 `reserved` / 2800，与账本长期不一致而无人发现。**1600 点从头到尾没收到。**
 - **根因**：三处各自都合理的设计串成静默通道——① 对账兜底 `recon.Reconcile` 每 5 分钟把仍 `reserved` 的记录按 `actual=0` 关账，原本只认**全局 10 分钟** TTL；② `wallet.Settle` 对非 `reserved` 记录 `return nil`（为幂等重放写的，但「已被兜底关掉」走同一分支，返回值无法区分）；③ `resource.Settle` 重读记录返回兜底写进去的 0。**没有任何调用方传过 `units: 0`**——这一点必须先证伪，否则会去改一堆没病的调用点。
-- **修法**：预留可声明 `reservationTtlSeconds`（上限 30 天），兜底只回收**真正过期**的；再在 TS 客户端的 `settleResource` / `settleVideoResource` 里加判据 `max(units, inputUnits) > 0 && !(settled > 0)` 的哨兵，一处改动覆盖全部 43 个 `createBillingClient(` 调用点。详见 [billing.md 第八节](billing.md)。
+- **修法**：预留可声明 `reservationTtlSeconds`（上限 30 天），兜底只回收**真正过期**的；再在 TS 客户端的 `settleResource` / `settleVideoResource` 里加判据 `max(units, inputUnits) > 0 && !(settled > 0)` 的哨兵，一处改动覆盖全部 43 个 `createBillingClient(` 调用点。计费已于 2026-09 整块下线（ADR-012），此条仅作历史参考。
 - **预防**：**任何新的 `reserveResource` 调用点都必须同时决定 TTL**，窗口推导一律往长的方向取整——两种失效方式代价严重不对称：TTL 偏短 = 静默漏钱且无痕迹，TTL 偏长 = 真被遗弃的预留晚一点退款。以及：**「不收钱」这种结果必须有人负责报出来**；一个既不抛异常也不改变返回形状的漏计费，等于没有发生过。
 
 ### 多副本重复消费任务

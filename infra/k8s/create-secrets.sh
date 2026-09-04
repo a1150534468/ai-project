@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# 读 secrets.env（gitignore）幂等地【增量】写入 ai-assistant ns 的两个 Secret。
+# 读 secrets.env（gitignore）幂等地【增量】写入 ai-assistant ns 的业务 Secret。
 #
 # ⚠️ 语义 = merge patch（只增改、绝不删）。历史教训：旧版用
 #   `kubectl create secret --dry-run=client -o yaml | kubectl apply -f -`
 # 是【整体替换】。线上 Secret 曾被手工加过 S3_BUCKET/S3_ENDPOINT/S3_REGION/
-# S3_PUBLIC_BASE_URL/S3_FORCE_PATH_STYLE/TOAPIS_API_KEY 等 key，而脚本不写这些，
-# 跑一次就会把它们连同 S3 AK/SK 一起抹掉 → 知识库/图片视频生成/数字人存储全崩。
+# S3_PUBLIC_BASE_URL/S3_FORCE_PATH_STYLE 等 key，而脚本不写这些，
+# 跑一次就会把它们连同 S3 AK/SK 一起抹掉 → 知识库/生图存储全崩。
 # 现在改为 merge patch，且【空值一律跳过】（避免用空串覆盖线上真实值）。
 #
 # 用法: KUBE_CONTEXT=<your-context> ./create-secrets.sh [path-to-secrets.env]
@@ -32,12 +32,8 @@ set -a; . "$ENV_FILE"; set +a
 : "${REDIS_URL:?缺 REDIS_URL}"
 : "${BAILIAN_WORKSPACE_ID:?缺 BAILIAN_WORKSPACE_ID}"
 : "${BAILIAN_API_KEY:?缺 BAILIAN_API_KEY}"
-: "${BILLING_INTERNAL_TOKEN:?缺 BILLING_INTERNAL_TOKEN}"
-: "${BILLING_DATABASE_URL:?缺 BILLING_DATABASE_URL}"
 : "${ADMIN_SESSION_SECRET:?缺 ADMIN_SESSION_SECRET}"
-# 视频生成上游 key 无回退、缺则视频必挂：设为必填。
-: "${VIDEO_API_KEY:?缺 VIDEO_API_KEY（视频生成上游 key，先填进 secrets.env）}"
-# 其余（IMAGE_API_KEY / GPT_IMAGE_API_KEY / CHATGPT_API_KEY / S3_* / EPAY_* / SKYHUMAN_* / MIMO_*）可空；
+# 其余（IMAGE_API_KEY / GPT_IMAGE_API_KEY / CHATGPT_API_KEY / S3_* / ARK_*）可空；
 # IMAGE_API_KEY 为空时生图复用 BAILIAN_API_KEY：
 # 空 => 本次不写该 key，线上原值保持不变；对应功能按各自的降级路径处理。
 
@@ -46,16 +42,11 @@ trap 'rm -rf "$TMP"' EXIT
 
 API_KEYS=(
   SESSION_SECRET DATABASE_URL REDIS_URL BAILIAN_WORKSPACE_ID BAILIAN_API_KEY LLM_API_KEY
-  IMAGE_API_KEY GPT_IMAGE_API_KEY GPT_IMAGE_EDIT_API_KEY CHATGPT_API_KEY VIDEO_API_KEY TOAPIS_API_KEY
+  IMAGE_API_KEY GPT_IMAGE_API_KEY GPT_IMAGE_EDIT_API_KEY CHATGPT_API_KEY
   ARK_API_KEY ARK_IMAGE_ENDPOINT
   CODEX_PET_ARTIFACT_SIGNING_SECRET
-  BILLING_INTERNAL_TOKEN ADMIN_SESSION_SECRET
+  ADMIN_SESSION_SECRET
   S3_ACCESS_KEY S3_SECRET_KEY
-  SKYHUMAN_API_TOKEN SKYHUMAN_CALLBACK_SECRET MIMO_API_KEY
-  DUB_PARSE_CLIENT_ID DUB_PARSE_SECRET_KEY
-)
-BILLING_KEYS=(
-  BILLING_DATABASE_URL BILLING_INTERNAL_TOKEN EPAY_PID EPAY_KEY
 )
 
 # 用 --patch-file 而非 -p '<json>'，避免密钥出现在进程 argv（ps 可见）。
@@ -83,6 +74,5 @@ PY
 }
 
 patch_secret ai-assistant-api-secrets "${API_KEYS[@]}"
-patch_secret ai-assistant-billing-secrets "${BILLING_KEYS[@]}"
 
 echo "完成（merge patch：只增改，未删除任何既有 key）"

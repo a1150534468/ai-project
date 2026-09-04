@@ -31,10 +31,6 @@ data:
   GPT_IMAGE_EDIT_ENDPOINT: "https://api.ai-pixel.online/v1/images/edits"
   CHATGPT_BASE_URL: "https://api.ai-pixel.online"
   CHATGPT_MODELS: "codex-auto-review,gpt-5.4,gpt-5.4-mini,gpt-5.5,gpt-5.6-luna,gpt-5.6-sol,gpt-5.6-terra"
-  LOCAL_BUSINESS_PROMO_WORKER_CONCURRENCY: "2"
-  LOCAL_BUSINESS_PROMO_FFMPEG_CONCURRENCY: "1"
-  LOCAL_BUSINESS_PROMO_JOB_ATTEMPTS: "2"
-  LOCAL_BUSINESS_PROMO_JOB_BACKOFF_MS: "30000"
   NOVEL_WORKER_CONCURRENCY: "2"
   NOVEL_WORKER_HEALTH_PORT: "8091"
   PET_VISUAL_QA_MODEL: "gpt-5.6-sol"
@@ -49,11 +45,3 @@ data:
   CODEX_PET_CLEANUP_ATTEMPTS: "120"
   CODEX_PET_CLEANUP_BACKOFF_MS: "10000"
   CODEX_PET_CLEANUP_RECOVERY_LIMIT: "100"
-  # 视频/图片理解旧工作流仍走 Gemini 原生协议；迁移该工作流时再切百炼全模态接口。
-  VIDEO_ANALYZE_MODEL: "gemini-2.5-flash"
-  # 数字人口播：飞天数字人（对口型）与小米 MiMo（TTS）的非敏感配置。
-  # token/key 在 Secret（SKYHUMAN_API_TOKEN / SKYHUMAN_CALLBACK_SECRET / MIMO_API_KEY）。
-  # 未配 token 时 api 优雅降级：dub 端点返 502、reaper 不启动，其余功能不受影响。
-  SKYHUMAN_BASE_URL: "https://skyhumanapi.pilihu.vip"
-  SKYHUMAN_MAX_INFLIGHT: "3"
-  MIMO_BASE_URL: "https://api.xiaomimimo.com/v1"

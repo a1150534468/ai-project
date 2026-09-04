@@ -44,7 +44,7 @@ cd "/Users/z/code/ai project" && set -a && . .env && set +a
 
 - `docs/pitfalls.md` —— 踩坑库。**改任何涉及上游模型调用的代码前必读**，里面记着 60s 中继读超时、模型静默回退、embedding 维度迁移这类会浪费半天的坑。
 - `docs/overview.md` —— 系统全貌。
-- 对应域的文档 —— `docs/codex-pet.md` / `novel.md` / `dub.md` / `image.md` / `ecom.md` / `billing.md` / `chat.md` / `wechat.md`。
+- 对应域的文档 —— `docs/codex-pet.md` / `novel.md` / `image.md` / `chat.md`。
 
 ---
 
@@ -199,6 +199,6 @@ dev 库存在与业务无关的历史 drift（`LocalBusinessPromoRun`、`NovelKn
 | `docs/orchestration.md` | 编排框架决策与分析 |
 | `docs/design-system.md` | 设计系统规范。**新增颜色/动效 token 必须先更新此文件再进组件** |
 | `docs/superpowers/plans/` | 执行计划 |
-| 域文档 | `codex-pet.md` / `novel.md` / `dub.md` / `image.md` / `ecom.md` / `billing.md` / `chat.md` / `wechat.md` / `fanout.md` |
+| 域文档 | `codex-pet.md` / `novel.md` / `image.md` / `chat.md` |
 
-**注意**：`docs/*` 已于 2026-08-17 解除 gitignore，**23 份文档全部入库**（含 4204 行的 `dub.md`、3283 行的 `novel.md`），整治计划 P1.4 Step 3 完成。目录是扁平的，没有 `docs/setup/` `docs/reference/` `docs/lessons/` 这些子目录 —— 写链接前先 `git ls-files docs` 确认文件真的存在，仓库里曾经因此攒下 7 条死链（`DESIGN.md` 1 条、根 `README.md` 4 条、`infra/k8s/**` 2 条，已于 2026-08-22 清零）。
+**注意**：`docs/*` 已于 2026-08-17 解除 gitignore，**文档全部入库**（解耦后剩 12 份，最大的是 3283 行的 `novel.md`；dub / ecom / wechat / billing / fanout 已随模块删除），整治计划 P1.4 Step 3 完成。目录是扁平的，没有 `docs/setup/` `docs/reference/` `docs/lessons/` 这些子目录 —— 写链接前先 `git ls-files docs` 确认文件真的存在，仓库里曾经因此攒下 7 条死链（`DESIGN.md` 1 条、根 `README.md` 4 条、`infra/k8s/**` 2 条，已于 2026-08-22 清零）。

@@ -28,7 +28,7 @@
 - **决策**：`services/billing`（Go + Gin，端口 8093）用独立 PostgreSQL，API 经内部 token 以 HTTP 调用；TS 侧仅保留薄客户端 `packages/billing`。
 - **理由**：账本与业务库物理隔离，业务库故障不影响对账；reserve/settle/refund 幂等语义集中一处实现；Go 适合这类强一致小接口集。
 - **后果**：多一个服务与一套数据库要运维；跨服务调用需内部鉴权与网络可达性保障。
-- **出处**：[architecture/billing.md](./overview.md)。
+- **出处**：本决策已于 2026-09 被 ADR-012 推翻（计费整块下线），原 `billing.md` 随之删除。
 
 <a id="adr-004-用-postgres-租约模式做任务队列bullmq-仅存量"></a>
 ## ADR-004 · 用 Postgres 租约模式做任务队列（BullMQ 仅存量）

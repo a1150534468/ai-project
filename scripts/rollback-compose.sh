@@ -15,7 +15,7 @@ if [ ! -f "$env_file" ] || [ ! -f "$compose_file" ]; then
 fi
 
 compose=(docker compose -p "$project_name" --env-file "$env_file" -f "$compose_file")
-services=(postgres billing-postgres redis billing api worker gateway)
+services=(postgres redis api worker gateway)
 
 wait_for_services() {
   local deadline=$((SECONDS + 240))

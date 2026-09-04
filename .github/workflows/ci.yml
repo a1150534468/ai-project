@@ -106,15 +106,11 @@ jobs:
       SESSION_SECRET: ci-session-secret-that-is-long-enough-for-tests
       ADMIN_SESSION_SECRET: ci-admin-session-secret-long-enough-for-tests
       CODEX_PET_ARTIFACT_SIGNING_SECRET: ci-codex-pet-signing-secret-long-enough
-      BILLING_INTERNAL_TOKEN: ci-billing-internal-token
-      # 必须「存在但不可达」：缺了它 5 个 admin 测试在 beforeAll 就抛；
-      # 端口必须含 8093，openapi.test.ts 断言 servers[0].url 含该串。
-      BILLING_BASE_URL: http://127.0.0.1:8093
       # packages/llm 在 LLM_PROVIDER 未设时落到 anthropic 分支，缺这两个会抛。
       LLM_BASE_URL: http://127.0.0.1:9
       LLM_API_KEY: ci-placeholder-not-a-real-key
       # 模型类 Key 与 S3 一律留空：不在 CI 花钱、不依赖外部服务。
-      # 后果是 6 个 .poc. 文件与 s3.test.ts 的 1 例按预期跳过，已计入 skip 基线。
+      # 后果是 8 个 .poc. 文件与 s3.test.ts 的 1 例按预期跳过，已计入 skip 基线。
 
     steps:
       - uses: actions/checkout@v4
@@ -123,19 +119,6 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-
-      # ubuntu-latest 不带 ffmpeg。缺了它有两种后果，且两种都发生过：
-      #   1. dub-ffmpeg / video-compress / local-business-promo-render 用
-      #      describe.runIf(hasFfmpeg) 守卫，静默跳过 6 个用例——是假绿；
-      #   2. local-business-promo-edit-analysis 没有守卫，直接 spawn ffmpeg ENOENT
-      #      挂 2 个用例。
-      # 这 8 个用例都是真要跑真 ffmpeg 的，所以装上，而不是放宽基线。
-      - name: 安装 ffmpeg
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends ffmpeg
-          ffmpeg -version | head -1
-          ffprobe -version | head -1
 
       - name: 安装依赖
         run: pnpm install --frozen-lockfile

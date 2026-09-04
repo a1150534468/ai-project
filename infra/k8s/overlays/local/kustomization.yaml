@@ -12,8 +12,6 @@ images:
     newTag: local
   - name: ai-assistant-admin
     newTag: local
-  - name: ai-assistant-billing
-    newTag: local
   - name: ai-assistant-migrate
     newTag: local
 
@@ -23,10 +21,6 @@ replicas:
   - name: web
     count: 1
   - name: admin
-    count: 1
-  - name: billing
-    count: 1
-  - name: local-business-promo-worker
     count: 1
   - name: novel-worker
     count: 1

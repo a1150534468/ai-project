@@ -6,7 +6,6 @@ resources:
   - 05-default-sa-pullsecret.yaml
   - 10-configmap.yaml
   - 30-api.yaml
-  - 35-local-business-promo-worker.yaml
   - 36-novel-worker.yaml
   - 37-codex-pet-worker.yaml
   - 40-web.yaml

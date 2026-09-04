@@ -1,22 +1,23 @@
 {
   "_why": "假绿防护基线。本仓有一批 describe.skipIf/it.skipIf 守卫的测试，缺 env 时静默跳过且退出码 0——「少跑了几十个测试」在 CI 上表现为绿色。scripts/check-test-report.mjs 拿各 workspace 的 vitest JSON 报告与这里比对。",
-  "_measured": "2026-08-06，直接取 CI run 31062750749（P0.5 那次 push）自己打印的合计 2411/0/23。沿用 P0.4 定下的做法：取 CI 自己的打印值而非本地实测——CI 就是被防护的那个环境。（历史：2375 取自 run 31000904356 即 P0.4；2354 是同日在「干净 HEAD + 只叠 P0.3 那 5 个文件」的 worktree 上按 ci.yml 的 env/空库/原 turbo 命令实测。全是实测，不是推算。）",
+  "_measured": "2026-09-04，解耦 Phase 1~7 收尾后本机实测（与 ci.yml 同口径：source .env 后 unset 全部 S3_*、DATABASE_URL 指向本机库、跑 `turbo run test --force --continue -- --reporter=json`）。合计 1650/0/23。上一版是 2411/23（2026-08-06 的 CI run 31062750749），差额 761 个 passed 全部来自 Phase 1~7 删掉的模块与两个 workspace，逐项对得上，见 _breakdown。",
 
-  "_ffmpegCaveat": "上一版基线（2339）标称「与 ci.yml 完全一致的 env」，但漏了一个不在 env block 里的差异：本地 PATH 上有 ffmpeg，ubuntu-latest 没有。后果是 CI 首跑 api 报 1645/2/24 而非本地的 1653/0/18——3 个文件用 describe.runIf(hasFfmpeg) 静默跳 6 例，local-business-promo-edit-analysis 无守卫直接 spawn ENOENT 挂 2 例。已在 ci.yml 加装 ffmpeg 的步骤，从此两边可比；重测时请确认 `ffmpeg -version` 可用，否则会低估 8 个用例。",
+  "_whyLocalThisTime": "上一版沿用「取 CI 自己的打印值」，这次拿不到——CI 的 test job 只在 main / ci-verify/** / workflow_dispatch 上跑，而解耦走的是 chore/decouple-yun-claude 分支。已逐条消掉本机与 CI 的三个已知差异：(1) ffmpeg——原来的 8 个用例随 dub / video / local-business-promo 一起删了，全仓已无 hasFfmpeg / spawn(\"ffmpeg\") / ffprobe 消费者，ci.yml 的安装步骤同步删除，两边不再有这个差异；(2) S3——本机 .env 配了 MinIO 会让 agents/routes.ts 的 avatarUrl 用例期望落空，跑之前显式 unset 全部 S3_*，与 CI 的留空一致；(3) 空库——kb/service.test.ts 有一例会被库里遗留的 KnowledgeBase 行搞挂，本次实测该文件全绿，但**合并到 main 后请以 CI 自己打印的合计为准回填这里**，若 CI 打出的 passed 更低，是去查为什么少跑，不是放宽这三个数。",
 
-  "expectedWorkspaces": 10,
-  "minPassed": 2411,
+  "expectedWorkspaces": 7,
+  "minPassed": 1650,
   "maxSkipped": 23,
 
   "_breakdown": {
-    "passed": "api 1725 + web 416 + desktop 123 + codex-pet-pipeline 48 + billing 31 + admin 17 + article-workflow 13 + novel-workflow 13 + connector-protocol 13 + llm 12 = 2411。相比上一版 2375 只多了 api 的 +36，即 P0.5 的 video-reaper.test.ts 20 例 + video-routes.test.ts 新增 8 例接线用例 + video-service.test.ts 新增 8 例 probe 用例，无新增 skip。（2375 相比 2354 多的是 P0.4 image 的 21 例；2354 相比 2339 多的是 P0.3 portrait-reaper.test.ts 的 15 例。）",
-    "skipped": "api 18（6 个 .poc. 文件共 16 例 + codex-pet-runner.integration 1 例 + storage/s3 1 例）+ llm 5（2 个 .poc. 文件）= 23",
-    "workspaces": "10 个有 test 脚本的 workspace；@ai-assistant/db 没有 test 脚本，turbo 不会为它建任务，故不计。"
+    "passed": "api 1035 + web 463 + admin 9 + codex-pet-pipeline 54 + llm 49 + article-workflow 27 + novel-workflow 13 = 1650。",
+    "workspaces": "7 个仍有 test 脚本的 workspace。上一版是 10：desktop（123 passed）随 Phase 1 删除、billing（31）随 Phase 2 删除、connector-protocol（13）随 Phase 3 删除；@ai-assistant/db 一直没有 test 脚本，两版都不计。",
+    "passedDelta": "2411 → 1650 少了 761：三个被删 workspace 共 167（desktop 123 + billing 31 + connector-protocol 13），其余 594 是 api 与 web 里随模块删掉的用例——api 1725 → 1035（-690，含 agent-teams / wechat / scheduled / analytics / comic / dub / ecom / local-business-promo / report / portrait / try-on / video 的全部用例，加计费的 reserve/settle/refund 用例、connector/device/tools 的用例、reservation-window 的两个文件、以及 Phase 4 素材库那 5 条），web 416 → 463（**+47**，Phase 1~3 删掉的页面用例少于素材库/生图/图文那批新护栏，所以 web 反而涨了）。",
+    "skipped": "api 18（6 个 .poc. 文件共 16 例：gpt-image-edit 8 + codex-pet 三个 look/action 各 2 + r7-recovery 1 + embedding 1，另 codex-pet-runner.integration 1 例 + storage/s3 1 例）+ llm 5（2 个 .poc. 文件）= 23。**与上一版一模一样**：被删的模块里没有 .poc. 文件，所以 skip 一个没变。"
   },
 
   "_skipsAreExpected": "CI 不配模型类 Key、不配 S3，故 .poc. 文件与 s3 的 1 例按预期跳过。.poc. 另有 RUN_*_POC=1 的独立开关，未设时无论有没有 Key 都跳过。",
 
   "_howToUpdate": "只有在「真的删了测试」或「真的新增了预期 skip」时才改这里，并在 commit message 里写清原因。新增测试会让 passed 上升，不会触发防护（minPassed 是下限），无需改。绝不要为了让 CI 变绿而放宽数字——那正是这套防护要拦的事。",
 
-  "_remeasureOnCleanDb": "重新实测必须用空库，且不要与另一次测试并发。两种坑都踩过：(1) kb/service.test.ts 有一例（「所有人可以读官方库」）会被库里遗留的 KnowledgeBase 行搞挂——复用库（残留 291 行）得 1652/1/18，空库得 1653/0/18；(2) 两次全量并发打同一个库时，kb/indexer 与 kb/service 的 beforeAll 撞 `User.uid` 唯一约束（uid 是 `test-${Date.now()}`，同毫秒即撞），suite 级挂掉后 vitest 把该 suite 余下用例记成 skipped，于是报出 1630/0/50 这种既不像红也不像绿的数——那 32 个「skip」是假象，串行重跑 kb/ 是 138 全绿。CI 每次起新 service container 且单跑，两个坑都不会遇到；本地复现请另建库跑 prisma migrate deploy，并确认没有第二个测试进程在跑。"
+  "_remeasureOnCleanDb": "重新实测必须用空库，且不要与另一次测试并发。两种坑都踩过：(1) kb/service.test.ts 有一例（「所有人可以读官方库」）会被库里遗留的 KnowledgeBase 行搞挂；(2) 两次全量并发打同一个库时，kb/indexer 与 kb/service 的 beforeAll 撞 `User.uid` 唯一约束（uid 是 `test-${Date.now()}`，同毫秒即撞），suite 级挂掉后 vitest 把该 suite 余下用例记成 skipped，于是报出既不像红也不像绿的数——那些「skip」是假象。CI 每次起新 service container 且单跑，两个坑都不会遇到；本地复现请另建库跑 prisma migrate deploy，并确认没有第二个测试进程在跑。"
 }

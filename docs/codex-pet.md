@@ -391,7 +391,7 @@ flowchart TD
 
 ### 6.14 8 张图交付了，1600 点一分没收，两个库都显示「成功」（2026-08-27 发生 / 08-29 补收）
 
-> 同一个样本 run `cpr_2defdce20f99dd1a8dd3477f774de2f8`（就是 6.13 那个卡在 `row-failed` 的运行）。**机制、判据、修法与补收 runbook 全部写在 [billing.md 第八节](./billing.md)，这里只留桌宠侧要记住的部分。**
+> 同一个样本 run `cpr_2defdce20f99dd1a8dd3477f774de2f8`（就是 6.13 那个卡在 `row-failed` 的运行）。**原机制与补收 runbook 写在已删除的 `billing.md`；计费于 2026-09 整块下线（ADR-012），这里只留桌宠侧仍然成立的部分。**
 
 - **现象**：8 次 planned 出图全部成功交付，`CodexPetImageCall` 上每条都写着 `points: 200`，但运行的 `billingSettledPoints = 0`，Go 侧 `usage_records` 是 `settled` / `actual_points = 0`。**没有任何一条报错**——TS 侧甚至还显示 `reserved` / 2800，与账本长期不一致而无人发现。
 - **根因不在桌宠**：没有任何调用方传过 `units: 0`。预留在创建 11 分钟后被 `recon` 兜底按 `actual=0` 关掉（`reservation_expires_at` 是 NULL，走 10 分钟全局 TTL），之后每次 settle 都静默拿回 0。桌宠一笔预留天生要跨「运行 + 等授权 7 天 + 失败宽限 24 小时」，是**最先撞上这个 10 分钟兜底**的域。

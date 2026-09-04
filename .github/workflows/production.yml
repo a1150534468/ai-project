@@ -2,7 +2,7 @@ name: Verify and deploy production
 
 on:
   # 只在打 tag 或手动触发时跑。原来是「push 到 main 就跑」，于是每次 push 都要把
-  # ci.yml 刚跑过的 typecheck + 全量测试再跑一遍，再接着 build 4 个镜像并部署一次
+  # ci.yml 刚跑过的 typecheck + 全量测试再跑一遍，再接着 build 当时的 4 个镜像并部署一次
   # 生产 —— 一次 push 约 50 个计费分钟。Free 计划每月 2000 分钟只够 40 次，
   # 2026-08 就是这么在 08-27 把额度用光，之后每个 job 都以「The job was not started
   # because ... spending limit」直接不启动，连着红了三天。
@@ -22,32 +22,12 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    # 20 分钟够跑完（实测 verify 瘦身后 ~6 分钟）。压低上限是为了防「卡住的 job
+    # 20 分钟够跑完（含 go test 与 smoke 时实测 ~6 分钟；现在只剩 install + build，
+    # 只会更短，没有新实测数字所以上限不往下压）。压低上限是为了防「卡住的 job
     # 一个人吃掉 45 分钟额度」——额度是按 job 实际墙钟时间向上取整计费的。
     timeout-minutes: 20
-    services:
-      # 只留 billing 自己的库：go test ./... 要连它。pgvector 和 redis 是给
-      # pnpm test 用的，测试已挪回 ci.yml，这两个 service 一起删掉——service 容器
-      # 的拉起时间也算在 job 计费里。
-      billing-postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: ai_assistant_billing
-          POSTGRES_PASSWORD: ci-billing-password
-          POSTGRES_DB: ai_assistant_billing
-        ports: ["5434:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ai_assistant_billing -d ai_assistant_billing"
-          --health-interval 5s --health-timeout 5s --health-retries 20
-    env:
-      # 同理，这里只保留 Go 侧真正读的两个 DSN。原来那串 DATABASE_URL / REDIS_URL /
-      # SESSION_SECRET / LLM_* 全是 JS 测试的入参，Go 代码里一个都不读
-      # （services/billing 全量 grep 无 DATABASE_URL / REDIS / ffmpeg）。
-      # BILLING_BASE_URL 也不需要：服务自己 envOr("BILLING_PORT", "8093")，
-      # 下面 smoke 步骤直接 curl 8093。
-      BILLING_DATABASE_URL: postgresql://ai_assistant_billing:ci-billing-password@127.0.0.1:5434/ai_assistant_billing
-      BILLING_TEST_DATABASE_URL: postgresql://ai_assistant_billing:ci-billing-password@127.0.0.1:5434/ai_assistant_billing
-      BILLING_INTERNAL_TOKEN: ci-billing-token
+    # 没有 service 容器、也没有 env：这个 job 只过一遍 pnpm build，不连库、不连 redis。
+    # 测试都在 ci.yml 上跑，而 service 容器的拉起时间也是算在 job 计费里的。
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -57,36 +37,16 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: services/billing/go.mod
-          cache-dependency-path: services/billing/go.sum
       - run: pnpm install --frozen-lockfile
       # 刻意不再跑 pnpm typecheck / pnpm test --force：同一个 commit 在 main 上已经
       # 被 ci.yml 跑过（见文件顶部「tag 只打绿灯 commit」的约定），再跑一遍只是花
-      # 双倍额度买同一个结论。跟着一起删的是 Install ffmpeg 和 prisma migrate
-      # deploy —— 那两步只为 pnpm test 存在（ffmpeg 决定 8 个用例是真跑还是静默跳）。
+      # 双倍额度买同一个结论。跟着一起删的是 prisma migrate deploy —— 那一步只为
+      # pnpm test 存在。
       #
       # 留下 pnpm build 是因为 ci.yml 里没有 build 步骤，全仓只有这里会真的过一遍
-      # vite / electron 打包。代价写明：**打不出包这件事从此只在打 tag 时才暴露**。
+      # vite 打包。代价写明：**打不出包这件事从此只在打 tag 时才暴露**。
       # 想在 push 阶段就拦住，得往 ci.yml 加 build，那是每次 push 再多几分钟。
       - run: pnpm build
-      - run: go test ./...
-        working-directory: services/billing
-      - name: Smoke test Billing service
-        working-directory: services/billing
-        run: |
-          go run . >/tmp/billing.log 2>&1 &
-          billing_pid=$!
-          trap 'kill "$billing_pid" 2>/dev/null || true' EXIT
-          for attempt in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8093/health; then
-              exit 0
-            fi
-            sleep 2
-          done
-          cat /tmp/billing.log
-          exit 1
 
   images:
     # 原来这里有 `if: github.event_name != 'pull_request'`，是为了让 PR 只验证不
@@ -102,7 +62,8 @@ jobs:
     #   3. 查不动（网络抖、凭据不对、任何非零退出）⇒ 一律当成「没有」，走第 2 条。
     # 绕这一圈是因为发布慢的根本不是构建，而是「把已经在 TCR 里的字节再传一遍」：
     # runner 出境到国内实测只有 0.15~0.40 MB/s，api 镜像 462 MB 就是 19~51 分钟。
-    # gateway（前端静态产物）和 billing（Go）平时几乎不变，第 1 条路主要是给它们省的。
+    # gateway（前端静态产物）和 migrate（内容只跟 packages/db/prisma 有关）平时几乎
+    # 不变，第 1 条路主要是给它们省的。
     #
     # 115 分钟 > 单趟 95m 推送窗口 + 冷缓存构建的十几分钟。上限是按「实测出境速率」倒推的，
     # 不是拍的：2026-09-02 的带宽探测（probe-egress.yml）显示 runner→国内只有 0.16 MB/s
@@ -111,9 +72,9 @@ jobs:
     strategy:
       max-parallel: 1
       # fail-fast: false 是必须的。默认 true 时 api 一失败，还在 queued 的 migrate/
-      # billing/gateway 会被连带取消 —— 但这四个镜像互不依赖，而且推送是**累积**的：
+      # gateway 会被连带取消 —— 但这三个镜像互不依赖，而且推送是**累积**的：
       # 每个成功落地的层都留在 TCR 里，下次重跑直接跳过。把它们一起取消等于白白放弃
-      # 三个小镜像本来能推完的进度。v0.1.3 就是这样只推了 api 一个就整轮报废。
+      # 两个小镜像本来能推完的进度。v0.1.3 就是这样只推了 api 一个就整轮报废。
       fail-fast: false
       matrix:
         # name / context / file / build_args 必须跟 warm-image-cache.yml 的 matrix 逐字
@@ -151,16 +112,6 @@ jobs:
               tsconfig.base.json
               infra/docker/api/Dockerfile
               .dockerignore
-          - name: billing
-            context: services/billing
-            file: infra/docker/billing/Dockerfile
-            build_args: ""
-            # 构建上下文就是 services/billing，Dockerfile 里是 `COPY . .`，整个目录都算。
-            # 不列 .dockerignore：docker 只认 <上下文>/.dockerignore，仓库根那个对它不生效
-            # （services/billing/ 下也确实没有这个文件）。
-            hash_paths: |
-              services/billing
-              infra/docker/billing/Dockerfile
           - name: migrate
             context: .
             file: infra/docker/migrate/Dockerfile

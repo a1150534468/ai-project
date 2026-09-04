@@ -1,7 +1,7 @@
-# Host Caddy fragment. The host Caddy terminates HTTPS and forwards all four
+# Host Caddy fragment. The host Caddy terminates HTTPS and forwards all three
 # production domains to the internal HTTP-only gateway container.
 
-app.indz.site, admin.indz.site, api.indz.site, billing.indz.site {
+app.indz.site, admin.indz.site, api.indz.site {
 	encode zstd gzip
 	header {
 		X-Content-Type-Options nosniff

@@ -15,8 +15,6 @@
 | API（Fastify 单体） | 8090 | `apps/api/src/server.ts` |
 | Novel Worker | 8091 | `apps/api/src/workers/novel-worker.ts` |
 | Codex Pet Worker | 8092 | `apps/api/src/workers/codex-pet-worker.ts` |
-| Promo Worker | — | `apps/api/src/workers/local-business-promo-worker.ts` |
-| Billing（Go + Gin） | 8093 | `services/billing/main.go` |
 | Desktop（Electron） | 本机 | `apps/desktop` |
 
 数据层：PostgreSQL 17 + pgvector（主库，90 个模型）+ Billing 独立 PG + Redis + MinIO/S3。
@@ -36,10 +34,9 @@ pnpm dev                     # 数据层进 Docker、业务进程热更新
 
 ```
 apps/       api（Fastify + workers）、web、admin、desktop
-packages/   db（Prisma）、llm（模型路由）、billing（TS 客户端）、
+packages/   db（Prisma）、llm（模型路由）、
             novel-workflow / article-workflow / codex-pet-pipeline（纯逻辑流水线）、
             connector-protocol（桌面连接协议 zod）
-services/   billing（Go + Gin，独立数据库）
 infra/      Dockerfile + K8s Kustomize
 docs/       本文档体系
 ```
@@ -75,7 +72,3 @@ docs/       本文档体系
 | 小说引擎 | [novel.md](./novel.md) | 最重的业务线：PlotPilot 叙事状态机 + 独立 Worker |
 | Codex 桌宠 | [codex-pet.md](./codex-pet.md) | 像素动画角色生成：模型合同 + 确定性流水线 + 签名交付 |
 | AI 生图 | [image.md](./image.md) | 双轨模型（百炼 Qwen + GPT Image）的底层图片能力 |
-| AI 电商图 | [ecom.md](./ecom.md) | 复用生图能力的电商长图工作流 |
-| 数字人口播 | [dub.md](./dub.md) | 飞天数字人 + MiMo TTS 的配音成片流水线 |
-| 微信通道 | [wechat.md](./wechat.md) | 个人微信 iLink 接入 + 多模态 + 团队电脑 |
-| 计费系统 | [billing.md](./billing.md) | Go 独立服务：reserve/settle/refund + 学习模式 |

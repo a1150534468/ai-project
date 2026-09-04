@@ -160,7 +160,7 @@ describe("warnMissingOptionalEnv", () => {
 
     expect(warn).toHaveBeenCalledTimes(OPTIONAL_FEATURE_ENV.length);
     const printed = warn.mock.calls.map((args) => String(args[0])).join("\n");
-    expect(printed).toContain("MIMO_API_KEY");
+    expect(printed).toContain("EMBEDDING_API_KEY");
     // 措辞别出现「可选配置缺失 X 缺失」这种复读（问题串里已经带了「缺失」）
     expect(printed).not.toMatch(/缺失[^\n]*缺失/);
     expect(exit).not.toHaveBeenCalled();
@@ -172,9 +172,6 @@ describe("warnMissingOptionalEnv", () => {
       DASHSCOPE_API_KEY: "k", // 顶 BAILIAN_API_KEY 与 EMBEDDING_API_KEY
       ARK_API_KEY: "k",
       CHATGPT_API_KEY: "k", // 顶 GPT_IMAGE_API_KEY
-      MIMO_API_KEY: "k",
-      SKYHUMAN_API_TOKEN: "k",
-      VIDEO_API_KEY: "k", // 顶 TOAPIS_API_KEY
     };
 
     warnMissingOptionalEnv(env);

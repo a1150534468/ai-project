@@ -10,7 +10,7 @@
 - 为 App、Admin、API、Billing 配置四个解析到服务器的域名。
 - 在服务器创建部署目录，例如 `/opt/ai-assistant`，放置 `docker-compose.prod.yml`、`remote-deploy.sh` 和 `.env.production`。
 - 从 `.env.production.example` 创建服务器环境文件，使用 URL 编码后的数据库密码填写连接串。
-- 在服务器执行镜像仓库登录。`IMAGE_REGISTRY`、`IMAGE_NAMESPACE` 必须和 CI 的 `REGISTRY`、`IMAGE_NAMESPACE` 一致，四个仓库名固定为 `ai-assistant-api`、`ai-assistant-gateway`、`ai-assistant-migrate`、`ai-assistant-billing`。
+- 在服务器执行镜像仓库登录。`IMAGE_REGISTRY`、`IMAGE_NAMESPACE` 必须和 CI 的 `REGISTRY`、`IMAGE_NAMESPACE` 一致，三个仓库名固定为 `ai-assistant-api`、`ai-assistant-gateway`、`ai-assistant-migrate`（`ai-assistant-billing` 随计费下线，见 ADR-012）。
 
 生产数据从空环境初始化，不迁移旧 PostgreSQL 或 MinIO 数据。Billing 继续使用独立 PostgreSQL。
 
@@ -39,7 +39,8 @@ docker compose --env-file /opt/ai-assistant/.env.production \
   -f /opt/ai-assistant/docker-compose.prod.yml ps
 ```
 
-正常拓扑应只有 `gateway`、`api`、`worker`、`billing`、`postgres`、`billing-postgres`、`redis`，不能出现 MinIO 或三套独立 Worker。Gateway 的宿主机端口应显示为 `127.0.0.1:18080->80/tcp`。
+正常拓扑应只有 `gateway`、`api`、`worker`、`postgres`、`redis`，不能出现 MinIO 或三套独立 Worker。
+（`billing` 与 `billing-postgres` 两个 service 的定义仍在 compose 里，等解耦 Phase 6 做完 `pg_dump` + `DROP DATABASE` 后一并删除 —— 它们是那一步唯一的入口。）Gateway 的宿主机端口应显示为 `127.0.0.1:18080->80/tcp`。
 
 ## 3. 真实资源测试
 
@@ -53,7 +54,7 @@ PROFILE_DURATION_SECONDS=7200 PROFILE_INTERVAL_SECONDS=5 \
   bash /opt/ai-assistant/profile-resources.sh
 ```
 
-固定场景建议分别使用 `idle`、`normal-five-users`、`chat`、`knowledge`、`billing`、`media-single` 作为 `PROFILE_SCENARIO`，输出中会同时记录容器 RSS/CPU 与 API、Worker 的 Node Heap/External 数据。
+固定场景建议分别使用 `idle`、`normal-five-users`、`chat`、`knowledge`、`media-single` 作为 `PROFILE_SCENARIO`，输出中会同时记录容器 RSS/CPU 与 API、Worker 的 Node Heap/External 数据。
 
 按以下顺序测试，期间不要停止或限制服务器上的另一应用：
 

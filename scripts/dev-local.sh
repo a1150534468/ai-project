@@ -5,7 +5,7 @@ set -Eeuo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-for command_name in docker pnpm go; do
+for command_name in docker pnpm; do
   if ! command -v "$command_name" >/dev/null 2>&1; then
     echo "缺少命令：$command_name" >&2
     exit 1
@@ -20,7 +20,7 @@ fi
 # Both files are layered in the same order as apps/api/src/env.ts: .env carries
 # the full base config and .env.local overrides only the keys it names. Sourcing
 # just one file meant a partial .env.local (e.g. a single QA override) hid every
-# required key in .env, and Billing then exited on a missing BILLING_DATABASE_URL.
+# required key in .env, and startup then failed on a missing required variable.
 env_files=()
 if [[ -f .env ]]; then
   env_files+=(".env")
@@ -47,8 +47,6 @@ echo "已加载环境变量文件（后者覆盖前者）：${env_files[*]}"
 
 export NODE_ENV="development"
 export PORT="${PORT:-8090}"
-export BILLING_PORT="${BILLING_PORT:-8093}"
-export BILLING_BASE_URL="${BILLING_BASE_URL:-http://localhost:${BILLING_PORT}}"
 export API_PROXY_TARGET="${API_PROXY_TARGET:-http://localhost:${PORT}}"
 export NOVEL_WORKER_HEALTH_PORT="${NOVEL_WORKER_HEALTH_PORT:-8091}"
 export CODEX_PET_WORKER_HEALTH_PORT="${CODEX_PET_WORKER_HEALTH_PORT:-8092}"
@@ -58,7 +56,7 @@ export CODEX_PET_WORKER_HEALTH_PORT="${CODEX_PET_WORKER_HEALTH_PORT:-8092}"
 export CODEX_PET_PUBLIC_BASE_URL="${CODEX_PET_PUBLIC_BASE_URL:-http://localhost:${PORT}}"
 
 echo "[1/4] 启动 Docker 数据层（不重建已有容器和数据卷）..."
-docker compose -f docker-compose.dev.yml up -d --no-recreate postgres redis billing-postgres minio
+docker compose -f docker-compose.dev.yml up -d --no-recreate postgres redis minio
 echo "按 S3_BUCKET 初始化本地对象存储..."
 docker compose -f docker-compose.dev.yml run --rm minio-init
 
@@ -76,7 +74,6 @@ wait_for_postgres() {
 }
 
 wait_for_postgres postgres
-wait_for_postgres billing-postgres
 
 echo "[2/4] 生成 Prisma Client 并应用数据库迁移..."
 pnpm --filter @ai-assistant/db generate
@@ -186,7 +183,6 @@ group_has_stuck_process() {
 }
 
 echo "[3/4] 启动本机服务..."
-run_background "Billing" bash -lc 'cd "$1/services/billing" && exec go run .' _ "$ROOT_DIR"
 run_background "API" pnpm --filter @ai-assistant/api dev
 run_background "Novel Worker" pnpm --filter @ai-assistant/api worker:novel:dev
 run_background "Codex Pet Worker" pnpm --filter @ai-assistant/api worker:codex-pet:dev
@@ -197,7 +193,6 @@ echo "[4/4] 混合开发环境已启动："
 echo "  Web:     http://localhost:5174"
 echo "  Admin:   http://localhost:5175"
 echo "  API:     http://localhost:${PORT}"
-echo "  Billing: http://localhost:${BILLING_PORT}"
 echo "  Novel Worker health: http://localhost:${NOVEL_WORKER_HEALTH_PORT}"
 echo "  Codex Pet Worker health: http://localhost:${CODEX_PET_WORKER_HEALTH_PORT}"
 echo "按 Ctrl+C 停止本机服务；Docker 数据层会继续运行。"

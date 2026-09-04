@@ -26,7 +26,7 @@ compose=(docker compose -p "$project_name" --env-file "$env_file" -f "$compose_f
 
 wait_for_services() {
   local deadline=$((SECONDS + 240))
-  local services=(postgres billing-postgres redis billing api worker gateway)
+  local services=(postgres redis api worker gateway)
   while [ "$SECONDS" -lt "$deadline" ]; do
     local all_healthy=1
     for service in "${services[@]}"; do
@@ -56,7 +56,6 @@ rollback() {
 echo "pulling image tag $new_tag"
 "${compose[@]}" --profile tools pull
 "${compose[@]}" --profile tools run --rm migrate
-"${compose[@]}" --profile tools run --rm billing-migrate
 "${compose[@]}" up -d --remove-orphans
 
 if ! wait_for_services; then

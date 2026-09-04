@@ -47,8 +47,3 @@ http://{$API_DOMAIN} {
 	import common
 	reverse_proxy api:8090
 }
-
-http://{$BILLING_DOMAIN} {
-	import common
-	reverse_proxy billing:8093
-}

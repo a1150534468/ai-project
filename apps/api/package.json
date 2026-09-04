@@ -10,7 +10,6 @@
     "test:poc:gpt-image-edit": "RUN_GPT_IMAGE_EDIT_POC=1 vitest run src/workflow/_shared/gpt-image-edit.poc.test.ts",
     "typecheck": "tsc --noEmit",
     "worker": "tsx src/workers/combined-worker.ts",
-    "worker:local-business-promo": "tsx src/workers/local-business-promo-worker.ts",
     "worker:codex-pet:dev": "tsx watch src/workers/codex-pet-worker.ts",
     "worker:codex-pet": "tsx src/workers/codex-pet-worker.ts",
     "worker:novel:dev": "tsx watch src/workers/novel-worker.ts",

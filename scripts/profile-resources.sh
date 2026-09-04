@@ -58,7 +58,7 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
   sleep "$interval_seconds"
 done
 
-for service in postgres billing-postgres redis billing api worker gateway; do
+for service in postgres redis api worker gateway; do
   container_id=$("${compose[@]}" ps -q "$service" 2>/dev/null || true)
   if [ -n "$container_id" ]; then
     docker inspect --format '{{.Name}} oom_killed={{.State.OOMKilled}} restart_count={{.RestartCount}} status={{.State.Status}}' "$container_id" || true

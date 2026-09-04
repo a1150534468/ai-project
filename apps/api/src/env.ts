@@ -89,7 +89,6 @@ export const OPTIONAL_FEATURE_ENV: ReadonlyArray<EnvRequirement> = [
     // embedding-client.ts:26-29：EMBEDDING_API_KEY 空时按 provider 回落到百炼 key 或 LLM_API_KEY。
     alternates: ["BAILIAN_API_KEY", "DASHSCOPE_API_KEY", "LLM_API_KEY"],
   },
-  { key: "MIMO_API_KEY", hint: "音频合成（MIMO）" },
 ];
 
 /**

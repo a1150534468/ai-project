@@ -63,12 +63,6 @@ spec:
     - host: api.localhost
       http:
         paths:
-          - path: /api/billing/epay
-            pathType: Prefix
-            backend:
-              service:
-                name: billing
-                port: { number: 8093 }
           - path: /
             pathType: Prefix
             backend:

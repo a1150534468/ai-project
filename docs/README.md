@@ -10,11 +10,6 @@
 | [novel.md](novel.md) | 小说引擎 | 最重的业务线：PlotPilot 叙事状态机 + 独立 Worker + 35 张表 |
 | [codex-pet.md](codex-pet.md) | Codex 桌宠 | 像素动画角色生成：模型合同 + 确定性流水线 + 签名交付 + 运维 |
 | [image.md](image.md) | AI 生图 | 双轨模型（百炼 Qwen + GPT Image），所有图片类工作流的底层能力 |
-| [ecom.md](ecom.md) | AI 电商图 | 复用生图能力的电商长图工作流 |
-| [dub.md](dub.md) | 数字人口播 | 飞天数字人 + MiMo TTS 的配音成片流水线（设计 + P1-P4 计划） |
-| [wechat.md](wechat.md) | 微信通道 | 个人微信 iLink 接入 + 多模态 + 团队电脑（设计 + P1-P3 计划） |
-| [billing.md](billing.md) | 计费系统 | Go 独立服务：reserve/settle/refund + 学习模式运维 |
-| [fanout.md](fanout.md) | 爆款文案裂变 | 一份原文 → 结构化提取 → 沿维度批量裂变去重（设计 + 实现计划） |
 
 ## 项目级参考
 

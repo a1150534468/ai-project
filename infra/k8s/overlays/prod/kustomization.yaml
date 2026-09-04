@@ -13,9 +13,6 @@ images:
   - name: ai-assistant-admin
     newName: registry.example.com/aiproject/admin
     newTag: latest
-  - name: ai-assistant-billing
-    newName: registry.example.com/aiproject/billing
-    newTag: latest
   - name: ai-assistant-migrate
     newName: registry.example.com/aiproject/migrate
     newTag: latest
