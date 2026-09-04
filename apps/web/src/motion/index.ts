@@ -11,5 +11,4 @@ export { MotionRoot } from "./MotionRoot";
 export { RippleButton } from "./RippleButton";
 export { Modal } from "./Modal";
 export { ToastProvider, useToast } from "./Toast";
-export { Stagger, StaggerItem } from "./Stagger";
 export { BrandLogo } from "./BrandLogo";
