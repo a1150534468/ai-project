@@ -459,6 +459,7 @@ git blame --line-porcelain HEAD -- <file> | grep -c '^491de0f'
 | 基线 `12a9536` | — | 122,213 | 929 | 1,500 |
 | Phase 1 | `1a4a0f2` | **72,667** | 560 | 1,087 |
 | Phase 4 | `92bdb30` | 72,667 | 560 | 1,087 |
+| Phase 2 | `ed5210c` | **49,453** | 413 | 915 |
 
 **Phase 1 实际删掉 49,546 行 / 413 个文件**（方案估 49,149 / 444）。与清单的偏差三处，都写进了 commit message，摘要：
 
@@ -486,6 +487,43 @@ video / audio 两个源只读得到存量行。
 
 `asset-classify.ts` 的 requestId 前缀规则表一条没动（含 `comic:` / `ecom-*`）：它描述的是库里的存量行，
 不是活着的模块；摘掉 `ecom-stitch:` 这类规则反而会让中间件掉进兜底规则、混进素材库。
+
+**Phase 2 实际删掉 23,214 行 / 172 个文件**，收在 49,453 —— 比方案给 Phase 2 的门槛（53,029 + 551）低了
+约 4,100 行，也已经低于 Phase 3 的门槛（50,188 + 551）。多出来的量来自方案没单独立项的几块：
+`codex-pet-call-ledger.ts` + 测试（1,359 行）、`workflow/_shared/reservation-window*`（预留窗口口径，
+纯 billing 常量）、`workflow/_shared/workflow-pricing`（摘完已无 import），以及各域 routes/runner 里
+比清单预估更厚的预扣/结算/退款分支。
+
+**codex-pet run 状态机的结论（方案点名要盯的那处）：不依赖计费结果，行为零变化。**
+HEAD 上 `pauseForImageApproval` 写的是
+`ctx.perImageBilling ? "awaiting_regeneration_approval" : "awaiting_direction_review"` ——
+按张计费关闭时本来就走后者。所以「等一次授权」现在一律停在 `awaiting_direction_review`，
+**这条路径与「关掉计费的 HEAD」逐字一致**，不是新行为。`imageGenerationApprovalBudget` 那道闸门
+作为「真实生图调用的速率保护」保留（上游 API 成本与跑飞循环仍然需要它），从 `runner-billing.ts`
+剥出来落到新文件 `codex-pet-runner/runner-image-approval.ts`。
+`awaiting_regeneration_approval` 留在 `CodexPetExecutionStatus` 联合里但不再产生 —— 库里可能还有停在
+该状态的存量 run，worker 的暂停态收尸、`BLOCKING_RUN_STATUSES`、`executeCodexPetRun` 开头那道
+早返回都还认它。（并发的子 agent 曾把它从联合里删掉却留着运行时分支，是本 Phase 唯一一次 typecheck 红。）
+
+### ⚠️ Phase 2 摘出来两个「计划外」的坑，需要你拍板
+
+**① `GET /api/models` 没了，而方案 §3 把「模型」列在运营后台的保留项里。**
+`admin/model-routes.ts` 的 8 个 handler 全是代理 billing 的 Go 服务，模型目录整张表在
+`ai_assistant_billing` 库里（Phase 6 要 DROP 的那个），主库 schema 里
+`showInMarketplace` / `contextLength` / `inputPricePerMillion` 零命中。所以它不是「摘计费」能救的，
+整文件只能删 —— 连带公开端点 `GET /api/models` 一起没了。下游实测：
+- `apps/web/src/api.ts` 的 `listModels()` 把错误 catch 成 `[]`，所以不报错但列表为空；
+- 受影响的是对话输入区的模型下拉、`pages/Settings.tsx` 的偏好模型、`pages/ModelMarketplace.tsx`
+  整页、`components/novel/NovelPromptWorkbench.tsx` 的模型选择；
+- **对话主链不断**：`chat/routes.ts` 是 `parsed.data.model ?? cfg.defaultModel`，兜底走 `LLM_DEFAULT_MODEL`。
+- `MODEL_MANAGE` 权限现在服务端零使用点；`nav.models`（模型广场）默认可见但整页已死。
+- 同一簇还有 `chat/routes-model-gate.ts` 删掉后一起没了的：模型启用闸门、每模型 `maxOutputTokens`
+  （`resolveModelMaxOutput`），客户端传任意 model 串会直达上游、输出上限退回全局默认。
+
+**② `KbQuotaGrant` 变成只写不读。** `POST /api/admin/users/:id/kb-quota` 还在写，
+但读侧（`kb/quota.ts` 的有效额度计算）随配额校验一起删了 —— 而 HEAD 的 `effectiveQuota` 要靠 billing
+取 `defaultBytes` / `membershipBytes` 才算得出来，Phase 5 的保留表清单里又留着 `KbQuotaGrant`。
+三者对不上。没敢自己删那个端点（删了同时违反 Phase 5 并砍掉 4 条业务用例）。
 
 **待办（记在这里免得漏）**：
 - `.github/test-baseline.json` 的 `expectedWorkspaces` / `minPassed` / `maxSkipped` 三个数必须重测重写
@@ -524,12 +562,12 @@ video / audio 两个源只读得到存量行。
 
 1. **数字**：重跑全仓 blame 统计，各 Phase 收尾不高于下表。**实测值写回本文档**，写估算值等于没做
 
-   | 收尾于 | 上游行应为 | 实测（见「执行记录」） |
-   |---|---|---|
-   | Phase 1 | ≤ 72,513 | **72,667**（含提前量：`tool-market/` 387 行挪到 Phase 3） |
-   | Phase 2 | ≤ 53,029 | 待测 |
-   | Phase 3 | ≤ 50,188 | 待测 |
-   | Phase 7 | ≤ 41,551 | 待测 |
+   | 收尾于 | 上游行应为 | 门槛 +551 | 实测（见「执行记录」） |
+   |---|---|---|---|
+   | Phase 1 | ≤ 72,513 | ≤ 73,064 | **72,667** ✅（含提前量：`tool-market/` 387 行挪到 Phase 3） |
+   | Phase 2 | ≤ 53,029 | ≤ 53,580 | **49,453** ✅（低了约 4,100） |
+   | Phase 3 | ≤ 50,188 | ≤ 50,739 | 待测（Phase 2 收尾已在门槛内） |
+   | Phase 7 | ≤ 41,551 | ≤ 42,102 | 待测 |
 
    Phase 4~6 对行数的影响没单独量过（Phase 5 删 39 个 model 会让 `schema.prisma` 的上游行再降一些），实测只要不高于上一行即可。
 
