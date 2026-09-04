@@ -1,140 +1,122 @@
 import { Icon } from "@iconify/react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { fallbackTitle } from "../../memoryGalaxy";
-import type { MemoryDraft, MemoryNode, MemoryType } from "../../memoryTypes";
-import MemoryDetailEditor from "./MemoryDetailEditor";
-import MemoryDetailView from "./MemoryDetailView";
+import type { MemoryDraft, MemoryNode } from "../../memoryTypes";
 import { msgIn } from "../../motion";
+import { buttonClass, cx } from "../ui";
+import { MEMORY_FIELD_LABEL } from "./MemoryChrome";
+import MemoryDetailEditor, { type MemoryEditorDraft } from "./MemoryDetailEditor";
+import MemoryDetailView from "./MemoryDetailView";
+import type { MemoryPending } from "./useMemoryGalaxyState";
 
+/** 编辑框里标题的截断长度。 */
 const EDITABLE_TITLE_MAX_LENGTH = 40;
 
-function parseTags(value: string): readonly string[] {
-  return Array.from(
-    new Set(
-      value
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter(Boolean),
-    ),
-  );
-}
+/**
+ * 软危险色的删除按钮。`buttonClass` 的 danger 是实底红，那一档留给确认弹窗里
+ * 真正落刀的那个按钮 —— 触发按钮做得比确认按钮弱，是这里有意的分级。
+ */
+const DELETE_BUTTON =
+  "inline-flex h-10 items-center justify-center gap-1.5 rounded-full border border-danger/30 bg-danger/10 px-4 text-sm font-semibold text-danger-ink transition-colors disabled:cursor-not-allowed disabled:opacity-60";
+
+/** 纯图标按钮：`buttonClass` 每档都带横向 padding，40×40 的方形按钮套不上。 */
+const ICON_BUTTON =
+  "inline-flex h-10 w-10 items-center justify-center rounded-full border border-hairline bg-surface text-ink shadow-sm transition-colors";
 
 function normalizeWhitespace(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function getEditableTitle(node: MemoryNode): string {
-  const normalizedTitle = normalizeWhitespace(node.title);
-  if (normalizedTitle) {
-    return normalizedTitle;
-  }
-
-  const normalizedText = normalizeWhitespace(node.text);
-  if (!normalizedText) {
-    return "未命名记忆";
-  }
-
-  return normalizedText.slice(0, EDITABLE_TITLE_MAX_LENGTH);
+/** 逗号分词 → 去空 → 去重。 */
+function parseTags(value: string): readonly string[] {
+  return [
+    ...new Set(
+      value
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
-function EmptyState() {
-  return (
-    <aside className="flex h-full min-h-[320px] flex-col justify-center rounded-[14px] border border-hairline-subtle bg-surface p-6 text-center">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
-        <Icon icon="mdi:table-row" className="text-2xl" />
-      </div>
-      <p className="mt-4 text-lg font-semibold text-ink">选择一条记忆</p>
-      <p className="mt-2 text-sm leading-6 text-ink-secondary">
-        在表格中点击任意行，即可查看详情、编辑内容或整理标签。
-      </p>
-    </aside>
-  );
+/**
+ * 编辑框里的初始标题。有意跟表格上的 `fallbackTitle` 不一样：那个是拿来看的，
+ * 截 24 字还补省略号；这里的会被存回库，所以截 40 字且**不能**带省略号。
+ */
+function editableTitle(node: MemoryNode): string {
+  const title = normalizeWhitespace(node.title);
+  if (title) return title;
+
+  const text = normalizeWhitespace(node.text);
+  return text ? text.slice(0, EDITABLE_TITLE_MAX_LENGTH) : "未命名记忆";
+}
+
+function draftOf(node: MemoryNode): MemoryEditorDraft {
+  return {
+    title: editableTitle(node),
+    text: node.text,
+    type: node.type,
+    importance: node.importance,
+    tagsInput: node.tags.join(", "),
+  };
 }
 
 interface MemoryDetailPanelProps {
-  readonly node: MemoryNode | null;
-  readonly saving: boolean;
-  readonly deleting: boolean;
+  readonly node: MemoryNode;
+  readonly pending: MemoryPending | null;
   readonly onSave: (draft: MemoryDraft) => Promise<boolean>;
-  readonly onDelete: () => Promise<void>;
+  readonly onDelete: () => void;
+  /** 移动端底部抽屉给的关闭回调；桌面端常驻在右栏，没有关闭按钮。 */
   readonly onClose?: () => void;
-  readonly mobile?: boolean;
+  readonly compact?: boolean;
 }
 
+/**
+ * 记忆详情面板。`draft` 一个状态就同时表达了「在不在编辑」和「编辑成什么样」——
+ * 迁移前是 `isEditing` + 5 个字段共 6 个 state，于是「进编辑」「取消」「换选中项」
+ * 三处各写一遍同样的 6 行赋值。
+ *
+ * 换选中项时的重置交给调用方的 `key={node.id}`（React 官方的 reset-by-key），
+ * 这样 8 秒一次的后台刷新就不会再打断正在输入的编辑 —— 原来那个 `useEffect([node])`
+ * 认的是对象身份，每次轮询回来都会把用户打了一半的内容抹掉。
+ */
 export default function MemoryDetailPanel({
   node,
-  saving,
-  deleting,
+  pending,
   onSave,
   onDelete,
   onClose,
-  mobile = false,
+  compact = false,
 }: MemoryDetailPanelProps) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [title, setTitle] = useState("");
-  const [text, setText] = useState("");
-  const [type, setType] = useState<MemoryType>("CORE");
-  const [importance, setImportance] = useState(60);
-  const [tagsInput, setTagsInput] = useState("");
-  const [formError, setFormError] = useState("");
+  const [draft, setDraft] = useState<MemoryEditorDraft | null>(null);
+  const [error, setError] = useState("");
+  const busy = pending === "save" || pending === "delete";
 
-  useEffect(() => {
-    if (!node) {
-      setIsEditing(false);
-      setFormError("");
-      return;
-    }
-
-    setTitle(getEditableTitle(node));
-    setText(node.text);
-    setType(node.type);
-    setImportance(node.importance);
-    setTagsInput(node.tags.join(", "));
-    setFormError("");
-    setIsEditing(false);
-  }, [node]);
-
-  const resetEditor = () => {
-    if (!node) {
-      return;
-    }
-
-    setTitle(getEditableTitle(node));
-    setText(node.text);
-    setType(node.type);
-    setImportance(node.importance);
-    setTagsInput(node.tags.join(", "));
-    setFormError("");
-    setIsEditing(false);
+  const closeEditor = () => {
+    setDraft(null);
+    setError("");
   };
 
-  const handleSave = async () => {
-    if (!title.trim() || !text.trim()) {
-      setFormError("标题和内容不能为空");
+  const submit = async () => {
+    if (!draft) return;
+
+    if (!draft.title.trim() || !draft.text.trim()) {
+      setError("标题和内容不能为空");
       return;
     }
 
-    setFormError("");
-    const didSave = await onSave({
-      title: title.trim(),
-      text: text.trim(),
-      type,
-      importance,
-      tags: parseTags(tagsInput),
+    setError("");
+    const saved = await onSave({
+      title: draft.title.trim(),
+      text: draft.text.trim(),
+      type: draft.type,
+      importance: draft.importance,
+      tags: parseTags(draft.tagsInput),
     });
 
-    if (didSave) {
-      setIsEditing(false);
-    }
+    if (saved) closeEditor();
   };
-
-  if (!node) {
-    return <EmptyState />;
-  }
-
-  const displayTitle = fallbackTitle(node.title, node.text);
-  const showGeneratedTitleHint = node.title.trim().length === 0;
 
   return (
     <motion.aside
@@ -146,134 +128,86 @@ export default function MemoryDetailPanel({
     >
       <div className="flex items-start justify-between gap-3 border-b border-hairline-subtle px-5 py-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
-            记忆详情
-          </p>
-          <h2
-            className={`mt-1 font-semibold text-ink ${
-              mobile ? "line-clamp-2 text-base leading-6" : "truncate text-lg"
-            }`}
-          >
-            {displayTitle}
+          <p className={MEMORY_FIELD_LABEL}>记忆详情</p>
+          <h2 className={cx("mt-1 font-semibold text-ink", compact ? "line-clamp-2 text-base leading-6" : "truncate text-lg")}>
+            {fallbackTitle(node.title, node.text)}
           </h2>
         </div>
         <div className="flex flex-none items-center gap-2">
-          {mobile && onClose ? (
+          {onClose && (
             <button
               type="button"
               onClick={onClose}
               aria-label="关闭记忆详情"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-hairline bg-surface text-ink shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              className={ICON_BUTTON}
             >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2.25"
-              >
-                <path d="M6 6l12 12" />
-                <path d="M18 6L6 18" />
-              </svg>
+              <Icon icon="mdi:close" className="text-base" aria-hidden />
             </button>
-          ) : null}
-          {!isEditing ? (
-            <button
-              type="button"
-              onClick={() => setIsEditing(true)}
-              className="inline-flex items-center gap-2 rounded-full border border-hairline px-3 py-2 text-xs font-medium text-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-            >
-              <Icon icon="mdi:pencil-outline" className="text-sm" />
-              编辑
+          )}
+          {draft ? (
+            <button type="button" onClick={closeEditor} className={buttonClass({ variant: "outline", size: "sm" })}>
+              <Icon icon="mdi:close-circle-outline" className="text-sm" aria-hidden />
+              取消
             </button>
           ) : (
             <button
               type="button"
-              onClick={resetEditor}
-              className="inline-flex items-center gap-2 rounded-full border border-hairline px-3 py-2 text-xs font-medium text-ink-secondary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
+              onClick={() => setDraft(draftOf(node))}
+              className={buttonClass({ variant: "outline", size: "sm" })}
             >
-              <Icon icon="mdi:close-circle-outline" className="text-sm" />
-              取消
+              <Icon icon="mdi:pencil-outline" className="text-sm" aria-hidden />
+              编辑
             </button>
           )}
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4">
+        {/* mode="wait" 让查看态先退干净再进编辑态，两块内容高度差很大，同时在场会跳一下 */}
         <AnimatePresence mode="wait">
-          {isEditing ? (
-            <motion.div
-              key="editor"
-              variants={msgIn}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
+          <motion.div key={draft ? "editor" : "view"} variants={msgIn} initial="initial" animate="animate" exit="exit">
+            {draft ? (
               <MemoryDetailEditor
-                title={title}
-                onTitleChange={setTitle}
-                showGeneratedTitleHint={showGeneratedTitleHint}
-                text={text}
-                onTextChange={setText}
-                type={type}
-                onTypeChange={setType}
-                importance={importance}
-                onImportanceChange={setImportance}
-                tagsInput={tagsInput}
-                onTagsInputChange={setTagsInput}
-                tags={parseTags(tagsInput)}
-                formError={formError}
-                mobile={mobile}
+                draft={draft}
+                onPatch={(patch) => setDraft((current) => (current ? { ...current, ...patch } : current))}
+                tags={parseTags(draft.tagsInput)}
+                titleGenerated={node.title.trim().length === 0}
+                error={error}
+                compact={compact}
               />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="view"
-              variants={msgIn}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-            >
+            ) : (
               <MemoryDetailView node={node} />
-            </motion.div>
-          )}
+            )}
+          </motion.div>
         </AnimatePresence>
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-hairline-subtle px-5 py-4">
-        <button
-          type="button"
-          onClick={() => void onDelete()}
-          disabled={saving || deleting}
-          className="inline-flex items-center gap-2 rounded-full border border-danger/30 bg-danger/10 px-4 py-2 text-sm font-medium text-danger-ink transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/30 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+        <button type="button" onClick={onDelete} disabled={busy} className={DELETE_BUTTON}>
           <Icon
-            icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"}
-            className={deleting ? "animate-spin text-base" : "text-base"}
+            icon={pending === "delete" ? "mdi:loading" : "mdi:trash-can-outline"}
+            className={cx("text-base", pending === "delete" && "animate-spin")}
+            aria-hidden
           />
           删除
         </button>
 
-        {isEditing ? (
+        {draft ? (
           <button
             type="button"
-            onClick={() => void handleSave()}
-            disabled={saving || deleting}
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-4 py-2 text-sm font-medium text-white transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
+            onClick={() => void submit()}
+            disabled={busy}
+            className={buttonClass({ variant: "primary", size: "lg" })}
           >
             <Icon
-              icon={saving ? "mdi:loading" : "mdi:content-save-outline"}
-              className={saving ? "animate-spin text-base" : "text-base"}
+              icon={pending === "save" ? "mdi:loading" : "mdi:content-save-outline"}
+              className={cx("text-base", pending === "save" && "animate-spin")}
+              aria-hidden
             />
             保存修改
           </button>
         ) : (
-          <div className="text-xs text-ink-tertiary">
-            支持编辑标题、内容、类型、重要度与标签
-          </div>
+          <p className="text-xs text-ink-tertiary">支持编辑标题、内容、类型、重要度与标签</p>
         )}
       </div>
     </motion.aside>

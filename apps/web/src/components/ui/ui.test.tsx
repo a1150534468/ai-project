@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
-import { Alert, alertClass, Badge, badgeClass, Button, buttonClass, Card, cardClass } from "./index";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { Alert, alertClass, Badge, badgeClass, Button, buttonClass, Card, cardClass, Switch } from "./index";
 
 /** 语义 token 之外的字面色值一律不许出现在基元里（design-system.md §2 Rules 的第二条） */
 const LITERAL_COLOR = /\b(?:bg|text|border|ring)-(?:\[#|(?:gray|slate|red|amber|yellow|orange|blue|sky|emerald|green|violet|indigo|rose|purple|teal|cyan|pink)-\d)/;
@@ -140,5 +140,61 @@ describe("组件壳的行为", () => {
     );
     expect(container.firstElementChild).toHaveClass("rounded-2xl", "bg-surface", "p-5", "mb-6");
     expect(container.querySelector("span")).toHaveClass("bg-success/10", "text-success-ink", "ml-2");
+  });
+});
+
+describe("<Switch>", () => {
+  /** 轨道是标签之后的那个 span，滑块是它里面唯一的孩子 */
+  function parts() {
+    const button = screen.getByRole("switch");
+    const track = button.lastElementChild as HTMLElement;
+
+    return { button, track, knob: track.firstElementChild as HTMLElement };
+  }
+
+  it("名字就是可见文字，aria-checked 跟着 checked 走", () => {
+    const { unmount } = render(<Switch checked label="长期记忆已启用" onToggle={vi.fn()} />);
+    expect(screen.getByRole("switch", { name: "长期记忆已启用" })).toHaveAttribute("aria-checked", "true");
+    unmount();
+
+    render(<Switch checked={false} label="长期记忆已关闭" onToggle={vi.fn()} />);
+    expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  });
+
+  it("给了 description 就多一行小字，名字把两行都算进去", () => {
+    render(<Switch checked label="跟随系统" description="使用设备或浏览器的显示模式" onToggle={vi.fn()} />);
+
+    expect(screen.getByText("使用设备或浏览器的显示模式")).toBeInTheDocument();
+    expect(screen.getByRole("switch")).toHaveAccessibleName("跟随系统 使用设备或浏览器的显示模式");
+  });
+
+  it("滑块靠 translate-x-5 走位，关态不带位移；轨道颜色两档", () => {
+    const { unmount } = render(<Switch checked label="开" onToggle={vi.fn()} />);
+    expect(parts().track).toHaveClass("bg-brand");
+    expect(parts().knob).toHaveClass("translate-x-5");
+    unmount();
+
+    render(<Switch checked={false} label="关" onToggle={vi.fn()} />);
+    expect(parts().track).toHaveClass("bg-hairline");
+    expect(parts().knob).not.toHaveClass("translate-x-5");
+  });
+
+  it("滑块不写 bg-white —— 字面色不跟着暗色模式翻", () => {
+    render(<Switch checked={false} label="关" onToggle={vi.fn()} />);
+    expect(parts().knob.className).not.toMatch(LITERAL_COLOR);
+    expect(parts().knob).toHaveClass("bg-surface");
+  });
+
+  it("点一下回调一次，disabled 时点不动", () => {
+    const onToggle = vi.fn();
+    const { unmount } = render(<Switch checked={false} label="开关" onToggle={onToggle} />);
+    fireEvent.click(screen.getByRole("switch"));
+    expect(onToggle).toHaveBeenCalledOnce();
+    unmount();
+
+    render(<Switch checked={false} label="开关" onToggle={onToggle} disabled />);
+    expect(screen.getByRole("switch")).toBeDisabled();
+    fireEvent.click(screen.getByRole("switch"));
+    expect(onToggle).toHaveBeenCalledOnce();
   });
 });

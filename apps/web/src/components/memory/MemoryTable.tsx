@@ -1,71 +1,91 @@
 import { Icon } from "@iconify/react";
-import { fallbackTitle, getMemoryTypeMeta } from "../../memoryGalaxy";
+import type { ReactNode } from "react";
+import { fallbackTitle } from "../../memoryGalaxy";
 import type { MemoryNode } from "../../memoryTypes";
-import { MEMORY_TYPE_STYLES } from "./memoryStyles";
+import { badgeClass, cx } from "../ui";
+import { MemoryPlaceholder, MemoryTypePill, formatMemoryTime, memoryListState, type MemoryListCopy } from "./MemoryChrome";
 
-function formatDate(value: string | null): string {
-  if (!value) {
-    return "尚未使用";
-  }
-
-  return new Date(value).toLocaleString("zh-CN");
+/**
+ * 桌面端的记忆表格。六个数据列写成一张表而不是 `<thead>`/`<tbody>` 各排一遍 ——
+ * 那两排必须同序同长，加一列要改两处，宽度百分比还得手动凑够 100。
+ * 第七列（操作）不在表里：它是交互而不是数据，单独渲染反倒好读。
+ */
+interface MemoryColumn {
+  readonly label: string;
+  /** table-fixed 下宽度只能在 `<th>` 上给死。字面类名，不能拼。 */
+  readonly width: string;
+  readonly cell: (node: MemoryNode, highlighted: boolean) => ReactNode;
 }
+
+const COLUMNS: readonly MemoryColumn[] = [
+  {
+    label: "记忆内容",
+    width: "w-[34%]",
+    cell: (node, highlighted) => (
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-semibold text-ink">{fallbackTitle(node.title, node.text)}</p>
+          {highlighted && <span className={badgeClass({ tone: "brand" })}>命中</span>}
+        </div>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-secondary">{node.text}</p>
+      </div>
+    ),
+  },
+  { label: "类型", width: "w-[13%]", cell: (node) => <MemoryTypePill type={node.type} size="sm" dot /> },
+  {
+    label: "重要度",
+    width: "w-[10%]",
+    cell: (node) => (
+      <span className={badgeClass({ size: "md", className: "min-w-12 justify-center" })}>{node.importance}</span>
+    ),
+  },
+  {
+    label: "标签",
+    width: "w-[14%]",
+    // 只露两个：第三个开始这一列就被挤宽了，完整标签在右侧详情面板
+    cell: (node) => (
+      <div className="flex flex-wrap gap-1.5">
+        {node.tags.length === 0 && <span className="text-xs text-ink-tertiary">暂无</span>}
+        {node.tags.slice(0, 2).map((tag) => (
+          <span key={tag} className={badgeClass({ variant: "outline" })}>
+            {tag}
+          </span>
+        ))}
+      </div>
+    ),
+  },
+  {
+    label: "使用",
+    width: "w-[10%]",
+    cell: (node) => <span className="text-xs text-ink-secondary">{node.usedCount} 次</span>,
+  },
+  {
+    label: "创建时间",
+    width: "w-[12%]",
+    cell: (node) => <span className="text-xs leading-5 text-ink-secondary">{formatMemoryTime(node.createdAt)}</span>,
+  },
+];
+
+const COPY: MemoryListCopy = {
+  loadingHeight: "min-h-[360px]",
+  loadingText: "正在加载记忆表格...",
+  errorTitle: "记忆表格加载失败",
+  emptyIcon: "mdi:table-search",
+  emptyHint: "调整搜索或类型筛选后再查看。",
+};
 
 interface MemoryTableProps {
   readonly nodes: readonly MemoryNode[];
   readonly selectedId: string | null;
-  readonly highlightedIds: readonly string[];
+  readonly highlightedIds: ReadonlySet<string>;
   readonly loading: boolean;
   readonly error: string;
-  readonly onSelectNode: (id: string) => void;
+  readonly onSelect: (id: string) => void;
 }
 
-export default function MemoryTable({
-  nodes,
-  selectedId,
-  highlightedIds,
-  loading,
-  error,
-  onSelectNode,
-}: MemoryTableProps) {
-  if (loading) {
-    return (
-      <div className="flex min-h-[360px] items-center justify-center rounded-[14px] border border-hairline-subtle bg-surface">
-        <div className="flex items-center gap-3 text-sm text-ink-secondary">
-          <Icon icon="mdi:loading" className="animate-spin text-lg text-brand" aria-hidden />
-          正在加载记忆表格...
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="rounded-[14px] border border-danger/30 bg-danger/10 px-5 py-4 text-sm text-danger-ink">
-        <div className="flex items-start gap-3">
-          <Icon icon="mdi:alert-circle-outline" className="mt-0.5 text-xl" aria-hidden />
-          <div>
-            <p className="font-medium">记忆表格加载失败</p>
-            <p className="mt-1 text-danger-ink/90">{error}</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (nodes.length === 0) {
-    return (
-      <div className="rounded-[14px] border border-hairline-subtle bg-surface px-5 py-14 text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-brand/10 text-brand">
-          <Icon icon="mdi:table-search" className="text-2xl" aria-hidden />
-        </div>
-        <p className="mt-4 text-base font-semibold text-ink">当前筛选下没有记忆</p>
-        <p className="mt-2 text-sm leading-6 text-ink-secondary">
-          调整搜索或类型筛选后再查看。
-        </p>
-      </div>
-    );
-  }
+export default function MemoryTable({ nodes, selectedId, highlightedIds, loading, error, onSelect }: MemoryTableProps) {
+  const state = memoryListState(loading, error, nodes.length);
+  if (state) return <MemoryPlaceholder state={state} copy={COPY} />;
 
   return (
     <div className="h-full min-h-0 overflow-hidden rounded-[14px] border border-hairline-subtle bg-surface">
@@ -73,91 +93,43 @@ export default function MemoryTable({
         <table className="min-w-[820px] w-full table-fixed border-collapse text-left">
           <thead className="sticky top-0 z-10 bg-surface-subtle text-[11px] font-semibold uppercase text-ink-tertiary">
             <tr>
-              <th className="w-[34%] whitespace-nowrap px-4 py-3">记忆内容</th>
-              <th className="w-[13%] whitespace-nowrap px-3 py-3">类型</th>
-              <th className="w-[10%] whitespace-nowrap px-4 py-3">重要度</th>
-              <th className="w-[14%] whitespace-nowrap px-4 py-3">标签</th>
-              <th className="w-[10%] whitespace-nowrap px-4 py-3">使用</th>
-              <th className="w-[12%] whitespace-nowrap px-4 py-3">创建时间</th>
+              {COLUMNS.map((column) => (
+                <th key={column.label} className={cx("whitespace-nowrap px-4 py-3", column.width)}>
+                  {column.label}
+                </th>
+              ))}
               <th className="w-[7%] whitespace-nowrap px-3 py-3 text-right">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-hairline-subtle">
-            {nodes.map((node, index) => {
-              const typeStyle = MEMORY_TYPE_STYLES[node.type];
-              const selected = node.id === selectedId;
-              const highlighted = highlightedIds.includes(node.id);
-              const title = fallbackTitle(node.title, node.text);
+            {nodes.map((node) => {
+              const highlighted = highlightedIds.has(node.id);
 
               return (
+                // 整行可点是主要交互；键盘与读屏走操作列那个按钮
                 <tr
                   key={node.id}
-                  className={`cursor-pointer transition ${
-                    selected
-                      ? "bg-brand/[0.08]"
-                      : highlighted
-                        ? "bg-brand/5"
-                        : ""
-                  }`}
-                  onClick={() => onSelectNode(node.id)}
+                  onClick={() => onSelect(node.id)}
+                  aria-selected={node.id === selectedId}
+                  className={cx(
+                    "cursor-pointer transition",
+                    node.id === selectedId ? "bg-brand/[0.08]" : highlighted && "bg-brand/5",
+                  )}
                 >
-                  <td className="px-4 py-4 align-top">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-ink">{title}</p>
-                        {highlighted ? (
-                          <span className="inline-flex flex-none items-center rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-medium text-brand">
-                            命中
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-xs leading-5 text-ink-secondary">
-                        {node.text}
-                      </p>
-                    </div>
-                  </td>
-                  <td className="px-3 py-4 align-top">
-                    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ${typeStyle.viewPill}`}>
-                      <span className={`h-2 w-2 rounded-full ${typeStyle.viewDot}`} />
-                      {getMemoryTypeMeta(node.type).label}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <span className="inline-flex min-w-12 justify-center rounded-full bg-surface-muted px-2.5 py-1 text-xs font-medium text-ink">
-                      {node.importance}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 align-top">
-                    <div className="flex flex-wrap gap-1.5">
-                      {node.tags.length > 0 ? (
-                        node.tags.slice(0, 2).map((tag) => (
-                          <span
-                            key={tag}
-                            className="rounded-full border border-hairline-subtle bg-surface px-2 py-0.5 text-[11px] text-ink-secondary"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-ink-tertiary">暂无</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 align-top text-xs text-ink-secondary">
-                    {node.usedCount} 次
-                  </td>
-                  <td className="px-4 py-4 align-top text-xs leading-5 text-ink-secondary">
-                    {formatDate(node.createdAt)}
-                  </td>
+                  {COLUMNS.map((column) => (
+                    <td key={column.label} className="px-4 py-4 align-top">
+                      {column.cell(node, highlighted)}
+                    </td>
+                  ))}
                   <td className="px-3 py-4 text-right align-top">
                     <button
                       type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-ink-tertiary transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30"
-                      aria-label={`查看记忆：${title}`}
+                      aria-label={`查看记忆：${fallbackTitle(node.title, node.text)}`}
                       onClick={(event) => {
                         event.stopPropagation();
-                        onSelectNode(node.id);
+                        onSelect(node.id);
                       }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full text-ink-tertiary"
                     >
                       <Icon icon="mdi:chevron-right" className="text-lg" aria-hidden />
                     </button>

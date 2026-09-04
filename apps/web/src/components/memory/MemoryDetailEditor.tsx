@@ -1,136 +1,153 @@
+import { useId, type ReactNode } from "react";
 import { MEMORY_TYPE_ORDER, getMemoryTypeMeta } from "../../memoryGalaxy";
 import type { MemoryType } from "../../memoryTypes";
-import { MEMORY_TYPE_STYLES } from "./memoryStyles";
+import { badgeClass, cx } from "../ui";
+import { MEMORY_FIELD_LABEL } from "./MemoryChrome";
+import { memoryChipClass } from "./memoryStyles";
+
+/**
+ * 编辑中的字段值。整块当一个对象传，而不是 5 个值 + 5 个 setter 共 10 个 prop ——
+ * 加一个可编辑字段原来要动 3 个文件的签名。`tagsInput` 是没解析的原始输入，
+ * 逗号分词交给面板做（用户正打到「偏好, 」时不能把尾巴吃掉）。
+ */
+export interface MemoryEditorDraft {
+  readonly title: string;
+  readonly text: string;
+  readonly type: MemoryType;
+  readonly importance: number;
+  readonly tagsInput: string;
+}
+
+const CONTROL = "w-full rounded-[10px] border border-hairline bg-surface-subtle px-3 py-2.5 text-sm text-ink";
+
+/** 一个字段 = 小标题 + 控件（+ 右上角一个可选的附加信息，重要度用它显示当前值）。 */
+function Field({
+  label,
+  htmlFor,
+  aside,
+  children,
+}: {
+  readonly label: string;
+  readonly htmlFor: string;
+  readonly aside?: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <label htmlFor={htmlFor} className={MEMORY_FIELD_LABEL}>
+          {label}
+        </label>
+        {aside}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 interface MemoryDetailEditorProps {
-  readonly title: string;
-  readonly onTitleChange: (value: string) => void;
-  readonly showGeneratedTitleHint: boolean;
-  readonly text: string;
-  readonly onTextChange: (value: string) => void;
-  readonly type: MemoryType;
-  readonly onTypeChange: (value: MemoryType) => void;
-  readonly importance: number;
-  readonly onImportanceChange: (value: number) => void;
-  readonly tagsInput: string;
-  readonly onTagsInputChange: (value: string) => void;
+  readonly draft: MemoryEditorDraft;
+  readonly onPatch: (patch: Partial<MemoryEditorDraft>) => void;
+  /** 已解析出来的标签，实时预览。 */
   readonly tags: readonly string[];
-  readonly formError: string;
-  readonly mobile: boolean;
+  /** 这条记忆原本没有标题，界面上的是按内容现编的，得说一声。 */
+  readonly titleGenerated: boolean;
+  readonly error: string;
+  /** 移动端底部抽屉高度有限，正文少给几行。 */
+  readonly compact: boolean;
 }
 
 export default function MemoryDetailEditor({
-  title,
-  onTitleChange,
-  showGeneratedTitleHint,
-  text,
-  onTextChange,
-  type,
-  onTypeChange,
-  importance,
-  onImportanceChange,
-  tagsInput,
-  onTagsInputChange,
+  draft,
+  onPatch,
   tags,
-  formError,
-  mobile,
+  titleGenerated,
+  error,
+  compact,
 }: MemoryDetailEditorProps) {
+  // 详情面板在桌面和移动端各挂一份，id 必须每份都不一样，否则 label 会指到另一份上
+  const id = useId();
+
   return (
     <div className="space-y-4">
-      <div>
-        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
-          标题
-        </label>
+      <Field label="标题" htmlFor={`${id}-title`}>
         <input
-          value={title}
-          onChange={(event) => onTitleChange(event.target.value)}
-          className="w-full rounded-[10px] border border-hairline bg-surface-subtle px-3 py-2.5 text-sm text-ink"
+          id={`${id}-title`}
+          value={draft.title}
+          onChange={(event) => onPatch({ title: event.target.value })}
+          className={CONTROL}
         />
-        {showGeneratedTitleHint ? (
-          <p className="mt-2 text-xs text-ink-tertiary">
-            已根据内容生成建议标题，可编辑后保存
-          </p>
-        ) : null}
-      </div>
+        {titleGenerated && <p className="mt-2 text-xs text-ink-tertiary">已根据内容生成建议标题，可编辑后保存</p>}
+      </Field>
 
-      <div>
-        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
-          内容
-        </label>
+      <Field label="内容" htmlFor={`${id}-text`}>
         <textarea
-          value={text}
-          onChange={(event) => onTextChange(event.target.value)}
-          rows={mobile ? 5 : 8}
-          className="w-full rounded-[10px] border border-hairline bg-surface-subtle px-3 py-2.5 text-sm leading-6 text-ink"
+          id={`${id}-text`}
+          value={draft.text}
+          onChange={(event) => onPatch({ text: event.target.value })}
+          rows={compact ? 5 : 8}
+          className={cx(CONTROL, "leading-6")}
         />
-      </div>
+      </Field>
 
       <div>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
-          记忆类型
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {MEMORY_TYPE_ORDER.map((memoryType) => (
+        <p className={cx(MEMORY_FIELD_LABEL, "mb-2")}>记忆类型</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="记忆类型">
+          {MEMORY_TYPE_ORDER.map((type) => (
             <button
-              key={memoryType}
+              key={type}
               type="button"
-              onClick={() => onTypeChange(memoryType)}
-              className={`rounded-full border px-3 py-2 text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30 ${
-                type === memoryType
-                  ? MEMORY_TYPE_STYLES[memoryType].editorActive
-                  : MEMORY_TYPE_STYLES[memoryType].editorIdle
-              }`}
+              aria-pressed={draft.type === type}
+              onClick={() => onPatch({ type })}
+              className={cx(
+                "rounded-full border px-3 py-2 text-xs font-medium transition",
+                memoryChipClass(type, draft.type === type, "neutral"),
+              )}
             >
-              {getMemoryTypeMeta(memoryType).label}
+              {getMemoryTypeMeta(type).label}
             </button>
           ))}
         </div>
       </div>
 
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <label className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
-            重要度
-          </label>
-          <span className="text-sm font-medium text-ink">{importance}</span>
-        </div>
+      <Field
+        label="重要度"
+        htmlFor={`${id}-importance`}
+        aside={<span className="text-sm font-medium text-ink">{draft.importance}</span>}
+      >
         <input
+          id={`${id}-importance`}
           type="range"
           min={1}
           max={100}
-          value={importance}
-          onChange={(event) => onImportanceChange(Number(event.target.value))}
+          value={draft.importance}
+          onChange={(event) => onPatch({ importance: Number(event.target.value) })}
           className="h-2 w-full cursor-pointer appearance-none rounded-full bg-hairline-subtle"
         />
-      </div>
+      </Field>
 
-      <div>
-        <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-tertiary">
-          标签
-        </label>
+      <Field label="标签" htmlFor={`${id}-tags`}>
         <input
-          value={tagsInput}
-          onChange={(event) => onTagsInputChange(event.target.value)}
+          id={`${id}-tags`}
+          value={draft.tagsInput}
+          onChange={(event) => onPatch({ tagsInput: event.target.value })}
           placeholder="用逗号分隔，例如：偏好, 项目, 人设"
-          className="w-full rounded-[10px] border border-hairline bg-surface-subtle px-3 py-2.5 text-sm text-ink"
+          className={CONTROL}
         />
         <div className="mt-2 flex flex-wrap gap-2">
           {tags.map((tag) => (
-            <span
-              key={tag}
-              className="inline-flex items-center rounded-full bg-brand/10 px-3 py-1 text-xs font-medium text-brand"
-            >
+            <span key={tag} className={badgeClass({ tone: "brand", size: "md" })}>
               {tag}
             </span>
           ))}
         </div>
-      </div>
+      </Field>
 
-      {formError ? (
-        <div className="rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger-ink">
-          {formError}
-        </div>
-      ) : null}
+      {error && (
+        <p role="alert" className="rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger-ink">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
