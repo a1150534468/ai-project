@@ -1,6 +1,6 @@
 /**
  * 底部输入区(空态时居中、有消息时贴底,同一时刻只存在一份)。从 `pages/Chat.tsx` 的
- * `composerCard` 原样搬出:隐藏的文件选择 input、附件缩略图条、知识库 / 工具两个入口按钮,
+ * `composerCard` 原样搬出:隐藏的文件选择 input、附件缩略图条、知识库入口按钮,
  * 以及行内的模型下拉。
  *
  * 三条不能动的规则:
@@ -24,9 +24,6 @@ export function ChatComposer({
   knowledgeLabel,
   knowledgeActive,
   onOpenKnowledgePicker,
-  toolLabel,
-  toolActive,
-  onOpenToolPicker,
   models,
   selectedModel,
   selectedModelLabel,
@@ -44,9 +41,6 @@ export function ChatComposer({
   readonly knowledgeLabel: string;
   readonly knowledgeActive: boolean;
   readonly onOpenKnowledgePicker: () => void;
-  readonly toolLabel: string;
-  readonly toolActive: boolean;
-  readonly onOpenToolPicker: () => void;
   readonly models: ReadonlyArray<{ model: string; displayName: string }>;
   readonly selectedModel: string;
   readonly selectedModelLabel: string;
@@ -149,18 +143,6 @@ export function ChatComposer({
             >
               <Icon icon="mdi:database-search-outline" className="text-base flex-none" aria-hidden />
               <span className="truncate">{knowledgeLabel}</span>
-            </button>
-            <button
-              type="button"
-              onClick={onOpenToolPicker}
-              className={`h-9 min-w-0 flex-1 max-w-48 px-3 rounded-xl border text-xs font-medium flex items-center gap-2 transition-colors sm:flex-none ${
-                toolActive
-                  ? "bg-brand-soft border-brand/30 text-brand-ink"
-                  : "bg-surface border-hairline-subtle text-ink-secondary "
-              }`}
-            >
-              <Icon icon="mdi:wrench-outline" className="text-base flex-none" aria-hidden />
-              <span className="truncate">{toolLabel}</span>
             </button>
           </div>
 

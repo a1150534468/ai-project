@@ -4,7 +4,7 @@
  * 这里用 `export *` 原样转发，纯粹是为了让 68 个调用方和全部测试文件一行都不用改；
  * **新代码请直接从域文件 import**，也不要再往本文件加小说 / 知识库 / 记忆的接口。
  *
- * 留在本文件的是还没独立成域的部分：auth、`streamChat`、工具市场、生图工作流、微信绑定、
+ * 留在本文件的是还没独立成域的部分：auth、`streamChat`、生图工作流、微信绑定、
  * 模型列表、会话、智能体。
  * `streamChat` 是刻意不搬的 —— 它是聊天页唯一的流式入口，拆出去会把 auth 的 token 语义
  * 和会话状态切成两个文件读。
@@ -67,19 +67,12 @@ export async function streamChat(
   kbIds?: string[],
   attachAllOwn?: boolean,
   attachments?: ChatAttachmentPayload[],
-  toolIds?: string[],
 ): Promise<void> {
-  // 桌面 app 会把「当前这台连接器」的 deviceId 暴露到 window.aiAssistantDesktop.deviceId，
-  // 带上它后端就能把工具派给用户正在操作的这台（多设备登录同一账号时不再派错机器）。
-  const deviceId =
-    typeof window !== "undefined"
-      ? (window as unknown as { aiAssistantDesktop?: { deviceId?: string } }).aiAssistantDesktop?.deviceId
-      : undefined;
   // 不走 request<T>()：这是 SSE 流，body 要整个留给下面的 reader。
   const r = await requestResponse("/api/chat", {
     method: "POST",
     token,
-    body: { message, sessionId, model, agentId, kbIds, attachAllOwn, attachments, toolIds, deviceId },
+    body: { message, sessionId, model, agentId, kbIds, attachAllOwn, attachments },
     fallback: "发送失败",
   });
   if (!r.body) throw new Error("连接失败");
@@ -104,89 +97,6 @@ export async function streamChat(
       }
     }
   }
-}
-
-export interface ToolMarketCategory {
-  key: string;
-  label: string;
-  total: number;
-}
-
-export interface MarketSkill {
-  id: string;
-  name: string;
-}
-
-export interface ToolMarketCategoryDetail extends ToolMarketCategory {
-  skills: MarketSkill[];
-}
-
-export interface InstalledTool {
-  id: string;
-  name: string;
-  toolName: string;
-  description: string;
-  categoryKey?: string;
-  marketId?: string;
-  status?: string;
-  builtin: boolean;
-  installed: boolean;
-  availableOnCurrentDevice: boolean;
-}
-
-export interface InstalledToolsResponse {
-  currentDeviceOnline: boolean;
-  builtin: InstalledTool[];
-  installed: InstalledTool[];
-}
-
-type InstalledToolPayload = Omit<InstalledTool, "availableOnCurrentDevice"> & {
-  availableOnCurrentDevice?: boolean;
-};
-
-function normalizeInstalledTool(tool: InstalledToolPayload): InstalledTool {
-  return {
-    ...tool,
-    availableOnCurrentDevice: tool.availableOnCurrentDevice ?? tool.installed,
-  };
-}
-
-export async function listToolMarketCategories(token: string): Promise<ToolMarketCategory[]> {
-  const rows = await request<ToolMarketCategory[]>("/api/tool-market", { token, fallback: "获取工具市场失败" });
-  return rows ?? [];
-}
-
-export async function listToolMarketSkills(token: string, categoryKey: string): Promise<ToolMarketCategoryDetail> {
-  return request<ToolMarketCategoryDetail>(`/api/tool-market/${encodeURIComponent(categoryKey)}`, {
-    token,
-    fallback: "获取工具列表失败",
-  });
-}
-
-export async function listInstalledTools(token: string): Promise<InstalledToolsResponse> {
-  const data = await request<{
-    currentDeviceOnline?: boolean;
-    builtin?: InstalledToolPayload[];
-    installed?: InstalledToolPayload[];
-  } | undefined>("/api/tools/installed", { token, fallback: "获取已安装工具失败" });
-  return {
-    currentDeviceOnline: data?.currentDeviceOnline ?? false,
-    builtin: (data?.builtin ?? []).map(normalizeInstalledTool),
-    installed: (data?.installed ?? []).map(normalizeInstalledTool),
-  };
-}
-
-export async function installMarketTool(
-  token: string,
-  payload: { categoryKey: string; marketId: string },
-): Promise<InstalledTool> {
-  const data = await request<InstalledToolPayload>("/api/tools/install", {
-    method: "POST",
-    token,
-    body: payload,
-    fallback: "安装工具失败",
-  });
-  return normalizeInstalledTool(data);
 }
 
 export interface WorkflowImageAsset {

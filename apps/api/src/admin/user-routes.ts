@@ -6,8 +6,6 @@ import { requireAdmin } from "./guard.js";
 import { writeAudit } from "./audit.js";
 import { buildAdminUserDetail } from "./user-detail.js";
 import { generateUniqueUid } from "../auth/uid.js";
-import { kickDevice } from "../connector/hub.js";
-import { revokeDeviceByAdmin, listDevicesForAdmin } from "../device/service.js";
 
 const createUserSchema = z.object({
   username: z.string().min(3).max(32),
@@ -100,12 +98,6 @@ export async function adminUserRoutes(app: FastifyInstance) {
     async (req) => {
       const { id } = req.params as { id: string };
       await prisma.user.update({ where: { id }, data: { bannedAt: new Date() } });
-      // 踢掉该用户所有在线设备
-      const devs = await prisma.device.findMany({
-        where: { userId: id, online: true },
-        select: { id: true },
-      });
-      for (const d of devs) void kickDevice(d.id); // fire-and-forget，复用 T8b
       const me = (req as unknown as { admin: { id: string } }).admin;
       await writeAudit(prisma, me.id, "USER_BAN", id);
       return { success: true };
@@ -125,16 +117,6 @@ export async function adminUserRoutes(app: FastifyInstance) {
   );
 
   app.get(
-    "/api/admin/users/:id/devices",
-    { preHandler: requireAdmin("USER_MANAGE") },
-    async (req) => {
-      const { id } = req.params as { id: string };
-      const data = await listDevicesForAdmin(prisma, id);
-      return { success: true, data };
-    },
-  );
-
-  app.get(
     "/api/admin/users/:id/detail",
     { preHandler: requireAdmin("USER_DETAIL_VIEW") },
     async (req, reply) => {
@@ -149,24 +131,6 @@ export async function adminUserRoutes(app: FastifyInstance) {
         success: true,
         data: await buildAdminUserDetail(prisma, user),
       };
-    },
-  );
-
-  app.post(
-    "/api/admin/devices/:deviceId/revoke",
-    { preHandler: requireAdmin("USER_MANAGE") },
-    async (req, reply) => {
-      const { deviceId } = req.params as { deviceId: string };
-      const dev = await prisma.device.findUnique({
-        where: { id: deviceId },
-        select: { id: true },
-      });
-      if (!dev) return reply.code(404).send({ error: "设备不存在" });
-      const revoked = await revokeDeviceByAdmin(prisma, deviceId);
-      if (revoked) void kickDevice(deviceId);
-      const me = (req as unknown as { admin: { id: string } }).admin;
-      await writeAudit(prisma, me.id, "DEVICE_REVOKE", deviceId);
-      return { success: true };
     },
   );
 }

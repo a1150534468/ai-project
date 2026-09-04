@@ -13,7 +13,7 @@
  */
 import { streamChat, type ChatAttachmentPayload } from "../api";
 import { attachmentLabels } from "../chatAttachments";
-import type { ChatMessage, ToolActivity } from "../chatState";
+import type { ChatMessage } from "../chatState";
 import type { ChatSessionsController } from "./useChatSessions";
 
 export interface ChatSendPayload {
@@ -21,7 +21,6 @@ export interface ChatSendPayload {
   model?: string;
   kbIds?: string[];
   attachAllOwn?: boolean;
-  toolIds?: string[];
   attachments?: ChatAttachmentPayload[];
 }
 
@@ -84,11 +83,6 @@ export function useChatStream(args: {
               return;
             }
 
-            if (event === "tool") {
-              turn.upsertTool(streamKey, data as Omit<ToolActivity, "updatedAt">);
-              return;
-            }
-
             if (event === "reset") {
               turn.dropTrailingAssistant(streamKey);
               return;
@@ -119,7 +113,6 @@ export function useChatStream(args: {
           payload.kbIds,
           payload.attachAllOwn,
           payload.attachments,
-          payload.toolIds,
         );
       } catch (err) {
         turn.fail(streamKey, `发送失败: ${err instanceof Error ? err.message : "未知错误"}`);

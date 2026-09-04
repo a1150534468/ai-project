@@ -161,7 +161,6 @@ export default function App() {
         isLoading={chat.runningSessionIds.has(chat.activeSessionKey)}
         error={chat.errorsBySession[chat.activeSessionKey] ?? ""}
         citations={chat.citationsBySession[chat.activeSessionKey] ?? []}
-        toolActivities={chat.toolActivitiesBySession[chat.activeSessionKey] ?? []}
         selectedModel={selectedModel}
         preferredModel={preferredModel}
         onModelChange={handlePreferredModelChange}

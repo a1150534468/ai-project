@@ -6,7 +6,7 @@
  *  - 登录态:token 进 localStorage、getMe 401 清登录态、登出回登录页
  *  - 视图分派:每个 view 分支各渲染谁、工作流二级菜单怎么落到 workflow
  *  - 深链一次性:知识库 ↔ 桌宠的跳转意图,离开目标页就必须清掉
- *  - 会话流:发送 → session 事件把草稿键迁到真实 id → text / tool / reset / citation / error
+ *  - 会话流:发送 → session 事件把草稿键迁到真实 id → text / reset / citation / error
  *  - 后台开关顶掉当前页时跳第一个可见页
  *
  * 页面组件全部换成探针,断言的是 **App.tsx 自己算出来、往下传的那份 props**,不进页面
@@ -147,10 +147,6 @@ function sessionRow(id: string) {
     agentIcon: null,
     updatedAt: "2026-08-29T00:00:00.000Z",
   };
-}
-
-function toolEvent(id: string, status: "started" | "completed" | "failed") {
-  return { id, name: "search", label: "搜索", status, detail: "" };
 }
 
 async function mount() {
@@ -387,20 +383,6 @@ describe("App 会话流事件", () => {
     // 尾部已经是用户消息,再来一次不该继续往前砍
     await emit("reset", {});
     expect(probes.chat?.messages).toHaveLength(1);
-  });
-
-  it("tool 事件按 id 覆盖,且只保留最近 12 条", async () => {
-    await mount();
-    await send();
-    await emit("tool", toolEvent("t-1", "started"));
-    await emit("tool", toolEvent("t-1", "completed"));
-    expect(probes.chat?.toolActivities).toHaveLength(1);
-    expect(probes.chat?.toolActivities[0].status).toBe("completed");
-    for (let index = 2; index <= 14; index += 1) {
-      await emit("tool", toolEvent(`t-${index}`, "started"));
-    }
-    expect(probes.chat?.toolActivities).toHaveLength(12);
-    expect(probes.chat?.toolActivities[0].id).toBe("t-3");
   });
 
   it("citation 事件累积引用,空引用不入列", async () => {

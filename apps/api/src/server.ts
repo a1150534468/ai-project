@@ -2,14 +2,11 @@ import "./env.js";
 import { assertRequiredEnv, SERVER_REQUIRED_ENV, warnMissingOptionalEnv } from "./env.js";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import websocket from "@fastify/websocket";
 import multipart from "@fastify/multipart";
 import { getPrisma, getRedis } from "@ai-assistant/db";
 import { authRoutes } from "./auth/routes.js";
 import { chatRoutes } from "./chat/routes.js";
 import { memoryRoutes } from "./memory/routes.js";
-import { deviceRoutes } from "./device/routes.js";
-import { toolRoutes } from "./tools/routes.js";
 import { adminRoutes } from "./admin/routes.js";
 import { adminUserRoutes } from "./admin/user-routes.js";
 import { adminAuditRoutes } from "./admin/audit-routes.js";
@@ -26,8 +23,6 @@ import { clientMenuRoutes } from "./admin/client-menu-routes.js";
 import { kbRoutes } from "./kb/routes.js";
 import { assetRoutes } from "./assets/asset-routes.js";
 import { verifyToken } from "./auth/token.js";
-import { registerHub } from "./connector/hub.js";
-import { startReaper } from "./connector/reaper.js";
 import { startKbReaper } from "./kb/reaper.js";
 import { buildIndexDeps } from "./kb/deps.js";
 import { makeS3 } from "./storage/s3.js";
@@ -88,7 +83,6 @@ export async function buildServer() {
     ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim())
     : true;
   await app.register(cors, { origin: corsOrigin, credentials: true });
-  await app.register(websocket);
   await app.register(multipart, {
     limits: {
       fileSize: Number(process.env.KB_MAX_FILE_BYTES) || 20971520,
@@ -122,17 +116,13 @@ export async function buildServer() {
   await app.register(novelEngineRoutes);
   await app.register(articleWorkflowRoutes);
   await app.register(memoryRoutes);
-  await app.register(deviceRoutes);
-  await app.register(toolRoutes);
   await app.register(adminRoutes);
   await app.register(adminUserRoutes);
   await app.register(adminAuditRoutes);
   await app.register(announcementRoutes);
   await app.register(adminKnowledgeRoutes);
   await app.register(clientMenuRoutes);
-  await registerHub(app);
 
-  const reaperTimer = startReaper(getPrisma(), getRedis());
   // 图文项目 reaper：崩溃/重启后把卡在 generating|revising 的项目置 failed
   const articleWorkflowReaperTimer = startArticleWorkflowReaper({
     prisma: getPrisma(),
@@ -154,7 +144,6 @@ export async function buildServer() {
   }
 
   app.addHook("onClose", async () => {
-    clearInterval(reaperTimer);
     clearInterval(articleWorkflowReaperTimer);
     kbReaper?.stop();
   });

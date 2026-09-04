@@ -27,8 +27,6 @@ export const bodySchema = z.object({
   agentId: z.string().min(1).max(128).optional(),
   kbIds: z.array(z.string()).max(50).optional(),
   attachAllOwn: z.boolean().optional(),
-  toolIds: z.array(z.string().min(1).max(64)).max(64).optional(),
-  deviceId: z.string().min(1).max(128).optional(),
   attachments: z.array(attachmentSchema).max(8).default([]),
 }).refine((data) => data.message.trim().length > 0 || data.attachments.length > 0, {
   message: "message or attachments required",

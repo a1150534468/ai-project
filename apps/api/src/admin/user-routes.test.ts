@@ -36,7 +36,7 @@ beforeAll(async () => {
     username: n2,
     password: "pw12345678",
     role: "admin",
-    permissions: ["VIEW_ANALYTICS"],
+    permissions: ["ANNOUNCEMENT_MANAGE"],
   });
   noPermToken = signAdminToken(a2.id, process.env.ADMIN_SESSION_SECRET!);
   createdAdminIds.push(a2.id);
@@ -194,36 +194,6 @@ describe("admin 用户管理", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().data.kpis).toBeDefined();
     expect(Array.isArray(r.json().data.timeline)).toBe(true);
-  });
-});
-
-describe("admin 设备管理", () => {
-  it("无 USER_MANAGE 吊销设备 403", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/api/admin/devices/x/revoke",
-      headers: { authorization: `Bearer ${noPermToken}` },
-    });
-    expect(r.statusCode).toBe(403);
-  });
-
-  it("吊销不存在设备 404", async () => {
-    const r = await app.inject({
-      method: "POST",
-      url: "/api/admin/devices/nonexistent/revoke",
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(r.statusCode).toBe(404);
-  });
-
-  it("列某用户设备返回数组", async () => {
-    const r = await app.inject({
-      method: "GET",
-      url: "/api/admin/users/someuser/devices",
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(r.statusCode).toBe(200);
-    expect(Array.isArray(r.json().data)).toBe(true);
   });
 });
 

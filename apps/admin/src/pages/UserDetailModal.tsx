@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as api from "../api.js";
-import { errMsg, Modal, Pill, Stat, StatStrip } from "../ui.js";
+import { errMsg, Modal, Stat, StatStrip } from "../ui.js";
 
 interface UserDetailModalProps {
   userId: string | null;
@@ -62,7 +62,6 @@ export function UserDetailModal({ userId, onClose, onError }: UserDetailModalPro
       {!loading && detail && (
         <div className="user-detail">
           <StatStrip>
-            <Stat label="今日在线" value={detail.kpis.onlineToday ? "在线" : "离线"} />
             <Stat label="今日登录" value={detail.kpis.loginCountToday} />
             <Stat label="今日使用 Agent" value={detail.kpis.todayAgent} />
           </StatStrip>
@@ -87,10 +86,6 @@ export function UserDetailModal({ userId, onClose, onError }: UserDetailModalPro
             </table>
           </div>
 
-          <div className="detail-grid">
-            <DeviceTable devices={detail.devices} />
-          </div>
-
           <div className="detail-section">
             <h4>用户时间线</h4>
             <div className="timeline-list">
@@ -113,28 +108,6 @@ export function UserDetailModal({ userId, onClose, onError }: UserDetailModalPro
   );
 }
 
-function DeviceTable({ devices }: { devices: api.UserDetail["devices"] }) {
-  return (
-    <div className="detail-section">
-      <h4>设备在线</h4>
-      <table className="tbl compact">
-        <thead><tr><th>设备</th><th>状态</th><th className="num">今日在线</th><th className="num">最后活跃</th></tr></thead>
-        <tbody>
-          {devices.map((row) => (
-            <tr key={row.id}>
-              <td>{row.name ?? row.platform}</td>
-              <td><Pill kind={row.online ? "g" : "n"}>{row.online ? "在线" : "离线"}</Pill></td>
-              <td className="num">{formatSeconds(row.onlineSecondsToday)}</td>
-              <td className="muted">{row.lastSeenAt ? new Date(row.lastSeenAt).toLocaleString() : "—"}</td>
-            </tr>
-          ))}
-          {devices.length === 0 && <tr><td colSpan={4} className="muted">无设备</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function TimelineTitle({ item, expanded, onToggle }: { item: api.UserDetail["timeline"][number]; expanded: boolean; onToggle: () => void }) {
   const canExpand = item.title.length > TIMELINE_PREVIEW_CHARS || item.title.includes("\n");
   const text = canExpand && !expanded ? `${item.title.slice(0, TIMELINE_PREVIEW_CHARS)}...` : item.title;
@@ -149,11 +122,4 @@ function TimelineTitle({ item, expanded, onToggle }: { item: api.UserDetail["tim
       )}
     </span>
   );
-}
-
-function formatSeconds(seconds: number): string {
-  if (seconds <= 0) return "0 分";
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return hours > 0 ? `${hours}时${minutes}分` : `${minutes}分`;
 }

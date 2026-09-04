@@ -22,12 +22,12 @@ import type { FastifyReply, FastifyRequest } from "fastify";
  * 挂一个钩子会同时覆盖三个文件的 60 个路由。
  *
  * 作用域里只要有一个公开路由就不能挂插件级，得逐路由挂。已知的公开路由：
- * 供应商回调（`dub-routes.ts` 的 skyhuman callback）、签名 URL 取文件（image / portrait /
- * codex-pet 的 blob）、静态目录（tool-market、comics video models）、登录注册本身。
+ * 签名 URL 取文件（image / codex-pet 的 blob）、`GET /api/models`、`GET /api/client-menu`、
+ * `GET /api/announcements`、登录注册本身。
  *
- * 还有一类**看着像守卫其实不是**的，同样不能换：`local-business-promo-audio-blob-routes.ts`
- * 的两个 blob 路由虽然也返回 401 未登录，但条件是 `!isOwner && !hasSignedAccess` ——
- * 带合法签名、不带 token 的请求本来就该放行，挂上去会把签名访问打死。
+ * 还有一类**看着像守卫其实不是**的，同样不能换：签名访问那几条 blob 路由虽然也返回
+ * 401 未登录，但条件是 `!isOwner && !hasSignedAccess` —— 带合法签名、不带 token 的请求
+ * 本来就该放行，挂上去会把签名访问打死。
  */
 // 不标返回类型，跟 `admin/guard.ts:29` 的 requireAdmin 一致：标了 `Promise<void>` 的话
 // `return reply.send()` 会因为 FastifyReply 不能赋给 void 而编译报错。

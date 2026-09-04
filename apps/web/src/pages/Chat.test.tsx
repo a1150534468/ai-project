@@ -7,13 +7,11 @@ import type { ChatMessage } from "../chatState";
 import Chat from "./Chat";
 
 const apiMocks = vi.hoisted(() => ({
-  listInstalledTools: vi.fn(),
   listKb: vi.fn(),
   listModels: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
-  listInstalledTools: apiMocks.listInstalledTools,
   listKb: apiMocks.listKb,
   listModels: apiMocks.listModels,
 }));
@@ -71,7 +69,6 @@ describe("Chat scrolling", () => {
 
   beforeEach(() => {
     Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
-    apiMocks.listInstalledTools.mockResolvedValue({ builtin: [], installed: [] });
     apiMocks.listKb.mockResolvedValue([]);
     apiMocks.listModels.mockResolvedValue([]);
     originalScrollIntoView = HTMLElement.prototype.scrollIntoView;

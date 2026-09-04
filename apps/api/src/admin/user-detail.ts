@@ -1,5 +1,4 @@
 import type { PrismaClient } from "@ai-assistant/db";
-import { listDevicesForAdmin } from "../device/service.js";
 
 interface AdminUserBasic {
   id: string;
@@ -19,13 +18,10 @@ export async function buildAdminUserDetail(prisma: PrismaClient, user: AdminUser
   return {
     user,
     kpis: {
-      onlineToday: activity.onlineDevices > 0,
-      onlineDevices: activity.onlineDevices,
       loginCountToday: activity.loginCountToday,
       todayAgent: activity.todayAgents,
     },
     activity: activity.periods,
-    devices: activity.devices,
     timeline: timeline.sort((a, b) => Date.parse(b.at) - Date.parse(a.at)).slice(0, 80),
   };
 }
@@ -46,40 +42,16 @@ async function userActivityDetail(prisma: PrismaClient, userId: string, today: s
   const todayEnd = new Date(todayStart.getTime() + 86_400_000);
   const weekStart = daysAgoStart(7);
   const monthStart = daysAgoStart(30);
-  const [devices, loginCountToday, todayAgents, periods] = await Promise.all([
-    listDevicesWithDuration(prisma, userId, todayStart, todayEnd),
+  const [loginCountToday, todayAgents, periods] = await Promise.all([
     countLoginEvents(prisma, userId, todayStart, todayEnd),
     countTodayAgents(prisma, userId, todayStart),
     periodCounts(prisma, userId, todayStart, weekStart, monthStart),
   ]);
   return {
-    onlineDevices: devices.filter((d) => d.online).length,
     loginCountToday,
     todayAgents,
     periods,
-    devices,
   };
-}
-
-async function listDevicesWithDuration(prisma: PrismaClient, userId: string, start: Date, end: Date) {
-  const [devices, durations] = await Promise.all([
-    listDevicesForAdmin(prisma, userId),
-    prisma.$queryRaw<{ deviceId: string; seconds: number | bigint | null }[]>`
-      SELECT "deviceId", COALESCE(SUM(
-        GREATEST(
-          0,
-          EXTRACT(EPOCH FROM LEAST(COALESCE("disconnectedAt", NOW()), ${end}) - GREATEST("connectedAt", ${start}))
-        )
-      ),0)::bigint AS seconds
-      FROM "DeviceSession"
-      WHERE "userId" = ${userId}
-        AND "connectedAt" < ${end}
-        AND COALESCE("disconnectedAt", NOW()) > ${start}
-      GROUP BY "deviceId"
-    `,
-  ]);
-  const byDevice = new Map(durations.map((row) => [row.deviceId, Number(row.seconds ?? 0)]));
-  return devices.map((device) => ({ ...device, onlineSecondsToday: byDevice.get(device.id) ?? 0 }));
 }
 
 async function countLoginEvents(prisma: PrismaClient, userId: string, start: Date, end: Date): Promise<number> {

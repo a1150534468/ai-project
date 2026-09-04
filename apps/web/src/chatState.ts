@@ -12,17 +12,6 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-export interface ToolActivity {
-  id: string;
-  name: string;
-  label: string;
-  status: "started" | "completed" | "failed";
-  detail: string;
-  elapsedMs?: number;
-  outputPreview?: string;
-  updatedAt: string;
-}
-
 export interface SessionStateMap {
   messagesBySession: Record<string, ChatMessage[]>;
   runningSessionIds: Set<string>;

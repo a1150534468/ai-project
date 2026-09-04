@@ -564,12 +564,6 @@ table .num {
   gap: 16px;
 }
 
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
 .detail-section h4 {
   margin: 0 0 10px;
   font-size: 13px;
@@ -624,8 +618,7 @@ table .num {
 
 @media (max-width: 900px) {
   .analytics-grid,
-  .analytics-grid.two,
-  .detail-grid {
+  .analytics-grid.two {
     grid-template-columns: 1fr;
   }
 

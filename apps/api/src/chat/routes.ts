@@ -1,6 +1,6 @@
 /**
  * 聊天路由:`POST /api/chat`(SSE 一轮对话)+ 三条会话读写路由。原文件把模块级的
- * schema、错误翻译、工具展示、运行期常量搬到 4 个同域文件,本文件只留下 fastify 插件本体。
+ * schema、错误翻译、运行期常量搬到 3 个同域文件,本文件只留下 fastify 插件本体。
  *
  * **本文件刻意不做成纯 re-export 门面**(与 image-routes.ts / video-routes.ts 同一处理):
  * 插件闭包持有 `prisma` / `redis` / `client`,四条路由全靠它们。要把路由再拆走就得
@@ -11,10 +11,9 @@
  * 分工:
  *  - routes-schemas.ts      请求体校验(bodySchema 及其附件子 schema)
  *  - routes-errors.ts       上游错误翻译 + 百炼模型别名
- *  - routes-tool-summary.ts 工具事件 → SSE 载荷
  *  - routes-runtime.ts      KB 默认值 / 心跳间隔 / 环境变量读取
  *
- * 四个新文件都是叶子,依赖方向单向:四个叶子 → 本文件。
+ * 三个新文件都是叶子,依赖方向单向:三个叶子 → 本文件。
  *
  * `POST /api/chat` 里几处顺序不能动:
  *  - 封禁校验在 `acquireSessionLock` **之前**,因为它是无副作用的 4xx。放到取锁之后
@@ -31,7 +30,6 @@ import { getPrisma } from "@ai-assistant/db";
 import { getRedis } from "@ai-assistant/db";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
 import { runTurn } from "../agent/run.js";
-import { execTool as execDefaultTool } from "../agent/tools.js";
 import { acquireSessionLock } from "./lock.js";
 import { embed, loadEmbeddingConfig } from "../memory/embedding-client.js";
 import { search, addTurn } from "../memory/memory-service.js";
@@ -44,11 +42,6 @@ import {
   type KbCitation,
 } from "../kb/retrieve.js";
 import type Anthropic from "@anthropic-ai/sdk";
-import { localTools } from "@ai-assistant/connector-protocol";
-import { getDispatcher } from "../connector/hub.js";
-import { makeLocalExecTool } from "../connector/local-tools.js";
-import { pickActiveDevice } from "../connector/select-device.js";
-import { parseDeviceTools, selectMountedTools, type InstalledToolSummary } from "../tools/tool-mounts.js";
 import { iconForAgentId, resolveAgent, type AgentRuntime } from "../agents/service.js";
 import {
   buildCurrentUserContent,
@@ -60,7 +53,6 @@ import {
 // === 拆分后的同域模块 ===
 import { bodySchema } from "./routes-schemas.js";
 import { chatModelErrorMessage, providerModelId, type ChatErrorProvider } from "./routes-errors.js";
-import { TOOL_LABELS, toToolPayload } from "./routes-tool-summary.js";
 import {
   DEFAULT_KB_MAX_CHUNKS_PER_DOCUMENT,
   DEFAULT_KB_MAX_CONTEXT_CHUNKS,
@@ -92,14 +84,12 @@ export async function chatRoutes(app: FastifyInstance) {
     // 会话归属校验（防越权）
     let sessionId = parsed.data.sessionId;
     let sessionAgent: AgentRuntime | null = null;
-    let requestedToolIds = parsed.data.toolIds ?? [];
     if (sessionId) {
       const s = await prisma.session.findUnique({
         where: { id: sessionId },
-        select: { userId: true, agentId: true, agentName: true, agentPrompt: true, attachedToolIds: true },
+        select: { userId: true, agentId: true, agentName: true, agentPrompt: true },
       });
       if (!s || s.userId !== userId) return reply.code(403).send({ error: "无权访问该会话" });
-      requestedToolIds = parsed.data.toolIds ?? s.attachedToolIds;
       if (s.agentId && s.agentName && s.agentPrompt) {
         const resolved = await resolveAgent(prisma, userId, s.agentId);
         sessionAgent = {
@@ -119,7 +109,6 @@ export async function chatRoutes(app: FastifyInstance) {
           agentId: sessionAgent.agentId,
           agentName: sessionAgent.agentName,
           agentPrompt: sessionAgent.agentPrompt,
-          attachedToolIds: requestedToolIds,
         },
       });
       sessionId = s.id;
@@ -314,85 +303,24 @@ export async function chatRoutes(app: FastifyInstance) {
           // 会话更新失败不阻塞聊天
         }
       }
-      if (parsed.data.toolIds) {
-        try {
-          await prisma.session.update({
-            where: { id: sessionId },
-            data: { attachedToolIds: requestedToolIds },
-          });
-        } catch {
-        }
-      }
-
-      let chatTools: Anthropic.Tool[] | undefined;
-      let chatExecTool: ((name: string, input: unknown) => Promise<string>) | undefined;
-      const toolLabels: Record<string, string> = { ...TOOL_LABELS };
-      const online = await prisma.device.findMany({
-        where: { userId, online: true, revokedAt: null },
-        select: { id: true, userId: true, lastSeenAt: true, capabilities: true, tools: true },
-      });
-      const active = pickActiveDevice(online, parsed.data.deviceId);
-      if (active) {
-        const installedRows = requestedToolIds.length > 0
-          ? await prisma.userToolInstall.findMany({
-            where: { userId, status: "installed", toolName: { in: requestedToolIds } },
-            select: { name: true, toolName: true, description: true },
-          })
-          : [];
-        const installedTools: InstalledToolSummary[] = installedRows.map((row) => ({
-          name: row.name,
-          toolName: row.toolName,
-          description: row.description,
-        }));
-        for (const row of installedRows) {
-          toolLabels[row.toolName] = row.name;
-        }
-        const mounted = selectMountedTools({
-          requestedToolIds,
-          builtinTools: localTools,
-          installedTools,
-          deviceCapabilities: active.capabilities,
-          deviceTools: parseDeviceTools(active.tools),
-        });
-        if (mounted.tools.length > 0) {
-          const localExec = makeLocalExecTool(getDispatcher(), userId, active.id, active.userId);
-          chatTools = mounted.tools;
-          chatExecTool = (name, input) => {
-            if (mounted.allowedToolNames.has(name)) {
-              return localExec(name, input);
-            }
-            return execDefaultTool(name, input);
-          };
-        }
-        send("device", { deviceId: active.id, tools: mounted.tools.map((tool) => tool.name) });
-      }
 
       const result = await runTurn({
         client,
         model,
         history,
         system: systemPrompt,
-        tools: chatTools,
-        execTool: chatExecTool,
         onText: (t) => send("text", { text: t }),
         onResetText: () => send("reset", {}),
-        onTool: (event) => {
-          app.log.info({
-            sessionId,
-            userId,
-            tool: event.name,
-            status: event.status,
-            elapsedMs: event.elapsedMs,
-          }, "chat tool event");
-          send("tool", toToolPayload(event, toolLabels));
-        },
       });
+      // 本机工具挂载随 connector 下线后，这里能触发的只剩服务端内置工具（agent/tools.ts 目前
+      // 只有 get_time），所以文案不再提「电脑工具」和「上方工具调用记录」—— 那个 UI 已经没了。
+      // 分支本身要留：run.ts 在 stoppedByMaxIterations 时不抛错，砍掉这条会让该轮静默 done 且不落库。
       const assistantText = result.stoppedByMaxIterations
-        ? `本轮已经连续执行了 ${result.toolCalls} 次电脑工具，已达到本轮工具调用上限。请查看上方工具调用记录确认执行状态，如需继续请发送“继续”。`
+        ? `本轮已经连续调用了 ${result.toolCalls} 次工具，达到单轮上限。如需继续请发送“继续”。`
         : result.text.trim().length > 0
           ? result.text
           : result.toolCalls > 0
-            ? "本轮已经执行了电脑工具，但模型没有返回最终说明。请查看上方工具调用记录确认执行状态，必要时发送“继续”让我接着处理。"
+            ? "本轮调用了工具，但模型没有返回最终说明。如需继续请发送“继续”。"
             : "";
       if (assistantText && assistantText !== result.text) {
         send("text", { text: assistantText });

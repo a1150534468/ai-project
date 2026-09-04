@@ -149,22 +149,10 @@ export interface UserActivityPeriod {
 export interface UserDetail {
   user: AdminUser;
   kpis: {
-    onlineToday: boolean;
-    onlineDevices: number;
     loginCountToday: number;
     todayAgent: number;
   };
   activity: UserActivityPeriod[];
-  devices: Array<{
-    id: string;
-    name: string | null;
-    platform: string;
-    appVersion: string;
-    online: boolean;
-    lastSeenAt: string | null;
-    createdAt: string;
-    onlineSecondsToday: number;
-  }>;
   timeline: Array<{ type: string; title: string; at: string; meta: string }>;
 }
 export async function getUserDetail(id: string): Promise<UserDetail> {

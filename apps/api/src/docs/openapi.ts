@@ -12,8 +12,6 @@ const tagDefinitions = [
   { name: "智能体", description: "智能体创建、推荐和执行" },
   { name: "长期记忆", description: "用户长期记忆、搜索与开关" },
   { name: "知识库", description: "用户知识库和文档管理" },
-  { name: "工具市场", description: "工具市场、安装和卸载" },
-  { name: "设备与连接器", description: "桌面设备配对、连接器和工具桥接" },
   { name: "工作流 · 图片", description: "图片生成、提示词优化和素材管理" },
   { name: "工作流 · Codex 桌宠", description: "Codex v2 桌宠生成、实时进度、安装与知识库归档" },
   { name: "工作流 · 小说", description: "小说工程、章节、资产和自动运行" },
@@ -21,7 +19,7 @@ const tagDefinitions = [
   { name: "工作流 · 批量生成", description: "内容提取和多维批量生成" },
   { name: "公告", description: "公开公告" },
   { name: "管理 · 管理员", description: "管理员账号与权限" },
-  { name: "管理 · 用户", description: "用户、设备和配额管理" },
+  { name: "管理 · 用户", description: "用户和配额管理" },
   { name: "管理 · 内容", description: "公告、知识库和客户端菜单管理" },
   { name: "管理 · 审计", description: "管理端操作日志" },
 ];
@@ -49,7 +47,6 @@ const exactSummaries: Record<string, string> = {
   "GET /api/models": "查询可用模型（数据源是 LLM_MODELS 配置，不是数据库）",
   "GET /api/client-menu": "查询客户端菜单",
   "GET /api/announcements": "查询当前公告",
-  "GET /ws/connector": "建立桌面连接器 WebSocket",
   "POST /api/workflow/dub/skyhuman/callback": "接收数字人服务回调",
   "GET /api/workflow/codex-pets/models": "查询 Codex 桌宠可选生图与视觉质检模型",
   "GET /api/workflow/codex-pets/projects": "查询 Codex 桌宠项目列表",
@@ -88,8 +85,6 @@ const actionNames: Record<string, string> = {
   restore: "恢复版本",
   import: "导入",
   export: "导出",
-  install: "安装",
-  revoke: "撤销",
   disable: "禁用",
   delete: "删除",
   confirm: "确认",
@@ -112,7 +107,6 @@ const resourceNames: Record<string, string> = {
   announcements: "公告",
   audit: "审计日志",
   users: "用户",
-  devices: "设备",
   models: "模型",
   analytics: "数据分析",
   "client-menu": "客户端菜单",
@@ -125,8 +119,6 @@ const resourceNames: Record<string, string> = {
   sessions: "会话",
   messages: "消息",
   "scheduled-tasks": "定时任务",
-  tools: "工具",
-  "tool-market": "工具市场",
   bindings: "微信绑定",
   projects: "项目",
   tasks: "任务",
@@ -201,15 +193,6 @@ const bodySchemas: Record<string, JsonSchema> = {
     properties: {
       username: { type: "string", description: "管理员用户名" },
       password: { type: "string", format: "password", description: "管理员密码" },
-    },
-  },
-  "POST /api/device/pair": {
-    type: "object",
-    additionalProperties: false,
-    required: ["name", "platform"],
-    properties: {
-      name: { type: "string", minLength: 1, maxLength: 100, description: "设备名称" },
-      platform: { type: "string", enum: ["win", "mac", "linux"], description: "设备平台" },
     },
   },
   "POST /api/wechat/bindings": {
@@ -345,21 +328,19 @@ function normalizeMethod(method: RouteOptions["method"]): string {
 
 function tagForPath(url: string): string {
   if (url === "/health") return "系统";
-  if (url === "/ws/connector" || url.startsWith("/api/device/")) return "设备与连接器";
   if (url.startsWith("/api/auth/")) return "认证";
   if (url.startsWith("/api/chat") || url.startsWith("/api/sessions")) return "对话";
   if (url === "/api/models") return "模型";
   if (url.startsWith("/api/agents")) return "智能体";
   if (url.startsWith("/api/memory")) return "长期记忆";
   if (url.startsWith("/api/kb")) return "知识库";
-  if (url.startsWith("/api/tool")) return "工具市场";
   if (url.startsWith("/api/workflow/images")) return "工作流 · 图片";
   if (url.startsWith("/api/workflow/codex-pets") || url.startsWith("/api/public/codex-pets")) return "工作流 · Codex 桌宠";
   if (url.startsWith("/api/workflow/novels")) return "工作流 · 小说";
   if (url.startsWith("/api/workflow/article-workflow")) return "工作流 · 文章";
   if (url === "/api/announcements") return "公告";
   if (url.startsWith("/api/admin/audit")) return "管理 · 审计";
-  if (/^\/api\/admin\/(users|devices)/.test(url)) return "管理 · 用户";
+  if (/^\/api\/admin\/users/.test(url)) return "管理 · 用户";
   if (/^\/api\/admin\/(kb|announcements|client-menu)/.test(url)) return "管理 · 内容";
   if (url.startsWith("/api/admin")) return "管理 · 管理员";
   return "系统";
@@ -406,9 +387,7 @@ function querySchema(url: string): JsonSchema | undefined {
 function securityForRoute(method: string, url: string): ReadonlyArray<Record<string, readonly string[]>> {
   const key = `${method} ${url}`;
   if (publicRoutes.has(key)
-    || (url.startsWith("/api/tool-market/") && method === "GET")
     || (url.startsWith("/api/public/codex-pets/artifacts/") && method === "GET")) return [];
-  if (url === "/ws/connector") return [{ connectorProtocolToken: [] }];
   if (url === "/api/workflow/dub/skyhuman/callback") return [{ callbackSecret: [] }];
   if (url.startsWith("/api/admin/")) return [{ adminBearerAuth: [] }];
   return [{ bearerAuth: [] }];
@@ -420,7 +399,6 @@ function descriptionForRoute(method: string, url: string): string {
   if (!security.length) notes.push("公开接口，无需登录。");
   else if (security.some((item) => "adminBearerAuth" in item)) notes.push("需要管理员 JWT，并可能受细粒度权限控制。");
   else if (security.some((item) => "bearerAuth" in item)) notes.push("需要用户 JWT；可使用 Authorization Bearer 或登录 Cookie。");
-  if (url === "/ws/connector") notes.push("该地址使用 WebSocket 升级；设备 Token 在连接后的注册消息中提交，Swagger UI 不能直接调试 WebSocket。");
   if (url.endsWith("/events/stream")) notes.push("响应类型为 text/event-stream（SSE）。");
   if (multipartRoutes.has(`${method} ${url}`)) notes.push("请求类型为 multipart/form-data。文件字段名为 file；其余字段按接口业务填写。");
   return notes.join("\n\n");
@@ -521,7 +499,6 @@ export async function registerOpenApi(app: FastifyInstance): Promise<void> {
         securitySchemes: {
           bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "普通用户登录返回的 JWT" },
           adminBearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT", description: "管理员登录返回的 JWT" },
-          connectorProtocolToken: { type: "apiKey", in: "header", name: "X-Device-Token", description: "仅用于说明设备连接器认证；实际在 WebSocket 注册消息中发送" },
           callbackSecret: { type: "apiKey", in: "query", name: "secret", description: "数字人平台回调密钥" },
         },
         schemas: {

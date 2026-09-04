@@ -1,18 +1,15 @@
 /**
  * 对话页。P2.4 批次二把输入侧整体挪走之后,这里只剩「头部 + 消息列表 + 挂载三个子组件」:
- *  - 输入侧状态(17 个 `useState`:输入框 / 附件 / 知识库 / 工具 / 模型下拉)→ `useChatComposerState`
- *  - 底部输入区 JSX → `ChatComposer`,两个挂载弹层 → `ChatKnowledgePicker` / `ChatToolPicker`
- *  - 工具调用时间线 → `ChatToolTimeline`,生成中的光标与三点 → `ChatStreamingIndicators`
+ *  - 输入侧状态(11 个 `useState`:输入框 / 附件 / 知识库 / 模型下拉)→ `useChatComposerState`
+ *  - 底部输入区 JSX → `ChatComposer`,挂载弹层 → `ChatKnowledgePicker`
+ *  - 生成中的光标与三点 → `ChatStreamingIndicators`
  *
- * 留在本文件里的三件事都与消息列表强绑,搬不走:
+ * 留在本文件里的两件事都与消息列表强绑,搬不走:
  *  - **自动滚到底**:`messagesScrollRef` 指向消息面板本身,不能用 `scrollIntoView`
- *    (那会连带滚动整个页面);消息 / 生成态 / 工具活动任一变化都要滚。
- *  - **工具时间线的两级展开状态**:时间线在列表里有两个落点(末条是助手消息时插在它前面,
- *    否则挂在列表末尾),流式过程中会从后者切到前者 —— React 视作卸载+重挂,状态放在
- *    子组件里就会被清空,用户刚展开的输出会自己收起来。
+ *    (那会连带滚动整个页面);消息与生成态任一变化都要滚。
  *  - **空态与贴底两份 composer 同一时刻只存在一份**,模型下拉的开合状态因此也只能放在这一层。
  */
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "@iconify/react";
 import { AnimatePresence } from "motion/react";
 import { AgentAvatar } from "../components/AgentAvatar";
@@ -21,10 +18,8 @@ import { MarkdownMessage } from "../components/MarkdownMessage";
 import { ChatComposer } from "../components/chat/ChatComposer";
 import { ChatKnowledgePicker } from "../components/chat/ChatKnowledgePicker";
 import { StreamingCaret, TypingIndicator } from "../components/chat/ChatStreamingIndicators";
-import { ChatToolPicker } from "../components/chat/ChatToolPicker";
-import { ChatToolTimeline } from "../components/chat/ChatToolTimeline";
 import { useChatComposerState, type ChatSendPayload } from "../components/chat/useChatComposerState";
-import type { ChatMessage, ToolActivity } from "../chatState";
+import type { ChatMessage } from "../chatState";
 
 interface Citation {
   docs: Array<{ docName: string; ordinal: number }>;
@@ -42,7 +37,6 @@ interface ChatProps {
   isLoading: boolean;
   error?: string;
   citations?: Citation[];
-  toolActivities?: ToolActivity[];
   selectedModel: string;
   preferredModel?: string;
   onModelChange: (model: string) => void;
@@ -63,7 +57,6 @@ export default function Chat({
   isLoading,
   error = "",
   citations = [],
-  toolActivities = [],
   selectedModel,
   preferredModel,
   onModelChange,
@@ -80,20 +73,6 @@ export default function Chat({
     onSend,
   });
   const messagesScrollRef = useRef<HTMLDivElement>(null);
-  const [toolGroupExpanded, setToolGroupExpanded] = useState(false);
-  const [expandedToolIds, setExpandedToolIds] = useState<Set<string>>(() => new Set());
-
-  const toggleExpandedTool = (id: string) => {
-    setExpandedToolIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
 
   const scrollToBottom = () => {
     const scroller = messagesScrollRef.current;
@@ -103,14 +82,7 @@ export default function Chat({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isLoading, toolActivities]);
-
-  useEffect(() => {
-    if (toolActivities.length === 0) {
-      setToolGroupExpanded(false);
-      setExpandedToolIds(new Set());
-    }
-  }, [toolActivities.length]);
+  }, [messages, isLoading]);
 
   const composerCard = (
     <ChatComposer
@@ -122,9 +94,6 @@ export default function Chat({
       knowledgeLabel={composer.knowledgeLabel}
       knowledgeActive={composer.knowledgeActive}
       onOpenKnowledgePicker={composer.openKbPicker}
-      toolLabel={composer.toolLabel}
-      toolActive={composer.toolActive}
-      onOpenToolPicker={composer.openToolPicker}
       models={composer.models}
       selectedModel={selectedModel}
       selectedModelLabel={composer.selectedModelLabel}
@@ -135,19 +104,6 @@ export default function Chat({
       onSend={() => void composer.handleSend()}
     />
   );
-
-  const toolTimeline = (
-    <ChatToolTimeline
-      toolActivities={toolActivities}
-      groupExpanded={toolGroupExpanded}
-      onToggleGroup={() => setToolGroupExpanded((prev) => !prev)}
-      expandedToolIds={expandedToolIds}
-      onToggleTool={toggleExpandedTool}
-    />
-  );
-
-  const shouldRenderToolsBeforeMessage = (message: ChatMessage, index: number) =>
-    toolActivities.length > 0 && index === messages.length - 1 && message.role === "assistant";
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -182,11 +138,6 @@ export default function Chat({
                   已挂载 {composer.attachAllOwn ? "全部库" : `${composer.selectedKbIds.length} 库`}
                 </span>
               )}
-              {composer.selectedToolIds.length > 0 && (
-                <span className="px-2 py-0.5 bg-brand-soft text-brand-ink text-[10px] font-medium rounded">
-                  已挂载 {composer.selectedToolIds.length} 工具
-                </span>
-              )}
             </div>
           </div>
         </div>
@@ -209,16 +160,15 @@ export default function Chat({
         ) : (
           <div className="space-y-4">
             {/* 不用 mode="popLayout"：本列表直接子节点多为普通 div（非 motion 组件），
-                popLayout 会把布局动画中的元素设为 position:absolute 脱离文档流，导致工具调用块与正文重叠。 */}
+                popLayout 会把布局动画中的元素设为 position:absolute 脱离文档流，导致消息块彼此重叠。 */}
             <AnimatePresence>
               {messages.map((msg, idx) => (
-                <Fragment key={idx}>
-                  {shouldRenderToolsBeforeMessage(msg, idx) && toolTimeline}
-                  <div
-                    className={`flex items-start space-x-3 ${
-                      msg.role === "user" ? "justify-end" : ""
-                    }`}
-                  >
+                <div
+                  key={idx}
+                  className={`flex items-start space-x-3 ${
+                    msg.role === "user" ? "justify-end" : ""
+                  }`}
+                >
                   {msg.role === "assistant" && (
                     <AgentAvatar avatarUrl={agentAvatarUrl} avatarSvg={agentAvatarSvg} icon={agentIcon} size={40} name={agentName} />
                   )}
@@ -267,11 +217,8 @@ export default function Chat({
                       <Icon icon="mdi:account-outline" className="text-lg text-ink-secondary" aria-hidden />
                     </div>
                   )}
-                  </div>
-                </Fragment>
+                </div>
               ))}
-
-              {toolActivities.length > 0 && messages[messages.length - 1]?.role !== "assistant" && toolTimeline}
 
               {isLoading && messages[messages.length - 1]?.role !== "assistant" && (
                 <TypingIndicator agentIcon={agentIcon} agentAvatarSvg={agentAvatarSvg} agentAvatarUrl={agentAvatarUrl} agentName={agentName} />
@@ -294,18 +241,6 @@ export default function Chat({
           {composerCard}
         </div>
       )}
-
-      <ChatToolPicker
-        open={composer.toolPickerOpen}
-        tools={composer.installedTools}
-        draftSelectedToolIds={composer.draftSelectedToolIds}
-        loading={composer.toolLoading}
-        error={composer.toolError}
-        onToggleTool={composer.toggleDraftTool}
-        onClose={composer.closeToolPicker}
-        onApply={composer.applyToolSelection}
-        onDisable={composer.disableTools}
-      />
 
       <ChatKnowledgePicker
         open={composer.kbPickerOpen}

@@ -81,9 +81,6 @@ const mocks = vi.hoisted(() => {
         messages.filter((message) => message.sessionId === where.sessionId)
       ),
     },
-    device: {
-      findMany: vi.fn(async () => []),
-    },
   };
 
   return {

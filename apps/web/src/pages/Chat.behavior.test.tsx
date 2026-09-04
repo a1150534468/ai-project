@@ -2,8 +2,8 @@
 
 /**
  * `Chat.tsx`(1077 行)拆分前的行为护栏。P2.4 批次二 Step 1 要求的四类路径各有覆盖:
- * 渲染(空态 / 消息列表)、切换(模型 / 知识库 / 工具选择器)、提交(按钮 / Enter / 各种不该提交的情况)、
- * 错误态(error / attachmentError / 工具加载失败)。
+ * 渲染(空态 / 消息列表)、切换(模型 / 知识库选择器)、提交(按钮 / Enter / 各种不该提交的情况)、
+ * 错误态(error / attachmentError / init 请求失败)。
  *
  * **这些断言是为了在拆子组件时钉住 props 契约**,不是为了覆盖率。所以断言尽量落在
  * "用户看得见的文案"与"`onSend` / `onModelChange` 收到的载荷"上,不碰内部 state 形状 ——
@@ -19,13 +19,11 @@ import type { ChatMessage } from "../chatState";
 import Chat from "./Chat";
 
 const apiMocks = vi.hoisted(() => ({
-  listInstalledTools: vi.fn(),
   listKb: vi.fn(),
   listModels: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
-  listInstalledTools: apiMocks.listInstalledTools,
   listKb: apiMocks.listKb,
   listModels: apiMocks.listModels,
 }));
@@ -44,18 +42,6 @@ function makeMessage(role: ChatMessage["role"], content: string): ChatMessage {
 
 function kb(id: string, name: string, ownerType = "USER") {
   return { id, name, ownerType, description: `${name} 描述` };
-}
-
-function tool(toolName: string, name: string, availableOnCurrentDevice = true) {
-  return {
-    id: `id-${toolName}`,
-    name,
-    toolName,
-    description: `${name} 描述`,
-    builtin: false,
-    installed: true,
-    availableOnCurrentDevice,
-  };
 }
 
 type ChatOverrides = Partial<Parameters<typeof Chat>[0]>;
@@ -161,7 +147,6 @@ beforeEach(() => {
     { model: "model-b", displayName: "模型乙" },
   ]);
   apiMocks.listKb.mockResolvedValue([]);
-  apiMocks.listInstalledTools.mockResolvedValue({ currentDeviceOnline: true, builtin: [], installed: [] });
 });
 
 afterEach(() => {
@@ -264,7 +249,6 @@ describe("Chat 提交", () => {
       model: "model-a",
       kbIds: [],
       attachAllOwn: undefined,
-      toolIds: [],
       attachments: [],
     });
     expect(textarea(scope).value).toBe("");
@@ -330,15 +314,6 @@ describe("Chat 错误态", () => {
     expect(warn).toHaveBeenCalledWith("chat init failed", expect.any(Error));
     expect(textarea(scope).placeholder).toBe("输入问题...");
     warn.mockRestore();
-  });
-
-  it("工具列表加载失败时弹层展示错误而不是一直转圈", async () => {
-    apiMocks.listInstalledTools.mockRejectedValue(new Error("设备离线"));
-    const scope = await mountChat();
-
-    await click(buttonByText(scope, "工具"));
-    expect(scope.textContent).toContain("设备离线");
-    expect(scope.textContent).not.toContain("正在加载已安装工具");
   });
 });
 
@@ -441,57 +416,6 @@ describe("Chat 知识库挂载", () => {
     expect(rowButton(scope, "产品手册").textContent).toContain("我的");
     expect(rowButton(scope, "会议记录").textContent).toContain("我的");
     expect(rowButton(scope, "行业报告").textContent).toContain("官方");
-  });
-});
-
-describe("Chat 工具挂载", () => {
-  beforeEach(() => {
-    apiMocks.listInstalledTools.mockResolvedValue({
-      currentDeviceOnline: true,
-      builtin: [],
-      installed: [tool("terminal_exec", "执行命令"), tool("远端工具", "远端工具", false)],
-    });
-  });
-
-  it("只列出当前设备可用的工具，勾选后提交带上 toolIds", async () => {
-    const scope = await mountChat();
-
-    await click(buttonByText(scope, "工具"));
-    expect(scope.textContent).toContain("执行命令");
-    expect(scope.textContent).not.toContain("远端工具");
-    expect(scope.textContent).toContain("0 个已选择，1 个可挂载");
-
-    await click(rowButton(scope, "执行命令 描述"));
-    await click(buttonByText(scope, "确定"));
-
-    expect(buttonByText(scope, "执行命令")).toBeTruthy();
-    expect(scope.textContent).toContain("已挂载 1 工具");
-
-    await type(textarea(scope), "跑一下");
-    await click(buttonByLabel(scope, "发送"));
-    expect(onSend.mock.calls[0][0]).toMatchObject({ toolIds: ["terminal_exec"] });
-  });
-
-  it("一个都没装时给出引导而不是空列表", async () => {
-    apiMocks.listInstalledTools.mockResolvedValue({ currentDeviceOnline: true, builtin: [], installed: [] });
-    const scope = await mountChat();
-
-    await click(buttonByText(scope, "工具"));
-    expect(scope.textContent).toContain("暂无已安装工具");
-  });
-
-  it("关闭工具把已生效的选择一起清掉", async () => {
-    const scope = await mountChat();
-
-    await click(buttonByText(scope, "工具"));
-    await click(rowButton(scope, "执行命令 描述"));
-    await click(buttonByText(scope, "确定"));
-    expect(scope.textContent).toContain("已挂载 1 工具");
-
-    await click(buttonByText(scope, "执行命令"));
-    await click(buttonByText(scope, "关闭工具"));
-    expect(buttonByText(scope, "工具")).toBeTruthy();
-    expect(scope.textContent).not.toContain("已挂载");
   });
 });
 

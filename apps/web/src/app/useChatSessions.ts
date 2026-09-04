@@ -1,21 +1,21 @@
 /**
- * 对话会话层:五份按会话分桶的记录(消息/错误/引用/工具/运行中)、会话列表、当前选中与当前 Agent,
+ * 对话会话层:四份按会话分桶的记录(消息/错误/引用/运行中)、会话列表、当前选中与当前 Agent,
  * 以及切换 / 删除 / 开新对话这三个入口。
  *
  * 从 `App.tsx` 原样搬出。四条不能动的规则:
- *  - **五份记录都按会话键分桶**,键是「真实 sessionId 或草稿键」。新对话还没有 sessionId,
+ *  - **四份记录都按会话键分桶**,键是「真实 sessionId 或草稿键」。新对话还没有 sessionId,
  *    先挂在草稿键上,后端回 `session` 事件时整体搬到真实 id 上(见 `promoteDraftSession`)。
  *    少搬一份,页面就会出现「消息还在草稿键上、看的却是真实 id」的空白对话。
  *  - **切会话要认请求序号**。连点两个会话时,先发的请求可能后回;`selectSessionRequestRef`
  *    保证只有最后一次点击的结果能写回。
  *  - **已经载入过的会话不重复拉**(`messagesBySession[id]` 有值就直接返回),否则每次点回去
  *    都会把正在流式的内容冲掉。
- *  - **删除只在确认成功后落地**,五份记录都要按 id 摘掉;删掉的正是当前会话时要让上层重开
+ *  - **删除只在确认成功后落地**,四份记录都要按 id 摘掉;删掉的正是当前会话时要让上层重开
  *    Agent 选择,不能留在一个已经不存在的会话上。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { deleteSession, getSessionMessages, listSessions, type AgentOption, type Session } from "../api";
-import { toChatMessages, type ChatMessage, type ToolActivity } from "../chatState";
+import { toChatMessages, type ChatMessage } from "../chatState";
 import { saveSelectedAgentId } from "../shellState";
 
 export interface Citation {
@@ -71,7 +71,6 @@ export function useChatSessions(args: {
   const [runningSessionIds, setRunningSessionIds] = useState<Set<string>>(() => new Set());
   const [errorsBySession, setErrorsBySession] = useState<Record<string, string>>({});
   const [citationsBySession, setCitationsBySession] = useState<Record<string, Citation[]>>({});
-  const [toolActivitiesBySession, setToolActivitiesBySession] = useState<Record<string, ToolActivity[]>>({});
   const [activeAgent, setActiveAgent] = useState<AgentOption | null>(null);
   const selectSessionRequestRef = useRef(0);
   const activeSessionKey = sessionId ?? draftSessionKey;
@@ -109,7 +108,6 @@ export function useChatSessions(args: {
       setMessagesBySession((prev) => ({ ...prev, [key]: [] }));
       setErrorsBySession((prev) => ({ ...prev, [key]: "" }));
       setCitationsBySession((prev) => ({ ...prev, [key]: [] }));
-      setToolActivitiesBySession((prev) => ({ ...prev, [key]: [] }));
       setActiveAgent(agent);
       // 选完 Agent（无论从弹窗还是列表）默认开启新对话并收起 Agent 栏；
       // 记住选中的 Agent，展开该栏时能看到它的历史对话
@@ -136,7 +134,6 @@ export function useChatSessions(args: {
         setMessagesBySession((prev) => ({ ...prev, [id]: toChatMessages(msgs) }));
         setErrorsBySession((prev) => ({ ...prev, [id]: "" }));
         setCitationsBySession((prev) => ({ ...prev, [id]: [] }));
-        setToolActivitiesBySession((prev) => ({ ...prev, [id]: [] }));
       } catch (err) {
         if (selectSessionRequestRef.current !== requestId) return;
         setErrorsBySession((prev) => ({
@@ -175,10 +172,6 @@ export function useChatSessions(args: {
           const { [id]: _removed, ...rest } = prev;
           return rest;
         });
-        setToolActivitiesBySession((prev) => {
-          const { [id]: _removed, ...rest } = prev;
-          return rest;
-        });
         if (sessionId === id) {
           onActiveSessionDeleted();
         }
@@ -187,17 +180,16 @@ export function useChatSessions(args: {
     [confirm, onActiveSessionDeleted, sessionId, token],
   );
 
-  /** 发车:用户消息入列,清掉上一轮的错误/引用/工具,并打上运行标记。 */
+  /** 发车:用户消息入列,清掉上一轮的错误/引用,并打上运行标记。 */
   const beginTurn = useCallback((key: string, userMessage: ChatMessage) => {
     setMessagesBySession((prev) => ({ ...prev, [key]: [...(prev[key] ?? []), userMessage] }));
     setErrorsBySession((prev) => ({ ...prev, [key]: "" }));
     setCitationsBySession((prev) => ({ ...prev, [key]: [] }));
-    setToolActivitiesBySession((prev) => ({ ...prev, [key]: [] }));
     setRunningSessionIds((prev) => new Set(prev).add(key));
   }, []);
 
   /**
-   * 草稿键 → 真实 sessionId。五份记录、运行标记、当前选中、会话列表都要一起搬:
+   * 草稿键 → 真实 sessionId。四份记录、运行标记、当前选中、会话列表都要一起搬:
    * 少搬一份就会出现「消息挂在草稿键上、页面看的却是真实 id」的空白对话。
    *
    * 当前选中只在「用户还停在这条会话上」时才改 —— 期间他可能已经点去别的会话了。
@@ -215,10 +207,6 @@ export function useChatSessions(args: {
     setCitationsBySession((prev) => {
       const { [previousKey]: draftCitations = [], ...rest } = prev;
       return { ...rest, [nextId]: draftCitations };
-    });
-    setToolActivitiesBySession((prev) => {
-      const { [previousKey]: draftTools = [], ...rest } = prev;
-      return { ...rest, [nextId]: draftTools };
     });
     setRunningSessionIds((prev) => {
       const nextSet = new Set(prev);
@@ -238,19 +226,6 @@ export function useChatSessions(args: {
         agentIcon: next.agentIcon,
         updatedAt: new Date().toISOString(),
       }, ...prev];
-    });
-  }, []);
-
-  /** 工具活动按 id 覆盖,只留最近 12 条:一轮里工具可能刷很多次,列表无上限会把页面撑爆。 */
-  const upsertToolActivity = useCallback((key: string, tool: Omit<ToolActivity, "updatedAt">) => {
-    setToolActivitiesBySession((prev) => {
-      const list = prev[key] ?? [];
-      const nextTool: ToolActivity = { ...tool, updatedAt: new Date().toISOString() };
-      const existingIndex = list.findIndex((item) => item.id === nextTool.id);
-      const nextList = existingIndex >= 0
-        ? [...list.slice(0, existingIndex), nextTool, ...list.slice(existingIndex + 1)]
-        : [...list, nextTool];
-      return { ...prev, [key]: nextList.slice(-12) };
     });
   }, []);
 
@@ -320,7 +295,6 @@ export function useChatSessions(args: {
     runningSessionIds,
     errorsBySession,
     citationsBySession,
-    toolActivitiesBySession,
     activeAgent,
     refreshSessions,
     startAgentSession,
@@ -330,7 +304,6 @@ export function useChatSessions(args: {
     turn: {
       begin: beginTurn,
       promote: promoteDraftSession,
-      upsertTool: upsertToolActivity,
       dropTrailingAssistant,
       appendText: appendAssistantText,
       appendCitation,
