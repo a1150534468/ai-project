@@ -261,7 +261,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 |---|---|---|
 | 前置 | ADR-012 的验收判据改成「没有一行有语义的表达归属上游」 | ✅ `9955f0f` |
 | **A8 清扫** | 删 `memoryGalaxy.ts` 里已无调用方的布局残骸；删依赖 `react-use-measure` | ✅ `e423ba1` |
-| **A9 收敛** | 「unknown → 人话」六份 + 一处内联收进 `apiError.ts`；`articleWorkflowClipboard.ts` 提成 `clipboard.ts` 供两个调用方用；`ArticleWorkflowInputPanel` 手写的 `role="switch"` 换成 `ui/Switch`；补一个恒亮的旋钮 token（深色模式下关着的开关现在看不见） | 待做 |
+| **A9 收敛** | 「unknown → 人话」六份 + 一处内联收进 `apiError.ts`；`articleWorkflowClipboard.ts` 提成 `clipboard.ts` 供两个调用方用；`ArticleWorkflowInputPanel` 手写的 `role="switch"` 换成 `ui/Switch`；补一个恒亮的旋钮 token（深色模式下关着的开关现在看不见） | ✅ `3bfb318` |
 | **A10 弹窗** | `motion/Modal` 补 `role="dialog"` / `aria-modal` / 必填可访问名 / Esc / 焦点陷阱 / 焦点归还，再把六处手搭的浮层收进来 | 待做 |
 | **A11** | 小说 hash 打开路径绕过 `setupCompleted` 门禁：不挡，但给一条「这本书还没设置完」的提示条 | 待做 |
 
@@ -281,6 +281,33 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 `node()` / `crowd()` / `spots()` / `closestPair()` / `SIZE_PROBES` 五个夹具同样只服务它们。
 顺手改了一处已经不成立的注释 —— `MEMORY_TYPE_ORDER` 原来写「也是布局的方位顺序」，
 布局删了之后它只是筛选栏 / 类别下拉 / 颜色表的共用展示顺序。
+
+**A9 实测：34,471 → 34,458（净消 13 行）。** 这个数字小得反常，值得记下来为什么：
+
+- 上面那行范围写少了：「unknown → 人话」实际是**七份实现、四个名字**（`errorMessage` /
+  `messageOf` / `codexPetErrorMessage` / `failureText`），内联三元不是「一处」而是**约 40 处**
+  （光 `components/novel/*` 就占 25 处）。数字按实测算，范围行按当时目测写的，别照抄。
+- 动到的四个文件才是全部来源 —— `clipboard.ts` 21 → **20**、`AssistantMessageActions.tsx` 41 → **33**、
+  `NovelWorkflowStudio.tsx` 76 → **73**、`articleWorkflowCopyActions.ts` 36 → **35**，
+  1 + 8 + 3 + 1 = 13，与全仓净消对得上。
+- 其余 38 个改动文件**一行都没动数字**：那些重复实现大多躺在 A1~A7 已经逐行重写过的文件里，
+  blame 早就指向我的 commit。`ArticleWorkflowInputPanel.tsx` 那 26 行手写开关就是典型
+  （23 → 23，文件里剩的 23 行在别处）—— 它已经算「重写过」，但仍然是全站第三份同样的控件，
+  所以才会被攒到跨文件清单里。**收敛批的产出不在计数器上，在缺陷上**：
+  空 `Error.message` 不再弹空 toast、剪贴板三个缺陷只剩一处实现、暗色下关着的开关看得见了。
+- `clipboard.ts` 是这批唯一「整份重写」的文件，残留 20 行按新判据逐行核过，全是地板：
+  `}` / `  }` 收尾与空行、`interface` 一行一个字段、`const selection = window.getSelection();`
+  这种只有一种拼法的声明，以及 `new ClipboardItem({ "text/html": …, "text/plain": … })`
+  —— 外部强制的调用形状，浏览器就认这两个 MIME 键。
+- **用例加 20 条**（web 796 → 816，合计 2,085 → 2,105，**没有删除任何用例**）：
+  `apiError.test.ts` 13 条（含「空 message 走兜底」那档，用真 `Response` 造 `fromResponse` 的 7 个分支）、
+  `AssistantMessageActions.test.tsx` 7 条。改了三条既有断言：`ui.test.tsx` 的旋钮从
+  `bg-surface` 改判 `bg-knob`，两处开关断言改用正则匹配名字 —— `ui/Switch` 的无障碍名把 label
+  和那行小字一起算进去（`ui.test.tsx` 早有一条用例把这个行为锁死了），而小字本身跟着开关状态换词。
+- 一处观感变化要记账：`ArticleWorkflowInputPanel` 的开关标题从 `text-xs font-semibold` +
+  `text-[10px] text-ink-tertiary` 变成 `ui/Switch` 的 `text-sm font-medium` + `text-xs text-ink-secondary`
+  （另两个调用方一直是这个字号）。这是统一到基元的必然结果，没有为它加 size 档 ——
+  加档等于把三处的差异重新固化回组件里。
 
 ### 硬边界（照抄方案，不许放宽）
 
@@ -349,6 +376,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | 批次 A6 | `565d929` | 35,485 | 6,687 |
 | 批次 A7（批次 A 收尾） | `f44b2fd` | 34,582 | 6,687 |
 | A8 清扫批 | `e423ba1` | 34,471 | 6,669 |
+| A9 收敛批 | `3bfb318` | 34,458 | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669**（只剩 lockfile） | 6,669 |
 
