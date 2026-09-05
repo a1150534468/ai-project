@@ -177,6 +177,32 @@ JSX 树跟原文件一模一样，只有 `className` / `aria-*` 这些属性行�
 `onEdit`/`onDelete` 缺省即不渲染），树是按「一份实现两处用」重新搭的，残留直接归零 ——
 对照 A4 里「抽屉与页头全站只有一处，提出去没有第二个调用方」的判断，两者的分界就是**调用方个数**。
 
+**A6 的范围实测只有 1,159 行，不是表里的 1,704** —— 表里那 545 行的差额是
+`index.css` 444 + `ui.tsx` 87，它们是 **A1 收尾留下的地板**，不属于 A6 的范围。
+本批 11 个文件（`App.tsx` 226 / `pages/Admins.tsx` 200 / `api.ts` 179 /
+`pages/Announcements.tsx` 170 / `pages/UserDetailModal.tsx` 117 / `pages/Audit.tsx` 86 /
+`pages/Users.tsx` 82 / `auth.ts` 36 / `api.test.ts` 35 / `auth.test.ts` 18 / `main.tsx` 10）
+压到 **531**（净消 633 行：36,118 → 35,485，`index.css` 顺手又降 5 行）。残留成分与 A1~A5 同：
+空行、纯收尾符号、`import`、一行一个的 interface 字段与 JSX 属性、产品文案与 confirm 选项
+（「新增公告」`confirmText: "删除"` `show("已删除")`）、`const { show, node } = useToast()`
+这类必须照写的 hook 解构、`let cancelled = false` / `return () => { cancelled = true }` 的
+清理惯用法 —— **没有一行有语义的表达归属上游**，最长连续段是 `</td>`/`</div>` 堆。
+
+**A6 是第一批「重写本身把功能性 bug 端出来」的批次**，而不是只把归属清掉：
+审计页那张动作码表从来没对上过服务端（库里写 `USER_BAN` / `KB_DOC_CREATE`，表里查
+`create`/`update`/`login`，于是每行都落 fallback，全站审计只看得到灰徽标 + 原始码，
+而表里那条 `login` 压根没有生产者）；审计「详情」的展开状态没有 setter，`<pre>` 是死代码、
+长 detail 永远截在 50 字符；管理员页手抄的可授权限少了 `KNOWLEDGE_MANAGE`，服务端收、后台勾不出来；
+`Audit.tsx` 与 `Admins.tsx` 的权限门禁都写在 `useState` 之前；用户页「初始密码」没有
+`type="password"`；用户详情弹窗把服务端给的 80 条时间线又切成 16 条，且 `onError` 闭包进了
+effect 依赖 —— 父组件每渲染一次就重拉一次详情；登录表单的空值判断只写在按钮 `disabled` 上，
+回车照样发请求。**共同点是「前端手抄了一份服务端的词表/规则」**：动作码、可授权限两处都改成
+从单一来源出（服务端真实动作码、`auth.ts` 的权限目录），照抄的那份删掉。
+测试从 32 条加到 109 条（新增 `App` 11 / `Users` 13 / `Admins` 11 / `Announcements` 10 /
+`Audit` 8，重写 `auth` 3→15、`api` 3→15），**一条没删**；`api.test.ts` 原来用
+`{ok,status,json}` 假冒 `Response`，客户端真正的读 body 路径（空 body / HTML 错误页 / 非 JSON）
+一次都没跑过，换成真 `Response` 才算测到。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -241,6 +267,7 @@ JSX 树跟原文件一模一样，只有 `className` / `aria-*` 这些属性行�
 | 批次 A3 | `41cfa03` | 38,158 | 6,687 |
 | 批次 A4 | `272e5a6` | 37,021 | 6,687 |
 | 批次 A5 | `cacd6bb` | 36,118 | 6,687 |
+| 批次 A6 | `565d929` | 35,485 | 6,687 |
 | … | | | |
 | 全部完成 | | **6,687**（只剩 lockfile） | 6,687 |
 
