@@ -262,7 +262,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | 前置 | ADR-012 的验收判据改成「没有一行有语义的表达归属上游」 | ✅ `9955f0f` |
 | **A8 清扫** | 删 `memoryGalaxy.ts` 里已无调用方的布局残骸；删依赖 `react-use-measure` | ✅ `e423ba1` |
 | **A9 收敛** | 「unknown → 人话」六份 + 一处内联收进 `apiError.ts`；`articleWorkflowClipboard.ts` 提成 `clipboard.ts` 供两个调用方用；`ArticleWorkflowInputPanel` 手写的 `role="switch"` 换成 `ui/Switch`；补一个恒亮的旋钮 token（深色模式下关着的开关现在看不见） | ✅ `3bfb318` |
-| **A10 弹窗** | `motion/Modal` 补 `role="dialog"` / `aria-modal` / 必填可访问名 / Esc / 焦点陷阱 / 焦点归还，再把六处手搭的浮层收进来 | 待做 |
+| **A10 弹窗** | `motion/Modal` 补 `role="dialog"` / `aria-modal` / 必填可访问名 / Esc / 焦点陷阱 / 焦点归还，再把六处手搭的浮层收进来 | ✅ `a18e103` |
 | **A11** | 小说 hash 打开路径绕过 `setupCompleted` 门禁：不挡，但给一条「这本书还没设置完」的提示条 | 待做 |
 
 `components/ThemeToggle.tsx` 那处手写的 `role="switch"` **刻意不动**：它的行盒版式在 `index.css` 里，
@@ -308,6 +308,37 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
   `text-[10px] text-ink-tertiary` 变成 `ui/Switch` 的 `text-sm font-medium` + `text-xs text-ink-secondary`
   （另两个调用方一直是这个字号）。这是统一到基元的必然结果，没有为它加 size 档 ——
   加档等于把三处的差异重新固化回组件里。
+
+**A10 实测：34,458 → 34,454（净消 4 行）。** 跟 A9 一样，这批的产出不在计数器上：
+
+- 全仓只有 `pages/Memory.tsx` 动了数字（107 → **103**），其余 13 个改动文件一行没变 ——
+  加的是新行（`useDialog.ts` / `useDialog.test.tsx` 整份是新写的，blame 指向本 commit），
+  改的是已经归我的行。**上游行只会因为「删掉或重写既有行」下降，摊一个 `{...dialogProps}`
+  进去只是替换掉三行 `role` / `aria-modal` / `aria-label`。**
+- 这批的范围行写得偏了：写的是「`Modal` 补语义 + 把六处收进来」，实际六处**早就有** role/aria/名字
+  三件套，`Modal` 才是一条键盘行为都没有的那个。**真正缺的是行为**：9 个浮层 0 个能 Esc 关、
+  0 个有焦点陷阱、0 个关掉后还焦点。所以做法是抽一个 `motion/useDialog`，
+  `Modal` 和六处浮层都吃它，六处的版式 / 动画 / 「点遮罩要不要关」一概不动 ——
+  收成同一个组件就是改设计，正好撞在本文件禁的美化 pass 上。
+- `Modal.tsx` 重写过两轮，仍有 **28** 行归上游，按新判据逐行核过全是地板：两行 `import`、
+  一个空行、`return (` / `);` / `}` / 各级闭合标签，以及 `initial={{ opacity: 0 }}` /
+  `animate="animate"` / `key="overlay"` / `{children}` 这类一行一个 JSX 属性、
+  只有一种拼法的写法。
+- 顺手修掉一个真缺陷：`ConfirmDialog` 在活正在跑的时候取消按钮是禁的，但**点遮罩照样能关** ——
+  等答案的调用方拿到 `false` 被放走，后台那笔活还在跑，等于给了个假撤销。现在 `onClose` 收
+  `undefined` 表示「这一刻不许关」，点遮罩和 Esc 一起失效，跟被禁掉的取消按钮对齐。
+- 一处行为变化要记账：`pages/Memory.tsx` 桌面端选中一条记忆后，Esc 现在会取消选中
+  （之前 Esc 什么都不做）。抽屉是 `xl:hidden`，但选中状态是共用的，所以宽屏也吃到了这条。
+- **用例加 16 条**（web 816 → 832，合计 2,105 → 2,121，**没有删除任何用例**）：
+  `useDialog.test.tsx` 13 条（打开时焦点落到面板上、面板里已有焦点就不抢、`onClose: undefined`
+  时 Esc 不拦、里层 `preventDefault` 过的 Esc 不抢、叠着开时只关最上面那个、Tab 两头绕回、
+  焦点在面板本身时往后不拦 / 往前接到最后一个、焦点跑出面板先拽回来、没有可聚焦元素就吞掉 Tab、
+  关掉后还焦点、焦点已经在别处就不抢回来）、`Modal.test.tsx` 3 条（面板是带名字的 dialog、
+  Esc 关窗、`onClose: undefined` 时两条关窗路径都不响应）。
+- 焦点陷阱有个坑值得单独记：三个抽屉是 `xl:hidden`，**宽屏下它们照样挂在 DOM 里**，
+  `querySelectorAll` 能选中里面的可聚焦元素而 `focus()` 静默失败 —— 照直做陷阱等于让宽屏
+  键盘用户按 Tab 什么都不动。所以用 `Element.checkVisibility()` 当「有没有真渲染」的闸；
+  jsdom 25 没有这个方法，取不到就按「渲染了」算，用例里陷阱照测、浏览器里拿得到的一律照准。
 
 ### 硬边界（照抄方案，不许放宽）
 
@@ -377,6 +408,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | 批次 A7（批次 A 收尾） | `f44b2fd` | 34,582 | 6,687 |
 | A8 清扫批 | `e423ba1` | 34,471 | 6,669 |
 | A9 收敛批 | `3bfb318` | 34,458 | 6,669 |
+| A10 弹窗批 | `a18e103` | 34,454 | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669**（只剩 lockfile） | 6,669 |
 
