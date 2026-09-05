@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
+import { useDialog } from "../../motion";
 import type { ImageTask, ImageTaskStatus } from "../../workflowState";
 
 interface ImageTaskDrawerProps {
@@ -30,6 +31,7 @@ function formatTime(value: string): string {
 export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
   const tasks = [...props.tasks].sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status]);
   const cancelling = new Set(props.cancellingTaskIds);
+  const dialogProps = useDialog({ open: props.open, onClose: props.onClose, label: "生图任务队列" });
 
   return (
     <AnimatePresence>
@@ -42,9 +44,7 @@ export function ImageTaskDrawer(props: ImageTaskDrawerProps) {
           onClick={props.onClose}
         >
           <motion.aside
-            role="dialog"
-            aria-modal="true"
-            aria-label="生图任务队列"
+            {...dialogProps}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}

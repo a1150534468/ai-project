@@ -1,6 +1,7 @@
 import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
+import { useDialog } from "../../motion";
 import { ArticleWorkflowBusyPanel } from "./ArticleWorkflowBusyPanel";
 import { ArticleWorkflowEditor } from "./ArticleWorkflowEditor";
 import { ArticleWorkflowHistoryPanel, ArticleWorkflowHistorySidebar } from "./ArticleWorkflowHistorySidebar";
@@ -39,6 +40,11 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const configDialog = useDialog({
+    open: configOpen && !state.bootstrapping,
+    onClose: () => setConfigOpen(false),
+    label: "图文生成配置",
+  });
   const busy = Boolean(state.project && isBusyArticleWorkflowStatus(state.project.status));
   const workspaceTitle = state.bootstrapping
     ? "图文工作台"
@@ -351,9 +357,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
             onClick={() => setConfigOpen(false)}
           >
             <motion.aside
-              role="dialog"
-              aria-modal="true"
-              aria-label="图文生成配置"
+              {...configDialog}
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}

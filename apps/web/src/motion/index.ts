@@ -10,5 +10,6 @@ export { msgIn, modalIn } from "./variants";
 export { MotionRoot } from "./MotionRoot";
 export { RippleButton } from "./RippleButton";
 export { Modal } from "./Modal";
+export { useDialog } from "./useDialog";
 export { ToastProvider, useToast } from "./Toast";
 export { BrandLogo } from "./BrandLogo";

@@ -30,7 +30,7 @@ export function DeleteAgentDialog({ open, agentName, sessionCount, onCancel, onC
   }, [open]);
 
   return (
-    <Modal open={open} onClose={onCancel} className={PANEL}>
+    <Modal open={open} onClose={onCancel} label={`删除「${agentName}」？`} className={PANEL}>
       <div className="mb-4 flex items-start gap-3">
         <Icon icon="mdi:alert-circle" className="mt-1 flex-none text-xl text-danger-ink" />
         <h2 className="text-lg font-semibold text-ink">删除「{agentName}」？</h2>

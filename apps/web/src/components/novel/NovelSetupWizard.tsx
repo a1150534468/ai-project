@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { errorMessage } from "../../apiError";
+import { useDialog } from "../../motion";
 import { Icon } from "@iconify/react";
 import {
   completeNovelSetup,
@@ -175,6 +176,8 @@ export function NovelSetupWizard({ token, project, onClose, onCompleted, onProje
   const current = STEPS[step - 1]!;
   const kind = current.kind === "complete" ? null : current.kind;
   const isProjectSettings = setup?.project.setupCompleted ?? project.setupCompleted;
+  // 挂上来就是开着的（关掉是父组件把整个向导摘走），所以 open 直接给 true
+  const dialogProps = useDialog({ open: true, onClose, label: "新书设置向导" });
 
   const load = useCallback(async () => {
     const next = await getNovelSetup(token, project.id);
@@ -236,7 +239,7 @@ export function NovelSetupWizard({ token, project, onClose, onCompleted, onProje
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-scrim/55 p-3 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="新书设置向导">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-scrim/55 p-3 backdrop-blur-sm" {...dialogProps}>
       <section className="grid max-h-[94dvh] w-full max-w-[1120px] grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-hidden rounded-3xl bg-surface-muted shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-hairline-subtle bg-surface px-5 py-4 sm:px-6"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-ink">{isProjectSettings ? "Project settings" : "New book setup"}</p><h2 className="mt-1 text-xl font-semibold text-ink">《{project.title}》{isProjectSettings ? "作品设置" : "设置向导"}</h2><p className="mt-1 text-xs text-ink-tertiary">{isProjectSettings ? "查看叙事基座、管理作品文件，设置会自动保留。" : "每一步都可以生成、修改、确认，进度会自动保留。"}</p></div><button type="button" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl border border-hairline text-ink-secondary" aria-label="关闭"><Icon icon="mdi:close" /></button></header>
         <nav className="flex gap-1 overflow-x-auto border-b border-hairline-subtle bg-surface px-4 py-3 [scrollbar-width:none]">{STEPS.map((item, index) => { const active = index + 1 === step; const unlockedStage = Math.max(step, setup?.project.setupStage ?? project.setupStage ?? 1); const complete = index + 1 < (setup?.project.setupStage ?? project.setupStage ?? 1) || Boolean(setup?.project.setupCompleted && index === 4); const unlocked = index + 1 <= unlockedStage; const displayTitle = item.kind === "complete" && isProjectSettings ? "作品设置" : item.title; const displayDescription = item.kind === "complete" && isProjectSettings ? "文件与项目管理" : item.description; return <button key={item.kind} type="button" disabled={!unlocked} aria-current={active ? "step" : undefined} onClick={() => setStep(index + 1)} className={`flex min-w-[170px] flex-1 items-center gap-3 rounded-xl px-3 py-2 text-left transition disabled:cursor-not-allowed ${active ? "bg-brand-soft ring-1 ring-brand/25" : complete ? "bg-surface-muted" : "opacity-55"}`}><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm ${active ? "bg-brand text-white" : complete ? "bg-brand-soft text-brand-ink" : "bg-surface-muted text-ink-tertiary"}`}><Icon icon={item.kind === "complete" && isProjectSettings ? "mdi:cog-outline" : complete ? "mdi:check" : item.icon} /></span><span><span className="block text-xs font-semibold text-ink">{index + 1}. {displayTitle}</span><span className="mt-0.5 block text-[10px] text-ink-tertiary">{displayDescription}</span></span></button>; })}</nav>

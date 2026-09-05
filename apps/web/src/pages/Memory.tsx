@@ -6,7 +6,7 @@ import MemoryMobileList from "../components/memory/MemoryMobileList";
 import MemoryTable from "../components/memory/MemoryTable";
 import { useMemoryGalaxyState } from "../components/memory/useMemoryGalaxyState";
 import { cx } from "../components/ui";
-import { modalIn } from "../motion";
+import { modalIn, useDialog } from "../motion";
 
 /** 抽屉与它的遮罩都吃这个高度上限，写两遍容易改漏一个。 */
 const SHEET_MAX_HEIGHT = "max-h-[82vh]";
@@ -70,6 +70,10 @@ export default function MemoryPage({ token }: MemoryPageProps) {
     onSave: save,
     onDelete: requestDelete,
   };
+
+  // 抽屉是 `xl:hidden`：宽屏上它照样挂在 DOM 里，所以焦点陷阱由 useDialog 自己按
+  // 「有没有真的渲染出来」判，这里只管开关和名字
+  const sheetDialog = useDialog({ open: Boolean(detail), onClose: () => select(null), label: "记忆详情" });
 
   return (
     <>
@@ -162,9 +166,7 @@ export default function MemoryPage({ token }: MemoryPageProps) {
                 transition={{ duration: 0.2 }}
               />
               <motion.div
-                role="dialog"
-                aria-modal="true"
-                aria-label="记忆详情"
+                {...sheetDialog}
                 className={cx("fixed inset-x-0 bottom-0 z-40 xl:hidden", SHEET_MAX_HEIGHT)}
                 variants={modalIn}
                 initial="initial"

@@ -37,7 +37,10 @@ function ConfirmPanel({
   readonly onConfirm: () => void;
 }) {
   return (
-    <Modal open onClose={onCancel} className={PANEL}>
+    // 活正在跑的时候取消键是禁的，点遮罩和 Esc 也跟着禁：这时候「取消」只会把
+    // 等答案的调用方放走，后台那笔活照样在跑，等于给了个假的撤销
+    <Modal open onClose={running ? undefined : onCancel} label={request.title} className={PANEL}>
+
       <div className="mb-4 flex items-start gap-3">
         {request.isDangerous && <Icon icon="mdi:alert-circle" className="mt-1 flex-none text-xl text-danger-ink" />}
         <h2 className="text-lg font-semibold text-ink">{request.title}</h2>

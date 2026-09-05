@@ -1,5 +1,6 @@
 import { Icon } from "@iconify/react";
 import { AnimatePresence, motion } from "motion/react";
+import { useDialog } from "../../motion";
 import {
   shortPlatformLabel,
   type ArticleWorkflowBatchEntry,
@@ -123,6 +124,8 @@ export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) 
 }
 
 export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySidebarProps) {
+  const dialogProps = useDialog({ open: props.open, onClose: props.onClose, label: "图文项目记录" });
+
   return (
     <AnimatePresence>
       {props.open && (
@@ -134,9 +137,7 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
           onClick={props.onClose}
         >
           <motion.aside
-            role="dialog"
-            aria-modal="true"
-            aria-label="图文项目记录"
+            {...dialogProps}
             initial={{ x: "100%" }}
             animate={{ x: 0 }}
             exit={{ x: "100%" }}

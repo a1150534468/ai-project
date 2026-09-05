@@ -290,7 +290,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
   };
 
   return (
-    <Modal open={open} onClose={onClose} className={SHELL}>
+    <Modal open={open} onClose={onClose} label={HEADING[mode]} className={SHELL}>
       <PickerHead mode={mode} onClose={onClose} />
       {error !== "" && <p className={BANNER}>{error}</p>}
 
