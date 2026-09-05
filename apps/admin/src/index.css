@@ -353,7 +353,7 @@ body {
   }
 }
 
-/* ═══ 顶栏：面包屑 + 标题 + 操作区 ═══ */
+/* ═══ 顶栏：面包屑 + 标题 ═══ */
 
 .top-breadcrumbs {
   display: flex;
@@ -395,13 +395,6 @@ body {
   @media (max-width: 640px) {
     font-size: 14px;
   }
-}
-
-.top-actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--sp-2);
-  align-items: center;
 }
 
 /* 侧栏与顶栏里的单行文字统一截断，别把栅格顶开 */
@@ -516,6 +509,24 @@ textarea:focus {
   border-color: var(--accent);
   outline: none;
   box-shadow: var(--focus-ring);
+}
+
+/* 勾选框不吃上面那套文本框的内边距与边框。写在这儿一次，
+ * 用到复选框的地方就不必各自内联 width / height 把尺寸压回去。 */
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+/* 「勾选框 + 一句说明」的一行，管理员权限那组用 */
+.check-line {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  cursor: pointer;
 }
 
 /* ═══ 面板与卡片 ═══ */
@@ -735,6 +746,30 @@ table .num {
   &:hover {
     text-decoration: underline;
   }
+}
+
+/* ═══ 审计日志 ═══ */
+
+/* 管理员 id 是一串 cuid，等宽字体下扫得快 */
+.audit-actor {
+  font-family: monospace;
+  font-size: 12px;
+}
+
+/* 详情列：一行摘要，点开是整段 JSON */
+.audit-brief {
+  font-size: 11px;
+  color: var(--ink3);
+}
+
+.audit-json {
+  max-height: 200px;
+  margin: var(--sp-1) 0 0;
+  padding: var(--sp-1);
+  overflow: auto;
+  font-size: 11px;
+  background: var(--surface2);
+  border-radius: var(--r-sm);
 }
 
 /* ═══ 零散工具类 ═══ */

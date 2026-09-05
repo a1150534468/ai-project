@@ -1,57 +1,81 @@
-import { useEffect, useState } from "react";
+/**
+ * 管理员账号：列表 + 创建，行内可禁用/启用（超管那行不给操作）。
+ *
+ * 重写时收掉的几处：
+ * 1. 权限门禁 `if (!can(...)) return <div/>` 写在所有 useState **之前** —— 一旦这个分支
+ *    在某次渲染里变了向，React 两次渲染的 hook 数目就对不上，整页白屏。
+ *    现在外层只做门禁、内层才拿 hook，两者各自渲染路径固定。
+ * 2. 可授予权限是手抄的三条，漏了 `KNOWLEDGE_MANAGE` —— 服务端的
+ *    `GRANTABLE_PERMISSIONS` 收这一条，于是后台根本勾不出知识库权限。
+ *    现在名单和中文名都从 auth.ts 那张目录出，前后端各自一份的抄写没了。
+ * 3. 权限列是一行三层嵌套的三元（超管 / 有权限 / 空），拆成一个函数。
+ * 4. 列表没有加载态：第一帧就摆着「暂无管理员」。
+ * 5. 创建弹窗的提交条件在页脚按钮上写一遍、submit 里没有第二道，请求飞行中也不禁用；
+ *    现在正文是真 `<form>`，页脚按钮用 `form=` 关联，条件只有 `ready` 一处。
+ * 6. 那句 `// eslint-disable-next-line react-hooks/exhaustive-deps`：本仓用 biome，没有这条规则。
+ */
+import { type FormEvent, useEffect, useState } from "react";
 import * as api from "../api.js";
-import { useToast, errMsg, Field, Panel, Modal, useConfirm, Pill } from "../ui.js";
-import type { Permission } from "../auth.js";
-import { can, loadSession } from "../auth.js";
-
-const GRANTABLE: Permission[] = ["USER_MANAGE", "USER_DETAIL_VIEW", "ANNOUNCEMENT_MANAGE"];
-
-const PERMISSION_LABELS: Record<Permission, string> = {
-  USER_MANAGE: "用户管理",
-  USER_DETAIL_VIEW: "用户完整详情",
-  ANNOUNCEMENT_MANAGE: "公告管理",
-  ADMIN_MANAGE: "管理员管理",
-  KNOWLEDGE_MANAGE: "知识库管理"
-};
+import { can, GRANTABLE_PERMISSIONS, loadSession, type Permission, permissionLabel } from "../auth.js";
+import { errMsg, Field, Modal, Panel, Pill, type ToastKind, useConfirm, useToast } from "../ui.js";
 
 export function AdminsPage() {
-  const session = loadSession();
-  if (!can(session, "ADMIN_MANAGE")) return <div className="card muted">无权限访问此功能</div>;
-  const [rows, setRows] = useState<api.AdminRow[]>([]);
+  // 门禁与控制台分开：这一层不拿任何 hook，返回哪条分支都不影响 hook 顺序
+  if (!can(loadSession(), "ADMIN_MANAGE")) return <div className="card muted">无权限访问此功能</div>;
+  return <AdminsConsole />;
+}
+
+/** 权限列的文案：超管一句话盖过明细，普通管理员列中文名，一条都没有给个破折号。 */
+function permissionSummary(row: api.AdminRow): string {
+  if (row.role === "super_admin") return "全部权限";
+  if (row.permissions.length === 0) return "—";
+  return row.permissions.map(permissionLabel).join(", ");
+}
+
+function AdminsConsole() {
+  const [rows, setRows] = useState<readonly api.AdminRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [nonce, setNonce] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
   const { show, node: toastNode } = useToast();
   const { confirm, node: confirmNode } = useConfirm();
-  const [createOpen, setCreateOpen] = useState(false);
-
-  const load = async () => {
-    try {
-      setRows(await api.listAdmins());
-    } catch (e) {
-      show(errMsg(e), "err");
-    }
-  };
 
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+    api
+      .listAdmins()
+      .then((data) => {
+        if (!cancelled) setRows(data);
+      })
+      .catch((error) => {
+        if (!cancelled) show(errMsg(error), "err");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nonce, show]);
 
-  const handleToggleDisable = async (id: string, username: string, disabled: boolean) => {
-    const action = disabled ? "启用" : "禁用";
-    const confirmed = await confirm({
-      title: action + "管理员",
-      message: `确认${action}管理员"${username}"？`,
+  async function toggleDisabled(row: api.AdminRow) {
+    const action = row.disabled ? "启用" : "禁用";
+    const ok = await confirm({
+      title: `${action}管理员`,
+      message: `确认${action}管理员"${row.username}"？`,
       confirmText: action,
-      danger: !disabled
+      danger: !row.disabled,
     });
-    if (!confirmed) return;
+    if (!ok) return;
     try {
-      await api.updateAdminAccount(id, { disabled: !disabled });
+      await api.updateAdminAccount(row.id, { disabled: !row.disabled });
       show("已更新");
-      void load();
-    } catch (e) {
-      show(errMsg(e), "err");
+      setNonce((n) => n + 1);
+    } catch (error) {
+      show(errMsg(error), "err");
     }
-  };
+  }
 
   return (
     <div>
@@ -60,7 +84,7 @@ export function AdminsPage() {
       <Panel
         title="管理员管理"
         actions={
-          <button className="btn sm" onClick={() => setCreateOpen(true)}>
+          <button className="btn sm" type="button" onClick={() => setCreateOpen(true)}>
             创建管理员
           </button>
         }
@@ -77,126 +101,159 @@ export function AdminsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.username}</td>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.username}</td>
                   <td>
-                    <Pill kind={a.role === "super_admin" ? "g" : "n"}>
-                      {a.role === "super_admin" ? "超级管理员" : "管理员"}
+                    <Pill kind={row.role === "super_admin" ? "g" : "n"}>
+                      {row.role === "super_admin" ? "超级管理员" : "管理员"}
                     </Pill>
                   </td>
                   <td className="muted" style={{ fontSize: 12 }}>
-                    {a.role === "super_admin" ? "全部权限" : a.permissions.length > 0 ? a.permissions.map((p) => PERMISSION_LABELS[p as Permission] || p).join(", ") : "—"}
+                    {permissionSummary(row)}
                   </td>
                   <td>
-                    <Pill kind={a.disabled ? "b" : "g"}>
-                      {a.disabled ? "禁用" : "正常"}
-                    </Pill>
+                    <Pill kind={row.disabled ? "b" : "g"}>{row.disabled ? "禁用" : "正常"}</Pill>
                   </td>
                   <td>
-                    {a.role !== "super_admin" && (
-                      <button
-                        className="btn ghost sm"
-                        onClick={() => void handleToggleDisable(a.id, a.username, a.disabled)}
-                      >
-                        {a.disabled ? "启用" : "禁用"}
+                    {/* 超管不给禁用键：服务端也会拒，界面上先不摆出来 */}
+                    {row.role !== "super_admin" && (
+                      <button className="btn ghost sm" type="button" onClick={() => void toggleDisabled(row)}>
+                        {row.disabled ? "启用" : "禁用"}
                       </button>
                     )}
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={5} className="muted">暂无管理员</td></tr>}
+              {rows.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={5} className="muted">
+                    暂无管理员
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </Panel>
-      <CreateAdminModal
+      <CreateAdmin
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onDone={() => {
-          show("已创建");
+        onCreated={() => {
           setCreateOpen(false);
-          void load();
+          show("已创建");
+          setNonce((n) => n + 1);
         }}
-        onErr={(m) => show(m, "err")}
+        onNotify={show}
       />
     </div>
   );
 }
 
-interface CreateAdminModalProps {
+const FORM_ID = "admin-create";
+
+function CreateAdmin({
+  open,
+  onClose,
+  onCreated,
+  onNotify,
+}: {
   open: boolean;
   onClose: () => void;
-  onDone: () => void;
-  onErr: (m: string) => void;
-}
+  onCreated: () => void;
+  onNotify: (text: string, kind?: ToastKind) => void;
+}) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  // Set 而不是数组：勾选就是集合的增删，`includes` + `filter` 那一套换掉
+  const [perms, setPerms] = useState<ReadonlySet<Permission>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const ready = !busy && username.trim().length >= 3 && password.length >= 8;
 
-function CreateAdminModal({ open, onClose, onDone, onErr }: CreateAdminModalProps) {
-  const [u, setU] = useState("");
-  const [p, setP] = useState("");
-  const [perms, setPerms] = useState<Permission[]>([]);
-
-  const toggle = (perm: Permission) =>
-    setPerms((cur) => (cur.includes(perm) ? cur.filter((x) => x !== perm) : [...cur, perm]));
-
-  const submit = async () => {
-    try {
-      await api.createAdminAccount({ username: u, password: p, permissions: perms });
-      setU("");
-      setP("");
-      setPerms([]);
-      onDone();
-    } catch (e) {
-      onErr(errMsg(e));
-    }
-  };
-
-  const handleClose = () => {
-    setU("");
-    setP("");
-    setPerms([]);
+  function close() {
+    setUsername("");
+    setPassword("");
+    setPerms(new Set());
     onClose();
-  };
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!ready) return;
+    setBusy(true);
+    try {
+      // 顺序按目录来，别让勾选先后决定发出去的数组次序
+      const permissions = GRANTABLE_PERMISSIONS.filter((perm) => perms.has(perm));
+      await api.createAdminAccount({ username: username.trim(), password, permissions });
+      setUsername("");
+      setPassword("");
+      setPerms(new Set());
+      onCreated();
+    } catch (error) {
+      onNotify(errMsg(error), "err");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Modal
       open={open}
       title="创建管理员"
-      onClose={handleClose}
+      onClose={close}
       footer={
         <div className="modal-footer-actions">
-          <button className="btn ghost" onClick={handleClose}>
+          <button className="btn ghost" type="button" disabled={busy} onClick={close}>
             取消
           </button>
-          <button className="btn" disabled={u.length < 3 || p.length < 8} onClick={submit}>
-            创建
+          <button className="btn" type="submit" form={FORM_ID} disabled={!ready}>
+            {busy ? "创建中…" : "创建"}
           </button>
         </div>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <form id={FORM_ID} style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={submit}>
         <Field label="用户名 (≥3 字符)">
-          <input value={u} onChange={(e) => setU(e.target.value)} placeholder="输入用户名" />
+          <input
+            value={username}
+            placeholder="输入用户名"
+            autoComplete="off"
+            disabled={busy}
+            onChange={(event) => setUsername(event.target.value)}
+          />
         </Field>
         <Field label="密码 (≥8 字符)">
-          <input type="password" value={p} onChange={(e) => setP(e.target.value)} placeholder="输入密码" />
+          <input
+            type="password"
+            value={password}
+            placeholder="输入密码"
+            autoComplete="new-password"
+            disabled={busy}
+            onChange={(event) => setPassword(event.target.value)}
+          />
         </Field>
         <Field label="权限">
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {GRANTABLE.map((perm) => (
-              <label key={perm} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
+            {GRANTABLE_PERMISSIONS.map((perm) => (
+              <label key={perm} className="check-line">
                 <input
                   type="checkbox"
-                  checked={perms.includes(perm)}
-                  onChange={() => toggle(perm)}
-                  style={{ width: 16, height: 16 }}
+                  checked={perms.has(perm)}
+                  disabled={busy}
+                  onChange={() =>
+                    setPerms((cur) => {
+                      const next = new Set(cur);
+                      if (!next.delete(perm)) next.add(perm);
+                      return next;
+                    })
+                  }
                 />
-                <span>{PERMISSION_LABELS[perm] || perm}</span>
+                <span>{permissionLabel(perm)}</span>
               </label>
             ))}
           </div>
         </Field>
-      </div>
+      </form>
     </Modal>
   );
 }

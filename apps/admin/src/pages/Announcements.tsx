@@ -1,42 +1,76 @@
-import { useEffect, useState } from "react";
+/**
+ * 公告管理：一张列表 + 新增弹窗，行内可停用/启用与删除。
+ *
+ * 重写时收掉的几处：
+ * 1. 「停用/启用」那个按钮的 onClick 是一段 14 行的内联 async 闭包，塞在 `<tbody>` 里，
+ *    错误处理与删除那条各写一份。现在两个动作都是页面里的命名函数，报错走同一条。
+ * 2. 列表没有加载态：进页面的第一帧就摆着「暂无公告」，看着像真的没有公告。
+ * 3. 新增弹窗的「发布」在请求飞行中没禁用，连点会发两条；标题/正文也没 trim，
+ *    敲一串空格能过 `!title` 那道判断，发出去是一条空白公告。
+ * 4. 弹窗里的输入区与页脚的提交键原来靠各自的 onClick 对齐条件；现在正文是一张真 `<form>`，
+ *    页脚的按钮用 `form=` 关联过去 —— 条件只写一处，标题里按回车也能提交。
+ * 5. 那句 `// eslint-disable-next-line react-hooks/exhaustive-deps` —— 本仓用的是 biome，
+ *    根本没有这条规则；依赖也不缺，`show` 在 ui.tsx 里是稳定引用。
+ */
+import { type FormEvent, useEffect, useState } from "react";
 import * as api from "../api.js";
-import { useToast, errMsg, Field, Panel, Modal, useConfirm, Pill } from "../ui.js";
+import { errMsg, Field, Modal, Panel, Pill, type ToastKind, useConfirm, useToast } from "../ui.js";
 
 export function AnnouncementsPage() {
-  const [rows, setRows] = useState<api.Announcement[]>([]);
+  const [rows, setRows] = useState<readonly api.Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [nonce, setNonce] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
   const { show, node: toastNode } = useToast();
   const { confirm, node: confirmNode } = useConfirm();
-  const [createOpen, setCreateOpen] = useState(false);
-
-  const load = async () => {
-    try {
-      setRows(await api.listAnnouncements());
-    } catch (e) {
-      show(errMsg(e), "err");
-    }
-  };
 
   useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    let cancelled = false;
+    setLoading(true);
+    api
+      .listAnnouncements()
+      .then((data) => {
+        if (!cancelled) setRows(data);
+      })
+      .catch((error) => {
+        if (!cancelled) show(errMsg(error), "err");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [nonce, show]);
 
-  const handleDelete = async (id: string, title: string) => {
-    const confirmed = await confirm({
-      title: "删除公告",
-      message: `确认删除公告"${title}"？此操作不可撤销。`,
-      confirmText: "删除",
-      danger: true
-    });
-    if (!confirmed) return;
+  const reload = () => setNonce((n) => n + 1);
+
+  async function toggleActive(row: api.Announcement) {
     try {
-      await api.deleteAnnouncement(id);
-      show("已删除");
-      void load();
-    } catch (e) {
-      show(errMsg(e), "err");
+      await api.updateAnnouncement(row.id, { active: !row.active });
+      show("已更新");
+      reload();
+    } catch (error) {
+      show(errMsg(error), "err");
     }
-  };
+  }
+
+  async function remove(row: api.Announcement) {
+    const ok = await confirm({
+      title: "删除公告",
+      message: `确认删除公告"${row.title}"？此操作不可撤销。`,
+      confirmText: "删除",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.deleteAnnouncement(row.id);
+      show("已删除");
+      reload();
+    } catch (error) {
+      show(errMsg(error), "err");
+    }
+  }
 
   return (
     <div>
@@ -45,7 +79,7 @@ export function AnnouncementsPage() {
       <Panel
         title="公告管理"
         actions={
-          <button className="btn sm" onClick={() => setCreateOpen(true)}>
+          <button className="btn sm" type="button" onClick={() => setCreateOpen(true)}>
             新增公告
           </button>
         }
@@ -61,110 +95,116 @@ export function AnnouncementsPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((a) => (
-                <tr key={a.id}>
-                  <td>{a.title}</td>
+              {rows.map((row) => (
+                <tr key={row.id}>
+                  <td>{row.title}</td>
                   <td>
-                    <Pill kind={a.active ? "g" : "n"}>
-                      {a.active ? "启用" : "停用"}
-                    </Pill>
+                    <Pill kind={row.active ? "g" : "n"}>{row.active ? "启用" : "停用"}</Pill>
                   </td>
-                  <td className="muted">{new Date(a.createdAt).toLocaleString()}</td>
-                  <td className="row" style={{ margin: 0 }}>
-                    <button
-                      className="btn ghost sm"
-                      onClick={async () => {
-                        try {
-                          await api.updateAnnouncement(a.id, { active: !a.active });
-                          show("已更新");
-                          void load();
-                        } catch (e) {
-                          show(errMsg(e), "err");
-                        }
-                      }}
-                    >
-                      {a.active ? "停用" : "启用"}
-                    </button>
-                    <button
-                      className="btn danger sm"
-                      onClick={() => void handleDelete(a.id, a.title)}
-                    >
-                      删除
-                    </button>
+                  <td className="muted">{new Date(row.createdAt).toLocaleString()}</td>
+                  <td>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button className="btn ghost sm" type="button" onClick={() => void toggleActive(row)}>
+                        {row.active ? "停用" : "启用"}
+                      </button>
+                      <button className="btn danger sm" type="button" onClick={() => void remove(row)}>
+                        删除
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && <tr><td colSpan={4} className="muted">暂无公告</td></tr>}
+              {rows.length === 0 && !loading && (
+                <tr>
+                  <td colSpan={4} className="muted">
+                    暂无公告
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </Panel>
-      <CreateAnnModal
+      <CreateAnnouncement
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        onDone={() => {
-          show("已发布");
+        onCreated={() => {
           setCreateOpen(false);
-          void load();
+          show("已发布");
+          reload();
         }}
-        onErr={(m) => show(m, "err")}
+        onNotify={show}
       />
     </div>
   );
 }
 
-interface CreateAnnModalProps {
+/** 页脚的提交键靠这个 id 关联到正文里的 `<form>`：Modal 的 footer 是 body 的兄弟节点，包不进去。 */
+const FORM_ID = "announcement-create";
+
+function CreateAnnouncement({
+  open,
+  onClose,
+  onCreated,
+  onNotify,
+}: {
   open: boolean;
   onClose: () => void;
-  onDone: () => void;
-  onErr: (m: string) => void;
-}
-
-function CreateAnnModal({ open, onClose, onDone, onErr }: CreateAnnModalProps) {
+  onCreated: () => void;
+  onNotify: (text: string, kind?: ToastKind) => void;
+}) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const ready = !busy && title.trim() !== "" && body.trim() !== "";
 
-  const submit = async () => {
-    try {
-      await api.createAnnouncement({ title, body, active: true });
-      setTitle("");
-      setBody("");
-      onDone();
-    } catch (e) {
-      onErr(errMsg(e));
-    }
-  };
-
-  const handleClose = () => {
+  function close() {
     setTitle("");
     setBody("");
     onClose();
-  };
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (!ready) return;
+    setBusy(true);
+    try {
+      // 后台发的公告一律直接生效，所以 active 恒为 true；定时区间由服务端字段留着，界面暂不给
+      await api.createAnnouncement({ title: title.trim(), body: body.trim(), active: true });
+      setTitle("");
+      setBody("");
+      onCreated();
+    } catch (error) {
+      onNotify(errMsg(error), "err");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Modal
       open={open}
       title="新增公告"
-      onClose={handleClose}
+      onClose={close}
       footer={
         <div className="modal-footer-actions">
-          <button className="btn ghost" onClick={handleClose}>
+          <button className="btn ghost" type="button" disabled={busy} onClick={close}>
             取消
           </button>
-          <button className="btn" disabled={!title || !body} onClick={submit}>
-            发布
+          <button className="btn" type="submit" form={FORM_ID} disabled={!ready}>
+            {busy ? "发布中…" : "发布"}
           </button>
         </div>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <form id={FORM_ID} style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={submit}>
         <Field label="标题">
-          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+          <input value={title} disabled={busy} onChange={(event) => setTitle(event.target.value)} />
         </Field>
         <Field label="正文">
-          <textarea rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
+          <textarea rows={4} value={body} disabled={busy} onChange={(event) => setBody(event.target.value)} />
         </Field>
-      </div>
+      </form>
     </Modal>
   );
 }

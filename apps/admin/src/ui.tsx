@@ -79,7 +79,8 @@ interface ModalProps {
 }
 
 /** open 期间才挂 Esc 监听，关掉就摘掉。 */
-function useEscapeKey(open: boolean, onEscape: () => void): void {
+/** 开着的浮层按 Esc 收起。Modal 与窄屏侧栏抽屉共用这一份。 */
+export function useEscapeKey(open: boolean, onEscape: () => void): void {
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -189,8 +190,11 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   );
 }
 
+/** 状态徽标的四档配色。审计页要按动作码算出档位，所以这个联合得有名字。 */
+export type PillKind = "g" | "w" | "b" | "n";
+
 /** 状态徽标：g 成功 / w 警告 / b 失败 / n 中性。 */
-export function Pill({ kind, children }: { kind: "g" | "w" | "b" | "n"; children: ReactNode }) {
+export function Pill({ kind, children }: { kind: PillKind; children: ReactNode }) {
   return <span className={cx("pill", kind)}>{children}</span>;
 }
 
