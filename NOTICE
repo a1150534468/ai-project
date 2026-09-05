@@ -47,7 +47,6 @@
 - `react`、`react-dom` — Meta Platforms, Inc. and affiliates
 - `react-markdown`、`rehype-sanitize`、`remark-gfm`、`remark-parse`、`remark-stringify`、
   `unified` — Titus Wormer and unified collective
-- `react-use-measure` — Paul Henschel
 - `squire-rte` — Neil Jenkins
 - `tailwindcss` — Tailwind Labs, Inc.
 - `tsx` — Hiroki Osame
