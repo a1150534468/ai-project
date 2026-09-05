@@ -203,6 +203,49 @@ effect 依赖 —— 父组件每渲染一次就重拉一次详情；登录表�
 `{ok,status,json}` 假冒 `Response`，客户端真正的读 body 路径（空 body / HTML 错误页 / 非 JSON）
 一次都没跑过，换成真 `Response` 才算测到。
 
+**A7 收掉批次 A 的最后一块：1,665 → 762（净消 903 行：35,485 → 34,582）。**
+表里写「1,120+」，实测范围 1,665 —— 差额里有 127 行**不属于本批**（`pages/Memory.tsx` 107 是
+A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一个字没动），其余是估算时
+没把三个工作台的测试文件和 `useArticleWorkflowStudio.ts` 算进去。本批 24 个文件重写 + 7 个新文件
+（`components/chat/ChatTranscript.tsx`、`app/useModelCatalog.ts`，加 5 个测试文件）。
+
+残留最多的是 `useArticleWorkflowStudio.ts` 83 / `NovelWorkflowStudio.tsx` 76 /
+`ImageWorkflowStudio.test.tsx` 49 / `ImageWorkflowStudio.tsx` 48 / `Chat.tsx` 46，成分与 A1~A6 同，
+另外冒出三种以前没记的：**一行一个的具名 import 成员**（`useArticleWorkflowStudio.ts` 那 83 行里
+12 行是 `createArticleWorkflowProject,` 这种，名字是 API 契约）、**hook 返回对象里一行一个的字段转发**
+（`bootstrapping,` `history,` `titleDraft,`）、**测试夹具里一行一个的 JSX 属性**
+（`ImageWorkflowStudio.test.tsx` 那 49 行里 20 行是 `onDownloadAll={vi.fn()}`，props 名是被测组件的契约）。
+再补一条：**API 规定的调用形状也是地板** —— `new ClipboardItem({ "text/html": …, "text/plain": … })`
+那四行只有一种写法。
+
+**A6 那条「重写把功能性 bug 端出来」在 A7 上换了一类：A7 抓到的多是时序与身份链上的 bug，
+这类只有把状态结构重搭一遍才看得见，逐行读原文件读不出来。**
+`NovelWorkflowStudio` 的 `saveStatus` 从打开一本书起就卡在 `"saving"`（章节列表一到就置位、没人清），
+顺带把 `NovelChapterDesk` 的「局部改写」按钮永久禁用了 —— 改成 `ChapterEditor { chapterId, draft }`
+一起换之后才浮出来；五处章节合并里有四处没有 project-id 守卫，切书时晚到的响应会把章节写进另一本书；
+图文工作台的 `activePlatform` 挂在 `hydrateProjects → loadBatch → 轮询` 这条身份链上，
+切一次平台就把 2.5 秒的定时器重建一次（改走 `batchRef` 才断开）；`Chat` 每次渲染都把视图拽到底，
+用户往上翻历史，下一次状态更新立刻被拽回去。另有一类是「状态机里到不了的分支」：
+`ModelMarketplace` 三个布尔 flag 的 `: null` 分支、`Workflow.tsx` 的化石 tab 状态机、
+`ImageWorkflowStudio` 的 `workspaceMode` 回退分支 —— 换掉状态表示的同时它们自己就没了。
+
+测试从 698 条加到 803 条（新增 `ChatTranscript` / `NovelCreatePage` / `Settings` / 剪贴板 /
+复制动作五个文件 56 条，其余 49 条补在五个已有文件里）。**删的只有 10 条永远不会红的
+`not.toContain` 断言**（NovelWorkflowStudio / ImageWorkflowStudio 里查的字符串压根不在渲染结果里），
+用例本身都还在；`ArticleWorkflowStudio` 那 4 条 `renderToStaticMarkup + toContain` 换成 10 条 RTL 用例
+—— 前者渲染的是静态字符串，事件与 effect 一条都没跑过。
+
+**A7 刻意留了两件跨批的合并没做**：`apps/web` 里「unknown → 人话」这个助手有四份（该收进 `apiError.ts`）、
+`copyViaTextarea` 有两份（另一份在 `components/AssistantMessageActions.tsx`，无测试）。
+两件都跨出 A7 的范围，混进来这一批就没法整块 `git revert` 了，留给单独一批做。
+
+**批次 A 收尾对账：11,667 → 4,257（`apps/web/src` 3,058 + `apps/admin/src` 1,199），消掉 63%。**
+批次表里那句「做完浏览器里再无上游代码」按老判据没做到、也做不到 —— 七批全是关掉原文件重写的，
+剩下的按批摊开是 A1 531 / A2 825 / A3 991 / A4 478 / A5 162 / A6 531 / A7 762
+（合计比 4,257 多出二十几行，是后面几批顺手又削掉了前面文件里的几行），
+**没有一行有语义的表达归属上游**。那句话的正确说法是：
+**浏览器里再无上游的表达，剩的是空行、收尾符号、`import` 与契约字符串。**
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -268,6 +311,7 @@ effect 依赖 —— 父组件每渲染一次就重拉一次详情；登录表�
 | 批次 A4 | `272e5a6` | 37,021 | 6,687 |
 | 批次 A5 | `cacd6bb` | 36,118 | 6,687 |
 | 批次 A6 | `565d929` | 35,485 | 6,687 |
+| 批次 A7（批次 A 收尾） | `f44b2fd` | 34,582 | 6,687 |
 | … | | | |
 | 全部完成 | | **6,687**（只剩 lockfile） | 6,687 |
 
