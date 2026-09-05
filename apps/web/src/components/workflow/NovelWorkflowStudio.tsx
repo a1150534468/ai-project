@@ -264,7 +264,13 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
     void loadProjects();
   }, [loadProjects]);
 
-  /** 地址栏里带着项目 id 就直接进工作台。加载途中组件卸掉了就别再动状态。 */
+  /**
+   * 地址栏里带着项目 id 就直接进工作台。加载途中组件卸掉了就别再动状态。
+   *
+   * 这条路刻意不看 `setupCompleted`：把一本还在搭设置的书的链接发给别人，是很正常的一件事，
+   * 拿到链接的人应该落在工作台上而不是被按进向导里 —— 那道闸只留在点封面进来的 `openProject` 上。
+   * 代价是「设置没做完」这件事在工作台上得说出来，由 NovelWorkbenchShell 的警告条负责。
+   */
   useEffect(() => {
     const projectId = novelProjectIdFromHash(window.location.hash);
     if (!projectId) return undefined;

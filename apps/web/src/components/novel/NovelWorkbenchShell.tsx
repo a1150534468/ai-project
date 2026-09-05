@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import { getNovelStructure, type NovelChapter, type NovelProjectDetail, type NovelStructureNode, type NovelWorkbenchPayload } from "../../api";
+import { Alert, Button } from "../ui";
 import { NovelChapterDesk } from "./NovelChapterDesk";
 import { NovelContextInspector } from "./NovelContextInspector";
 import { NovelStructureSidebar } from "./NovelStructureSidebar";
@@ -124,6 +125,18 @@ export function NovelWorkbenchShell({
         </div>
         <div className="flex items-center gap-1 overflow-x-auto border-t border-hairline-subtle px-3 py-1.5 [scrollbar-width:none]">{WORKSPACES.map((item) => <button key={item.id} type="button" onClick={() => setWorkspace(item.id)} className={`group flex h-10 shrink-0 items-center gap-2 rounded-lg px-3 text-xs font-semibold transition ${workspace === item.id ? "bg-brand-soft text-brand-ink" : "text-ink-secondary "}`}><Icon icon={item.icon} /><span>{item.label}</span><span className={`hidden text-[9px] font-normal xl:inline ${workspace === item.id ? "text-brand-ink/70" : "text-ink-tertiary"}`}>{item.hint}</span></button>)}<div className="flex-1" />{workspace === "writing" && <div className="hidden items-center gap-1 xl:flex"><button type="button" onClick={() => setLeftOpen((value) => !value)} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${leftOpen ? "bg-surface-muted text-brand-ink" : "text-ink-tertiary"}`} title="切换结构栏"><Icon icon="mdi:dock-left" /></button><button type="button" onClick={() => setRightOpen((value) => !value)} className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${rightOpen ? "bg-surface-muted text-brand-ink" : "text-ink-tertiary"}`} title="切换情报栏"><Icon icon="mdi:dock-right" /></button></div>}</div>
       </header>
+
+      {/*
+        没做完新书设置也能站在工作台上（把链接发给别人就是走这条路，见 NovelWorkflowStudio 的 hash effect）。
+        这里只提醒不拦人：叙事基座缺着照样能写，但得让人知道缺了什么、从哪补。
+        设置做完这条自己就没了，所以不给关闭按钮 —— 关掉它等于把「还没做完」这件事藏起来。
+      */}
+      {!detail.project.setupCompleted && (
+        <Alert tone="warning" size="sm" bordered className="mx-3 mt-2 flex flex-none items-center gap-3">
+          <span className="min-w-0 flex-1">这本书的新书设置还没做完，世界观、主要人物这些叙事基座还缺着，生成质量会跟着打折。</span>
+          <Button variant="outline" size="sm" shape="rounded" className="flex-none" onClick={onOpenSetup}>继续设置</Button>
+        </Alert>
+      )}
 
       {(error || notice) && <div className={`mx-3 mt-2 flex-none rounded-lg px-3 py-2 text-xs ${error ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</div>}
 

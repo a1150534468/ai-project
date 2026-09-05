@@ -367,10 +367,10 @@ describe("NovelWorkflowStudio 书库与建档", () => {
 
   /**
    * hash 直达走的是另一条路：它只 `refreshProject` 然后进工作台，**不看 `setupCompleted`** ——
-   * 而点封面进来的 `openProject` 会先拦一道。也就是说把没做完设置的书链接发给别人，对方直接落在
-   * 工作台上，跳过新书设置向导。这是现状，先把行为钉住；要不要补这道闸另说。
+   * 而点封面进来的 `openProject` 会先拦一道。这是定下来的分工：链接分享要能落到工作台上，
+   * 不拿向导把人按住；「设置没做完」改由工作台里那条警告条说（见 NovelWorkbenchShell.test.tsx）。
    */
-  it("hash 里带项目 id 就直接进工作台，连设置没做完的也进", async () => {
+  it("hash 里带项目 id 就直接进工作台，设置没做完也不改道去向导", async () => {
     window.history.replaceState(null, "", "/#novel/project-1/workbench");
     api.getNovelProject.mockResolvedValue(makeDetail({ setupCompleted: false, setupStage: 2 }));
     render(<NovelWorkflowStudio token="token" />);
