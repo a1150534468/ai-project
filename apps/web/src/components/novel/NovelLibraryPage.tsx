@@ -61,7 +61,7 @@ export function NovelLibraryPage({
         </div>
       </header>
 
-      <NovelCreatePage draft={draft} canGoBack={false} isSubmitting={isCreating} onBack={() => undefined} onChange={onDraftChange} onSubmit={onCreate} />
+      <NovelCreatePage draft={draft} isSubmitting={isCreating} onChange={onDraftChange} onSubmit={onCreate} />
       {error && <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">{error}</p>}
 
       <section className="grid gap-4">

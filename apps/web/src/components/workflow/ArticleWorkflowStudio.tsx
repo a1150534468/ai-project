@@ -9,7 +9,7 @@ import { ArticleWorkflowInputPanel } from "./ArticleWorkflowInputPanel";
 import { ArticleWorkflowPlatformTabs } from "./ArticleWorkflowPlatformTabs";
 import { ArticleWorkflowResultTools } from "./ArticleWorkflowResultSidebar";
 import type { ArticleWorkflowStudioProps } from "./articleWorkflowStudioModel";
-import { isBusyArticleWorkflowStatus } from "./articleWorkflowStudioModel";
+import { isBusyArticleWorkflowStatus, needsArticleWorkflowImages } from "./articleWorkflowStudioModel";
 import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
 
 function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boolean }) {
@@ -189,11 +189,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
             retryingProjectId={state.retryingProjectId}
             regeneratingSlot={state.regeneratingSlot}
             canRewrite={state.canRewrite}
-            batchMissingProjectCount={
-              state.batchProjects.filter(
-                (item) => item.status === "ready" && item.imageManifestJson.some((image) => !image.imageUrl.trim()),
-              ).length
-            }
+            batchMissingProjectCount={state.batchProjects.filter(needsArticleWorkflowImages).length}
             generatingImages={state.generatingImageProjectIds.length > 0}
             canGenerateImages={state.project.status === "ready" && !state.saving}
             onRewriteInstructionChange={state.setRewriteInstruction}

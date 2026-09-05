@@ -12,6 +12,9 @@ import { cx } from "./cx";
  * 滑块用 `bg-surface` 而不是 `bg-white` —— 字面色不跟着暗色模式翻（design-system.md 开头那条）。
  * 代价是暗色下滑块（29,29,31）压在关态轨道（66,66,69）上只有 1.5:1，几乎看不出圆点；
  * 这是缺一个「永远浅色」token 的问题，留给设计系统那一轮，不在这里现编。
+ *
+ * 基底是 `flex` 而不是 `inline-flex`：两个调用方一个是 flex 行里的项（两种写法等价）、
+ * 一个是设置页里占满整行的大卡 —— 后者用 inline-level 会在卡片底部多出一条行盒的下沉空隙。
  */
 export interface SwitchProps {
   readonly checked: boolean;
@@ -37,7 +40,7 @@ export function Switch({ checked, label, description, onToggle, disabled = false
       disabled={disabled}
       onClick={onToggle}
       className={cx(
-        "inline-flex items-center justify-between gap-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
+        "flex items-center justify-between gap-3 text-left transition disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
     >

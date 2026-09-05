@@ -60,12 +60,20 @@ function batchTitleRow(rows: readonly ArticleWorkflowProjectSummary[]): ArticleW
     ?? pool[0]!;
 }
 
+/**
+ * 侧栏行的身份。存量项目没有 `batchId`（多平台之前建的），只能拿自己的 id 当一批。
+ * 主控判断「点的是不是当前这批」用的是同一个键，所以这句只能有一份。
+ */
+export function articleWorkflowBatchKey(row: { readonly id: string; readonly batchId: string | null }): string {
+  return row.batchId ? `batch:${row.batchId}` : `project:${row.id}`;
+}
+
 export function groupArticleWorkflowHistory(
   rows: readonly ArticleWorkflowProjectSummary[],
 ): readonly ArticleWorkflowBatchEntry[] {
   const buckets = new Map<string, ArticleWorkflowProjectSummary[]>();
   for (const row of rows) {
-    const key = row.batchId ? `batch:${row.batchId}` : `project:${row.id}`;
+    const key = articleWorkflowBatchKey(row);
     const bucket = buckets.get(key);
     if (bucket) bucket.push(row);
     else buckets.set(key, [row]);

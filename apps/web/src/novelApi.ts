@@ -125,21 +125,6 @@ export interface NovelWorkbenchPayload {
   workbenchHighlights: Record<string, unknown>;
 }
 
-export interface CreateNovelInitialSettings {
-  channel?: string;
-  coreRequirement?: string;
-  platforms?: string[];
-  topics?: string[];
-  perspective?: string;
-  styleMode?: string;
-  era?: string;
-  hasCheat?: boolean;
-  styleTags?: string[];
-  language?: string;
-  chapterCount?: number;
-  chapterChars?: number;
-}
-
 export interface CreateNovelProjectPayload {
   title: string;
   premise: string;

@@ -1,5 +1,21 @@
+/*
+ * 公众号正文编辑器的皮。三条规矩：
+ *
+ *  - **框架跟着主题走，纸不跟。** 工具栏、边框、按钮一律取 index.css 那组 `--apple-*` 别名，
+ *    深色模式下整条跟着暗下去。正文那张「纸」反过来钉死浅色 —— 里面是公众号成品，自带
+ *    `color:#2c3e50` 这类内联颜色，铺在深色底上就是黑字压深灰，没法读。
+ *  - **排版尺寸只写一遍。** 占位文案是绝对定位浮在正文上的，它必须跟正文第一行严丝合缝对齐，
+ *    也就是内边距、字号、行高三样都得一致。原来是两处各写一份字面值，改一边就错位。
+ *  - **焦点看得见。** 原来 `outline: none` 写了两遍，正文是个 `role="textbox"` 的 div，
+ *    键盘用户点进来没有任何提示。改成向内画一圈，不占位、不推动版式。
+ */
 .article-workflow-rich-editor {
-  background: #ffffff;
+  /* 正文的排版尺寸，占位文案跟着这三个值走 */
+  --awre-pad-y: 28px;
+  --awre-pad-x: 32px;
+  --awre-text: 16px;
+  --awre-leading: 1.9;
+  background: var(--apple-surface);
 }
 
 .article-workflow-rich-editor__toolbar {
@@ -7,65 +23,75 @@
   flex-wrap: wrap;
   gap: 4px;
   padding: 8px 12px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f7f8fa;
+  border-bottom: 1px solid var(--apple-hairline);
+  background: var(--apple-surface-raised);
 }
 
 .article-workflow-rich-editor__button {
   min-width: 32px;
   height: 30px;
   padding: 0 8px;
-  border: 1px solid #d2d2d7;
+  border: 1px solid var(--apple-hairline);
   border-radius: 6px;
-  background: #ffffff;
-  color: #1d1d1f;
+  background: var(--apple-surface);
+  color: var(--apple-ink);
   font-size: 13px;
   line-height: 1;
   cursor: pointer;
 }
 
 .article-workflow-rich-editor__button:hover:not(:disabled) {
-  border-color: #b8b8bd;
-  background: #f0f0f2;
+  border-color: var(--apple-ink-tertiary);
+  background: var(--apple-surface-muted);
 }
 
 .article-workflow-rich-editor__button:disabled {
-  color: #8a8a8f;
+  color: var(--apple-ink-tertiary);
   cursor: not-allowed;
 }
 
+/*
+ * 「纸」的边界就在这里：往下所有颜色都是写死的浅色，深色模式也不变。
+ * color-scheme 一并钉住，免得浏览器把这块里的滚动条和插入符反色。
+ */
 .article-workflow-rich-editor__body {
+  --awre-paper: #ffffff;
+  --awre-paper-ink: #1d1d1f;
+  --awre-paper-hint: #8a8a8f;
   position: relative;
+  background: var(--awre-paper);
+  color-scheme: light;
 }
 
 .article-workflow-rich-editor__placeholder {
   position: absolute;
-  top: 28px;
-  left: 32px;
-  color: #8a8a8f;
-  font-size: 16px;
-  line-height: 1.9;
+  top: var(--awre-pad-y);
+  right: var(--awre-pad-x);
+  left: var(--awre-pad-x);
+  color: var(--awre-paper-hint);
+  font-size: var(--awre-text);
+  line-height: var(--awre-leading);
   pointer-events: none;
 }
 
 .article-workflow-rich-editor__surface {
   min-height: 560px;
-  padding: 28px 32px;
-  outline: none;
+  padding: var(--awre-pad-y) var(--awre-pad-x);
+  color: var(--awre-paper-ink);
   font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  font-size: 16px;
-  line-height: 1.9;
-  color: #1d1d1f;
+  font-size: var(--awre-text);
+  line-height: var(--awre-leading);
   overflow-wrap: break-word;
 }
 
+/* 向内画：outline 会被 outline-offset 推到纸外面，box-shadow 不占位 */
 .article-workflow-rich-editor__surface:focus-visible {
   outline: none;
+  box-shadow: inset 0 0 0 2px rgb(var(--color-brand) / 0.55);
 }
 
-.article-workflow-rich-editor__surface p,
-.article-workflow-rich-editor__surface li,
-.article-workflow-rich-editor__surface blockquote {
+/* 生成的正文自带内联 margin，这条只管人手敲出来的段落 */
+.article-workflow-rich-editor__surface :is(p, li, blockquote) {
   margin: 0 0 1em;
 }
 
