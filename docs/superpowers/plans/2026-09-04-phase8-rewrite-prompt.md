@@ -263,7 +263,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | **A8 清扫** | 删 `memoryGalaxy.ts` 里已无调用方的布局残骸；删依赖 `react-use-measure` | ✅ `e423ba1` |
 | **A9 收敛** | 「unknown → 人话」六份 + 一处内联收进 `apiError.ts`；`articleWorkflowClipboard.ts` 提成 `clipboard.ts` 供两个调用方用；`ArticleWorkflowInputPanel` 手写的 `role="switch"` 换成 `ui/Switch`；补一个恒亮的旋钮 token（深色模式下关着的开关现在看不见） | ✅ `3bfb318` |
 | **A10 弹窗** | `motion/Modal` 补 `role="dialog"` / `aria-modal` / 必填可访问名 / Esc / 焦点陷阱 / 焦点归还，再把六处手搭的浮层收进来 | ✅ `a18e103` |
-| **A11** | 小说 hash 打开路径绕过 `setupCompleted` 门禁：不挡，但给一条「这本书还没设置完」的提示条 | 待做 |
+| **A11** | 小说 hash 打开路径绕过 `setupCompleted` 门禁：不挡，但给一条「这本书还没设置完」的提示条 | ✅ `435a3aa` |
 
 `components/ThemeToggle.tsx` 那处手写的 `role="switch"` **刻意不动**：它的行盒版式在 `index.css` 里，
 偏好口径也不一样（它存的是具体的 light/dark，`ui/Switch` 那处存的是「跟随系统」），
@@ -340,6 +340,31 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
   键盘用户按 Tab 什么都不动。所以用 `Element.checkVisibility()` 当「有没有真渲染」的闸；
   jsdom 25 没有这个方法，取不到就按「渲染了」算，用例里陷阱照测、浏览器里拿得到的一律照准。
 
+**A11 实测：34,454 → 34,454（净消 0 行）。** 这批一行都没消，而且是预料之中的：
+
+- 动到的两个源文件里，`NovelWorkbenchShell.tsx` 上游行本来就是 **0**（A5 逐行重写过），
+  `NovelWorkflowStudio.tsx` 仍是 **73**（A9 之后没再动过的那 73 行，我改的是自己的注释）。
+  新增的警告条、注释、整个 `NovelWorkbenchShell.test.tsx` 都 blame 到本 commit。
+  **A9「收敛批不体现在计数器上」那条到这里更极端：纯行为批的产出全在缺陷上，计数器完全不动。**
+- 这批修的是一处没人说出口的分歧：hash 直达只 `refreshProject` 就进工作台，
+  点封面进来的 `openProject` 会先看 `setupCompleted`。**决定是不补闸** ——
+  分享一本还在搭设置的书是正常事，拿到链接的人该落在工作台上，不该被向导按住。
+  代价是这件事得在工作台上说出来：常驻一条 `ui/Alert`（warning / sm / bordered）+
+  `ui/Button`（outline / sm / rounded）的「继续设置」，接现成的 `onOpenSetup`，
+  条件直接从 `detail.project.setupCompleted` 推，**没加任何新 prop**。
+- 三个刻意的取舍：**不给关闭按钮**（关掉它等于把「还没做完」藏起来，而设置做完这条自己就没了）；
+  **挂在工作区外面**（这是常驻状态不是某个工作区的事，切「全托管」「叙事资产」也还在），
+  与 error/notice 那条各占一行，不互相顶掉；**不印步骤号**（印了外壳就得知道向导的 `STEPS` 模型，
+  白搭一条耦合）。UI 放在外壳而不是容器里，是因为容器头一句注释就写着「页面本身不画任何 UI」。
+- **用例加 5 条**（web 832 → 837，合计 2,121 → 2,126，**没有删除任何用例**）：
+  外壳之前**根本没有用例文件** —— 两个容器用例（`NovelWorkflowStudio{,.live}.test.tsx`）
+  都拿探针把它整块替掉，警告条在原有用例里没有任何落脚点。新建的
+  `NovelWorkbenchShell.test.tsx` 把八个子面板换成一行探针（外壳自己只拉 `getNovelStructure`），
+  5 条盯：没做完就挂、做完了不挂、点按钮回向导、切工作区还在、和报错条并存。
+- 容器用例里那条 hash 直达的注释原来写「这是现状，先把行为钉住；要不要补这道闸另说」——
+  现在有答案了，注释和用例名一起改成「设置没做完也不改道去向导」，并在 `NovelWorkflowStudio.tsx`
+  的 hash effect 上把「为什么不补闸、谁负责说」写进注释。**行为一个字没变，钉住的理由变了。**
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -409,6 +434,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | A8 清扫批 | `e423ba1` | 34,471 | 6,669 |
 | A9 收敛批 | `3bfb318` | 34,458 | 6,669 |
 | A10 弹窗批 | `a18e103` | 34,454 | 6,669 |
+| A11 提示条批（纯行为，计数器不动） | `435a3aa` | 34,454 | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669**（只剩 lockfile） | 6,669 |
 
