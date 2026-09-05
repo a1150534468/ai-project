@@ -12,7 +12,8 @@
  *    递归里那个 `parts.length > 0` 是白判的。
  */
 import type { RefObject } from "react";
-import { copyArticleWorkflowBody, copyArticleWorkflowPlainText } from "./articleWorkflowClipboard";
+import { errorMessage } from "../../apiError";
+import { copyRichText, copyPlainText } from "../../clipboard";
 
 /**
  * 纯文本里跟着上文走、不单独占行的标签。词汇表
@@ -87,7 +88,7 @@ export function createArticleWorkflowCopyActions(args: {
       args.setNotice(done);
       args.toast.show("ok", done);
     } catch (failure) {
-      const message = failure instanceof Error ? failure.message : `复制${label}失败`;
+      const message = errorMessage(failure, `复制${label}失败`);
       args.setError(message);
       args.toast.show("err", message);
     }
@@ -96,14 +97,14 @@ export function createArticleWorkflowCopyActions(args: {
   /** 纯文本那四颗按钮。取值是个函数：`args` 每次渲染都是新的，但点下去要读的是当下的草稿。 */
   const plain = (label: string, value: () => string) => () =>
     run(label, async () => {
-      await copyArticleWorkflowPlainText(value());
+      await copyPlainText(value());
       return `已复制${label}`;
     });
 
   return {
     handleCopyBody: () =>
       run("正文", async () => {
-        const kind = await copyArticleWorkflowBody({
+        const kind = await copyRichText({
           html: args.bodyHtmlDraft,
           plainText: plainTextFromHtml(args.bodyHtmlDraft),
           previewNode: args.previewBodyRef.current,

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { useToast } from "../../motion/Toast";
 import { MEMORY_TYPE_ORDER } from "../../memoryGalaxy";
 import { deleteMemory, getMemoryGalaxy, searchMemory, toggleMemory, updateMemory } from "../../memoryApi";
@@ -35,11 +36,6 @@ export interface MemoryGalaxyState {
   readonly toggleEnabled: () => Promise<void>;
   readonly save: (draft: MemoryDraft) => Promise<boolean>;
   readonly remove: () => Promise<void>;
-}
-
-/** 后端抛什么都得落到一句能给人看的话上。 */
-function messageOf(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
 }
 
 /**
@@ -96,7 +92,7 @@ export function useMemoryGalaxyState(token: string): MemoryGalaxyState {
       } catch (error) {
         if (!alive || background) return;
 
-        setLoadError(messageOf(error, "未知错误"));
+        setLoadError(errorMessage(error, "未知错误"));
         show("err", "记忆加载失败");
       } finally {
         if (alive && !background) setLoading(false);
@@ -135,7 +131,7 @@ export function useMemoryGalaxyState(token: string): MemoryGalaxyState {
     try {
       return await task();
     } catch (error) {
-      show("err", messageOf(error, fallback));
+      show("err", errorMessage(error, fallback));
       return undefined;
     } finally {
       setPending(null);

@@ -200,7 +200,8 @@ describe("新建态的生成配置", () => {
     await renderStudio(null);
     const config = configPanel();
 
-    fireEvent.click(within(config).getByRole("switch", { name: "同时生成配图" }));
+    // 名字用正则：ui/Switch 的无障碍名把 label 和那行小字一起算进去，而小字本身跟着开关状态换词
+    fireEvent.click(within(config).getByRole("switch", { name: /同时生成配图/ }));
 
     expect(within(config).getByRole("button", { name: "生成 3 个平台文案" })).toBeInTheDocument();
   });

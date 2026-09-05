@@ -12,6 +12,7 @@
  * `activeSessionKey`、`runningSessionIds`、`activeAgent` 四个渲染期的值,memo 化就会拿到旧值。
  */
 import { streamChat, type ChatAttachmentPayload } from "../api";
+import { errorMessage } from "../apiError";
 import { attachmentLabels } from "../chatAttachments";
 import type { ChatMessage } from "../chatState";
 import type { ChatSessionsController } from "./useChatSessions";
@@ -115,7 +116,7 @@ export function useChatStream(args: {
           payload.attachments,
         );
       } catch (err) {
-        turn.fail(streamKey, `发送失败: ${err instanceof Error ? err.message : "未知错误"}`);
+        turn.fail(streamKey, `发送失败: ${errorMessage(err, "未知错误")}`);
       } finally {
         turn.end(streamKey, currentSessionId);
       }

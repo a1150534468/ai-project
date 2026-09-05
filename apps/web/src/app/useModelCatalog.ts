@@ -10,6 +10,7 @@
  * 一边是「模型广场」。
  */
 import { useEffect, useState } from "react";
+import { errorMessage } from "../apiError";
 import { listModels, type ModelOption } from "../api";
 
 export type ModelCatalog =
@@ -28,7 +29,7 @@ export function useModelCatalog(): ModelCatalog {
       })
       .catch((failure: unknown) => {
         if (cancelled) return;
-        setCatalog({ status: "failed", reason: failure instanceof Error ? failure.message : "未知错误" });
+        setCatalog({ status: "failed", reason: errorMessage(failure, "未知错误") });
       });
     return () => {
       cancelled = true;

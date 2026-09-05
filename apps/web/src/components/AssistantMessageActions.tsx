@@ -1,4 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { errorMessage } from "../apiError";
+import { copyPlainText } from "../clipboard";
 
 /** 复制完给 1.4 秒的反馈，然后回到常态 */
 const RESET_DELAY_MS = 1400;
@@ -57,39 +59,6 @@ const LOOK: Record<CopyState, { readonly label: string; readonly tone: string; r
 
 const BUTTON =
   "flex h-7 w-7 items-center justify-center rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30";
-/**
- * 没有 clipboard API 的场合（http 页面、老 Safari）退回到「塞一个看不见的 textarea 再 execCommand」。
- * 这条路要求元素真的在文档里且被选中，所以只能先插进去，用完立刻收走。
- */
-function copyViaTextarea(text: string): boolean {
-  if (!document.body) return false;
-
-  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  const carrier = document.createElement("textarea");
-  carrier.value = text;
-  carrier.setAttribute("readonly", "");
-  carrier.style.position = "fixed";
-  carrier.style.left = "-9999px";
-  carrier.style.top = "0";
-  document.body.appendChild(carrier);
-  try {
-    carrier.focus();
-    carrier.select();
-    return document.execCommand("copy");
-  } finally {
-    // 无论成没成都要拆掉，并把焦点还给原来那个元素
-    carrier.remove();
-    focused?.focus();
-  }
-}
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  if (!copyViaTextarea(text)) throw new Error("clipboard_copy_failed");
-}
 
 /** state 是模样，round 是第几次点 —— 连点两次同一结果也要重新计时，靠 round 让 effect 再跑一遍。 */
 interface Flash {
@@ -103,7 +72,14 @@ interface AssistantMessageActionsProps {
   readonly content: string;
 }
 
-/** 助手消息下面那颗复制按钮。空消息（比如流还没吐字）不占位。 */
+/**
+ * 助手消息下面那颗复制按钮。空消息（比如流还没吐字）不占位。
+ *
+ * 写剪贴板这件事**不在这里做**：原来这个文件自带 30 行手写实现（`copyViaTextarea` + `copyText`），
+ * 与图文工作流那份降级链并存，三处毛病一处不落 —— `execCommand` 不先探就调、`writeText`
+ * 被拒之后直接上抛（textarea 那条兜底白站着）、借完选区只还焦点不还选区。现在统一走
+ * `src/clipboard.ts` 的 `copyPlainText`，那三处在那里已经修好了，抛出来的也是给人看的一句话。
+ */
 export function AssistantMessageActions({ content }: AssistantMessageActionsProps) {
   const [flash, setFlash] = useState<Flash>(CALM);
   const text = content.trim();
@@ -122,9 +98,9 @@ export function AssistantMessageActions({ content }: AssistantMessageActionsProp
   const copy = async () => {
     let state: CopyState = "copied";
     try {
-      await copyText(text);
+      await copyPlainText(text);
     } catch (failure) {
-      console.warn("assistant message copy failed", failure instanceof Error ? failure.message : String(failure));
+      console.warn("assistant message copy failed", errorMessage(failure, String(failure)));
       state = "failed";
     }
     setFlash((prev) => ({ state, round: prev.round + 1 }));

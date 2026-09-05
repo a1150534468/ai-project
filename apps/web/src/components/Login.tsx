@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { errorMessage } from "../apiError";
 import { ApiError } from "../apiError";
 import { request } from "../http";
 import { AuthField, AuthScreen, AuthSwitch } from "./AuthScreen";
@@ -38,7 +39,7 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
         setError("登录失败，请检查用户名和密码");
         return;
       }
-      setError(failure instanceof Error ? failure.message : "登录出错，请稍后重试");
+      setError(errorMessage(failure, "登录出错，请稍后重试"));
     }
   };
 

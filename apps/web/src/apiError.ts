@@ -26,3 +26,16 @@ export class ApiError extends Error {
     return new ApiError(body?.error || fallback, response.status, data);
   }
 }
+
+/**
+ * 后端抛什么、网络抛什么，最后都得落到一句能给人看的话上。
+ *
+ * 这句话原来在 `apps/web` 里有七份各自的实现、四个名字（`errorMessage` / `messageOf` /
+ * `codexPetErrorMessage` / `failureText`），另有七处直接写成内联三元。其中三份漏了
+ * 「message 是空串」这一档：`fetch` 被 `AbortController` 掐断、或服务端回 `{ error: "" }`
+ * 经 `fromResponse` 造出来的，都是 message 为空的 `Error` —— 那三处会弹一条空 toast，
+ * 或者拼出「发送失败: 」这种断句。空串一律当没话说，走 fallback。
+ */
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message !== "" ? error.message : fallback;
+}

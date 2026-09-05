@@ -54,10 +54,6 @@ export function createRequestId(prefix = "img-"): string {
   return `${prefix}${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error ? error.message : fallback;
-}
-
 export function toImageTask(task: WorkflowImageTask): ImageTask {
   return {
     id: task.requestId,

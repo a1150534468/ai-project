@@ -34,6 +34,7 @@ import {
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
+import { errorMessage } from "../../apiError";
 import { useToast } from "../../motion";
 import {
   applyArticleWorkflowTheme,
@@ -146,10 +147,6 @@ const CLEAN_REWRITE_PANEL: RewritePanel = {
 function settled(pending: Partial<PendingActions>): Partial<PendingActions> {
   const keys = Object.keys(pending) as (keyof PendingActions)[];
   return Object.fromEntries(keys.map((key) => [key, NOTHING_PENDING[key]]));
-}
-
-function failureText(reason: unknown, fallback: string): string {
-  return reason instanceof Error ? reason.message : fallback;
 }
 
 /** 进批次的每一行都换一份自己的 manifest：编辑器会就地改它，共享引用等于改到别人身上。 */
@@ -393,7 +390,7 @@ export function useArticleWorkflowStudio({
         await run();
         if (!keepHistory) await refreshHistory();
       } catch (reason) {
-        const message = failureText(reason, failure);
+        const message = errorMessage(reason, failure);
         setError(message);
         if (toastFailure) toast.show("err", message);
         await recover?.();

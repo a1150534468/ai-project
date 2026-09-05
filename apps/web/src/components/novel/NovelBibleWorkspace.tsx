@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import {
   createNovelCharacterRelation,
@@ -28,7 +29,7 @@ export function NovelBibleWorkspace({ token, projectId, onOpenSetup }: { readonl
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const load = useCallback(() => getNovelSetup(token, projectId).then(setSetup), [projectId, token]);
-  useEffect(() => { void load().catch((reason) => setError(reason instanceof Error ? reason.message : "加载 Bible 失败")); }, [load]);
+  useEffect(() => { void load().catch((reason) => setError(errorMessage(reason, "加载 Bible 失败"))); }, [load]);
   const bible = record(setup?.bible);
   const dimensions = Array.isArray(bible.worldDimensions) ? bible.worldDimensions.map(record) : [];
   const styles = Array.isArray(bible.styleNotes) ? bible.styleNotes.map(record) : [];
@@ -56,7 +57,7 @@ export function NovelBibleWorkspace({ token, projectId, onOpenSetup }: { readonl
       if (editor.id) await updateNovelResource(token, projectId, editor.kind, editor.id, payload);
       else await createNovelResource(token, projectId, editor.kind, payload);
       setEditor(null); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
+    } catch (reason) { setError(errorMessage(reason, "保存失败")); }
     finally { setBusy(false); }
   };
 
@@ -64,7 +65,7 @@ export function NovelBibleWorkspace({ token, projectId, onOpenSetup }: { readonl
     if (!window.confirm(`确定删除“${label}”吗？`)) return;
     setBusy(true); setError("");
     try { await deleteNovelResource(token, projectId, kind, id); await load(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "删除失败"); }
+    catch (reason) { setError(errorMessage(reason, "删除失败")); }
     finally { setBusy(false); }
   };
 
@@ -74,7 +75,7 @@ export function NovelBibleWorkspace({ token, projectId, onOpenSetup }: { readonl
     try {
       await createNovelCharacterRelation(token, projectId, { ...relation, strength: Math.max(0, Math.min(1, Number(relation.strength) || 0.5)) });
       setRelationOpen(false); setRelation({ fromCharacterId: "", toCharacterId: "", relationType: "盟友", description: "", strength: "0.5" }); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "保存人物关系失败"); }
+    } catch (reason) { setError(errorMessage(reason, "保存人物关系失败")); }
     finally { setBusy(false); }
   };
 

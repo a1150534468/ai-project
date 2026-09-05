@@ -66,9 +66,12 @@
 | Scrim | `--color-scrim` | `scrim` | `#101615` | 同浅色 | 压暗层：模态/抽屉遮罩 `bg-scrim/20`~`/30`，图片上的角标 `bg-scrim/55`~`/70` |
 | Console | `--color-console` | `console` | `#111418` | 同浅色 | 固定深色面板：流式输出、脚本预览、视频信箱底 |
 | Console/ink | `--color-console-ink` | `console-ink` | `#d7e0e8` | 同浅色 | 深色面板上的字与描边（`/70` 次要、`/15` 描边） |
+| Knob | `--color-knob` | `knob` | `#ffffff` | 同浅色 | 开关（`ui/Switch`）的旋钮：无论主题、无论开关状态都是白的 |
 
-`scrim` / `console` / `console-ink` 是三个**故意不随主题翻转**的角色，所以暗色块里不重新声明：
-遮罩的职责是压暗背后内容，两种模式下都该压暗；控制台面板是一套自洽的深色配色，翻成浅色就不是控制台了。
+`scrim` / `console` / `console-ink` / `knob` 是四个**故意不随主题翻转**的角色，所以暗色块里不重新声明：
+遮罩的职责是压暗背后内容，两种模式下都该压暗；控制台面板是一套自洽的深色配色，翻成浅色就不是控制台了；
+旋钮是「轨道上那颗滑块」，靠与轨道的对比说明开没开 —— 跟着主题翻成深色，关着的开关在暗色下就看不见了
+（原来用 `surface`，暗色下与关态轨道 `hairline` 只差 1.5:1）。
 反过来说，**深色块只要内容会跟着主题翻，就不能用它们** —— 那种块用 `surface-inverse` + `ink-inverse`。
 
 已知的两处暗色扁平化，是既有行为不是遗漏：`hairline` 与 `hairline-subtle`、`surface` 与 `surface-subtle`

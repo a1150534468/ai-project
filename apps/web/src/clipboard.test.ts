@@ -4,12 +4,13 @@
  * 剪贴板这三条路原来一条用例都没有，而这一版恰好改的是「谁先成算谁、不成怎么退」——
  * 所以用例都压在退路上：第一条被拒会不会往下走、`writeText` 被拒还有没有兜底、
  * 三条都不给写时抛出来的是给人看的话还是 `execCommand` 的 TypeError。
+ * 现在这条链有两个调用方（图文的五颗复制按钮、对话里的「复制这条回复」），退路只有这一份。
  *
  * jsdom 既没有异步剪贴板也没有 `execCommand`，两样都得自己摆上来 —— 这本身就是那条
  * 「先探再用」的由来。
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { copyArticleWorkflowBody, copyArticleWorkflowPlainText } from "./articleWorkflowClipboard";
+import { copyRichText, copyPlainText } from "./clipboard";
 
 const REFUSED = "浏览器不允许写入剪贴板，请手动选中复制";
 
@@ -45,7 +46,7 @@ describe("正文按保真度往下退", () => {
     stubAsyncClipboard({ write });
     stubClipboardItem();
 
-    const kind = await copyArticleWorkflowBody({ html: "<p>正文</p>", plainText: "正文", previewNode: null });
+    const kind = await copyRichText({ html: "<p>正文</p>", plainText: "正文", previewNode: null });
 
     expect(kind).toBe("html");
     expect(mimeTypesOf(write.mock.calls[0]![0])).toEqual(["text/html", "text/plain"]);
@@ -67,7 +68,7 @@ describe("正文按保真度往下退", () => {
       return true;
     });
 
-    const kind = await copyArticleWorkflowBody({ html: "<p>x</p>", plainText: "x", previewNode: preview });
+    const kind = await copyRichText({ html: "<p>x</p>", plainText: "x", previewNode: preview });
 
     expect(kind).toBe("selection");
     expect(selected).toBe("渲好的正文");
@@ -77,7 +78,7 @@ describe("正文按保真度往下退", () => {
     const writeText = vi.fn(async (_text: string) => undefined);
     stubAsyncClipboard({ writeText });
 
-    const kind = await copyArticleWorkflowBody({ html: "<p>正文</p>", plainText: "正文", previewNode: null });
+    const kind = await copyRichText({ html: "<p>正文</p>", plainText: "正文", previewNode: null });
 
     expect(kind).toBe("plain");
     expect(writeText).toHaveBeenCalledWith("正文");
@@ -86,7 +87,7 @@ describe("正文按保真度往下退", () => {
   it("三条路都不给写时抛的是给人看的那句话，不是 execCommand 的 TypeError", async () => {
     const previewNode = document.createElement("div");
 
-    await expect(copyArticleWorkflowBody({ html: "<p>x</p>", plainText: "x", previewNode })).rejects.toThrow(REFUSED);
+    await expect(copyRichText({ html: "<p>x</p>", plainText: "x", previewNode })).rejects.toThrow(REFUSED);
   });
 });
 
@@ -103,7 +104,7 @@ describe("纯文本兜底", () => {
       return true;
     });
 
-    await expect(copyArticleWorkflowPlainText("标题")).resolves.toBeUndefined();
+    await expect(copyPlainText("标题")).resolves.toBeUndefined();
 
     expect(carried).toBe("标题");
     // 借来的 textarea 用完就收，不留在 DOM 里
@@ -124,7 +125,7 @@ describe("纯文本兜底", () => {
       return true;
     });
 
-    await copyArticleWorkflowPlainText("标题");
+    await copyPlainText("标题");
 
     expect(window.getSelection()?.toString()).toBe("用户手动选中的一段");
   });
@@ -139,7 +140,7 @@ describe("纯文本兜底", () => {
       return true;
     });
 
-    await copyArticleWorkflowPlainText("标题");
+    await copyPlainText("标题");
 
     // 中途确实把焦点借走了，所以「还回去」不是句空话
     expect(borrowed).toBe("TEXTAREA");
@@ -147,6 +148,6 @@ describe("纯文本兜底", () => {
   });
 
   it("连 execCommand 都没有就抛，好让上层去说话", async () => {
-    await expect(copyArticleWorkflowPlainText("标题")).rejects.toThrow(REFUSED);
+    await expect(copyPlainText("标题")).rejects.toThrow(REFUSED);
   });
 });

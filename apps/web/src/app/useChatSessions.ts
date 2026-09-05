@@ -14,6 +14,7 @@
  *    Agent 选择,不能留在一个已经不存在的会话上。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errorMessage } from "../apiError";
 import { deleteSession, getSessionMessages, listSessions, type AgentOption, type Session } from "../api";
 import { toChatMessages, type ChatMessage } from "../chatState";
 import { saveSelectedAgentId } from "../shellState";
@@ -138,7 +139,7 @@ export function useChatSessions(args: {
         if (selectSessionRequestRef.current !== requestId) return;
         setErrorsBySession((prev) => ({
           ...prev,
-          [id]: `加载会话失败: ${err instanceof Error ? err.message : "未知错误"}`,
+          [id]: `加载会话失败: ${errorMessage(err, "未知错误")}`,
         }));
       }
     },

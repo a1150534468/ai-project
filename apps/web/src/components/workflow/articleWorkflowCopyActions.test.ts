@@ -11,11 +11,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { articleWorkflowTagsText, createArticleWorkflowCopyActions } from "./articleWorkflowCopyActions";
 
 const clipboard = vi.hoisted(() => ({
-  copyArticleWorkflowBody: vi.fn(),
-  copyArticleWorkflowPlainText: vi.fn(),
+  copyRichText: vi.fn(),
+  copyPlainText: vi.fn(),
 }));
 
-vi.mock("./articleWorkflowClipboard", () => clipboard);
+vi.mock("../../clipboard", () => clipboard);
 
 type Args = Parameters<typeof createArticleWorkflowCopyActions>[0];
 
@@ -38,9 +38,9 @@ function harness(overrides: Partial<Args> = {}) {
 
 /** 正文那颗按钮交给剪贴板的纯文本版本。 */
 async function plainTextOf(bodyHtml: string): Promise<string> {
-  clipboard.copyArticleWorkflowBody.mockResolvedValue("html");
+  clipboard.copyRichText.mockResolvedValue("html");
   await harness({ bodyHtmlDraft: bodyHtml }).actions.handleCopyBody();
-  const [args] = clipboard.copyArticleWorkflowBody.mock.calls.at(-1) as [{ plainText: string }];
+  const [args] = clipboard.copyRichText.mock.calls.at(-1) as [{ plainText: string }];
   return args.plainText;
 }
 
@@ -79,20 +79,20 @@ describe("正文铺成纯文本", () => {
 
 describe("按钮说什么话", () => {
   it("走到纯文本兜底要说清楚没排版，成功一并清掉上一条错误", async () => {
-    clipboard.copyArticleWorkflowBody.mockResolvedValue("plain");
+    clipboard.copyRichText.mockResolvedValue("plain");
     const node = document.createElement("div");
     const { actions, toast, setError, setNotice } = harness({ previewBodyRef: { current: node } });
 
     await actions.handleCopyBody();
 
-    expect(clipboard.copyArticleWorkflowBody).toHaveBeenCalledWith(expect.objectContaining({ previewNode: node }));
+    expect(clipboard.copyRichText).toHaveBeenCalledWith(expect.objectContaining({ previewNode: node }));
     expect(setNotice).toHaveBeenCalledWith("已复制纯文本正文");
     expect(toast.show).toHaveBeenCalledWith("ok", "已复制纯文本正文");
     expect(setError).toHaveBeenCalledWith("");
   });
 
   it("选区那条路也是带排版的，说的话跟 html 一样", async () => {
-    clipboard.copyArticleWorkflowBody.mockResolvedValue("selection");
+    clipboard.copyRichText.mockResolvedValue("selection");
     const { actions, toast } = harness();
 
     await actions.handleCopyBody();
@@ -102,7 +102,7 @@ describe("按钮说什么话", () => {
 
   it("浏览器拒绝时把原话交给用户，notice 不动", async () => {
     const refused = "浏览器不允许写入剪贴板，请手动选中复制";
-    clipboard.copyArticleWorkflowBody.mockRejectedValue(new Error(refused));
+    clipboard.copyRichText.mockRejectedValue(new Error(refused));
     const { actions, toast, setError, setNotice } = harness();
 
     await actions.handleCopyBody();
@@ -113,7 +113,7 @@ describe("按钮说什么话", () => {
   });
 
   it("抛出来的不是 Error 就拿按钮名字凑一句，不让 [object Object] 进 toast", async () => {
-    clipboard.copyArticleWorkflowBody.mockRejectedValue({ code: 500 });
+    clipboard.copyRichText.mockRejectedValue({ code: 500 });
     const { actions, toast } = harness();
 
     await actions.handleCopyBody();
@@ -122,14 +122,14 @@ describe("按钮说什么话", () => {
   });
 
   it("标题、摘要、文案都掐掉首尾空白再写", async () => {
-    clipboard.copyArticleWorkflowPlainText.mockResolvedValue(undefined);
+    clipboard.copyPlainText.mockResolvedValue(undefined);
     const { actions, toast } = harness({ captionDraft: "\n第一次用就回不去了。\n" });
 
     await actions.handleCopyTitle();
     await actions.handleCopySummary();
     await actions.handleCopyCaption();
 
-    expect(clipboard.copyArticleWorkflowPlainText.mock.calls.map(([text]) => text)).toEqual([
+    expect(clipboard.copyPlainText.mock.calls.map(([text]) => text)).toEqual([
       "咖啡机夏促",
       "适合公众号摘要",
       "第一次用就回不去了。",

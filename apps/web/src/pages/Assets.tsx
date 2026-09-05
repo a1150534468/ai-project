@@ -8,6 +8,7 @@
  *    `requestSeq` 认领响应，不是当前那次的直接丢。
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { errorMessage } from "../apiError";
 import { AssetLibraryView } from "../components/assets/AssetLibraryView";
 import { DownloadLinkDialog, type DownloadDialogState } from "../components/ui/DownloadLinkDialog";
 import { useToast } from "../motion";
@@ -20,10 +21,6 @@ interface AssetsPageProps {
 
 /** 一页 30 条是服务端缺省值；显式传，避免哪天服务端调缺省把前端网格的节奏也改了。 */
 const PAGE_SIZE = 30;
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "获取素材库失败";
-}
 
 export default function Assets({ token }: AssetsPageProps) {
   const toast = useToast();
@@ -49,7 +46,7 @@ export default function Assets({ token }: AssetsPageProps) {
     } catch (err) {
       if (requestSeq.current !== seq) return;
       setList(EMPTY_ASSET_LIST);
-      setError(errorMessage(err));
+      setError(errorMessage(err, "获取素材库失败"));
     } finally {
       if (requestSeq.current === seq) setLoading(false);
     }
@@ -71,7 +68,7 @@ export default function Assets({ token }: AssetsPageProps) {
       setList((current) => appendAssetPage(current, page));
     } catch (err) {
       if (requestSeq.current !== seq) return;
-      const message = errorMessage(err);
+      const message = errorMessage(err, "获取素材库失败");
       setError(message);
       toast.show("err", message);
     } finally {

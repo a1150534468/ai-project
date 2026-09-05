@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import {
   controlNovelEngineRun,
@@ -175,7 +176,7 @@ export function NovelRunCockpit({
     setSteps([]);
     setEvents([]);
     setActiveRunId("");
-    void load(true).catch((reason) => setError(reason instanceof Error ? reason.message : "加载驾驶舱失败"));
+    void load(true).catch((reason) => setError(errorMessage(reason, "加载驾驶舱失败")));
   }, [load]);
 
   useEffect(() => {
@@ -225,7 +226,7 @@ export function NovelRunCockpit({
           });
         } catch (reason) {
           if (controller.signal.aborted) return;
-          setError(reason instanceof Error ? reason.message : "运行流连接中断");
+          setError(errorMessage(reason, "运行流连接中断"));
         }
         await new Promise((resolve) => window.setTimeout(resolve, 1200));
       }
@@ -252,7 +253,7 @@ export function NovelRunCockpit({
       setActiveRunId(run.id);
       onProjectChanged?.();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "启动全托管失败");
+      setError(errorMessage(reason, "启动全托管失败"));
     } finally {
       setBusy("");
     }
@@ -266,7 +267,7 @@ export function NovelRunCockpit({
       const run = await controlNovelEngineRun(token, projectId, activeRun.id, action);
       setRuns((current) => current.map((item) => item.id === run.id ? run : item));
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "运行操作失败");
+      setError(errorMessage(reason, "运行操作失败"));
     } finally {
       setBusy("");
     }

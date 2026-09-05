@@ -350,8 +350,7 @@ describe("ArticleWorkflowStudio 主题创作", () => {
     await act(async () => { await Promise.resolve(); });
 
     fireEvent.click(screen.getByRole("tab", { name: "主题创作" }));
-    const imageSwitch = screen.getByRole("switch", { name: "同时生成配图" }) as HTMLInputElement;
-    expect(imageSwitch.checked).toBe(false);
+    expect(screen.getByRole("switch", { name: /同时生成配图/ })).toHaveAttribute("aria-checked", "false");
     expect(screen.getByRole("button", { name: "生成 3 个平台文案" })).toBeDisabled();
 
     fireEvent.change(screen.getByPlaceholderText("例如：夏天在家做一杯清爽咖啡"), {

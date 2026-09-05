@@ -1,5 +1,5 @@
 /**
- * 把多平台图文的正文 / 标题 / 文案放进剪贴板。三条路按保真度排，前一条不成就往下退：
+ * 全站唯一一处「把东西放进剪贴板」。三条路按保真度排，前一条不成就往下退：
  *
  *  1. **`ClipboardItem` 一次写 `text/html` 与 `text/plain`**：公众号编辑器认前者，纯文本
  *     输入框认后者，两边都不用二次加工；
@@ -7,18 +7,20 @@
  *     与老 Safari 拿不到 1，选区这条路能把样式一起带走；
  *  3. **纯文本兜底**。
  *
- * 这一版收掉三处：
+ * 原来这套逻辑在图文工作流里（`articleWorkflowClipboard.ts`），对话页的
+ * 「复制这条回复」另有一份 30 行的手写实现，三处毛病一处不落地又犯了一遍。搬到这里之后
+ * 两个调用方共用同一条降级链，那份手写的删掉了。三处毛病是：
  *
  *  - **`execCommand` 先探再用**。它是废弃 API，jsdom 和部分环境根本没有这个方法，
- *    原来直接调 —— 抛出来的 `TypeError: document.execCommand is not a function` 会原样进 toast。
- *  - **`writeText` 被拒之后还有兜底**。原来那句 `await navigator.clipboard.writeText(text)`
+ *    直接调 —— 抛出来的 `TypeError: document.execCommand is not a function` 会原样进 toast。
+ *  - **`writeText` 被拒之后还有兜底**。那句 `await navigator.clipboard.writeText(text)`
  *    一旦被拒（文档没焦点时 Firefox / Safari 就这么干）异常直接上抛，屏幕外 textarea 那条路白站着。
- *  - **选区和焦点由一个人收拾**。原来 textarea 那条路只还焦点不还选区：借完就走，
+ *  - **选区和焦点由一个人收拾**。textarea 那条路只还焦点不还选区：借完就走，
  *    用户手上选中的那一段没了。
  */
 
 /** 哪条路成的。调用方靠它决定说「已复制公众号正文」还是「已复制纯文本正文」。 */
-export type ArticleWorkflowCopyKind = "html" | "selection" | "plain";
+export type CopyKind = "html" | "selection" | "plain";
 
 /** 三条路都不给写时说的话。会原样进 toast，所以写的是给人看的句子。 */
 const REFUSED = "浏览器不允许写入剪贴板，请手动选中复制";
@@ -124,22 +126,22 @@ async function writePlainText(text: string): Promise<boolean> {
   return copyViaCarrier(text);
 }
 
-/** 标题、摘要、文案、标签走这条：写不进去就抛给上层去说话。 */
-export async function copyArticleWorkflowPlainText(text: string): Promise<void> {
+/** 标题、摘要、文案、标签、以及对话里的整条回复走这条：写不进去就抛给上层去说话。 */
+export async function copyPlainText(text: string): Promise<void> {
   if (!(await writePlainText(text))) throw new Error(REFUSED);
 }
 
 /**
- * 正文走这条。三条路写成一张按顺序试的表：这一层的规则就是「谁先成算谁」，
+ * 带格式的正文走这条。三条路写成一张按顺序试的表：这一层的规则就是「谁先成算谁」，
  * 让代码长得像那句话，比三段各自 return 的 if 少一处漏改。
  */
-export async function copyArticleWorkflowBody(args: {
+export async function copyRichText(args: {
   readonly html: string;
   readonly plainText: string;
   readonly previewNode: HTMLElement | null;
-}): Promise<ArticleWorkflowCopyKind> {
+}): Promise<CopyKind> {
   const tiers: readonly {
-    readonly kind: ArticleWorkflowCopyKind;
+    readonly kind: CopyKind;
     readonly attempt: () => boolean | Promise<boolean>;
   }[] = [
     { kind: "html", attempt: () => writeBothFormats(args.html, args.plainText) },

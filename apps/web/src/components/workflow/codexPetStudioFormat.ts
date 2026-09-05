@@ -77,10 +77,6 @@ export const EVENT_LABELS: Record<string, string> = {
   "run.cancelled": "桌宠制作已取消",
 };
 
-export function codexPetErrorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
-
 export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }

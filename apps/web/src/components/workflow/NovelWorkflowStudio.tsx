@@ -28,6 +28,7 @@
  * 不在就选第一章」收成 `selectChapterFrom`。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { errorMessage } from "../../apiError";
 import {
   analyzeNovelChapter,
   createNovelProject,
@@ -88,10 +89,6 @@ interface ChapterEditor {
 }
 
 const EMPTY_EDITOR: ChapterEditor = { chapterId: "", draft: EMPTY_CHAPTER_DRAFT };
-
-function errorMessage(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 function isActiveTask(status: string): boolean {
   return status === "queued" || status === "running";

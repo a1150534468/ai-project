@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../apiError";
 import { Icon } from "@iconify/react";
 import { generateAgent, listAgents, type AgentOption } from "../api";
 import { Modal, RippleButton } from "../motion";
@@ -252,7 +253,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
         const data = await listAgents(token);
         setCatalog({ presets: data.presets, custom: data.custom });
       } catch (failure) {
-        setError(failure instanceof Error ? failure.message : "加载失败");
+        setError(errorMessage(failure, "加载失败"));
       } finally {
         setLoading(false);
       }
@@ -283,7 +284,7 @@ export function AgentPicker({ token, open, onClose, onSelect }: AgentPickerProps
       setCreated(await generateAgent(token, text));
       setMode("success");
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "创建失败");
+      setError(errorMessage(failure, "创建失败"));
       setMode("create");
     }
   };

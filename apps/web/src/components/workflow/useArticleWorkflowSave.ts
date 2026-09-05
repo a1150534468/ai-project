@@ -12,6 +12,7 @@
  * 1.5s 计时器在每次渲染时重置掉——批次轮询每 2.5s 回填一次,那就等于自动保存永不发车。
  */
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { articleWorkflowPlatformConfig, type ArticleWorkflowPlatform } from "@ai-assistant/article-workflow";
 import { ApiError } from "../../apiError";
 import {
@@ -104,7 +105,7 @@ export function useArticleWorkflowSave(args: {
           if (latest) replaceProjectRow(latest);
           return false;
         }
-        const message = err instanceof Error ? err.message : "保存失败";
+        const message = errorMessage(err, "保存失败");
         setError(message);
         toast.show("err", message);
         return false;

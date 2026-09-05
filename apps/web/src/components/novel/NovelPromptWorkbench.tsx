@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import { listModels, listNovelPrompts, rollbackNovelPrompt, saveNovelPrompt, type NovelPromptTemplate } from "../../api";
 
@@ -62,7 +63,7 @@ export function NovelPromptWorkbench({ token, projectId }: { readonly token: str
       setSelectedId(saved.id);
       setMessage("已创建新版本");
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "保存失败");
+      setMessage(errorMessage(reason, "保存失败"));
     } finally {
       setBusy(false);
     }
@@ -76,7 +77,7 @@ export function NovelPromptWorkbench({ token, projectId }: { readonly token: str
       await load();
       setMessage(`已回滚到 v${version}`);
     } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : "回滚失败");
+      setMessage(errorMessage(reason, "回滚失败"));
     } finally {
       setBusy(false);
     }

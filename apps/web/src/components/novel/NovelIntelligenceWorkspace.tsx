@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import {
   backfillNovelNarrativeAssets,
@@ -106,7 +107,7 @@ export function NovelIntelligenceWorkspace({ token, projectId, showPrompts = tru
     ]);
     setDashboard(nextDashboard); setStructure(nextStructure); setCharacters(cast.characters); setRelations(cast.relations); setStorylines(nextStorylines); setProps(nextProps); setAssets(nextAssets); setCheckpoints(nextCheckpoints);
   }, [projectId, token]);
-  useEffect(() => { void load().catch((reason) => setError(reason instanceof Error ? reason.message : "加载叙事智能失败")); }, [load]);
+  useEffect(() => { void load().catch((reason) => setError(errorMessage(reason, "加载叙事智能失败"))); }, [load]);
 
   const openEditor = (kind: EditorKind, row: Record<string, unknown> = {}, parentId = "") => {
     const defaults: Record<EditorKind, Record<string, string>> = {
@@ -142,7 +143,7 @@ export function NovelIntelligenceWorkspace({ token, projectId, showPrompts = tru
       else if (editor.id) await updateNovelResource(token, projectId, resource, editor.id, payload);
       else await createNovelResource(token, projectId, resource, payload);
       setEditor(null); await load();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
+    } catch (reason) { setError(errorMessage(reason, "保存失败")); }
     finally { setBusy(false); }
   };
 
@@ -150,7 +151,7 @@ export function NovelIntelligenceWorkspace({ token, projectId, showPrompts = tru
     if (!window.confirm(`确定删除“${name}”吗？`)) return;
     setBusy(true); setError("");
     try { await deleteNovelResource(token, projectId, resource, id); await load(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "删除失败"); }
+    catch (reason) { setError(errorMessage(reason, "删除失败")); }
     finally { setBusy(false); }
   };
 
@@ -160,7 +161,7 @@ export function NovelIntelligenceWorkspace({ token, projectId, showPrompts = tru
       const result = await backfillNovelNarrativeAssets(token, projectId);
       await load();
       setNotice(`已扫描 ${result.chapters} 章并重算 ${result.rescoredChapters} 章评分；当前 ${result.foreshadows} 条伏笔、${result.foreshadowEvents} 条伏笔事件、${result.debts} 项债务，另生成 ${result.timelineEvents} 条时间线、${result.props} 个道具。`);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "补齐叙事资产失败"); }
+    } catch (reason) { setError(errorMessage(reason, "补齐叙事资产失败")); }
     finally { setBackfilling(false); }
   };
 
@@ -172,9 +173,9 @@ export function NovelIntelligenceWorkspace({ token, projectId, showPrompts = tru
     ["检查点", checkpoints.length, "支持分支与回滚", "mdi:source-commit"],
   ] as const, [assets, characters.length, checkpoints.length, props.length, relations.length, storylines.length]);
 
-  const createCheckpoint = async () => { setBusy(true); try { await createNovelCheckpoint(token, projectId, `手动检查点 ${new Date().toLocaleString("zh-CN")}`); await load(); } catch (reason) { setError(reason instanceof Error ? reason.message : "创建检查点失败"); } finally { setBusy(false); } };
-  const rollback = async (id: string) => { if (!window.confirm("恢复后当前作品状态会被替换，确定继续吗？")) return; setBusy(true); try { await rollbackNovelCheckpoint(token, projectId, id); window.location.reload(); } catch (reason) { setError(reason instanceof Error ? reason.message : "回滚失败"); setBusy(false); } };
-  const branch = async (id: string) => { const name = window.prompt("输入新世界线名称"); if (!name?.trim()) return; setBusy(true); try { await createNovelBranch(token, projectId, id, name.trim()); window.location.reload(); } catch (reason) { setError(reason instanceof Error ? reason.message : "创建世界线失败"); setBusy(false); } };
+  const createCheckpoint = async () => { setBusy(true); try { await createNovelCheckpoint(token, projectId, `手动检查点 ${new Date().toLocaleString("zh-CN")}`); await load(); } catch (reason) { setError(errorMessage(reason, "创建检查点失败")); } finally { setBusy(false); } };
+  const rollback = async (id: string) => { if (!window.confirm("恢复后当前作品状态会被替换，确定继续吗？")) return; setBusy(true); try { await rollbackNovelCheckpoint(token, projectId, id); window.location.reload(); } catch (reason) { setError(errorMessage(reason, "回滚失败")); setBusy(false); } };
+  const branch = async (id: string) => { const name = window.prompt("输入新世界线名称"); if (!name?.trim()) return; setBusy(true); try { await createNovelBranch(token, projectId, id, name.trim()); window.location.reload(); } catch (reason) { setError(errorMessage(reason, "创建世界线失败")); setBusy(false); } };
 
   return <section className="grid gap-4">
     <header className="rounded-2xl border border-hairline-subtle bg-surface p-5"><p className="text-xs font-bold uppercase tracking-[0.16em] text-brand-ink">Narrative Intelligence</p><div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-xl font-semibold text-ink">叙事智能中心</h2><p className="mt-1 text-sm text-ink-secondary">直接治理故事树、人物关系、时间、伏笔、道具、知识与因果。</p></div><span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">{dashboard?.project.currentBranch || "main"} 世界线</span></div>{error && <p className="mt-4 rounded-xl bg-danger/10 px-3 py-2 text-xs text-danger-ink">{error}</p>}{notice && <p className="mt-4 rounded-xl bg-brand-soft px-3 py-2 text-xs text-brand-ink">{notice}</p>}<nav className="mt-5 flex gap-1 overflow-x-auto rounded-xl bg-surface-muted p-1 [scrollbar-width:none]">{TABS.map(([id, label, icon]) => <button key={id} type="button" onClick={() => setTab(id)} className={`flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-semibold ${tab === id ? "bg-surface text-brand-ink shadow-sm" : "text-ink-secondary"}`}><Icon icon={icon} />{label}</button>)}</nav></header>

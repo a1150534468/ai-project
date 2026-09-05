@@ -179,10 +179,13 @@ describe("<Switch>", () => {
     expect(parts().knob).not.toHaveClass("translate-x-5");
   });
 
-  it("滑块不写 bg-white —— 字面色不跟着暗色模式翻", () => {
+  it("滑块走 bg-knob —— 既不写字面色，也不跟着暗色模式翻", () => {
+    // knob 是四个「恒不翻转」token 之一。原来用 bg-surface，暗色下它压在关态轨道
+    // （hairline，66 66 69）上只有 1.5:1，等于看不见那颗圆点。
     render(<Switch checked={false} label="关" onToggle={vi.fn()} />);
     expect(parts().knob.className).not.toMatch(LITERAL_COLOR);
-    expect(parts().knob).toHaveClass("bg-surface");
+    expect(parts().knob).toHaveClass("bg-knob");
+    expect(parts().knob).not.toHaveClass("bg-surface");
   });
 
   it("点一下回调一次，disabled 时点不动", () => {

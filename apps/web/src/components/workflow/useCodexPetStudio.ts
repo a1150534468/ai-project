@@ -21,6 +21,7 @@ import {
   useState,
   type ChangeEvent,
 } from "react";
+import { errorMessage } from "../../apiError";
 import * as codexPetApi from "../../codexPetApi";
 import {
   CODEX_PET_IMAGE_MODEL,
@@ -56,7 +57,6 @@ import {
   type CodexPetStudioClient,
 } from "./codexPetStudioClient";
 import {
-  codexPetErrorMessage,
   isAbortError,
   launchInstallUrl,
   openDownload,
@@ -155,7 +155,7 @@ export function useCodexPetStudio({
       applyDetail(next, false);
       return next;
     } catch (refreshError) {
-      if (!silent) setError(codexPetErrorMessage(refreshError, "刷新桌宠项目失败"));
+      if (!silent) setError(errorMessage(refreshError, "刷新桌宠项目失败"));
       return null;
     }
   }, [applyDetail, client, token]);
@@ -222,7 +222,7 @@ export function useCodexPetStudio({
           setSelectedProjectId(projectsResult.value[0]?.id ?? null);
         }
       } else {
-        setError(codexPetErrorMessage(projectsResult.reason, "加载桌宠项目失败"));
+        setError(errorMessage(projectsResult.reason, "加载桌宠项目失败"));
         if (selectedProjectIdRef.current === undefined) setSelectedProjectId(null);
       }
       if (modelOptionsResult.status === "fulfilled") setModelOptions(modelOptionsResult.value);
@@ -253,7 +253,7 @@ export function useCodexPetStudio({
         setError("");
       })
       .catch((loadError: unknown) => {
-        if (!isAbortError(loadError)) setError(codexPetErrorMessage(loadError, "加载桌宠项目详情失败"));
+        if (!isAbortError(loadError)) setError(errorMessage(loadError, "加载桌宠项目详情失败"));
       })
       .finally(() => {
         if (selectedProjectIdRef.current === projectId) setLoadingDetail(false);
@@ -354,7 +354,7 @@ export function useCodexPetStudio({
         // selectable until the next 2.5-second fallback poll.
         if (regeneratesCandidates) await refreshSelectedProject(true);
       })
-      .catch((saveError: unknown) => setError(codexPetErrorMessage(saveError, "保存桌宠草稿失败")))
+      .catch((saveError: unknown) => setError(errorMessage(saveError, "保存桌宠草稿失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -380,7 +380,7 @@ export function useCodexPetStudio({
         setNotice("制作任务已提交，实时进度已连接");
         void refreshSelectedProject(true);
       } catch (startError) {
-        setError(codexPetErrorMessage(startError, "启动桌宠制作失败"));
+        setError(errorMessage(startError, "启动桌宠制作失败"));
       } finally {
         setBusyAction(null);
       }
@@ -418,7 +418,7 @@ export function useCodexPetStudio({
         }));
         setNotice(`已上传 ${uploaded.length} 张参考图`);
       } catch (uploadError) {
-        setError(codexPetErrorMessage(uploadError, "上传参考图失败"));
+        setError(errorMessage(uploadError, "上传参考图失败"));
       } finally {
         setBusyAction(null);
       }
@@ -442,7 +442,7 @@ export function useCodexPetStudio({
         setNotice("候选 1 已保留；候选 2 的 429 重试等待单次额外调用授权");
         void refreshSelectedProject(true);
       })
-      .catch((continuationError: unknown) => setError(codexPetErrorMessage(continuationError, "续跑失败的 GPT 桌宠项目失败")))
+      .catch((continuationError: unknown) => setError(errorMessage(continuationError, "续跑失败的 GPT 桌宠项目失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -463,7 +463,7 @@ export function useCodexPetStudio({
         setNotice(`已排队重做：${resumableGateRowLabels}；每次重出图仍需单独授权`);
         void refreshSelectedProject(true);
       })
-      .catch((resumeError: unknown) => setError(codexPetErrorMessage(resumeError, "重做闸门指认的动作组失败")))
+      .catch((resumeError: unknown) => setError(errorMessage(resumeError, "重做闸门指认的动作组失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -520,7 +520,7 @@ export function useCodexPetStudio({
         } catch {
           // Preserve the local list and surface the original delete error.
         }
-        setError(codexPetErrorMessage(deleteError, "删除桌宠项目失败"));
+        setError(errorMessage(deleteError, "删除桌宠项目失败"));
       })
       .finally(() => {
         setBusyAction(null);
@@ -545,7 +545,7 @@ export function useCodexPetStudio({
         // finishes the cancellation handshake.
         void refreshSelectedProject(true);
       })
-      .catch((cancelError: unknown) => setError(codexPetErrorMessage(cancelError, "取消桌宠制作失败")))
+      .catch((cancelError: unknown) => setError(errorMessage(cancelError, "取消桌宠制作失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -565,7 +565,7 @@ export function useCodexPetStudio({
         setNotice(success);
         void refreshSelectedProject(true);
       })
-      .catch((selectionError: unknown) => setError(codexPetErrorMessage(selectionError, "处理主形象失败")))
+      .catch((selectionError: unknown) => setError(errorMessage(selectionError, "处理主形象失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -581,7 +581,7 @@ export function useCodexPetStudio({
         setNotice(`已批准 ${run.pendingImageJobKey || "当前方向任务"} 的 1 次真实生图调用；失败后会立即停下`);
         void refreshSelectedProject(true);
       })
-      .catch((approvalError: unknown) => setError(codexPetErrorMessage(approvalError, "批准下一次真实生图失败")))
+      .catch((approvalError: unknown) => setError(errorMessage(approvalError, "批准下一次真实生图失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -596,7 +596,7 @@ export function useCodexPetStudio({
         else launchInstallUrl(result.installUrl);
         setNotice("已唤起 Codex 安装确认；签名图片链接 30 分钟内有效");
       })
-      .catch((installError: unknown) => setError(codexPetErrorMessage(installError, "安装到 Codex 失败")))
+      .catch((installError: unknown) => setError(errorMessage(installError, "安装到 Codex 失败")))
       .finally(() => setBusyAction(null));
   };
 
@@ -610,7 +610,7 @@ export function useCodexPetStudio({
         openDownload(result.blob, result.filename);
         setNotice("兼容包已开始下载");
       })
-      .catch((downloadError: unknown) => setError(codexPetErrorMessage(downloadError, "下载兼容包失败")))
+      .catch((downloadError: unknown) => setError(errorMessage(downloadError, "下载兼容包失败")))
       .finally(() => setBusyAction(null));
   };
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import { listModels } from "../../api";
 
@@ -29,7 +30,7 @@ export function NovelModelSelector({
         if (!cancelled) setModels(rows);
       })
       .catch((reason) => {
-        if (!cancelled) setError(reason instanceof Error ? reason.message : "模型列表加载失败");
+        if (!cancelled) setError(errorMessage(reason, "模型列表加载失败"));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);

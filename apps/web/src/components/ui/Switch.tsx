@@ -2,19 +2,19 @@ import { cx } from "./cx";
 
 /**
  * 轨道式开关。全站手写了三遍：记忆筛选条的「长期记忆」、设置页的「跟随系统」、
- * 文章工作流的「同时生成配图」。最后那份是 `checkbox` + `peer-checked` 的另一套机制，
- * 这里先收 `<button role="switch">` 的两处 —— 它们连几何尺寸都不一样（44 对 42）。
+ * 图文工作流的「同时生成配图」。前两处收在批次 A4，最后那处是 `checkbox` + `peer-checked`
+ * 的另一套机制（还是另一副几何：40×24 轨道 + 16 滑块），A9 一并收进来 —— 三处都在这里了。
  *
  * 几何统一到 44×24 轨道 + 20 滑块，两端各留 2，行程就是 44-20-4 = 20 = `translate-x-5`，
  * 全落在 Tailwind 原生刻度上，不用 `w-[42px]` / `translate-x-[18px]` 这种任意值。
  * 位移走 transform 而不是切 `left` 档位：不触发重排，也省一个类名分支。
  *
- * 滑块用 `bg-surface` 而不是 `bg-white` —— 字面色不跟着暗色模式翻（design-system.md 开头那条）。
- * 代价是暗色下滑块（29,29,31）压在关态轨道（66,66,69）上只有 1.5:1，几乎看不出圆点；
- * 这是缺一个「永远浅色」token 的问题，留给设计系统那一轮，不在这里现编。
+ * 滑块用 `bg-knob`：字面色不跟着暗色模式翻（design-system.md 开头那条），但 `bg-surface`
+ * 在暗色下压在关态轨道（`hairline`，66,66,69）上只有 1.5:1、几乎看不出圆点。`knob` 是为此
+ * 补的第三个「恒不翻转」token（另两个是 `scrim` 与 `console`），恒白，暗色下对比约 10:1。
  *
- * 基底是 `flex` 而不是 `inline-flex`：两个调用方一个是 flex 行里的项（两种写法等价）、
- * 一个是设置页里占满整行的大卡 —— 后者用 inline-level 会在卡片底部多出一条行盒的下沉空隙。
+ * 基底是 `flex` 而不是 `inline-flex`：三个调用方一个是 flex 行里的项（两种写法等价）、
+ * 两个是占满整行的大卡 —— 后者用 inline-level 会在卡片底部多出一条行盒的下沉空隙。
  */
 export interface SwitchProps {
   readonly checked: boolean;
@@ -57,7 +57,7 @@ export function Switch({ checked, label, description, onToggle, disabled = false
       >
         <span
           className={cx(
-            "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-surface shadow-sm transition-transform",
+            "absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-knob shadow-sm transition-transform",
             checked && "translate-x-5",
           )}
         />

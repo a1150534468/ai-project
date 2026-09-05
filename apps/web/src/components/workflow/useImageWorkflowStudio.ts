@@ -12,6 +12,7 @@
  *  - **轮询只在有活跃任务时挂定时器**,并随 `tasks` 变化重建 —— 任务全部结束必须停下来。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { errorMessage } from "../../apiError";
 import {
   cancelWorkflowImageTask,
   generateWorkflowImages,
@@ -48,7 +49,6 @@ import {
   IMAGE_REFERENCE_MIME_TYPES,
   TASK_POLL_MS,
   createRequestId,
-  errorMessage,
   isActiveTask,
   mergeTask,
   remainingImageCount,
@@ -370,7 +370,7 @@ export function useImageWorkflowStudio(args: {
         setNotice("提示词已优化");
         toast.show("ok", "提示词已优化");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "优化提示词失败";
+        const msg = errorMessage(err, "优化提示词失败");
         setError(msg);
         toast.show("err", msg);
       } finally {
@@ -396,7 +396,7 @@ export function useImageWorkflowStudio(args: {
         setNotice("已取消生图任务");
         toast.show("ok", "任务已取消");
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "取消生图任务失败";
+        const msg = errorMessage(err, "取消生图任务失败");
         setError(msg);
         toast.show("err", msg);
         await refreshImageState(false);

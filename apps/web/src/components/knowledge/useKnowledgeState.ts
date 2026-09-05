@@ -12,6 +12,7 @@
  *    现在是一个 effect 统一轮询「当前库里还没落地的那几篇」，卸载即停。
  */
 import { useCallback, useEffect, useState } from "react";
+import { errorMessage } from "../../apiError";
 import {
   addKbFile,
   createKb,
@@ -41,10 +42,6 @@ export interface KbDraft {
 const EMPTY_DRAFT: KbDraft = { name: "", description: "" };
 
 const OFFICIAL = "OFFICIAL";
-
-function messageOf(error: unknown, fallback: string): string {
-  return error instanceof Error && error.message ? error.message : fallback;
-}
 
 export interface KnowledgeState {
   /** 首屏还在拉列表。后续的刷新走 `pending === "list"`，不再把列表清空。 */
@@ -107,7 +104,7 @@ export function useKnowledgeState(token: string): KnowledgeState {
       try {
         await fetchList();
       } catch (error) {
-        if (alive) setLoadError(messageOf(error, "未知错误"));
+        if (alive) setLoadError(errorMessage(error, "未知错误"));
       } finally {
         if (alive) setLoading(false);
       }
@@ -138,7 +135,7 @@ export function useKnowledgeState(token: string): KnowledgeState {
         const docs = await listKbDocuments(token, selectedId);
         if (alive) setDocuments(docs);
       } catch (error) {
-        if (alive) show("err", messageOf(error, "加载文档失败"));
+        if (alive) show("err", errorMessage(error, "加载文档失败"));
       }
     })();
 
@@ -186,7 +183,7 @@ export function useKnowledgeState(token: string): KnowledgeState {
     try {
       await task();
     } catch (error) {
-      show("err", messageOf(error, fallback));
+      show("err", errorMessage(error, fallback));
     } finally {
       setPending(null);
     }
@@ -239,7 +236,7 @@ export function useKnowledgeState(token: string): KnowledgeState {
         try {
           added.push(await addKbFile(token, kbId, file));
         } catch (error) {
-          failed.push(`${file.name}: ${messageOf(error, "未知错误")}`);
+          failed.push(`${file.name}: ${errorMessage(error, "未知错误")}`);
         } finally {
           setUploaded((done) => done + 1);
         }

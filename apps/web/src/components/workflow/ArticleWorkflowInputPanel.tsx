@@ -9,6 +9,7 @@ import {
 } from "@ai-assistant/article-workflow";
 import { ArticleWorkflowCreationCanvas } from "./ArticleWorkflowCreationCanvas";
 import { ArticleWorkflowThemePicker } from "./ArticleWorkflowThemePicker";
+import { Switch } from "../ui/Switch";
 import type { ArticleWorkflowCreationDraft } from "./articleWorkflowCreationDraft";
 import { SubmitBar } from "./SubmitBar";
 
@@ -126,32 +127,13 @@ export function ArticleWorkflowInputPanel(props: ArticleWorkflowInputPanelProps)
           </div>
         </fieldset>
 
-        <label className="mt-4 flex items-center justify-between gap-4 border-t border-hairline-subtle pt-4">
-          <span className="min-w-0">
-            <span className="block text-xs font-semibold text-ink">同时生成配图</span>
-            <span className="mt-1 block text-[10px] text-ink-tertiary">
-              {props.generateImages ? "文案与配图一起完成" : "先确认文案，再生成配图"}
-            </span>
-          </span>
-          <span className="relative inline-flex h-6 w-10 shrink-0 items-center">
-            <input
-              type="checkbox"
-              role="switch"
-              aria-label="同时生成配图"
-              checked={props.generateImages}
-              onChange={(event) => props.onGenerateImagesChange(event.target.checked)}
-              className="peer absolute inset-0 cursor-pointer opacity-0"
-            />
-            <span
-              className="h-6 w-10 rounded-full bg-hairline transition peer-checked:bg-brand peer-focus-visible:ring-2 peer-focus-visible:ring-brand/30"
-              aria-hidden
-            />
-            <span
-              className="pointer-events-none absolute left-1 h-4 w-4 rounded-full bg-white shadow-sm transition-transform peer-checked:translate-x-4"
-              aria-hidden
-            />
-          </span>
-        </label>
+        <Switch
+          checked={props.generateImages}
+          label="同时生成配图"
+          description={props.generateImages ? "文案与配图一起完成" : "先确认文案，再生成配图"}
+          onToggle={() => props.onGenerateImagesChange(!props.generateImages)}
+          className="mt-4 w-full border-t border-hairline-subtle pt-4"
+        />
 
         {props.creationDraft.mode === "source" && props.selectedPlatforms.includes("wechat") && (
           <fieldset className="mt-4">

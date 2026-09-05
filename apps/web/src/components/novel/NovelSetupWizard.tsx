@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import {
   completeNovelSetup,
@@ -144,7 +145,7 @@ function ProjectFileActions({ token, projectId, onImported }: { readonly token: 
       anchor.download = `novel.${format === "markdown" ? "md" : format}`;
       anchor.click();
       URL.revokeObjectURL(url);
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "导出失败"); }
+    } catch (reason) { setError(errorMessage(reason, "导出失败")); }
     finally { setBusy(""); }
   };
 
@@ -157,7 +158,7 @@ function ProjectFileActions({ token, projectId, onImported }: { readonly token: 
       await importNovelProject(token, projectId, { format: extension === "txt" ? "text" : "markdown", content: await file.text(), mode: "replace", filename: file.name });
       await onImported?.();
       setNotice("作品已导入，章节与检查点已刷新");
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "导入失败"); }
+    } catch (reason) { setError(errorMessage(reason, "导入失败")); }
     finally { setBusy(""); }
   };
 
@@ -181,7 +182,7 @@ export function NovelSetupWizard({ token, project, onClose, onCompleted, onProje
     return next;
   }, [project.id, token]);
 
-  useEffect(() => { void load().catch((reason) => setError(reason instanceof Error ? reason.message : "加载新书设置失败")); }, [load]);
+  useEffect(() => { void load().catch((reason) => setError(errorMessage(reason, "加载新书设置失败"))); }, [load]);
   useEffect(() => {
     if (!setup?.activeTask) return undefined;
     const timer = window.setInterval(() => void load().catch(() => undefined), 900);
@@ -206,7 +207,7 @@ export function NovelSetupWizard({ token, project, onClose, onCompleted, onProje
     if (!kind) return;
     setBusy("generate"); setError("");
     try { await generateNovelSetup(token, project.id, kind, prompt); await load(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "生成失败"); }
+    catch (reason) { setError(errorMessage(reason, "生成失败")); }
     finally { setBusy(""); }
   };
   const saveAndNext = async () => {
@@ -224,13 +225,13 @@ export function NovelSetupWizard({ token, project, onClose, onCompleted, onProje
       setEditing(false);
       if (!next.project.setupCompleted) setStep((currentStep) => Math.min(5, currentStep + 1));
     }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "保存失败"); }
+    catch (reason) { setError(errorMessage(reason, "保存失败")); }
     finally { setBusy(""); }
   };
   const complete = async () => {
     setBusy("complete"); setError("");
     try { await completeNovelSetup(token, project.id); onCompleted(); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : "完成设置失败"); }
+    catch (reason) { setError(errorMessage(reason, "完成设置失败")); }
     finally { setBusy(""); }
   };
 

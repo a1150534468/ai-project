@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Icon } from "@iconify/react";
 import type { AgentOption, Session } from "../../api";
@@ -228,7 +229,7 @@ export function AgentRail({
       await call();
       onAgentsChanged();
     } catch (error) {
-      toast.show("err", error instanceof Error ? error.message : "操作失败");
+      toast.show("err", errorMessage(error, "操作失败"));
     } finally {
       setBusyId(null);
     }

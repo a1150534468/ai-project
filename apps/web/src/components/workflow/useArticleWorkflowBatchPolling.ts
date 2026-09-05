@@ -9,6 +9,7 @@
  *    的话用户会以为图都出好了。
  */
 import { useEffect } from "react";
+import { errorMessage } from "../../apiError";
 import type { ArticleWorkflowPlatform } from "@ai-assistant/article-workflow";
 import type { ArticleWorkflowProject } from "../../workflowArticleApi";
 import { shortPlatformLabel } from "./articleWorkflowBatchModel";
@@ -64,7 +65,7 @@ export function useArticleWorkflowBatchPolling(args: {
             setError(`${names}配图失败：${imageFailures[0]?.error || "未知原因"}`);
           }
         } catch (err) {
-          setError(err instanceof Error ? err.message : "刷新项目失败");
+          setError(errorMessage(err, "刷新项目失败"));
         }
       })();
     }, POLL_INTERVAL_MS);

@@ -9,6 +9,7 @@
  *    卸载那条走 `attachmentsRef`(effect 的清理函数拿不到最新的 state)。
  */
 import { useEffect, useRef, useState } from "react";
+import { errorMessage } from "../../apiError";
 import {
   listKb,
   listModels,
@@ -136,7 +137,7 @@ export function useChatComposerState(args: {
       const next = await filesToChatAttachments(files, attachments.length);
       setAttachments((prev) => [...prev, ...next]);
     } catch (err) {
-      setAttachmentError(err instanceof Error ? err.message : "附件读取失败");
+      setAttachmentError(errorMessage(err, "附件读取失败"));
     }
   };
 

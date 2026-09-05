@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { errorMessage } from "../apiError";
 import { register } from "../api";
 import { AuthField, AuthScreen, AuthSwitch } from "./AuthScreen";
 
@@ -47,7 +48,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
     try {
       onAuthed(await register(draft.username, draft.password));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "注册出错，请稍后重试");
+      setError(errorMessage(failure, "注册出错，请稍后重试"));
     }
   };
 

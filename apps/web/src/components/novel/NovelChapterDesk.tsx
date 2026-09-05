@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
 import { listNovelChapterVersions, listNovelGenerationRequests, restoreNovelChapterVersion, type NovelChapter, type NovelChapterVersion, type NovelGenerationRequest } from "../../api";
 
@@ -75,7 +76,7 @@ export function NovelChapterDesk({
     void listNovelChapterVersions(token, projectId, chapter.chapterIndex).then((items) => {
       setVersions(items);
       setSelectedVersionId(items[0]?.id ?? "");
-    }).catch((reason) => setVersionError(reason instanceof Error ? reason.message : "加载版本失败"));
+    }).catch((reason) => setVersionError(errorMessage(reason, "加载版本失败")));
   }, [chapter?.id, projectId, tab, token]);
   useEffect(() => {
     setPromptRequests([]);
@@ -85,7 +86,7 @@ export function NovelChapterDesk({
     void listNovelGenerationRequests(token, projectId, chapter.chapterIndex).then((items) => {
       setPromptRequests(items);
       setSelectedPromptId(items[0]?.id ?? "");
-    }).catch((reason) => setPromptError(reason instanceof Error ? reason.message : "加载提示词记录失败"));
+    }).catch((reason) => setPromptError(errorMessage(reason, "加载提示词记录失败")));
   }, [chapter?.id, projectId, tab, token]);
   const words = Array.from(chapterContent.replace(/\s+/gu, "")).length;
   const original = chapter?.rawContent ?? "";
@@ -107,7 +108,7 @@ export function NovelChapterDesk({
       onVersionRestored(restored);
       setTab("prose");
     } catch (reason) {
-      setVersionError(reason instanceof Error ? reason.message : "恢复版本失败");
+      setVersionError(errorMessage(reason, "恢复版本失败"));
     } finally {
       setVersionBusy(false);
     }
