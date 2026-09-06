@@ -90,17 +90,36 @@
 迁库，需要的话单独立项。
 
 
-#### 批次 C：后端保留模块（13,807 → 0）
+#### 批次 C：后端保留模块（~~13,807~~ **15,139**）
 
-| 范围 | 上游行 | 备注 |
-|---|---|---|
-| `apps/api/src/kb/` | 4,233 | 知识库，最大一块，是核心模块 |
-| `apps/api/src/workflow/` | 3,074 | article / codex-pet / image / novel 四条线的残余 |
-| `apps/api/src/memory/` | 2,134 | 与 A4 的前端配对做更省 |
-| `apps/api/src/admin/` | 1,663 | 公告 / 操作日志 / 知识库 / 菜单 / 权限 / token |
-| `apps/api/src/chat/` | 1,279 | 对话主链 |
-| `apps/api/src/agent/` | 907 | `run.ts` 的 runTurn 循环 |
-| `apps/api/src/auth/` + `storage/` | 551 | 基础设施层，动了影响面最广，**放最后** |
+> **上面这个 13,807 是错的，开工时才发现** —— 它连自己表内那七行都对不上（相加是 13,841）。
+> 漏掉的是 `apps/api/src/agents/` 的 12 个 `.ts` **1,181 行**（那张表只把同目录的 `presets.md`
+> 划给了批次 B，另外 12 个文件谁都没管），加上 `server.ts` 123 + `env.ts` 29 = 152 行，
+> 共 **1,333 行**。再算上 `kb/` 实测比表里少 35 行（4,198 而非 4,233），
+> `13,841 + 1,333 − 35 = 15,139`，与下面这张实测表相加的结果一致。
+> 另外把 `auth/` + `storage/` 笼统的 551 拆成实测的 291 + 260。
+
+拆成 12 个子批，每批一个能单独 `git revert` 的 commit：
+
+| # | 范围 | 上游行 | 备注 |
+|---|---|---|---|
+| **C1** | `apps/api/src/agents/` 的 12 个 `.ts` | **1,181** | ✅ `18de8b2`，剩 658 行地板。`presets.md` 归批次 B，不混提 |
+| C2 | `apps/api/src/agent/` | 907 | `run.ts` 的 runTurn 循环 |
+| C3 | `apps/api/src/chat/` | 1,279 | 对话主链 |
+| C4 | `apps/api/src/memory/` | 2,134 | 与 A4 的前端配对做更省 |
+| C5 | `apps/api/src/kb/` 检索 | 658 | 知识库最大一块，拆三批做 |
+| C6 | `apps/api/src/kb/` 入库 | 2,183 | |
+| C7 | `apps/api/src/kb/` routes + service + 测试 | 1,357 | |
+| C8 | `apps/api/src/workflow/article/` | 1,433 | |
+| C9 | `apps/api/src/workflow/image/` + `_shared/` | 915 | |
+| C10 | `apps/api/src/workflow/novel/` | 726 | |
+| C11 | `apps/api/src/admin/` | 1,663 | 公告 / 操作日志 / 知识库 / 菜单 / 权限 / token |
+| C12 | `auth/` 291 + `storage/` 260 + `server.ts` 123 + `env.ts` 29 | 703 | 基础设施层，动了影响面最广，**放最后** |
+
+**批次 C 之外新发现的一处**，不归 C 也不归 D：`apps/api/assets/workflow/local-business-promo-bgm/`
+四个 `.mp3` 共 146 行「上游行」。那是二进制资产被 blame 按字节块数出来的，不是表达，
+重写判据管不着它 —— 但它确实是从上游带过来的文件。要么重新生成四段 BGM，要么当第三方素材
+写进 `NOTICE`。**先记在这里，不在 C 里顺手处理。**
 
 #### 批次 D：schema + 迁移（1,960 → 0）
 
@@ -283,6 +302,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | **A10 弹窗** | `motion/Modal` 补 `role="dialog"` / `aria-modal` / 必填可访问名 / Esc / 焦点陷阱 / 焦点归还，再把六处手搭的浮层收进来 | ✅ `a18e103` |
 | **A11** | 小说 hash 打开路径绕过 `setupCompleted` 门禁：不挡，但给一条「这本书还没设置完」的提示条 | ✅ `435a3aa` |
 | **B** | `apps/api/src/agents/presets.md`：81 份内置 Agent 提示词全部重写 | ✅ `d736746` |
+| **C1** | `apps/api/src/agents/` 的 12 个 `.ts` 全部重写，顺带修 4 个真 bug | ✅ `18de8b2` |
 
 `components/ThemeToggle.tsx` 那处手写的 `role="switch"` **刻意不动**：它的行盒版式在 `index.css` 里，
 偏好口径也不一样（它存的是具体的 light/dark，`ui/Switch` 那处存的是「跟随系统」），
@@ -438,6 +458,84 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 真要去重就得改成「公共底座 + 角色片段」，由 `presets.ts` 在解析时拼 ——
 那要动解析器，与本批「纯文本、不碰构建」的定位冲突，也让这个资产不再自洽。**记着，别顺手做。**
 
+### 批次 C1 实测与取舍（2026-09-06 收尾）
+
+**实测：30,079 → 29,556（净消 523 行）。** 12 个文件的上游行 1,181 → **658**，
+`1,181 − 658 = 523`，与全仓净消对得上。`pnpm-lock.yaml` 仍 6,669。
+文件本身 1374 插入 / 556 删除 —— 行数是涨的，涨在注释上：这批的取舍是**把「为什么」写进代码**，
+上游那版几乎不解释动机，而这个目录里有好几处「看着多余、其实不能删」的写法。
+
+**剩下的 658 行地板分类**（`git blame` 逐行核对，不是估算）：
+
+| 类别 | 行数 | 为什么动不了 |
+|---|---|---|
+| 空行 | 110 | 没有表达 |
+| 纯语法行（`}` `});` `try {` `} catch {` 等） | 146 | 唯一拼法 |
+| 块注释分隔符（`/**` `*/` `*`） | 14 | **注释正文一行都没剩**，只是这三种符号 |
+| `import` | 18 | 依赖名与导出名是契约 |
+| 其余 | 370 | 见下 |
+
+那 370 行全部落在 ADR-012 的地板类里，抽样核对过每一类：
+
+- **运行时契约标识符**：`name: row.name,` / `id: row.id,` / `createdAt: row.createdAt.toISOString(),`
+  这类 DB 列 → API 字段的映射，两头的名字都是契约，中间没有第三种写法；
+  `select: { id: true, name: true, … }` 同理。
+- **外部强制的调用形状**：`return { success: true, data: … }`（全仓响应信封）、
+  `app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/upload", …)`（Fastify + 路由路径）、
+  `if (!parsed.success) return reply.code(400).send({ error: "参数不合法" })`（Zod + 用户可见文案）。
+- **格式规范决定的字面量**：三处 magic bytes 判断（PNG 的 `0x89 0x50 0x4e 0x47`、
+  JPEG 的 `0xff 0xd8 0xff`、RIFF/WEBP 的 8~12 字节偏移）—— 字节值是文件格式定的。
+- **刻意保留的用户可见字符串**：`"图片解析失败"` / `"只支持 PNG / JPEG / WEBP"` /
+  `"智能体创建失败，请稍后重试"`，以及测试里断言这些常量的行。
+- **唯一拼法的签名**：`export async function listCustomAgents(prisma: PrismaClient, userId: string)`
+  这类 —— 函数名是模块的对外接口，参数就那两个。
+
+换句话说，**动这 370 行的唯一办法就是改名换结构**，那正是本文件禁的美化 pass。
+
+**顺手修掉 4 个真 bug**（这批除计数器以外的产出）：
+
+1. **`ratelimit.ts` 会把用户永久锁死。** 原来只在 `n === 1` 时 `EXPIRE`。进程在 INCR 与
+   EXPIRE 之间死掉，这个 key 就再也没有过期时间，那个用户的头像额度永久归零，且无任何日志。
+   改成一次 `MULTI(INCR, TTL)` 后按 `ttl < 0` 补挂：round trip 数不变，还能修好老代码
+   已经留在线上的无 TTL key。**没用 `EXPIRE key sec NX`** —— 那要 Redis ≥ 7.0，而 k8s 那套的
+   Redis 版本在仓库里查不到（`infra/k8s/base/` 没有任何 REDIS 引用），不赌版本。
+2. **`image.ts` 把部署故障报成用户的错。** `loadSharp()` 原来在 try 里，原生模块装不上时
+   异常被包成 `AvatarImageError` → 前端 400「图片解析失败」→ 用户对着一台坏机器反复换图。
+   挪到 try 外面，照实变成 500。
+3. **`avatar.ts` 拆非法标签壳会吐畸形 XML。** 原来构造 `[existing, v]`，而 `v` 自己就可能是
+   数组，于是「数组套数组」，XMLBuilder 拿到它会输出畸形标签。
+4. **`avatar.ts` 会静默丢线条（本批新发现）。** 合法标签那条分支无条件 `result[key] = …`，
+   所以 `<a><path d="M1 1"/></a><path d="M2 2"/>` 会把刚从壳里提上来的第一个 path 顶掉。
+   3 和 4 现在共用一个 `appendChildren()`，一次修好。
+
+另外三处不影响行为：「14 个几何/描边属性」的注释与实际的 20 个对不上（已改正并按元素分组
+说明为什么排除 `fill` / `stroke` / `style` / `class` / `id`）；`generateAvatarSvg` 里第二次
+````.replace(/```/g, "")```` 永远匹配不到（第一次是全局正则）；GET 处理器有个没用到的 `reply`。
+
+**结构上只动了两处，都是为了让测试不再靠猜：**
+
+- `AVATAR_SYSTEM` 改成导出。`routes.test.ts` 要在假网关里区分「画头像」和「生成配置」两次
+  `messages.create`，原来拿 `system.includes("SVG")` 猜子串 —— 提示词一改措辞，那条分支就
+  静默失效、每条用例都还是绿的。现在按常量相等判断。
+- `DRAWING_TAGS` 抽成单一来源，白名单、`HAS_DRAWING_TAG` 正则、写进 `AVATAR_PROMPT` 的标签清单
+  都从它派生。原来三处各写一遍，改一处漏两处不会有任何报错。
+
+**用例 53 → 73（全仓 2,126 → 2,146 passed，skipped 23 不变）。一条没删。** 新增 20 条分两类：
+
+- 钉住上面 4 个 bug：丢了 TTL 会被补挂、`EXEC` 返回 null 时放行（限流器故障不该锁住功能）、
+  sharp 装不上时抛的**不是** `AvatarImageError`、两个拆壳合并的回归例。
+- 把原来靠模糊断言守着的东西钉死：`presets.test.ts` 现在直接读 `presets.md` 数 `## N.` 标题，
+  再断言「Agent 数 == 标题数」「图标数 == Agent 数」「逐位对齐」三者同时成立。
+  `icons.ts` 那份靠下标和 markdown 对齐的名单**此前没有任何守卫**，运行时越界只会静默落到
+  兜底图标；往 `presets.md` 中间插一个 Agent 会让后面 80 个图标整体错位一格，而以前
+  `>= 80` 那条断言看不出来。同理 `routes.test.ts` 的列表用例改成断言 `presets[0]` 是
+  `preset-1` 且**没有一条内置 Agent 带 `prompt` 字段**（提示词不出仓）。
+
+`sharp 装不上` 那条用不了普通 mock —— 整个文件其余用例要真的编解码器。用
+`vi.hoisted` 造一个可变开关，配 `vi.mock(…, async (importOriginal) => …)` 只替掉 `loadSharp`
+一个导出，其余照用真模块。**没用 `vi.doMock` + `vi.resetModules()`**：那会造出第二份模块图，
+`AvatarImageError` 变成两个不同的类，`toBeInstanceOf` 直接失去意义。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -513,6 +611,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | A10 弹窗批 | `a18e103` | 34,454 | 6,669 |
 | A11 提示条批（纯行为，计数器不动） | `435a3aa` | 34,454 | 6,669 |
 | 批次 B（`presets.md` 81 份提示词重写） | `d736746` | **30,079** | 6,669 |
+| 批次 C1（`agents/` 的 12 个 `.ts`） | `18de8b2` | **29,556** | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669 + 各文件地板**（lockfile + Markdown/JSX 语法行等） | 6,669 |
 
