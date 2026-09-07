@@ -105,7 +105,7 @@
 |---|---|---|---|
 | **C1** | `apps/api/src/agents/` 的 12 个 `.ts` | **1,181** | ✅ `18de8b2`，剩 658 行地板。`presets.md` 归批次 B，不混提 |
 | **C2** | `apps/api/src/agent/` | **907** | ✅ `4ea475b`，剩 218 行地板；`runTurn` 工具循环 |
-| C3 | `apps/api/src/chat/` | 1,279 | 对话主链 |
+| **C3** | `apps/api/src/chat/` | **1,279** | ✅ `e858bd2`，剩 229 行地板；对话主链、会话锁与附件边界 |
 | C4 | `apps/api/src/memory/` | 2,134 | 与 A4 的前端配对做更省 |
 | C5 | `apps/api/src/kb/` 检索 | 658 | 知识库最大一块，拆三批做 |
 | C6 | `apps/api/src/kb/` 入库 | 2,183 | |
@@ -304,6 +304,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | **B** | `apps/api/src/agents/presets.md`：81 份内置 Agent 提示词全部重写 | ✅ `d736746` |
 | **C1** | `apps/api/src/agents/` 的 12 个 `.ts` 全部重写，顺带修 4 个真 bug | ✅ `18de8b2` |
 | **C2** | `apps/api/src/agent/` 三个文件全部重写，修正 reset 后正文丢失 | ✅ `4ea475b` |
+| **C3** | `apps/api/src/chat/` 对话主链全部重写，补齐锁续租、历史顺序与附件边界 | ✅ `e858bd2` |
 
 `components/ThemeToggle.tsx` 那处手写的 `role="switch"` **刻意不动**：它的行盒版式在 `index.css` 里，
 偏好口径也不一样（它存的是具体的 light/dark，`ui/Switch` 那处存的是「跟随系统」），
@@ -575,6 +576,51 @@ messages.push({ role: "user", content: results }) 这类契约。没有一行注
 两轮全仓验证都通过；第二轮按 CI 口径强制执行，7/7 workspace、0 cached、
 **2,155 passed / 0 failed / 23 skipped**。
 
+### 批次 C3 实测与取舍（2026-09-07 收尾）
+
+**实测：28,867 → 27,817（净消 1,050 行）。** 本批原有八个文件的上游行 **1,279 → 229**：
+sessions.test.ts 462 → 57、routes.ts 397 → 51、routes.empty-response.test.ts 165 → 0（用例并入
+routes.test.ts 后删除）、attachments.ts 142 → 77、attachments.test.ts 49 → 23、
+routes.test.ts 24 → 7、lock.test.ts 22 → 7、lock.ts 18 → 7。新拆的 sse.ts / session-routes.ts
+均为 0；原先已经归零的 routes-errors、routes-runtime、routes-schemas 及其测试仍为 0。
+1,279 − 229 = 1,050，与全仓净消完全一致；pnpm-lock.yaml 仍为 6,669。
+
+**路由不再同时承担四条 API、SSE 连接管理和全部上下文拼装。** 三条会话读写路由进
+session-routes.ts，SSE 头、心跳、断连和收尾进 sse.ts；routes.ts 留下单轮聊天编排。
+这不是平移旧代码：主链顺序改成「校验用户与封禁 → 获取会话 → 加锁 → 解析附件与 KB 权限
+→ 读取旧历史 → 事务写当前消息并 touch Session → 显式追加当前多模态消息 → 检索与生成」，
+每一步的副作用边界现在能由测试单独钉住。
+
+**修掉七组真实问题：**
+
+1. 旧锁用 GET 后 DEL，两条命令之间租约过期时会误删新持有者；现在释放用 Lua compare-and-delete，
+   token 改为 randomUUID，并用 compare-and-PEXPIRE 每 1/3 TTL 续租。release 清定时器、等待在途续租，
+   并让并发调用共享同一个 Promise。
+2. 封禁检查移到新建 Session 之前，封禁或已删除用户不再留下空会话。
+3. 当前消息不再先落库再混入 createdAt 单字段排序；锁内先按 createdAt + id 读取旧历史，
+   再事务写当前消息，并把当前多模态内容显式 append 到模型历史。
+4. 写 Message 不会触发 Session 的 @updatedAt；现在每轮用户消息在同一事务里显式 touch，
+   普通续聊会回到会话列表顶部。
+5. KB 挂载只保存 resolveEffectiveKbIds 权限过滤后的 ID；权限解析失败不覆盖旧挂载，
+   请求没带选择时会复用 Session 已保存的挂载。
+6. Base64 改为线性严格校验并核对真实字节数，杜绝 Buffer.from 宽松吞掉畸形尾部；截断提示本身
+   计入 12,000/24,000 字符配额，单文件 10MB 与整轮 20MB 都按解码后字节执行。
+7. 工具轮次到上限时，提示现在追加到已流正文并按同一完整文本落库；释放 Redis 锁失败也不会阻止
+   SSE 收尾，界面与消息库不再出现两份答案。
+
+**剩下 229 行地板逐行分类：** 空行 70，纯括号、闭合符和分隔符 74，其余 85 行是依赖 import、
+公开请求/结果字段、模型与 MIME 固定标识、Anthropic 内容块、Prisma/Fastify 调用形状及固定测试断言。
+最大的 attachments.ts 77 行里，前 20 行就是公开附件契约，后面集中在视觉模型标识和 Anthropic
+image source 结构；sessions.test.ts 的 57 行则以空行与 `});` 为主。没有一行注释正文或自有算法表达
+归属上游。
+
+**chat 用例 26 → 45（全仓 2,155 → 2,174 passed，skipped 23 不变）。** 测试文件从 6 个收成 5 个：
+只删除了单场景的 routes.empty-response.test.ts，该场景并入 16 条主路由用例，没有删行为覆盖。
+新增覆盖原子锁释放/续租、严格 Base64 与精确配额、封禁无副作用、409、SSE 首事件与 finally、
+旧历史顺序、Session touch、视觉模型回退、KB 过滤/复用、记忆 citation、流式/落库对齐，以及真实数据库
+上的空标题、稳定排序、50 条上限、权限和级联删除。四条常规闸门全过；强制测试 7/7 workspace、
+0 cached、**2,174 passed / 0 failed / 23 skipped**。changed-files lint 按 CI 完整参数检查 361 个文件通过。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -652,6 +698,7 @@ messages.push({ role: "user", content: results }) 这类契约。没有一行注
 | 批次 B（`presets.md` 81 份提示词重写） | `d736746` | **30,079** | 6,669 |
 | 批次 C1（`agents/` 的 12 个 `.ts`） | `18de8b2` | **29,556** | 6,669 |
 | 批次 C2（`agent/` 工具循环） | `4ea475b` | **28,867** | 6,669 |
+| 批次 C3（`chat/` 对话主链） | `e858bd2` | **27,817** | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669 + 各文件地板**（lockfile + Markdown/JSX 语法行等） | 6,669 |
 
