@@ -19,38 +19,76 @@ export interface PreparedChatAttachments {
   imageCount: number;
 }
 
-const MULTIMODAL_FALLBACK_MODEL = "qwen3.7-plus";
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 20 * 1024 * 1024;
-const MAX_FILE_TEXT_CHARS = 12_000;
-const MAX_TOTAL_FILE_TEXT_CHARS = 24_000;
+const DEFAULT_VISION_MODEL = "qwen3.7-plus";
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 20 * 1024 * 1024;
+const MAX_TEXT_PER_FILE = 12_000;
+const MAX_TEXT_PER_REQUEST = 24_000;
+const TRUNCATED = "\n\n[内容已截断，原文过长]";
 
-const IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
+const IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 
-function clampText(text: string, maxChars: number): string {
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, maxChars)}\n\n[内容已截断，原文过长]`;
+function truncateWithin(text: string, limit: number): string {
+  if (limit <= 0) return "";
+  if (text.length <= limit) return text;
+  if (limit <= TRUNCATED.length) return TRUNCATED.slice(0, limit);
+  return `${text.slice(0, limit - TRUNCATED.length)}${TRUNCATED}`;
 }
 
-function decodedBuffer(attachment: ChatAttachmentPayload): Buffer {
-  const buf = Buffer.from(attachment.dataBase64, "base64");
-  if (buf.length === 0) throw new Error(`附件 ${attachment.name} 内容为空`);
-  if (buf.length > MAX_ATTACHMENT_BYTES) throw new Error(`附件 ${attachment.name} 超过 10MB 限制`);
-  return buf;
+function isBase64Character(code: number): boolean {
+  return (
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    (code >= 48 && code <= 57) ||
+    code === 43 ||
+    code === 47
+  );
+}
+
+function hasStandardBase64Shape(encoded: string): boolean {
+  if (encoded.length === 0 || encoded.length % 4 !== 0) return false;
+  const padding = encoded.endsWith("==") ? 2 : encoded.endsWith("=") ? 1 : 0;
+  const dataEnd = encoded.length - padding;
+  for (let index = 0; index < dataEnd; index += 1) {
+    if (!isBase64Character(encoded.charCodeAt(index))) return false;
+  }
+  for (let index = dataEnd; index < encoded.length; index += 1) {
+    if (encoded.charCodeAt(index) !== 61) return false;
+  }
+  return true;
+}
+
+function decodeAttachment(attachment: ChatAttachmentPayload): Buffer {
+  const encoded = attachment.dataBase64;
+  if (!hasStandardBase64Shape(encoded)) {
+    throw new Error(`附件 ${attachment.name} 的 Base64 内容不合法`);
+  }
+
+  const bytes = Buffer.from(encoded, "base64");
+  if (bytes.length === 0) throw new Error(`附件 ${attachment.name} 内容为空`);
+  if (bytes.toString("base64") !== encoded) {
+    throw new Error(`附件 ${attachment.name} 的 Base64 内容不合法`);
+  }
+  if (bytes.length > MAX_FILE_BYTES) {
+    throw new Error(`附件 ${attachment.name} 超过 10MB 限制`);
+  }
+  if (bytes.length !== attachment.sizeBytes) {
+    throw new Error(`附件 ${attachment.name} 的实际大小与声明不一致`);
+  }
+  return bytes;
+}
+
+function normalizedMime(value: string): string {
+  return value.trim().toLowerCase();
 }
 
 export function isImageMime(mime: string): boolean {
-  return IMAGE_MIME_TYPES.has(mime.toLowerCase());
+  return IMAGE_MIMES.has(normalizedMime(mime));
 }
 
 export function supportsVisionModel(model: string): boolean {
-  const normalized = model.toLowerCase();
-  return [
+  const id = model.toLowerCase();
+  const visionMarkers = [
     "minimax-m3",
     "m3",
     "vision",
@@ -64,49 +102,50 @@ export function supportsVisionModel(model: string): boolean {
     "gemini",
     "qwen-vl",
     "claude-3",
-  ].some((keyword) => normalized.includes(keyword));
+  ];
+  return visionMarkers.some((marker) => id.includes(marker));
 }
 
 export function resolveChatModel(
   requestedModel: string,
   hasImage: boolean,
-  multimodalFallback = process.env.CHAT_MULTIMODAL_MODEL?.trim() || MULTIMODAL_FALLBACK_MODEL,
+  visionFallback = process.env.CHAT_MULTIMODAL_MODEL?.trim() || DEFAULT_VISION_MODEL,
 ) {
-  if (hasImage && !supportsVisionModel(requestedModel)) {
-    return {
-      model: multimodalFallback,
-      requestedModel,
-      fallbackReason: "image_requires_multimodal" as const,
-    };
+  if (!hasImage || supportsVisionModel(requestedModel)) {
+    return { model: requestedModel, requestedModel, fallbackReason: null };
   }
-  return { model: requestedModel, requestedModel, fallbackReason: null };
+  return {
+    model: visionFallback,
+    requestedModel,
+    fallbackReason: "image_requires_multimodal" as const,
+  };
 }
 
 export async function prepareChatAttachments(
-  attachments: ChatAttachmentPayload[] = [],
+  attachments: readonly ChatAttachmentPayload[] = [],
 ): Promise<PreparedChatAttachments> {
-  if (attachments.length === 0) {
-    return { blocks: [], storedLabel: "", searchableText: "", hasImage: false, imageCount: 0 };
-  }
-
-  let totalBytes = 0;
-  let totalFileTextChars = 0;
-  let imageCount = 0;
   const blocks: Anthropic.ContentBlockParam[] = [];
   const labels: string[] = [];
-  const searchableParts: string[] = [];
+  const searchable: string[] = [];
+  let byteCount = 0;
+  let extractedChars = 0;
+  let imageCount = 0;
 
   for (const attachment of attachments) {
-    const mime = attachment.mime.toLowerCase();
-    const buf = decodedBuffer(attachment);
-    totalBytes += buf.length;
-    if (totalBytes > MAX_TOTAL_BYTES) throw new Error("附件总大小超过 20MB 限制");
+    const bytes = decodeAttachment(attachment);
+    byteCount += bytes.length;
+    if (byteCount > MAX_REQUEST_BYTES) {
+      throw new Error("附件总大小超过 20MB 限制");
+    }
 
-    const isImage = attachment.kind === "image" || isImageMime(mime);
-    labels.push(`- ${attachment.name}（${isImage ? "图片" : "文件"}，${Math.ceil(buf.length / 1024)}KB）`);
+    const mime = normalizedMime(attachment.mime);
+    const image = attachment.kind === "image" || isImageMime(mime);
+    labels.push(`- ${attachment.name}（${image ? "图片" : "文件"}，${Math.ceil(bytes.length / 1024)}KB）`);
 
-    if (isImage) {
-      if (!isImageMime(mime)) throw new Error(`不支持的图片类型：${attachment.mime}`);
+    if (image) {
+      if (!IMAGE_MIMES.has(mime)) {
+        throw new Error(`不支持的图片类型：${attachment.mime}`);
+      }
       imageCount += 1;
       blocks.push({
         type: "image",
@@ -115,24 +154,24 @@ export async function prepareChatAttachments(
           media_type: mime as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
           data: attachment.dataBase64,
         },
-      } as Anthropic.ContentBlockParam);
-      searchableParts.push(`[图片附件：${attachment.name}]`);
+      });
+      searchable.push(`[图片附件：${attachment.name}]`);
       continue;
     }
 
-    const text = await parseDocument(buf, attachment.mime, attachment.name);
-    const remaining = Math.max(0, MAX_TOTAL_FILE_TEXT_CHARS - totalFileTextChars);
-    const clipped = clampText(text, Math.min(MAX_FILE_TEXT_CHARS, remaining));
-    totalFileTextChars += clipped.length;
-    const fileBlock = `附件文件：${attachment.name}\n\n${clipped}`;
-    blocks.push({ type: "text", text: fileBlock });
-    searchableParts.push(fileBlock);
+    const parsed = await parseDocument(bytes, mime, attachment.name);
+    const remaining = MAX_TEXT_PER_REQUEST - extractedChars;
+    const content = truncateWithin(parsed, Math.min(MAX_TEXT_PER_FILE, remaining));
+    extractedChars += content.length;
+    const textBlock = `附件文件：${attachment.name}\n\n${content}`;
+    blocks.push({ type: "text", text: textBlock });
+    searchable.push(textBlock);
   }
 
   return {
     blocks,
-    storedLabel: labels.length > 0 ? `\n\n[附件]\n${labels.join("\n")}` : "",
-    searchableText: searchableParts.join("\n\n"),
+    storedLabel: labels.length === 0 ? "" : `\n\n[附件]\n${labels.join("\n")}`,
+    searchableText: searchable.join("\n\n"),
     hasImage: imageCount > 0,
     imageCount,
   };
@@ -143,11 +182,5 @@ export function buildCurrentUserContent(
   prepared: PreparedChatAttachments,
 ): Anthropic.MessageParam["content"] {
   if (prepared.blocks.length === 0) return message;
-  return [
-    {
-      type: "text",
-      text: message.trim() || "请根据附件内容回答。",
-    },
-    ...prepared.blocks,
-  ];
+  return [{ type: "text", text: message.trim() || "请根据附件内容回答。" }, ...prepared.blocks];
 }

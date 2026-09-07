@@ -15,19 +15,30 @@ import { z } from "zod";
 const attachmentSchema = z.object({
   name: z.string().min(1).max(240),
   mime: z.string().min(1).max(160),
-  sizeBytes: z.number().int().positive().max(10 * 1024 * 1024),
+  sizeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(10 * 1024 * 1024),
   kind: z.enum(["image", "file"]),
-  dataBase64: z.string().min(1).max(14 * 1024 * 1024),
+  dataBase64: z
+    .string()
+    .min(1)
+    .max(14 * 1024 * 1024),
 });
 
-export const bodySchema = z.object({
-  sessionId: z.string().optional(),
-  message: z.string().max(20_000).default(""),
-  model: z.string().min(1).max(128).optional(),
-  agentId: z.string().min(1).max(128).optional(),
-  kbIds: z.array(z.string()).max(50).optional(),
-  attachAllOwn: z.boolean().optional(),
-  attachments: z.array(attachmentSchema).max(8).default([]),
-}).refine((data) => data.message.trim().length > 0 || data.attachments.length > 0, {
-  message: "message or attachments required",
-});
+export const bodySchema = z
+  .object({
+    sessionId: z.string().optional(),
+    message: z.string().max(20_000).default(""),
+    model: z.string().min(1).max(128).optional(),
+    agentId: z.string().min(1).max(128).optional(),
+    kbIds: z.array(z.string()).max(50).optional(),
+    attachAllOwn: z.boolean().optional(),
+    attachments: z.array(attachmentSchema).max(8).default([]),
+  })
+  .refine((data) => data.message.trim().length > 0 || data.attachments.length > 0, {
+    message: "message or attachments required",
+  });
+
+export type ChatRequestBody = z.infer<typeof bodySchema>;

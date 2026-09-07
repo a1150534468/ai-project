@@ -18,6 +18,7 @@ export const DEFAULT_KB_MIN_SCORE = 0.35;
 export const DEFAULT_KB_TOPK = 8;
 export const DEFAULT_KB_MAX_CONTEXT_CHUNKS = 4;
 export const DEFAULT_KB_MAX_CHUNKS_PER_DOCUMENT = 2;
+export const DEFAULT_KB_RETRIEVE_TIMEOUT_MS = 3_000;
 export const SSE_HEARTBEAT_MS = 15_000;
 
 export function positiveNumberEnv(name: string, fallback: number): number {

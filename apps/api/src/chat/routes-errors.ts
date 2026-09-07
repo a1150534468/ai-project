@@ -32,10 +32,12 @@ function upstreamErrorDetails(error: unknown): { status?: number; code: string; 
     cause?: { code?: unknown; message?: unknown };
   };
   const status = typeof value.status === "number" ? value.status : undefined;
-  const code = [value.code, value.error?.code, value.cause?.code]
-    .find((item): item is string => typeof item === "string") ?? "";
-  const message = [value.message, value.error?.message, value.cause?.message]
-    .find((item): item is string => typeof item === "string") ?? "";
+  const code =
+    [value.code, value.error?.code, value.cause?.code].find((item): item is string => typeof item === "string") ?? "";
+  const message =
+    [value.message, value.error?.message, value.cause?.message].find(
+      (item): item is string => typeof item === "string",
+    ) ?? "";
   return { status, code, message };
 }
 
@@ -63,9 +65,7 @@ export function chatModelErrorMessage(error: unknown, provider: ChatErrorProvide
   return "生成失败，请重试";
 }
 
-const BAILIAN_MODEL_ALIASES = new Map<string, string>([
-  ["GLM-5.2", "glm-5.2"],
-]);
+const BAILIAN_MODEL_ALIASES = new Map<string, string>([["GLM-5.2", "glm-5.2"]]);
 
 export function providerModelId(model: string, provider: "bailian" | "anthropic"): string {
   return provider === "bailian" ? (BAILIAN_MODEL_ALIASES.get(model) ?? model) : model;
