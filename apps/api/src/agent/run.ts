@@ -1,13 +1,13 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import { builtinTools, execTool } from "./tools.js";
+import { builtinTools, execTool as execBuiltinTool } from "./tools.js";
 
 export interface RunTurnArgs {
-  client: Anthropic;
+  client: RunTurnClient;
   model: string;
   history: Anthropic.MessageParam[];
-  system?: string; // 可选系统提示词（如记忆注入）
-  onText?: (delta: string) => void; // 逐 token 实时回调（真流式）
-  onResetText?: () => void; // 重试/工具前说明作废时，通知前端清空当前这轮已流式的文本
+  system?: string;
+  onText?: (delta: string) => void;
+  onResetText?: () => void;
   onTool?: (event: RunTurnToolEvent) => void;
   maxIterations?: number;
   streamIdleTimeoutMs?: number;
@@ -19,11 +19,33 @@ export interface RunTurnArgs {
   execTool?: (name: string, input: unknown) => Promise<string>;
 }
 
+export interface RunTurnModelRequest {
+  readonly model: string;
+  readonly max_tokens: number;
+  readonly tools: Anthropic.Tool[];
+  readonly system?: string;
+  readonly messages: Anthropic.MessageParam[];
+}
+
+export interface RunTurnMessageStream {
+  on(event: "streamEvent", listener: () => void): this;
+  on(event: "text", listener: (delta: string) => void): this;
+  on(event: "error" | "abort", listener: (error: unknown) => void): this;
+  abort(): void;
+  finalMessage(): Promise<Anthropic.Message>;
+}
+
+export interface RunTurnClient {
+  readonly messages: {
+    stream(request: RunTurnModelRequest): RunTurnMessageStream;
+  };
+}
+
 export interface RunTurnResult {
   text: string;
   toolCalls: number;
   stoppedByMaxIterations: boolean;
-  messages: Anthropic.MessageParam[]; // 含本回合产生的 assistant/tool 消息
+  messages: Anthropic.MessageParam[];
   usage: { inputTokens: number; outputTokens: number };
 }
 
@@ -37,15 +59,41 @@ export interface RunTurnToolEvent {
   readonly error?: string;
 }
 
-const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 60_000;
-const DEFAULT_STREAM_TOTAL_TIMEOUT_MS = 180_000;
-const DEFAULT_STREAM_MAX_RETRIES = 1;
-const DEFAULT_MAX_ITERATIONS = 256;
-const DEFAULT_MAX_OUTPUT_TOKENS = 4096;
-const DEFAULT_MAX_CONTINUATIONS = 20;
-const CONTINUATION_PROMPT = "请从上一条回复被截断的位置继续写，不要重复已经写过的内容，不要添加任何说明或标题，直接续写正文。";
+interface RunLimits {
+  readonly iterations: number;
+  readonly idleTimeoutMs: number;
+  readonly totalTimeoutMs: number;
+  readonly retries: number;
+  readonly outputTokens: number;
+  readonly continuations: number;
+}
 
-type MessageStream = ReturnType<Anthropic["messages"]["stream"]>;
+interface StreamAttempt {
+  readonly message: Anthropic.Message;
+  readonly streamedText: string;
+}
+
+interface TurnProgress {
+  answer: string;
+  toolCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+  continuationCount: number;
+  stoppedByMaxIterations: boolean;
+}
+
+const DEFAULTS = Object.freeze({
+  idleTimeoutMs: 60_000,
+  totalTimeoutMs: 180_000,
+  retries: 1,
+  iterations: 256,
+  outputTokens: 4096,
+  continuations: 20,
+});
+
+const CONTINUE_FROM_CUTOFF =
+  "请从上一条回复被截断的位置继续写，不要重复已经写过的内容，不要添加任何说明或标题，直接续写正文。";
+const TOOL_FAILURE_PREFIX = "[工具执行失败:";
 
 export class ChatModelStreamTimeoutError extends Error {
   constructor(message: string) {
@@ -61,252 +109,283 @@ export class ChatModelEmptyResponseError extends Error {
   }
 }
 
-function positiveInt(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
-  return Math.floor(parsed);
+function integerFromEnv(name: string, fallback: number, allowZero: boolean): number {
+  const candidate = Number(process.env[name]);
+  const belowMinimum = allowZero ? candidate < 0 : candidate <= 0;
+  return Number.isFinite(candidate) && !belowMinimum ? Math.floor(candidate) : fallback;
 }
 
-function nonNegativeInt(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return Math.floor(parsed);
+function limitsFor(args: RunTurnArgs): RunLimits {
+  return {
+    iterations: args.maxIterations ?? DEFAULTS.iterations,
+    idleTimeoutMs:
+      args.streamIdleTimeoutMs ?? integerFromEnv("CHAT_STREAM_IDLE_TIMEOUT_MS", DEFAULTS.idleTimeoutMs, false),
+    totalTimeoutMs:
+      args.streamTotalTimeoutMs ?? integerFromEnv("CHAT_STREAM_TOTAL_TIMEOUT_MS", DEFAULTS.totalTimeoutMs, false),
+    retries: args.streamMaxRetries ?? integerFromEnv("CHAT_STREAM_MAX_RETRIES", DEFAULTS.retries, true),
+    outputTokens: args.maxOutputTokens ?? integerFromEnv("CHAT_MAX_OUTPUT_TOKENS", DEFAULTS.outputTokens, false),
+    continuations: args.maxContinuations ?? integerFromEnv("CHAT_MAX_CONTINUATIONS", DEFAULTS.continuations, true),
+  };
 }
 
-function streamIdleTimeoutMs(arg?: number): number {
-  return arg ?? positiveInt(process.env.CHAT_STREAM_IDLE_TIMEOUT_MS, DEFAULT_STREAM_IDLE_TIMEOUT_MS);
+function configuredOutputTokens(explicit?: number): number {
+  return explicit ?? integerFromEnv("CHAT_MAX_OUTPUT_TOKENS", DEFAULTS.outputTokens, false);
 }
 
-function streamTotalTimeoutMs(arg?: number): number {
-  return arg ?? positiveInt(process.env.CHAT_STREAM_TOTAL_TIMEOUT_MS, DEFAULT_STREAM_TOTAL_TIMEOUT_MS);
-}
-
-function streamMaxRetries(arg?: number): number {
-  return arg ?? nonNegativeInt(process.env.CHAT_STREAM_MAX_RETRIES, DEFAULT_STREAM_MAX_RETRIES);
-}
-
-function mergeTools(extraTools: readonly Anthropic.Tool[] | undefined): Anthropic.Tool[] {
-  const byName = new Map<string, Anthropic.Tool>();
-  for (const tool of builtinTools) byName.set(tool.name, tool);
-  for (const tool of extraTools ?? []) byName.set(tool.name, tool);
-  return [...byName.values()];
-}
-
-function maxOutputTokens(arg?: number): number {
-  return arg ?? positiveInt(process.env.CHAT_MAX_OUTPUT_TOKENS, DEFAULT_MAX_OUTPUT_TOKENS);
-}
-
-function maxContinuations(arg?: number): number {
-  return arg ?? nonNegativeInt(process.env.CHAT_MAX_CONTINUATIONS, DEFAULT_MAX_CONTINUATIONS);
+function configuredContinuations(explicit?: number): number {
+  return explicit ?? integerFromEnv("CHAT_MAX_CONTINUATIONS", DEFAULTS.continuations, true);
 }
 
 export function chatMaxOutputTokenBudget(args?: {
   readonly maxOutputTokens?: number;
   readonly maxContinuations?: number;
 }): number {
-  return maxOutputTokens(args?.maxOutputTokens) * (maxContinuations(args?.maxContinuations) + 1);
+  const perRequest = configuredOutputTokens(args?.maxOutputTokens);
+  return perRequest * (configuredContinuations(args?.maxContinuations) + 1);
 }
 
-export function chatInitialReserveOutputTokens(args?: {
-  readonly maxOutputTokens?: number;
-}): number {
-  return maxOutputTokens(args?.maxOutputTokens);
+export function chatInitialReserveOutputTokens(args?: { readonly maxOutputTokens?: number }): number {
+  return configuredOutputTokens(args?.maxOutputTokens);
 }
 
-async function finalMessageWithGuards(
-  stream: MessageStream,
-  opts: {
-    idleTimeoutMs: number;
-    totalTimeoutMs: number;
-    onText?: (delta: string) => void;
-    onTextEmitted?: () => void;
-  },
-): Promise<Anthropic.Message> {
+function toolCatalog(extra: readonly Anthropic.Tool[] | undefined): Anthropic.Tool[] {
+  const catalog = new Map(builtinTools.map((tool) => [tool.name, tool]));
+  for (const tool of extra ?? []) catalog.set(tool.name, tool);
+  return Array.from(catalog.values());
+}
+
+function textFrom(message: Anthropic.Message): string {
+  return message.content.reduce((text, block) => {
+    return block.type === "text" ? text + block.text : text;
+  }, "");
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * 等待 SDK 汇总最终消息，同时独立守住两种卡死：长时间没有任何流事件，以及整条流总耗时过长。
+ * SDK 自己的请求超时不能代替前者；只要中继连接还活着，请求层可能永远看不出模型已经停住。
+ */
+function collectStream(
+  stream: RunTurnMessageStream,
+  limits: Pick<RunLimits, "idleTimeoutMs" | "totalTimeoutMs">,
+  onText?: (delta: string) => void,
+): Promise<StreamAttempt> {
   return new Promise((resolve, reject) => {
-    let settled = false;
+    let finished = false;
+    let streamedText = "";
     let idleTimer: NodeJS.Timeout | undefined;
     let totalTimer: NodeJS.Timeout | undefined;
 
-    const cleanup = () => {
-      if (idleTimer) clearTimeout(idleTimer);
-      if (totalTimer) clearTimeout(totalTimer);
+    const clearTimers = () => {
+      if (idleTimer !== undefined) clearTimeout(idleTimer);
+      if (totalTimer !== undefined) clearTimeout(totalTimer);
     };
 
-    const settleReject = (err: unknown) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
+    const succeed = (message: Anthropic.Message) => {
+      if (finished) return;
+      finished = true;
+      clearTimers();
+      resolve({ message, streamedText });
+    };
+
+    const fail = (error: unknown) => {
+      if (finished) return;
+      finished = true;
+      clearTimers();
       stream.abort();
-      reject(err);
+      reject(error);
     };
 
-    const settleResolve = (message: Anthropic.Message) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(message);
+    const armIdleTimeout = () => {
+      if (idleTimer !== undefined) clearTimeout(idleTimer);
+      idleTimer = setTimeout(
+        () => fail(new ChatModelStreamTimeoutError("CHAT_MODEL_STREAM_IDLE_TIMEOUT")),
+        limits.idleTimeoutMs,
+      );
     };
 
-    const resetIdleTimer = () => {
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        settleReject(new ChatModelStreamTimeoutError("CHAT_MODEL_STREAM_IDLE_TIMEOUT"));
-      }, opts.idleTimeoutMs);
-    };
-
-    stream.on("streamEvent", resetIdleTimer);
+    stream.on("streamEvent", armIdleTimeout);
     stream.on("text", (delta) => {
-      resetIdleTimer();
-      if (delta) {
-        opts.onTextEmitted?.();
-        opts.onText?.(delta);
-      }
+      armIdleTimeout();
+      if (delta.length === 0) return;
+      streamedText += delta;
+      onText?.(delta);
     });
-    stream.on("error", settleReject);
-    stream.on("abort", settleReject);
+    stream.on("error", fail);
+    stream.on("abort", fail);
 
-    resetIdleTimer();
-    totalTimer = setTimeout(() => {
-      settleReject(new ChatModelStreamTimeoutError("CHAT_MODEL_STREAM_TOTAL_TIMEOUT"));
-    }, opts.totalTimeoutMs);
+    armIdleTimeout();
+    totalTimer = setTimeout(
+      () => fail(new ChatModelStreamTimeoutError("CHAT_MODEL_STREAM_TOTAL_TIMEOUT")),
+      limits.totalTimeoutMs,
+    );
 
-    void stream.finalMessage().then(settleResolve, settleReject);
+    try {
+      void stream.finalMessage().then(succeed, fail);
+    } catch (error) {
+      fail(error);
+    }
   });
 }
 
-export async function runTurn(args: RunTurnArgs): Promise<RunTurnResult> {
-  const { client, model, onText, onResetText, system } = args;
-  const tools = mergeTools(args.tools);
-  const execToolFn = args.execTool ?? execTool;
-  const messages: Anthropic.MessageParam[] = [...args.history];
-  const maxIterations = args.maxIterations ?? DEFAULT_MAX_ITERATIONS;
-  const idleTimeoutMs = streamIdleTimeoutMs(args.streamIdleTimeoutMs);
-  const totalTimeoutMs = streamTotalTimeoutMs(args.streamTotalTimeoutMs);
-  const maxStreamRetries = streamMaxRetries(args.streamMaxRetries);
-  const outputTokensPerCall = maxOutputTokens(args.maxOutputTokens);
-  const maxContinuationTurns = maxContinuations(args.maxContinuations);
-  let toolCalls = 0;
-  let finalText = "";
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let stoppedByMaxIterations = false;
-  let continuationTurns = 0;
-  let continuationActive = false;
+function replaceVisibleText(args: RunTurnArgs, replacement: string): void {
+  if (!args.onResetText) return;
+  args.onResetText();
+  if (replacement.length > 0) args.onText?.(replacement);
+}
 
-  for (let i = 0; i < maxIterations; i++) {
-    let resp: Anthropic.Message | undefined;
-    let attemptText = "";
-    let attempt = 0;
-    let textDeltas: string[] = [];
-    while (!resp) {
-      textDeltas = [];
-      attemptText = "";
-      const stream = client.messages.stream({
-        model,
-        max_tokens: outputTokensPerCall,
-        tools,
-        system,
-        messages,
+async function nextModelMessage(
+  args: RunTurnArgs,
+  messages: Anthropic.MessageParam[],
+  tools: Anthropic.Tool[],
+  limits: RunLimits,
+  acceptedText: string,
+): Promise<StreamAttempt> {
+  for (let attempt = 0; ; attempt += 1) {
+    let emitted = "";
+    const stream = args.client.messages.stream({
+      model: args.model,
+      max_tokens: limits.outputTokens,
+      tools,
+      system: args.system,
+      messages,
+    });
+
+    try {
+      return await collectStream(stream, limits, (delta) => {
+        emitted += delta;
+        args.onText?.(delta);
       });
-
-      try {
-        resp = await finalMessageWithGuards(stream, {
-          idleTimeoutMs,
-          totalTimeoutMs,
-          onText: (delta) => {
-            textDeltas.push(delta);
-            attemptText += delta;
-            onText?.(delta); // 逐 token 实时转发到 SSE
-          },
-        });
-      } catch (err) {
-        if (attempt >= maxStreamRetries) throw err;
-        // 本次尝试已流式出的半截文本作废，通知前端清空后重试
-        if (textDeltas.length > 0) onResetText?.();
-        attempt += 1;
-      }
+    } catch (error) {
+      if (attempt >= limits.retries) throw error;
+      // reset 会删除这一轮整条助手草稿，因此续写前已经确认的正文也要立即补回。
+      if (emitted.length > 0) replaceVisibleText(args, acceptedText);
     }
+  }
+}
 
-    inputTokens += resp.usage?.input_tokens ?? 0;
-    outputTokens += resp.usage?.output_tokens ?? 0;
-    messages.push({ role: "assistant", content: resp.content });
+/** 让前端的流式草稿与最终消息采用同一份文本，即使兼容网关漏发或改写了最后一个 delta。 */
+function acceptText(progress: TurnProgress, attempt: StreamAttempt, args: RunTurnArgs): void {
+  const canonical = textFrom(attempt.message) || attempt.streamedText;
+  if (canonical.length === 0) return;
 
-    const text = resp.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map((b) => b.text)
-      .join("");
-    const effectiveText = text || attemptText;
-    // tool_use 轮的文本只是工具调用前的说明（会被 onResetText 清掉），不计入最终答案；
-    // 仅普通结束或 max_tokens 续写块才写入/累加 finalText。
-    if (effectiveText && resp.stop_reason !== "tool_use") {
-      finalText = continuationActive || resp.stop_reason === "max_tokens"
-        ? `${finalText}${effectiveText}`
-        : effectiveText;
+  if (attempt.streamedText.length === 0) {
+    args.onText?.(canonical);
+  } else if (canonical.startsWith(attempt.streamedText)) {
+    const missingTail = canonical.slice(attempt.streamedText.length);
+    if (missingTail.length > 0) args.onText?.(missingTail);
+  } else if (canonical !== attempt.streamedText && args.onResetText) {
+    replaceVisibleText(args, progress.answer + canonical);
+  }
+
+  progress.answer += canonical;
+}
+
+function reportToolResult(args: RunTurnArgs, tool: Anthropic.ToolUseBlock, startedAt: number, output: string): void {
+  const failed = output.startsWith(TOOL_FAILURE_PREFIX);
+  args.onTool?.({
+    id: tool.id,
+    name: tool.name,
+    input: tool.input,
+    status: failed ? "failed" : "completed",
+    elapsedMs: Date.now() - startedAt,
+    output,
+    ...(failed ? { error: output } : {}),
+  });
+}
+
+async function runTools(
+  toolUses: readonly Anthropic.ToolUseBlock[],
+  execute: (name: string, input: unknown) => Promise<string>,
+  args: RunTurnArgs,
+): Promise<Anthropic.ToolResultBlockParam[]> {
+  const results: Anthropic.ToolResultBlockParam[] = [];
+
+  for (const tool of toolUses) {
+    const startedAt = Date.now();
+    args.onTool?.({ id: tool.id, name: tool.name, input: tool.input, status: "started" });
+    try {
+      const output = await execute(tool.name, tool.input);
+      reportToolResult(args, tool, startedAt, output);
+      results.push({ type: "tool_result", tool_use_id: tool.id, content: output });
+    } catch (error) {
+      args.onTool?.({
+        id: tool.id,
+        name: tool.name,
+        input: tool.input,
+        status: "failed",
+        elapsedMs: Date.now() - startedAt,
+        error: errorText(error),
+      });
+      throw error;
     }
+  }
 
-    // 输出被 max_tokens 截断：自动续写。前端已实时流式的内容保留，续写块继续往后追加。
-    if (resp.stop_reason === "max_tokens") {
-      if (continuationTurns >= maxContinuationTurns) break;
-      continuationTurns += 1;
-      continuationActive = true;
-      messages.push({ role: "user", content: CONTINUATION_PROMPT });
+  return results;
+}
+
+function finish(progress: TurnProgress, messages: Anthropic.MessageParam[]): RunTurnResult {
+  if (progress.answer.trim().length === 0 && !progress.stoppedByMaxIterations) {
+    throw new ChatModelEmptyResponseError("CHAT_MODEL_EMPTY_RESPONSE");
+  }
+  return {
+    text: progress.answer,
+    toolCalls: progress.toolCalls,
+    stoppedByMaxIterations: progress.stoppedByMaxIterations,
+    messages,
+    usage: { inputTokens: progress.inputTokens, outputTokens: progress.outputTokens },
+  };
+}
+
+export async function runTurn(args: RunTurnArgs): Promise<RunTurnResult> {
+  const limits = limitsFor(args);
+  const tools = toolCatalog(args.tools);
+  const execute = args.execTool ?? execBuiltinTool;
+  const messages = args.history.slice();
+  const progress: TurnProgress = {
+    answer: "",
+    toolCalls: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    continuationCount: 0,
+    stoppedByMaxIterations: false,
+  };
+
+  for (let iteration = 0; iteration < limits.iterations; iteration += 1) {
+    const attempt = await nextModelMessage(args, messages, tools, limits, progress.answer);
+    const response = attempt.message;
+
+    progress.inputTokens += response.usage?.input_tokens ?? 0;
+    progress.outputTokens += response.usage?.output_tokens ?? 0;
+    messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "max_tokens") {
+      acceptText(progress, attempt, args);
+      if (progress.continuationCount >= limits.continuations) break;
+      progress.continuationCount += 1;
+      messages.push({ role: "user", content: CONTINUE_FROM_CUTOFF });
       continue;
     }
 
-    if (resp.stop_reason !== "tool_use") {
-      // 文本已在流式回调里逐 token 实时发出；仅当没有任何 delta 但最终有文本时兜底补发一次
-      if (textDeltas.length === 0 && text) onText?.(text);
+    if (response.stop_reason !== "tool_use") {
+      acceptText(progress, attempt, args);
       break;
     }
 
-    // stop_reason === "tool_use"：本轮流式出的是工具调用前的说明，最终答案不含它，
-    // 清掉前端已显示的这段，保持与 finalText / 入库文本一致
-    if (textDeltas.length > 0) onResetText?.();
-
-    const toolUses = resp.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
-    );
-    const results: Anthropic.ToolResultBlockParam[] = [];
-    for (const tu of toolUses) {
-      toolCalls += 1;
-      const startedAt = Date.now();
-      args.onTool?.({ id: tu.id, name: tu.name, input: tu.input, status: "started" });
-      try {
-        const r = await execToolFn(tu.name, tu.input);
-        const failed = r.startsWith("[工具执行失败:");
-        args.onTool?.({
-          id: tu.id,
-          name: tu.name,
-          input: tu.input,
-          status: failed ? "failed" : "completed",
-          elapsedMs: Date.now() - startedAt,
-          output: r,
-          ...(failed ? { error: r } : {}),
-        });
-        results.push({ type: "tool_result", tool_use_id: tu.id, content: r });
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        args.onTool?.({
-          id: tu.id,
-          name: tu.name,
-          input: tu.input,
-          status: "failed",
-          elapsedMs: Date.now() - startedAt,
-          error: message,
-        });
-        throw error;
-      }
-    }
+    // 工具前说明不属于最终答复。清空时把此前已经确认的续写正文恢复，避免界面与落库结果分叉。
+    if (attempt.streamedText.length > 0) replaceVisibleText(args, progress.answer);
+    const toolUses = response.content.filter((block): block is Anthropic.ToolUseBlock => block.type === "tool_use");
+    progress.toolCalls += toolUses.length;
+    const results = await runTools(toolUses, execute, args);
     messages.push({ role: "user", content: results });
-    if (i === maxIterations - 1) {
-      stoppedByMaxIterations = true;
+
+    if (iteration + 1 === limits.iterations) {
+      progress.stoppedByMaxIterations = true;
     }
   }
 
-  // 仅在「模型真的没给内容」时抛空响应；打满工具轮上限属正常终止（由 stoppedByMaxIterations 表达），不算空响应。
-  if (!finalText.trim() && !stoppedByMaxIterations) {
-    throw new ChatModelEmptyResponseError("CHAT_MODEL_EMPTY_RESPONSE");
-  }
-
-  return { text: finalText, toolCalls, stoppedByMaxIterations, messages, usage: { inputTokens, outputTokens } };
+  return finish(progress, messages);
 }

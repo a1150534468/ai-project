@@ -1,576 +1,583 @@
-import { describe, it, expect, vi } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   chatInitialReserveOutputTokens,
   chatMaxOutputTokenBudget,
   ChatModelEmptyResponseError,
   ChatModelStreamTimeoutError,
   runTurn,
+  type RunTurnClient,
+  type RunTurnMessageStream,
+  type RunTurnModelRequest,
 } from "../run.js";
+import { execTool as executeBuiltinTool } from "../tools.js";
 
-// 用假 client 模拟"先 tool_use 再 end_turn"两轮
-function fakeClient(): Anthropic {
-  let call = 0;
-  return {
-    messages: {
-      stream: vi.fn(() => {
-        call += 1;
-        const finalMessage = async () => {
-          if (call === 1) {
-            return {
-              stop_reason: "tool_use",
-              content: [
-                { type: "tool_use", id: "t1", name: "get_time", input: {} },
-              ],
-              usage: { input_tokens: 1, output_tokens: 1 },
-            };
-          }
-          return {
-            stop_reason: "end_turn",
-            content: [{ type: "text", text: "现在是工具返回的时间" }],
-            usage: { input_tokens: 1, output_tokens: 8 },
-          };
-        };
-        if (call === 1) {
-          return {
-            on() { return this; },
-            finalMessage,
-          };
-        }
-        return {
-          on(event: string, listener: (delta: string, snapshot: string) => void) {
-            if (event === "text") listener("现在是工具返回的时间", "现在是工具返回的时间");
-            return this;
-          },
-          finalMessage,
-        };
-      }),
-    },
-  } as unknown as Anthropic;
+interface StreamScript {
+  readonly response?: Anthropic.Message;
+  readonly deltas?: readonly string[];
+  readonly failure?: Error;
+  readonly pending?: boolean;
 }
 
-describe("runTurn 工具循环", () => {
-  it("注入本机工具时仍保留默认云端工具", async () => {
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on() { return this; },
-          async finalMessage() {
-            return {
-              stop_reason: "end_turn",
-              content: [{ type: "text", text: "ok" }],
-              usage: { input_tokens: 1, output_tokens: 1 },
-            };
-          },
-        })),
+interface ScriptedClient {
+  readonly client: RunTurnClient;
+  readonly requests: RunTurnModelRequest[];
+  readonly aborts: ReturnType<typeof vi.fn>[];
+}
+
+function text(value: string): Anthropic.TextBlock {
+  return { type: "text", text: value, citations: null };
+}
+
+function toolUse(id: string, name = "get_time", input: unknown = {}): Anthropic.ToolUseBlock {
+  return { type: "tool_use", id, name, input };
+}
+
+function response(
+  stopReason: Anthropic.StopReason,
+  content: Anthropic.ContentBlock[],
+  inputTokens = 1,
+  outputTokens = 1,
+): Anthropic.Message {
+  return {
+    id: "message-" + stopReason,
+    type: "message",
+    role: "assistant",
+    model: "test-model",
+    content,
+    stop_reason: stopReason,
+    stop_sequence: null,
+    usage: {
+      cache_creation: null,
+      cache_creation_input_tokens: null,
+      cache_read_input_tokens: null,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      server_tool_use: null,
+      service_tier: null,
+    },
+  };
+}
+
+class FakeMessageStream implements RunTurnMessageStream {
+  readonly abort = vi.fn();
+  private readonly textListeners: Array<(delta: string) => void> = [];
+  private readonly errorListeners: Array<(error: unknown) => void> = [];
+
+  constructor(private readonly script: StreamScript) {}
+
+  on(event: "streamEvent", listener: () => void): this;
+  on(event: "text", listener: (delta: string) => void): this;
+  on(event: "error" | "abort", listener: (error: unknown) => void): this;
+  on(
+    event: "streamEvent" | "text" | "error" | "abort",
+    listener: (() => void) | ((delta: string) => void) | ((error: unknown) => void),
+  ): this {
+    if (event === "text") this.textListeners.push(listener as (delta: string) => void);
+    if (event === "error") this.errorListeners.push(listener as (error: unknown) => void);
+    return this;
+  }
+
+  async finalMessage(): Promise<Anthropic.Message> {
+    for (const delta of this.script.deltas ?? []) {
+      for (const listener of this.textListeners) listener(delta);
+    }
+    if (this.script.failure) {
+      queueMicrotask(() => {
+        for (const listener of this.errorListeners) listener(this.script.failure);
+      });
+      return new Promise<never>(() => undefined);
+    }
+    if (this.script.pending) return new Promise<never>(() => undefined);
+    return this.script.response ?? response("end_turn", [text("ok")]);
+  }
+}
+
+function scriptedClient(...scripts: StreamScript[]): ScriptedClient {
+  const requests: RunTurnModelRequest[] = [];
+  const aborts: ReturnType<typeof vi.fn>[] = [];
+  let cursor = 0;
+  const client: RunTurnClient = {
+    messages: {
+      stream(request) {
+        const script = scripts[cursor];
+        if (!script) throw new Error("unexpected model request " + (cursor + 1));
+        cursor += 1;
+        requests.push({ ...request, messages: request.messages.slice(), tools: request.tools.slice() });
+        const stream = new FakeMessageStream(script);
+        aborts.push(stream.abort);
+        return stream;
       },
-    } as unknown as Anthropic;
+    },
+  };
+  return { client, requests, aborts };
+}
 
-    await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "看桌面文件并告诉我时间" }],
-      tools: [{
-        name: "fs_list",
-        description: "列出目录",
-        input_schema: { type: "object", properties: {}, required: [] },
-      }],
-      execTool: async () => "ok",
+function userHistory(content = "你好"): Anthropic.MessageParam[] {
+  return [{ role: "user", content }];
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllEnvs();
+});
+
+describe("runTurn 的模型输出", () => {
+  it("逐段转发文本，并用最终消息与 usage 作为返回值", async () => {
+    const fixture = scriptedClient({
+      deltas: ["你", "好"],
+      response: response("end_turn", [text("你好")], 7, 2),
     });
-
-    expect(client.messages.stream).toHaveBeenCalledWith(expect.objectContaining({
-      tools: expect.arrayContaining([
-        expect.objectContaining({ name: "get_time" }),
-        expect.objectContaining({ name: "fs_list" }),
-      ]),
-    }));
-  });
-
-  it("遇到 tool_use 执行工具并回填，最终返回文本", async () => {
     const onText = vi.fn();
-    const out = await runTurn({
-      client: fakeClient(),
+
+    const result = await runTurn({
+      client: fixture.client,
       model: "glm-5.2",
-      history: [{ role: "user", content: "几点了" }],
-      onText,
-    });
-    expect(out.text).toContain("时间");
-    expect(out.toolCalls).toBe(1);
-    expect(out.stoppedByMaxIterations).toBe(false);
-  });
-
-  it("工具执行时回调开始和完成状态", async () => {
-    const onTool = vi.fn();
-    const out = await runTurn({
-      client: fakeClient(),
-      model: "glm-5.2",
-      history: [{ role: "user", content: "几点了" }],
-      execTool: async () => "2026-07-03T00:00:00.000Z",
-      onTool,
-    });
-
-    expect(out.toolCalls).toBe(1);
-    expect(onTool).toHaveBeenNthCalledWith(1, {
-      id: "t1",
-      name: "get_time",
-      input: {},
-      status: "started",
-    });
-    expect(onTool).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      id: "t1",
-      name: "get_time",
-      input: {},
-      status: "completed",
-      output: "2026-07-03T00:00:00.000Z",
-    }));
-  });
-
-  it("工具返回错误文本时回调失败状态并继续喂给模型", async () => {
-    const onTool = vi.fn();
-    const out = await runTurn({
-      client: fakeClient(),
-      model: "glm-5.2",
-      history: [{ role: "user", content: "操作电脑" }],
-      execTool: async () => "[工具执行失败: CONNECTION_LOST] 这一步结果未知",
-      onTool,
-    });
-
-    expect(out.toolCalls).toBe(1);
-    expect(onTool).toHaveBeenLastCalledWith(expect.objectContaining({
-      id: "t1",
-      name: "get_time",
-      status: "failed",
-      error: "[工具执行失败: CONNECTION_LOST] 这一步结果未知",
-    }));
-  });
-
-  it("工具调用轮里的文字不会提前作为最终回复输出", async () => {
-    let call = 0;
-    const client = {
-      messages: {
-        stream: vi.fn(() => {
-          call += 1;
-          if (call === 1) {
-            return {
-              on(event: string, listener: (delta: string, snapshot: string) => void) {
-                if (event === "text") listener("Assessing build machine", "Assessing build machine");
-                return this;
-              },
-              async finalMessage() {
-                return {
-                  stop_reason: "tool_use",
-                  content: [
-                    { type: "text", text: "Assessing build machine" },
-                    { type: "tool_use", id: "t1", name: "terminal_exec", input: {} },
-                  ],
-                  usage: { input_tokens: 1, output_tokens: 1 },
-                };
-              },
-            };
-          }
-          return {
-            on(event: string, listener: (delta: string, snapshot: string) => void) {
-              if (event === "text") listener("最终检查完成", "最终检查完成");
-              return this;
-            },
-            async finalMessage() {
-              return {
-                stop_reason: "end_turn",
-                content: [{ type: "text", text: "最终检查完成" }],
-                usage: { input_tokens: 1, output_tokens: 1 },
-              };
-            },
-          };
-        }),
-      },
-    } as unknown as Anthropic;
-    const onText = vi.fn();
-    const onResetText = vi.fn();
-
-    const out = await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "检查构建机" }],
-      execTool: async () => "ok",
-      onText,
-      onResetText,
-    });
-
-    expect(out.toolCalls).toBe(1);
-    expect(out.text).toBe("最终检查完成");
-    // 新流式行为：工具前的说明会实时流出，但随后被 onResetText 作废，
-    // 前端最终仅保留最终文本，工具前说明不会泄漏进最终回复
-    expect(onText).toHaveBeenNthCalledWith(1, "Assessing build machine");
-    expect(onResetText).toHaveBeenCalledTimes(1);
-    expect(onText).toHaveBeenLastCalledWith("最终检查完成");
-  });
-
-  it("按文本 delta 回调，而不是等完整消息返回后一次性回调", async () => {
-    const onText = vi.fn();
-    const client = {
-      messages: {
-        create: vi.fn(async () => ({
-          stop_reason: "end_turn",
-          content: [{ type: "text", text: "你好世界" }],
-          usage: { input_tokens: 1, output_tokens: 4 },
-        })),
-        stream: vi.fn(() => ({
-          on(event: string, listener: (delta: string, snapshot: string) => void) {
-            if (event === "text") {
-              listener("你好", "你好");
-              listener("世界", "你好世界");
-            }
-            return this;
-          },
-          async finalMessage() {
-            return {
-              stop_reason: "end_turn",
-              content: [{ type: "text", text: "你好世界" }],
-              usage: { input_tokens: 1, output_tokens: 4 },
-            };
-          },
-        })),
-      },
-    } as unknown as Anthropic;
-
-    const out = await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "打招呼" }],
+      history: userHistory(),
       onText,
     });
 
-    expect(out.text).toBe("你好世界");
-    expect(onText).toHaveBeenNthCalledWith(1, "你好");
-    expect(onText).toHaveBeenNthCalledWith(2, "世界");
-    expect(client.messages.stream).toHaveBeenCalled();
-    expect(client.messages.create).not.toHaveBeenCalled();
-  });
-
-  it("默认支持超过 8 次的桌面工具循环", async () => {
-    let call = 0;
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on() { return this; },
-          async finalMessage() {
-            call += 1;
-            if (call <= 9) {
-              return {
-                stop_reason: "tool_use",
-                content: [{ type: "tool_use", id: `t${call}`, name: "terminal_exec", input: {} }],
-                usage: { input_tokens: 1, output_tokens: 1 },
-              };
-            }
-            return {
-              stop_reason: "end_turn",
-              content: [{ type: "text", text: "任务完成" }],
-              usage: { input_tokens: 1, output_tokens: 1 },
-            };
-          },
-        })),
-      },
-    } as unknown as Anthropic;
-
-    const out = await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "操作电脑" }],
-      execTool: async () => "ok",
+    expect(onText.mock.calls).toEqual([["你"], ["好"]]);
+    expect(result).toMatchObject({
+      text: "你好",
+      toolCalls: 0,
+      stoppedByMaxIterations: false,
+      usage: { inputTokens: 7, outputTokens: 2 },
     });
-
-    expect(out.toolCalls).toBe(9);
-    expect(out.text).toBe("任务完成");
-    expect(out.stoppedByMaxIterations).toBe(false);
+    expect(result.messages).toHaveLength(2);
   });
 
-  it("工具循环耗尽上限时返回明确状态", async () => {
-    let call = 0;
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on() { return this; },
-          async finalMessage() {
-            call += 1;
-            return {
-              stop_reason: "tool_use",
-              content: [{ type: "tool_use", id: `t${call}`, name: "terminal_exec", input: {} }],
-              usage: { input_tokens: 1, output_tokens: 1 },
-            };
-          },
-        })),
-      },
-    } as unknown as Anthropic;
-
-    const out = await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "一直操作电脑" }],
-      execTool: async () => "ok",
-      maxIterations: 2,
-    });
-
-    expect(out.toolCalls).toBe(2);
-    expect(out.text).toBe("");
-    expect(out.stoppedByMaxIterations).toBe(true);
-  });
-
-  it("工具循环耗尽上限时不把工具轮说明当最终文本", async () => {
-    let call = 0;
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on(event: string, listener: (delta: string, snapshot: string) => void) {
-            if (event === "text") listener("Still checking", "Still checking");
-            return this;
-          },
-          async finalMessage() {
-            call += 1;
-            return {
-              stop_reason: "tool_use",
-              content: [
-                { type: "text", text: "Still checking" },
-                { type: "tool_use", id: `t${call}`, name: "terminal_exec", input: {} },
-              ],
-              usage: { input_tokens: 1, output_tokens: 1 },
-            };
-          },
-        })),
-      },
-    } as unknown as Anthropic;
-    const onText = vi.fn();
-    const onResetText = vi.fn();
-
-    const out = await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "一直操作电脑" }],
-      execTool: async () => "ok",
-      onText,
-      onResetText,
-      maxIterations: 2,
-    });
-
-    expect(out.toolCalls).toBe(2);
-    expect(out.text).toBe("");
-    expect(out.stoppedByMaxIterations).toBe(true);
-    // 新流式行为：工具轮说明会实时流出，但每轮都被 onResetText 作废，
-    // 最终文本仍为空，不会把工具轮说明当最终回复
-    expect(onText).toHaveBeenCalledWith("Still checking");
-    expect(onResetText).toHaveBeenCalled();
-  });
-
-  it("模型流空闲超时时会中止请求", async () => {
-    vi.useFakeTimers();
-    const abort = vi.fn();
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on() { return this; },
-          abort,
-          finalMessage: () => new Promise<never>(() => {}),
-        })),
-      },
-    } as unknown as Anthropic;
-
-    const pending = runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "测试卡住" }],
-      streamIdleTimeoutMs: 20,
-      streamTotalTimeoutMs: 1000,
-      streamMaxRetries: 0,
-    });
-
-    const assertion = expect(pending).rejects.toBeInstanceOf(ChatModelStreamTimeoutError);
-    await vi.advanceTimersByTimeAsync(21);
-    await assertion;
-    expect(abort).toHaveBeenCalledTimes(1);
-    vi.useRealTimers();
-  });
-
-  it("模型流未输出文本前异常会自动重试", async () => {
-    let call = 0;
-    const firstAbort = vi.fn();
-    const secondAbort = vi.fn();
-    const client = {
-      messages: {
-        stream: vi.fn(() => {
-          call += 1;
-          if (call === 1) {
-            const listeners: Record<string, (...args: unknown[]) => void> = {};
-            return {
-              on(event: string, listener: (...args: unknown[]) => void) {
-                listeners[event] = listener;
-                return this;
-              },
-              abort: firstAbort,
-              finalMessage: () => {
-                queueMicrotask(() => listeners.error?.(new Error("bad stream")));
-                return new Promise<never>(() => {});
-              },
-            };
-          }
-          return {
-            on(event: string, listener: (delta: string, snapshot: string) => void) {
-              if (event === "text") listener("重试成功", "重试成功");
-              return this;
-            },
-            abort: secondAbort,
-            async finalMessage() {
-              return {
-                stop_reason: "end_turn",
-                content: [{ type: "text", text: "重试成功" }],
-                usage: { input_tokens: 1, output_tokens: 2 },
-              };
-            },
-          };
-        }),
-      },
-    } as unknown as Anthropic;
+  it("兼容只在最终消息里给文本、没有 text 事件的网关", async () => {
+    const fixture = scriptedClient({ response: response("end_turn", [text("最终正文")]) });
     const onText = vi.fn();
 
-    const out = await runTurn({
-      client,
+    const result = await runTurn({
+      client: fixture.client,
       model: "glm-5.2",
-      history: [{ role: "user", content: "测试重试" }],
-      onText,
-      streamIdleTimeoutMs: 1000,
-      streamTotalTimeoutMs: 2000,
-      streamMaxRetries: 1,
-    });
-
-    expect(out.text).toBe("重试成功");
-    expect(onText).toHaveBeenCalledWith("重试成功");
-    expect(client.messages.stream).toHaveBeenCalledTimes(2);
-    expect(firstAbort).toHaveBeenCalledTimes(1);
-    expect(secondAbort).not.toHaveBeenCalled();
-  });
-
-  it("最终消息为空但流式 delta 有内容时，使用流式内容作为最终回复", async () => {
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on(event: string, listener: (delta: string, snapshot: string) => void) {
-            if (event === "text") {
-              listener("流式", "流式");
-              listener("内容", "流式内容");
-            }
-            return this;
-          },
-          async finalMessage() {
-            return {
-              stop_reason: "end_turn",
-              content: [],
-              usage: { input_tokens: 3, output_tokens: 8 },
-            };
-          },
-        })),
-      },
-    } as unknown as Anthropic;
-    const onText = vi.fn();
-
-    const out = await runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "写文章" }],
+      history: userHistory(),
       onText,
     });
 
-    expect(out.text).toBe("流式内容");
-    expect(out.usage.outputTokens).toBe(8);
-    expect(onText).toHaveBeenNthCalledWith(1, "流式");
-    expect(onText).toHaveBeenNthCalledWith(2, "内容");
+    expect(result.text).toBe("最终正文");
+    expect(onText).toHaveBeenCalledOnce();
+    expect(onText).toHaveBeenCalledWith("最终正文");
   });
 
-  it("模型没有返回有效文本时抛出空响应错误", async () => {
-    const client = {
-      messages: {
-        stream: vi.fn(() => ({
-          on() { return this; },
-          async finalMessage() {
-            return {
-              stop_reason: "end_turn",
-              content: [],
-              usage: { input_tokens: 3, output_tokens: 8 },
-            };
-          },
-        })),
-      },
-    } as unknown as Anthropic;
-
-    await expect(runTurn({
-      client,
-      model: "glm-5.2",
-      history: [{ role: "user", content: "写文章" }],
-    })).rejects.toBeInstanceOf(ChatModelEmptyResponseError);
-  });
-
-  it("模型因 max_tokens 截断时自动续写并合并最终回复", async () => {
-    const streamCalls: Array<{ messages: Anthropic.MessageParam[]; max_tokens: number }> = [];
-    let call = 0;
-    const client = {
-      messages: {
-        stream: vi.fn((args: { messages: Anthropic.MessageParam[]; max_tokens: number }) => {
-          streamCalls.push({ max_tokens: args.max_tokens, messages: [...args.messages] });
-          call += 1;
-          if (call === 1) {
-            return {
-              on(event: string, listener: (delta: string, snapshot: string) => void) {
-                if (event === "text") listener("第一段", "第一段");
-                return this;
-              },
-              async finalMessage() {
-                return {
-                  stop_reason: "max_tokens",
-                  content: [{ type: "text", text: "第一段" }],
-                  usage: { input_tokens: 10, output_tokens: 100 },
-                };
-              },
-            };
-          }
-          return {
-            on(event: string, listener: (delta: string, snapshot: string) => void) {
-              if (event === "text") listener("第二段", "第二段");
-              return this;
-            },
-            async finalMessage() {
-              return {
-                stop_reason: "end_turn",
-                content: [{ type: "text", text: "第二段" }],
-                usage: { input_tokens: 5, output_tokens: 20 },
-              };
-            },
-          };
-        }),
-      },
-    } as unknown as Anthropic;
+  it("最终消息补齐流事件漏掉的尾巴时，只增发缺失部分", async () => {
+    const fixture = scriptedClient({
+      deltas: ["第一段"],
+      response: response("end_turn", [text("第一段第二段")]),
+    });
     const onText = vi.fn();
 
-    const out = await runTurn({
-      client,
+    const result = await runTurn({
+      client: fixture.client,
       model: "glm-5.2",
-      history: [{ role: "user", content: "写一篇长文" }],
+      history: userHistory(),
       onText,
+    });
+
+    expect(result.text).toBe("第一段第二段");
+    expect(onText.mock.calls).toEqual([["第一段"], ["第二段"]]);
+  });
+
+  it("最终消息为空时采用已经收到的流式文本", async () => {
+    const fixture = scriptedClient({
+      deltas: ["流式", "正文"],
+      response: response("end_turn", [], 3, 8),
+    });
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+    });
+
+    expect(result.text).toBe("流式正文");
+    expect(result.usage.outputTokens).toBe(8);
+  });
+
+  it("流与最终消息都没有文本时抛类型化错误", async () => {
+    const fixture = scriptedClient({ response: response("end_turn", []) });
+
+    await expect(
+      runTurn({
+        client: fixture.client,
+        model: "glm-5.2",
+        history: userHistory(),
+      }),
+    ).rejects.toBeInstanceOf(ChatModelEmptyResponseError);
+  });
+});
+
+describe("runTurn 的自动续写", () => {
+  it("在 max_tokens 后追加续写提示，并合并文本与 token 用量", async () => {
+    const fixture = scriptedClient(
+      { deltas: ["上半"], response: response("max_tokens", [text("上半")], 10, 100) },
+      { deltas: ["下半"], response: response("end_turn", [text("下半")], 5, 20) },
+    );
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory("写长文"),
       maxContinuations: 1,
     });
 
-    expect(out.text).toBe("第一段第二段");
-    expect(out.usage).toEqual({ inputTokens: 15, outputTokens: 120 });
-    expect(onText).toHaveBeenNthCalledWith(1, "第一段");
-    expect(onText).toHaveBeenNthCalledWith(2, "第二段");
-    expect(streamCalls).toHaveLength(2);
-    expect(streamCalls[1].messages.at(-1)).toEqual({
+    expect(result.text).toBe("上半下半");
+    expect(result.usage).toEqual({ inputTokens: 15, outputTokens: 120 });
+    const secondRequest = fixture.requests[1];
+    expect(secondRequest?.messages.at(-1)).toEqual({
       role: "user",
       content: expect.stringContaining("继续"),
     });
   });
 
-  it("主对话初始预扣只使用单次输出上限", () => {
+  it("续写次数达到上限后保留已生成正文，不再发请求", async () => {
+    const fixture = scriptedClient({
+      deltas: ["被截断的正文"],
+      response: response("max_tokens", [text("被截断的正文")]),
+    });
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      maxContinuations: 0,
+    });
+
+    expect(result.text).toBe("被截断的正文");
+    expect(fixture.requests).toHaveLength(1);
+  });
+
+  it("工具前说明被清除时恢复此前已确认的续写正文", async () => {
+    const fixture = scriptedClient(
+      { deltas: ["第一段"], response: response("max_tokens", [text("第一段")]) },
+      {
+        deltas: ["我先查一下"],
+        response: response("tool_use", [text("我先查一下"), toolUse("tool-1")]),
+      },
+      { deltas: ["第二段"], response: response("end_turn", [text("第二段")]) },
+    );
+    const visible: string[] = [];
+    const onResetText = vi.fn(() => visible.splice(0));
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      maxContinuations: 2,
+      execTool: async () => "2026-09-07T00:00:00.000Z",
+      onText: (delta) => visible.push(delta),
+      onResetText,
+    });
+
+    expect(result.text).toBe("第一段第二段");
+    expect(visible.join("")).toBe(result.text);
+    expect(onResetText).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runTurn 的工具循环", () => {
+  it("把工具结果回灌给下一次模型请求", async () => {
+    const fixture = scriptedClient(
+      { response: response("tool_use", [toolUse("time-1")]) },
+      { deltas: ["查到了"], response: response("end_turn", [text("查到了")]) },
+    );
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory("几点了"),
+      execTool: async () => "2026-09-07T00:00:00.000Z",
+    });
+
+    expect(result.toolCalls).toBe(1);
+    expect(result.text).toBe("查到了");
+    expect(fixture.requests[1]?.messages.at(-1)).toEqual({
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "time-1",
+          content: "2026-09-07T00:00:00.000Z",
+        },
+      ],
+    });
+  });
+
+  it("附加工具覆盖同名内置定义，同时保留其他内置工具", async () => {
+    const fixture = scriptedClient({ response: response("end_turn", [text("ok")]) });
+
+    await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      tools: [
+        {
+          name: "get_time",
+          description: "自定义时钟",
+          input_schema: { type: "object", properties: {} },
+        },
+        {
+          name: "list_files",
+          description: "列出文件",
+          input_schema: { type: "object", properties: {} },
+        },
+      ],
+    });
+
+    expect(fixture.requests[0]?.tools).toEqual([
+      expect.objectContaining({ name: "get_time", description: "自定义时钟" }),
+      expect.objectContaining({ name: "list_files" }),
+    ]);
+  });
+
+  it("逐个报告工具开始与完成，并保持响应顺序", async () => {
+    const fixture = scriptedClient(
+      { response: response("tool_use", [toolUse("a", "first"), toolUse("b", "second")]) },
+      { response: response("end_turn", [text("完成")]) },
+    );
+    const onTool = vi.fn();
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      execTool: async (name) => name + "-result",
+      onTool,
+    });
+
+    expect(result.toolCalls).toBe(2);
+    expect(onTool).toHaveBeenCalledTimes(4);
+    expect(onTool.mock.calls.map(([event]) => [event.name, event.status])).toEqual([
+      ["first", "started"],
+      ["first", "completed"],
+      ["second", "started"],
+      ["second", "completed"],
+    ]);
+  });
+
+  it("工具返回约定失败文本时上报失败，但仍把文本交给模型", async () => {
+    const fixture = scriptedClient(
+      { response: response("tool_use", [toolUse("broken")]) },
+      { response: response("end_turn", [text("已说明失败")]) },
+    );
+    const onTool = vi.fn();
+    const failure = "[工具执行失败: CONNECTION_LOST] 结果未知";
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      execTool: async () => failure,
+      onTool,
+    });
+
+    expect(result.text).toBe("已说明失败");
+    expect(onTool).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: "broken",
+        status: "failed",
+        output: failure,
+        error: failure,
+      }),
+    );
+  });
+
+  it("工具执行抛错时上报失败并停止本轮", async () => {
+    const fixture = scriptedClient({ response: response("tool_use", [toolUse("broken")]) });
+    const onTool = vi.fn();
+
+    await expect(
+      runTurn({
+        client: fixture.client,
+        model: "glm-5.2",
+        history: userHistory(),
+        execTool: async () => {
+          throw new Error("disk offline");
+        },
+        onTool,
+      }),
+    ).rejects.toThrow("disk offline");
+    expect(onTool).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: "broken",
+        status: "failed",
+        error: "disk offline",
+      }),
+    );
+  });
+
+  it("达到迭代上限时执行最后一轮工具并返回明确状态", async () => {
+    const fixture = scriptedClient(
+      { response: response("tool_use", [toolUse("one")]) },
+      { response: response("tool_use", [toolUse("two")]) },
+    );
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      execTool: async () => "ok",
+      maxIterations: 2,
+    });
+
+    expect(result).toMatchObject({ text: "", toolCalls: 2, stoppedByMaxIterations: true });
+    expect(result.messages.at(-1)).toMatchObject({ role: "user" });
+  });
+
+  it("默认上限允许连续九轮工具调用", async () => {
+    const scripts: StreamScript[] = Array.from({ length: 9 }, (_, index) => ({
+      response: response("tool_use", [toolUse("tool-" + index)]),
+    }));
+    scripts.push({ response: response("end_turn", [text("任务完成")]) });
+    const fixture = scriptedClient(...scripts);
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      execTool: async () => "ok",
+    });
+
+    expect(result).toMatchObject({
+      text: "任务完成",
+      toolCalls: 9,
+      stoppedByMaxIterations: false,
+    });
+  });
+
+  it("工具轮的流式说明不会混进最终答复", async () => {
+    const fixture = scriptedClient(
+      {
+        deltas: ["正在检查"],
+        response: response("tool_use", [text("正在检查"), toolUse("inspect")]),
+      },
+      { deltas: ["检查完成"], response: response("end_turn", [text("检查完成")]) },
+    );
+    const visible: string[] = [];
+    const onResetText = vi.fn(() => visible.splice(0));
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      execTool: async () => "ok",
+      onText: (delta) => visible.push(delta),
+      onResetText,
+    });
+
+    expect(result.text).toBe("检查完成");
+    expect(visible.join("")).toBe("检查完成");
+    expect(onResetText).toHaveBeenCalledOnce();
+  });
+});
+
+describe("runTurn 的流保护", () => {
+  it("空闲超时会中止当前流", async () => {
+    vi.useFakeTimers();
+    const fixture = scriptedClient({ pending: true });
+    const pending = runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      streamIdleTimeoutMs: 20,
+      streamTotalTimeoutMs: 1_000,
+      streamMaxRetries: 0,
+    });
+
+    const rejected = expect(pending).rejects.toBeInstanceOf(ChatModelStreamTimeoutError);
+    await vi.advanceTimersByTimeAsync(21);
+    await rejected;
+    expect(fixture.aborts[0]).toHaveBeenCalledOnce();
+  });
+
+  it("总时长超时独立于空闲超时", async () => {
+    vi.useFakeTimers();
+    const fixture = scriptedClient({ pending: true });
+    const pending = runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      streamIdleTimeoutMs: 1_000,
+      streamTotalTimeoutMs: 20,
+      streamMaxRetries: 0,
+    });
+
+    const rejected = expect(pending).rejects.toMatchObject({
+      message: "CHAT_MODEL_STREAM_TOTAL_TIMEOUT",
+    });
+    await vi.advanceTimersByTimeAsync(21);
+    await rejected;
+    expect(fixture.aborts[0]).toHaveBeenCalledOnce();
+  });
+
+  it("失败后重试，并在清除半截文本后恢复既有正文", async () => {
+    const fixture = scriptedClient(
+      { deltas: ["已确认"], response: response("max_tokens", [text("已确认")]) },
+      { deltas: ["半截"], failure: new Error("bad stream") },
+      { deltas: ["补完"], response: response("end_turn", [text("补完")]) },
+    );
+    const visible: string[] = [];
+    const onResetText = vi.fn(() => visible.splice(0));
+
+    const result = await runTurn({
+      client: fixture.client,
+      model: "glm-5.2",
+      history: userHistory(),
+      maxContinuations: 1,
+      streamMaxRetries: 1,
+      onText: (delta) => visible.push(delta),
+      onResetText,
+    });
+
+    expect(result.text).toBe("已确认补完");
+    expect(visible.join("")).toBe(result.text);
+    expect(fixture.requests).toHaveLength(3);
+    expect(fixture.aborts[1]).toHaveBeenCalledOnce();
+  });
+
+  it("重试次数耗尽后透传最后一次错误", async () => {
+    const fixture = scriptedClient({ failure: new Error("first") }, { failure: new Error("second") });
+
+    await expect(
+      runTurn({
+        client: fixture.client,
+        model: "glm-5.2",
+        history: userHistory(),
+        streamMaxRetries: 1,
+      }),
+    ).rejects.toThrow("second");
+    expect(fixture.requests).toHaveLength(2);
+  });
+});
+
+describe("输出 token 预算", () => {
+  it("初始预扣只覆盖第一次模型请求", () => {
     expect(chatInitialReserveOutputTokens({ maxOutputTokens: 100 })).toBe(100);
   });
 
-  it("自动续写总输出预算覆盖续写轮数", () => {
+  it("最大预算覆盖第一次请求和全部续写", () => {
     expect(chatMaxOutputTokenBudget({ maxOutputTokens: 100, maxContinuations: 2 })).toBe(300);
+  });
+
+  it("环境变量非法时使用默认值，合法小数向下取整", () => {
+    vi.stubEnv("CHAT_MAX_OUTPUT_TOKENS", "12.9");
+    vi.stubEnv("CHAT_MAX_CONTINUATIONS", "bad");
+    expect(chatInitialReserveOutputTokens()).toBe(12);
+    expect(chatMaxOutputTokenBudget()).toBe(12 * 21);
+  });
+});
+
+describe("服务端内置工具", () => {
+  it("get_time 返回当前 UTC ISO 时间", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-07T03:04:05.000Z"));
+    await expect(executeBuiltinTool("get_time", {})).resolves.toBe("2026-09-07T03:04:05.000Z");
+  });
+
+  it("未知名称返回可供模型理解的错误文本", async () => {
+    await expect(executeBuiltinTool("missing", null)).resolves.toBe("未知工具: missing");
   });
 });
