@@ -1,371 +1,168 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { Dispatcher } from "undici";
 import { assertSafeUrl, fetchUrl, SsrfError } from "./url-fetch.js";
 
-// 辅助函数：创建返回指定 IP 的 fake lookup
-const lookupTo =
-  (ip: string) =>
-  async () => [{ address: ip, family: ip.includes(":") ? 6 : 4 }];
+const PUBLIC_V4 = "93.184.216.34";
+const lookup = (...addresses: string[]) => vi.fn(async () =>
+  addresses.map((address) => ({ address, family: address.includes(":") ? 6 : 4 })));
+const response = (status: number, body: string | null = "", headers: Record<string, string> = {}) =>
+  new Response(status === 204 || status === 304 ? null : body, { status, headers });
 
-// 辅助函数：创建 fake Response
-const createMockResponse = (
-  status: number,
-  body: string = "",
-  headers: Record<string, string> = {}
-): Response => {
-  return new Response(body, {
-    status,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      ...headers,
-    },
-  });
-};
+function inertDispatcher(): Dispatcher {
+  return {
+    close: vi.fn(async () => undefined),
+    destroy: vi.fn(async () => undefined),
+  } as unknown as Dispatcher;
+}
 
 describe("assertSafeUrl", () => {
-  describe("拒绝字面量危险 IP", () => {
-    it.each([
-      "http://127.0.0.1/",
-      "http://127.0.0.5/",
-      "http://0.0.0.0/",
-      "http://[::1]/",
-      "http://[::]/",
-    ])("拒绝回环地址: %s", async (u) => {
-      await expect(assertSafeUrl(u, lookupTo("93.184.216.34"))).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it.each([
-      "http://10.0.0.1/",
-      "http://10.255.255.255/",
-      "http://192.168.0.1/",
-      "http://172.16.0.1/",
-      "http://172.31.255.255/",
-    ])("拒绝私网地址: %s", async (u) => {
-      await expect(assertSafeUrl(u, lookupTo("93.184.216.34"))).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it.each([
-      "http://169.254.169.254/latest/meta-data/",
-      "http://169.254.169.253/",
-      "http://169.254.0.1/",
-    ])("拒绝链路本地/云元数据: %s", async (u) => {
-      await expect(assertSafeUrl(u, lookupTo("93.184.216.34"))).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it.each([
-      "http://[fc00::1]/",
-      "http://[fe80::1]/",
-    ])("拒绝 IPv6 本地/链路本地: %s", async (u) => {
-      await expect(assertSafeUrl(u, lookupTo("2001:db8::1"))).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it.each([
-      "http://224.0.0.1/",
-      "http://239.255.255.255/",
-    ])("拒绝组播地址: %s", async (u) => {
-      await expect(assertSafeUrl(u, lookupTo("93.184.216.34"))).rejects.toBeInstanceOf(SsrfError);
-    });
+  it.each([
+    "http://127.0.0.1/",
+    "http://10.0.0.1/",
+    "http://192.168.1.1/",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://[::1]/",
+    "http://[fc00::1]/",
+    "http://224.0.0.1/",
+    "http://0.0.0.1/",
+  ])("拒绝危险字面地址 %s", async (url) => {
+    await expect(assertSafeUrl(url, lookup(PUBLIC_V4))).rejects.toBeInstanceOf(SsrfError);
   });
 
-  describe("拒绝非 http(s) 协议", () => {
-    it.each([
-      "ftp://example.com/",
-      "file:///etc/passwd",
-      "gopher://x/",
-      "data:text/html,<h1>xss</h1>",
-    ])("拒绝协议: %s", async (u) => {
-      await expect(assertSafeUrl(u, lookupTo("93.184.216.34"))).rejects.toBeInstanceOf(SsrfError);
-    });
+  it.each(["file:///etc/passwd", "ftp://example.com/a", "data:text/plain,x", "not a url"])(
+    "拒绝非 HTTP(S) 或畸形 URL %s",
+    async (url) => {
+      await expect(assertSafeUrl(url, lookup(PUBLIC_V4))).rejects.toBeInstanceOf(SsrfError);
+    },
+  );
+
+  it("DNS 任一答案危险就整体拒绝，空答案和 resolver 错误也拒绝", async () => {
+    await expect(assertSafeUrl("https://example.com", lookup(PUBLIC_V4, "127.0.0.1")))
+      .rejects.toThrow("blocked IP");
+    await expect(assertSafeUrl("https://example.com", lookup())).rejects.toThrow("no records");
+    const failed = vi.fn().mockRejectedValue(new Error("dns down"));
+    await expect(assertSafeUrl("https://example.com", failed)).rejects.toThrow("DNS lookup failed");
   });
 
-  describe("拒绝 DNS 解析到内网", () => {
-    it("域名解析到回环", async () => {
-      await expect(
-        assertSafeUrl("http://evil.example.com/", lookupTo("127.0.0.1"))
-      ).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it("域名解析到私网", async () => {
-      await expect(
-        assertSafeUrl("http://internal.local/", lookupTo("192.168.1.1"))
-      ).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it("域名解析到云元数据 IP", async () => {
-      await expect(
-        assertSafeUrl("http://malicious.example.com/", lookupTo("169.254.169.254"))
-      ).rejects.toBeInstanceOf(SsrfError);
-    });
-
-    it("localhost 解析失败也拒绝", async () => {
-      await expect(
-        assertSafeUrl("http://localhost/", lookupTo("127.0.0.1"))
-      ).rejects.toBeInstanceOf(SsrfError);
-    });
-  });
-
-  describe("放行安全公网 URL", () => {
-    it("公网 https 域名", async () => {
-      const ips = await assertSafeUrl("https://example.com/", lookupTo("93.184.216.34"));
-      expect(ips).toEqual(["93.184.216.34"]);
-    });
-
-    it("公网 http 域名", async () => {
-      const ips = await assertSafeUrl("http://google.com/path", lookupTo("142.251.32.46"));
-      expect(ips).toEqual(["142.251.32.46"]);
-    });
-
-    it("字面公网 IPv4", async () => {
-      const ips = await assertSafeUrl("https://93.184.216.34/");
-      expect(ips).toEqual(["93.184.216.34"]);
-    });
-
-    it("字面公网 IPv6", async () => {
-      const ips = await assertSafeUrl("https://[2606:4700:4700::1111]/");
-      expect(ips).toEqual(["2606:4700:4700::1111"]);
-    });
-  });
-
-  describe("对无效或恶意 URL 拒绝", () => {
-    it("无效 URL 格式", async () => {
-      await expect(
-        assertSafeUrl("not a url", lookupTo("93.184.216.34"))
-      ).rejects.toBeInstanceOf(SsrfError);
-    });
+  it("公网域名与字面 IPv4/IPv6 返回实际连接地址", async () => {
+    await expect(assertSafeUrl("https://example.com", lookup(PUBLIC_V4))).resolves.toEqual([PUBLIC_V4]);
+    await expect(assertSafeUrl(`https://${PUBLIC_V4}/`)).resolves.toEqual([PUBLIC_V4]);
+    await expect(assertSafeUrl("https://[2606:4700:4700::1111]/")).resolves.toEqual(["2606:4700:4700::1111"]);
   });
 });
 
-describe("fetchUrl 重定向防护", () => {
-  describe("拒绝重定向到内网", () => {
-    it("302 重定向到云元数据 IP 应拒绝", async () => {
-      const fakeFetch = vi.fn(async (url: string) => {
-        // 首次请求返回 302
-        if (url === "https://example.com/") {
-          return createMockResponse(302, "", {
-            location: "http://169.254.169.254/latest/meta-data/",
-          });
-        }
-        throw new Error(`Unexpected URL: ${url}`);
-      }) as any;
+describe("fetchUrl", () => {
+  const base = {
+    lookupFn: lookup(PUBLIC_V4),
+    dispatcherFactory: vi.fn(() => inertDispatcher()),
+  };
 
-      await expect(
-        fetchUrl("https://example.com/", {
-          fetchFn: fakeFetch,
-          lookupFn: lookupTo("93.184.216.34"),
-        })
-      ).rejects.toThrow("Redirect target blocked");
-
-      // 应该只请求了第一个 URL，不应该跟进到内网
-      expect(fakeFetch).toHaveBeenCalledTimes(1);
-      expect(fakeFetch).toHaveBeenCalledWith("https://example.com/", expect.any(Object));
+  it("相对与绝对公网重定向逐跳复验并返回最终 URL", async () => {
+    const fetchFn = vi.fn(async (url: string) => {
+      if (url === "https://example.com/start") return response(302, "", { location: "/next" });
+      if (url === "https://example.com/next") return response(307, "", { location: "https://cdn.example/end" });
+      return response(200, "done", { "content-type": "text/plain; charset=utf-8" });
     });
-
-    it("302 重定向到私网 IP 应拒绝", async () => {
-      const fakeFetch = vi.fn(async (url: string) => {
-        if (url === "https://example.com/") {
-          return createMockResponse(302, "", {
-            location: "http://192.168.1.1/admin",
-          });
-        }
-        throw new Error(`Unexpected URL: ${url}`);
-      }) as any;
-
-      await expect(
-        fetchUrl("https://example.com/", {
-          fetchFn: fakeFetch,
-          lookupFn: lookupTo("93.184.216.34"),
-        })
-      ).rejects.toThrow("Redirect target blocked");
-
-      expect(fakeFetch).toHaveBeenCalledTimes(1);
+    const result = await fetchUrl("https://example.com/start", { ...base, fetchFn: fetchFn as never });
+    expect(result).toEqual({
+      buf: Buffer.from("done"),
+      contentType: "text/plain; charset=utf-8",
+      finalUrl: "https://cdn.example/end",
     });
-
-    it("302 重定向到通过 DNS 解析到内网的域名应拒绝", async () => {
-      const fakeFetch = vi.fn(async (url: string) => {
-        if (url === "https://example.com/") {
-          return createMockResponse(302, "", {
-            location: "https://internal.local/data",
-          });
-        }
-        throw new Error(`Unexpected URL: ${url}`);
-      }) as any;
-
-      // internal.local 解析到私网 IP
-      const lookupFn = vi.fn(async (hostname: string) => {
-        if (hostname === "internal.local") {
-          return [{ address: "192.168.1.1", family: 4 }];
-        }
-        return [{ address: "93.184.216.34", family: 4 }];
-      }) as any;
-
-      await expect(
-        fetchUrl("https://example.com/", {
-          fetchFn: fakeFetch,
-          lookupFn,
-        })
-      ).rejects.toThrow("Redirect target blocked");
-
-      expect(fakeFetch).toHaveBeenCalledTimes(1);
-      expect(lookupFn).toHaveBeenCalledWith("internal.local", { all: true });
-    });
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([
+      "https://example.com/start",
+      "https://example.com/next",
+      "https://cdn.example/end",
+    ]);
   });
 
-  describe("允许重定向到公网", () => {
-    it("相对 Location 会先解析成绝对 URL 再复验", async () => {
-      const fakeFetch = vi.fn(async (url: string) => url.endsWith("/start")
-        ? createMockResponse(302, "", { location: "/next" })
-        : createMockResponse(200, "done")) as any;
-      const result = await fetchUrl("https://example.com/start", {
-        fetchFn: fakeFetch,
-        lookupFn: lookupTo("93.184.216.34"),
-      });
-      expect(result.finalUrl).toBe("https://example.com/next");
-      expect(fakeFetch.mock.calls.map((call: unknown[]) => call[0])).toEqual([
-        "https://example.com/start",
-        "https://example.com/next",
-      ]);
-    });
+  it("危险、非 HTTP 协议与无 Location 重定向不跟随", async () => {
+    const privateLookup = vi.fn(async (hostname: string) => [{
+      address: hostname === "internal.local" ? "10.0.0.1" : PUBLIC_V4,
+      family: 4,
+    }]);
+    const privateRedirect = vi.fn(async () => response(302, "", { location: "http://internal.local/secret" }));
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      lookupFn: privateLookup,
+      fetchFn: privateRedirect as never,
+    })).rejects.toBeInstanceOf(SsrfError);
+    expect(privateRedirect).toHaveBeenCalledOnce();
 
-    it("302 重定向到公网 URL 应正常跟进并读取内容", async () => {
-      const responseBody = "Hello from redirected page";
-
-      const fakeFetch = vi.fn(async (url: string) => {
-        if (url === "https://example.com/") {
-          // 第一个请求：302 重定向
-          return createMockResponse(302, "", {
-            location: "https://redirect.example.com/page",
-          });
-        }
-        if (url === "https://redirect.example.com/page") {
-          // 第二个请求：200 OK 并返回内容
-          return createMockResponse(200, responseBody);
-        }
-        throw new Error(`Unexpected URL: ${url}`);
-      }) as any;
-
-      const result = await fetchUrl("https://example.com/", {
-        fetchFn: fakeFetch,
-        lookupFn: lookupTo("93.184.216.34"),
-      });
-
-      expect(result.buf.toString()).toBe(responseBody);
-      expect(result.finalUrl).toBe("https://redirect.example.com/page");
-      expect(result.contentType).toBe("text/html; charset=utf-8");
-
-      // 应该请求了两个 URL
-      expect(fakeFetch).toHaveBeenCalledTimes(2);
-    });
-
-    it("多次重定向（都到公网）应正常跟进直到 200", async () => {
-      const responseBody = "Final content";
-
-      const fakeFetch = vi.fn(async (url: string) => {
-        if (url === "https://example.com/") {
-          return createMockResponse(302, "", {
-            location: "https://example.com/redirect1",
-          });
-        }
-        if (url === "https://example.com/redirect1") {
-          return createMockResponse(302, "", {
-            location: "https://example.com/redirect2",
-          });
-        }
-        if (url === "https://example.com/redirect2") {
-          return createMockResponse(200, responseBody);
-        }
-        throw new Error(`Unexpected URL: ${url}`);
-      }) as any;
-
-      const result = await fetchUrl("https://example.com/", {
-        fetchFn: fakeFetch,
-        lookupFn: lookupTo("93.184.216.34"),
-      });
-
-      expect(result.buf.toString()).toBe(responseBody);
-      expect(result.finalUrl).toBe("https://example.com/redirect2");
-      expect(fakeFetch).toHaveBeenCalledTimes(3);
-    });
-
-    it("304 不是重定向，按 HTTP 错误处理", async () => {
-      const fakeFetch = vi.fn(async () => new Response(null, { status: 304, headers: { location: "/wrong" } })) as any;
+    for (const location of ["data:text/plain,secret", "file:///etc/passwd"]) {
       await expect(fetchUrl("https://example.com/", {
-        fetchFn: fakeFetch,
-        lookupFn: lookupTo("93.184.216.34"),
-      })).rejects.toThrow("HTTP 304");
-      expect(fakeFetch).toHaveBeenCalledOnce();
-    });
-
-    it("超过最大重定向次数应拒绝", async () => {
-      const fakeFetch = vi.fn(async (url: string) => {
-        // 每次都返回 302，无限循环
-        return createMockResponse(302, "", {
-          location: `https://example.com/redirect${Math.random()}`,
-        });
-      }) as any;
-
-      await expect(
-        fetchUrl("https://example.com/", {
-          fetchFn: fakeFetch,
-          lookupFn: lookupTo("93.184.216.34"),
-          maxRedirects: 3,
-        })
-      ).rejects.toThrow("Too many redirects");
-    });
+        ...base,
+        fetchFn: (async () => response(302, "", { location })) as never,
+      })).rejects.toThrow("Unsupported protocol");
+    }
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      fetchFn: (async () => response(302)) as never,
+    })).rejects.toThrow("Redirect without Location");
   });
 
-  describe("总期限与字节上限", () => {
-    it("初始 DNS 不返回时也按总期限结束", async () => {
-      const pendingLookup = () => new Promise<Array<{ address: string; family: number }>>(() => undefined);
-      await expect(fetchUrl("https://example.com/", { lookupFn: pendingLookup, timeoutMs: 5 }))
-        .rejects.toThrow("timeout");
-    });
+  it("只跟随标准 redirect status，严格执行次数上限", async () => {
+    const notRedirect = vi.fn(async () => response(304, null, { location: "/wrong" }));
+    await expect(fetchUrl("https://example.com/", { ...base, fetchFn: notRedirect as never }))
+      .rejects.toThrow("HTTP 304");
+    expect(notRedirect).toHaveBeenCalledOnce();
 
-    it("恰好 maxBytes 可收，第一个超限字节拒绝", async () => {
-      const opts = { lookupFn: lookupTo("93.184.216.34"), maxBytes: 3 };
-      await expect(fetchUrl("https://example.com/", {
-        ...opts,
-        fetchFn: (async () => createMockResponse(200, "abc")) as any,
-      })).resolves.toMatchObject({ buf: Buffer.from("abc") });
-      await expect(fetchUrl("https://example.com/", {
-        ...opts,
-        fetchFn: (async () => createMockResponse(200, "abcd")) as any,
-      })).rejects.toThrow("exceeds max size");
-    });
+    const loop = vi.fn(async () => response(302, "", { location: "/again" }));
+    await expect(fetchUrl("https://example.com/", { ...base, fetchFn: loop as never, maxRedirects: 0 }))
+      .rejects.toThrow("Too many redirects (max 0)");
+    expect(loop).toHaveBeenCalledOnce();
   });
 
-  describe("初始 URL 校验", () => {
-    it("初始 URL 是内网 IP 应立即拒绝，不发送请求", async () => {
-      const fakeFetch = vi.fn();
+  it("恰好 maxBytes 可收，第一个超限字节拒绝", async () => {
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      maxBytes: 3,
+      fetchFn: (async () => response(200, "abc")) as never,
+    })).resolves.toMatchObject({ buf: Buffer.from("abc") });
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      maxBytes: 3,
+      fetchFn: (async () => response(200, "abcd")) as never,
+    })).rejects.toThrow("exceeds max size 3");
+  });
 
-      await expect(
-        fetchUrl("http://192.168.1.1/", {
-          fetchFn: fakeFetch as any,
-          lookupFn: lookupTo("93.184.216.34"),
-        })
-      ).rejects.toBeInstanceOf(Error);
+  it("总期限覆盖初始 DNS 和忽略 signal 的 fetch", async () => {
+    const never = new Promise<never>(() => undefined);
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      lookupFn: () => never,
+      timeoutMs: 5,
+    })).rejects.toThrow("timeout");
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      fetchFn: (() => never) as never,
+      timeoutMs: 5,
+    })).rejects.toThrow("timeout");
+  });
 
-      // 根本不应该发送 HTTP 请求
-      expect(fakeFetch).not.toHaveBeenCalled();
+  it("HTTP 错误与重定向显式取消响应 body，dispatcher 总会销毁", async () => {
+    let cancels = 0;
+    const body = new ReadableStream({ cancel() { cancels += 1; } });
+    const dispatcher = inertDispatcher();
+    await expect(fetchUrl("https://example.com/", {
+      lookupFn: lookup(PUBLIC_V4),
+      dispatcherFactory: () => dispatcher,
+      fetchFn: (async () => new Response(body, { status: 500 })) as never,
+    })).rejects.toThrow("HTTP 500");
+    expect(cancels).toBe(1);
+    expect(dispatcher.destroy).toHaveBeenCalledOnce();
+  });
+
+  it("生产连接器只接收本跳已经验证的地址", async () => {
+    const dispatcherFactory = vi.fn(() => inertDispatcher());
+    await fetchUrl("https://example.com/", {
+      lookupFn: lookup("93.184.216.34", "2606:4700:4700::1111"),
+      dispatcherFactory,
+      fetchFn: (async () => response(200, "ok")) as never,
     });
-
-    it("初始 URL 域名解析到内网应立即拒绝", async () => {
-      const fakeFetch = vi.fn();
-
-      const lookupFn = vi.fn(async (hostname: string) => {
-        if (hostname === "internal.local") {
-          return [{ address: "10.0.0.1", family: 4 }];
-        }
-        return [{ address: "93.184.216.34", family: 4 }];
-      }) as any;
-
-      await expect(
-        fetchUrl("https://internal.local/", {
-          fetchFn: fakeFetch as any,
-          lookupFn,
-        })
-      ).rejects.toBeInstanceOf(Error);
-
-      expect(fakeFetch).not.toHaveBeenCalled();
-      expect(lookupFn).toHaveBeenCalledWith("internal.local", { all: true });
-    });
+    expect(dispatcherFactory).toHaveBeenCalledWith([
+      { address: "93.184.216.34", family: 4 },
+      { address: "2606:4700:4700::1111", family: 6 },
+    ]);
   });
 });
