@@ -4,11 +4,16 @@ import { embed, loadEmbeddingConfig } from "./embedding-client.js";
 import { search } from "./memory-service.js";
 import {
   deleteMemory,
+  getMemory,
   listMemory,
   touchMemories,
-  updateMemory,
+  withUserMemoryTransaction,
 } from "./memory-store.js";
-import { MEMORY_TYPES, sanitizeMemoryShape } from "./memory-types.js";
+import {
+  MEMORY_TYPES,
+  memoryTextLength,
+  sanitizeMemoryShape,
+} from "./memory-types.js";
 
 type AuthenticatedRequest = FastifyRequest & { userId?: string };
 
@@ -16,24 +21,39 @@ function getUserId(req: FastifyRequest): string | undefined {
   return (req as AuthenticatedRequest).userId;
 }
 
-function invalidMemoryPayload(reply: FastifyReply) {
-  return reply.code(400).send({ error: "Invalid memory payload" });
+type ActiveUser = { memoryEnabled: boolean; bannedAt: Date | null };
+
+async function activeUser(req: FastifyRequest, reply: FastifyReply): Promise<ActiveUser | null> {
+  const userId = getUserId(req);
+  if (!userId) {
+    reply.code(401).send({ error: "Unauthorized" });
+    return null;
+  }
+  const user = await getPrisma().user.findUnique({
+    where: { id: userId },
+    select: { memoryEnabled: true, bannedAt: true },
+  });
+  if (!user) {
+    reply.code(401).send({ error: "Unauthorized" });
+    return null;
+  }
+  if (user.bannedAt) {
+    reply.code(403).send({ error: "账号已被封禁" });
+    return null;
+  }
+  return user;
 }
 
-async function getMemoryEnabled(userId: string): Promise<boolean> {
-  const prisma = getPrisma();
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { memoryEnabled: true },
-  });
-  return user?.memoryEnabled ?? true;
+function invalidMemoryPayload(reply: FastifyReply) {
+  return reply.code(400).send({ error: "Invalid memory payload" });
 }
 
 export async function memoryRoutes(app: FastifyInstance) {
   // GET /api/memory - 列表
   app.get<{ Reply: unknown }>("/api/memory", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
     try {
       const memories = await listMemory(userId);
@@ -45,11 +65,12 @@ export async function memoryRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Reply: unknown }>("/api/memory/settings", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
     try {
-      const enabled = await getMemoryEnabled(userId);
+      const enabled = user.memoryEnabled;
       return { success: true, data: { enabled, memoryEnabled: enabled } };
     } catch (err) {
       app.log.error(err);
@@ -58,14 +79,13 @@ export async function memoryRoutes(app: FastifyInstance) {
   });
 
   app.get<{ Reply: unknown }>("/api/memory/galaxy", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
     try {
-      const [enabled, nodes] = await Promise.all([
-        getMemoryEnabled(userId),
-        listMemory(userId),
-      ]);
+      const nodes = await listMemory(userId);
+      const enabled = user.memoryEnabled;
       const byType = Object.fromEntries(
         MEMORY_TYPES.map((type) => [type, 0]),
       ) as Record<(typeof MEMORY_TYPES)[number], number>;
@@ -93,11 +113,17 @@ export async function memoryRoutes(app: FastifyInstance) {
 
   // GET /api/memory/search?q=... - 搜索
   app.get<{ Querystring: { q?: string }; Reply: unknown }>("/api/memory/search", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
-    const q = (req.query as { q?: string }).q ?? "";
-    if (!q.trim()) return { success: true, data: { hits: [] } };
+    const rawQuery = (req.query as { q?: unknown }).q;
+    if (rawQuery === undefined || rawQuery === "") return { success: true, data: { hits: [] } };
+    if (typeof rawQuery !== "string" || memoryTextLength(rawQuery) > 2000) {
+      return reply.code(400).send({ error: "Invalid search query" });
+    }
+    const q = rawQuery.trim();
+    if (!q) return { success: true, data: { hits: [] } };
 
     try {
       const cfg = loadEmbeddingConfig();
@@ -117,8 +143,9 @@ export async function memoryRoutes(app: FastifyInstance) {
 
   // DELETE /api/memory/:id - 删除
   app.delete<{ Params: { id?: string }; Reply: unknown }>("/api/memory/:id", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
     const id = (req.params as { id?: string }).id;
     if (!id) return reply.code(400).send({ error: "Missing id" });
@@ -134,8 +161,9 @@ export async function memoryRoutes(app: FastifyInstance) {
 
   // PATCH /api/memory/toggle - 开关
   app.patch<{ Body: { enabled?: boolean }; Reply: unknown }>("/api/memory/toggle", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
     const body = req.body as { enabled?: boolean } | undefined;
     if (typeof body?.enabled !== "boolean") {
@@ -157,8 +185,9 @@ export async function memoryRoutes(app: FastifyInstance) {
   });
 
   app.patch<{ Params: { id?: string }; Body: unknown; Reply: unknown }>("/api/memory/:id", async (req: FastifyRequest, reply: FastifyReply) => {
-    const userId = getUserId(req);
-    if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+    const user = await activeUser(req, reply);
+    if (!user) return;
+    const userId = getUserId(req)!;
 
     const id = (req.params as { id?: string }).id;
     if (!id) return reply.code(400).send({ error: "Missing id" });
@@ -179,9 +208,9 @@ export async function memoryRoutes(app: FastifyInstance) {
     if (
       rawTitle === null
       || rawTitle.length === 0
-      || rawTitle.length > 40
+      || memoryTextLength(rawTitle) > 40
       || rawText.length === 0
-      || rawText.length > 2000
+      || memoryTextLength(rawText) > 2000
     ) {
       return invalidMemoryPayload(reply);
     }
@@ -192,34 +221,21 @@ export async function memoryRoutes(app: FastifyInstance) {
     }
 
     try {
-      const existing = (await listMemory(userId)).find((memory) => memory.id === id);
-      if (!existing) {
-        return reply.code(404).send({ error: "Memory not found" });
-      }
+      const existing = await getMemory(userId, id);
+      if (!existing) return reply.code(404).send({ error: "Memory not found" });
 
-      let embeddingVector: number[] | null = null;
-      let metadata: Record<string, boolean> = {};
-
+      let vector: number[] | null = null;
       if (shape.text !== existing.text) {
-        try {
-          const cfg = loadEmbeddingConfig();
-          const result = await embed(cfg, shape.text);
-          embeddingVector = result.vector;
-        } catch (err) {
-          app.log.error(err);
-          metadata = { needsEmbeddingRebuild: true };
-        }
+        // embedding 非空列没有「暂时不可搜」状态；写新正文却留旧向量会永久错召回，所以失败就不写。
+        const cfg = loadEmbeddingConfig();
+        vector = (await embed(cfg, shape.text)).vector;
       }
 
-      await updateMemory(userId, id, shape, embeddingVector, metadata);
-
-      return {
-        success: true,
-        data: {
-          ...existing,
-          ...shape,
-        },
-      };
+      const result = await withUserMemoryTransaction(userId, (store) =>
+        store.update(id, existing, shape, vector, {}));
+      if (result.kind === "missing") return reply.code(404).send({ error: "Memory not found" });
+      if (result.kind === "conflict") return reply.code(409).send({ error: "Memory changed" });
+      return { success: true, data: result.record };
     } catch (err) {
       app.log.error(err);
       return reply.code(500).send({ error: "Failed to update memory" });

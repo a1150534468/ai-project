@@ -109,19 +109,62 @@ function appendSharedFields(
   }
 }
 
-function parseJsonArray(text: string): unknown[] | null {
-  const matched = text.match(/\[[\s\S]*\]/);
-  if (!matched) return null;
+export type MemoryExtractionFailure = "request" | "stop" | "framing" | "schema";
 
-  try {
-    const parsed = JSON.parse(matched[0]);
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
+export type MemoryExtractionLogger = (reason: MemoryExtractionFailure) => void;
+
+const ignoreExtractionFailure: MemoryExtractionLogger = () => {};
+
+/**
+ * 模型偶尔会在 JSON 前后多说一句。不能用 `/\[[\s\S]*\]/` 贪婪吞：两段数组会粘成一段坏 JSON，
+ * 字符串里的 `]` 也不是边界。这里逐字符找平衡数组，完整尊重 JSON 字符串和反斜杠转义。
+ */
+function framedArrays(text: string): string[] {
+  const arrays: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === "\\") escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === "[") {
+      if (depth === 0) start = index;
+      depth += 1;
+    } else if (char === "]" && depth > 0) {
+      depth -= 1;
+      if (depth === 0 && start >= 0) {
+        arrays.push(text.slice(start, index + 1));
+        start = -1;
+      }
+    }
   }
+  return arrays;
 }
 
-function parseActions(items: readonly unknown[]): MemoryAction[] {
+function parseJsonArray(text: string): unknown[] | null {
+  const parsed = framedArrays(text).flatMap((candidate) => {
+    try {
+      const value: unknown = JSON.parse(candidate);
+      return Array.isArray(value) ? [value] : [];
+    } catch {
+      return [];
+    }
+  });
+  return parsed.length === 1 ? parsed[0] : null;
+}
+
+function parseActions(items: readonly unknown[], allowedIds?: ReadonlySet<string>): MemoryAction[] {
   const actions: MemoryAction[] = [];
 
   for (const item of items) {
@@ -162,7 +205,7 @@ function parseActions(items: readonly unknown[]): MemoryAction[] {
       case "UPDATE": {
         const id = readTrimmedString(item.id);
         const text = readTrimmedString(item.text);
-        if (!id || !text) {
+        if (!id || !text || (allowedIds && !allowedIds.has(id))) {
           continue;
         }
 
@@ -177,7 +220,7 @@ function parseActions(items: readonly unknown[]): MemoryAction[] {
       }
       case "DELETE": {
         const id = readTrimmedString(item.id);
-        if (!id) {
+        if (!id || (allowedIds && !allowedIds.has(id))) {
           continue;
         }
 
@@ -201,7 +244,7 @@ function buildPrompt(
   assistant: string,
   existingMemories: readonly ExistingMemory[],
 ): string {
-  const memoryPreview = JSON.stringify(existingMemories.slice(0, 30), null, 2);
+  const memoryPreview = JSON.stringify(existingMemories, null, 2);
 
   return [
     "你是中文长期记忆管理员。",
@@ -233,34 +276,35 @@ export async function extractMemoryActions(
   user: string,
   assistant: string,
   existingMemories: readonly ExistingMemory[],
+  onFailure: MemoryExtractionLogger = ignoreExtractionFailure,
 ): Promise<MemoryAction[]> {
+  const visibleMemories = existingMemories.slice(0, 30);
+  let response: Awaited<ReturnType<Anthropic["messages"]["create"]>>;
   try {
-    const resp = await client.messages.create({
+    response = await client.messages.create({
       model,
       max_tokens: 512,
-      messages: [
-        {
-          role: "user",
-          content: buildPrompt(user, assistant, existingMemories),
-        },
-      ],
+      messages: [{ role: "user", content: buildPrompt(user, assistant, visibleMemories) }],
     });
-
-    const text = resp.content
-      .filter(isTextBlock)
-      .map((block) => block.text)
-      .join("");
-
-    const parsed = parseJsonArray(text);
-    if (!parsed) {
-      return [];
-    }
-
-    return parseActions(parsed);
   } catch {
-    // no-excuse-ok: catch - LLM 抽取失败只允许降级为空，不能影响主链路
+    onFailure("request");
     return [];
   }
+
+  if (!("content" in response) || (response.stop_reason !== "end_turn" && response.stop_reason !== null)) {
+    onFailure("stop");
+    return [];
+  }
+  const text = response.content.filter(isTextBlock).map((block) => block.text).join("");
+  const parsed = parseJsonArray(text);
+  if (!parsed) {
+    onFailure("framing");
+    return [];
+  }
+
+  const actions = parseActions(parsed, new Set(visibleMemories.map((memory) => memory.id)));
+  if (parsed.length > 0 && actions.length === 0) onFailure("schema");
+  return actions;
 }
 
 export async function extractFacts(

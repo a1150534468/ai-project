@@ -1,25 +1,22 @@
 import Fastify from "fastify";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { signToken, verifyToken } from "../../auth/token.js";
-import type { EmbedResult } from "../embedding-client.js";
-import type { MemoryHit } from "../memory-store.js";
+import type { MemoryHit, UserMemoryTransaction } from "../memory-store.js";
 import type { MemoryRecord } from "../memory-types.js";
 
-vi.mock("@ai-assistant/db", () => ({
-  getPrisma: vi.fn(),
-}));
-
+vi.mock("@ai-assistant/db", () => ({ getPrisma: vi.fn() }));
 vi.mock("../embedding-client.js", () => ({
-  embed: vi.fn<(...args: readonly unknown[]) => Promise<EmbedResult>>(),
-  loadEmbeddingConfig: vi.fn(() => ({
-    baseURL: "http://embedding.test",
-    apiKey: "[REDACTED]",
-    model: "embedding-model",
-  })),
+  embed: vi.fn(),
+  loadEmbeddingConfig: vi.fn(() => ({ baseURL: "http://embedding.test", apiKey: "key", model: "embedding-model" })),
 }));
-
 vi.mock("../memory-service.js", () => ({ search: vi.fn() }));
-vi.mock("../memory-store.js", () => ({ deleteMemory: vi.fn(), listMemory: vi.fn(), touchMemories: vi.fn(), updateMemory: vi.fn() }));
+vi.mock("../memory-store.js", () => ({
+  deleteMemory: vi.fn(),
+  getMemory: vi.fn(),
+  listMemory: vi.fn(),
+  touchMemories: vi.fn(),
+  withUserMemoryTransaction: vi.fn(),
+}));
 
 const { getPrisma } = await import("@ai-assistant/db");
 const embeddingClient = await import("../embedding-client.js");
@@ -29,252 +26,223 @@ const { memoryRoutes } = await import("../routes.js");
 
 const userId = "user-memory-routes";
 const token = signToken(userId, "x".repeat(32));
-
-const baseRecord = {
+const base = {
   title: "默认标题",
   text: "默认记忆",
-  type: "OTHER",
+  type: "OTHER" as const,
   importance: 50,
   tags: [],
   createdAt: new Date("2026-06-01T00:00:00.000Z"),
   lastUsedAt: null,
   usedCount: 0,
-} satisfies Omit<MemoryRecord, "id">;
+};
+const record = (overrides: Partial<MemoryRecord> = {}): MemoryRecord => ({ id: "memory-1", ...base, ...overrides });
 
-const makeRecord = (overrides: Partial<MemoryRecord> = {}): MemoryRecord => ({
-  id: "memory-1",
-  ...baseRecord,
-  ...overrides,
-});
+let prisma: ReturnType<typeof prismaMock>;
+let tx: UserMemoryTransaction;
 
-type MockPrisma = { readonly user: { readonly findUnique: ReturnType<typeof vi.fn>; readonly update: ReturnType<typeof vi.fn> } };
-
-function createPrismaMock(memoryEnabled = true) {
+function prismaMock(user: { memoryEnabled: boolean; bannedAt: Date | null } | null = { memoryEnabled: true, bannedAt: null }) {
   return {
     user: {
-      findUnique: vi.fn().mockResolvedValue({ memoryEnabled }),
-      update: vi.fn().mockImplementation(async ({ data }: { data: { memoryEnabled: boolean } }) => ({
-        id: userId,
-        memoryEnabled: data.memoryEnabled,
-      })),
+      findUnique: vi.fn().mockResolvedValue(user),
+      update: vi.fn(async ({ data }: { data: { memoryEnabled: boolean } }) => ({ id: userId, ...data })),
     },
-  } satisfies MockPrisma;
+  };
 }
 
-async function buildApp() {
-  const app = Fastify();
-  app.decorateRequest("userId", "");
-  app.addHook("onRequest", async (req) => {
+async function app() {
+  const instance = Fastify();
+  instance.decorateRequest("userId", "");
+  instance.addHook("onRequest", async (req) => {
     const auth = req.headers.authorization;
-    if (auth?.startsWith("Bearer ")) {
-      const verified = verifyToken(auth.slice(7), process.env.SESSION_SECRET!);
-      if (verified) {
-        req.userId = verified;
-      }
-    }
+    if (auth?.startsWith("Bearer ")) req.userId = verifyToken(auth.slice(7), process.env.SESSION_SECRET!) ?? "";
   });
-  await app.register(memoryRoutes);
-  await app.ready();
-  return app;
+  await instance.register(memoryRoutes);
+  await instance.ready();
+  return instance;
 }
+
+beforeEach(() => {
+  process.env.SESSION_SECRET = "x".repeat(32);
+  vi.clearAllMocks();
+  prisma = prismaMock();
+  vi.mocked(getPrisma).mockReturnValue(prisma as never);
+  tx = {
+    get: vi.fn(),
+    list: vi.fn(),
+    query: vi.fn(),
+    insert: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+    deleteMany: vi.fn(),
+  };
+  vi.mocked(memoryStore.withUserMemoryTransaction).mockImplementation(async (_userId, work) => work(tx));
+});
+
+const previousSessionSecret = process.env.SESSION_SECRET;
+
+afterEach(() => {
+  if (previousSessionSecret === undefined) delete process.env.SESSION_SECRET;
+  else process.env.SESSION_SECRET = previousSessionSecret;
+});
 
 describe("memory routes", () => {
-  beforeEach(() => {
-    process.env.SESSION_SECRET = "x".repeat(32);
-    process.env.EMBEDDING_MODEL = "embedding-model";
-    vi.clearAllMocks();
-    vi.mocked(getPrisma).mockImplementation(
-      () => createPrismaMock() as unknown as ReturnType<typeof getPrisma>,
-    );
+  it("六条路由都拒绝未登录、已删除和封禁用户，且没有副作用", async () => {
+    const instance = await app();
+    const cases = [
+      ["GET", "/api/memory"],
+      ["GET", "/api/memory/settings"],
+      ["GET", "/api/memory/galaxy"],
+      ["GET", "/api/memory/search?q=x"],
+      ["PATCH", "/api/memory/toggle", { enabled: false }],
+      ["PATCH", "/api/memory/m1", { title: "t", text: "text" }],
+      ["DELETE", "/api/memory/m1"],
+    ] as const;
+
+    for (const [method, url, payload] of cases) {
+      expect((await instance.inject({ method, url, payload })).statusCode).toBe(401);
+    }
+    prisma.user.findUnique.mockResolvedValueOnce(null);
+    expect((await instance.inject({ method: "GET", url: "/api/memory", headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(401);
+    prisma.user.findUnique.mockResolvedValueOnce({ memoryEnabled: true, bannedAt: new Date() });
+    expect((await instance.inject({ method: "GET", url: "/api/memory", headers: { authorization: `Bearer ${token}` } })).statusCode).toBe(403);
+    expect(memoryStore.listMemory).not.toHaveBeenCalled();
+    expect(embeddingClient.embed).not.toHaveBeenCalled();
+    await instance.close();
   });
 
-  afterEach(() => {
-    delete process.env.EMBEDDING_MODEL;
-  });
-
-  it("GET /api/memory/galaxy returns enabled, stats and nodes", async () => {
-    vi.mocked(getPrisma).mockImplementation(
-      () => createPrismaMock(true) as unknown as ReturnType<typeof getPrisma>,
-    );
+  it("settings 与 galaxy 复用已验证用户的开关并返回五类统计", async () => {
     vi.mocked(memoryStore.listMemory).mockResolvedValue([
-      makeRecord({ id: "m-core", type: "CORE" }),
-      makeRecord({ id: "m-temp", type: "TEMPORARY" }),
+      record({ id: "core", type: "CORE" }),
+      record({ id: "temp", type: "TEMPORARY" }),
     ]);
+    const instance = await app();
+    const headers = { authorization: `Bearer ${token}` };
 
-    const app = await buildApp();
-
-    const unauthorized = await app.inject({ method: "GET", url: "/api/memory/galaxy" });
-    expect(unauthorized.statusCode).toBe(401);
-
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/memory/galaxy",
-      headers: { authorization: `Bearer ${token}` },
+    expect((await instance.inject({ method: "GET", url: "/api/memory/settings", headers })).json()).toEqual({
+      success: true,
+      data: { enabled: true, memoryEnabled: true },
     });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({
+    expect((await instance.inject({ method: "GET", url: "/api/memory/galaxy", headers })).json()).toEqual({
       success: true,
       data: {
         enabled: true,
-        stats: {
-          total: 2,
-          byType: {
-            CORE: 1,
-            PERMANENT: 0,
-            TEMPORARY: 1,
-            KNOWLEDGE: 0,
-            OTHER: 0,
-          },
-        },
-        nodes: [
-          expect.objectContaining({ id: "m-core", type: "CORE" }),
-          expect.objectContaining({ id: "m-temp", type: "TEMPORARY" }),
-        ],
+        stats: { total: 2, byType: { CORE: 1, PERMANENT: 0, TEMPORARY: 1, KNOWLEDGE: 0, OTHER: 0 } },
+        nodes: [expect.objectContaining({ id: "core" }), expect.objectContaining({ id: "temp" })],
       },
     });
-    expect(memoryStore.listMemory).toHaveBeenCalledWith(userId);
-
-    await app.close();
+    await instance.close();
   });
 
-  it("PATCH /api/memory/:id validates and updates memory", async () => {
-    const app = await buildApp();
-    vi.mocked(memoryStore.listMemory).mockResolvedValue([makeRecord({ id: "memory-123", text: "旧文本", type: "OTHER", importance: 40 })]);
-    vi.mocked(embeddingClient.embed).mockResolvedValue({
-      vector: [0.1, 0.2, 0.3],
-      tokens: 12,
-    });
-
-    const invalid = await app.inject({
-      method: "PATCH",
-      url: "/api/memory/memory-123",
-      headers: { authorization: `Bearer ${token}` },
-      payload: { text: "   " },
-    });
-
-    const missingTitle = await app.inject({
-      method: "PATCH",
-      url: "/api/memory/memory-123",
-      headers: { authorization: `Bearer ${token}` },
-      payload: { text: "只有文本，没有标题" },
-    });
-
-    expect(invalid.statusCode).toBe(400);
-    expect(invalid.json()).toEqual({ error: "Invalid memory payload" });
-    expect(missingTitle.statusCode).toBe(400);
-    expect(missingTitle.json()).toEqual({ error: "Invalid memory payload" });
-
-    const updated = await app.inject({
-      method: "PATCH",
-      url: "/api/memory/memory-123",
-      headers: { authorization: `Bearer ${token}` },
-      payload: {
-        title: "  更新标题  ",
-        text: "新的记忆文本",
-        type: "CORE",
-        importance: 88,
-        tags: ["标签1", "标签1", ""],
-      },
-    });
-
-    expect(updated.statusCode).toBe(200);
-    expect(embeddingClient.embed).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "embedding-model" }),
-      "新的记忆文本",
-    );
-    expect(memoryStore.updateMemory).toHaveBeenCalledWith(
-      userId,
-      "memory-123",
-      {
-        title: "更新标题",
-        text: "新的记忆文本",
-        type: "CORE",
-        importance: 88,
-        tags: ["标签1"],
-      },
-      [0.1, 0.2, 0.3],
-      {},
-    );
-    expect(updated.json()).toEqual({
+  it("重复 q 返回 400，空查询仍是 200 空命中", async () => {
+    const instance = await app();
+    const headers = { authorization: `Bearer ${token}` };
+    expect((await instance.inject({ method: "GET", url: "/api/memory/search?q=a&q=b", headers })).statusCode).toBe(400);
+    expect((await instance.inject({ method: "GET", url: "/api/memory/search?q=%20", headers })).json()).toEqual({
       success: true,
-      data: expect.objectContaining({
-        id: "memory-123",
-        title: "更新标题",
-        text: "新的记忆文本",
-        type: "CORE",
-        importance: 88,
-        tags: ["标签1"],
-      }),
+      data: { hits: [] },
     });
-
-    await app.close();
+    expect(memoryService.search).not.toHaveBeenCalled();
+    await instance.close();
   });
 
-  it("PATCH /api/memory/:id falls back when embedding fails", async () => {
-    const app = await buildApp();
-    vi.mocked(memoryStore.listMemory).mockResolvedValue([makeRecord({ id: "memory-embedding", text: "旧文本" })]);
-    vi.mocked(embeddingClient.embed).mockRejectedValue(new Error("embedding failed"));
-
-    const response = await app.inject({
+  it("已登录用户可以切换开关并幂等删除自己的记忆", async () => {
+    const instance = await app();
+    const headers = { authorization: `Bearer ${token}` };
+    const toggled = await instance.inject({
       method: "PATCH",
-      url: "/api/memory/memory-embedding",
-      headers: { authorization: `Bearer ${token}` },
-      payload: {
-        title: "降级标题",
-        text: "需要重新构建向量",
-        type: "KNOWLEDGE",
-        importance: 77,
-        tags: ["embed"],
-      },
+      url: "/api/memory/toggle",
+      headers,
+      payload: { enabled: false },
     });
+    expect(toggled.statusCode).toBe(200);
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: userId },
+      data: { memoryEnabled: false },
+    });
+    expect(toggled.json()).toEqual({ success: true, data: { memoryEnabled: false } });
 
-    expect(response.statusCode).toBe(200);
-    expect(memoryStore.updateMemory).toHaveBeenCalledWith(
-      userId,
-      "memory-embedding",
-      {
-        title: "降级标题",
-        text: "需要重新构建向量",
-        type: "KNOWLEDGE",
-        importance: 77,
-        tags: ["embed"],
-      },
-      null,
-      { needsEmbeddingRebuild: true },
-    );
-
-    await app.close();
+    const deleted = await instance.inject({ method: "DELETE", url: "/api/memory/m1", headers });
+    expect(deleted.statusCode).toBe(200);
+    expect(memoryStore.deleteMemory).toHaveBeenCalledWith(userId, "m1");
+    expect(deleted.json()).toEqual({ success: true });
+    await instance.close();
   });
 
-  it("GET /api/memory/search touches hit usage counters", async () => {
-    const app = await buildApp();
-    const hits: MemoryHit[] = [{ ...makeRecord({ id: "m1" }), score: 0.8 }, { ...makeRecord({ id: "m2" }), score: 0.6 }];
+  it("搜索命中后递增使用次数，touch 失败也保留命中", async () => {
+    const hits: MemoryHit[] = [
+      { ...record({ id: "m1" }), score: 0.8 },
+      { ...record({ id: "m2" }), score: 0.6 },
+    ];
     vi.mocked(memoryService.search).mockResolvedValue(hits);
-
-    const response = await app.inject({
+    vi.mocked(memoryStore.touchMemories).mockRejectedValue(new Error("touch failed"));
+    const instance = await app();
+    const response = await instance.inject({
       method: "GET",
       url: "/api/memory/search?q=typescript",
       headers: { authorization: `Bearer ${token}` },
     });
-
     expect(response.statusCode).toBe(200);
-    expect(memoryService.search).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "embedding-model" }),
-      userId,
-      "typescript",
-    );
     expect(memoryStore.touchMemories).toHaveBeenCalledWith(userId, ["m1", "m2"]);
-    expect(response.json()).toEqual({
-      success: true,
-      data: {
-        hits: [
-          expect.objectContaining({ id: "m1", createdAt: "2026-06-01T00:00:00.000Z", score: 0.8 }),
-          expect.objectContaining({ id: "m2", createdAt: "2026-06-01T00:00:00.000Z", score: 0.6 }),
-        ],
-      },
-    });
+    expect(response.json().data.hits).toHaveLength(2);
+    await instance.close();
+  });
 
-    await app.close();
+  it("PATCH 只改显示字段时保留向量与 metadata，并返回真实落库行", async () => {
+    const existing = record({ id: "m-edit", title: "旧标题", text: "相同正文", usedCount: 7 });
+    const saved = { ...existing, title: "新标题", importance: 88 };
+    vi.mocked(memoryStore.getMemory).mockResolvedValue(existing);
+    vi.mocked(tx.update).mockResolvedValue({ kind: "updated", record: saved });
+    const instance = await app();
+    const response = await instance.inject({
+      method: "PATCH",
+      url: "/api/memory/m-edit",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: "新标题", text: "相同正文", type: "OTHER", importance: 88, tags: [] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(embeddingClient.embed).not.toHaveBeenCalled();
+    expect(tx.update).toHaveBeenCalledWith(
+      "m-edit",
+      existing,
+      expect.objectContaining({ title: "新标题", text: "相同正文" }),
+      null,
+      {},
+    );
+    expect(response.json().data).toMatchObject({ id: "m-edit", title: "新标题", usedCount: 7 });
+    await instance.close();
+  });
+
+  it("PATCH 正文变化时先生成新向量；失败则一字不写", async () => {
+    const existing = record({ id: "m-edit", text: "主题 A" });
+    vi.mocked(memoryStore.getMemory).mockResolvedValue(existing);
+    vi.mocked(embeddingClient.embed).mockRejectedValue(new Error("embedding failed"));
+    const instance = await app();
+    const response = await instance.inject({
+      method: "PATCH",
+      url: "/api/memory/m-edit",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: "主题 B", text: "主题 B", type: "CORE", importance: 80, tags: [] },
+    });
+    expect(response.statusCode).toBe(500);
+    expect(tx.update).not.toHaveBeenCalled();
+    await instance.close();
+  });
+
+  it("PATCH 用 CAS 区分已经删除的 404 和并发修改的 409", async () => {
+    const existing = record({ id: "m-edit" });
+    vi.mocked(memoryStore.getMemory).mockResolvedValue(existing);
+    const instance = await app();
+    const options = {
+      method: "PATCH" as const,
+      url: "/api/memory/m-edit",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { title: "标题", text: existing.text, type: "OTHER", importance: 50, tags: [] },
+    };
+    vi.mocked(tx.update).mockResolvedValueOnce({ kind: "missing" });
+    expect((await instance.inject(options)).statusCode).toBe(404);
+    vi.mocked(tx.update).mockResolvedValueOnce({ kind: "conflict" });
+    expect((await instance.inject(options)).statusCode).toBe(409);
+    await instance.close();
   });
 });

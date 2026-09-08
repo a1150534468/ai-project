@@ -1,482 +1,282 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import {
-  search,
-  addTurn,
-} from "../memory-service.js";
-import type { EmbeddingConfig } from "../embedding-client.js";
 import type Anthropic from "@anthropic-ai/sdk";
-import type { MemoryHit } from "../memory-store.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { EmbeddingConfig } from "../embedding-client.js";
+import { addTurn, search } from "../memory-service.js";
+import type { MemoryHit, UserMemoryTransaction } from "../memory-store.js";
 import type { MemoryRecord } from "../memory-types.js";
 
-// Mock 模块：embedding-client, fact-extractor, memory-store
 vi.mock("../embedding-client.js");
 vi.mock("../fact-extractor.js");
 vi.mock("../memory-store.js");
 
-// 获取 mock 后的导出
 const embeddingClient = await import("../embedding-client.js");
 const factExtractor = await import("../fact-extractor.js");
 const memoryStore = await import("../memory-store.js");
 
-const baseRecord = {
+const cfg: EmbeddingConfig = { baseURL: "http://embedding.test", apiKey: "key", model: "embed" };
+const userId = "user-123";
+const client = { messages: { create: vi.fn() } } as unknown as Anthropic;
+const vector = [0.1, 0.2];
+const base = {
   title: "默认标题",
   text: "默认记忆",
-  type: "OTHER",
+  type: "OTHER" as const,
   importance: 50,
   tags: [],
   createdAt: new Date("2026-06-01T00:00:00.000Z"),
   lastUsedAt: null,
   usedCount: 0,
-} satisfies Omit<MemoryRecord, "id">;
+};
+const record = (overrides: Partial<MemoryRecord> = {}): MemoryRecord => ({ id: "m1", ...base, ...overrides });
+const hit = (overrides: Partial<MemoryHit> = {}): MemoryHit => ({ ...record(), score: 0.8, ...overrides });
 
-const makeHit = (overrides: Partial<MemoryHit> = {}): MemoryHit => ({
-  id: "m-hit",
-  ...baseRecord,
-  score: 0.8,
-  ...overrides,
-});
+let rows: MemoryRecord[];
+let tx: UserMemoryTransaction;
 
-const makeRecord = (overrides: Partial<MemoryRecord> = {}): MemoryRecord => ({
-  id: "m-record",
-  ...baseRecord,
-  ...overrides,
-});
-
-describe("memory-service", () => {
-  const cfg: EmbeddingConfig = {
-    baseURL: "http://test.local",
-    apiKey: "test-key",
-    model: "test-embedding",
+beforeEach(() => {
+  vi.useRealTimers();
+  vi.clearAllMocks();
+  rows = [];
+  tx = {
+    get: vi.fn(async (id) => rows.find((row) => row.id === id) ?? null),
+    list: vi.fn(async () => [...rows]),
+    query: vi.fn(async () => []),
+    insert: vi.fn(async (shape) => {
+      rows.push(record({ ...shape, id: `new-${rows.length}` }));
+      return rows.at(-1)!.id;
+    }),
+    update: vi.fn(async (id, expected, shape) => {
+      const index = rows.findIndex((row) => row.id === id);
+      if (index < 0) return { kind: "missing" } as const;
+      if (rows[index].text !== expected.text) return { kind: "conflict" } as const;
+      rows[index] = { ...rows[index], ...shape };
+      return { kind: "updated", record: rows[index] } as const;
+    }),
+    delete: vi.fn(async (id) => {
+      const before = rows.length;
+      rows = rows.filter((row) => row.id !== id);
+      return before - rows.length;
+    }),
+    deleteMany: vi.fn(async (ids) => {
+      const before = rows.length;
+      const set = new Set(ids);
+      rows = rows.filter((row) => !set.has(row.id));
+      return before - rows.length;
+    }),
   };
-  const userId = "user-123";
+  vi.mocked(memoryStore.listMemory).mockImplementation(async () => [...rows]);
+  vi.mocked(memoryStore.withUserMemoryTransaction).mockImplementation(async (_uid, work) => work(tx));
+});
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    vi.mocked(memoryStore.listMemory).mockResolvedValue([]);
-    vi.mocked(memoryStore.deleteMemory).mockResolvedValue(undefined);
-    vi.mocked(memoryStore.updateMemory).mockResolvedValue(undefined);
-    vi.mocked(memoryStore.insertMemory).mockResolvedValue("new-memory");
+describe("search", () => {
+  it("embedding 与查询共用三秒总期限，并过滤低分结果", async () => {
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 3 });
+    vi.mocked(memoryStore.queryMemory).mockResolvedValue([
+      hit({ id: "high", score: 0.8 }),
+      hit({ id: "low", score: 0.29 }),
+    ]);
+
+    await expect(search(cfg, userId, "typescript")).resolves.toEqual([
+      expect.objectContaining({ id: "high" }),
+    ]);
+    expect(embeddingClient.embed).toHaveBeenCalledWith(
+      cfg,
+      "typescript",
+      fetch,
+      expect.any(AbortSignal),
+    );
   });
 
-  describe("search", () => {
-    it("embed → queryMemory → 过滤 score≥THRESHOLD(0.3) 返回", async () => {
-      const mockVec = [0.1, 0.2, 0.3];
-      const mockHits = [
-        makeHit({ id: "m1", text: "记忆 1", score: 0.8 }),
-        makeHit({ id: "m2", text: "记忆 2", score: 0.5 }),
-        makeHit({ id: "m3", text: "记忆 3", score: 0.25 }), // score < 0.3 应被过滤
-      ];
-
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: mockVec, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue(mockHits);
-
-      const result = await search(cfg, userId, "用户查询", 5);
-
-      expect(result).toEqual([
-        expect.objectContaining({ id: "m1", text: "记忆 1", score: 0.8 }),
-        expect.objectContaining({ id: "m2", text: "记忆 2", score: 0.5 }),
-      ]);
-      expect(embeddingClient.embed).toHaveBeenCalledWith(cfg, "用户查询");
-      expect(memoryStore.queryMemory).toHaveBeenCalledWith(userId, mockVec, 5);
-    });
-
-    it("embed 超时 3s → 返回 [] 降级", async () => {
-      vi.mocked(embeddingClient.embed).mockImplementation(
-        () =>
-          new Promise((_, reject) =>
-            setTimeout(
-              () => reject(new Error("timeout")),
-              4000, // 4s > 3s 超时
-            ),
-          ),
-      );
-
-      const result = await search(cfg, userId, "查询", 5);
-
-      expect(result).toEqual([]);
-    });
-
-    it("embed 抛错 → 返回 [] 降级不抛", async () => {
-      vi.mocked(embeddingClient.embed).mockRejectedValue(
-        new Error("network error"),
-      );
-
-      const result = await search(cfg, userId, "查询", 5);
-
-      expect(result).toEqual([]);
-    });
-
-    it("queryMemory 全部低于阈值 → 返回 []", async () => {
-      const mockVec = [0.1, 0.2];
-      const mockHits = [
-        makeHit({ id: "m1", text: "无关", score: 0.2 }),
-        makeHit({ id: "m2", text: "更无关", score: 0.1 }),
-      ];
-
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: mockVec, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue(mockHits);
-
-      const result = await search(cfg, userId, "查询", 5);
-
-      expect(result).toEqual([]);
-    });
+  it("预计算向量的数据库查询挂住也会在三秒降级", async () => {
+    vi.useFakeTimers();
+    vi.mocked(memoryStore.queryMemory).mockReturnValue(new Promise(() => {}));
+    const pending = search(cfg, userId, "q", 5, vector);
+    await vi.advanceTimersByTimeAsync(3000);
+    await expect(pending).resolves.toEqual([]);
+    vi.useRealTimers();
   });
 
-  describe("addTurn", () => {
-    const mockClient = {
-      messages: { create: vi.fn() },
-    } as unknown as Anthropic;
+  it("embedding 失败或查询失败都返回空数组", async () => {
+    vi.mocked(embeddingClient.embed).mockRejectedValueOnce(new Error("down"));
+    await expect(search(cfg, userId, "q")).resolves.toEqual([]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 0 });
+    vi.mocked(memoryStore.queryMemory).mockRejectedValueOnce(new Error("db"));
+    await expect(search(cfg, userId, "q")).resolves.toEqual([]);
+  });
+});
 
-    it("extractMemoryActions ADD → 每条 embed → queryMemory 检查是否去重 > 0.95 skip", async () => {
-      const actions = [
-        { event: "ADD" as const, text: "用户喜欢 TypeScript" },
-        { event: "ADD" as const, text: "用户在做 AI 助手项目" },
-      ];
-      const mockVec1 = [0.1, 0.2];
-      const mockVec2 = [0.3, 0.4];
+describe("addTurn", () => {
+  it("ADD 在用户事务里复查去重，再原子插入并清理被替代事实", async () => {
+    rows = [
+      record({ id: "old-career", text: "用户之前是后端工程师" }),
+      record({ id: "keep", text: "用户喜欢简洁回复" }),
+    ];
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "ADD", text: "用户现在是前端工程师" },
+    ]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 1 });
 
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue(actions);
-      vi.mocked(embeddingClient.embed)
-        .mockResolvedValueOnce({ vector: mockVec1, tokens: 10 })
-        .mockResolvedValueOnce({ vector: mockVec2, tokens: 15 });
+    await addTurn(cfg, client, "extract", userId, "我转行了", "已记录", { sessionId: "s1" });
 
-      // 第一条最近邻相似度 0.97 > 0.95 → 去重跳过
-      // 第二条最近邻相似度 0.93 < 0.95 → 插入
-      vi.mocked(memoryStore.queryMemory)
-        .mockResolvedValueOnce([
-          makeHit({ id: "old1", text: "旧记忆 1", score: 0.97 }),
-        ])
-        .mockResolvedValueOnce([
-          makeHit({ id: "old2", text: "旧记忆 2", score: 0.93 }),
-        ]);
+    expect(factExtractor.extractMemoryActions).toHaveBeenCalledWith(
+      client,
+      "extract",
+      "我转行了",
+      "已记录",
+      expect.arrayContaining([expect.objectContaining({ id: "old-career" })]),
+      expect.any(Function),
+    );
+    expect(memoryStore.withUserMemoryTransaction).toHaveBeenCalledWith(userId, expect.any(Function));
+    expect(tx.query).toHaveBeenCalledWith(vector, 5);
+    expect(tx.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "用户现在是前端工程师" }),
+      vector,
+      { sessionId: "s1" },
+    );
+    expect(tx.deleteMany).toHaveBeenCalledWith(["old-career"]);
+    expect(rows.some((row) => row.id === "keep")).toBe(true);
+  });
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {
-        sessionId: "s1",
-      });
+  it("锁内复查发现等价或高相似非职业事实就不插入", async () => {
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "ADD", text: "用户喜欢 TypeScript" },
+    ]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 1 });
+    vi.mocked(tx.query).mockResolvedValue([hit({ text: "用户喜欢 TS", score: 0.97 })]);
 
-      expect(factExtractor.extractMemoryActions).toHaveBeenCalledWith(
-        mockClient,
-        "extract-model",
-        "用户说",
-        "助手说",
-        [],
-      );
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-      expect(embeddingClient.embed).toHaveBeenCalledTimes(2);
-      expect(embeddingClient.embed).toHaveBeenNthCalledWith(1, cfg, "用户喜欢 TypeScript");
-      expect(embeddingClient.embed).toHaveBeenNthCalledWith(2, cfg, "用户在做 AI 助手项目");
-      expect(memoryStore.queryMemory).toHaveBeenCalledTimes(2);
-      expect(memoryStore.insertMemory).toHaveBeenCalledTimes(1);
-      expect(memoryStore.insertMemory).toHaveBeenCalledWith(
-        userId,
-        expect.objectContaining({
-          text: "用户在做 AI 助手项目",
-          title: "用户在做 AI 助手项目",
-          type: "OTHER",
-        }),
-        mockVec2,
-        { sessionId: "s1" },
-      );
-    });
+    expect(tx.insert).not.toHaveBeenCalled();
+    expect(tx.deleteMany).not.toHaveBeenCalled();
+  });
 
-    it("规范化后等价的职业记忆即使向量分数低于 0.95 也跳过", async () => {
-      const facts = ["职业是后端工程师"];
-      const mockVec = [0.1, 0.2];
+  it("同一轮规范化后等价的 ADD 只写一次", async () => {
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "ADD", text: "职业是后端工程师" },
+      { event: "ADD", text: "用户是一名后端工程师" },
+    ]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 1 });
 
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: facts[0] },
-      ]);
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: mockVec, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue([
-        makeHit({ id: "old1", text: "用户是一名后端工程师", score: 0.84 }),
-      ]);
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {});
+    expect(tx.insert).toHaveBeenCalledTimes(1);
+    expect(embeddingClient.embed).toHaveBeenCalledTimes(1);
+  });
 
-      expect(memoryStore.insertMemory).not.toHaveBeenCalled();
-    });
+  it("UPDATE 保留模型没给的字段，成功后才清理同类旧事实", async () => {
+    rows = [
+      record({ id: "career1", title: "职业", text: "用户之前是后端工程师", type: "CORE", importance: 90, tags: ["工作"] }),
+      record({ id: "career2", text: "目前处于失业状态" }),
+    ];
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "UPDATE", id: "career1", text: "用户现在是前端工程师" },
+    ]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 1 });
 
-    it("同一轮抽取里的等价事实只插入一次", async () => {
-      const facts = ["职业是后端工程师", "用户是一名后端工程师"];
-      const mockVec1 = [0.1, 0.2];
-      const mockVec2 = [0.3, 0.4];
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: facts[0] },
-        { event: "ADD", text: facts[1] },
-      ]);
-      vi.mocked(embeddingClient.embed)
-        .mockResolvedValueOnce({ vector: mockVec1, tokens: 10 })
-        .mockResolvedValueOnce({ vector: mockVec2, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory)
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+    expect(tx.update).toHaveBeenCalledWith(
+      "career1",
+      expect.objectContaining({ id: "career1", type: "CORE" }),
+      expect.objectContaining({
+        title: "职业",
+        text: "用户现在是前端工程师",
+        type: "CORE",
+        importance: 90,
+        tags: ["工作"],
+      }),
+      vector,
+      {},
+    );
+    expect(tx.deleteMany).toHaveBeenCalledWith(["career2"]);
+  });
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {});
+  it("不存在或过期的 UPDATE 绝不删掉现有职业事实", async () => {
+    rows = [record({ id: "career1", text: "用户是后端工程师" })];
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "UPDATE", id: "missing", text: "用户现在是前端工程师" },
+    ]);
 
-      expect(memoryStore.insertMemory).toHaveBeenCalledTimes(1);
-      expect(memoryStore.insertMemory).toHaveBeenCalledWith(
-        userId,
-        expect.objectContaining({
-          text: "职业是后端工程师",
-          title: "职业是后端工程师",
-          type: "OTHER",
-        }),
-        mockVec1,
-        {},
-      );
-    });
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-    it("新的职业状态记忆会覆盖旧的同类职业记忆", async () => {
-      const facts = ["职业状态：全职前端工程师"];
-      const mockVec = [0.1, 0.2];
+    expect(embeddingClient.embed).not.toHaveBeenCalled();
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(tx.deleteMany).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(1);
+  });
 
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: facts[0] },
-      ]);
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: mockVec, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue([]);
-      vi.mocked(memoryStore.listMemory).mockResolvedValue([
-        makeRecord({ id: "old1", text: "目前处于失业状态" }),
-        makeRecord({ id: "old2", text: "已转行为兼职前端工程师" }),
-        makeRecord({ id: "keep", text: "喜欢简洁的回复" }),
-      ]);
+  it("UPDATE CAS 冲突后不清理同类事实", async () => {
+    rows = [record({ id: "career1", text: "用户是后端工程师" })];
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "UPDATE", id: "career1", text: "用户现在是前端工程师" },
+    ]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 1 });
+    vi.mocked(tx.update).mockResolvedValue({ kind: "conflict" });
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {});
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-      expect(memoryStore.deleteMemory).toHaveBeenCalledWith(userId, "old1");
-      expect(memoryStore.deleteMemory).toHaveBeenCalledWith(userId, "old2");
-      expect(memoryStore.deleteMemory).not.toHaveBeenCalledWith(userId, "keep");
-      expect(memoryStore.insertMemory).toHaveBeenCalledWith(
-        userId,
-        expect.objectContaining({ text: "职业状态:全职前端工程师" }),
-        expect.any(Array),
-        {},
-      );
-    });
+    expect(tx.deleteMany).not.toHaveBeenCalled();
+  });
 
-    it("新的职业状态记忆不会覆盖正在开发的项目记忆", async () => {
-      const mockVec = [0.1, 0.2];
+  it("DELETE 只执行抽取快照里真实存在的 id", async () => {
+    rows = [record({ id: "real" })];
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "DELETE", id: "missing" },
+      { event: "DELETE", id: "real" },
+    ]);
 
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: "用户是一名后端工程师" },
-      ]);
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: mockVec, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue([]);
-      vi.mocked(memoryStore.listMemory).mockResolvedValue([
-        makeRecord({ id: "project", text: "用户正在开发 OpenClaw 项目" }),
-        makeRecord({ id: "career", text: "用户之前是前端工程师" }),
-      ]);
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "我现在是一名后端工程师", "已记录", {});
+    expect(tx.delete).toHaveBeenCalledTimes(1);
+    expect(tx.delete).toHaveBeenCalledWith("real", expect.objectContaining({ id: "real" }));
+  });
 
-      expect(memoryStore.deleteMemory).not.toHaveBeenCalledWith(userId, "project");
-      expect(memoryStore.deleteMemory).toHaveBeenCalledWith(userId, "career");
-      expect(memoryStore.insertMemory).toHaveBeenCalledWith(
-        userId,
-        expect.objectContaining({ text: "用户是一名后端工程师" }),
-        mockVec,
-        {},
-      );
-    });
+  it("单条 action 失败只记录错误，后面的 action 继续", async () => {
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "ADD", text: "用户喜欢 Rust" },
+      { event: "ADD", text: "用户正在做桌面端项目" },
+    ]);
+    vi.mocked(embeddingClient.embed)
+      .mockRejectedValueOnce(new Error("embed failed"))
+      .mockResolvedValueOnce({ vector, tokens: 1 });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    it("UPDATE 动作会原地更新已有记忆并清理同类旧记忆", async () => {
-      vi.mocked(memoryStore.listMemory).mockResolvedValue([
-        makeRecord({ id: "career1", text: "用户之前是后端工程师" }),
-        makeRecord({ id: "career2", text: "目前处于失业状态" }),
-      ]);
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "UPDATE", id: "career1", text: "用户现在是前端工程师" },
-      ]);
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: [0.5, 0.6], tokens: 10 });
+    await expect(addTurn(cfg, client, "extract", userId, "x", "y", {})).resolves.toBeUndefined();
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "我转行前端了", "已记录", {});
+    expect(log).toHaveBeenCalledWith(
+      "[memory] addTurn action failed",
+      expect.objectContaining({ text: "用户喜欢 Rust" }),
+      expect.any(Error),
+    );
+    expect(tx.insert).toHaveBeenCalledTimes(1);
+    log.mockRestore();
+  });
 
-      expect(memoryStore.updateMemory).toHaveBeenCalledWith(
-        userId,
-        "career1",
-        expect.objectContaining({
-          text: "用户现在是前端工程师",
-          title: "用户现在是前端工程师",
-          type: "OTHER",
-        }),
-        [0.5, 0.6],
-        {},
-      );
-      expect(memoryStore.deleteMemory).not.toHaveBeenCalledWith(userId, "career1");
-      expect(memoryStore.deleteMemory).toHaveBeenCalledWith(userId, "career2");
-    });
+  it("事务失败不往外抛，后续 action 仍可处理", async () => {
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "ADD", text: "用户喜欢 TypeScript" },
+      { event: "ADD", text: "用户正在维护记忆系统" },
+    ]);
+    vi.mocked(embeddingClient.embed).mockResolvedValue({ vector, tokens: 1 });
+    vi.mocked(memoryStore.withUserMemoryTransaction)
+      .mockRejectedValueOnce(new Error("insert failed"))
+      .mockImplementationOnce(async (_uid, work) => work(tx));
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    it("DELETE 动作会删除指定旧记忆", async () => {
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "DELETE", id: "m1" },
-      ]);
+    await addTurn(cfg, client, "extract", userId, "x", "y", {});
 
-      await addTurn(cfg, mockClient, "extract-model", userId, "这条记忆不对", "已删除", {});
+    expect(log).toHaveBeenCalledTimes(1);
+    expect(tx.insert).toHaveBeenCalledTimes(1);
+    log.mockRestore();
+  });
 
-      expect(memoryStore.deleteMemory).toHaveBeenCalledWith(userId, "m1");
-      expect(embeddingClient.embed).not.toHaveBeenCalled();
-    });
-
-    it("extractMemoryActions 返回空数组 → 无操作", async () => {
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([]);
-
-      await addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {});
-
-      expect(embeddingClient.embed).not.toHaveBeenCalled();
-      expect(memoryStore.insertMemory).not.toHaveBeenCalled();
-    });
-
-    it("extractMemoryActions 失败 → 仅 log，不抛，不中断", async () => {
-      vi.mocked(factExtractor.extractMemoryActions).mockRejectedValue(
-        new Error("extraction failed"),
-      );
-      const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      // 应该不抛错
-      await expect(
-        addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {}),
-      ).resolves.toBeUndefined();
-
-      expect(logSpy).toHaveBeenCalledWith(
-        "[memory] addTurn failed",
-        expect.any(Error),
-      );
-      logSpy.mockRestore();
-    });
-
-    it("embed 失败 → 仅 log，不抛，继续处理其他 action", async () => {
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: "用户喜欢 Rust" },
-        { event: "ADD", text: "用户正在做桌面端项目" },
-      ]);
-      vi.mocked(embeddingClient.embed)
-        .mockRejectedValueOnce(new Error("embed failed"))
-        .mockResolvedValueOnce({ vector: [0.3, 0.4], tokens: 15 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue([]);
-
-      const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      // 应该不抛错
-      await expect(
-        addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {}),
-      ).resolves.toBeUndefined();
-
-      expect(logSpy).toHaveBeenCalledWith(
-        "[memory] addTurn action failed",
-        expect.objectContaining({ event: "ADD", text: "用户喜欢 Rust" }),
-        expect.any(Error),
-      );
-      expect(memoryStore.insertMemory).toHaveBeenCalledWith(
-        userId,
-        expect.objectContaining({ text: "用户正在做桌面端项目" }),
-        [0.3, 0.4],
-        {},
-      );
-      logSpy.mockRestore();
-    });
-
-    it("insertMemory 失败 → 仅 log，不抛", async () => {
-      const facts = ["用户喜欢 TypeScript"];
-      const mockVec = [0.1, 0.2];
-
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: facts[0] },
-      ]);
-      vi.mocked(embeddingClient.embed).mockResolvedValue({ vector: mockVec, tokens: 10 });
-      vi.mocked(memoryStore.queryMemory).mockResolvedValue([]); // 无去重
-      vi.mocked(memoryStore.insertMemory).mockRejectedValue(
-        new Error("insert failed"),
-      );
-
-      const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      // 应该不抛错
-      await expect(
-        addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {}),
-      ).resolves.toBeUndefined();
-
-      expect(logSpy).toHaveBeenCalledWith(
-        "[memory] addTurn action failed",
-        expect.objectContaining({ event: "ADD", text: "用户喜欢 TypeScript" }),
-        expect.any(Error),
-      );
-      logSpy.mockRestore();
-    });
-
-    it("多条 facts，混合成功/失败 → 仅 log 不抛", async () => {
-      const facts = ["用户喜欢 Go", "用户喜欢 Python", "用户喜欢 Java"];
-      const mockVec1 = [0.1, 0.2];
-      const mockVec3 = [0.3, 0.4];
-
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: facts[0] },
-        { event: "ADD", text: facts[1] },
-        { event: "ADD", text: facts[2] },
-      ]);
-      vi.mocked(embeddingClient.embed)
-        .mockResolvedValueOnce({ vector: mockVec1, tokens: 10 })
-        .mockRejectedValueOnce(new Error("embed error"))
-        .mockResolvedValueOnce({ vector: mockVec3, tokens: 15 });
-
-      vi.mocked(memoryStore.queryMemory)
-        .mockResolvedValueOnce([]) // 成功 1
-        .mockResolvedValueOnce([]); // 成功 3
-
-      const logSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      // 应该不抛错，最终仅记录一次错误（第一次失败）
-      await expect(
-        addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {}),
-      ).resolves.toBeUndefined();
-
-      expect(logSpy).toHaveBeenCalledWith(
-        "[memory] addTurn action failed",
-        expect.objectContaining({ event: "ADD", text: "用户喜欢 Python" }),
-        expect.any(Error),
-      );
-      expect(memoryStore.insertMemory).toHaveBeenCalledTimes(2);
-      logSpy.mockRestore();
-    });
-
-    it("低价值动作会被跳过", async () => {
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: "你好" },
-        { event: "ADD", text: "用户询问如何写代码" },
-      ]);
-
-      await addTurn(cfg, mockClient, "extract-model", userId, "你好", "你好", {});
-
-      expect(embeddingClient.embed).not.toHaveBeenCalled();
-      expect(memoryStore.insertMemory).not.toHaveBeenCalled();
-    });
-
-    it("all queryMemory scores > 0.95 → 所有 ADD 去重跳过，无 insert", async () => {
-      const facts = ["用户喜欢 TypeScript", "用户正在做 AI 助手项目"];
-      const mockVec1 = [0.1, 0.2];
-      const mockVec2 = [0.3, 0.4];
-
-      vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
-        { event: "ADD", text: facts[0] },
-        { event: "ADD", text: facts[1] },
-      ]);
-      vi.mocked(embeddingClient.embed)
-        .mockResolvedValueOnce({ vector: mockVec1, tokens: 10 })
-        .mockResolvedValueOnce({ vector: mockVec2, tokens: 15 });
-
-      // 两个都有高相似度的已存在记忆
-      vi.mocked(memoryStore.queryMemory)
-        .mockResolvedValueOnce([
-          makeHit({ id: "dup1", text: "已存 1", score: 0.96 }),
-        ])
-        .mockResolvedValueOnce([
-          makeHit({ id: "dup2", text: "已存 2", score: 0.99 }),
-        ]);
-
-      await addTurn(cfg, mockClient, "extract-model", userId, "用户说", "助手说", {});
-
-      // 都被去重跳过，无 insert
-      expect(memoryStore.insertMemory).not.toHaveBeenCalled();
-    });
+  it("低价值动作、NONE 和空动作都不做向量或写操作", async () => {
+    vi.mocked(factExtractor.extractMemoryActions).mockResolvedValue([
+      { event: "ADD", text: "你好" },
+      { event: "NONE" },
+    ]);
+    await addTurn(cfg, client, "extract", userId, "你好", "你好", {});
+    expect(embeddingClient.embed).not.toHaveBeenCalled();
+    expect(memoryStore.withUserMemoryTransaction).not.toHaveBeenCalled();
   });
 });

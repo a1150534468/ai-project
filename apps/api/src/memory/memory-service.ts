@@ -5,14 +5,13 @@ import {
   type MemoryAction,
 } from "./fact-extractor.js";
 import {
-  deleteMemory,
-  insertMemory,
   listMemory,
   queryMemory,
   type MemoryHit,
-  updateMemory,
+  type MemorySnapshot,
+  withUserMemoryTransaction,
 } from "./memory-store.js";
-import { sanitizeMemoryShape } from "./memory-types.js";
+import { mergeMemoryUpdate, sanitizeMemoryShape } from "./memory-types.js";
 
 const THRESHOLD = 0.3;
 const DEDUP = 0.95;
@@ -73,15 +72,6 @@ function isValuableMemory(text: string): boolean {
   return trimmed.length >= 8 && !/[?？]$/.test(trimmed);
 }
 
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    p,
-    new Promise<T>((_, rej) =>
-      setTimeout(() => rej(new Error("timeout")), ms),
-    ),
-  ]);
-}
-
 function logAddTurnFailure(error: unknown): void {
   console.error("[memory] addTurn failed", error);
 }
@@ -90,29 +80,25 @@ function logActionFailure(action: MemoryAction, error: unknown): void {
   console.error("[memory] addTurn action failed", action, error);
 }
 
-function isDeduped(hits: readonly MemoryHit[]): boolean {
-  return (hits[0]?.score ?? 0) > DEDUP;
+function isDeduped(hit: MemoryHit): boolean {
+  return hit.score > DEDUP;
 }
 
-async function removeSupersededFacts(
-  userId: string,
+function supersededIds(
+  memories: readonly MemorySnapshot[],
   fact: string,
   exceptId?: string,
-): Promise<void> {
+): string[] {
   const category = factCategory(fact);
-  if (!category) return;
-
-  const memories = await listMemory(userId);
-  await Promise.all(
-    memories
-      .filter(
-        (memory) =>
-          memory.id !== exceptId &&
-          factCategory(memory.text) === category &&
-          !isEquivalentFact(fact, memory.text),
-      )
-      .map((memory) => deleteMemory(userId, memory.id)),
-  );
+  if (!category) return [];
+  return memories
+    .filter(
+      (memory) =>
+        memory.id !== exceptId
+        && factCategory(memory.text) === category
+        && !isEquivalentFact(fact, memory.text),
+    )
+    .map((memory) => memory.id);
 }
 
 export async function search(
@@ -122,18 +108,28 @@ export async function search(
   topK = 5,
   precomputedVector?: number[],
 ): Promise<MemoryHit[]> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    let vector: number[];
-    if (precomputedVector) {
-      vector = precomputedVector;
-    } else {
-      const result = await withTimeout(embed(cfg, query), SEARCH_TIMEOUT_MS);
-      vector = result.vector;
-    }
-    const hits = await queryMemory(userId, vector, topK);
-    return hits.filter((h) => h.score >= THRESHOLD);
+    const work = async () => {
+      const vector = precomputedVector
+        ?? (await embed(cfg, query, fetch, controller.signal)).vector;
+      const hits = await queryMemory(userId, vector, topK);
+      return hits.filter((hit) => hit.score >= THRESHOLD);
+    };
+    return await Promise.race([
+      work(),
+      new Promise<MemoryHit[]>((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(new Error("memory search timeout"));
+        }, SEARCH_TIMEOUT_MS);
+      }),
+    ]);
   } catch {
     return [];
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -147,15 +143,17 @@ export async function addTurn(
   metadata: unknown,
 ): Promise<void> {
   let actions: MemoryAction[];
+  let preview: Awaited<ReturnType<typeof listMemory>>;
 
   try {
-    const existingMemories = await listMemory(userId);
+    preview = await listMemory(userId);
     actions = await extractMemoryActions(
       client,
       extractModel,
       user,
       assistant,
-      existingMemories,
+      preview,
+      (reason) => console.error("[memory] extraction failed", reason),
     );
   } catch (error) {
     logAddTurnFailure(error);
@@ -168,47 +166,52 @@ export async function addTurn(
       switch (action.event) {
         case "ADD": {
           const shape = sanitizeMemoryShape(action);
-          if (!shape || !isValuableMemory(shape.text)) {
-            continue;
-          }
-
+          if (!shape || !isValuableMemory(shape.text)) continue;
           const normalized = normalizeFact(shape.text);
-          if (normalized && insertedInTurn.has(normalized)) {
-            continue;
-          }
+          if (normalized && insertedInTurn.has(normalized)) continue;
 
           const result = await embed(cfg, shape.text);
-          const near = await queryMemory(userId, result.vector, DEDUP_TOPK);
-          const category = factCategory(shape.text);
-          if (
-            near.some(
+          const inserted = await withUserMemoryTransaction(userId, async (store) => {
+            // 锁要在复查之前拿：两个并发回合都在锁外判「没有重复」仍会各插一条。
+            const near = await store.query(result.vector, DEDUP_TOPK);
+            const category = factCategory(shape.text);
+            const duplicate = near.some(
               (hit) =>
-                isEquivalentFact(shape.text, hit.text) ||
-                (isDeduped([hit]) && (!category || factCategory(hit.text) !== category)),
-            )
-          ) {
-            continue;
-          }
+                isEquivalentFact(shape.text, hit.text)
+                || (isDeduped(hit) && (!category || factCategory(hit.text) !== category)),
+            );
+            if (duplicate) return false;
 
-          await removeSupersededFacts(userId, shape.text);
-          await insertMemory(userId, shape, result.vector, metadata);
-          if (normalized) insertedInTurn.add(normalized);
+            const current = await store.list();
+            // 先插后删也好、先删后插也好，关键是二者必须在同一事务；任一步失败全部回滚。
+            await store.insert(shape, result.vector, metadata);
+            await store.deleteMany(supersededIds(current, shape.text));
+            return true;
+          });
+          if (inserted && normalized) insertedInTurn.add(normalized);
           break;
         }
         case "UPDATE": {
-          const shape = sanitizeMemoryShape(action);
-          if (!shape || !isValuableMemory(shape.text)) {
-            continue;
-          }
-
+          const expected = preview.find((memory) => memory.id === action.id);
+          if (!expected) continue;
+          const shape = mergeMemoryUpdate(expected, action);
+          if (!shape || !isValuableMemory(shape.text)) continue;
           const result = await embed(cfg, shape.text);
-          await updateMemory(userId, action.id, shape, result.vector, metadata);
-          await removeSupersededFacts(userId, shape.text, action.id);
+
+          await withUserMemoryTransaction(userId, async (store) => {
+            const updated = await store.update(action.id, expected, shape, result.vector, metadata);
+            if (updated.kind !== "updated") return;
+            const current = await store.list();
+            await store.deleteMany(supersededIds(current, shape.text, action.id));
+          });
           break;
         }
-        case "DELETE":
-          await deleteMemory(userId, action.id);
+        case "DELETE": {
+          const expected = preview.find((memory) => memory.id === action.id);
+          if (!expected) continue;
+          await withUserMemoryTransaction(userId, (store) => store.delete(action.id, expected));
           break;
+        }
         case "NONE":
           break;
       }
