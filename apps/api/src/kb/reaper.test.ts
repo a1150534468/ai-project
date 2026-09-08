@@ -240,6 +240,28 @@ describe('reapOnce', () => {
     expect(count).toBeGreaterThanOrEqual(3);
   });
 
+  it('耗尽最后一次的过期 indexing 会直接 failed，不再调用 provider', async () => {
+    const lockedAt = new Date(Date.now() - 600_000);
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const findMany = vi.fn()
+      .mockResolvedValueOnce([{ id: 'dead', lockedBy: 'worker:attempt' }])
+      .mockResolvedValueOnce([]);
+    const runIndex = vi.fn();
+    const db = { document: { findMany, updateMany } } as unknown as PrismaClient;
+
+    await expect(reapOnce(db, {
+      leaseMs: 300_000,
+      maxAttempts: 3,
+      batchSize: 20,
+      runIndex,
+    })).resolves.toBe(1);
+    expect(runIndex).not.toHaveBeenCalled();
+    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'dead', lockedBy: 'worker:attempt' }),
+      data: expect.objectContaining({ status: 'failed', lockedBy: null, lockedAt: null }),
+    }));
+  });
+
   it('返回正确的处理个数', async () => {
     // Create separate KB to avoid interference
     const isolatedKb = await prisma.knowledgeBase.create({
@@ -428,11 +450,15 @@ describe('startKbReaper', () => {
    * 原来那条用例用真库 + 真定时器，睡 250ms 再 stop()，然后断言 stop 前后调用数相等 ——
    * 前面的用例在库里留下十几篇 pending，一轮要跑十几次 runIndex，机器一忙
    * stop() 就正好落在某一轮中间，那一轮继续把剩下的做完，断言就炸（CI 上实测 10 → 20）。
-   * 现在用 fake timers 推 tick，行为本身也修了：stop() 会让在跑的那一轮就地收手。
+   * 现在用 fake timers 推 tick；stop() 不再起下一轮，并让当前普通候选批次在文档边界退出。
    */
   function stubPrisma(docIds: readonly string[]) {
     return {
-      document: { findMany: async () => docIds.map((id) => ({ id })) },
+      document: {
+        findMany: async (args?: { where?: { attempts?: { gte?: number } } }) =>
+          args?.where?.attempts?.gte === undefined ? docIds.map((id) => ({ id })) : [],
+        updateMany: async () => ({ count: 0 }),
+      },
     } as unknown as PrismaClient;
   }
 
@@ -469,18 +495,32 @@ describe('startKbReaper', () => {
     }
   });
 
-  it('stop() 之后正在跑的那一轮就地收手，不把整批做完', async () => {
+  it('stop() 在文档边界停止当前普通候选批次', async () => {
     vi.useFakeTimers();
     try {
       let reaper!: { stop: () => void };
-      // 第一篇处理完就停：剩下两篇一篇都不许再碰
       const runIndex = vi.fn(async () => {
-        reaper.stop();
+        if (runIndex.mock.calls.length === 1) void reaper.stop();
       });
       reaper = startKbReaper(stubDeps(['a', 'b', 'c']), { ...OPTS, runIndex });
 
       await vi.advanceTimersByTimeAsync(100);
       expect(runIndex).toHaveBeenCalledTimes(1);
+      reaper.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('stop() 可重复调用且不再启动新轮次', async () => {
+    vi.useFakeTimers();
+    try {
+      const runIndex = vi.fn(async () => undefined);
+      const reaper = startKbReaper(stubDeps(['a']), { ...OPTS, runIndex });
+      reaper.stop();
+      reaper.stop();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(runIndex).not.toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }

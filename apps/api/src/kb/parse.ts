@@ -1,179 +1,167 @@
 export class EmptyTextError extends Error {
-  constructor(message: string = '未能提取文本（疑似扫描件，暂不支持 OCR）') {
+  constructor(message = "未能提取文本（疑似扫描件，暂不支持 OCR）") {
     super(message);
-    this.name = 'EmptyTextError';
+    this.name = "EmptyTextError";
   }
 }
 
-/** MIME 类型到文件扩展名的映射（用于双重验证） */
-const MIME_TO_EXT: Record<string, string> = {
-  'text/plain': '.txt',
-  'text/markdown': '.md',
-  'application/json': '.json',
-  'application/xml': '.xml',
-  'text/xml': '.xml',
-  'application/x-yaml': '.yaml',
-  'text/yaml': '.yaml',
-  'text/csv': '.csv',
-  'text/x-log': '.log',
-  'application/pdf': '.pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
-  'application/vnd.ms-excel': '.xls',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
-};
-
-/**
- * 获取文件扩展名（小写）。
- */
-function extOf(filename: string): string {
-  const i = filename.lastIndexOf('.');
-  return i >= 0 ? filename.slice(i).toLowerCase() : '';
+export class PermanentDocumentError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = "PermanentDocumentError";
+  }
 }
 
-/**
- * 根据 MIME 类型或文件扩展名判断是否为纯文本文件。
- */
-function isTextFile(mime: string, filename: string): boolean {
-  const ext = extOf(filename);
+type DocumentKind = "text" | "pdf" | "docx" | "sheet" | "slides";
 
-  // 白名单：支持的纯文本类型
-  const textMimes = new Set([
-    'text/plain',
-    'text/markdown',
-    'application/json',
-    'application/xml',
-    'text/xml',
-    'application/x-yaml',
-    'text/yaml',
-    'text/csv',
-    'text/x-log',
-  ]);
+const KIND_BY_EXTENSION = new Map<string, DocumentKind>([
+  [".txt", "text"], [".md", "text"], [".markdown", "text"], [".json", "text"],
+  [".xml", "text"], [".yaml", "text"], [".yml", "text"], [".csv", "text"], [".log", "text"],
+  [".pdf", "pdf"], [".docx", "docx"], [".xlsx", "sheet"], [".xls", "sheet"], [".pptx", "slides"],
+]);
+const KIND_BY_MIME = new Map<string, DocumentKind>([
+  ["text/plain", "text"], ["text/markdown", "text"], ["application/json", "text"],
+  ["application/xml", "text"], ["text/xml", "text"], ["application/x-yaml", "text"],
+  ["application/yaml", "text"], ["text/yaml", "text"], ["text/x-yaml", "text"], ["text/csv", "text"], ["text/x-log", "text"],
+  ["application/pdf", "pdf"],
+  ["application/vnd.openxmlformats-officedocument.wordprocessingml.document", "docx"],
+  ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "sheet"],
+  ["application/vnd.ms-excel", "sheet"],
+  ["application/vnd.openxmlformats-officedocument.presentationml.presentation", "slides"],
+]);
 
-  const textExts = new Set(['.txt', '.md', '.markdown', '.json', '.xml', '.yaml', '.yml', '.csv', '.log']);
-
-  return textMimes.has(mime) || textExts.has(ext);
+function extensionOf(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  return dot < 0 ? "" : filename.slice(dot).toLowerCase();
 }
 
-/**
- * 解析文档到纯文本。
- * 支持：txt、md、json、xml、yaml、csv、log（UTF-8）、pdf、docx、xlsx、xls、pptx。
- * 解析结果为空 => EmptyTextError。
- * 不支持的类型 => Error。
- */
-export async function parseDocument(
-  buf: Buffer,
-  mime: string,
-  filename: string,
-): Promise<string> {
-  const ext = extOf(filename);
+function mediaType(mime: string): string {
+  return mime.split(";", 1)[0].trim().toLowerCase();
+}
 
-  // 纯文本文件：直接 UTF-8 解码
-  if (isTextFile(mime, filename)) {
-    const text = buf.toString('utf8').trim();
-    if (!text) {
-      throw new EmptyTextError();
-    }
-    return text;
+function documentKind(mime: string, filename: string): DocumentKind {
+  const byExtension = KIND_BY_EXTENSION.get(extensionOf(filename));
+  const normalized = mediaType(mime);
+  const byMime = KIND_BY_MIME.get(normalized);
+  if (byExtension && byMime && byExtension !== byMime) {
+    throw new PermanentDocumentError(`文件扩展名与 MIME 不匹配：${mime} (${filename})`);
+  }
+  const kind = byExtension ?? byMime;
+  if (!kind) throw new PermanentDocumentError(`不支持的文件类型：${mime} (${filename})`);
+  return kind;
+}
+
+function nonEmpty(text: string): string {
+  const result = text.trim();
+  if (!result) throw new EmptyTextError();
+  return result;
+}
+
+function decodeUtf8(buffer: Buffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+  } catch (cause) {
+    throw new PermanentDocumentError("文本不是合法的 UTF-8", { cause });
+  }
+}
+
+function cellText(cell: unknown): string {
+  return cell instanceof Date ? cell.toISOString() : String(cell ?? "").trim();
+}
+
+function rowText(row: readonly unknown[]): string {
+  const cells = row.map(cellText);
+  while (cells.at(-1) === "") cells.pop();
+  return cells.join("\t");
+}
+
+async function parseWorkbook(buffer: Buffer): Promise<string> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  const sections: string[] = [];
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    if (!sheet) continue;
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, blankrows: false, defval: "" });
+    const lines = rows.map(rowText).filter((line) => line.replace(/\t/g, "") !== "");
+    if (lines.length > 0) sections.push([`# ${name}`, ...lines].join("\n"));
+  }
+  return nonEmpty(sections.join("\n\n"));
+}
+
+type RelationshipMap = Map<string, string>;
+
+function slideNumber(path: string): number {
+  return Number(path.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
+}
+
+async function presentationOrder(zip: import("jszip")): Promise<string[]> {
+  const presentation = zip.file("ppt/presentation.xml");
+  const relationships = zip.file("ppt/_rels/presentation.xml.rels");
+  if (!presentation || !relationships) {
+    return Object.keys(zip.files).filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+      .sort((left, right) => slideNumber(left) - slideNumber(right));
   }
 
-  // PDF
-  if (ext === '.pdf' || mime === 'application/pdf') {
-    const { PDFParse } = await import('pdf-parse');
-    const parser = new PDFParse({ data: new Uint8Array(buf) });
+  const { DOMParser } = await import("@xmldom/xmldom");
+  const parser = new DOMParser();
+  const relDoc = parser.parseFromString(await relationships.async("text"), "application/xml");
+  const targets: RelationshipMap = new Map();
+  const relationshipNodes = Array.from(relDoc.getElementsByTagNameNS("*", "Relationship"));
+  for (const node of relationshipNodes) {
+    const id = node.getAttribute("Id");
+    const target = node.getAttribute("Target");
+    if (id && target) targets.set(id, target.replace(/^\.\.\//, "ppt/").replace(/^(?!ppt\/)/, "ppt/"));
+  }
+  const presentationDoc = parser.parseFromString(await presentation.async("text"), "application/xml");
+  const slideIds = Array.from(presentationDoc.getElementsByTagNameNS("*", "sldId"));
+  const ordered = slideIds
+    .map((node) => targets.get(node.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id")
+      ?? node.getAttribute("r:id")
+      ?? ""))
+    .filter((path): path is string => Boolean(path && zip.file(path)));
+  return ordered.length === slideIds.length && ordered.length > 0
+    ? ordered
+    : Object.keys(zip.files).filter((path) => /^ppt\/slides\/slide\d+\.xml$/.test(path))
+      .sort((left, right) => slideNumber(left) - slideNumber(right));
+}
+
+async function parseSlides(buffer: Buffer): Promise<string> {
+  const [{ default: JSZip }, { DOMParser }] = await Promise.all([import("jszip"), import("@xmldom/xmldom")]);
+  const zip = await JSZip.loadAsync(buffer);
+  const parser = new DOMParser();
+  const paths = await presentationOrder(zip);
+  const slides = await Promise.all(paths.map(async (path, index) => {
+    const xml = await zip.file(path)?.async("text");
+    if (!xml) return "";
+    const document = parser.parseFromString(xml, "application/xml");
+    const lines = Array.from(document.getElementsByTagName("a:t"))
+      .map((node) => node.textContent?.trim() ?? "").filter(Boolean);
+    return lines.length === 0 ? "" : [`# Slide ${index + 1}`, ...lines].join("\n");
+  }));
+  return nonEmpty(slides.filter(Boolean).join("\n\n"));
+}
+
+/** 所有解析结果统一 trim；动态模块加载故障保持原异常，不伪装成用户文件错误。 */
+export async function parseDocument(buffer: Buffer, mime: string, filename: string): Promise<string> {
+  const kind = documentKind(mime, filename);
+  if (kind === "text") return nonEmpty(decodeUtf8(buffer));
+
+  if (kind === "pdf") {
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: new Uint8Array(buffer) });
     try {
-      const result = await parser.getText();
-      const text = (result.text ?? '').trim();
-      if (!text) {
-        throw new EmptyTextError();
-      }
-      return text;
+      return nonEmpty((await parser.getText()).text ?? "");
     } finally {
       await parser.destroy();
     }
   }
 
-  // DOCX
-  if (ext === '.docx' || mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const mammoth = (await import('mammoth')).default;
-    const result = await mammoth.extractRawText({ buffer: buf });
-    const text = (result.value ?? '').trim();
-    if (!text) {
-      throw new EmptyTextError();
-    }
-    return text;
+  if (kind === "docx") {
+    const mammoth = (await import("mammoth")).default;
+    return nonEmpty((await mammoth.extractRawText({ buffer })).value ?? "");
   }
 
-  // Excel
-  if (
-    ext === '.xlsx' ||
-    ext === '.xls' ||
-    mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-    mime === 'application/vnd.ms-excel'
-  ) {
-    const XLSX = await import('xlsx');
-    const workbook = XLSX.read(buf, { type: 'buffer', cellDates: true });
-    const sheets = workbook.SheetNames.map((sheetName) => {
-      const worksheet = workbook.Sheets[sheetName];
-      if (!worksheet) return '';
-      const rows = XLSX.utils.sheet_to_json<Array<string | number | boolean | Date | null>>(worksheet, {
-        header: 1,
-        blankrows: false,
-        defval: '',
-      });
-      const lines = rows
-        .map((row) =>
-          row
-            .map((cell) => (cell instanceof Date ? cell.toISOString() : String(cell ?? '').trim()))
-            .filter(Boolean)
-            .join('\t'),
-        )
-        .filter(Boolean);
-      return lines.length > 0 ? [`# ${sheetName}`, ...lines].join('\n') : '';
-    }).filter(Boolean);
-    const text = sheets.join('\n\n').trim();
-    if (!text) {
-      throw new EmptyTextError();
-    }
-    return text;
-  }
-
-  // PPTX
-  if (
-    ext === '.pptx' ||
-    mime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  ) {
-    const [{ default: JSZip }, { DOMParser }] = await Promise.all([
-      import('jszip'),
-      import('@xmldom/xmldom'),
-    ]);
-    const zip = await JSZip.loadAsync(buf);
-    const slideEntries = Object.values(zip.files)
-      .filter((file) => /^ppt\/slides\/slide\d+\.xml$/.test(file.name))
-      .sort((a, b) => {
-        const an = Number(a.name.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
-        const bn = Number(b.name.match(/slide(\d+)\.xml$/)?.[1] ?? 0);
-        return an - bn;
-      });
-    const parser = new DOMParser();
-    const slides = await Promise.all(
-      slideEntries.map(async (entry, index) => {
-        const xml = await entry.async('text');
-        const doc = parser.parseFromString(xml, 'application/xml');
-        const nodes = Array.from(doc.getElementsByTagName('a:t'));
-        const lines = nodes
-          .map((node) => node.textContent?.trim() ?? '')
-          .filter(Boolean);
-        return lines.length > 0 ? [`# Slide ${index + 1}`, ...lines].join('\n') : '';
-      }),
-    );
-    const text = slides.filter(Boolean).join('\n\n').trim();
-    if (!text) {
-      throw new EmptyTextError();
-    }
-    return text;
-  }
-
-  // 不支持的类型
-  throw new Error(`不支持的文件类型：${mime} (${filename})`);
+  if (kind === "sheet") return parseWorkbook(buffer);
+  return parseSlides(buffer);
 }

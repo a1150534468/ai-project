@@ -1,109 +1,81 @@
-import { describe, it, expect } from 'vitest';
-import { parseDocument, EmptyTextError } from './parse.js';
+import { describe, expect, it } from "vitest";
+import { EmptyTextError, PermanentDocumentError, parseDocument } from "./parse.js";
 
-describe('parseDocument', () => {
-  it('txt 直接 utf8', async () => {
-    const out = await parseDocument(Buffer.from('hello world'), 'text/plain', 'a.txt');
-    expect(out).toContain('hello');
-    expect(out).toContain('world');
+const parse = (text: string, mime = "text/plain", name = "a.txt") => parseDocument(Buffer.from(text), mime, name);
+
+describe("parseDocument 文本边界", () => {
+  it.each([
+    ["text/plain", "a.txt"],
+    ["TEXT/MARKDOWN; charset=UTF-8", "download"],
+    ["application/json; charset=utf-8", "download"],
+    ["application/xml", "a.xml"],
+    ["application/octet-stream", "a.yaml"],
+  ])("按 MIME/扩展名识别 UTF-8 文本：%s %s", async (mime, name) => {
+    await expect(parse("  hello 世界  ", mime, name)).resolves.toBe("hello 世界");
   });
 
-  it('md 直接 utf8', async () => {
-    const out = await parseDocument(
-      Buffer.from('# 标题\n正文'),
-      'text/markdown',
-      'a.md',
-    );
-    expect(out).toContain('标题');
-    expect(out).toContain('正文');
+  it("空文本抛唯一的 EmptyTextError", async () => {
+    await expect(parse("   ")).rejects.toBeInstanceOf(EmptyTextError);
   });
 
-  it('空文本抛 EmptyTextError', async () => {
-    await expect(
-      parseDocument(Buffer.from('   '), 'text/plain', 'a.txt'),
-    ).rejects.toBeInstanceOf(EmptyTextError);
-
-    await expect(
-      parseDocument(Buffer.from(''), 'text/plain', 'a.txt'),
-    ).rejects.toBeInstanceOf(EmptyTextError);
+  it("畸形 UTF-8 和二进制扩展名/text MIME 冲突是永久输入错误", async () => {
+    await expect(parseDocument(Buffer.from([0xc3, 0x28]), "text/plain", "a.txt"))
+      .rejects.toBeInstanceOf(PermanentDocumentError);
+    await expect(parse("%PDF", "text/plain", "a.pdf"))
+      .rejects.toThrow("扩展名与 MIME 不匹配");
   });
 
-  it('不支持的类型抛 Error', async () => {
-    await expect(
-      parseDocument(Buffer.from('data'), 'application/octet-stream', 'a.bin'),
-    ).rejects.toThrow();
+  it("不支持类型保留既有错误消息", async () => {
+    await expect(parse("data", "application/octet-stream", "a.bin"))
+      .rejects.toThrow("不支持的文件类型：application/octet-stream (a.bin)");
   });
+});
 
-  it('json 按 utf8 解析', async () => {
-    const out = await parseDocument(
-      Buffer.from('{"key": "value"}'),
-      'application/json',
-      'a.json',
-    );
-    expect(out).toContain('key');
-    expect(out).toContain('value');
-  });
-
-  it('xml 按 utf8 解析', async () => {
-    const out = await parseDocument(
-      Buffer.from('<root><item>text</item></root>'),
-      'application/xml',
-      'a.xml',
-    );
-    expect(out).toContain('root');
-    expect(out).toContain('text');
-  });
-
-  it('xlsx 提取工作表文本', async () => {
-    const XLSX = await import('xlsx');
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['客户', '金额'],
-      ['星野科技', 128],
+describe("parseDocument Office", () => {
+  it("XLSX 保留稀疏列坐标与日期", async () => {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.utils.book_new();
+    const sheet = XLSX.utils.aoa_to_sheet([
+      ["A", "", "C"],
+      [new Date("2026-01-02T03:04:05.000Z"), "", ""],
     ]);
-    XLSX.utils.book_append_sheet(wb, ws, '订单');
-
+    XLSX.utils.book_append_sheet(workbook, sheet, "订单");
     const out = await parseDocument(
-      Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer),
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'orders.xlsx',
+      Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer),
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "orders.xlsx",
     );
-
-    expect(out).toContain('订单');
-    expect(out).toContain('客户');
-    expect(out).toContain('星野科技');
-    expect(out).toContain('128');
+    expect(out).toContain("# 订单");
+    expect(out).toContain("A\t\tC");
+    expect(out).toContain("2026-01-02T03:04:05.000Z");
   });
 
-  it('pptx 提取幻灯片文本', async () => {
-    const { default: JSZip } = await import('jszip');
+  it("PPTX 按 presentation relationship 顺序而不是文件名顺序", async () => {
+    const { default: JSZip } = await import("jszip");
     const zip = new JSZip();
-    zip.file(
-      'ppt/slides/slide1.xml',
-      `<?xml version="1.0" encoding="UTF-8"?>
-      <p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
-             xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
-        <p:cSld>
-          <p:spTree>
-            <p:sp>
-              <p:txBody>
-                <a:p><a:r><a:t>季度复盘</a:t></a:r></a:p>
-                <a:p><a:r><a:t>增长 23%</a:t></a:r></a:p>
-              </p:txBody>
-            </p:sp>
-          </p:spTree>
-        </p:cSld>
-      </p:sld>`,
-    );
-
+    const slide = (text: string) => `<p:sld xmlns:p="p" xmlns:a="a"><a:t>${text}</a:t></p:sld>`;
+    zip.file("ppt/slides/slide1.xml", slide("第一份文件"));
+    zip.file("ppt/slides/slide2.xml", slide("先播放"));
+    zip.file("ppt/presentation.xml", `<p:presentation xmlns:p="p" xmlns:r="r"><p:sldIdLst><p:sldId r:id="r2"/><p:sldId r:id="r1"/></p:sldIdLst></p:presentation>`);
+    zip.file("ppt/_rels/presentation.xml.rels", `<Relationships><Relationship Id="r1" Target="slides/slide1.xml"/><Relationship Id="r2" Target="slides/slide2.xml"/></Relationships>`);
     const out = await parseDocument(
-      await zip.generateAsync({ type: 'nodebuffer' }),
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      'report.pptx',
+      await zip.generateAsync({ type: "nodebuffer" }),
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "deck.pptx",
     );
+    expect(out).toBe("# Slide 1\n先播放\n\n# Slide 2\n第一份文件");
+  });
 
-    expect(out).toContain('Slide 1');
-    expect(out).toContain('季度复盘');
-    expect(out).toContain('增长 23%');
+  it("PPTX 缺演示关系时回落到数字文件顺序", async () => {
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    zip.file("ppt/slides/slide2.xml", `<a:t xmlns:a="a">二</a:t>`);
+    zip.file("ppt/slides/slide1.xml", `<a:t xmlns:a="a">一</a:t>`);
+    const out = await parseDocument(
+      await zip.generateAsync({ type: "nodebuffer" }),
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      "deck.pptx",
+    );
+    expect(out).toBe("# Slide 1\n一\n\n# Slide 2\n二");
   });
 });

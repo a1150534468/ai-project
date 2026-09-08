@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
 import { assertSafeUrl, fetchUrl, SsrfError } from "./url-fetch.js";
-import type { FetchResult } from "./url-fetch.js";
 
 // 辅助函数：创建返回指定 IP 的 fake lookup
 const lookupTo =
@@ -211,6 +210,21 @@ describe("fetchUrl 重定向防护", () => {
   });
 
   describe("允许重定向到公网", () => {
+    it("相对 Location 会先解析成绝对 URL 再复验", async () => {
+      const fakeFetch = vi.fn(async (url: string) => url.endsWith("/start")
+        ? createMockResponse(302, "", { location: "/next" })
+        : createMockResponse(200, "done")) as any;
+      const result = await fetchUrl("https://example.com/start", {
+        fetchFn: fakeFetch,
+        lookupFn: lookupTo("93.184.216.34"),
+      });
+      expect(result.finalUrl).toBe("https://example.com/next");
+      expect(fakeFetch.mock.calls.map((call: unknown[]) => call[0])).toEqual([
+        "https://example.com/start",
+        "https://example.com/next",
+      ]);
+    });
+
     it("302 重定向到公网 URL 应正常跟进并读取内容", async () => {
       const responseBody = "Hello from redirected page";
 
@@ -271,6 +285,15 @@ describe("fetchUrl 重定向防护", () => {
       expect(fakeFetch).toHaveBeenCalledTimes(3);
     });
 
+    it("304 不是重定向，按 HTTP 错误处理", async () => {
+      const fakeFetch = vi.fn(async () => new Response(null, { status: 304, headers: { location: "/wrong" } })) as any;
+      await expect(fetchUrl("https://example.com/", {
+        fetchFn: fakeFetch,
+        lookupFn: lookupTo("93.184.216.34"),
+      })).rejects.toThrow("HTTP 304");
+      expect(fakeFetch).toHaveBeenCalledOnce();
+    });
+
     it("超过最大重定向次数应拒绝", async () => {
       const fakeFetch = vi.fn(async (url: string) => {
         // 每次都返回 302，无限循环
@@ -286,6 +309,26 @@ describe("fetchUrl 重定向防护", () => {
           maxRedirects: 3,
         })
       ).rejects.toThrow("Too many redirects");
+    });
+  });
+
+  describe("总期限与字节上限", () => {
+    it("初始 DNS 不返回时也按总期限结束", async () => {
+      const pendingLookup = () => new Promise<Array<{ address: string; family: number }>>(() => undefined);
+      await expect(fetchUrl("https://example.com/", { lookupFn: pendingLookup, timeoutMs: 5 }))
+        .rejects.toThrow("timeout");
+    });
+
+    it("恰好 maxBytes 可收，第一个超限字节拒绝", async () => {
+      const opts = { lookupFn: lookupTo("93.184.216.34"), maxBytes: 3 };
+      await expect(fetchUrl("https://example.com/", {
+        ...opts,
+        fetchFn: (async () => createMockResponse(200, "abc")) as any,
+      })).resolves.toMatchObject({ buf: Buffer.from("abc") });
+      await expect(fetchUrl("https://example.com/", {
+        ...opts,
+        fetchFn: (async () => createMockResponse(200, "abcd")) as any,
+      })).rejects.toThrow("exceeds max size");
     });
   });
 
