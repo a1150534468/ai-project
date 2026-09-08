@@ -4,41 +4,25 @@ export interface ChunkOpts {
   maxChunks: number;
 }
 
+const APPROXIMATE_CHARS_PER_TOKEN = 3;
+
 /**
- * 按字符窗口切块文本。
- * 每个 token 估算为 3 个字符（中文/英文混合环境下的粗略估算）。
- * 支持相邻块重叠，且总块数不超 maxChunks。
- * 返回字符串数组（去除纯空白块）。
+ * 用 UTF-16 字符窗口切文本，保持旧索引的块边界；这里刻意不改成按码点或段落切分，
+ * 否则同一份文档会整体重排 ordinal，已有引用角标与重新索引结果都会漂移。
  */
-export function chunkText(text: string, opts: ChunkOpts): string[] {
-  const t = text.trim();
-  if (!t) return [];
+export function chunkText(text: string, options: ChunkOpts): string[] {
+  const input = text.trim();
+  if (input === "") return [];
 
-  // token => 字符：约 1 token ≈ 3 字符
-  const TOKEN_TO_CHAR = 3;
-  const maxChars = opts.maxTokens * TOKEN_TO_CHAR;
-  const overlapChars = opts.overlapTokens * TOKEN_TO_CHAR;
+  const windowSize = options.maxTokens * APPROXIMATE_CHARS_PER_TOKEN;
+  if (input.length <= windowSize) return [input];
 
-  // 若文本小于一个块，直接返回
-  if (t.length <= maxChars) return [t];
-
-  // 计算步长：每次向前移动 (maxChars - overlapChars) 个字符
-  const step = Math.max(1, maxChars - overlapChars);
-
+  const overlap = options.overlapTokens * APPROXIMATE_CHARS_PER_TOKEN;
+  const advance = Math.max(1, windowSize - overlap);
   const chunks: string[] = [];
-  let i = 0;
-
-  while (i < t.length && chunks.length < opts.maxChunks) {
-    // 从位置 i 切出 maxChars 长度的块
-    const chunk = t.slice(i, i + maxChars);
-
-    // 过滤纯空白块
-    if (chunk.trim()) {
-      chunks.push(chunk);
-    }
-
-    i += step;
+  for (let start = 0; start < input.length && chunks.length < options.maxChunks; start += advance) {
+    const candidate = input.slice(start, start + windowSize);
+    if (candidate.trim() !== "") chunks.push(candidate);
   }
-
   return chunks;
 }

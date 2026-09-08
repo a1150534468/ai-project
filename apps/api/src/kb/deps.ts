@@ -1,58 +1,62 @@
-import { getPrisma } from "@ai-assistant/db";
-import { getObject, type S3 } from "../storage/s3.js";
-import { fetchUrl } from "./url-fetch.js";
-import { parseDocument } from "./parse.js";
-import { chunkText } from "./chunk.js";
-import { embed, loadEmbeddingConfig } from "../memory/embedding-client.js";
-import * as os from "node:os";
 import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
+import { getPrisma } from "@ai-assistant/db";
+import { embed, loadEmbeddingConfig } from "../memory/embedding-client.js";
+import { getObject, type S3 } from "../storage/s3.js";
+import { chunkText } from "./chunk.js";
 import type { IndexDeps } from "./indexer.js";
+import { parseDocument } from "./parse.js";
+import { fetchUrl } from "./url-fetch.js";
+
+function integerSetting(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
+  const value = Number.parseInt(env[name] ?? "", 10);
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function filenameFromLocation(location: string): string {
+  return location.split("/").pop() || "document";
+}
 
 /**
- * 构建索引依赖（工厂函数）
- * 装配真实的 S3/fetchUrl/parse/chunk/embed 实现
- * 供 routes 与后续 reaper/indexer 复用
+ * 这一层只装配索引器的真实依赖，不承载重试或入库策略。
+ * FILE/TEXT 都以 sourceUri 作为 S3 key；URL 才走受 SSRF 防护的 fetchUrl。
  */
-export async function buildIndexDeps(
-  s3: S3
-): Promise<IndexDeps> {
-  const prisma = getPrisma();
-  const embCfg = loadEmbeddingConfig();
-
+export async function buildIndexDeps(s3: S3): Promise<IndexDeps> {
+  const embedding = loadEmbeddingConfig();
   return {
-    prisma,
-    loadObject: async (doc) => {
-      // P5.2 之前这里的第一个分支是 `sourceType === "ARTIFACT"`，把内联在
-      // `Document.content` 的产物正文直接包成 Buffer。P1.2 之后没有产物文档，这个
-      // 分支已不可达；`content` 列随 P5.2 删掉后它连编译都过不去，所以一并退役
-      // （计划把它挂在 P5.3 名下，实际由本项带走）。剩下三种来源都靠 sourceUri 定位。
-      if (doc.sourceType === "FILE" || doc.sourceType === "TEXT") {
-        // FILE 和 TEXT 都存在 S3，sourceUri 是 S3 key
-        const buf = await getObject(s3, doc.sourceUri!);
-        const filename = doc.sourceUri!.split("/").pop() ?? "document";
-        const mime = doc.sourceType === "TEXT" ? "text/plain" : "application/octet-stream";
-        return { buf, mime, filename };
-      } else if (doc.sourceType === "URL") {
-        // URL：fetch 抓取
-        const result = await fetchUrl(doc.sourceUri!, {
-          maxBytes: parseInt(process.env.KB_URL_MAX_BYTES ?? "10485760", 10),
-          timeoutMs: parseInt(process.env.KB_URL_FETCH_TIMEOUT_MS ?? "15000", 10),
-          maxRedirects: parseInt(process.env.KB_URL_MAX_REDIRECTS ?? "3", 10),
-        });
-        const filename = new URL(result.finalUrl).pathname.split("/").pop() ?? "document";
-        return { buf: result.buf, mime: result.contentType, filename };
+    prisma: getPrisma(),
+    loadObject: async (document) => {
+      const location = document.sourceUri;
+      if (document.sourceType === "FILE" || document.sourceType === "TEXT") {
+        const buf = await getObject(s3, location!);
+        return {
+          buf,
+          mime: document.sourceType === "TEXT" ? "text/plain" : "application/octet-stream",
+          filename: filenameFromLocation(location!),
+        };
       }
-      throw new Error(`Unknown sourceType: ${doc.sourceType}`);
+      if (document.sourceType === "URL") {
+        const fetched = await fetchUrl(location!, {
+          maxBytes: integerSetting(process.env, "KB_URL_MAX_BYTES", 10_485_760),
+          timeoutMs: integerSetting(process.env, "KB_URL_FETCH_TIMEOUT_MS", 15_000),
+          maxRedirects: integerSetting(process.env, "KB_URL_MAX_REDIRECTS", 3),
+        });
+        return {
+          buf: fetched.buf,
+          mime: fetched.contentType,
+          filename: filenameFromLocation(new URL(fetched.finalUrl).pathname),
+        };
+      }
+      throw new Error(`Unknown sourceType: ${document.sourceType}`);
     },
     parse: parseDocument,
-    chunk: (text) =>
-      chunkText(text, {
-        maxTokens: parseInt(process.env.KB_CHUNK_TOKENS ?? "800", 10),
-        overlapTokens: parseInt(process.env.KB_CHUNK_OVERLAP ?? "100", 10),
-        maxChunks: parseInt(process.env.KB_MAX_CHUNKS ?? "2000", 10),
-      }),
-    embed: async (input) => embed(embCfg, input),
-    embeddingDimension: embCfg.dimension,
-    workerId: `${process.pid}-${os.hostname()}-${randomUUID()}`,
+    chunk: (text) => chunkText(text, {
+      maxTokens: integerSetting(process.env, "KB_CHUNK_TOKENS", 800),
+      overlapTokens: integerSetting(process.env, "KB_CHUNK_OVERLAP", 100),
+      maxChunks: integerSetting(process.env, "KB_MAX_CHUNKS", 2_000),
+    }),
+    embed: (input) => embed(embedding, input),
+    embeddingDimension: embedding.dimension,
+    workerId: `${process.pid}-${hostname()}-${randomUUID()}`,
   };
 }

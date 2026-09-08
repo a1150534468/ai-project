@@ -1,51 +1,55 @@
-import { describe, it, expect } from 'vitest';
-import { chunkText } from './chunk.js';
+import { describe, expect, it } from "vitest";
+import { chunkText } from "./chunk.js";
 
-describe('chunkText', () => {
-  it('按字符窗口切块且不超上限', () => {
-    const text = '段落一。'.repeat(2000); // 长文本
-    const chunks = chunkText(text, { maxTokens: 50, overlapTokens: 10, maxChunks: 5 });
-    expect(chunks.length).toBeLessThanOrEqual(5);
-    expect(chunks.length).toBeGreaterThan(0);
-    expect(chunks[0].length).toBeGreaterThan(0);
+const options = (overrides: Partial<Parameters<typeof chunkText>[1]> = {}) => ({
+  maxTokens: 4,
+  overlapTokens: 1,
+  maxChunks: 20,
+  ...overrides,
+});
+
+describe("chunkText", () => {
+  it("trim 后的短文本原样成为单块", () => {
+    expect(chunkText("  hello world  ", options())).toEqual(["hello world"]);
   });
 
-  it('空白返回空数组', () => {
-    expect(chunkText('   ', { maxTokens: 50, overlapTokens: 10, maxChunks: 5 })).toEqual([]);
-    expect(chunkText('', { maxTokens: 50, overlapTokens: 10, maxChunks: 5 })).toEqual([]);
+  it("空串和纯空白没有块", () => {
+    expect(chunkText("", options())).toEqual([]);
+    expect(chunkText(" \n\t ", options())).toEqual([]);
   });
 
-  it('正常切出多块且有重叠', () => {
-    const text = 'abcdefghij'.repeat(50); // 500 字符
-    const chunks = chunkText(text, { maxTokens: 30, overlapTokens: 5, maxChunks: 100 });
-    expect(chunks.length).toBeGreaterThan(1);
-    // 验证重叠：相邻块应该有重叠部分
-    if (chunks.length > 1) {
-      const chunk0End = chunks[0].slice(-5); // 最后 5 个字符
-      const chunk1Start = chunks[1].slice(0, 5); // 开始 5 个字符
-      // 由于有重叠，可能会共享一些内容
-      expect(chunks[1]).toContain(chunk0End.slice(0, 1));
-    }
+  it("窗口按每 token 三个 UTF-16 code unit 计算", () => {
+    const chunks = chunkText("0123456789abcdefghijkl", options({ overlapTokens: 0 }));
+    expect(chunks).toEqual(["0123456789ab", "cdefghijkl"]);
   });
 
-  it('单块文本直接返回', () => {
-    const text = 'hello world';
-    const chunks = chunkText(text, { maxTokens: 100, overlapTokens: 10, maxChunks: 5 });
-    expect(chunks).toEqual([text]);
+  it("相邻窗口精确重叠 overlapTokens × 3", () => {
+    const chunks = chunkText("0123456789abcdefghijklmnop", options());
+    expect(chunks[0]).toBe("0123456789ab");
+    expect(chunks[1]).toBe("9abcdefghijk");
+    expect(chunks[0].slice(-3)).toBe(chunks[1].slice(0, 3));
   });
 
-  it('尊重 maxChunks 限制', () => {
-    const text = 'x'.repeat(10000);
-    const chunks = chunkText(text, { maxTokens: 50, overlapTokens: 10, maxChunks: 3 });
-    expect(chunks.length).toBeLessThanOrEqual(3);
+  it("到 maxChunks 就停止", () => {
+    expect(chunkText("x".repeat(100), options({ maxChunks: 3 }))).toHaveLength(3);
   });
 
-  it('过滤仅空白的块', () => {
-    const text = 'hello   \n\n   world';
-    const chunks = chunkText(text, { maxTokens: 5, overlapTokens: 1, maxChunks: 100 });
-    // 所有块应该非空白
-    for (const chunk of chunks) {
-      expect(chunk.trim().length).toBeGreaterThan(0);
-    }
+  it("overlap 不小于窗口时仍逐个 code unit 前进", () => {
+    expect(chunkText("abcdef", options({ maxTokens: 1, overlapTokens: 1, maxChunks: 4 }))).toEqual([
+      "abc",
+      "bcd",
+      "cde",
+      "def",
+    ]);
+  });
+
+  it("纯空白窗口被跳过，但游标继续前进", () => {
+    expect(chunkText("a      b", options({ maxTokens: 1, overlapTokens: 0 }))).toEqual(["a  ", " b"]);
+  });
+
+  it("继续使用 UTF-16 slice，保持既有块边界", () => {
+    const chunks = chunkText("a😀bc", options({ maxTokens: 1, overlapTokens: 0 }));
+    expect(chunks).toEqual(["a😀", "bc"]);
+    expect(chunks[0]).toHaveLength(3);
   });
 });
