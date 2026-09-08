@@ -107,7 +107,7 @@
 | **C2** | `apps/api/src/agent/` | **907** | ✅ `4ea475b`，剩 218 行地板；`runTurn` 工具循环 |
 | **C3** | `apps/api/src/chat/` | **1,279** | ✅ `e858bd2`，剩 229 行地板；对话主链、会话锁与附件边界 |
 | **C4** | `apps/api/src/memory/` | **2,134** | ✅ `492b90c` + `6fff0dd`，剩 588 行地板；长期记忆抽取、事务与路由 |
-| C5 | `apps/api/src/kb/` 检索 | 658 | 知识库最大一块，拆三批做 |
+| **C5** | `apps/api/src/kb/` 检索 | **658** | ✅ `8626db1`，剩 121 行地板；权限集合、向量检索、分块与组合根 |
 | C6 | `apps/api/src/kb/` 入库 | 2,183 | |
 | C7 | `apps/api/src/kb/` routes + service + 测试 | 1,357 | |
 | C8 | `apps/api/src/workflow/article/` | 1,433 | |
@@ -306,6 +306,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | **C2** | `apps/api/src/agent/` 三个文件全部重写，修正 reset 后正文丢失 | ✅ `4ea475b` |
 | **C3** | `apps/api/src/chat/` 对话主链全部重写，补齐锁续租、历史顺序与附件边界 | ✅ `e858bd2` |
 | **C4** | `apps/api/src/memory/` 长期记忆后端全部重写，补齐事务、CAS 与向量边界 | ✅ `492b90c` + `6fff0dd` |
+| **C5** | `apps/api/src/kb/` 检索、分块与索引组合根全部重写 | ✅ `8626db1` |
 
 `components/ThemeToggle.tsx` 那处手写的 `role="switch"` **刻意不动**：它的行盒版式在 `index.css` 里，
 偏好口径也不一样（它存的是具体的 light/dark，`ui/Switch` 那处存的是「跟随系统」），
@@ -673,6 +674,55 @@ memory-store.ts 101 行集中在数据库列名、`$queryRawUnsafe` 签名、`Me
 `git diff --check origin/main...HEAD` 仍会报 16 个**此前批次**留下的 EOF 空行，其中包括本方案明令不动的
 历史迁移；本批没有新增任何一条，所以没有跨批顺手改。
 
+### 批次 C5 实测与取舍（2026-09-09 收尾）
+
+**实测：26,271 → 25,734（净消 537 行）。** 计划里的 658 行不是 `retrieve.*` 两文件的 514 行，
+而是五个文件的精确归属和：retrieve.ts 197 + retrieve.test.ts 317 + chunk.ts 44 + chunk.test.ts 51 +
+deps.ts 49。五文件最终 **658 → 121**，`658 − 121 = 537`，与全仓净消完全一致；lockfile 仍 6,669。
+
+**范围为什么包括 `chunk.*` 和 `deps.ts`：** 分块窗口直接决定检索 ordinal，`deps.ts` 则是索引器把
+S3/URL → parse → chunk → embed 串起来的组合根；两者都在本批基线的 658 行里。C6 才拥有 ingest、
+parse、url-fetch、indexer、reaper 及测试，C7 拥有 routes/service 及测试，本批没有碰它们。
+
+**权限集合改成可审计的两层边界。** attach-all 只展开 `ownerType=USER && userId=当前认证用户` 的自有库；
+显式 id 查询在数据库谓词上只放当前用户的 USER 与 OFFICIAL；不存在、重复、他人 USER 都不进结果。
+为了保持已有 Session 数组稳定，自有 id 始终先于官方 id。无选择仍读取一次 own 集，因此数据库故障继续
+透传，不能伪装成合法空选择；生产 chat 自己已有真正空选择的零查询 fast path。
+
+**检索仍是 pgvector cosine HNSW 友好的形状：** `ORDER BY c.embedding <=> $1::vector` 原样保留，
+只检索选择的 Chunk 且 joined Document 必须是 indexed，SQL 值全部走占位参数。新增的防线发生在 SQL 前：
+向量必须正好 1024 个有限坐标且不能全零；topK 必须是正安全整数。没有把上限硬写成 50 —— chat 的
+`KB_TOPK` 接受任意正整数，私自设 50 会让合法的 51 在 best-effort catch 里静默失去全部 KB 上下文。
+原始 cosine score 合法范围按数学事实记录为 **[-1, 1]**，不再用只含正向共线向量的 fixture 误称 [0, 1]。
+
+**修掉两处可复现缺陷：**
+
+1. `filterRelevantChunks` 原来先 push 再检查全局上限，所以 `maxChunks=0` 仍返回第一条；现在进入循环先判容量，
+   非正全局或单文档容量都返回空。
+2. `deps.ts` 的整数环境变量原来直接 `parseInt`：`KB_CHUNK_TOKENS=abc` 会把窗口变成 NaN，所有非空文档
+   得到零块并被永久标记失败；URL 的 maxBytes=NaN 还会关闭大小限制。现在非正、NaN、非安全整数回落默认值。
+
+另外登记三条**不在 C5 顺手修**的既有风险：同名不同 Document 因公共 citation 没有 documentId，会共享配额
+并折叠角标；chat 的三秒 `Promise.race` 不会取消正在 PostgreSQL 中执行的查询；全局 HNSW 叠加 KB/status
+过滤，在大量更近的未选择行下可能召回不足。后两项要动 chat/事务/GUC 或部署 pgvector 版本，第一项要改
+SQL → SSE → 前端契约，全部跨批。
+
+**测试从 19 条改成 44 条（本批净增 25，全仓 2,183 → 2,208 passed，23 skipped 不变），一条行为覆盖没删。**
+旧的“多 KB”用例第二个库没有 chunk 且只断言 `length >= 0`，topK 只断言 `<=`，overlap 只检查一个字符
+可能出现 —— 三条逻辑全坏也能绿。新版用窄 fake 锁权限谓词、集合与 own-before-official；精确锁查询门控、
+阈值等号、两层容量、顺序/对象身份、citation 首见；SQL fake 锁占位参数与零查询拒绝；分块按窗口、重叠、
+步长与 UTF-16 边界精确断言。真实 pgvector 套件用 non-collinear 1024 维向量验证 1/0/-1 排序、topK、
+indexed-only 与多 KB 隔离；fixture 全用 randomUUID 且只删自己造的行。
+
+验证：C5 + chat 专项 **60 passed / 0 failed**；四条常规闸门全过（typecheck 8/8、build 2/2、
+test 7/7、k8s:validate）；强制测试 7/7 workspace、0 cached、**2,208 passed / 0 failed / 23 skipped**，
+基线通过。post-commit Biome 按 `origin/main` 检查 377 个文件通过，C5 commit 的 `diff --check` 通过。
+
+**剩下 121 行地板逐行分类：** 空行 37、纯括号/闭合符 18、import 5、块注释分隔符 6、其余 55。
+其余集中在公开类型/函数签名、`ChunkOpts`/`RetrievedChunk` 字段、SQL 的 KB/status 条件与 cosine ORDER BY、
+调用者固定的 `"indexed"` 和测试 import。没有上游注释正文或自有算法表达；动这些只能改公共契约、索引查询
+形状或做本文件禁止的改名美化。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -752,6 +802,7 @@ memory-store.ts 101 行集中在数据库列名、`$queryRawUnsafe` 签名、`Me
 | 批次 C2（`agent/` 工具循环） | `4ea475b` | **28,867** | 6,669 |
 | 批次 C3（`chat/` 对话主链） | `e858bd2` | **27,817** | 6,669 |
 | 批次 C4（`memory/` 长期记忆） | `492b90c` + `6fff0dd` | **26,271** | 6,669 |
+| 批次 C5（`kb/` 检索） | `8626db1` | **25,734** | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669 + 各文件地板**（lockfile + Markdown/JSX 语法行等） | 6,669 |
 
