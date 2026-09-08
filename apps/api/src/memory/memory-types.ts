@@ -45,47 +45,57 @@ export function normalizeMemoryType(value: unknown): MemoryType {
 }
 
 export function clampImportance(value: unknown): number {
-  const numeric = typeof value === "number" && Number.isFinite(value) ? value : 50;
-  return Math.max(1, Math.min(100, Math.round(numeric)));
+  const finite = typeof value === "number" && Number.isFinite(value) ? value : 50;
+  const rounded = Math.round(finite);
+  if (rounded < 1) return 1;
+  if (rounded > 100) return 100;
+  return rounded;
 }
 
 export function normalizeTags(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
 
-  const seen = new Set<string>();
-  const tags: string[] = [];
+  const accepted: string[] = [];
+  const keys = new Set<string>();
   for (const item of value) {
     if (typeof item !== "string") continue;
-    const tag = clip(item.normalize("NFKC").trim(), 20);
-    if (!tag || seen.has(tag)) continue;
-    seen.add(tag);
-    tags.push(tag);
-    if (tags.length === 8) break;
+    const normalized = clip(item.normalize("NFKC").trim(), 20);
+    if (!normalized || keys.has(normalized)) continue;
+    keys.add(normalized);
+    accepted.push(normalized);
+    if (accepted.length === 8) break;
   }
-  return tags;
+  return accepted;
 }
 
 export function buildMemoryTitle(text: string, title?: string): string {
   const supplied = title?.normalize("NFKC").trim();
   if (supplied) return clip(supplied, 40);
-  const compact = text.normalize("NFKC").replace(/\s+/g, " ").trim();
+  const compact = text.normalize("NFKC").trim().split(/\s/).filter(Boolean).join(" ");
   return clip(compact, 24) || "未命名记忆";
+}
+
+function normalizedText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const result = value.normalize("NFKC").trim();
+  return result || null;
 }
 
 /** ADD 的缺省值在这里定；UPDATE 必须先与旧记录合并，不能拿这些缺省值覆盖旧字段。 */
 export function sanitizeMemoryShape(value: unknown): MemoryShape | null {
   const input = objectInput(value);
   if (!input) return null;
-  const text = typeof input.text === "string" ? input.text.normalize("NFKC").trim() : "";
-  if (!text) return null;
-
-  return {
-    title: buildMemoryTitle(text, typeof input.title === "string" ? input.title : undefined),
+  const text = normalizedText(input.text);
+  if (text === null) return null;
+  const title = typeof input.title === "string" ? input.title : undefined;
+  const shape: MemoryShape = {
+    title: buildMemoryTitle(text, title),
     text: clip(text, 2000),
     type: normalizeMemoryType(input.type),
     importance: clampImportance(input.importance),
     tags: normalizeTags(input.tags),
   };
+  return shape;
 }
 
 /**

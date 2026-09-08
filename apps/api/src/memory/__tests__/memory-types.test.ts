@@ -60,6 +60,18 @@ describe("memory-types", () => {
     expect(memoryTextLength(tags[0])).toBe(20);
   });
 
+  it("收满八个标签后不再读取后续输入", () => {
+    const tags: unknown[] = ["一", "二", "三", "四", "五", "六", "七", "八"];
+    Object.defineProperty(tags, 8, {
+      get() {
+        throw new Error("不该读取第九项");
+      },
+    });
+    tags.length = 9;
+
+    expect(normalizeTags(tags)).toEqual(["一", "二", "三", "四", "五", "六", "七", "八"]);
+  });
+
   it("标题和正文按码点截断，不制造半个 emoji", () => {
     const text = `${"a".repeat(1999)}😀尾`;
     const shape = sanitizeMemoryShape({ title: `${"题".repeat(39)}😀尾`, text });

@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { extractMemoryActions, extractFacts } from "../fact-extractor.js";
+import { describe, expect, it, vi } from "vitest";
+import { extractFacts, extractMemoryActions } from "../fact-extractor.js";
 
-function fakeClient(text: string, stopReason: string | null = "end_turn") {
+function modelReply(text: string, stopReason: string | null = "end_turn") {
   return {
     messages: {
       create: vi.fn(async () => ({
@@ -12,134 +12,111 @@ function fakeClient(text: string, stopReason: string | null = "end_turn") {
   } as never;
 }
 
-describe("fact-extractor", () => {
-  it("解析结构化记忆动作", async () => {
+const addJson = (text: string, extras = "") =>
+  `[{"event":"ADD","text":${JSON.stringify(text)}${extras}}]`;
+
+describe("long-term memory action extraction", () => {
+  it("keeps all valid fields from a structured ADD", async () => {
     const actions = await extractMemoryActions(
-      fakeClient(
-        '[{"event":"ADD","title":"OpenClaw","text":"用户正在做 OpenClaw 项目","type":"CORE","importance":90,"tags":["项目"]}]',
-      ),
-      "m",
-      "我在做 OpenClaw",
-      "好的",
+      modelReply(addJson("用户长期维护 Atlas", ',"title":"Atlas","type":"CORE","importance":90,"tags":["产品"]')),
+      "extractor-model",
+      "Atlas 会长期维护",
+      "收到",
       [],
     );
-    expect(actions).toEqual([
-      {
-        event: "ADD",
-        title: "OpenClaw",
-        text: "用户正在做 OpenClaw 项目",
-        type: "CORE",
-        importance: 90,
-        tags: ["项目"],
-      },
-    ]);
+    expect(actions).toEqual([{
+      event: "ADD",
+      title: "Atlas",
+      text: "用户长期维护 Atlas",
+      type: "CORE",
+      importance: 90,
+      tags: ["产品"],
+    }]);
   });
 
-  it("兼容旧字符串数组为 ADD 动作", async () => {
+  it("turns the legacy string-array response into ADD facts", async () => {
     const facts = await extractFacts(
-      fakeClient('["用户喜欢 TS"]'),
-      "m",
-      "我喜欢 TS",
-      "好的",
+      modelReply('["用户偏好 Rust"]'),
+      "extractor-model",
+      "以后用 Rust",
+      "收到",
     );
-    expect(facts).toEqual(["用户喜欢 TS"]);
+    expect(facts).toEqual(["用户偏好 Rust"]);
   });
 
-  it("extractFacts 只保留 ADD 文本", async () => {
-    const facts = await extractFacts(
-      fakeClient(
-        '[{"event":"ADD","text":"用户在维护 OpenClaw"},{"event":"UPDATE","id":"m1","text":"用户在维护 Memory Galaxy"},{"event":"DELETE","id":"m2"},{"event":"NONE"}]',
-      ),
-      "m",
-      "我在维护 OpenClaw",
-      "好的",
-    );
-    expect(facts).toEqual(["用户在维护 OpenClaw"]);
-  });
-
-  it("忽略非法 type 但保留有效 ADD 动作", async () => {
-    const actions = await extractMemoryActions(
-      fakeClient(
-        '[{"event":"ADD","text":"用户在维护记忆系统","type":"INVALID","importance":70}]',
-      ),
-      "m",
-      "我在维护记忆系统",
-      "好的",
-      [],
-    );
-    expect(actions).toEqual([
-      {
-        event: "ADD",
-        text: "用户在维护记忆系统",
-        importance: 70,
-      },
+  it("extractFacts projects ADD entries and ignores every other action", async () => {
+    const response = JSON.stringify([
+      { event: "UPDATE", id: "known", text: "更新" },
+      { event: "ADD", text: "用户持续开发桌面应用" },
+      { event: "DELETE", id: "old" },
+      { event: "NONE" },
     ]);
+    await expect(
+      extractFacts(modelReply(response), "extractor-model", "本轮", "收到"),
+    ).resolves.toEqual(["用户持续开发桌面应用"]);
   });
 
-  it("平衡扫描器允许括号文字和字符串内的方括号", async () => {
-    const actions = await extractMemoryActions(
-      fakeClient('说明 [不是 JSON]；结果是 [{"event":"ADD","text":"用户喜欢 [TypeScript]"}]。'),
-      "m",
-      "x",
-      "y",
-      [],
-    );
-    expect(actions).toEqual([{ event: "ADD", text: "用户喜欢 [TypeScript]" }]);
+  it("drops an unknown type without dropping the otherwise valid action", async () => {
+    await expect(
+      extractMemoryActions(
+        modelReply(addJson("用户长期研究检索系统", ',"type":"UNKNOWN","importance":66')),
+        "extractor-model",
+        "本轮",
+        "收到",
+        [],
+      ),
+    ).resolves.toEqual([{ event: "ADD", text: "用户长期研究检索系统", importance: 66 }]);
   });
 
-  it("两个有效数组有歧义，拒绝执行任何动作", async () => {
-    const failure = vi.fn();
-    const actions = await extractMemoryActions(
-      fakeClient('[{"event":"ADD","text":"用户喜欢 TS"}] [{"event":"DELETE","id":"m1"}]'),
-      "m",
-      "x",
-      "y",
-      [{ id: "m1", text: "old" }],
-      failure,
-    );
-    expect(actions).toEqual([]);
-    expect(failure).toHaveBeenCalledWith("framing");
+  it("finds one balanced array around prose and brackets inside strings", async () => {
+    const response = `note [not-json] ${addJson("用户偏好 [TypeScript]")}`;
+    await expect(
+      extractMemoryActions(modelReply(response), "extractor-model", "x", "y", []),
+    ).resolves.toEqual([{ event: "ADD", text: "用户偏好 [TypeScript]" }]);
   });
 
-  it("UPDATE / DELETE 只能引用实际展示给模型的 id", async () => {
-    const actions = await extractMemoryActions(
-      fakeClient('[{"event":"UPDATE","id":"m1","text":"更新"},{"event":"DELETE","id":"missing"}]'),
-      "m",
-      "x",
-      "y",
-      [{ id: "m1", text: "old" }],
-    );
-    expect(actions).toEqual([{ event: "UPDATE", id: "m1", text: "更新" }]);
+  it("rejects two parseable arrays because choosing either would be arbitrary", async () => {
+    const diagnostic = vi.fn();
+    const response = `${addJson("用户偏好简洁回答")} [{"event":"DELETE","id":"m1"}]`;
+    await expect(
+      extractMemoryActions(modelReply(response), "extractor-model", "x", "y", [{ id: "m1", text: "old" }], diagnostic),
+    ).resolves.toEqual([]);
+    expect(diagnostic).toHaveBeenCalledWith("framing");
   });
 
-  it("截断或拒答的内容看起来像 JSON 也不执行", async () => {
+  it("allows UPDATE and DELETE only for ids included in the visible catalog", async () => {
+    const response = JSON.stringify([
+      { event: "UPDATE", id: "visible", text: "新版事实" },
+      { event: "DELETE", id: "invented" },
+    ]);
+    await expect(
+      extractMemoryActions(modelReply(response), "extractor-model", "x", "y", [{ id: "visible", text: "旧版事实" }]),
+    ).resolves.toEqual([{ event: "UPDATE", id: "visible", text: "新版事实" }]);
+  });
+
+  it("does not apply content cut off by token limits or provider refusal", async () => {
     for (const reason of ["max_tokens", "refusal"]) {
-      const failure = vi.fn();
+      const diagnostic = vi.fn();
       await expect(
-        extractMemoryActions(
-          fakeClient('[{"event":"ADD","text":"用户喜欢 TS"}]', reason),
-          "m",
-          "x",
-          "y",
-          [],
-          failure,
-        ),
+        extractMemoryActions(modelReply(addJson("用户偏好简洁回答"), reason), "extractor-model", "x", "y", [], diagnostic),
       ).resolves.toEqual([]);
-      expect(failure).toHaveBeenCalledWith("stop");
+      expect(diagnostic).toHaveBeenCalledWith("stop");
     }
   });
 
-  it("请求失败仍降级为空，并只报一个无内容原因", async () => {
-    const failure = vi.fn();
-    const client = { messages: { create: vi.fn().mockRejectedValue(new Error("secret body")) } } as never;
-    await expect(extractMemoryActions(client, "m", "x", "y", [], failure)).resolves.toEqual([]);
-    expect(failure).toHaveBeenCalledOnce();
-    expect(failure).toHaveBeenCalledWith("request");
+  it("turns request failures into one content-free diagnostic", async () => {
+    const diagnostic = vi.fn();
+    const client = { messages: { create: vi.fn().mockRejectedValue(new Error("provider body")) } } as never;
+    await expect(
+      extractMemoryActions(client, "extractor-model", "x", "y", [], diagnostic),
+    ).resolves.toEqual([]);
+    expect(diagnostic).toHaveBeenCalledOnce();
+    expect(diagnostic).toHaveBeenCalledWith("request");
   });
 
-  it("非 JSON 返回空数组", async () => {
+  it("returns no actions when the response has no JSON array", async () => {
     await expect(
-      extractMemoryActions(fakeClient("抱歉"), "m", "x", "y", []),
+      extractMemoryActions(modelReply("没有需要记录的内容"), "extractor-model", "x", "y", []),
     ).resolves.toEqual([]);
   });
 });

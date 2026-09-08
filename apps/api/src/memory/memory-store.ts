@@ -14,7 +14,7 @@ const MAX_QUERY_RESULTS = 50;
 
 type MemoryDb = Pick<Prisma.TransactionClient, "$executeRawUnsafe" | "$queryRawUnsafe">;
 
-type MemoryRow = {
+type StoredMemory = {
   id: string;
   title: string;
   text: string;
@@ -26,7 +26,8 @@ type MemoryRow = {
   usedCount: number;
 };
 
-type QueryMemoryRow = MemoryRow & { dist: number };
+type MemoryRow = StoredMemory;
+type MemorySearchRow = StoredMemory & { dist: number };
 
 export interface MemoryHit extends MemoryRecord {
   score: number;
@@ -112,7 +113,7 @@ async function queryFrom(
   vector: readonly number[],
   topK = 5,
 ): Promise<MemoryHit[]> {
-  const rows = await db.$queryRawUnsafe<QueryMemoryRow[]>(
+  const rows = await db.$queryRawUnsafe<MemorySearchRow[]>(
     `SELECT ${SELECT_COLUMNS}, (embedding <=> $1::vector) AS dist
      FROM "Memory"
      WHERE "userId" = $2
