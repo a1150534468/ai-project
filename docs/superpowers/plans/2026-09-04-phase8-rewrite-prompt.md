@@ -106,7 +106,7 @@
 | **C1** | `apps/api/src/agents/` 的 12 个 `.ts` | **1,181** | ✅ `18de8b2`，剩 658 行地板。`presets.md` 归批次 B，不混提 |
 | **C2** | `apps/api/src/agent/` | **907** | ✅ `4ea475b`，剩 218 行地板；`runTurn` 工具循环 |
 | **C3** | `apps/api/src/chat/` | **1,279** | ✅ `e858bd2`，剩 229 行地板；对话主链、会话锁与附件边界 |
-| C4 | `apps/api/src/memory/` | 2,134 | 与 A4 的前端配对做更省 |
+| **C4** | `apps/api/src/memory/` | **2,134** | ✅ `492b90c` + `6fff0dd`，剩 588 行地板；长期记忆抽取、事务与路由 |
 | C5 | `apps/api/src/kb/` 检索 | 658 | 知识库最大一块，拆三批做 |
 | C6 | `apps/api/src/kb/` 入库 | 2,183 | |
 | C7 | `apps/api/src/kb/` routes + service + 测试 | 1,357 | |
@@ -305,6 +305,7 @@ A4 的地板、`pages/Knowledge.tsx` 20 是 A5 的地板，两个文件本批一
 | **C1** | `apps/api/src/agents/` 的 12 个 `.ts` 全部重写，顺带修 4 个真 bug | ✅ `18de8b2` |
 | **C2** | `apps/api/src/agent/` 三个文件全部重写，修正 reset 后正文丢失 | ✅ `4ea475b` |
 | **C3** | `apps/api/src/chat/` 对话主链全部重写，补齐锁续租、历史顺序与附件边界 | ✅ `e858bd2` |
+| **C4** | `apps/api/src/memory/` 长期记忆后端全部重写，补齐事务、CAS 与向量边界 | ✅ `492b90c` + `6fff0dd` |
 
 `components/ThemeToggle.tsx` 那处手写的 `role="switch"` **刻意不动**：它的行盒版式在 `index.css` 里，
 偏好口径也不一样（它存的是具体的 light/dark，`ui/Switch` 那处存的是「跟随系统」），
@@ -621,6 +622,57 @@ image source 结构；sessions.test.ts 的 57 行则以空行与 `});` 为主。
 上的空标题、稳定排序、50 条上限、权限和级联删除。四条常规闸门全过；强制测试 7/7 workspace、
 0 cached、**2,174 passed / 0 failed / 23 skipped**。changed-files lint 按 CI 完整参数检查 361 个文件通过。
 
+### 批次 C4 实测与取舍（2026-09-08 收尾）
+
+**实测：27,817 → 26,271（净消 1,546 行）。** 本批 13 个文件的上游行 **2,134 → 588**，
+`2,134 − 588 = 1,546`，与全仓净消完全一致；`pnpm-lock.yaml` 仍为 6,669。代码主体在
+`492b90c`，收尾复核中发现 6 个未提交的同批重写文件，完成类型拆分、补一条标签边界回归后以
+`6fff0dd` 收进 C4；没有混入 C5 文件。
+
+**这批不是给 CRUD 换皮，而是把记忆写入改成可证明的一致性事务：** 抽取器只允许操作它实际看到的
+前 30 条记忆；UPDATE/DELETE 带旧快照做 CAS；职业事实替换在同一个 PostgreSQL transaction-scoped
+advisory lock 内完成，锁内重新查重，插入、更新、删除任一步失败都回滚。PATCH 不再先读全表、
+异步算向量再伪造一个成功对象，而是按 id 读取、按五个公开字段做 CAS，并从 `UPDATE RETURNING`
+返回数据库真实行；正文变化时 embedding 失败就整次拒绝，避免新正文继续挂着旧向量。
+
+**修掉六组数据一致性和边界问题：**
+
+1. 模型 UPDATE 只给 text 时，旧代码会把没给的 title/type/importance/tags 重置成缺省值；现在先与
+   模型看过的快照合并，缺失字段就是保持。
+2. UPDATE id 幻觉、越权或并发删除导致 SQL 更新 0 行时，旧代码仍会删除同类职业事实；现在 CAS
+   成功后才允许清理兄弟行。DELETE 同样带快照，迟到动作不会删掉用户刚改过的新版。
+3. 职业替换原来是多条自动提交语句：先删旧再插新，插入失败就永久丢旧事实；并发 addTurn 还能
+   同时通过查重各插一条。现在按用户串行化，锁内复查，事务失败全回滚。
+4. 搜索的三秒期限原来没有完整覆盖 embedding 与数据库查询；现在两段共用一个总期限，超时会 abort
+   fetch，计时器在 finally 清掉，预计算向量也不能绕过数据库阶段期限。
+5. embedding 在配置、provider 返回和 SQL 边界三层固定为真实的 1024 维，拒绝 NaN/Infinity/字符串
+   坐标与非法 topK；字符上限按 Unicode code point 计算，不再把边界上的 emoji 劈成半个代理项。
+6. 路由现在确认 token 对应用户仍存在且未封禁；重复 `q` 参数返回 400，不会在 try 外对数组调用 trim
+   变成 500。PATCH 的 404（记录消失）与 409（并发修改）不再撒谎。
+
+**抽取结果不再用贪婪正则猜 JSON。** 新扫描器识别 JSON 字符串与反斜杠转义，只接受唯一一个平衡数组；
+两个合法数组算歧义并拒绝，`max_tokens` / refusal 的半截内容也不落库。失败日志只记 request / stop /
+framing / schema 四种无内容原因，不把用户对话或 provider body 打进日志。每轮仍最多六个动作，旧字符串
+数组仍兼容为 ADD，UPDATE/DELETE id 仍受可见清单约束。
+
+**剩下 588 行地板逐行分类：** 空行 116，纯括号、闭合符、分隔符 97，依赖 import 23，其余 352 行是
+公开函数/记录字段、Prisma/Fastify/Anthropic 调用形状、SQL 列名与参数占位、pgvector 的 1024 维契约、
+HTTP 路径/状态码/用户可见错误字符串，以及对应固定断言。**没有一行注释正文归属上游。** 最大的
+memory-store.ts 101 行集中在数据库列名、`$queryRawUnsafe` 签名、`MemoryRecord` 字段映射和 SQL 形状；
+动它们只能改 API/数据库契约或做本文件禁止的改名换结构。
+
+**用例 40 passed / 1 skipped → 49 passed / 1 skipped，全仓 2,174 → 2,183 passed，23 skipped 不变。**
+一条行为覆盖没删：`memory-routes-settings.test.ts` 的两个场景并入主路由套件后才删文件；pgvector 测试
+移除全表 TRUNCATE，没 DATABASE_URL 时在创建 Prisma 前跳过，有库时只删自身 randomUUID 前缀用户，
+并新增真实事务回滚。收尾复核另补「标签收满八项后不再读取第九项」：一版 `filter().reduce()` 会让
+最多 30 MiB 的认证 PATCH 在已有八个有效标签后仍遍历并复制数百万项，现恢复单循环提前终止。
+
+验证：四条常规闸门全过（typecheck 8/8、build 2/2、test 7/7、k8s:validate）；最终强制测试
+7/7 workspace、0 cached、**2,183 passed / 0 failed / 23 skipped**，基线通过。Biome 对本批 7 个最终
+改动文件与此前 6 个文件复核均通过；`git diff --check HEAD~1..HEAD` 通过。全分支
+`git diff --check origin/main...HEAD` 仍会报 16 个**此前批次**留下的 EOF 空行，其中包括本方案明令不动的
+历史迁移；本批没有新增任何一条，所以没有跨批顺手改。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -699,6 +751,7 @@ image source 结构；sessions.test.ts 的 57 行则以空行与 `});` 为主。
 | 批次 C1（`agents/` 的 12 个 `.ts`） | `18de8b2` | **29,556** | 6,669 |
 | 批次 C2（`agent/` 工具循环） | `4ea475b` | **28,867** | 6,669 |
 | 批次 C3（`chat/` 对话主链） | `e858bd2` | **27,817** | 6,669 |
+| 批次 C4（`memory/` 长期记忆） | `492b90c` + `6fff0dd` | **26,271** | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669 + 各文件地板**（lockfile + Markdown/JSX 语法行等） | 6,669 |
 
