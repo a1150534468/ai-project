@@ -143,3 +143,50 @@ suite("KB indexer", () => {
     }
   });
 });
+
+describe("KB indexer lease heartbeat", () => {
+  it("检测到租约丢失后停止后续 embedding 并清理心跳", async () => {
+    vi.useFakeTimers();
+    vi.stubEnv("KB_EMBED_CONCURRENCY", "1");
+    try {
+      let releaseFirst!: (value: { vector: number[]; tokens: number }) => void;
+      const firstEmbedding = new Promise<{ vector: number[]; tokens: number }>((resolve) => {
+        releaseFirst = resolve;
+      });
+      const embed = vi.fn()
+        .mockImplementationOnce(() => firstEmbedding)
+        .mockResolvedValue({ vector: vector(), tokens: 1 });
+      const updateMany = vi.fn().mockResolvedValue({ count: 0 });
+      const mockPrisma = {
+        $executeRaw: vi.fn().mockResolvedValue(1),
+        document: {
+          findUnique: vi.fn().mockResolvedValue({
+            id: "lost-lease",
+            kbId: "kb",
+            sourceType: "TEXT",
+            sourceUri: "source",
+          }),
+          updateMany,
+        },
+      } as unknown as IndexDeps["prisma"];
+      const work = indexOnce(fakeDeps({
+        prisma: mockPrisma,
+        chunk: vi.fn().mockReturnValue(["first", "second"]),
+        embed,
+      }), "lost-lease", { leaseMs: 30 });
+
+      await vi.advanceTimersByTimeAsync(0);
+      expect(embed).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(updateMany).toHaveBeenCalledOnce();
+      releaseFirst({ vector: vector(), tokens: 1 });
+      await work;
+
+      expect(embed).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+      vi.useRealTimers();
+    }
+  });
+});

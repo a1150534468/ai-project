@@ -25,6 +25,11 @@ describe("assertSafeUrl", () => {
     "http://[fc00::1]/",
     "http://224.0.0.1/",
     "http://0.0.0.1/",
+    "http://192.0.0.1/",
+    "http://198.18.0.1/",
+    "http://240.0.0.1/",
+    "http://[2001:db8::1]/",
+    "http://[2001::1]/",
   ])("拒绝危险字面地址 %s", async (url) => {
     await expect(assertSafeUrl(url, lookup(PUBLIC_V4))).rejects.toBeInstanceOf(SsrfError);
   });
@@ -99,6 +104,23 @@ describe("fetchUrl", () => {
       ...base,
       fetchFn: (async () => response(302)) as never,
     })).rejects.toThrow("Redirect without Location");
+  });
+
+  it("重定向目标被拒绝时也取消当前响应体", async () => {
+    let cancels = 0;
+    const body = new ReadableStream({ cancel() { cancels += 1; } });
+    await expect(fetchUrl("https://example.com/", {
+      ...base,
+      lookupFn: vi.fn(async (hostname: string) => [{
+        address: hostname === "internal.local" ? "10.0.0.1" : PUBLIC_V4,
+        family: 4,
+      }]),
+      fetchFn: (async () => new Response(body, {
+        status: 302,
+        headers: { location: "http://internal.local/secret" },
+      })) as never,
+    })).rejects.toBeInstanceOf(SsrfError);
+    expect(cancels).toBe(1);
   });
 
   it("只跟随标准 redirect status，严格执行次数上限", async () => {

@@ -23,15 +23,8 @@ export interface FetchResult {
 function blockedAddress(ip: string): boolean {
   try {
     const address = ipaddr.process(ip);
-    const range = address.range();
-    if (["private", "loopback", "linkLocal", "uniqueLocal", "unspecified", "broadcast", "carrierGradeNat", "multicast"]
-      .includes(range)) return true;
-    if (ip === "169.254.169.254" || ip === "169.254.169.253") return true;
-    if (address.kind() === "ipv4") {
-      const [first, second, third] = address.toString().split(".");
-      return first === "0" || (first === "255" && second === "255" && third === "255");
-    }
-    return false;
+    // SSRF 边界只放行公网单播；保留、文档、隧道和基准网段都不需要由服务端访问。
+    return address.range() !== "unicast";
   } catch {
     return true;
   }
@@ -150,6 +143,7 @@ export async function fetchUrl(
         } as UndiciRequestInit), controller.signal, timeoutMs);
 
         if (REDIRECT_STATUSES.has(response.status)) {
+          await cancelBody(response, controller.signal, timeoutMs);
           const location = response.headers.get("location");
           if (!location) throw new Error(`Redirect without Location header: ${response.status}`);
           if (redirects >= maxRedirects) throw new Error(`Too many redirects (max ${maxRedirects})`);
@@ -161,7 +155,6 @@ export async function fetchUrl(
             if (cause instanceof SsrfError) throw new SsrfError(`Redirect target blocked: ${cause.message}`, { cause });
             throw cause;
           }
-          await cancelBody(response, controller.signal, timeoutMs);
           current = next;
           continue;
         }
@@ -180,7 +173,7 @@ export async function fetchUrl(
             if (done) break;
             total += value.byteLength;
             if (total > maxBytes) {
-              await reader.cancel().catch(() => undefined);
+              await withDeadline(reader.cancel(), controller.signal, timeoutMs).catch(() => undefined);
               throw new Error(`Response exceeds max size ${maxBytes} bytes`);
             }
             chunks.push(Buffer.from(value));
@@ -190,7 +183,7 @@ export async function fetchUrl(
         }
         return { buf: Buffer.concat(chunks), contentType: response.headers.get("content-type") ?? "", finalUrl: current.href };
       } finally {
-        await dispatcher.destroy().catch(() => undefined);
+        await withDeadline(dispatcher.destroy(), controller.signal, timeoutMs).catch(() => undefined);
       }
     }
   } finally {

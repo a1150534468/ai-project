@@ -218,7 +218,10 @@ export async function indexOnce(deps: IndexDeps, docId: string, options: IndexOn
     const embeds: Array<{ vector: number[]; tokens: number }> = [];
     let totalTokens = 0;
     for (let start = 0; start < chunks.length; start += concurrency) {
-      if (!heartbeat.isOwned()) return;
+      if (!heartbeat.isOwned()) {
+        await heartbeat.stop();
+        return;
+      }
       const batch = chunks.slice(start, start + concurrency);
       const results = await Promise.all(batch.map((chunk) => deps.embed(chunk)));
       embeds.push(...results);
