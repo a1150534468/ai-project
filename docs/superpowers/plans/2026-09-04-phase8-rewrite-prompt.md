@@ -108,7 +108,7 @@
 | **C3** | `apps/api/src/chat/` | **1,279** | ✅ `e858bd2`，剩 229 行地板；对话主链、会话锁与附件边界 |
 | **C4** | `apps/api/src/memory/` | **2,134** | ✅ `492b90c` + `6fff0dd`，剩 588 行地板；长期记忆抽取、事务与路由 |
 | **C5** | `apps/api/src/kb/` 检索 | **658** | ✅ `8626db1`，剩 121 行地板；权限集合、向量检索、分块与组合根 |
-| C6 | `apps/api/src/kb/` 入库 | 2,183 | |
+| **C6** | `apps/api/src/kb/` 入库 | **2,183** | ✅ `0e60de7` + `29d8ba4` + `b534c39` + `9c36e50`，剩 287 行地板；摄取、解析、SSRF、索引租约与 reaper |
 | C7 | `apps/api/src/kb/` routes + service + 测试 | 1,357 | |
 | C8 | `apps/api/src/workflow/article/` | 1,433 | |
 | C9 | `apps/api/src/workflow/image/` + `_shared/` | 915 | |
@@ -723,6 +723,49 @@ test 7/7、k8s:validate）；强制测试 7/7 workspace、0 cached、**2,208 pas
 调用者固定的 `"indexed"` 和测试 import。没有上游注释正文或自有算法表达；动这些只能改公共契约、索引查询
 形状或做本文件禁止的改名美化。
 
+### 批次 C6 实测与取舍（2026-09-11 收尾）
+
+**实测：25,734 → 23,838（净消 1,896 行）。** C6 十个文件的计划基线 **2,183 → 287**：
+ingest.ts 235→57、ingest.test.ts 32→8、parse.ts 179→21、parse.test.ts 109→23、
+url-fetch.ts 288→53、url-fetch.test.ts 328→21、indexer.ts 219→41、indexer.test.ts 376→26、
+reaper.ts 93→28、reaper.test.ts 324→9。`2,183 − 287 = 1,896`，与全仓净消完全一致；
+lockfile 仍为 6,669。
+
+这批因长会话和连接中断，生产代码、URL 测试、reaper 测试分别落在 `0e60de7`、`29d8ba4`、
+`b534c39`，最终审查修复落在 `9c36e50`。没有为了形式上的单 commit 去 rebase 或改写历史；回退整个 C6
+需按相反顺序回退这四个提交。最后一轮审查发现并补掉两处遗漏：索引器在租约已经丢失且仍有下一批
+embedding 时提前返回却不清心跳定时器；URL 抓取只拒绝部分特殊地址，且重定向目标被拒绝时未显式取消
+当前响应体。现在 SSRF 边界只允许公网单播，保留、文档、隧道、基准、私网、链路本地、组播等地址全部拒绝；
+响应体取消和 dispatcher 销毁也受总期限约束。
+
+**摄取与解析边界：** FILE/TEXT 写入 S3 后若建 Document 失败，会只补删本次 UUID key；文件名统一取
+basename、NFC 归一并清理控制字符。扩展名与已知 MIME 建立双向矩阵，畸形 URL 稳定返回 400，非法 UTF-8、
+扩展名/MIME 冲突和不支持格式成为永久失败。XLSX 保留稀疏列坐标和日期，PPTX 优先按 presentation
+relationship 排序，关系缺失才按数字文件名回退。
+
+**SSRF 与索引状态机：** 每次请求及每一跳重定向都重新解析 DNS，并把本跳全部已验证地址钉进独立
+undici dispatcher，关闭校验后 fetch 的 DNS rebinding 窗口；相对重定向、标准 redirect status、总字节数和
+覆盖 DNS/fetch/body 的总期限都有精确回归。每次索引用 `workerId:UUID` fencing token 抢占，租约心跳续期；
+旧 worker 发布前必须在事务中按 token 锁住 Document，删除旧 Chunk、插入新 Chunk 与 indexed 元数据同事务
+提交。确定性解析/向量/4xx 失败直接终态化，瞬时错误回 pending；最终尝试崩溃留下的过期 indexing 由 reaper
+显式置 failed，不再永久卡在候选集合外。reaper 周期不重叠，stop 后在文档边界收手。
+
+**C6 专项最终 62 passed / 0 failed。** C5 快照的这五份测试是 68 条，最终是 62 条：indexer 11→8、
+ingest 3→10、parse 8→11、reaper 8→6、url-fetch 38→27，净减 6。删减来自把同类字面 IP、三种 claim、
+瞬时失败/耗尽和候选/计数拆分用例合并成表格或单一状态机断言；reaper 的重试分类改由 indexer 专项负责，
+没有删除对应行为分支。新增覆盖包括 S3 补偿、严格 UTF-8、MIME 冲突、PPTX 顺序、DNS 地址绑定、总期限、
+响应体/dispatcher 清理、fencing 发布、错维向量、耗尽租约收尸和心跳丢租约清理。
+
+验证：干净 `HEAD` worktree 上 typecheck 8/8、build 2/2、常规 test 7/7、k8s:validate 全过；最终强制测试
+7/7 workspace、0 cached、**2,202 passed / 0 failed / 23 skipped**，基线通过。第一次强制测试有一条 C6
+之外的 `codex-pet-generated-board-recovery.test.ts` 在并发压力下超过 5 秒；该文件单独复跑 705ms 通过，
+随后完全相同、未放宽超时或并发的强制命令全绿。Biome 按 `origin/main` 检查 382 个文件通过，
+`git diff --check 46480e7..HEAD` 通过。
+
+**剩下 287 行地板逐行分类：** 空行 89、纯括号/闭合符/分隔符 106、依赖 import 4、块注释分隔符 2，
+其余 86 行是公开函数/类型字段、Prisma/SQL 状态字段、HTTP/URL 协议、用户可见错误和对应固定断言。
+没有一行上游注释正文；继续降低只能改公共契约、数据库形状或做本文件禁止的改名换结构。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -803,6 +846,7 @@ test 7/7、k8s:validate）；强制测试 7/7 workspace、0 cached、**2,208 pas
 | 批次 C3（`chat/` 对话主链） | `e858bd2` | **27,817** | 6,669 |
 | 批次 C4（`memory/` 长期记忆） | `492b90c` + `6fff0dd` | **26,271** | 6,669 |
 | 批次 C5（`kb/` 检索） | `8626db1` | **25,734** | 6,669 |
+| 批次 C6（`kb/` 入库） | `0e60de7` + `29d8ba4` + `b534c39` + `9c36e50` | **23,838** | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669 + 各文件地板**（lockfile + Markdown/JSX 语法行等） | 6,669 |
 
