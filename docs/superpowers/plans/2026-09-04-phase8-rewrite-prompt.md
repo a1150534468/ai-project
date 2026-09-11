@@ -109,7 +109,7 @@
 | **C4** | `apps/api/src/memory/` | **2,134** | ✅ `492b90c` + `6fff0dd`，剩 588 行地板；长期记忆抽取、事务与路由 |
 | **C5** | `apps/api/src/kb/` 检索 | **658** | ✅ `8626db1`，剩 121 行地板；权限集合、向量检索、分块与组合根 |
 | **C6** | `apps/api/src/kb/` 入库 | **2,183** | ✅ `0e60de7` + `29d8ba4` + `b534c39` + `9c36e50`，剩 287 行地板；摄取、解析、SSRF、索引租约与 reaper |
-| C7 | `apps/api/src/kb/` routes + service + 测试 | 1,357 | |
+| **C7** | `apps/api/src/kb/` routes + service + 测试 | **1,357** | ✅ `b2e72b7`，剩 204 行地板；权限写谓词、删库顺序与窄路由测试 |
 | C8 | `apps/api/src/workflow/article/` | 1,433 | |
 | C9 | `apps/api/src/workflow/image/` + `_shared/` | 915 | |
 | C10 | `apps/api/src/workflow/novel/` | 726 | |
@@ -766,6 +766,47 @@ ingest 3→10、parse 8→11、reaper 8→6、url-fetch 38→27，净减 6。删
 其余 86 行是公开函数/类型字段、Prisma/SQL 状态字段、HTTP/URL 协议、用户可见错误和对应固定断言。
 没有一行上游注释正文；继续降低只能改公共契约、数据库形状或做本文件禁止的改名换结构。
 
+### 批次 C7 实测与取舍（2026-09-11 收尾）
+
+**实测：23,838 → 22,685（净消 1,153 行）。** C7 四个文件的计划基线 **1,357 → 204**：
+routes.ts 220→71、routes.test.ts 614→52、service.ts 173→48、service.test.ts 350→33。
+`1,357 − 204 = 1,153`，与全仓净消完全一致；四文件最终共 831 行，lockfile 仍为 6,669。
+
+**权限不再靠先查后写。** 用户列表的数据库谓词固定为「自己的 USER 或任意 OFFICIAL」，带当前 userId
+但 ownerType 异常的遗留行不会混入。改名在同一事务内用 `updateMany(id + ownerType=USER + userId)` 判定
+属主，零行才报 403；删库同样按条件 `deleteMany`，`userId=null` 只代表管理端删 OFFICIAL，不能误删
+`userId=null` 的其他类型。管理端官方库 CRUD 联动 12 条实测通过。
+
+**删除先保证数据库真相，再清对象。** 整库先提交 KnowledgeBase 删除，由外键级联 Document/Chunk，随后
+尽力清理 `kb/{id}/`；S3 失败不再留下「数据库记录仍在、文件已经没了」的半残状态，也不会把已经提交的
+删除响应伪装成失败。单文档删除也在事务里校验 USER 属主并条件删除 Document，不再手写重复的 Chunk 删除；
+路由拿到已删文档的对象位置后才尽力清 S3。真实 pgvector fixture 验证了两层级联，路由 fake 精确锁住
+database→S3 顺序及 S3 失败仍返回 204。
+
+**路由测试不再启动完整 server。** 裸 Fastify 只注册 multipart 与本文件插件，窄 mock 数据库/service/S3/
+ingest/indexer，因此 C7 专项不再连接 Redis，也不依赖共享数据库中的「第一个用户/官方库」。8 个路由仍由
+插件级 `requireUser` 全覆盖，原状态码和中文错误不变；文档列表与详情共用 10 个公开字段的 select，详情不再
+返回 tokensUsed、lockedBy、lockedAt、attempts 等内部状态。三种 TEXT/URL/FILE 请求适配和后台 best-effort
+索引均有路由级回归，摄取校验与索引算法继续由 C6 专项负责。
+
+**C7 专项 37 → 39 passed / 0 failed。** service 12→10：属主/可读权限和 USER/OFFICIAL 删除改为矩阵式
+断言，合并了逐个重复建用户的用例，同时新增严格列表谓词、空列表零聚合、原子 updateMany、S3 失败和文档
+级联；routes 25→29：8 条未登录路径改为表驱动，新增 Zod、字段投影、删除顺序和后台失败回归。旧路由里
+「文本超长、SSRF、exe 后缀、txt/pdf 各自成功」这些重复穿透真实摄取层的场景不再在路由套件再跑，等价行为
+已由 C6 的 ingest/url-fetch/parse 测试覆盖；路由保留三种来源的适配与 `IngestError` 状态码映射，没有删掉
+行为覆盖。
+
+验证：typecheck 8/8、build 2/2、常规 test 7/7、k8s:validate 全过；常规 test 因根 `.env` 开启
+`codex-pet-runner.integration.test.ts` 的 32 条长图像用例，前两次 120/300 秒只是工具超时，给足时限后
+**2,213 passed / 0 failed / 23 skipped**、约 5 分 10 秒完成。最终强制测试 7/7 workspace、0 cached，
+同样 **2,213 / 0 / 23**，报告防护通过。该工作区总数包含用户另行开发、未纳入 C7 提交的体验账号测试
+9 条（API 6 + Web 3）；C7 自身相对 C6 的 2,202 基线净增 2 条，即提交态对应 2,204。Biome 按
+`origin/main` 检查 382 个文件通过，`git diff --check HEAD^..HEAD` 通过。
+
+**剩下 204 行地板逐行分类：** 空行 57、纯括号/闭合符/分隔符 73、依赖 import/export 8，其余 66。
+其余集中在 Fastify 路径与状态码、中文错误、Prisma 字段/谓词、公开函数签名和对应固定断言；没有上游注释
+正文。继续压低只能改 HTTP/数据库契约、删除必要断言或做禁止的改名换结构。
+
 ### 硬边界（照抄方案，不许放宽）
 
 - **不改写 git history**、不删导入 commit `491de0f`、不 force push。
@@ -847,6 +888,7 @@ ingest 3→10、parse 8→11、reaper 8→6、url-fetch 38→27，净减 6。删
 | 批次 C4（`memory/` 长期记忆） | `492b90c` + `6fff0dd` | **26,271** | 6,669 |
 | 批次 C5（`kb/` 检索） | `8626db1` | **25,734** | 6,669 |
 | 批次 C6（`kb/` 入库） | `0e60de7` + `29d8ba4` + `b534c39` + `9c36e50` | **23,838** | 6,669 |
+| 批次 C7（`kb/` routes + service） | `b2e72b7` | **22,685** | 6,669 |
 | … | | | |
 | 全部完成 | | **6,669 + 各文件地板**（lockfile + Markdown/JSX 语法行等） | 6,669 |
 
