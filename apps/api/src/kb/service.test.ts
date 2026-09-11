@@ -1,351 +1,197 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { getPrisma } from "@ai-assistant/db";
+import type { KnowledgeBase, PrismaClient } from "@prisma/client";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const storage = vi.hoisted(() => ({ deletePrefix: vi.fn() }));
+vi.mock("../storage/s3.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../storage/s3.js")>()),
+  deletePrefix: storage.deletePrefix,
+}));
+
 import {
-  createKb,
-  listKbsForUser,
-  renameKb,
-  deleteKb,
   assertKbOwner,
   assertKbReadable,
+  createKb,
+  deleteKb,
+  deleteKbDocument,
   ForbiddenError,
+  listKbsForUser,
+  renameKb,
 } from "./service.js";
 
-const prisma = getPrisma();
+const databaseReady = Boolean(process.env.DATABASE_URL);
+const prisma = databaseReady ? getPrisma() : null;
+const suite = describe.skipIf(!databaseReady);
+const prefix = `kb-service-${randomUUID()}`;
+const kbIds = new Set<string>();
+let ownerId = "";
+let otherId = "";
+let official: KnowledgeBase;
 
-// Test data collectors for id-scoped cleanup
-let createdUserIds: string[] = [];
-let createdKbIds: string[] = [];
-let createdDocIds: string[] = [];
-
-beforeAll(async () => {
-  // Create test user
-  const testUser = await prisma.user.create({
+async function kb(data: { ownerType?: string; userId?: string | null; name?: string } = {}) {
+  const row = await prisma!.knowledgeBase.create({
     data: {
-      uid: `test-${Date.now()}`,
-      username: `testuser${Date.now()}`,
-      passwordHash: "dummy",
+      ownerType: data.ownerType ?? "USER",
+      userId: data.userId === undefined ? ownerId : data.userId,
+      name: data.name ?? `${prefix}-${randomUUID()}`,
     },
   });
-  createdUserIds.push(testUser.id);
+  kbIds.add(row.id);
+  return row;
+}
 
-  // Create an OFFICIAL knowledge base
-  const officialKb = await prisma.knowledgeBase.create({
+async function document(kbId: string, chunkCount = 0, sourceType = "TEXT") {
+  return prisma!.document.create({
     data: {
-      ownerType: "OFFICIAL",
-      name: "Official KB",
-      description: "Official knowledge base for testing",
+      kbId,
+      name: `${prefix}.txt`,
+      sourceType,
+      sourceUri: sourceType === "URL" ? "https://example.test/doc" : `kb/${kbId}/source`,
+      status: "indexed",
+      chunkCount,
     },
   });
-  createdKbIds.push(officialKb.id);
-});
+}
 
-afterAll(async () => {
-  // Clean up in reverse order of dependencies
-  // Chunks must be deleted before Documents
-  if (createdDocIds.length > 0) {
-    await prisma.chunk.deleteMany({
-      where: { documentId: { in: createdDocIds } },
-    });
-  }
+async function chunk(documentId: string, kbId: string) {
+  const vector = `[${Array(1024).fill(0.01).join(",")}]`;
+  await prisma!.$executeRawUnsafe(
+    `INSERT INTO "Chunk" (id, "documentId", "kbId", ordinal, content, embedding, "createdAt")
+     VALUES ($1, $2, $3, 0, 'fixture', $4::vector, now())`,
+    randomUUID(),
+    documentId,
+    kbId,
+    vector,
+  );
+}
 
-  // Documents must be deleted before KnowledgeBases
-  if (createdDocIds.length > 0) {
-    await prisma.document.deleteMany({
-      where: { id: { in: createdDocIds } },
-    });
-  }
+beforeEach(() => storage.deletePrefix.mockReset().mockResolvedValue(undefined));
 
-  // KnowledgeBases before Users
-  if (createdKbIds.length > 0) {
-    await prisma.knowledgeBase.deleteMany({
-      where: { id: { in: createdKbIds } },
-    });
-  }
-
-  // Users last
-  if (createdUserIds.length > 0) {
-    await prisma.user.deleteMany({
-      where: { id: { in: createdUserIds } },
-    });
-  }
-});
-
-describe("KB Service", () => {
-  let testUserId: string;
-  let officialKbId: string;
-
+suite("KB service", () => {
   beforeAll(async () => {
-    const users = await prisma.user.findMany();
-    testUserId = users[0]!.id;
-
-    const kbs = await prisma.knowledgeBase.findMany({
-      where: { ownerType: "OFFICIAL" },
-    });
-    officialKbId = kbs[0]!.id;
+    const [owner, other] = await Promise.all([
+      prisma!.user.create({ data: { uid: `${prefix}-owner`, username: `${prefix}-owner`, passwordHash: "x" } }),
+      prisma!.user.create({ data: { uid: `${prefix}-other`, username: `${prefix}-other`, passwordHash: "x" } }),
+    ]);
+    ownerId = owner.id;
+    otherId = other.id;
+    official = await kb({ ownerType: "OFFICIAL", userId: null });
   });
 
-  describe("createKb + listKbsForUser", () => {
-    it("创建用户的 KB，listKbsForUser 包含我的 + 官方库", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "My KB",
-        description: "Test knowledge base",
-      });
-      createdKbIds.push(kb.id);
-
-      expect(kb.ownerType).toBe("USER");
-      expect(kb.userId).toBe(testUserId);
-      expect(kb.name).toBe("My KB");
-      expect(kb.description).toBe("Test knowledge base");
-
-      const kbs = await listKbsForUser(prisma, testUserId);
-      const myKbs = kbs.filter((k) => k.ownerType === "USER");
-      const officialKbs = kbs.filter((k) => k.ownerType === "OFFICIAL");
-
-      expect(myKbs.length).toBeGreaterThan(0);
-      expect(myKbs.some((k) => k.id === kb.id)).toBe(true);
-      expect(myKbs.every((k) => k.userId === testUserId)).toBe(true);
-
-      expect(officialKbs.length).toBeGreaterThan(0);
-      expect(officialKbs.every((k) => k.ownerType === "OFFICIAL")).toBe(true);
-    });
-
-    it("listKbsForUser 返回每个库已建立的知识晶格数量", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Lattice KB",
-      });
-      createdKbIds.push(kb.id);
-
-      const doc1 = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "a.md",
-          sourceType: "TEXT",
-          status: "indexed",
-          chunkCount: 3,
-        },
-      });
-      const doc2 = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "b.md",
-          sourceType: "TEXT",
-          status: "indexed",
-          chunkCount: 5,
-        },
-      });
-      createdDocIds.push(doc1.id, doc2.id);
-
-      const kbs = await listKbsForUser(prisma, testUserId);
-      const found = kbs.find((k) => k.id === kb.id);
-
-      expect(found?.latticeCount).toBe(8);
-    });
+  afterAll(async () => {
+    if (!prisma) return;
+    await prisma.knowledgeBase.deleteMany({ where: { id: { in: [...kbIds] } } });
+    await prisma.user.deleteMany({ where: { id: { in: [ownerId, otherId].filter(Boolean) } } });
   });
 
-  describe("renameKb", () => {
-    it("重命名用户的 KB", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Original Name",
-      });
-      createdKbIds.push(kb.id);
-
-      const updated = await renameKb(prisma, kb.id, testUserId, {
-        name: "New Name",
-        description: "New description",
-      });
-
-      expect(updated.name).toBe("New Name");
-      expect(updated.description).toBe("New description");
+  it("createKb 默认建 USER 库，OFFICIAL 强制清空 userId", async () => {
+    const mine = await createKb(prisma!, { userId: ownerId, name: `${prefix}-mine` });
+    const publicKb = await createKb(prisma!, {
+      userId: ownerId,
+      ownerType: "OFFICIAL",
+      name: `${prefix}-public`,
+      description: "official",
     });
-
-    it("非所有人无法重命名", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Owner Only",
-      });
-      createdKbIds.push(kb.id);
-
-      // Create another user
-      const otherUser = await prisma.user.create({
-        data: {
-          uid: `other-${Date.now()}`,
-          username: `other${Date.now()}`,
-          passwordHash: "dummy",
-        },
-      });
-      createdUserIds.push(otherUser.id);
-
-      await expect(
-        renameKb(prisma, kb.id, otherUser.id, { name: "Hacked" })
-      ).rejects.toThrow(ForbiddenError);
-    });
+    kbIds.add(mine.id);
+    kbIds.add(publicKb.id);
+    expect(mine).toMatchObject({ ownerType: "USER", userId: ownerId });
+    expect(publicKb).toMatchObject({ ownerType: "OFFICIAL", userId: null, description: "official" });
   });
 
-  describe("assertKbOwner", () => {
-    it("所有人可以获取自己的 KB", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "My KB",
-      });
-      createdKbIds.push(kb.id);
-
-      const fetched = await assertKbOwner(prisma, kb.id, testUserId);
-      expect(fetched.id).toBe(kb.id);
-      expect(fetched.userId).toBe(testUserId);
-    });
-
-    it("其他用户无法访问", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Owner Only",
-      });
-      createdKbIds.push(kb.id);
-
-      const otherUser = await prisma.user.create({
-        data: {
-          uid: `other2-${Date.now()}`,
-          username: `other2${Date.now()}`,
-          passwordHash: "dummy",
-        },
-      });
-      createdUserIds.push(otherUser.id);
-
-      await expect(
-        assertKbOwner(prisma, kb.id, otherUser.id)
-      ).rejects.toThrow(ForbiddenError);
-    });
-
-    it("不存在的 KB 抛 ForbiddenError", async () => {
-      await expect(
-        assertKbOwner(prisma, "nonexistent-id", testUserId)
-      ).rejects.toThrow(ForbiddenError);
-    });
+  it("list 只含自己的 USER 与全部 OFFICIAL，并汇总每库 chunkCount", async () => {
+    const mine = await kb();
+    const foreign = await kb({ userId: otherId });
+    const malformed = await kb({ ownerType: "LEGACY" });
+    await document(mine.id, 3);
+    await document(mine.id, 5);
+    const rows = await listKbsForUser(prisma!, ownerId);
+    expect(rows.find(({ id }) => id === mine.id)?.latticeCount).toBe(8);
+    expect(rows.some(({ id }) => id === official.id)).toBe(true);
+    expect(rows.some(({ id }) => id === foreign.id || id === malformed.id)).toBe(false);
   });
 
-  describe("assertKbReadable", () => {
-    it("用户可以读自己的 KB", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Readable",
-      });
-      createdKbIds.push(kb.id);
-
-      const fetched = await assertKbReadable(prisma, kb.id, testUserId);
-      expect(fetched.id).toBe(kb.id);
-    });
-
-    it("所有人可以读官方库", async () => {
-      const otherUser = await prisma.user.create({
-        data: {
-          uid: `other3-${Date.now()}`,
-          username: `other3${Date.now()}`,
-          passwordHash: "dummy",
-        },
-      });
-      createdUserIds.push(otherUser.id);
-
-      const fetched = await assertKbReadable(
-        prisma,
-        officialKbId,
-        otherUser.id
-      );
-      expect(fetched.ownerType).toBe("OFFICIAL");
-    });
-
-    it("无法读他人的 USER 库", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Private",
-      });
-      createdKbIds.push(kb.id);
-
-      const otherUser = await prisma.user.create({
-        data: {
-          uid: `other4-${Date.now()}`,
-          username: `other4${Date.now()}`,
-          passwordHash: "dummy",
-        },
-      });
-      createdUserIds.push(otherUser.id);
-
-      await expect(
-        assertKbReadable(prisma, kb.id, otherUser.id)
-      ).rejects.toThrow(ForbiddenError);
-    });
+  it("空可见集合不查询 Document 聚合", async () => {
+    const groupBy = vi.fn();
+    const fake = {
+      knowledgeBase: { findMany: vi.fn().mockResolvedValue([]) },
+      document: { groupBy },
+    } as unknown as PrismaClient;
+    await expect(listKbsForUser(fake, "nobody")).resolves.toEqual([]);
+    expect(groupBy).not.toHaveBeenCalled();
   });
 
-  describe("deleteKb", () => {
-    it("删除 KB 及其所有 Document 和 Chunk", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "To Delete",
-      });
-      createdKbIds.push(kb.id);
+  it("assertKbOwner 严格拒绝 OFFICIAL、他人库和不存在库", async () => {
+    const mine = await kb();
+    await expect(assertKbOwner(prisma!, mine.id, ownerId)).resolves.toMatchObject({ id: mine.id });
+    for (const id of [official.id, mine.id, randomUUID()]) {
+      const caller = id === mine.id ? otherId : ownerId;
+      await expect(assertKbOwner(prisma!, id, caller)).rejects.toBeInstanceOf(ForbiddenError);
+    }
+  });
 
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "Doc",
-          sourceType: "FILE",
-          sizeBytes: 100,
-          status: "indexed",
-        },
-      });
-      createdDocIds.push(doc.id);
+  it("assertKbReadable 只放行自有 USER 与 OFFICIAL", async () => {
+    const mine = await kb();
+    const foreign = await kb({ userId: otherId });
+    await expect(assertKbReadable(prisma!, mine.id, ownerId)).resolves.toMatchObject({ id: mine.id });
+    await expect(assertKbReadable(prisma!, official.id, ownerId)).resolves.toMatchObject({ id: official.id });
+    await expect(assertKbReadable(prisma!, foreign.id, ownerId)).rejects.toBeInstanceOf(ForbiddenError);
+  });
 
-      // Mock S3
-      const mockS3 = {
-        client: {
-          send: async () => ({ Contents: [] }),
-        },
-        bucket: "test",
-      };
-
-      await deleteKb(prisma, mockS3 as any, kb.id, testUserId);
-
-      // Verify KB is deleted
-      const kbExists = await prisma.knowledgeBase.findUnique({
-        where: { id: kb.id },
-      });
-      expect(kbExists).toBeNull();
-
-      // Documents should be deleted by cascade
-      const docExists = await prisma.document.findUnique({
-        where: { id: doc.id },
-      });
-      expect(docExists).toBeNull();
-
-      // Remove from tracking since we deleted it manually
-      createdKbIds = createdKbIds.filter((id) => id !== kb.id);
-      createdDocIds = createdDocIds.filter((id) => id !== doc.id);
+  it("renameKb 用单个严格 updateMany 判定所有权，再在同一事务返回结果", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 });
+    const findUniqueOrThrow = vi.fn().mockResolvedValue({ id: "kb", name: "new" });
+    const fake = {
+      $transaction: (run: (tx: unknown) => unknown) => run({ knowledgeBase: { updateMany, findUniqueOrThrow } }),
+    } as unknown as PrismaClient;
+    await expect(renameKb(fake, "kb", "owner", { name: "new" })).resolves.toMatchObject({ name: "new" });
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: "kb", ownerType: "USER", userId: "owner" },
+      data: { name: "new" },
     });
+    updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(renameKb(fake, "kb", "other", { name: "bad" })).rejects.toBeInstanceOf(ForbiddenError);
+  });
 
-    it("非所有人无法删除 KB", async () => {
-      const kb = await createKb(prisma, {
-        userId: testUserId,
-        name: "Protected",
-      });
-      createdKbIds.push(kb.id);
-
-      const otherUser = await prisma.user.create({
-        data: {
-          uid: `other6-${Date.now()}`,
-          username: `other6${Date.now()}`,
-          passwordHash: "dummy",
-        },
-      });
-      createdUserIds.push(otherUser.id);
-
-      const mockS3 = {
-        deletePrefix: async (prefix: string) => {},
-      };
-
-      await expect(
-        deleteKb(prisma, mockS3 as any, kb.id, otherUser.id)
-      ).rejects.toThrow(ForbiddenError);
+  it("deleteKb 先按 USER 属主级联删库，再尽力清理 S3", async () => {
+    const target = await kb();
+    const doc = await document(target.id);
+    await chunk(doc.id, target.id);
+    storage.deletePrefix.mockImplementationOnce(async () => {
+      expect(await prisma!.knowledgeBase.findUnique({ where: { id: target.id } })).toBeNull();
     });
+    await deleteKb(prisma!, {} as never, target.id, ownerId);
+    expect(await prisma!.document.findUnique({ where: { id: doc.id } })).toBeNull();
+    expect(await prisma!.chunk.count({ where: { documentId: doc.id } })).toBe(0);
+    expect(storage.deletePrefix).toHaveBeenCalledWith(expect.anything(), `kb/${target.id}/`);
+  });
+
+  it("deleteKb 的 null 只删 OFFICIAL，非属主与类型错位都拒绝", async () => {
+    const publicKb = await kb({ ownerType: "OFFICIAL", userId: null });
+    const mine = await kb();
+    await expect(deleteKb(prisma!, {} as never, mine.id, otherId)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(deleteKb(prisma!, {} as never, publicKb.id, ownerId)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(deleteKb(prisma!, {} as never, mine.id, null)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(deleteKb(prisma!, {} as never, publicKb.id, null)).resolves.toBeUndefined();
+  });
+
+  it("deleteKb 的 S3 清理失败不把已提交删除伪装成失败", async () => {
+    const target = await kb();
+    storage.deletePrefix.mockRejectedValueOnce(new Error("S3 unavailable"));
+    await expect(deleteKb(prisma!, {} as never, target.id, ownerId)).resolves.toBeUndefined();
+    await expect(prisma!.knowledgeBase.findUnique({ where: { id: target.id } })).resolves.toBeNull();
+  });
+
+  it("deleteKbDocument 在事务中校验属主并依赖 FK 级联 Chunk", async () => {
+    const target = await kb();
+    const doc = await document(target.id);
+    await chunk(doc.id, target.id);
+    await expect(deleteKbDocument(prisma!, target.id, doc.id, otherId)).rejects.toBeInstanceOf(ForbiddenError);
+    await expect(deleteKbDocument(prisma!, target.id, randomUUID(), ownerId)).resolves.toBeNull();
+    await expect(deleteKbDocument(prisma!, target.id, doc.id, ownerId)).resolves.toEqual({
+      sourceType: "TEXT",
+      sourceUri: `kb/${target.id}/source`,
+    });
+    expect(await prisma!.chunk.count({ where: { documentId: doc.id } })).toBe(0);
   });
 });

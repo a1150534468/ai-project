@@ -1,618 +1,380 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { randomUUID } from "node:crypto";
-import { getPrisma } from "@ai-assistant/db";
-import { buildServer } from "../server.js";
-import { signToken } from "../auth/token.js";
-import { generateUniqueUid } from "../auth/uid.js";
+import multipart from "@fastify/multipart";
+import Fastify, { type InjectOptions } from "fastify";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock indexOnce 避免真实索引
-vi.mock("./indexer.js", () => ({
-  indexOnce: vi.fn().mockResolvedValue(undefined),
-}));
+type UploadAdapter = {
+  isMultipart: () => boolean;
+  file: () => Promise<{ filename: string; mimetype: string; toBuffer: () => Promise<Buffer> } | undefined>;
+  body: Record<string, unknown>;
+};
 
-// Mock S3 操作避免真连接
-vi.mock("../storage/s3.js", async () => {
-  const actual = await vi.importActual<typeof import("../storage/s3.js")>("../storage/s3.js");
+const mocks = vi.hoisted(() => {
+  const prisma = { document: { findMany: vi.fn(), findFirst: vi.fn() } };
   return {
-    ...actual,
-    makeS3: vi.fn(() => ({
-      client: { send: vi.fn().mockResolvedValue({}) },
-      bucket: "test-kb",
+    prisma,
+    list: vi.fn(async (_db: unknown, _userId: string): Promise<unknown[]> => []),
+    create: vi.fn(async (_db: unknown, args: Record<string, unknown>) => ({ id: "kb-new", ...args })),
+    rename: vi.fn(async (_db: unknown, id: string, _userId: string, patch: Record<string, unknown>) => ({
+      id,
+      ...patch,
     })),
-    putObject: vi.fn().mockResolvedValue(undefined),
-    deleteObject: vi.fn().mockResolvedValue(undefined),
-    deletePrefix: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn(async () => undefined),
+    assertOwner: vi.fn(async () => ({ id: "kb", ownerType: "USER" })),
+    assertReadable: vi.fn(async () => ({ id: "kb", ownerType: "USER" })),
+    removeDocument: vi.fn(
+      async (): Promise<{ sourceType: string; sourceUri: string | null } | null> => ({
+        sourceType: "TEXT",
+        sourceUri: "kb/kb/doc/source.txt",
+      }),
+    ),
+    store: vi.fn(async (_db: unknown, _s3: unknown, _kbId: string, _userId: string, _request: UploadAdapter) => ({
+      docId: "doc-new",
+    })),
+    makeS3: vi.fn(() => ({ name: "test-s3" })),
+    deleteObject: vi.fn(async () => undefined),
+    buildIndexDeps: vi.fn(async () => ({ name: "index-deps" })),
+    indexOnce: vi.fn(async () => undefined),
   };
 });
 
-const prisma = getPrisma();
-let app: Awaited<ReturnType<typeof buildServer>>;
-let auth = "";
-let userId = "";
-
-beforeAll(async () => {
-  process.env.SESSION_SECRET ??= "x".repeat(32);
-  process.env.REDIS_URL ??= "redis://localhost:6379";
-  process.env.LLM_BASE_URL ??= "http://localhost:9999";
-  process.env.LLM_API_KEY ??= "test-key";
-  process.env.EMBEDDING_MODEL ??= "test-embedding-model";
-  process.env.ADMIN_SESSION_SECRET ??= "y".repeat(32);
-  // S3 配置（可指向 MinIO 或其他 S3 兼容存储，仅用于测试）
-  process.env.S3_ENDPOINT ??= "http://localhost:9000";
-  process.env.S3_BUCKET ??= "test-kb";
-  process.env.S3_ACCESS_KEY ??= "test-s3-access-key";
-  process.env.S3_SECRET_KEY ??= "test-s3-secret-key";
-
-  const uid = await generateUniqueUid(async (u) => Boolean(await prisma.user.findUnique({ where: { uid: u } })));
-  const u = await prisma.user.create({ data: { uid, username: `kb_${Date.now()}`, passwordHash: "x" } });
-  userId = u.id;
-  auth = `Bearer ${signToken(userId, process.env.SESSION_SECRET!)}`;
-  app = await buildServer();
-  await app.ready();
-});
-
-afterAll(async () => {
-  await app.close();
-  // 清理：document → chunk → kb → user
-  const kbs = await prisma.knowledgeBase.findMany({ where: { userId } });
-  for (const kb of kbs) {
-    await prisma.chunk.deleteMany({ where: { kbId: kb.id } });
-    await prisma.document.deleteMany({ where: { kbId: kb.id } });
-    await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+vi.mock("@ai-assistant/db", () => ({ getPrisma: () => mocks.prisma }));
+vi.mock("./service.js", () => ({
+  listKbsForUser: mocks.list,
+  createKb: mocks.create,
+  renameKb: mocks.rename,
+  deleteKb: mocks.remove,
+  assertKbOwner: mocks.assertOwner,
+  assertKbReadable: mocks.assertReadable,
+  deleteKbDocument: mocks.removeDocument,
+}));
+vi.mock("../storage/s3.js", () => ({ makeS3: mocks.makeS3, deleteObject: mocks.deleteObject }));
+vi.mock("./deps.js", () => ({ buildIndexDeps: mocks.buildIndexDeps }));
+vi.mock("./indexer.js", () => ({ indexOnce: mocks.indexOnce }));
+vi.mock("./ingest.js", () => {
+  class IngestError extends Error {
+    constructor(
+      message: string,
+      public statusCode: number,
+    ) {
+      super(message);
+      this.name = "IngestError";
+    }
   }
-  await prisma.user.delete({ where: { id: userId } });
+  return { IngestError, storeAndCreateDocument: mocks.store };
 });
 
-describe("知识库路由", () => {
-  describe("GET /api/kb", () => {
-    it("未登录 401", async () => {
-      const r = await app.inject({ method: "GET", url: "/api/kb" });
-      expect(r.statusCode).toBe(401);
+import { IngestError } from "./ingest.js";
+import { kbRoutes } from "./routes.js";
+
+const authHeader = { "x-test-user": "user-1" };
+const forbidden = (message = "forbidden") => Object.assign(new Error(message), { name: "ForbiddenError" });
+
+async function makeApp() {
+  const app = Fastify({ logger: false });
+  app.decorateRequest("userId", "");
+  app.addHook("onRequest", async (req) => {
+    const userId = req.headers["x-test-user"];
+    if (typeof userId === "string") req.userId = userId;
+  });
+  await app.register(multipart);
+  await app.register(kbRoutes);
+  await app.ready();
+  return app;
+}
+
+async function inject(options: InjectOptions) {
+  const app = await makeApp();
+  const response = await app.inject(options);
+  await app.close();
+  return response;
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.prisma.document.findMany.mockResolvedValue([]);
+  mocks.prisma.document.findFirst.mockResolvedValue(null);
+  mocks.list.mockResolvedValue([]);
+  mocks.create.mockImplementation(async (_db, args) => ({ id: "kb-new", ...args }));
+  mocks.rename.mockImplementation(async (_db, id, _userId, patch) => ({ id, ...patch }));
+  mocks.remove.mockResolvedValue(undefined);
+  mocks.assertOwner.mockResolvedValue({ id: "kb", ownerType: "USER" });
+  mocks.assertReadable.mockResolvedValue({ id: "kb", ownerType: "USER" });
+  mocks.removeDocument.mockResolvedValue({ sourceType: "TEXT", sourceUri: "kb/kb/doc/source.txt" });
+  mocks.store.mockResolvedValue({ docId: "doc-new" });
+  mocks.makeS3.mockReturnValue({ name: "test-s3" });
+  mocks.deleteObject.mockResolvedValue(undefined);
+  mocks.buildIndexDeps.mockResolvedValue({ name: "index-deps" });
+  mocks.indexOnce.mockResolvedValue(undefined);
+});
+
+describe("KB 路由鉴权", () => {
+  it.each([
+    ["GET", "/api/kb", undefined],
+    ["POST", "/api/kb", { name: "kb" }],
+    ["PATCH", "/api/kb/kb", { name: "kb" }],
+    ["DELETE", "/api/kb/kb", undefined],
+    ["GET", "/api/kb/kb/documents", undefined],
+    ["GET", "/api/kb/kb/documents/doc", undefined],
+    ["DELETE", "/api/kb/kb/documents/doc", undefined],
+    ["POST", "/api/kb/kb/documents", { text: "hello" }],
+  ])("%s %s 未登录返回 401", async (method, url, payload) => {
+    const response = await inject({ method: method as InjectOptions["method"], url, payload });
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toEqual({ error: "未登录" });
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.assertOwner).not.toHaveBeenCalled();
+  });
+});
+
+describe("知识库 CRUD", () => {
+  it("GET 原样返回 service 的用户可见列表", async () => {
+    mocks.list.mockResolvedValueOnce([{ id: "mine" }, { id: "official" }]);
+    const response = await inject({ method: "GET", url: "/api/kb", headers: authHeader });
+    expect(response.json()).toEqual([{ id: "mine" }, { id: "official" }]);
+    expect(mocks.list).toHaveBeenCalledWith(mocks.prisma, "user-1");
+    expect(mocks.makeS3).not.toHaveBeenCalled();
+  });
+
+  it("POST 用 Zod 拒绝空名和过长描述", async () => {
+    for (const payload of [{ name: "" }, { name: "ok", description: "x".repeat(1001) }]) {
+      const response = await inject({ method: "POST", url: "/api/kb", headers: authHeader, payload });
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual({ error: "参数不合法" });
+    }
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+
+  it("POST 只用认证 userId 创建 USER 库", async () => {
+    const response = await inject({
+      method: "POST",
+      url: "/api/kb",
+      headers: authHeader,
+      payload: { name: "我的库", description: "说明", userId: "attacker" },
     });
-
-    it("已登录列出用户的库和官方库", async () => {
-      // 建库
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "Test KB", description: "test" },
-      });
-      const official = await prisma.knowledgeBase.create({
-        data: { ownerType: "OFFICIAL", name: "Official KB" },
-      });
-
-      const r = await app.inject({
-        method: "GET",
-        url: "/api/kb",
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as Array<{ id: string; ownerType: string; name: string }>;
-      expect(body.length).toBeGreaterThanOrEqual(2);
-      expect(body.some((k) => k.id === kb.id && k.ownerType === "USER")).toBe(true);
-      expect(body.some((k) => k.id === official.id && k.ownerType === "OFFICIAL")).toBe(true);
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-      await prisma.knowledgeBase.delete({ where: { id: official.id } });
+    expect(response.statusCode).toBe(200);
+    expect(mocks.create).toHaveBeenCalledWith(mocks.prisma, {
+      userId: "user-1",
+      name: "我的库",
+      description: "说明",
     });
   });
 
-  describe("POST /api/kb", () => {
-    it("未登录 401", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/kb",
-        payload: { name: "Test" },
-      });
-      expect(r.statusCode).toBe(401);
+  it("PATCH 参数错误为 400，ForbiddenError 为 403", async () => {
+    const invalid = await inject({
+      method: "PATCH",
+      url: "/api/kb/kb-1",
+      headers: authHeader,
+      payload: { name: "" },
     });
-
-    it("已登录建库成功 200", async () => {
-      const r = await app.inject({
-        method: "POST",
-        url: "/api/kb",
-        headers: { authorization: auth },
-        payload: { name: "My KB", description: "My description" },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { id: string; name: string };
-      expect(body.id).toBeDefined();
-      expect(body.name).toBe("My KB");
-
-      await prisma.knowledgeBase.delete({ where: { id: body.id } });
+    expect(invalid.statusCode).toBe(400);
+    mocks.rename.mockRejectedValueOnce(forbidden("不是属主"));
+    const denied = await inject({
+      method: "PATCH",
+      url: "/api/kb/kb-1",
+      headers: authHeader,
+      payload: { name: "new" },
     });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.json()).toEqual({ error: "不是属主" });
   });
 
-  describe("PATCH /api/kb/:id", () => {
-    it("非属主库 403", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId: randomUUID(), name: "Other KB" },
-      });
-      const r = await app.inject({
-        method: "PATCH",
-        url: `/api/kb/${kb.id}`,
-        headers: { authorization: auth },
-        payload: { name: "Hacked" },
-      });
-      expect(r.statusCode).toBe(403);
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+  it("PATCH 把可选 patch 和认证 userId 交给 service", async () => {
+    const response = await inject({
+      method: "PATCH",
+      url: "/api/kb/kb-1",
+      headers: authHeader,
+      payload: { description: "new" },
     });
-
-    it("属主库 200", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const r = await app.inject({
-        method: "PATCH",
-        url: `/api/kb/${kb.id}`,
-        headers: { authorization: auth },
-        payload: { name: "Updated KB" },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { name: string };
-      expect(body.name).toBe("Updated KB");
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
+    expect(response.statusCode).toBe(200);
+    expect(mocks.rename).toHaveBeenCalledWith(mocks.prisma, "kb-1", "user-1", { description: "new" });
   });
 
-  describe("DELETE /api/kb/:id", () => {
-    it("非属主库 403", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId: randomUUID(), name: "Other KB" },
-      });
-      const r = await app.inject({
-        method: "DELETE",
-        url: `/api/kb/${kb.id}`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(403);
+  it("DELETE 映射 403；成功时延迟创建 S3 并返回 204", async () => {
+    mocks.remove.mockRejectedValueOnce(forbidden("不可删除"));
+    const denied = await inject({ method: "DELETE", url: "/api/kb/kb-1", headers: authHeader });
+    expect(denied.statusCode).toBe(403);
+    mocks.remove.mockResolvedValueOnce(undefined);
+    const removed = await inject({ method: "DELETE", url: "/api/kb/kb-1", headers: authHeader });
+    expect(removed.statusCode).toBe(204);
+    expect(mocks.remove).toHaveBeenLastCalledWith(mocks.prisma, { name: "test-s3" }, "kb-1", "user-1");
+    expect(mocks.makeS3).toHaveBeenCalledTimes(2);
+  });
+});
 
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("属主库 204", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const r = await app.inject({
-        method: "DELETE",
-        url: `/api/kb/${kb.id}`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(204);
-
-      const found = await prisma.knowledgeBase.findUnique({ where: { id: kb.id } });
-      expect(found).toBeNull();
-    });
+describe("文档读取", () => {
+  it("不可读库返回 403 且不查询 Document", async () => {
+    mocks.assertReadable.mockRejectedValueOnce(forbidden("不可读"));
+    const response = await inject({ method: "GET", url: "/api/kb/kb/documents", headers: authHeader });
+    expect(response.statusCode).toBe(403);
+    expect(mocks.prisma.document.findMany).not.toHaveBeenCalled();
   });
 
-  describe("GET /api/kb/:id/documents", () => {
-    it("非可读库 403", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId: randomUUID(), name: "Other KB" },
-      });
-      const r = await app.inject({
-        method: "GET",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(403);
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("官方库不开放文档明细", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "OFFICIAL", name: "Official KB" },
-      });
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "official.txt",
-          sourceType: "TEXT",
-          sourceUri: null,
-          sizeBytes: 100,
-          status: "indexed",
-        },
-      });
-
-      const r = await app.inject({
-        method: "GET",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(403);
-      expect(r.json().error).toContain("官方知识库不开放文档明细");
-
-      await prisma.document.delete({ where: { id: doc.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("可读库列出文档", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "doc.txt",
-          sourceType: "TEXT",
-          sourceUri: null,
-          sizeBytes: 100,
-          status: "pending",
-        },
-      });
-
-      const r = await app.inject({
-        method: "GET",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as Array<{ id: string; name: string; status: string }>;
-      expect(body.length).toBeGreaterThanOrEqual(1);
-      expect(body.some((d) => d.id === doc.id)).toBe(true);
-
-      await prisma.document.delete({ where: { id: doc.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
+  it.each(["/api/kb/official/documents", "/api/kb/official/documents/doc"])("官方库不开放明细：%s", async (url) => {
+    mocks.assertReadable.mockResolvedValueOnce({ id: "official", ownerType: "OFFICIAL" });
+    const response = await inject({ method: "GET", url, headers: authHeader });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: "官方知识库不开放文档明细" });
   });
 
-  describe("GET /api/kb/:id/documents/:docId", () => {
-    it("官方库不开放单文档详情", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "OFFICIAL", name: "Official KB" },
-      });
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "official.txt",
-          sourceType: "TEXT",
-          sourceUri: null,
-          sizeBytes: 100,
-          status: "indexed",
-        },
-      });
-
-      const r = await app.inject({
-        method: "GET",
-        url: `/api/kb/${kb.id}/documents/${doc.id}`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(403);
-      expect(r.json().error).toContain("官方知识库不开放文档明细");
-
-      await prisma.document.delete({ where: { id: doc.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("不存在的文档 404", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const r = await app.inject({
-        method: "GET",
-        url: `/api/kb/${kb.id}/documents/nonexistent`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(404);
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("存在的文档 200", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "doc.txt",
-          sourceType: "TEXT",
-          sourceUri: null,
-          sizeBytes: 100,
-          status: "pending",
-        },
-      });
-
-      const r = await app.inject({
-        method: "GET",
-        url: `/api/kb/${kb.id}/documents/${doc.id}`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { id: string; status: string };
-      expect(body.id).toBe(doc.id);
-
-      await prisma.document.delete({ where: { id: doc.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
+  it("列表按创建时间倒序且只选择公开字段", async () => {
+    mocks.prisma.document.findMany.mockResolvedValueOnce([{ id: "doc", name: "a.txt" }]);
+    const response = await inject({ method: "GET", url: "/api/kb/kb/documents", headers: authHeader });
+    expect(response.statusCode).toBe(200);
+    const query = mocks.prisma.document.findMany.mock.calls[0][0];
+    expect(query).toMatchObject({ where: { kbId: "kb" }, orderBy: { createdAt: "desc" } });
+    expect(Object.keys(query.select)).toEqual([
+      "id",
+      "name",
+      "status",
+      "sizeBytes",
+      "chunkCount",
+      "error",
+      "sourceType",
+      "sourceUri",
+      "mime",
+      "createdAt",
+    ]);
+    expect(query.select).not.toHaveProperty("tokensUsed");
+    expect(query.select).not.toHaveProperty("lockedBy");
   });
 
-  describe("DELETE /api/kb/:id/documents/:docId", () => {
-    it("非属主库 403", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId: randomUUID(), name: "Other KB" },
-      });
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "doc.txt",
-          sourceType: "TEXT",
-          sourceUri: null,
-          sizeBytes: 100,
-          status: "pending",
-        },
-      });
-
-      const r = await app.inject({
-        method: "DELETE",
-        url: `/api/kb/${kb.id}/documents/${doc.id}`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(403);
-
-      await prisma.document.delete({ where: { id: doc.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("属主库 204", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const doc = await prisma.document.create({
-        data: {
-          kbId: kb.id,
-          name: "doc.txt",
-          sourceType: "TEXT",
-          sourceUri: null,
-          sizeBytes: 100,
-          status: "pending",
-        },
-      });
-
-      const r = await app.inject({
-        method: "DELETE",
-        url: `/api/kb/${kb.id}/documents/${doc.id}`,
-        headers: { authorization: auth },
-      });
-      expect(r.statusCode).toBe(204);
-
-      const found = await prisma.document.findUnique({ where: { id: doc.id } });
-      expect(found).toBeNull();
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
+  it("详情把 docId 和 kbId 一起查询，不存在返回 404", async () => {
+    const response = await inject({ method: "GET", url: "/api/kb/kb/documents/missing", headers: authHeader });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: "文档不存在" });
+    expect(mocks.prisma.document.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "missing", kbId: "kb" },
+      }),
+    );
   });
 
-  describe("POST /api/kb/:id/documents (TEXT)", () => {
-    it("未登录 401", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        payload: { text: "hello", name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(401);
+  it("详情与列表共用公开字段投影", async () => {
+    mocks.prisma.document.findFirst.mockResolvedValueOnce({ id: "doc", name: "a.txt", status: "indexed" });
+    const response = await inject({ method: "GET", url: "/api/kb/kb/documents/doc", headers: authHeader });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: "doc", name: "a.txt", status: "indexed" });
+    const detailSelect = mocks.prisma.document.findFirst.mock.calls[0][0].select;
+    await inject({ method: "GET", url: "/api/kb/kb/documents", headers: authHeader });
+    expect(detailSelect).toEqual(mocks.prisma.document.findMany.mock.calls[0][0].select);
+  });
+});
 
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("非属主库 403", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId: randomUUID(), name: "Other KB" },
-      });
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { text: "hello", name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(403);
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("文本超长 400", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const longText = "x".repeat(300000);
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { text: longText, name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(400);
-      expect(r.json().error).toContain("文本过长");
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
-
-    it("文本成功上传 200", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { text: "hello world", name: "test.txt" },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { id: string; status: string };
-      expect(body.id).toBeDefined();
-      expect(body.status).toBe("pending");
-
-      // 验证 Document 被建
-      const doc = await prisma.document.findUnique({
-        where: { id: body.id },
-      });
-      expect(doc).toBeDefined();
-      expect(doc?.sourceType).toBe("TEXT");
-      expect(doc?.status).toBe("pending");
-
-      await prisma.document.delete({ where: { id: body.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
-    });
+describe("文档删除", () => {
+  it("属主错误映射 403，文档不存在映射 404，均不碰 S3", async () => {
+    mocks.removeDocument.mockRejectedValueOnce(forbidden("不是属主"));
+    const denied = await inject({ method: "DELETE", url: "/api/kb/kb/documents/doc", headers: authHeader });
+    expect(denied.statusCode).toBe(403);
+    mocks.removeDocument.mockResolvedValueOnce(null);
+    const missing = await inject({ method: "DELETE", url: "/api/kb/kb/documents/doc", headers: authHeader });
+    expect(missing.statusCode).toBe(404);
+    expect(mocks.makeS3).not.toHaveBeenCalled();
+    expect(mocks.deleteObject).not.toHaveBeenCalled();
   });
 
-  describe("POST /api/kb/:id/documents (URL)", () => {
-    it("内网 URL SSRF 400", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { url: "http://169.254.169.254/", name: "test" },
-      });
-      expect(r.statusCode).toBe(400);
-      expect(r.json().error).toContain("SSRF");
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+  it("FILE/TEXT 先删数据库再清对象；S3 失败仍返回 204", async () => {
+    const order: string[] = [];
+    mocks.removeDocument.mockImplementationOnce(async () => {
+      order.push("database");
+      return { sourceType: "FILE", sourceUri: "kb/kb/doc/file.pdf" };
     });
-
-    it("URL 成功 200", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: { authorization: auth },
-        payload: { url: "https://example.com/doc.txt", name: "test" },
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { id: string; status: string };
-      expect(body.status).toBe("pending");
-
-      // 验证 Document
-      const doc = await prisma.document.findUnique({
-        where: { id: body.id },
-      });
-      expect(doc?.sourceType).toBe("URL");
-      expect(doc?.sourceUri).toBe("https://example.com/doc.txt");
-
-      await prisma.document.delete({ where: { id: body.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+    mocks.deleteObject.mockImplementationOnce(async () => {
+      order.push("s3");
+      throw new Error("S3 unavailable");
     });
+    const response = await inject({ method: "DELETE", url: "/api/kb/kb/documents/doc", headers: authHeader });
+    expect(response.statusCode).toBe(204);
+    expect(order).toEqual(["database", "s3"]);
+    expect(mocks.deleteObject).toHaveBeenCalledWith({ name: "test-s3" }, "kb/kb/doc/file.pdf");
   });
 
-  describe("POST /api/kb/:id/documents (FILE)", () => {
-    it("非法后缀(.exe) 400", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
+  it("URL 文档没有自有对象，不初始化 S3", async () => {
+    mocks.removeDocument.mockResolvedValueOnce({ sourceType: "URL", sourceUri: "https://example.test/doc" });
+    const response = await inject({ method: "DELETE", url: "/api/kb/kb/documents/doc", headers: authHeader });
+    expect(response.statusCode).toBe(204);
+    expect(mocks.makeS3).not.toHaveBeenCalled();
+  });
+});
 
-      // 构造 multipart 请求
-      const boundary = "----FormBoundary7MA4YWxkTrZu0gW";
-      const fileContent = "MZ\x90\x00"; // EXE header
-      const payload =
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="test.exe"\r\n` +
-        `Content-Type: application/octet-stream\r\n` +
-        `\r\n` +
-        fileContent +
-        `\r\n--${boundary}--\r\n`;
-
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: {
-          authorization: auth,
-          "content-type": `multipart/form-data; boundary=${boundary}`,
-        },
-        payload,
-      });
-      expect(r.statusCode).toBe(400);
-      expect(r.json().error).toContain("不支持的文件类型");
-
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+describe("文档入库", () => {
+  it("非属主返回 403，不初始化 S3 或调用 ingest", async () => {
+    mocks.assertOwner.mockRejectedValueOnce(forbidden("不是属主"));
+    const response = await inject({
+      method: "POST",
+      url: "/api/kb/kb/documents",
+      headers: authHeader,
+      payload: { text: "hello" },
     });
+    expect(response.statusCode).toBe(403);
+    expect(mocks.makeS3).not.toHaveBeenCalled();
+    expect(mocks.store).not.toHaveBeenCalled();
+  });
 
-    it("上传 .txt 文件 200", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
-
-      const boundary = "----FormBoundary7MA4YWxkTrZu0gW";
-      const fileContent = "Hello, this is a test file.\nLine 2.";
-      const payload =
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="test.txt"\r\n` +
-        `Content-Type: text/plain\r\n` +
-        `\r\n` +
-        fileContent +
-        `\r\n--${boundary}--\r\n`;
-
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: {
-          authorization: auth,
-          "content-type": `multipart/form-data; boundary=${boundary}`,
-        },
-        payload,
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { id: string; status: string };
-      expect(body.id).toBeDefined();
-      expect(body.status).toBe("pending");
-
-      // 验证 Document
-      const doc = await prisma.document.findUnique({
-        where: { id: body.id },
-      });
-      expect(doc?.sourceType).toBe("FILE");
-      expect(doc?.sizeBytes).toBe(fileContent.length);
-      expect(doc?.name).toBe("test.txt");
-
-      await prisma.document.delete({ where: { id: body.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+  it("IngestError 保留自身状态码和中文消息", async () => {
+    mocks.store.mockRejectedValueOnce(new IngestError("文本过长", 413));
+    const response = await inject({
+      method: "POST",
+      url: "/api/kb/kb/documents",
+      headers: authHeader,
+      payload: { text: "hello" },
     });
+    expect(response.statusCode).toBe(413);
+    expect(response.json()).toEqual({ error: "文本过长" });
+  });
 
-    it("上传 .pdf 文件 200", async () => {
-      const kb = await prisma.knowledgeBase.create({
-        data: { ownerType: "USER", userId, name: "My KB" },
-      });
+  it.each([
+    ["TEXT", { text: "hello", name: "note.txt" }],
+    ["URL", { url: "https://example.test/doc" }],
+  ])("%s 请求适配后入库并后台索引", async (_kind, payload) => {
+    const response = await inject({ method: "POST", url: "/api/kb/kb/documents", headers: authHeader, payload });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: "doc-new", status: "pending" });
+    const adapter = mocks.store.mock.calls[0][4];
+    expect(adapter.isMultipart()).toBe(false);
+    expect(adapter.body).toEqual(payload);
+    await vi.waitFor(() => expect(mocks.indexOnce).toHaveBeenCalledWith({ name: "index-deps" }, "doc-new"));
+  });
 
-      const boundary = "----FormBoundary7MA4YWxkTrZu0gW";
-      const fileContent = "%PDF-1.4\n%fake pdf"; // Minimal PDF header
-      const payload =
-        `--${boundary}\r\n` +
-        `Content-Disposition: form-data; name="file"; filename="test.pdf"\r\n` +
-        `Content-Type: application/pdf\r\n` +
-        `\r\n` +
-        fileContent +
-        `\r\n--${boundary}--\r\n`;
-
-      const r = await app.inject({
-        method: "POST",
-        url: `/api/kb/${kb.id}/documents`,
-        headers: {
-          authorization: auth,
-          "content-type": `multipart/form-data; boundary=${boundary}`,
-        },
-        payload,
-      });
-      expect(r.statusCode).toBe(200);
-      const body = r.json() as { id: string; status: string };
-      expect(body.status).toBe("pending");
-
-      const doc = await prisma.document.findUnique({
-        where: { id: body.id },
-      });
-      expect(doc?.sourceType).toBe("FILE");
-      expect(doc?.mime).toBe("application/pdf");
-
-      await prisma.document.delete({ where: { id: body.id } });
-      await prisma.knowledgeBase.delete({ where: { id: kb.id } });
+  it("FILE 请求把 multipart 文件适配给 ingest", async () => {
+    mocks.store.mockImplementationOnce(async (_db, _s3, _kbId, _userId, adapter) => {
+      expect(adapter.isMultipart()).toBe(true);
+      const file = await adapter.file();
+      expect(file).toMatchObject({ filename: "note.txt", mimetype: "text/plain" });
+      expect((await file!.toBuffer()).toString()).toBe("hello file");
+      return { docId: "file-doc" };
     });
+    const boundary = "----kb-route-test";
+    const payload = [
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="note.txt"',
+      "Content-Type: text/plain",
+      "",
+      "hello file",
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+    const response = await inject({
+      method: "POST",
+      url: "/api/kb/kb/documents",
+      headers: { ...authHeader, "content-type": `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ id: "file-doc", status: "pending" });
+    await vi.waitFor(() => expect(mocks.indexOnce).toHaveBeenCalledWith({ name: "index-deps" }, "file-doc"));
+  });
+
+  it("后台索引装配失败不改变已完成的入库响应", async () => {
+    mocks.buildIndexDeps.mockRejectedValueOnce(new Error("embedding unavailable"));
+    const response = await inject({
+      method: "POST",
+      url: "/api/kb/kb/documents",
+      headers: authHeader,
+      payload: { text: "hello" },
+    });
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(mocks.buildIndexDeps).toHaveBeenCalledOnce());
+    expect(mocks.indexOnce).not.toHaveBeenCalled();
   });
 });

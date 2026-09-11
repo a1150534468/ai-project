@@ -1,23 +1,25 @@
-import type { PrismaClient, KnowledgeBase } from "@prisma/client";
-import type { S3 } from "../storage/s3.js";
-import { deletePrefix } from "../storage/s3.js";
+import type { KnowledgeBase, Prisma, PrismaClient } from "@prisma/client";
+import { deletePrefix, type S3 } from "../storage/s3.js";
 
 export class ForbiddenError extends Error {
-  constructor(message: string = "Forbidden") {
+  constructor(message = "Forbidden") {
     super(message);
     this.name = "ForbiddenError";
   }
 }
 
-type Prisma = PrismaClient;
+type Db = PrismaClient | Prisma.TransactionClient;
+type KbPatch = { name?: string; description?: string };
 
-/**
- * Create a new knowledge base for a user or official.
- * ownerType defaults to 'USER'. When ownerType is 'OFFICIAL', userId must be null.
- */
+const ownedBy = (id: string, userId: string) => ({ id, ownerType: "USER", userId });
+const readableBy = (id: string, userId: string) => ({
+  id,
+  OR: [{ ownerType: "USER", userId }, { ownerType: "OFFICIAL" }],
+});
+
 export async function createKb(
-  prisma: Prisma,
-  args: { userId: string | null; name: string; description?: string; ownerType?: "USER" | "OFFICIAL" }
+  prisma: PrismaClient,
+  args: { userId: string | null; name: string; description?: string; ownerType?: "USER" | "OFFICIAL" },
 ): Promise<KnowledgeBase> {
   const ownerType = args.ownerType ?? "USER";
   return prisma.knowledgeBase.create({
@@ -30,153 +32,74 @@ export async function createKb(
   });
 }
 
-/**
- * List knowledge bases accessible to a user:
- * - All KBs owned by the user (ownerType = USER)
- * - All official KBs (ownerType = OFFICIAL)
- */
-export async function listKbsForUser(
-  prisma: Prisma,
-  userId: string
-): Promise<
-  Array<
-    KnowledgeBase & {
-      ownerType: string;
-      latticeCount: number;
-    }
-  >
-> {
+export async function listKbsForUser(prisma: PrismaClient, userId: string) {
   const kbs = await prisma.knowledgeBase.findMany({
-    where: {
-      OR: [{ userId }, { ownerType: "OFFICIAL" }],
-    },
+    where: { OR: [{ ownerType: "USER", userId }, { ownerType: "OFFICIAL" }] },
     orderBy: { createdAt: "desc" },
   });
-
-  if (kbs.length === 0) {
-    return [];
-  }
+  if (kbs.length === 0) return [];
 
   const totals = await prisma.document.groupBy({
     by: ["kbId"],
-    where: { kbId: { in: kbs.map((kb) => kb.id) } },
+    where: { kbId: { in: kbs.map(({ id }) => id) } },
     _sum: { chunkCount: true },
   });
-  const latticeCountByKbId = new Map(
-    totals.map((row) => [row.kbId, row._sum.chunkCount ?? 0])
-  );
-
-  return kbs.map((kb) => ({
-    ...kb,
-    latticeCount: latticeCountByKbId.get(kb.id) ?? 0,
-  }));
+  const counts = new Map(totals.map(({ kbId, _sum }) => [kbId, _sum.chunkCount ?? 0]));
+  return kbs.map((kb) => ({ ...kb, latticeCount: counts.get(kb.id) ?? 0 }));
 }
 
-/**
- * Rename a knowledge base (update name and/or description).
- * Only the owner can rename their KB.
- *
- * P5.1 之前这里还有一道 `if (kb.systemKey) throw ForbiddenError("系统知识库不能重命名")`。
- * 「系统知识库」这个概念随 `systemKey` 一起退役了：知识库现在只有官方库和个人自建库
- * 两类，个人自建库全都能改名。官方库不走这条路——`assertKbOwner` 只认 `userId`。
- */
 export async function renameKb(
-  prisma: Prisma,
+  prisma: PrismaClient,
   kbId: string,
   userId: string,
-  patch: { name?: string; description?: string }
+  patch: KbPatch,
 ): Promise<KnowledgeBase> {
-  await assertKbOwner(prisma, kbId, userId);
-
-  const updateData: { name?: string; description?: string } = {};
-  if (patch.name !== undefined) {
-    updateData.name = patch.name;
-  }
-  if (patch.description !== undefined) {
-    updateData.description = patch.description;
-  }
-
-  return prisma.knowledgeBase.update({
-    where: { id: kbId },
-    data: updateData,
+  return prisma.$transaction(async (tx) => {
+    const result = await tx.knowledgeBase.updateMany({ where: ownedBy(kbId, userId), data: patch });
+    if (result.count !== 1) throw new ForbiddenError(`KB ${kbId} not found or not owned by user`);
+    return tx.knowledgeBase.findUniqueOrThrow({ where: { id: kbId } });
   });
 }
 
-/**
- * Delete a knowledge base and all its documents/chunks.
- * Only the owner can delete their KB.
- * Also deletes associated S3 objects under kb/{kbId}/.
- *
- * 同 renameKb：P5.1 撤掉了 `systemKey` 的 403 保护，删库不再有「系统库」这个例外。
- */
-export async function deleteKb(
-  prisma: Prisma,
-  s3: S3,
-  kbId: string,
-  userId: string
-): Promise<void> {
-  // Verify ownership
-  await assertKbOwner(prisma, kbId, userId);
-
-  // Delete from S3
-  await deletePrefix(s3, `kb/${kbId}/`);
-
-  // Delete KB (cascades to Document and Chunk via onDelete: Cascade)
-  await prisma.knowledgeBase.delete({
-    where: { id: kbId },
+/** null 只代表管理端删除 OFFICIAL；普通用户始终只能删除自己的 USER 库。 */
+export async function deleteKb(prisma: PrismaClient, s3: S3, kbId: string, userId: string | null): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const where = userId === null ? { id: kbId, ownerType: "OFFICIAL" } : ownedBy(kbId, userId);
+    const result = await tx.knowledgeBase.deleteMany({ where });
+    if (result.count !== 1) throw new ForbiddenError(`KB ${kbId} not found or not owned by caller`);
   });
+  await deletePrefix(s3, `kb/${kbId}/`).catch(() => undefined);
 }
 
-/**
- * Assert that a KB exists and is owned by the user.
- * Throws ForbiddenError if not found or not owned.
- */
-export async function assertKbOwner(
-  prisma: Prisma,
-  kbId: string,
-  userId: string
-): Promise<KnowledgeBase> {
-  const kb = await prisma.knowledgeBase.findUnique({
-    where: { id: kbId },
-  });
-
-  if (!kb || kb.userId !== userId) {
-    throw new ForbiddenError(`KB ${kbId} not found or not owned by user`);
-  }
-
+export async function assertKbOwner(prisma: Db, kbId: string, userId: string): Promise<KnowledgeBase> {
+  const kb = await prisma.knowledgeBase.findFirst({ where: ownedBy(kbId, userId) });
+  if (!kb) throw new ForbiddenError(`KB ${kbId} not found or not owned by user`);
   return kb;
 }
 
-/**
- * Assert that a KB is readable by the user.
- * - Owner of a USER KB can read it
- * - Anyone can read an OFFICIAL KB
- * Throws ForbiddenError otherwise.
- */
-export async function assertKbReadable(
-  prisma: Prisma,
+export async function assertKbReadable(prisma: Db, kbId: string, userId: string): Promise<KnowledgeBase> {
+  const kb = await prisma.knowledgeBase.findFirst({ where: readableBy(kbId, userId) });
+  if (!kb) throw new ForbiddenError(`KB ${kbId} is not readable by user ${userId}`);
+  return kb;
+}
+
+export interface DeletedKbDocument {
+  sourceType: string;
+  sourceUri: string | null;
+}
+
+export async function deleteKbDocument(
+  prisma: PrismaClient,
   kbId: string,
-  userId: string
-): Promise<KnowledgeBase> {
-  const kb = await prisma.knowledgeBase.findUnique({
-    where: { id: kbId },
+  docId: string,
+  userId: string,
+): Promise<DeletedKbDocument | null> {
+  return prisma.$transaction(async (tx) => {
+    await assertKbOwner(tx, kbId, userId);
+    const where = { id: docId, kbId, kb: { is: { ownerType: "USER", userId } } };
+    const doc = await tx.document.findFirst({ where, select: { sourceType: true, sourceUri: true } });
+    if (!doc) return null;
+    const result = await tx.document.deleteMany({ where });
+    return result.count === 1 ? doc : null;
   });
-
-  if (!kb) {
-    throw new ForbiddenError(`KB ${kbId} not found`);
-  }
-
-  // Anyone can read OFFICIAL KBs
-  if (kb.ownerType === "OFFICIAL") {
-    return kb;
-  }
-
-  // USER KBs can only be read by their owner
-  if (kb.userId === userId) {
-    return kb;
-  }
-
-  throw new ForbiddenError(
-    `KB ${kbId} is not readable by user ${userId}`
-  );
 }
