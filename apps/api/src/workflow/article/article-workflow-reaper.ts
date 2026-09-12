@@ -25,7 +25,9 @@ export async function reapStaleArticleWorkflowProjects(args: {
   let reaped = 0;
   for (const row of stuck) {
     const claimed = await args.prisma.articleWorkflowProject.updateMany({
-      where: { id: row.id, status: row.status },
+      // findMany 与 updateMany 之间可能正好收到 runner 心跳；重复时间条件让 reaper
+      // 只收走它查询到的那一版，而不是把刚恢复工作的项目误判成卡死。
+      where: { id: row.id, status: row.status, updatedAt: { lt: threshold } },
       data: {
         status: "failed",
         progressStage: "failed",

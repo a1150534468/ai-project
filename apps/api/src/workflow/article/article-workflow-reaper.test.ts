@@ -27,9 +27,21 @@ describe("reapStaleArticleWorkflowProjects", () => {
     expect(where.status.in).toEqual(["generating", "revising"]);
     expect(where.updatedAt.lt).toEqual(new Date(99_000));
     expect(articleWorkflowProject.updateMany.mock.calls[0]![0]).toMatchObject({
-      where: { id: "p1", status: "generating" },
+      where: { id: "p1", status: "generating", updatedAt: { lt: new Date(99_000) } },
       data: { status: "failed", progressStage: "failed", progressPercent: 100 },
     });
+  });
+
+  it("心跳在扫描后到达时，时间条件使 reaper 放弃这行", async () => {
+    const { prisma, articleWorkflowProject } = fakePrisma([{ id: "p1", status: "generating" }]);
+    articleWorkflowProject.updateMany.mockImplementationOnce(async ({ where }) => {
+      expect((where as { updatedAt: { lt: Date } }).updatedAt.lt).toEqual(new Date(99_000));
+      return { count: 0 };
+    });
+
+    const reaped = await reapStaleArticleWorkflowProjects({ prisma, staleMs: 1_000, now: () => 100_000 });
+
+    expect(reaped).toBe(0);
   });
 
   it("抢占失败（count=0）不计入收尸", async () => {

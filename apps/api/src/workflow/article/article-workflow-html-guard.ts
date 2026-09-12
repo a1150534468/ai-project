@@ -1,39 +1,17 @@
-import { DOMParser, XMLSerializer } from "@xmldom/xmldom";
+import { DOMParser } from "@xmldom/xmldom";
 import {
-  ARTICLE_WORKFLOW_HTML_ATTRS,
-  ARTICLE_WORKFLOW_HTML_BLOCKED_TAGS,
-  ARTICLE_WORKFLOW_HTML_TAGS,
   ARTICLE_WORKFLOW_IMAGE_SLOT_ATTR,
   type ArticleWorkflowImageSlot,
 } from "@ai-assistant/article-workflow";
 import { articleWorkflowVisibleTextFromHtml } from "./article-workflow-html-visible-text.js";
-
-// 词汇表跟编辑器共用一份，见 packages/article-workflow/src/html-vocabulary.ts
-const ALLOWED_TAGS = new Set(ARTICLE_WORKFLOW_HTML_TAGS);
-const BLOCKED_TAGS = new Set(ARTICLE_WORKFLOW_HTML_BLOCKED_TAGS);
-const ALLOWED_ATTRS = new Set(ARTICLE_WORKFLOW_HTML_ATTRS);
-
-const BLOCKED_STYLE_PROPS = new Set([
-  "position",
-  "float",
-  "clear",
-  "z-index",
-  "filter",
-  "column-count",
-  "column-gap",
-  "columns",
-  "transform",
-  "animation",
-]);
-
-const FORBIDDEN_VISIBLE_PHRASES = [
-  "当前项目直接复用",
-  "编辑区只处理输入",
-  "自动保存也只在内容真改动后触发",
-  "这里看到的是最终要复制到公众号正文区的格式",
-  "公众号图文工作流",
-  "多平台图文工作流",
-];
+import {
+  ARTICLE_BLOCKED_STYLE_PROPERTIES,
+  ARTICLE_FORBIDDEN_VISIBLE_PHRASES,
+  ARTICLE_HTML_ATTRIBUTES,
+  ARTICLE_HTML_BLOCKED_TAGS,
+  ARTICLE_HTML_TAGS,
+} from "./article-workflow-html-policy.js";
+export { repairArticleWorkflowHtmlFragment } from "./article-workflow-html-repair.js";
 
 function validateStyle(styleText: string) {
   for (const declaration of styleText.split(";")) {
@@ -41,7 +19,7 @@ function validateStyle(styleText: string) {
     const property = rawProperty?.trim().toLowerCase();
     const value = rawValueParts.join(":").trim().toLowerCase();
     if (!property) continue;
-    if (BLOCKED_STYLE_PROPS.has(property)) {
+    if (ARTICLE_BLOCKED_STYLE_PROPERTIES.has(property)) {
       throw new Error(`HTML 包含不支持的样式属性: ${property}`);
     }
     if (property.startsWith("margin") && value.includes("-")) {
@@ -64,16 +42,16 @@ function walk(node: any, requiredSlots: Set<string>) {
 
   const element = node as Element;
   const tagName = element.tagName.toLowerCase();
-  if (BLOCKED_TAGS.has(tagName)) {
+  if (ARTICLE_HTML_BLOCKED_TAGS.has(tagName)) {
     throw new Error(`HTML 包含不支持的标签: <${tagName}>`);
   }
-  if (!ALLOWED_TAGS.has(tagName)) {
+  if (!ARTICLE_HTML_TAGS.has(tagName)) {
     throw new Error(`HTML 包含未允许的标签: <${tagName}>`);
   }
 
   for (const attr of Array.from(element.attributes)) {
     const name = attr.name.toLowerCase();
-    if (!ALLOWED_ATTRS.has(name)) {
+    if (!ARTICLE_HTML_ATTRIBUTES.has(name)) {
       throw new Error(`HTML 包含不支持的属性: ${attr.name}`);
     }
     if (name === "style") validateStyle(attr.value);
@@ -147,91 +125,6 @@ export function assertArticleWorkflowBodyNotDestroyed(args: {
   }
 }
 
-/** 样式声明里挑掉不支持的属性，其余原样留下。返回 null 表示整条 style 都不用留了。 */
-function repairStyle(styleText: string): string | null {
-  const kept: string[] = [];
-  for (const declaration of styleText.split(";")) {
-    const [rawProperty, ...rawValueParts] = declaration.split(":");
-    const property = rawProperty?.trim().toLowerCase();
-    const value = rawValueParts.join(":").trim().toLowerCase();
-    if (!property || !value) continue;
-    if (BLOCKED_STYLE_PROPS.has(property)) continue;
-    if (property.startsWith("margin") && value.includes("-")) continue;
-    if (property === "height" && value !== "auto") continue;
-    if (property === "background-image" || value.includes("url(")) continue;
-    kept.push(`${property}:${rawValueParts.join(":").trim()}`);
-  }
-  return kept.length > 0 ? kept.join(";") : null;
-}
-
-function repairNode(node: any) {
-  const children = Array.from(node.childNodes ?? []) as any[];
-  for (const child of children) {
-    if (child.nodeType === 8) {
-      // 注释：直接摘掉
-      node.removeChild(child);
-      continue;
-    }
-    if (child.nodeType !== 1) continue;
-
-    const tagName = String(child.tagName ?? "").toLowerCase();
-
-    if (BLOCKED_TAGS.has(tagName)) {
-      node.removeChild(child);
-      continue;
-    }
-
-    if (!ALLOWED_TAGS.has(tagName)) {
-      // 脱壳：标签本身丢掉，孩子提到当前层。可见文字因此一个字都不少，
-      // 后面的「可见文字完全一致」校验照样能过。
-      repairNode(child);
-      while (child.firstChild) node.insertBefore(child.firstChild, child);
-      node.removeChild(child);
-      continue;
-    }
-
-    for (const attr of Array.from(child.attributes ?? []) as any[]) {
-      const name = String(attr.name).toLowerCase();
-      if (!ALLOWED_ATTRS.has(name)) {
-        child.removeAttribute(attr.name);
-        continue;
-      }
-      if (name === "style") {
-        const repaired = repairStyle(attr.value);
-        if (repaired) child.setAttribute("style", repaired);
-        else child.removeAttribute("style");
-      }
-    }
-
-    repairNode(child);
-  }
-}
-
-/**
- * 把排版模型的输出修到词汇表以内，而不是直接判整单失败。
- *
- * 为什么要这一层：排版是生成链路的**最后一步**，配图早就出完了。
- * 模型多写一个 `<h2>`（在提示词没列清单时这完全合理）就让整行 failed，前面的活全白干。
- * 所以这里先修——未知标签脱壳、危险标签删掉、越界属性和样式摘掉——修完再交给
- * `assertArticleWorkflowHtmlFragment` 做硬校验。
- *
- * 修的都是**不影响可见文字**的操作，所以「可见文字与原文完全一致」这道闸依然有效：
- * 真正的改写、增删、漏槽位仍然会被拦下来失败，这一层不给它们放水。
- */
-export function repairArticleWorkflowHtmlFragment(html: string): string {
-  const normalized = html.replaceAll("\r\n", "\n").trim();
-  if (!normalized) return normalized;
-  const document = new DOMParser().parseFromString(`<body>${normalized}</body>`, "text/html");
-  const body = document.getElementsByTagName("body")[0];
-  if (!body) return normalized;
-  repairNode(body);
-  const serializer = new XMLSerializer();
-  return Array.from(body.childNodes)
-    .map((child) => serializer.serializeToString(child as any))
-    .join("")
-    .trim();
-}
-
 export function assertArticleWorkflowHtmlFragment(args: {
   readonly html: string;
   readonly expectedVisibleText: string;
@@ -262,7 +155,7 @@ export function assertArticleWorkflowHtmlFragment(args: {
     if (comparableVisibleText(visibleText) !== comparableVisibleText(args.expectedVisibleText)) {
       throw new Error("HTML 可见文字与预期内容不一致");
     }
-    for (const phrase of FORBIDDEN_VISIBLE_PHRASES) {
+    for (const phrase of ARTICLE_FORBIDDEN_VISIBLE_PHRASES) {
       if (visibleText.includes(phrase)) {
         throw new Error("HTML 中混入了解释性文案");
       }

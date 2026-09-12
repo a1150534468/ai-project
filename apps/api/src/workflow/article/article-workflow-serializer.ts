@@ -12,21 +12,18 @@ import {
   type ArticleWorkflowThemeKey,
 } from "@ai-assistant/article-workflow";
 import {
-  articleWorkflowImageManifestItemSchema,
   articleWorkflowCreationConfigSchema,
+  articleWorkflowImageManifestItemSchema,
   articleWorkflowTagsSchema,
 } from "./article-workflow-schema.js";
 import { articleWorkflowResponseBodyHtml, articleWorkflowResponseImageUrl } from "./article-workflow-image-url.js";
 import type { ArticleProjectRow, ArticleWorkflowPersistedProject } from "./article-workflow-shared.js";
 
-function fallbackTitle(value: string): string {
-  const trimmed = value.trim();
-  return trimmed || "未命名图文";
-}
+const titleOrFallback = (title: string) => title.trim() || "未命名图文";
 
 export function parseArticleWorkflowTagsJson(value: unknown): readonly string[] {
-  const parsed = articleWorkflowTagsSchema.safeParse(value);
-  return parsed.success ? parsed.data : [];
+  const result = articleWorkflowTagsSchema.safeParse(value);
+  return result.success ? result.data : [];
 }
 
 export function jsonValue(value: unknown): Prisma.InputJsonValue {
@@ -35,21 +32,27 @@ export function jsonValue(value: unknown): Prisma.InputJsonValue {
 
 export function parseArticleWorkflowImageManifestJson(value: unknown): readonly ArticleWorkflowImageAsset[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => articleWorkflowImageManifestItemSchema.safeParse(item))
-    .filter((item): item is { success: true; data: ArticleWorkflowImageAsset } => item.success)
-    .map((item) => item.data);
+  return value.flatMap((item) => {
+    const result = articleWorkflowImageManifestItemSchema.safeParse(item);
+    return result.success ? [result.data] : [];
+  });
 }
 
 export function parseArticleWorkflowCreationConfigJson(mode: unknown, value: unknown): ArticleWorkflowCreationConfig {
-  const creationMode: ArticleWorkflowCreationMode = mode === "topic" ? "topic" : "source";
-  const parsed = articleWorkflowCreationConfigSchema.safeParse(value);
-  if (parsed.success && parsed.data.mode === creationMode) return parsed.data;
-  return { mode: "source", generateImages: true };
+  const expected: ArticleWorkflowCreationMode = mode === "topic" ? "topic" : "source";
+  const result = articleWorkflowCreationConfigSchema.safeParse(value);
+  return result.success && result.data.mode === expected
+    ? result.data
+    : { mode: "source", generateImages: true };
 }
 
 export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkflowPersistedProject {
   const creationConfig = parseArticleWorkflowCreationConfigJson(row.creationMode, row.creationConfigJson);
+  const platform = articleWorkflowPlatformConfig(row.platform);
+  const theme = articleWorkflowTheme(row.theme) as ArticleWorkflowThemeKey;
+  const galleryMode = (row.galleryMode === "grid" || row.galleryMode === "stack"
+    ? row.galleryMode
+    : "collage") as ArticleWorkflowGalleryMode;
   return {
     id: row.id,
     userId: row.userId,
@@ -58,14 +61,12 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
     sourceFormat: row.sourceFormat as ArticleWorkflowSourceFormat,
     sourceText: row.sourceText,
     generationMode: row.generationMode as ArticleWorkflowGenerationMode,
-    platform: articleWorkflowPlatformConfig(row.platform).platform,
+    platform: platform.platform,
     batchId: row.batchId,
-    theme: articleWorkflowTheme(row.theme) as ArticleWorkflowThemeKey,
+    theme,
     themeColor: row.themeColor ?? null,
-    galleryMode: (row.galleryMode === "grid" || row.galleryMode === "stack"
-      ? row.galleryMode
-      : "collage") as ArticleWorkflowGalleryMode,
-    title: fallbackTitle(row.title),
+    galleryMode,
+    title: titleOrFallback(row.title),
     summary: row.summary.trim(),
     bodyHtml: row.bodyHtml.trim(),
     bodyMarkdown: row.bodyMarkdown?.trim() ?? "",
@@ -80,8 +81,7 @@ export function readArticleWorkflowProject(row: ArticleProjectRow): ArticleWorkf
   };
 }
 
-export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
-  const project = readArticleWorkflowProject(row);
+function summary(row: ArticleProjectRow, project: ArticleWorkflowPersistedProject) {
   return {
     id: project.id,
     title: project.title,
@@ -103,19 +103,14 @@ export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
   };
 }
 
-/**
- * 出参：库里存的是稳定代理地址，这里现签一份短期地址给页面用。
- *
- * 为什么放在序列化层：正文里的 `<img>` 是浏览器直接发的请求，带不上 `Authorization`
- * 头，而 web 端的登录态只在 localStorage 里。签名地址是让页面显示出图的唯一办法，
- * 又不能落库（会过期）——所以只能每次读的时候现加。
- *
- * `env` 缺省取 `process.env`：签名密钥就是 `SESSION_SECRET`。
- */
+export function serializeArticleWorkflowProjectSummary(row: ArticleProjectRow) {
+  return summary(row, readArticleWorkflowProject(row));
+}
+
 export function serializeArticleWorkflowProject(row: ArticleProjectRow, env: NodeJS.ProcessEnv = process.env) {
   const project = readArticleWorkflowProject(row);
   return {
-    ...serializeArticleWorkflowProjectSummary(row),
+    ...summary(row, project),
     sourceFormat: project.sourceFormat,
     sourceText: project.sourceText,
     creationConfig: project.creationConfig,

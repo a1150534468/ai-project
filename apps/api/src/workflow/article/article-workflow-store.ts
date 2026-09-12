@@ -6,10 +6,9 @@ import type {
   ArticleWorkflowProjectStatus,
 } from "@ai-assistant/article-workflow";
 import { jsonValue } from "./article-workflow-serializer.js";
+import type { ArticleProjectRow } from "./article-workflow-shared.js";
 
-export async function findOwnedArticleWorkflowProject(prisma: PrismaClient, userId: string, projectId: string) {
-  return prisma.articleWorkflowProject.findFirst({ where: { id: projectId, userId } });
-}
+type ArticleWorkflowDb = Pick<PrismaClient, "articleWorkflowProject">;
 
 export type ArticleWorkflowProjectStatePatch = Partial<{
   title: string;
@@ -20,6 +19,8 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   captionText: string;
   tags: readonly string[];
   imageManifestJson: readonly ArticleWorkflowImageAsset[];
+  theme: string;
+  themeColor: string | null;
   galleryMode: ArticleWorkflowGalleryMode;
   status: ArticleWorkflowProjectStatus;
   progressStage: string;
@@ -28,53 +29,106 @@ export type ArticleWorkflowProjectStatePatch = Partial<{
   error: string | null;
 }>;
 
-/**
- * patch → Prisma data 的唯一转换点。
- * undefined 一律保持 undefined（Prisma 语义 = 不动该列），不要在这里补默认值。
- */
-function articleWorkflowStateData(data: ArticleWorkflowProjectStatePatch) {
+export interface ArticleWorkflowStateGuard {
+  readonly userId?: string;
+  readonly statuses?: readonly string[];
+  readonly updatedAt?: Date;
+}
+
+export class ArticleWorkflowLeaseLostError extends Error {
+  constructor(projectId: string) {
+    super(`图文任务已失去写入租约: ${projectId}`);
+    this.name = "ArticleWorkflowLeaseLostError";
+  }
+}
+
+export async function findOwnedArticleWorkflowProject(
+  db: ArticleWorkflowDb,
+  userId: string,
+  projectId: string,
+): Promise<ArticleProjectRow | null> {
+  return db.articleWorkflowProject.findFirst({ where: { id: projectId, userId } });
+}
+
+function projectStateData(patch: ArticleWorkflowProjectStatePatch, updatedAt?: Date) {
   return {
-    title: data.title,
-    summary: data.summary,
-    generationMode: data.generationMode,
-    bodyHtml: data.bodyHtml,
-    bodyMarkdown: data.bodyMarkdown,
-    captionText: data.captionText,
-    tagsJson: data.tags ? jsonValue(data.tags) : undefined,
-    imageManifestJson: data.imageManifestJson ? jsonValue(data.imageManifestJson) : undefined,
-    galleryMode: data.galleryMode,
-    status: data.status,
-    progressStage: data.progressStage,
-    progressPercent: data.progressPercent,
-    progressMessage: data.progressMessage,
-    error: data.error,
+    title: patch.title,
+    summary: patch.summary,
+    generationMode: patch.generationMode,
+    bodyHtml: patch.bodyHtml,
+    bodyMarkdown: patch.bodyMarkdown,
+    captionText: patch.captionText,
+    tagsJson: patch.tags === undefined ? undefined : jsonValue(patch.tags),
+    imageManifestJson:
+      patch.imageManifestJson === undefined ? undefined : jsonValue(patch.imageManifestJson),
+    theme: patch.theme,
+    themeColor: patch.themeColor,
+    galleryMode: patch.galleryMode,
+    status: patch.status,
+    progressStage: patch.progressStage,
+    progressPercent: patch.progressPercent,
+    progressMessage: patch.progressMessage,
+    error: patch.error,
+    updatedAt,
   };
 }
 
-/**
- * 终态写入的受保护变体：只在项目仍处于 generating|revising 时生效。
- * 返回 false 表示 reaper 已抢先把项目置 failed（进程曾卡死超过阈值），
- * 此时调用方必须跳过终态写入——失败现场要留住，不能被迟到的成品覆盖。
- */
-export async function finalizeArticleWorkflowProjectState(
-  prisma: PrismaClient,
-  projectId: string,
-  data: ArticleWorkflowProjectStatePatch,
-): Promise<boolean> {
-  const result = await prisma.articleWorkflowProject.updateMany({
-    where: { id: projectId, status: { in: ["generating", "revising"] } },
-    data: articleWorkflowStateData(data),
-  });
-  return result.count === 1;
+function nextVersion(previous: Date): Date {
+  return new Date(Math.max(Date.now(), previous.getTime() + 1));
 }
 
+/**
+ * 条件更新项目并返回数据库实际写入的行。传入 updatedAt 时，它既是 CAS 条件，也是
+ * 单调递增的运行版本；即使同一毫秒内连续写进度，旧 worker 也无法命中 ABA 后的新任务。
+ */
 export async function updateArticleWorkflowProjectState(
-  prisma: PrismaClient,
+  db: ArticleWorkflowDb,
   projectId: string,
-  data: ArticleWorkflowProjectStatePatch,
-) {
-  return prisma.articleWorkflowProject.update({
-    where: { id: projectId },
-    data: articleWorkflowStateData(data),
+  patch: ArticleWorkflowProjectStatePatch,
+  guard: ArticleWorkflowStateGuard = {},
+): Promise<ArticleProjectRow | null> {
+  const status = guard.statuses
+    ? guard.statuses.length === 1
+      ? guard.statuses[0]
+      : { in: [...guard.statuses] }
+    : undefined;
+  const where = {
+    id: projectId,
+    ...(guard.userId ? { userId: guard.userId } : {}),
+    ...(status ? { status } : {}),
+    ...(guard.updatedAt ? { updatedAt: guard.updatedAt } : {}),
+  };
+  const rows = await db.articleWorkflowProject.updateManyAndReturn({
+    where,
+    data: projectStateData(patch, guard.updatedAt ? nextVersion(guard.updatedAt) : undefined),
   });
+  return rows[0] ?? null;
+}
+
+export async function writeArticleWorkflowRunState(
+  db: ArticleWorkflowDb,
+  projectId: string,
+  expectedVersion: Date,
+  patch: ArticleWorkflowProjectStatePatch,
+): Promise<Date> {
+  const updated = await updateArticleWorkflowProjectState(db, projectId, patch, {
+    statuses: ["generating", "revising"],
+    updatedAt: expectedVersion,
+  });
+  if (!updated) throw new ArticleWorkflowLeaseLostError(projectId);
+  return updated.updatedAt;
+}
+
+export async function finalizeArticleWorkflowProjectState(
+  db: ArticleWorkflowDb,
+  projectId: string,
+  expectedVersion: Date,
+  patch: ArticleWorkflowProjectStatePatch,
+): Promise<boolean> {
+  return Boolean(
+    await updateArticleWorkflowProjectState(db, projectId, patch, {
+      statuses: ["generating", "revising"],
+      updatedAt: expectedVersion,
+    }),
+  );
 }

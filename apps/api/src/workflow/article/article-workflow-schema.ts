@@ -7,9 +7,23 @@ import {
   ARTICLE_WORKFLOW_PLATFORMS,
   ARTICLE_WORKFLOW_SOURCE_FORMATS,
   ARTICLE_WORKFLOW_THEMES,
-  ARTICLE_WORKFLOW_TOPIC_PRESETS,
 } from "@ai-assistant/article-workflow";
 import { ARTICLE_MAX_SOURCE_LENGTH } from "./article-workflow-shared.js";
+import {
+  articleWorkflowCaptionPlanSchema,
+  articleWorkflowCreationConfigSchema,
+  articleWorkflowImageManifestItemSchema,
+  articleWorkflowPlanSchema,
+  articleWorkflowTagsSchema,
+} from "./article-workflow-model-schema.js";
+
+export {
+  articleWorkflowCaptionPlanSchema,
+  articleWorkflowCreationConfigSchema,
+  articleWorkflowImageManifestItemSchema,
+  articleWorkflowPlanSchema,
+  articleWorkflowTagsSchema,
+};
 
 const sourceFormatSchema = z.enum(ARTICLE_WORKFLOW_SOURCE_FORMATS);
 const generationModeSchema = z.enum(ARTICLE_WORKFLOW_GENERATION_MODES);
@@ -24,94 +38,6 @@ export const articleWorkflowThemeColorSchema = z
   .trim()
   .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
   .nullish();
-
-/** 话题标签：统一去掉前导 #，长度与数量取三平台里最宽的上限，具体裁剪交给平台归一化。 */
-export const articleWorkflowTagsSchema = z.array(z.string().trim().min(1).max(40)).max(8).default([]);
-
-export const articleWorkflowImageManifestItemSchema = z.object({
-  slot: imageSlotSchema,
-  role: z.enum(["cover", "inline"]),
-  assetId: z.string().trim().max(160).nullable().default(null),
-  imageUrl: z.string().trim().max(3_000_000).default(""),
-  thumbnailUrl: z.string().trim().max(3_000_000).default(""),
-  alt: z.string().trim().max(240).default(""),
-  caption: z.string().trim().max(400).default(""),
-  prompt: z.string().trim().min(1).max(4000),
-});
-
-const articleWorkflowTopicStyleSchema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("preset"),
-    preset: z.enum(ARTICLE_WORKFLOW_TOPIC_PRESETS),
-  }),
-  z.object({
-    mode: z.literal("custom"),
-    instruction: z.string().trim().min(1).max(2_000),
-  }),
-  z.object({
-    mode: z.literal("imitate"),
-    referenceText: z.string().trim().min(1).max(20_000),
-  }),
-]);
-
-export const articleWorkflowCreationConfigSchema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("source"),
-    generateImages: z.boolean().optional().default(true),
-  }),
-  z.object({
-    mode: z.literal("topic"),
-    generateImages: z.boolean().optional().default(false),
-    topic: z.string().trim().min(1).max(200),
-    keyPoints: z.string().trim().max(4_000).optional().default(""),
-    audience: z.string().trim().max(500).optional().default(""),
-    avoid: z.string().trim().max(2_000).optional().default(""),
-    style: articleWorkflowTopicStyleSchema,
-  }),
-]);
-
-/**
- * html-fragment 计划。
- *
- * title 允许为空串，由 normalizeArticleWorkflowPlan 从正文兜出一个——
- * 正文与配图都齐了却因为缺个标题整单失败，用户要白等一次生成再重跑，
- * 这与 caption 链路「一律归一化，不抛错」的取舍保持一致。
- */
-export const articleWorkflowPlanSchema = z.object({
-  title: z.string().trim().max(120).default(""),
-  summary: z.string().trim().max(300).default(""),
-  bodyMarkdown: z.string().trim().min(1).max(500_000),
-  images: z
-    .array(
-      articleWorkflowImageManifestItemSchema.omit({
-        assetId: true,
-        imageUrl: true,
-        thumbnailUrl: true,
-      }),
-    )
-    .min(1)
-    .max(5),
-});
-
-/**
- * caption 计划：字数上限收得比平台硬限制宽，让 LLM 的轻微超标先落地，
- * 再由 normalizeArticleWorkflowCaptionPlan 按平台裁剪——不该为几个字的超标让用户重跑一遍。
- */
-export const articleWorkflowCaptionPlanSchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  captionText: z.string().trim().min(1).max(20_000),
-  tags: articleWorkflowTagsSchema,
-  images: z
-    .array(
-      articleWorkflowImageManifestItemSchema.omit({
-        assetId: true,
-        imageUrl: true,
-        thumbnailUrl: true,
-      }),
-    )
-    .min(1)
-    .max(5),
-});
 
 export const createArticleWorkflowProjectSchema = z
   .object({

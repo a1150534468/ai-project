@@ -6,43 +6,38 @@ import type {
   ArticleWorkflowPlatformConfig,
 } from "@ai-assistant/article-workflow";
 import { callImageGeneration, loadImageGenerationConfig, storeWorkflowImage } from "../_shared/image-service.js";
-import {
-  ARTICLE_IMAGE_BATCH_SIZE,
-  type FetchLike,
-} from "./article-workflow-shared.js";
+import type { FetchLike } from "./article-workflow-shared.js";
+import { ARTICLE_IMAGE_BATCH_SIZE } from "./article-workflow-shared.js";
 import { ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS, withArticleWorkflowRetry } from "./article-workflow-retry.js";
 import { articleWorkflowStorableImageUrl } from "./article-workflow-image-url.js";
 
-function chunk<T>(items: readonly T[], size: number): T[][] {
-  const groups: T[][] = [];
-  for (let index = 0; index < items.length; index += size) groups.push(items.slice(index, index + size));
-  return groups;
-}
-
-function imageSize(slot: ArticleWorkflowImageSlot, platformConfig: ArticleWorkflowPlatformConfig): string {
-  return slot === "cover" ? platformConfig.coverSize : platformConfig.inlineSize;
-}
-
-function fallbackAlt(slot: ArticleWorkflowImageSlot, platformConfig: ArticleWorkflowPlatformConfig): string {
-  if (platformConfig.outputKind === "caption") return slot === "cover" ? "封面图" : "配图";
-  return slot === "cover" ? "公众号头图" : "正文配图";
-}
-
-export async function generateArticleWorkflowImageAsset(args: {
+type ImageRunArgs = {
   readonly prisma: PrismaClient;
   readonly fetchFn: FetchLike;
   readonly env: NodeJS.ProcessEnv;
   readonly userId: string;
   readonly projectId: string;
   readonly image: ArticleWorkflowImageAsset;
-  /** 平台配置，决定封面/内页尺寸与 alt 兜底文案。 */
   readonly platformConfig: ArticleWorkflowPlatformConfig;
-}): Promise<ArticleWorkflowImageAsset> {
-  const size = imageSize(args.image.slot, args.platformConfig);
+};
+
+const sizeFor = (slot: ArticleWorkflowImageSlot, config: ArticleWorkflowPlatformConfig) =>
+  slot === "cover" ? config.coverSize : config.inlineSize;
+
+const altFor = (slot: ArticleWorkflowImageSlot, config: ArticleWorkflowPlatformConfig) => {
+  const caption = config.outputKind === "caption";
+  return slot === "cover" ? (caption ? "封面图" : "公众号头图") : (caption ? "配图" : "正文配图");
+};
+
+function batches<T>(items: readonly T[], size: number): readonly (readonly T[])[] {
+  return Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
+    items.slice(index * size, (index + 1) * size));
+}
+
+export async function generateArticleWorkflowImageAsset(args: ImageRunArgs): Promise<ArticleWorkflowImageAsset> {
+  const size = sizeFor(args.image.slot, args.platformConfig);
   const requestId = `article:${args.projectId}:${args.image.slot}:${randomUUID()}`;
   const config = loadImageGenerationConfig(args.env);
-  // 网关中途断连时上游可能已经出图，重试只会让它白跑一次，
-  // 所以这里的尝试上限比文本低一档。
   const stored = await withArticleWorkflowRetry({
     env: args.env,
     maxAttempts: ARTICLE_IMAGE_RETRY_MAX_ATTEMPTS,
@@ -54,7 +49,7 @@ export async function generateArticleWorkflowImageAsset(args: {
         fetchFn: args.fetchFn,
         env: args.env,
       });
-      return await storeWorkflowImage({
+      return storeWorkflowImage({
         image: generated,
         userId: args.userId,
         requestId,
@@ -78,21 +73,17 @@ export async function generateArticleWorkflowImageAsset(args: {
       mime: stored.mime,
     },
   });
+  const stableUrl = (url: string) => articleWorkflowStorableImageUrl({
+    url,
+    assetId: asset.id,
+    objectKey: stored.objectKey,
+  });
   return {
     ...args.image,
     assetId: asset.id,
-    // 字节已进对象存储时改用代理地址：图文的地址会被写进正文，正文里不能放图片字节。
-    imageUrl: articleWorkflowStorableImageUrl({
-      url: stored.originalUrl,
-      assetId: asset.id,
-      objectKey: stored.objectKey,
-    }),
-    thumbnailUrl: articleWorkflowStorableImageUrl({
-      url: stored.thumbnailUrl,
-      assetId: asset.id,
-      objectKey: stored.objectKey,
-    }),
-    alt: args.image.alt.trim() || fallbackAlt(args.image.slot, args.platformConfig),
+    imageUrl: stableUrl(stored.originalUrl),
+    thumbnailUrl: stableUrl(stored.thumbnailUrl),
+    alt: args.image.alt.trim() || altFor(args.image.slot, args.platformConfig),
   };
 }
 
@@ -107,31 +98,16 @@ export async function populateArticleWorkflowImages(args: {
   readonly force?: boolean;
   readonly onProgress?: (completed: number, total: number) => Promise<void>;
 }): Promise<readonly ArticleWorkflowImageAsset[]> {
-  const targets = args.force
-    ? args.imageManifest
-    : args.imageManifest.filter((image) => !image.imageUrl.trim());
-  if (targets.length === 0) return args.imageManifest;
+  const targets = args.force ? args.imageManifest : args.imageManifest.filter((image) => !image.imageUrl.trim());
+  if (!targets.length) return args.imageManifest;
 
   const replacements = new Map<ArticleWorkflowImageSlot, ArticleWorkflowImageAsset>();
   let completed = 0;
-  for (const group of chunk(targets, ARTICLE_IMAGE_BATCH_SIZE)) {
-    const generated = await Promise.all(group.map((image) =>
-      generateArticleWorkflowImageAsset({
-        prisma: args.prisma,
-        fetchFn: args.fetchFn,
-        env: args.env,
-        userId: args.userId,
-        projectId: args.projectId,
-        image,
-        platformConfig: args.platformConfig,
-      })
-    ));
-    for (const image of generated) {
-      replacements.set(image.slot, image);
-      completed += 1;
-    }
+  for (const group of batches(targets, ARTICLE_IMAGE_BATCH_SIZE)) {
+    const generated = await Promise.all(group.map((image) => generateArticleWorkflowImageAsset({ ...args, image })));
+    generated.forEach((image) => replacements.set(image.slot, image));
+    completed += generated.length;
     await args.onProgress?.(completed, targets.length);
   }
-
   return args.imageManifest.map((image) => replacements.get(image.slot) ?? image);
 }

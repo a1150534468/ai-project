@@ -152,8 +152,7 @@ export function createArticleWorkflowPrismaMock(seed?: {
   const projects = (seed?.projects ?? []).map((row) => articleProjectRow(row));
   const imageAssets = [...(seed?.imageAssets ?? [])];
   const now = new Date("2026-07-08T06:00:00.000Z");
-  return {
-    articleWorkflowProject: {
+  const articleWorkflowProject = {
       create: vi.fn(
         async ({
           data,
@@ -200,13 +199,23 @@ export function createArticleWorkflowPrismaMock(seed?: {
             (row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId),
           ) ?? null,
       ),
-      deleteMany: vi.fn(async ({ where }: { where: { id?: string; userId?: string; batchId?: string } }) => {
+      deleteMany: vi.fn(async ({ where }: {
+        where: {
+          id?: string;
+          userId?: string;
+          batchId?: string;
+          OR?: readonly { id: string; status: string; updatedAt: Date }[];
+        };
+      }) => {
         let count = 0;
         for (let index = projects.length - 1; index >= 0; index -= 1) {
           const row = projects[index]!;
           if (where.id && row.id !== where.id) continue;
           if (where.userId && row.userId !== where.userId) continue;
           if (where.batchId && row.batchId !== where.batchId) continue;
+          if (where.OR && !where.OR.some((candidate) =>
+            candidate.id === row.id && candidate.status === row.status && candidate.updatedAt.getTime() === row.updatedAt.getTime()
+          )) continue;
           projects.splice(index, 1);
           count += 1;
         }
@@ -231,15 +240,31 @@ export function createArticleWorkflowPrismaMock(seed?: {
           return { count: 1 };
         },
       ),
+      updateManyAndReturn: vi.fn(
+        async ({ where, data }: {
+          where: { id: string; userId?: string; status?: string | { in: string[] }; updatedAt?: Date };
+          data: Partial<ProjectRow>;
+        }) => {
+          const row = projects.find((item) => item.id === where.id);
+          if (!row) return [];
+          if (where.userId && row.userId !== where.userId) return [];
+          if (typeof where.status === "string" && row.status !== where.status) return [];
+          if (typeof where.status === "object" && !where.status.in.includes(row.status)) return [];
+          if (where.updatedAt && row.updatedAt.getTime() !== where.updatedAt.getTime()) return [];
+          assignDefined(row, data);
+          row.updatedAt = new Date(Math.max(Date.now(), row.updatedAt.getTime() + 1));
+          return [row];
+        },
+      ),
       update: vi.fn(async ({ where, data }: { where: { id: string }; data: Partial<ProjectRow> }) => {
         const row = projects.find((item) => item.id === where.id);
         if (!row) throw new Error("project not found");
         assignDefined(row, data);
-        row.updatedAt = new Date("2026-07-08T06:01:00.000Z");
+        row.updatedAt = new Date(Math.max(Date.now(), row.updatedAt.getTime() + 1));
         return row;
       }),
-    },
-    imageAsset: {
+    };
+  const imageAsset = {
       findFirst: vi.fn(
         async ({ where }: { where: { id?: string; userId?: string } }) =>
           imageAssets.find(
@@ -255,9 +280,29 @@ export function createArticleWorkflowPrismaMock(seed?: {
         imageAssets.push(row);
         return row;
       }),
-    },
+    };
+  const prisma = {
+    articleWorkflowProject,
+    imageAsset,
     __state: { projects, imageAssets },
+    $transaction: vi.fn(async (work: unknown) => {
+      const projectSnapshot = projects.map((row) => ({ ...row }));
+      const assetSnapshot = imageAssets.map((row) => ({ ...row }));
+      try {
+        return Array.isArray(work)
+          ? await Promise.all(work)
+          : await (work as (tx: {
+            articleWorkflowProject: typeof articleWorkflowProject;
+            imageAsset: typeof imageAsset;
+          }) => unknown)({ articleWorkflowProject, imageAsset });
+      } catch (error) {
+        projects.splice(0, projects.length, ...projectSnapshot);
+        imageAssets.splice(0, imageAssets.length, ...assetSnapshot);
+        throw error;
+      }
+    }),
   };
+  return prisma;
 }
 
 export function createArticleWorkflowLlmResponse(text: string) {

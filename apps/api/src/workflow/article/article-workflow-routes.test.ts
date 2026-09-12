@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildArticleWorkflowApp,
   buildArticleWorkflowCaptionPlan,
@@ -10,6 +10,31 @@ import {
 } from "./article-workflow-test-helpers.js";
 
 describe("article-workflow routes", () => {
+  it("creates a batch atomically when one platform insert fails", async () => {
+    const prisma = createArticleWorkflowPrismaMock();
+    const create = prisma.articleWorkflowProject.create;
+    const original = create.getMockImplementation()!;
+    create
+      .mockImplementationOnce(original)
+      .mockImplementationOnce(async () => {
+        throw new Error("database unavailable");
+      });
+    const { app } = await buildArticleWorkflowApp({ prisma, scheduleTask: vi.fn() });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: {
+        sourceFormat: "plain-text",
+        sourceText: "批次正文",
+        platforms: ["wechat", "xiaohongshu"],
+      },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(prisma.__state.projects).toHaveLength(0);
+  });
+
   it("creates a text project and finishes generation", async () => {
     let scheduledTask: (() => Promise<void>) | null = null;
     const { app, prisma } = await buildArticleWorkflowApp({
@@ -395,6 +420,62 @@ describe("article-workflow routes", () => {
     expect(prisma.__state.projects.map((row) => row.id)).toEqual(["p-2"]);
   });
 
+  it("does not partially delete a batch when a row changes during the delete transaction", async () => {
+    const createdAt = new Date("2026-07-08T05:00:00.000Z");
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [
+        {
+          id: "p-1", userId: "u1", batchId: "b-1", platform: "wechat",
+          sourceFormat: "plain-text", sourceText: "one", status: "ready", createdAt, updatedAt: createdAt,
+        },
+        {
+          id: "p-2", userId: "u1", batchId: "b-1", platform: "xiaohongshu",
+          sourceFormat: "plain-text", sourceText: "one", status: "ready", createdAt, updatedAt: createdAt,
+        },
+      ],
+    });
+    const deleteMany = prisma.articleWorkflowProject.deleteMany;
+    const original = deleteMany.getMockImplementation()!;
+    deleteMany.mockImplementationOnce(async (args) => {
+      prisma.__state.projects[1]!.status = "revising";
+      prisma.__state.projects[1]!.updatedAt = new Date("2026-07-08T05:00:01.000Z");
+      return original(args);
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+
+    const response = await app.inject({ method: "DELETE", url: "/api/workflow/article-workflow/p-1" });
+
+    expect(response.statusCode).toBe(409);
+    expect(prisma.__state.projects.map((row) => row.id)).toEqual(["p-1", "p-2"]);
+  });
+
+  it("does not let a reaped runner overwrite the failure state", async () => {
+    let scheduledTask: (() => Promise<void>) | null = null;
+    const { app, prisma, llm } = await buildArticleWorkflowApp({
+      scheduleTask: (work) => {
+        scheduledTask = work;
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow",
+      payload: { sourceFormat: "plain-text", sourceText: "批次正文" },
+    });
+    expect(response.statusCode).toBe(201);
+
+    const row = prisma.__state.projects[0]!;
+    row.status = "failed";
+    row.progressStage = "failed";
+    row.error = "reaper won";
+    row.updatedAt = new Date("2026-09-12T06:00:00.000Z");
+    await scheduledTask!();
+
+    expect(row.status).toBe("failed");
+    expect(row.error).toBe("reaper won");
+    expect(llm.messages.create).not.toHaveBeenCalled();
+  });
+
   it("refuses to delete a batch while any platform is still busy", async () => {
     const createdAt = new Date("2026-07-08T05:00:00.000Z");
     const prisma = createArticleWorkflowPrismaMock({
@@ -419,6 +500,28 @@ describe("article-workflow routes", () => {
     expect(response.json().error).toContain("正在处理中");
     expect(prisma.articleWorkflowProject.deleteMany).not.toHaveBeenCalled();
     expect(prisma.__state.projects).toHaveLength(2);
+  });
+
+  it("does not schedule a second run when the retry claim loses a race", async () => {
+    const updatedAt = new Date("2026-07-08T05:00:00.000Z");
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [{
+        id: "p-1", userId: "u1", platform: "wechat", sourceFormat: "plain-text", sourceText: "正文",
+        status: "failed", progressStage: "failed", progressPercent: 100, updatedAt, createdAt: updatedAt,
+      }],
+    });
+    prisma.articleWorkflowProject.updateManyAndReturn.mockResolvedValueOnce([]);
+    const scheduleTask = vi.fn();
+    const { app } = await buildArticleWorkflowApp({ prisma, scheduleTask });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/workflow/article-workflow/p-1/retry",
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(scheduleTask).not.toHaveBeenCalled();
   });
 
   it("saves edited html via PATCH", async () => {

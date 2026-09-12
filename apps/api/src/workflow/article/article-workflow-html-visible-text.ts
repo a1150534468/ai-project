@@ -1,31 +1,11 @@
 import { DOMParser } from "@xmldom/xmldom";
 
 const BLOCK_TAGS = new Set([
-  "section",
-  "div",
-  "p",
-  "blockquote",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "pre",
-  "ul",
-  "ol",
-  "li",
-  "table",
-  "thead",
-  "tbody",
-  "tfoot",
-  "tr",
-  "th",
-  "td",
-  "hr",
+  "section", "div", "p", "blockquote", "h1", "h2", "h3", "h4", "h5", "h6", "pre",
+  "ul", "ol", "li", "table", "thead", "tbody", "tfoot", "tr", "th", "td", "hr",
 ]);
 
-function normalizeVisibleText(value: string): string {
+function normalize(value: string): string {
   return value
     .replaceAll("\r\n", "\n")
     .replaceAll("\u00a0", " ")
@@ -37,43 +17,24 @@ function normalizeVisibleText(value: string): string {
     .join("\n");
 }
 
-function appendText(parts: string[], text: string) {
-  if (!text) return;
-  parts.push(text);
-}
-
-function visit(node: any, parts: string[]) {
+function visit(node: any, output: string[]): void {
   if (node.nodeType === node.TEXT_NODE) {
-    appendText(parts, node.nodeValue ?? "");
+    if (node.nodeValue) output.push(node.nodeValue);
     return;
   }
   if (node.nodeType !== node.ELEMENT_NODE) return;
-
-  const element = node as Element;
-  const tagName = element.tagName.toLowerCase();
-  if (tagName === "br") {
-    parts.push("\n");
-    return;
-  }
-
-  if (BLOCK_TAGS.has(tagName) && parts.length > 0) {
-    parts.push("\n");
-  }
-
-  const children = Array.from(element.childNodes);
-  for (const child of children) visit(child, parts);
-
-  if (BLOCK_TAGS.has(tagName)) {
-    parts.push("\n");
-  }
+  const tag = node.tagName.toLowerCase();
+  if (tag === "br") output.push("\n");
+  if (BLOCK_TAGS.has(tag) && output.length) output.push("\n");
+  Array.from(node.childNodes).forEach((child) => visit(child, output));
+  if (BLOCK_TAGS.has(tag)) output.push("\n");
 }
 
 export function articleWorkflowVisibleTextFromHtml(html: string): string {
-  const wrapped = `<body>${html}</body>`;
-  const document = new DOMParser().parseFromString(wrapped, "text/html");
+  const document = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
   const body = document.getElementsByTagName("body")[0];
   if (!body) return "";
-  const parts: string[] = [];
-  Array.from(body.childNodes).forEach((node) => visit(node, parts));
-  return normalizeVisibleText(parts.join(""));
+  const output: string[] = [];
+  Array.from(body.childNodes).forEach((node) => visit(node, output));
+  return normalize(output.join(""));
 }

@@ -6,7 +6,6 @@ import type {
   ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
 import { assertArticleWorkflowImitationOriginality } from "./article-workflow-creation.js";
-import type { PrismaClient } from "@prisma/client";
 import {
   articleWorkflowCaptionSummary,
   normalizeArticleWorkflowCaptionPlan,
@@ -18,8 +17,11 @@ import {
 import { generateArticleWorkflowCaptionPlan } from "./article-workflow-llm.js";
 import type { ArticleWorkflowCaptionPlan } from "./article-workflow-schema.js";
 import type { LlmClientLike } from "./article-workflow-shared.js";
-import { updateArticleWorkflowProjectState } from "./article-workflow-store.js";
-import type { MaterializedArticle, PopulateArticleImages } from "./article-workflow-runner.js";
+import type {
+  MaterializedArticle,
+  PopulateArticleImages,
+  UpdateArticleProgress,
+} from "./article-workflow-runner.js";
 
 function plannedCaptionImageManifest(
   images: ArticleWorkflowCaptionPlan["images"],
@@ -40,7 +42,6 @@ function plannedCaptionImageManifest(
  */
 export async function materializeCaptionArticle(args: {
   readonly creationConfig: ArticleWorkflowCreationConfig;
-  readonly prisma: PrismaClient;
   readonly llm: LlmClientLike;
   readonly model: string;
   readonly projectId: string;
@@ -54,6 +55,7 @@ export async function materializeCaptionArticle(args: {
   readonly regenerateImages: boolean;
   readonly generateImages: boolean;
   readonly populateImages: PopulateArticleImages;
+  readonly updateProgress: UpdateArticleProgress;
 }): Promise<MaterializedArticle> {
   const rawPlan = await generateArticleWorkflowCaptionPlan({
     creationConfig: args.creationConfig,
@@ -78,7 +80,7 @@ export async function materializeCaptionArticle(args: {
     imageManifest = mergeArticleImageManifest(imageManifest, args.currentImages);
   }
 
-  await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+  await args.updateProgress({
     title: plan.title,
     summary,
     captionText: plan.captionText,
@@ -93,7 +95,7 @@ export async function materializeCaptionArticle(args: {
     imageManifest = await args.populateImages({
       imageManifest,
       onProgress: async (completed, total) => {
-        await updateArticleWorkflowProjectState(args.prisma, args.projectId, {
+        await args.updateProgress({
           title: plan.title,
           summary,
           captionText: plan.captionText,
