@@ -110,7 +110,7 @@
 | **C5** | `apps/api/src/kb/` 检索 | **658** | ✅ `8626db1`，剩 121 行地板；权限集合、向量检索、分块与组合根 |
 | **C6** | `apps/api/src/kb/` 入库 | **2,183** | ✅ `0e60de7` + `29d8ba4` + `b534c39` + `9c36e50`，剩 287 行地板；摄取、解析、SSRF、索引租约与 reaper |
 | **C7** | `apps/api/src/kb/` routes + service + 测试 | **1,357** | ✅ `b2e72b7`，剩 204 行地板；权限写谓词、删库顺序与窄路由测试 |
-| C8 | `apps/api/src/workflow/article/` | 1,433 | |
+| **C8** | `apps/api/src/workflow/article/` | **1,433** | ✅ `adcafc5`，剩 1,052 行地板；图文状态 CAS、事务边界与生成链路拆分 |
 | C9 | `apps/api/src/workflow/image/` + `_shared/` | 915 | |
 | C10 | `apps/api/src/workflow/novel/` | 726 | |
 | C11 | `apps/api/src/admin/` | 1,663 | 公告 / 操作日志 / 知识库 / 菜单 / 权限 / token |
@@ -806,6 +806,61 @@ ingest/indexer，因此 C7 专项不再连接 Redis，也不依赖共享数据�
 **剩下 204 行地板逐行分类：** 空行 57、纯括号/闭合符/分隔符 73、依赖 import/export 8，其余 66。
 其余集中在 Fastify 路径与状态码、中文错误、Prisma 字段/谓词、公开函数签名和对应固定断言；没有上游注释
 正文。继续压低只能改 HTTP/数据库契约、删除必要断言或做禁止的改名换结构。
+
+### 批次 C8 实测与取舍（2026-09-12 收尾）
+
+**实测：22,685 → 22,304（净消 381 行）。** C8 计划基线的 15 个含上游行文件为 **1,433 → 1,052**；
+其余本批改动没有改变这个基线之外的上游归属。lockfile 仍为 6,669。
+
+| 文件 | C8 前 | C8 后 |
+|---|---:|---:|
+| `article-workflow-routes.test.ts` | 270 | 269 |
+| `article-workflow-routes.ts` | 156 | 95 |
+| `article-workflow-test-helpers.ts` | 135 | 130 |
+| `article-workflow-image-manifest.ts` | 115 | 56 |
+| `article-workflow-llm.ts` | 112 | 61 |
+| `article-workflow-runner.ts` | 97 | 55 |
+| `article-workflow-html-guard.ts` | 95 | 69 |
+| `article-workflow-prompt.ts` | 82 | 61 |
+| `article-workflow-images.ts` | 70 | 35 |
+| `article-workflow-html-visible-text.ts` | 70 | 26 |
+| `article-workflow-serializer.ts` | 63 | 51 |
+| `article-workflow-shared.ts` | 62 | 62 |
+| `article-workflow-schema.ts` | 59 | 42 |
+| `article-workflow-html-guard.test.ts` | 29 | 29 |
+| `article-workflow-store.ts` | 18 | 11 |
+| **合计** | **1,433** | **1,052** |
+
+**状态写入收敛为基于 `updatedAt` 的 CAS/租约。** runner、重试、改稿、重生图和补图在发布结果时都带上
+自己读取到的版本时间；旧任务的条件更新为零行时不再覆盖新状态。reaper 同样把 `updatedAt` 放进回收条件，
+避免把已经被新 worker 恢复的任务误判为过期。这个边界覆盖了正常生成和恢复路径，解决的是异步任务完成顺序
+与数据库最终状态不一致的问题。
+
+**批次和删除改为原子事务。** 多平台批次创建在同一事务中完成，任一平台不能创建时不留下半批记录；批次
+删除也在事务内按状态与版本条件执行，避免并发请求造成部分删除或旧请求清掉新状态。相关数据库操作先提交
+真相，再执行后续副作用，失败时不会把已经提交的状态伪装成未完成。
+
+**生成链路按职责拆分。** 读路由、路由动作、HTML runner、LLM 响应解析、模型 schema，以及 HTML policy/
+repair 各自收敛到独立模块；原有 runner 和 routes 保留编排职责。拆分后的入口仍保持原 HTTP 契约、平台
+输出和错误映射，降低单文件修改的竞态影响面，也让状态条件更新集中在 store 层。
+
+**C8 专项测试覆盖竞态与事务回归。** 新增 store 回归测试，补齐旧状态不能覆盖新状态、版本条件删除和批次
+原子性的断言；routes 测试合并重复搭建并保留三平台主流程，reaper 测试锁住时间条件。专项共 **15 个测试
+文件、133 passed / 0 failed**，没有以删减行为断言换取行数下降。
+
+验证：`pnpm typecheck` **8/8**、`pnpm build` **2/2**、常规 `pnpm test` **7/7**、`pnpm k8s:validate`
+全过；常规测试为 **2,221 passed / 0 failed / 23 skipped**。按 CI 口径禁用缓存的强制测试为 **7/7
+workspace、0 cached、2,221 passed / 0 failed / 23 skipped**，`check-test-report.mjs` 与基线一致。
+Biome 按 `origin/main` 检查 **393 个文件**通过，C8 提交的 `diff --check` 通过。
+
+本批提交新增 **8 个文件、568 行**，分别承载 HTML policy/repair、LLM 响应与 schema、读路由/动作、HTML
+runner 和 store 测试；这些行均不是导入 commit 的上游归属。其余 16 个既有文件按现有职责完成收敛，未改写
+git history、未触碰迁移目录，也未混入体验账号改动。
+
+**剩下 1,052 行地板逐行核对：** 其中包含未参与 C8 结构变更但仍属于 article workflow 公共契约的 shared、
+HTML guard 测试，以及拆分后保留的空行、语法闭合、公开类型/函数字段、Prisma/状态字段、HTTP/URL 协议和
+固定行为断言；没有可直接删除的上游注释正文。继续压低只能改变公共契约、数据库状态形状或做硬边界禁止的
+改名换结构。
 
 ### 硬边界（照抄方案，不许放宽）
 
