@@ -4,7 +4,16 @@ import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ObjectCannedACL } from "@aws-sdk/client-s3";
-import { makeS3, loadS3Config, putObject, putObjectFile, getObject, getObjectToFile, deleteObject } from "./s3.js";
+import {
+  deleteObject,
+  deletePrefix,
+  getObject,
+  getObjectToFile,
+  loadS3Config,
+  makeS3,
+  putObject,
+  putObjectFile,
+} from "./s3.js";
 
 const have = !!process.env.S3_ENDPOINT;
 
@@ -121,6 +130,72 @@ describe("getObjectToFile", () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it("rejects an empty response body without creating a file", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "s3-get-empty-"));
+    const filePath = join(dir, "download.bin");
+    try {
+      const { s3 } = fakeS3();
+      Object.assign(s3.client, { send: async () => ({}) });
+      await expect(getObjectToFile(s3, "objects/empty", filePath)).rejects.toThrow("empty body");
+      await expect(access(filePath)).rejects.toBeDefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not remove a destination file that already exists", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "s3-get-existing-"));
+    const filePath = join(dir, "download.bin");
+    const original = Buffer.from("keep-existing-content");
+    await writeFile(filePath, original);
+    try {
+      const { s3 } = fakeS3();
+      Object.assign(s3.client, {
+        send: async () => ({ Body: Readable.from([Buffer.from("replacement")]) }),
+      });
+      await expect(getObjectToFile(s3, "objects/a", filePath)).rejects.toMatchObject({ code: "EEXIST" });
+      await expect(readFile(filePath)).resolves.toEqual(original);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("deletePrefix", () => {
+  it("follows continuation tokens so prefixes larger than one page are fully deleted", async () => {
+    const { s3, sentCommands } = fakeS3();
+    let listPage = 0;
+    Object.assign(s3.client, {
+      send: async (command: { input: Record<string, unknown>; constructor: { name: string } }) => {
+        sentCommands.push(command);
+        if (command.constructor.name !== "ListObjectsV2Command") return {};
+        listPage += 1;
+        return listPage === 1
+          ? { Contents: [{ Key: "kb/1/a" }], IsTruncated: true, NextContinuationToken: "page-2" }
+          : { Contents: [{ Key: "kb/1/b" }], IsTruncated: false };
+      },
+    });
+
+    await deletePrefix(s3, "kb/1/");
+    const lists = sentCommands.filter((command) => command.constructor.name === "ListObjectsV2Command");
+    const deletes = sentCommands.filter((command) => command.constructor.name === "DeleteObjectCommand");
+    expect(lists).toHaveLength(2);
+    expect(lists[1]!.input.ContinuationToken).toBe("page-2");
+    expect(deletes.map((command) => command.input.Key)).toEqual(["kb/1/a", "kb/1/b"]);
+  });
+
+  it("fails instead of looping when a truncated page repeats its token", async () => {
+    const { s3 } = fakeS3();
+    Object.assign(s3.client, {
+      send: async (command: { constructor: { name: string } }) =>
+        command.constructor.name === "ListObjectsV2Command"
+          ? { IsTruncated: true, NextContinuationToken: "same-token" }
+          : {},
+    });
+
+    await expect(deletePrefix(s3, "kb/1/")).rejects.toThrow("without a new continuation token");
   });
 });
 

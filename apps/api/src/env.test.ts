@@ -88,19 +88,18 @@ describe("必需集的构成", () => {
   // 没有它们，任何人删掉入口里的 assertRequiredEnv() 或删掉一条必需项，
   // 整个仓库不会有任何测试变红 —— 那正是 P1.1 花力气消灭的那类无人看守代码。
   it("注册期就抛 ≥32 字节的密钥必须都在 SERVER_REQUIRED_ENV 里", () => {
-    const registrationTimeChecks = ["auth/routes.ts", "admin/routes.ts"];
+    const registrationTimeChecks = [
+      { file: "auth/auth-route-context.ts", key: "SESSION_SECRET" },
+      { file: "admin/routes.ts", key: "ADMIN_SESSION_SECRET" },
+    ] as const;
     const declared = new Map(SERVER_REQUIRED_ENV.map((item) => [item.key, item]));
-    for (const relative of registrationTimeChecks) {
-      const source = readFileSync(resolve(SRC_ROOT, relative), "utf8");
-      const keys = [
-        ...source.matchAll(/process\.env\.([A-Z][A-Z_0-9]+);?\n\s*if \(!secret \|\| secret\.length < 32\)/g),
-      ].map((match) => match[1]);
-      expect(keys.length, `${relative} 的注册期密钥校验形态变了，这条钉子需要同步`).toBeGreaterThan(0);
-      for (const key of keys) {
-        expect(declared.get(key), `${relative} 注册期要求 ${key}，但它不在 SERVER_REQUIRED_ENV`).toMatchObject({
-          minLength: 32,
-        });
-      }
+    for (const { file, key } of registrationTimeChecks) {
+      const source = readFileSync(resolve(SRC_ROOT, file), "utf8");
+      expect(source, `${file} 不再读取 ${key}`).toContain(key);
+      expect(source, `${file} 不再执行 32 字节下限校验`).toContain("secret.length < 32");
+      expect(declared.get(key), `${file} 注册期要求 ${key}，但它不在 SERVER_REQUIRED_ENV`).toMatchObject({
+        minLength: 32,
+      });
     }
   });
 

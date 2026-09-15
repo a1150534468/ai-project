@@ -14,7 +14,7 @@ const cfg: S3Config = {
 describe("publicObjectUrl", () => {
   it("优先用 S3_PUBLIC_BASE_URL", () => {
     expect(publicObjectUrl(cfg, "a/b.webp", { S3_PUBLIC_BASE_URL: "https://cdn.x/" })).toBe(
-      "https://cdn.x/a/b.webp"
+      "https://cdn.x/a/b.webp",
     );
   });
 
@@ -30,7 +30,12 @@ describe("publicObjectUrl", () => {
 
   it("key 分段做 URL 编码，不吃掉斜杠", () => {
     expect(publicObjectUrl(cfg, "a b/c+d.webp", {})).toBe(
-      "https://buck.oss.example.com/a%20b/c%2Bd.webp"
+      "https://buck.oss.example.com/a%20b/c%2Bd.webp",
     );
+  });
+
+  it("保留 endpoint 的端口和路径前缀", () => {
+    const endpoint = { ...cfg, endpoint: "http://localhost:9000/root", forcePathStyle: true };
+    expect(publicObjectUrl(endpoint, "a.png", {})).toBe("http://localhost:9000/root/buck/a.png");
   });
 });

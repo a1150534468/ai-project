@@ -1,25 +1,25 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-function b64url(buf: Buffer): string {
-  return buf.toString("base64url");
+const DEFAULT_TTL_MS = 7 * 24 * 60 * 60 * 1_000;
+
+function signature(payload: string, secret: string): string {
+  return createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-// token 结构: <userId>.<expMs>.<hmac>
-export function signToken(userId: string, secret: string, ttlMs = 7 * 24 * 3600_000): string {
-  const exp = String(Date.now() + ttlMs);
-  const payload = `${userId}.${exp}`;
-  const sig = b64url(createHmac("sha256", secret).update(payload).digest());
-  return `${payload}.${sig}`;
+export function signToken(userId: string, secret: string, ttlMs = DEFAULT_TTL_MS): string {
+  if (!userId || userId.includes(".")) throw new Error("用户 ID 不合法");
+  const payload = `${userId}.${Math.trunc(Date.now() + ttlMs)}`;
+  return `${payload}.${signature(payload, secret)}`;
 }
 
 export function verifyToken(token: string, secret: string): string | null {
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-  const [userId, exp, sig] = parts;
-  const expected = b64url(createHmac("sha256", secret).update(`${userId}.${exp}`).digest());
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
-  if (Number(exp) < Date.now()) return null;
+  const [userId, expiresText, supplied, ...extra] = token.split(".");
+  if (extra.length > 0 || !userId || !/^\d+$/.test(expiresText ?? "") || !supplied) return null;
+  const expiresAt = Number(expiresText);
+  if (!Number.isSafeInteger(expiresAt) || expiresAt < Date.now()) return null;
+
+  const actual = Buffer.from(supplied);
+  const expected = Buffer.from(signature(`${userId}.${expiresText}`, secret));
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
   return userId;
 }

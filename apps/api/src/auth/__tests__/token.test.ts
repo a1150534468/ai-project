@@ -16,4 +16,8 @@ describe("session token", () => {
     const t = signToken("user_123", secret);
     expect(verifyToken(t, "another-secret-at-least-32-bytes-long-yy")).toBeNull();
   });
+  it("拒绝过期或非数字过期时间", () => {
+    expect(verifyToken(signToken("user_123", secret, -1), secret)).toBeNull();
+    expect(verifyToken(signToken("user_123", secret, Number.NaN), secret)).toBeNull();
+  });
 });
