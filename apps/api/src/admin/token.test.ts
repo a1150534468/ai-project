@@ -19,4 +19,8 @@ describe("admin token", () => {
   it("用户 token 形态(无 admin. 前缀)被拒", () => {
     expect(verifyAdminToken("admin1.123.sig", secret)).toBeNull();
   });
+  it("非数字过期时间即使签名来自本服务也被拒", () => {
+    const token = signAdminToken("admin1", secret, Number.NaN);
+    expect(verifyAdminToken(token, secret)).toBeNull();
+  });
 });

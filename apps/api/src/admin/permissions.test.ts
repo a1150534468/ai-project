@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { hasPermission, PERMISSIONS } from "./permissions.js";
+import { GRANTABLE_PERMISSIONS, hasPermission, PERMISSIONS } from "./permissions.js";
 
 describe("权限", () => {
   it("super_admin 拥有任意权限", () => {
@@ -21,5 +21,6 @@ describe("权限", () => {
       "ADMIN_MANAGE",
       "KNOWLEDGE_MANAGE",
     ]);
+    expect(GRANTABLE_PERMISSIONS).not.toContain("ADMIN_MANAGE");
   });
 });

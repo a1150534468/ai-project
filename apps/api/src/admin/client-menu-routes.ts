@@ -3,6 +3,7 @@ import type { PrismaClient } from "@ai-assistant/db";
 import { getPrisma } from "@ai-assistant/db";
 import { z } from "zod";
 import { requireAdmin } from "./guard.js";
+import { requestAdminId } from "./request-admin.js";
 import { writeAudit } from "./audit.js";
 import {
   CLIENT_MENU_CATALOG,
@@ -54,8 +55,7 @@ export async function clientMenuRoutes(
         update: { visible: parsed.data.visible },
       });
       const definition = CLIENT_MENU_CATALOG.find((item) => item.key === key)!;
-      const me = (req as unknown as { admin: { id: string } }).admin;
-      await writeAudit(prisma, me.id, "CLIENT_MENU_VISIBILITY_UPDATE", key, {
+      await writeAudit(prisma, requestAdminId(req), "CLIENT_MENU_VISIBILITY_UPDATE", key, {
         visible: parsed.data.visible,
       });
       return {

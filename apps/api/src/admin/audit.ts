@@ -1,18 +1,20 @@
-import type { PrismaClient } from "@ai-assistant/db";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
-export async function writeAudit(
-  prisma: PrismaClient,
+type AuditDb = PrismaClient | Prisma.TransactionClient;
+
+export function writeAudit(
+  db: AuditDb,
   adminId: string,
   action: string,
   target?: string,
   detail?: unknown,
-): Promise<void> {
-  await prisma.adminAudit.create({
+): Promise<unknown> {
+  return db.adminAudit.create({
     data: {
       adminId,
       action,
       target: target ?? null,
-      detail: (detail ?? null) as never,
+      detail: (detail ?? null) as Prisma.InputJsonValue,
     },
   });
 }

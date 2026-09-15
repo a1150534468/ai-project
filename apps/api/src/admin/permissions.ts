@@ -1,3 +1,10 @@
+export const GRANTABLE_PERMISSIONS = [
+  "USER_MANAGE",
+  "USER_DETAIL_VIEW",
+  "ANNOUNCEMENT_MANAGE",
+  "KNOWLEDGE_MANAGE",
+] as const;
+
 export const PERMISSIONS = [
   "USER_MANAGE",
   "USER_DETAIL_VIEW",
@@ -9,9 +16,8 @@ export const PERMISSIONS = [
 export type Permission = (typeof PERMISSIONS)[number];
 
 export function hasPermission(
-  admin: { role: string; permissions: string[] },
-  perm: Permission,
+  admin: { readonly role: string; readonly permissions: readonly string[] },
+  permission: Permission,
 ): boolean {
-  if (admin.role === "super_admin") return true;
-  return admin.permissions.includes(perm);
+  return admin.role === "super_admin" || admin.permissions.includes(permission);
 }

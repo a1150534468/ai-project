@@ -159,6 +159,15 @@ describe("admin 用户管理", () => {
     expect((await prisma.user.findUnique({ where: { id: userId } }))!.bannedAt).toBeNull();
   });
 
+  it("封禁不存在的用户返回 404", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/admin/users/missing-user/ban",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.statusCode).toBe(404);
+  });
+
   it("无 USER_MANAGE 权限的管理员被拒（403）", async () => {
     const r = await app.inject({
       method: "GET",

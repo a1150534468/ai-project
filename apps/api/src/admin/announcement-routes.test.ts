@@ -59,4 +59,21 @@ describe("公告", () => {
     const pub = await app.inject({ method: "GET", url: "/api/announcements" });
     expect(pub.json<{ success: boolean; data: { id: string }[] }>().data.some((a) => a.id === id)).toBe(false);
   });
+
+  it("更新和删除不存在的公告返回 404", async () => {
+    const headers = { authorization: `Bearer ${tok}` };
+    const updated = await app.inject({
+      method: "PATCH",
+      url: "/api/admin/announcements/missing-announcement",
+      headers,
+      payload: { active: false },
+    });
+    const deleted = await app.inject({
+      method: "DELETE",
+      url: "/api/admin/announcements/missing-announcement",
+      headers,
+    });
+    expect(updated.statusCode).toBe(404);
+    expect(deleted.statusCode).toBe(404);
+  });
 });

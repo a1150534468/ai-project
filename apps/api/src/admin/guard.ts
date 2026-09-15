@@ -1,23 +1,25 @@
-import type { FastifyReply, FastifyRequest } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
-import type { PrismaClient } from "@ai-assistant/db";
-import { verifyAdminToken } from "./token.js";
-import { getAdminById } from "./service.js";
+import type { FastifyReply, FastifyRequest } from "fastify";
 import { hasPermission, type Permission } from "./permissions.js";
+import { getAdminById } from "./service.js";
+import { verifyAdminToken } from "./token.js";
 
 export interface LoadedAdmin {
-  id: string;
-  role: string;
-  permissions: string[];
-  disabled: boolean;
+  readonly id: string;
+  readonly role: string;
+  readonly permissions: string[];
+  readonly disabled: boolean;
 }
 
-// 纯核：adminId 已解析；loadAdmin 取库；返回判定
+type AdminAuthResult =
+  | { readonly ok: true; readonly admin: LoadedAdmin }
+  | { readonly ok: false; readonly code: 401 | 403 };
+
 export async function checkAdminAuth(
   adminId: string | null,
   loadAdmin: (id: string) => Promise<LoadedAdmin | null>,
   permission: Permission,
-): Promise<{ ok: boolean; code?: number; admin?: LoadedAdmin }> {
+): Promise<AdminAuthResult> {
   if (!adminId) return { ok: false, code: 401 };
   const admin = await loadAdmin(adminId);
   if (!admin || admin.disabled) return { ok: false, code: 401 };
@@ -25,26 +27,28 @@ export async function checkAdminAuth(
   return { ok: true, admin };
 }
 
-// Fastify preHandler 工厂：解析 admin token → checkAdminAuth → 通过则把 admin 挂到 req
+function bearerToken(request: FastifyRequest): string | null {
+  const authorization = request.headers.authorization;
+  return authorization?.startsWith("Bearer ") ? authorization.slice(7) : null;
+}
+
 export function requireAdmin(permission: Permission) {
-  return async (req: FastifyRequest, reply: FastifyReply) => {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
     const secret = process.env.ADMIN_SESSION_SECRET;
     if (!secret || secret.length < 32) {
       return reply.code(500).send({ error: "ADMIN_SESSION_SECRET 未配置" });
     }
-    const auth = req.headers.authorization;
-    const token = auth?.startsWith("Bearer ") ? auth.slice(7) : null;
-    const adminId = token ? verifyAdminToken(token, secret) : null;
-    const prisma = getPrisma();
-    const r = await checkAdminAuth(
-      adminId,
-      (id) => getAdminById(prisma, id) as Promise<LoadedAdmin | null>,
+
+    const token = bearerToken(request);
+    const result = await checkAdminAuth(
+      token ? verifyAdminToken(token, secret) : null,
+      (id) => getAdminById(getPrisma(), id),
       permission,
     );
-    if (!r.ok) {
-      const msg = r.code === 403 ? `需要 ${permission} 权限` : "管理员未登录或无效";
-      return reply.code(r.code!).send({ error: msg });
+    if (!result.ok) {
+      const error = result.code === 403 ? `需要 ${permission} 权限` : "管理员未登录或无效";
+      return reply.code(result.code).send({ error });
     }
-    (req as unknown as { admin: LoadedAdmin }).admin = r.admin!;
+    (request as FastifyRequest & { admin: LoadedAdmin }).admin = result.admin;
   };
 }

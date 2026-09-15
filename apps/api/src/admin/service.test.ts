@@ -30,5 +30,18 @@ describe("admin service", () => {
     const list = await listAdmins(prisma);
     expect(list.length).toBeGreaterThan(0);
     expect((list[0] as unknown as Record<string, unknown>).passwordHash).toBeUndefined();
+    const one = await getAdminById(prisma, list[0]!.id);
+    expect(one?.id).toBe(list[0]!.id);
+    expect((one as unknown as Record<string, unknown>).passwordHash).toBeUndefined();
+  });
+  it("服务层拒绝给普通管理员显式 ADMIN_MANAGE", async () => {
+    await expect(
+      createAdmin(prisma, {
+        username: `adm_forbidden_${Date.now()}`,
+        password: "pw12345678",
+        role: "admin",
+        permissions: ["ADMIN_MANAGE"],
+      }),
+    ).rejects.toThrow("ADMIN_MANAGE");
   });
 });
