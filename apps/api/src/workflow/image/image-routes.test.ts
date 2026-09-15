@@ -931,7 +931,8 @@ describe("image workflow routes", () => {
 
     expect(response.statusCode).toBe(202);
     await scheduled[0];
-    expect(prisma.imageGenerationTask.update).toHaveBeenCalledWith(expect.objectContaining({
+    expect(prisma.imageGenerationTask.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ status: "running" }),
       data: expect.objectContaining({
         status: "running",
         error: expect.stringContaining("image relay 503"),

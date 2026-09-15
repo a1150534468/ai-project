@@ -131,13 +131,6 @@ export async function runImageGenerationTask(args: {
     });
   } catch (error) {
     if (error instanceof ImageTaskStoppedError) {
-      // 取消已由 cancel 路由写成终态，这里只兜底刷新状态
-      if (error.status === IMAGE_TASK_STATUS.cancelled) {
-        await updateTask(prisma, task.id, {
-          status: IMAGE_TASK_STATUS.cancelled,
-          error: "用户已取消",
-        }).catch(() => undefined);
-      }
       return;
     }
     // 取消触发的 AbortError 会以普通错误抛出：任务已是 cancelled 时不得改写为 failed

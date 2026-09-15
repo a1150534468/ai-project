@@ -310,10 +310,15 @@ export async function updateTask(
     readonly error?: string | null;
   },
 ): Promise<void> {
-  await prisma.imageGenerationTask.update({
-    where: { id: taskId },
+  const updated = await prisma.imageGenerationTask.updateMany({
+    where: { id: taskId, status: IMAGE_TASK_STATUS.running },
     data,
   });
+  if (updated.count === 1) return;
+
+  const current = await prisma.imageGenerationTask.findUnique({ where: { id: taskId } });
+  if (!current) throw new Error("image task not found");
+  throw new ImageTaskStoppedError(current.status);
 }
 
 export function safeErrorMessage(error: unknown): string {
