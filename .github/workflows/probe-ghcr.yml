@@ -1,0 +1,185 @@
+name: Probe GHCR delivery path
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Commit, tag, or branch to build without deploying it
+        required: true
+        default: 6bd71474b21d18489e2e158abfa948c9da4883fb
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-delivery-probe
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build and push API probe image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      image_ref: ${{ steps.source.outputs.image_ref }}
+      digest: ${{ steps.build.outputs.digest }}
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+      - name: Resolve source image reference
+        id: source
+        env:
+          IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/ai-project-api
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse HEAD)
+          image_ref="$IMAGE_REPO:ghcr-probe-$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
+          echo "Building $image_ref"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - name: Build and push probe image
+        id: build
+        uses: docker/build-push-action@v6
+        env:
+          SOURCE_DATE_EPOCH: "0"
+        with:
+          context: .
+          file: infra/docker/api/Dockerfile
+          platforms: linux/amd64
+          push: true
+          build-args: |
+            USE_CHINA_APT_MIRROR=false
+            NPM_CONFIG_REGISTRY=https://registry.npmjs.org
+            PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
+          tags: ${{ steps.source.outputs.image_ref }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          provenance: false
+          sbom: false
+      - name: Record pushed image
+        env:
+          IMAGE_REF: ${{ steps.source.outputs.image_ref }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          {
+            echo "### GHCR push complete"
+            echo
+            echo "- Image: \`$IMAGE_REF\`"
+            echo "- Digest: \`$IMAGE_DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  pull-from-production:
+    name: Pull from production host without deploying
+    needs: build
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 120
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+      IMAGE_REF: ${{ needs.build.outputs.image_ref }}@${{ needs.build.outputs.digest }}
+      SOURCE_SHA: ${{ needs.build.outputs.source_sha }}
+      GHCR_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+      GHCR_USERNAME: ${{ github.repository_owner }}
+    steps:
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PRIVATE_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+      - name: Pull, inspect, and remove probe image
+        run: |
+          set -euo pipefail
+          ssh_target="$DEPLOY_USER@$DEPLOY_HOST"
+          ssh_port="${DEPLOY_PORT:-22}"
+          remote_token_file="/tmp/ghcr-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.token"
+          test -n "$GHCR_TOKEN"
+
+          printf '%s' "$GHCR_TOKEN" | ssh -p "$ssh_port" "$ssh_target" \
+            "umask 077; cat > '$remote_token_file'"
+
+          ssh -p "$ssh_port" "$ssh_target" bash -s -- \
+            "$remote_token_file" "$GHCR_USERNAME" "$IMAGE_REF" "$SOURCE_SHA" <<'REMOTE' \
+            | tee /tmp/ghcr-probe-result.log
+          set -euo pipefail
+          token_file=$1
+          github_actor=$2
+          image_ref=$3
+          expected_sha=$4
+          docker_config=$(mktemp -d)
+
+          cleanup() {
+            rm -f "$token_file"
+            rm -rf "$docker_config"
+            docker image rm "$image_ref" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          available_kb=$(df -Pk /var/lib/docker 2>/dev/null | awk 'NR==2 {print $4}')
+          if [ -z "$available_kb" ]; then
+            available_kb=$(df -Pk / | awk 'NR==2 {print $4}')
+          fi
+          if [ "$available_kb" -lt 3145728 ]; then
+            echo "less than 3 GiB free on the Docker filesystem" >&2
+            exit 1
+          fi
+
+          before_mem_kb=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+          cat "$token_file" | docker --config "$docker_config" login ghcr.io \
+            --username "$github_actor" --password-stdin >/dev/null
+
+          started_at=$(date +%s)
+          pulled=0
+          for attempt in 1 2 3; do
+            echo "GHCR pull attempt $attempt started at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            if timeout --signal=TERM 5400 docker --config "$docker_config" pull "$image_ref"; then
+              pulled=1
+              break
+            fi
+            sleep $((attempt * 15))
+          done
+          if [ "$pulled" -ne 1 ]; then
+            echo "GHCR pull failed after three attempts" >&2
+            exit 1
+          fi
+
+          duration_seconds=$(( $(date +%s) - started_at ))
+          after_mem_kb=$(awk '/^MemAvailable:/ {print $2}' /proc/meminfo)
+          architecture=$(docker image inspect "$image_ref" --format '{{.Architecture}}')
+          image_size=$(docker image inspect "$image_ref" --format '{{.Size}}')
+          revision=$(docker image inspect "$image_ref" \
+            --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')
+
+          test "$architecture" = amd64
+          test "$revision" = "$expected_sha"
+          printf 'result=success\nimage=%s\narchitecture=%s\nsize_bytes=%s\nduration_seconds=%s\nmem_available_before_kb=%s\nmem_available_after_kb=%s\n' \
+            "$image_ref" "$architecture" "$image_size" "$duration_seconds" \
+            "$before_mem_kb" "$after_mem_kb"
+          REMOTE
+
+          {
+            echo "### Production host GHCR pull probe"
+            echo
+            echo '```text'
+            cat /tmp/ghcr-probe-result.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
