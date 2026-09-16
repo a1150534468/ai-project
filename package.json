@@ -15,7 +15,8 @@
     "format": "biome format --write",
     "format:check": "biome format",
     "lint": "biome lint",
-    "typecheck": "pnpm --filter @ai-assistant/db generate && turbo run typecheck",
+    "db:migrations:verify": "node scripts/check-historical-migrations.mjs",
+    "typecheck": "pnpm db:migrations:verify && pnpm --filter @ai-assistant/db generate && turbo run typecheck",
     "k8s:validate": "kubectl kustomize infra/k8s/base >/dev/null"
   },
   "devDependencies": {
