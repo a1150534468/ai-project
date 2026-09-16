@@ -1,11 +1,7 @@
 import { PrismaClient } from "@prisma/client";
+import { lazySingleton } from "./lazy-singleton.js";
 
-let prisma: PrismaClient | undefined;
-
-export function getPrisma(): PrismaClient {
-  if (!prisma) prisma = new PrismaClient();
-  return prisma;
-}
+export const getPrisma = lazySingleton(() => new PrismaClient());
 
 export type { PrismaClient } from "@prisma/client";
 export { getRedis } from "./redis.js";

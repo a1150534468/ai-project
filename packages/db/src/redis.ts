@@ -1,9 +1,9 @@
 import { Redis } from "ioredis";
+import { lazySingleton } from "./lazy-singleton.js";
 
-let redis: Redis | undefined;
-
-export function getRedis(url = process.env.REDIS_URL): Redis {
+const connectRedis = (url = process.env.REDIS_URL): Redis => {
   if (!url) throw new Error("REDIS_URL is required");
-  if (!redis) redis = new Redis(url);
-  return redis;
-}
+  return new Redis(url);
+};
+
+export const getRedis = lazySingleton(connectRedis);
