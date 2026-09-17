@@ -162,7 +162,11 @@ jobs:
           test "$(uname -s)" = Darwin
           test "$(uname -m)" = arm64
           echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          umask 077
           mkdir -p "$DOCKER_CONFIG/cli-plugins"
+          # macOS 上如果 config.json 不存在，docker login 会自动启用 Keychain helper；
+          # launchd Runner 无法弹交互授权。先放一个显式的临时配置，后面直接写 auths。
+          jq -n '{auths:{}}' > "$DOCKER_CONFIG/config.json"
           ln -sf "$HOME/.docker/cli-plugins/docker-buildx" \
             "$DOCKER_CONFIG/cli-plugins/docker-buildx"
           export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
@@ -170,11 +174,25 @@ jobs:
           docker info >/dev/null
           buildx_info=$(docker buildx inspect default --bootstrap)
           grep -q 'linux/amd64' <<< "$buildx_info"
-      - uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.REGISTRY }}
-          username: ${{ secrets.REGISTRY_USERNAME }}
-          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Configure temporary TCR credentials
+        env:
+          REGISTRY: ${{ secrets.REGISTRY }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$REGISTRY"
+          test -n "$REGISTRY_USERNAME"
+          test -n "$REGISTRY_PASSWORD"
+          umask 077
+          temp_config=$(mktemp "$DOCKER_CONFIG/config.json.XXXXXX")
+          jq -n \
+            --arg registry "$REGISTRY" \
+            --arg username "$REGISTRY_USERNAME" \
+            --rawfile password <(printf '%s' "$REGISTRY_PASSWORD") \
+            '{auths:{($registry):{auth:([$username,$password] | join(":") | @base64)}}}' \
+            > "$temp_config"
+          mv "$temp_config" "$DOCKER_CONFIG/config.json"
       - name: Resolve source hash
         id: src
         env:
