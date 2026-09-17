@@ -1,0 +1,147 @@
+name: Inspect production runtime
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_tag:
+        description: Optional deployed image tag that must be active
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-diagnostics
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, macOS, ARM64, release-mac]
+    environment: production
+    timeout-minutes: 10
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_ROOT: ${{ secrets.DEPLOY_ROOT }}
+      DEPLOY_PRIVATE_KEY: ${{ secrets.DEPLOY_PRIVATE_KEY }}
+      EXPECTED_TAG: ${{ inputs.expected_tag }}
+    steps:
+      - name: Inspect health, memory, and rollback image
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_ROOT"
+          test -n "$DEPLOY_PRIVATE_KEY"
+
+          ssh_dir=$(mktemp -d "$RUNNER_TEMP/production-diagnostics.XXXXXX")
+          trap 'rm -rf "$ssh_dir"' EXIT
+          key_file="$ssh_dir/id_ed25519"
+          known_hosts="$ssh_dir/known_hosts"
+          printf '%s\n' "$DEPLOY_PRIVATE_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" > "$known_hosts" 2>/dev/null
+
+          ssh -i "$key_file" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o UserKnownHostsFile="$known_hosts" \
+            -p "${DEPLOY_PORT:-22}" \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            bash -s -- "$DEPLOY_ROOT" "$EXPECTED_TAG" <<'REMOTE'
+          set -euo pipefail
+          deploy_root=$1
+          expected_tag=$2
+          project_name=ai-assistant
+          tag_file="$deploy_root/.deployed-image-tag"
+
+          test -r "$tag_file"
+          deployed_tag=$(tr -d '[:space:]' < "$tag_file")
+          if [ -n "$expected_tag" ] && [ "$deployed_tag" != "$expected_tag" ]; then
+            echo "expected deployed tag $expected_tag, found $deployed_tag" >&2
+            exit 1
+          fi
+          echo "deployed_tag=$deployed_tag"
+
+          mapfile -t container_ids < <(
+            docker ps \
+              --filter "label=com.docker.compose.project=$project_name" \
+              --format '{{.ID}}'
+          )
+          if [ "${#container_ids[@]}" -ne 5 ]; then
+            echo "expected 5 running project containers, found ${#container_ids[@]}" >&2
+            exit 1
+          fi
+
+          states=$(docker inspect \
+            --format '{{.Name}}|{{.Config.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}|{{.State.OOMKilled}}|{{.RestartCount}}' \
+            "${container_ids[@]}")
+          printf '%s\n' "$states"
+          if printf '%s\n' "$states" | awk -F '|' '$3 != "running" || $4 != "healthy" || $5 != "false" { bad=1 } END { exit bad }'; then
+            echo "container_health=ok"
+          else
+            echo "one or more production containers are unhealthy or OOM-killed" >&2
+            exit 1
+          fi
+
+          for service in api worker gateway; do
+            container_id=$(docker ps \
+              --filter "label=com.docker.compose.project=$project_name" \
+              --filter "label=com.docker.compose.service=$service" \
+              --format '{{.ID}}')
+            image_ref=$(docker inspect --format '{{.Config.Image}}' "$container_id")
+            case "$image_ref" in
+              *:"$deployed_tag") ;;
+              *) echo "$service is not running deployed tag $deployed_tag: $image_ref" >&2; exit 1 ;;
+            esac
+          done
+
+          stats=$(docker stats --no-stream \
+            --format '{{.Name}}|{{.MemUsage}}|{{.MemPerc}}|{{.PIDs}}' \
+            "${container_ids[@]}")
+          printf '%s\n' "$stats"
+          total_mib=$(printf '%s\n' "$stats" | awk -F '|' '
+            function to_mib(raw, parts, value, unit) {
+              split(raw, parts, " ")
+              value = parts[1] + 0
+              unit = parts[1]
+              gsub(/[0-9.]/, "", unit)
+              if (unit == "GiB") return value * 1024
+              if (unit == "MiB") return value
+              if (unit == "KiB") return value / 1024
+              if (unit == "GB") return value * 953.674
+              if (unit == "MB") return value * 0.953674
+              if (unit == "kB") return value * 0.000953674
+              if (unit == "B") return value / 1048576
+              return 1048576
+            }
+            { total += to_mib($2) }
+            END { printf "%.1f", total }
+          ')
+          echo "project_memory_mib=$total_mib"
+          awk -v total="$total_mib" 'BEGIN { exit !(total < 2048) }' \
+            || { echo "project memory is not below 2048 MiB" >&2; exit 1; }
+
+          api_container=$(docker ps \
+            --filter "label=com.docker.compose.project=$project_name" \
+            --filter 'label=com.docker.compose.service=api' \
+            --format '{{.ID}}')
+          api_image=$(docker inspect --format '{{.Config.Image}}' "$api_container")
+          api_repo=${api_image%:*}
+          rollback_tag=""
+          while IFS= read -r candidate; do
+            if [[ "$candidate" =~ ^[0-9a-f]{40}$ ]] && [ "$candidate" != "$deployed_tag" ]; then
+              rollback_tag=$candidate
+              break
+            fi
+          done < <(docker image ls "$api_repo" --format '{{.Tag}}')
+          test -n "$rollback_tag"
+          image_base=${api_repo%-api}
+          for image_name in api migrate gateway; do
+            docker manifest inspect "${image_base}-${image_name}:$rollback_tag" >/dev/null
+          done
+          echo "rollback_tag=$rollback_tag"
+          free -m
+          REMOTE
