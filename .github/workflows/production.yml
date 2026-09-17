@@ -19,6 +19,10 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -53,22 +57,24 @@ jobs:
     # 发布。现在触发条件里已经没有 pull_request，这个判断恒为真，删掉免得误读成
     # 「还有某种情况不发布」。
     needs: verify
-    runs-on: ubuntu-latest
+    # 专用 Mac Runner 只服务发布镜像：仓库没有 PR 触发这份工作流，
+    # 而 release-mac 自定义标签防止普通 self-hosted job 误占用这台电脑。
+    runs-on: [self-hosted, macOS, ARM64, release-mac]
     # 每个镜像走三条路之一，判定在下面的 Resolve source hash 那步：
     #   1. TCR 上已经有 :src-<内容哈希> ⇒ imagetools create 在 registry 内部复制出
     #      :<sha>，只传一份 manifest，十秒级完事，连 dockerd 都不用重启。
-    #   2. 没有 ⇒ 正常 build（读 main 上预热好的 gha 缓存，见 warm-image-cache.yml），
-    #      再 push；只有没命中缓存的那几层会真的过出境管子。
+    #   2. 没有 ⇒ 在 Mac 的持久 Docker Desktop BuildKit 上 build，再直接 push TCR。
+    #      后续发布同时复用本机构建缓存和 TCR 已落地的内容寻址层。
     #   3. 查不动（网络抖、凭据不对、任何非零退出）⇒ 一律当成「没有」，走第 2 条。
-    # 绕这一圈是因为发布慢的根本不是构建，而是「把已经在 TCR 里的字节再传一遍」：
-    # runner 出境到国内实测只有 0.15~0.40 MB/s，api 镜像 462 MB 就是 19~51 分钟。
+    # 绕这一圈是因为发布慢的根本不是构建，而是 GitHub Runner 出境：
+    # 实测 GitHub→TCR <0.17 MB/s，Mac→TCR 为 0.44 MB/s。生产机仍从 TCR 拉取，
+    # 不在生产机构建，也不让生产机走 GHCR 的慢速 Blob 链路。
     # gateway（前端静态产物）和 migrate（内容只跟 packages/db/prisma 有关）平时几乎
     # 不变，第 1 条路主要是给它们省的。
     #
-    # 115 分钟 > 单趟 95m 推送窗口 + 冷缓存构建的十几分钟。上限是按「实测出境速率」倒推的，
-    # 不是拍的：2026-09-02 的带宽探测（probe-egress.yml）显示 runner→国内只有 0.16 MB/s
-    # 量级，v0.1.2 的实测区间是 0.15~0.40 MB/s。所以短窗口是「物理上不够」，不是网络故障。
-    timeout-minutes: 115
+    # 455 MB 冷推按 Mac→TCR 实测约 17 分钟；60 分钟同时容纳首次 amd64
+    # 跨架构构建。不内嵌长时重试：快速失败直接报错，人工 rerun 才续跑。
+    timeout-minutes: 60
     strategy:
       max-parallel: 1
       # fail-fast: false 是必须的。默认 true 时 api 一失败，还在 queued 的 migrate/
@@ -98,9 +104,9 @@ jobs:
             context: .
             file: infra/docker/api/Dockerfile
             build_args: |
-              USE_CHINA_APT_MIRROR=false
-              NPM_CONFIG_REGISTRY=https://registry.npmjs.org
-              PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
+              USE_CHINA_APT_MIRROR=true
+              NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+              PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
             # 对应 Dockerfile 第 34-42、50-52 行的 COPY。packages/ 整个进来：api 是
             # `pnpm deploy` 把 workspace 依赖打包进 node_modules 的，挑包等于赌 import 图。
             hash_paths: |
@@ -116,9 +122,9 @@ jobs:
             context: .
             file: infra/docker/migrate/Dockerfile
             build_args: |
-              USE_CHINA_APT_MIRROR=false
-              NPM_CONFIG_REGISTRY=https://registry.npmjs.org
-              PRISMA_ENGINES_MIRROR=https://binaries.prisma.sh
+              USE_CHINA_APT_MIRROR=true
+              NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
+              PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
             # 全镜像只有一条业务 COPY（Dockerfile 第 35 行 packages/db/prisma）。
             # 刻意不含 pnpm-lock.yaml：这个镜像不跑 pnpm，prisma 版本是第 30 行
             # `npm i prisma@6.19.3` 写死的字面量，而 Dockerfile 自己在集合里。
@@ -148,10 +154,22 @@ jobs:
               .dockerignore
     steps:
       - uses: actions/checkout@v4
-      # 登录挪到最前面（原来排在 setup-buildx 后面）：紧接着的 Resolve source hash 要查
-      # TCR 上有没有现成镜像，得先有凭据。imagetools 直接说 registry 的 HTTP 协议、不经过
-      # dockerd，所以它排在「重启 docker」前面反而更稳；凭据落在 ~/.docker/config.json，
-      # 是客户端文件，下面重启 dockerd 不会把它冲掉。
+      - name: Prepare dedicated Mac builder
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/docker-config-${{ github.run_id }}-${{ matrix.name }}
+        run: |
+          set -euo pipefail
+          test "$(uname -s)" = Darwin
+          test "$(uname -m)" = arm64
+          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          mkdir -p "$DOCKER_CONFIG/cli-plugins"
+          ln -sf "$HOME/.docker/cli-plugins/docker-buildx" \
+            "$DOCKER_CONFIG/cli-plugins/docker-buildx"
+          export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
+          echo "DOCKER_HOST=$DOCKER_HOST" >> "$GITHUB_ENV"
+          docker info >/dev/null
+          buildx_info=$(docker buildx inspect default --bootstrap)
+          grep -q 'linux/amd64' <<< "$buildx_info"
       - uses: docker/login-action@v3
         with:
           registry: ${{ secrets.REGISTRY }}
@@ -188,7 +206,7 @@ jobs:
             echo "::error::hash_paths 没匹配到任何文件，集合写错了"
             exit 1
           fi
-          hash=$(printf '%s\n%s\n%s\n' "$SPEC" "$PATHS" "$tree" | sha256sum | cut -c1-16)
+          hash=$(printf '%s\n%s\n%s\n' "$SPEC" "$PATHS" "$tree" | shasum -a 256 | cut -c1-16)
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
           echo "参与计算 $(printf '%s\n' "$tree" | wc -l) 个文件，hash=$hash"
           # 查得到就复用；查不到——404、网络抖、凭据不对，任何非零退出——都当作没有，重新构建。
@@ -236,24 +254,6 @@ jobs:
           else
             docker buildx imagetools create -t "$IMAGE_REF" "$SRC_REF"
           fi
-      - name: Limit concurrent registry uploads
-        # 命中跳过时这一步没意义（不推任何层），而它要重启 dockerd，白花二十来秒。
-        if: steps.src.outputs.hit != 'true'
-        # 并发回到 1。出境是一根被限到 0.16 MB/s 量级的管子，并发只是把它切成 N 份，
-        # 结果谁都跑不完一整层：v0.1.1（并发 1）推完 8/11 层，v0.1.2（并发 3）反而只
-        # 推完 6/11、attempt 1 一层都没落地。限速链路上，串行才能把层一个个「存档」。
-        run: |
-          daemon_config="$(mktemp)"
-          if sudo test -f /etc/docker/daemon.json; then
-            sudo cat /etc/docker/daemon.json \
-              | jq '. + {"max-concurrent-uploads": 1}' > "$daemon_config"
-          else
-            jq -n '{"max-concurrent-uploads": 1}' > "$daemon_config"
-          fi
-          sudo install -m 0644 "$daemon_config" /etc/docker/daemon.json
-          sudo systemctl restart docker
-      - uses: docker/setup-buildx-action@v3
-        if: steps.src.outputs.hit != 'true'
       - uses: docker/build-push-action@v6
         if: steps.src.outputs.hit != 'true'
         env:
@@ -264,6 +264,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
+          platforms: linux/amd64
           build-args: ${{ matrix.build_args }}
           # 这里原来是 `load: true`。换成等价的 outputs 写法只为了能多带一个 exporter 选项，
           # 「build 到本地 → 单独 docker push」的结构一点没动（type=docker 且不带 dest 就是
@@ -287,48 +288,16 @@ jobs:
           tags: |
             ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
             ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
-          cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
       - name: Push image to TCR
         if: steps.src.outputs.hit != 'true'
         env:
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
           SRC_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
         run: |
-          # 单趟窗口 95m，不再切成 3 × 35m。
-          #
-          # 为什么改：内容寻址的层复用是按「层」而不是按「字节」的 —— 一次 docker push 被
-          # timeout 砍掉时，正在传输的那一层进度全部作废，只有已经 PUT 完成的层才留在 TCR。
-          # 而 462 MB 按实测的 0.15~0.22 MB/s 单趟就需要 35~51 分钟，比 35m 的窗口还长，
-          # 于是每一次尝试都在最大的那层（195.88 MB，单层就要 15~22 分钟）上被砍，三次尝试
-          # 一层都没跨过去。v0.1.3 的 images (api) 就是这么烧掉 115 分钟零产出的。
-          # 「切小窗口多试几次」在限速链路上是反作用力，一趟推到底才对。
-          #
-          # 重试只留给「快速失败」（连接被断、token 过期这类）。跑满窗口说明是带宽不够，
-          # 再试一次是同样的结果，不如直接失败：同一个 ref 上 `gh run rerun --failed` 能读到
-          # 这次 build 写进 gha 缓存的层，digest 一致，已经上传的层会被判 Layer already
-          # exists，于是重跑是**续跑**而不是重来。跨 ref 就没有这个性质（gha 缓存按 ref 隔离，
-          # tag 之间互相读不到），所以别为了续跑去新打一个 tag。
-          attempt=1
-          pushed=0
-          while :; do
-            started=$(date +%s)
-            if timeout --signal=TERM 95m docker push "$IMAGE_REF"; then
-              pushed=1
-              break
-            fi
-            elapsed=$(( $(date +%s) - started ))
-            if [ "$elapsed" -ge 5400 ] || [ "$attempt" -ge 3 ]; then
-              echo "::error::推送未在窗口内完成（本次耗时 ${elapsed}s）。已落地的层留在 TCR，" \
-                   "对同一个 run 执行 gh run rerun --failed 可续传剩余层。"
-              exit 1
-            fi
-            attempt=$((attempt + 1))
-            sleep $((attempt * 15))
-          done
-          # 成功路径原来是 `exit 0`，改成 pushed=1 + break，好接着推 src tag——窗口、重试
-          # 次数、退避、失败判定一个都没动。
-          if [ "$pushed" -ne 1 ]; then exit 1; fi
+          # Mac→TCR 25 MiB 实测 0.44 MB/s，单次直接推完。这里不做自动重试：
+          # 快速失败由工作流报错，需要时对同一 run 手工 rerun。TCR 已接收的
+          # 完整层会继续复用，本机 BuildKit 缓存也保留在 Docker Desktop 中。
+          docker push "$IMAGE_REF"
           # 层刚才已经全部落地，这里只是给同一个 image id 再提交一份 manifest（几 KB）。
           # 它失败不该让发布挂：后果仅仅是下次发布查不到这个 hash，多构建一次而已。
           docker push "$SRC_REF" || echo "::warning::src tag 推送失败，下次发布会重新构建这个镜像"
