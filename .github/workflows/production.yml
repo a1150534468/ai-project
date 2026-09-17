@@ -63,8 +63,8 @@ jobs:
     # 每个镜像走三条路之一，判定在下面的 Resolve source hash 那步：
     #   1. TCR 上已经有 :src-<内容哈希> ⇒ imagetools create 在 registry 内部复制出
     #      :<sha>，只传一份 manifest，十秒级完事，连 dockerd 都不用重启。
-    #   2. 没有 ⇒ 在 Mac 的持久 Docker Desktop BuildKit 上 build，再直接 push TCR。
-    #      后续发布同时复用本机构建缓存和 TCR 已落地的内容寻址层。
+    #   2. 没有 ⇒ 在 Mac 的持久 Docker Desktop BuildKit 上 build，再将本地镜像归档交给
+    #      regctl 按 4 MiB 分块 push TCR。后续发布同时复用本机构建缓存和 TCR 已落地的层。
     #   3. 查不动（网络抖、凭据不对、任何非零退出）⇒ 一律当成「没有」，走第 2 条。
     # 绕这一圈是因为发布慢的根本不是构建，而是 GitHub Runner 出境：
     # 实测 GitHub→TCR <0.17 MB/s，Mac→TCR 为 0.44 MB/s。生产机仍从 TCR 拉取，
@@ -73,7 +73,7 @@ jobs:
     # 不变，第 1 条路主要是给它们省的。
     #
     # 455 MB 冷推按 Mac→TCR 实测约 17 分钟；60 分钟同时容纳首次 amd64
-    # 跨架构构建。不内嵌长时重试：快速失败直接报错，人工 rerun 才续跑。
+    # 跨架构构建。regctl 让大层不再依赖一条长连接，单个分块失败由客户端短重试。
     timeout-minutes: 60
     strategy:
       max-parallel: 1
@@ -295,16 +295,56 @@ jobs:
       - name: Push image to TCR
         if: steps.src.outputs.hit != 'true'
         env:
+          IMAGE_NAME: ${{ matrix.name }}
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
           SRC_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
+          REGISTRY: ${{ secrets.REGISTRY }}
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
-          # Mac→TCR 25 MiB 实测 0.44 MB/s，单次直接推完。这里不做自动重试：
-          # 快速失败由工作流报错，需要时对同一 run 手工 rerun。TCR 已接收的
-          # 完整层会继续复用，本机 BuildKit 缓存也保留在 Docker Desktop 中。
-          docker push "$IMAGE_REF"
-          # 层刚才已经全部落地，这里只是给同一个 image id 再提交一份 manifest（几 KB）。
-          # 它失败不该让发布挂：后果仅仅是下次发布查不到这个 hash，多构建一次而已。
-          docker push "$SRC_REF" || echo "::warning::src tag 推送失败，下次发布会重新构建这个镜像"
+          set -euo pipefail
+
+          # Docker push 会把整个压缩层放进一次长 PUT。Mac 直连 TCR 时实测同一连接传到
+          # 36.3 MB 后被中断，下一次只能从该层的 0 字节重新开始。regctl 导入 docker save
+          # 归档时使用 Registry V2 PATCH，把大层切成 4 MiB 小块；断线只重试当前小块。
+          # 固定版本和 SHA-256，避免发布机每次拿到未经验证的 latest 二进制。
+          regctl_version=v0.11.6
+          regctl_sha256=5b52b71861abc300ab513e87a4c3794cff6508035ac7f6b6bdfa1fa5688c0040
+          temp_dir=$(mktemp -d "$RUNNER_TEMP/regctl-${IMAGE_NAME}.XXXXXX")
+          trap 'rm -rf "$temp_dir"' EXIT
+          regctl="$temp_dir/regctl"
+          curl --fail --location --silent --show-error \
+            --retry 5 --retry-all-errors --connect-timeout 15 --max-time 180 \
+            "https://github.com/regclient/regclient/releases/download/${regctl_version}/regctl-darwin-arm64" \
+            --output "$regctl"
+          printf '%s  %s\n' "$regctl_sha256" "$regctl" | shasum -a 256 -c -
+          chmod 700 "$regctl"
+
+          export REGCTL_CONFIG="$temp_dir/config.json"
+          "$regctl" registry set "$REGISTRY" \
+            --blob-chunk 4194304 \
+            --blob-max 4194304 \
+            --req-concurrent 1 \
+            --skip-check
+          printf '%s' "$REGISTRY_PASSWORD" \
+            | "$regctl" registry login "$REGISTRY" \
+                --user "$REGISTRY_USERNAME" --pass-stdin
+
+          archive="$temp_dir/image.tar"
+          docker save "$IMAGE_REF" --output "$archive"
+          echo "本地镜像归档大小：$(du -h "$archive" | awk '{print $1}')"
+          "$regctl" --verbosity debug image import "$IMAGE_REF" "$archive"
+          image_digest=$("$regctl" image digest "$IMAGE_REF")
+          echo "TCR 已写入 $IMAGE_REF ($image_digest)"
+
+          # 层已经全部落地，同仓库复制只提交一份 manifest（几 KB）。它失败不该让发布挂：
+          # 后果仅仅是下次发布查不到这个 hash，多构建一次而已。
+          if "$regctl" image copy "$IMAGE_REF" "$SRC_REF"; then
+            src_digest=$("$regctl" image digest "$SRC_REF")
+            test "$image_digest" = "$src_digest"
+          else
+            echo "::warning::src tag 推送失败，下次发布会重新构建这个镜像"
+          fi
 
   deploy:
     needs: images
