@@ -274,30 +274,16 @@ jobs:
           fi
       - uses: docker/build-push-action@v6
         if: steps.src.outputs.hit != 'true'
-        env:
-          # 可复现构建（P4）。为什么必须是常量 0 而不是 docker 文档推荐的 `git log -1 %ct`：
-          # 用提交时间就等于每个 commit 一个时间戳，层的 mtime 又变了，正好把这件事的意义抹掉。
-          # 代价是镜像的 created 显示 1970-01-01，本仓没有任何东西读它。
-          SOURCE_DATE_EPOCH: "0"
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           platforms: linux/amd64
           build-args: ${{ matrix.build_args }}
-          # 这里原来是 `load: true`。换成等价的 outputs 写法只为了能多带一个 exporter 选项，
-          # 「build 到本地 → 单独 docker push」的结构一点没动（type=docker 且不带 dest 就是
-          # --load 的定义）：那个结构是限速链路上唯一能把已上传的层累积下来的机制。
-          #
-          # rewrite-timestamp=true 把层里的文件 mtime 全部改写成 SOURCE_DATE_EPOCH。
-          # 没有它的话，同样的内容重新构建一次也会得到新的 digest（实测：同一个 Dockerfile
-          # 连续两次 --no-cache 构建，最后一层 diffID 不同），TCR 就不认 Layer already
-          # exists，于是 gha 缓存一失效（7 天不用会被清、仓库总量 10 GB 也会 LRU 淘汰）
-          # 就要把 apt / node_modules 那两百多 MB 重传一遍。加上它之后两次构建的 6 层
-          # diffID 与 config digest 全部逐字相同（本机实测，含 docker load 之后再比一次）。
-          #
-          # provenance / sbom 关掉：attestation 走不进 docker load 这条路（dockerd 里只有
-          # 单平台镜像），算了也是白算，还会多出一个自带时间戳的 manifest。
-          outputs: type=docker,rewrite-timestamp=true
+          # Docker Desktop BuildKit v0.27 禁止 docker exporter 的隐式 unpack 与
+          # rewrite-timestamp 同时使用；标准 load 路径已在同一台 Mac 上验证。
+          # 镜像先加载到 Docker Desktop，再由下一步单独 push，失败重跑时可复用
+          # 本地 BuildKit 缓存和 TCR 已经接收完成的层。
+          load: true
           provenance: false
           sbom: false
           # 两个 tag 指向同一个 image id：`:<sha>` 是 deploy 用的（remote-deploy.sh 收的就是
