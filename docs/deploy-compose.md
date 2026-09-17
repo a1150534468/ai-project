@@ -14,6 +14,18 @@
 
 生产数据从空环境初始化，不迁移旧 PostgreSQL 或 MinIO 数据。Billing 继续使用独立 PostgreSQL。
 
+### 面试体验账号（可选）
+
+如果要让面试官免注册试用，在服务器的 `.env.production` 中加入以下配置：
+
+```dotenv
+DEMO_ACCOUNT_ENABLED=true
+DEMO_ACCOUNT_USERNAME=demo
+DEMO_ACCOUNT_PASSWORD=<至少 8 位的独立密码>
+```
+
+登录页会显示该账号并提供“一键进入体验”。API 首次请求会自动创建用户，之后只复用这一个用户；体验数据与其他账号按 `userId` 隔离。不要把体验密码复用于管理员或个人账号。关闭演示时将 `DEMO_ACCOUNT_ENABLED=false` 并重启 API 即可，已有普通账号不受影响。
+
 ## 2. 首次生产部署
 
 镜像应在本地或 CI Runner 构建并推送，服务器只拉取和运行。首次部署前确认 DSH 保持正常运行。

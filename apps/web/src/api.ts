@@ -79,6 +79,29 @@ export function getMe(token: string): Promise<MeResponse> {
   return request<MeResponse>("/api/auth/me", { token, fallback: "获取账号信息失败" });
 }
 
+export interface DemoAccountConfig {
+  enabled: boolean;
+  username: string | null;
+}
+
+/** 登录页公开读取是否配置了面试体验入口；不返回密码。 */
+export function getDemoAccountConfig(): Promise<DemoAccountConfig> {
+  return request<DemoAccountConfig>("/api/auth/demo-config", {
+    token: null,
+    fallback: "获取体验账号失败",
+  });
+}
+
+/** 体验登录由后端按环境变量管理凭据，浏览器不保存或发送演示密码。 */
+export async function loginDemo(): Promise<string> {
+  const data = await request<{ token: string }>("/api/auth/demo", {
+    method: "POST",
+    token: null,
+    fallback: "体验登录失败",
+  });
+  return data.token;
+}
+
 // ── 聊天流 ───────────────────────────────────────────────────────────────────
 
 /**
@@ -228,7 +251,11 @@ export function generateWorkflowImages(
 
 export async function cancelWorkflowImageTask(token: string, requestId: string): Promise<WorkflowImageTask> {
   const path = `/api/workflow/images/tasks/${encodeURIComponent(requestId)}/cancel`;
-  const data = await request<{ task: WorkflowImageTask }>(path, { method: "POST", token, fallback: "取消生图任务失败" });
+  const data = await request<{ task: WorkflowImageTask }>(path, {
+    method: "POST",
+    token,
+    fallback: "取消生图任务失败",
+  });
   return data.task;
 }
 
