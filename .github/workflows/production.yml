@@ -243,13 +243,13 @@ jobs:
           if docker buildx imagetools inspect "$IMAGE_REPO:$GITHUB_SHA" >/dev/null 2>&1; then
             echo "hit=true" >> "$GITHUB_OUTPUT"
             echo "sha_present=true" >> "$GITHUB_OUTPUT"
-            echo "TCR 上已经有 :$GITHUB_SHA，构建与推送整段跳过"
+            echo "TCR 上已经有 :${GITHUB_SHA}，构建与推送整段跳过"
           elif docker buildx imagetools inspect "$IMAGE_REPO:src-$hash" >/dev/null 2>&1; then
             echo "hit=true" >> "$GITHUB_OUTPUT"
             echo "TCR 上已有同源镜像，跳过构建与推送"
           else
             echo "hit=false" >> "$GITHUB_OUTPUT"
-            echo "TCR 上没有 :$GITHUB_SHA 也没有 src-$hash，走完整构建"
+            echo "TCR 上没有 :$GITHUB_SHA 也没有 src-${hash}，走完整构建"
           fi
       - name: Reuse identical image already in TCR
         if: steps.src.outputs.hit == 'true'
