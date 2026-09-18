@@ -5,7 +5,7 @@
  * 所以从 DOM 这一侧测：点开编辑、改字段、按保存，看交出去的 payload 与之后的去向。
  */
 import "@testing-library/jest-dom";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { MemoryNode } from "../../memoryTypes";
 import MemoryDetailPanel from "./MemoryDetailPanel";
@@ -94,8 +94,9 @@ describe("编辑态", () => {
     fireEvent.change(ui.title(), { target: { value: "改了但不保存" } });
     fireEvent.click(screen.getByRole("button", { name: "取消" }));
 
-    await screen.findByText(NODE.text);
-    expect(screen.queryByLabelText("标题")).toBeNull();
+    // textarea 本身也包含 NODE.text，不能用它判断退出动画已经结束。
+    await waitFor(() => expect(screen.queryByLabelText("标题")).toBeNull());
+    expect(screen.getByText(NODE.text)).toBeInTheDocument();
     expect(ui.onSave).not.toHaveBeenCalled();
   });
 
@@ -140,8 +141,8 @@ describe("保存", () => {
       fireEvent.click(ui.save());
     });
 
-    await screen.findByText(NODE.text);
-    expect(screen.queryByLabelText("标题")).toBeNull();
+    await waitFor(() => expect(screen.queryByLabelText("标题")).toBeNull());
+    expect(screen.getByText(NODE.text)).toBeInTheDocument();
   });
 
   it("保存失败留在编辑态，内容不丢", async () => {
@@ -191,4 +192,3 @@ describe("删除", () => {
     expect(ui.remove()).toBeDisabled();
   });
 });
-

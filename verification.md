@@ -182,3 +182,4 @@ API 跳过项为 16 项显式 opt-in 的模型/embedding POC、1 项退役桌宠
 - 生产主库已用 `pg_dump -Fc` 备份并通过 `pg_restore --list` 检查，保存在服务器 `/opt/ai-assistant/backups/20260918-restore-image-workflows/main-before-release.dump`，同目录保存上一镜像标签；备份仅服务器私有保存。
 - 发布前重跑 `pnpm typecheck`（8/8）、`pnpm build`（2/2）和 `git diff --check` 均通过。构建保留已有大 chunk 提示。
 - 按现有流程先推送 `main` 并等待 CI，再手动触发生产工作流；部署后核对镜像标签、迁移及服务健康。生产历史记录不从本地搬迁；回滚仅回退应用镜像，保留新建表。
+- 首轮远程 CI：API 1293 项通过、18 项预期跳过；其他包通过，Web 894 通过/1 失败。唯一失败是原有 `MemoryDetailPanel.test.tsx` 在退出动画完成前断言输入框已卸载：`findByText(NODE.text)` 也能匹配尚未卸载的 textarea，不能代表查看态就绪。仅将取消/保存成功两处测试改为等待标题输入框消失，再断言正文；未修改记忆模块业务代码、未跳过测试。修正后该文件 15/15、本地 Web 全量 895/895 通过。
