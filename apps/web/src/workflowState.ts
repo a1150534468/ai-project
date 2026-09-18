@@ -23,7 +23,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "image",
     title: "生图模块",
-    description: "批量生图、提示词优化、参考图管理",
+    description: "通用生图、电商图、商品提取、形象照、万物试穿",
     icon: "mdi:image-multiple-outline",
     status: "available",
   },

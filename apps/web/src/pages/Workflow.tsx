@@ -1,21 +1,5 @@
-/**
- * 工作流页面：外壳布局 + 按 `activeModuleId` 分发到对应 studio。生图的 24 个状态、4 个副作用
- * 与全部动作在 `components/workflow/useImageWorkflowStudio`，常量与纯函数在
- * `components/workflow/imageWorkflowStudioModel`。本页把 hook 返回的 `studioProps` 整份摊给
- * `<ImageWorkflowStudio>`，不在中途改写任何一项 —— 护栏 `Workflow.behavior.test.tsx` 断言的
- * 正是这个组件实际收到的那份 props。
- *
- * 重写时收掉的两处：
- *  - **「生图 Hub 的页内 tab」整套状态机是化石**。`ImageHubTabId` 只有 `"general"` 一个成员，
- *    `useState` 拿到的又只有值、没有 setter，于是「请求值 + 回落」算出来的永远是 `"general"`；
- *    再套上外层已有的 `hasImageTab("general")`，那句 `hidden` 一次都轮不到。页面里也从来
- *    没渲染过 tab 栏（护栏正是这么断言的）。现在只留下真正还活着的那条规矩：**后台把
- *    `workflow.image.general` 关掉时说「暂未开放」，而不是留一页空白**；tab 表继续留在
- *    `clientMenu.ts`，将来真要加第二个 tab 是在那边加。
- *  - **三处零散的布局判断收成一张表**。原来全屏是一个 `Set`、页头是一串 `!==`、工作区留白是
- *    三层嵌套三元，其中「非全屏且不要页头」那一支根本到不了 —— 唯一的非全屏模块 ppt 恰好要
- *    页头。现在五个模块各占一行，加模块时缺哪项 TS 会指出来。
- */
+/** 生图五个场景共享入口，已访问的工作台保留挂载，切换不丢草稿。 */
+import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
 import { DownloadLinkDialog } from "../components/ui/DownloadLinkDialog";
 import { cx } from "../components/ui";
@@ -24,8 +8,16 @@ import { CodexPetStudio } from "../components/workflow/CodexPetStudio";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
 import { useImageWorkflowStudio } from "../components/workflow/useImageWorkflowStudio";
-import { visibleImageHubTabs, type ClientMenuVisibility } from "../clientMenu";
+import { visibleImageHubTabs, type ClientMenuVisibility, type ImageHubTabId } from "../clientMenu";
 import { WORKFLOW_MODULES, type WorkflowModuleId } from "../workflowState";
+
+import { CommerceImageStudio } from "../components/workflow/CommerceImageStudio";
+import { PortraitWorkflowStudio } from "../components/workflow/PortraitWorkflowStudio";
+import { ProductExtractionWorkflowStudio } from "../components/workflow/ProductExtractionWorkflowStudio";
+import { TryOnWorkflowStudio } from "../components/workflow/TryOnWorkflowStudio";
+import { isGeneralImageRequestId } from "../components/workflow/productExtractionWorkflowModel";
+import type { EcomMainJob } from "../workflowEcomMainApi";
+import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
 
 interface WorkflowProps {
   readonly token: string;
@@ -65,7 +57,19 @@ function Placeholder({ icon, text }: { readonly icon: string; readonly text: str
 }
 
 export default function Workflow({ token, activeModuleId, initialCodexPetProjectId, menuVisibility }: WorkflowProps) {
-  const image = useImageWorkflowStudio({ token });
+  const image = useImageWorkflowStudio({ token, requestFilter: isGeneralImageRequestId });
+  const imageTabs = visibleImageHubTabs(menuVisibility);
+  const [requestedTab, setRequestedTab] = useState<ImageHubTabId>("general");
+  const activeTab = imageTabs.some((tab) => tab.id === requestedTab) ? requestedTab : imageTabs[0]?.id;
+  const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<ImageHubTabId>>(() => new Set(["general"]));
+  useEffect(() => {
+    if (activeModuleId !== "image" || !activeTab) return;
+    setVisitedTabs((current) => current.has(activeTab) ? current : new Set([...current, activeTab]));
+  }, [activeModuleId, activeTab]);
+  const [commerceTab, setCommerceTab] = useState<"main" | "detail">("main");
+  const [commerceLoadMainJob, setCommerceLoadMainJob] = useState<EcomMainJob | null>(null);
+  const [commerceLoadDetailWorkflow, setCommerceLoadDetailWorkflow] = useState<WorkflowEcomWorkflow | null>(null);
+  const [commerceHistoryKey, setCommerceHistoryKey] = useState(0);
   const module = WORKFLOW_MODULES.find((candidate) => candidate.id === activeModuleId) ?? WORKFLOW_MODULES[0];
   const shell = SHELL[activeModuleId] ?? SHELL.ppt;
 
@@ -92,15 +96,37 @@ export default function Workflow({ token, activeModuleId, initialCodexPetProject
             </header>
           )}
 
+          {activeModuleId === "image" && imageTabs.length > 1 && (
+            <div role="tablist" aria-label="生图场景" className="flex flex-none gap-1 overflow-x-auto px-4 pt-3 lg:px-6">
+              {imageTabs.map((tab) => (
+                <button key={tab.id} id={`image-tab-${tab.id}`} type="button" role="tab"
+                  aria-selected={activeTab === tab.id} aria-controls={`image-panel-${tab.id}`}
+                  onClick={() => { setRequestedTab(tab.id); setVisitedTabs((current) => new Set([...current, tab.id])); }}
+                  className={cx("h-9 flex-none whitespace-nowrap rounded-lg px-4 text-sm font-semibold", activeTab === tab.id ? "bg-surface text-ink shadow-sm" : "text-ink-secondary")}
+                >{tab.label}</button>
+              ))}
+            </div>
+          )}
           <div className={shell.studio}>
             {activeModuleId === "image" ? (
-              visibleImageHubTabs(menuVisibility).length === 0 ? (
+              imageTabs.length === 0 ? (
                 <Placeholder icon="mdi:image-off-outline" text="生图模块暂未开放" />
-              ) : (
-                <div className="min-h-0 xl:h-full">
-                  <ImageWorkflowStudio {...image.studioProps} />
+              ) : imageTabs.map((tab) => (
+                <div key={tab.id} id={`image-panel-${tab.id}`} role="tabpanel" aria-label={imageTabs.length === 1 ? tab.label : undefined} aria-labelledby={imageTabs.length > 1 ? `image-tab-${tab.id}` : undefined}
+                  hidden={activeTab !== tab.id} className={activeTab === tab.id ? "min-h-0 xl:h-full" : "hidden"}>
+                  {(visitedTabs.has(tab.id) || activeTab === tab.id) && (
+                    tab.id === "general" ? <ImageWorkflowStudio {...image.studioProps} /> :
+                    tab.id === "ecom" ? <CommerceImageStudio token={token} tab={commerceTab} onTabChange={setCommerceTab}
+                      loadMainJob={commerceLoadMainJob} loadDetailWorkflow={commerceLoadDetailWorkflow}
+                      onActivity={() => setCommerceHistoryKey((key) => key + 1)} historyRefreshKey={commerceHistoryKey}
+                      onSelectMainHistory={(job) => { setCommerceTab("main"); setCommerceLoadMainJob(job); }}
+                      onSelectDetailHistory={(workflow) => { setCommerceTab("detail"); setCommerceLoadDetailWorkflow(workflow); }} /> :
+                    tab.id === "product-extraction" ? <ProductExtractionWorkflowStudio token={token} /> :
+                    tab.id === "portrait" ? <PortraitWorkflowStudio token={token} /> :
+                    <TryOnWorkflowStudio token={token} />
+                  )}
                 </div>
-              )
+              ))
             ) : activeModuleId === "novel" ? (
               <NovelWorkflowStudio token={token} />
             ) : activeModuleId === "codex-pet" ? (

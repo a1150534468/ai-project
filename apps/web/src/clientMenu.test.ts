@@ -27,12 +27,12 @@ describe("clientMenu", () => {
   });
 
   it("生图模块页内 tab 按后台开关过滤", () => {
-    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual(["general"]);
-    expect(visibleImageHubTabs({ "workflow.image.general": false }).map((tab) => tab.id)).toEqual([]);
+    expect(visibleImageHubTabs(undefined).map((tab) => tab.id)).toEqual(["general", "ecom", "product-extraction", "portrait", "try-on"]);
+    expect(visibleImageHubTabs({ "workflow.image.general": false }).map((tab) => tab.id)).toEqual(["ecom", "product-extraction", "portrait", "try-on"]);
   });
 
   it("生图模块页内 tab 全关时二级入口一并隐藏", () => {
-    expect(isWorkflowSubVisible({ "workflow.image.general": false }, "image")).toBe(false);
+    expect(isWorkflowSubVisible({ "workflow.image.general": false, "workflow.image.ecom": false, "workflow.image.product-extraction": false, "workflow.image.portrait": false, "workflow.image.try-on": false }, "image")).toBe(false);
     expect(isWorkflowSubVisible(undefined, "image")).toBe(true);
     expect(isWorkflowSubVisible({ "workflow.image": false }, "image")).toBe(false);
     expect(isWorkflowSubVisible(undefined, "novel")).toBe(true);

@@ -8,6 +8,14 @@ datasource db {
 }
 
 model User {
+  portraitReferenceAssets     PortraitReferenceAsset[]
+  portraitTasks               PortraitTask[]
+  portraitOutputs             PortraitOutput[]
+  tryOnReferenceAssets        TryOnReferenceAsset[]
+  tryOnTasks                  TryOnTask[]
+  tryOnOutputs                TryOnOutput[]
+  ecomWorkflows               EcomWorkflow[]
+  ecomMainImageJobs           EcomMainImageJob[]
   id                          String                       @id @default(cuid())
   uid                         String                       @unique
   username                    String                       @unique
@@ -1312,3 +1320,196 @@ model Avatar {
   @@index([userId, createdAt])
 }
 
+
+
+model PortraitReferenceAsset {
+  id        String    @id @default(cuid())
+  userId    String
+  objectKey String    @unique
+  mime      String    @default("image/jpeg")
+  width     Int
+  height    Int
+  sizeBytes Int
+  expiresAt DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt, deletedAt])
+}
+
+model PortraitTask {
+  id                   String           @id @default(cuid())
+  userId               String
+  requestId            String           @unique
+  model                String
+  presetId             String
+  aspectRatio          String
+  resolution           String
+  count                Int
+  prompt               String           @default("")
+  effectivePrompt      String
+  options              Json             @default("{}")
+  referenceAssetIds    String[]         @default([])
+  status               String           @default("running")
+  completedCount       Int              @default(0)
+  error                String?
+  consentVersion       String
+  billingOperationId   String           @unique
+  billingResourceKey   String
+  billingReservedUnits Int              @default(0)
+  billingSettledUnits  Int              @default(0)
+  billingStatus        String           @default("pending")
+  cancelRequested      Boolean          @default(false)
+  startedAt            DateTime         @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  user                 User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outputs              PortraitOutput[]
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model PortraitOutput {
+  id           String       @id @default(cuid())
+  taskId       String
+  userId       String
+  requestIndex Int
+  objectKey    String       @unique
+  mime         String       @default("image/png")
+  width        Int
+  height       Int
+  sizeBytes    Int
+  createdAt    DateTime     @default(now())
+  task         PortraitTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, requestIndex])
+  @@index([userId, createdAt])
+}
+
+model TryOnReferenceAsset {
+  id        String    @id @default(cuid())
+  userId    String
+  kind      String
+  objectKey String    @unique
+  mime      String    @default("image/jpeg")
+  width     Int
+  height    Int
+  sizeBytes Int
+  expiresAt DateTime?
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+  @@index([expiresAt, deletedAt])
+}
+
+model TryOnTask {
+  id                     String        @id @default(cuid())
+  userId                 String
+  requestId              String        @unique
+  model                  String
+  aspectRatio            String
+  resolution             String
+  count                  Int
+  description            String        @default("")
+  effectivePrompt        String
+  garmentFrontAssetId    String
+  garmentDetailAssetId   String?
+  modelAssetId           String?
+  status                 String        @default("running")
+  completedCount         Int           @default(0)
+  error                  String?
+  consentVersion         String?
+  billingOperationId     String        @unique
+  billingResourceKey     String
+  billingReservedUnits   Int           @default(0)
+  billingSettledUnits    Int           @default(0)
+  billingStatus          String        @default("pending")
+  cancelRequested        Boolean       @default(false)
+  startedAt              DateTime      @default(now())
+  completedAt            DateTime?
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  user                    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outputs                 TryOnOutput[]
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
+}
+
+model TryOnOutput {
+  id           String    @id @default(cuid())
+  taskId       String
+  userId       String
+  requestIndex Int
+  objectKey    String    @unique
+  mime         String    @default("image/png")
+  width        Int
+  height       Int
+  sizeBytes    Int
+  createdAt    DateTime  @default(now())
+  task         TryOnTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, requestIndex])
+  @@index([userId, createdAt])
+}
+
+model EcomWorkflow {
+  id                  String   @id @default(cuid())
+  userId              String
+  platform            String
+  language            String
+  template            String
+  resolution          String   @default("1K")
+  model               String?
+  segmentCount        Int      @default(3)
+  product             Json
+  referenceAssetIds   String[] @default([])
+  masterAssetId       String?
+  segments            Json     @default("[]")
+  stitchedAssetId     String?
+  stage               String   @default("draft")
+  error               String?
+  billingOperationIds String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, stage])
+}
+
+model EcomMainImageJob {
+  id                  String   @id @default(cuid())
+  userId              String
+  platform            String
+  language            String
+  ratio               String
+  resolution          String   @default("1K")
+  model               String?
+  style               String
+  customStyle         String   @default("")
+  withText            Boolean  @default(true)
+  product             Json
+  referenceAssetIds   String[] @default([])
+  count               Int
+  images              Json     @default("[]")
+  stage               String   @default("draft")
+  error               String?
+  billingOperationIds String[] @default([])
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([userId, stage])
+}

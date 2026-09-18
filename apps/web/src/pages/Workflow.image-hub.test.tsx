@@ -9,22 +9,21 @@ import Workflow from "./Workflow";
 import { ToastProvider } from "../motion";
 
 describe("Workflow image hub", () => {
-  it("生图 Hub 只剩通用生图一个 tab：不渲染 tab 栏，studio 直接铺开", () => {
+  it("完整生图包含五个场景入口，默认显示通用生图", () => {
     const html = renderToStaticMarkup(<ToastProvider><Workflow token="token" activeModuleId="image" /></ToastProvider>);
-    // 只有一个 tab 时 tab 栏整体不渲染。注意不能断言全文没有「通用生图」——
-    // studio 自己的头部写着「通用生图工作台」，要看的是那个 tab 按钮没被渲染。
-    expect(html).not.toMatch(/<button[^>]*>通用生图<\/button>/);
+    expect((html.match(/role="tab"/g) ?? [])).toHaveLength(5);
+    for (const label of ["通用生图", "电商图", "商品提取", "形象照", "万物试穿"]) expect(html).toContain(label);
     expect(html).toContain("生成图片");
     expect(html).not.toContain("生图模块暂未开放");
   });
 
-  it("后台关掉通用生图后整页给出「暂未开放」而不是空白", () => {
+  it("后台关掉全部场景后整页给出「暂未开放」而不是空白", () => {
     const html = renderToStaticMarkup(
       <ToastProvider>
         <Workflow
           token="token"
           activeModuleId="image"
-          menuVisibility={{ "workflow.image.general": false }}
+          menuVisibility={{ "workflow.image.general": false, "workflow.image.ecom": false, "workflow.image.product-extraction": false, "workflow.image.portrait": false, "workflow.image.try-on": false }}
         />
       </ToastProvider>,
     );

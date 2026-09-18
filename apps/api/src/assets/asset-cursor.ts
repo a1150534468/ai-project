@@ -14,6 +14,8 @@ import type { AssetCursor } from "./asset-types.js";
 
 export const ASSET_SOURCE_ID_PREFIXES = {
   image: "image:",
+  portrait: "portrait:",
+  tryOn: "try-on:",
   video: "video:",
   audio: "audio:",
   codexPet: "codex-pet:",

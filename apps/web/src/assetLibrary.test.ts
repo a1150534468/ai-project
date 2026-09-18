@@ -54,9 +54,11 @@ describe("分区与筛选项", () => {
     }
   });
 
-  it("AI 生成区：生图/文章配图/电商图/视频/音频/桌宠", () => {
+  it("AI 生成区：含形象照、万物试穿和全部已保留的素材源", () => {
     expect(moduleFiltersForOrigin("ai")).toEqual([
       "image",
+      "portrait",
+      "try-on",
       "article",
       "ecom",
       "video",

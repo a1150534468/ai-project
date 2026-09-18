@@ -1,5 +1,5 @@
 /**
- * 四个源适配器。每个把一张权威表的行翻成 `AssetItem`，**不新建表、不新开取件端点**。
+ * 各个源适配器。每个把一张权威表的行翻成 `AssetItem`，**不新建表、不新开取件端点**。
  *
  * 三条贯穿全文件的约束：
  *
@@ -16,6 +16,8 @@
 import type { PrismaClient } from "@ai-assistant/db";
 import { defaultArtifactPreviewUrl, isSafeRasterImageMime } from "../workflow/codex-pet/codex-pet-route-helpers.js";
 import type { CodexPetArtifactShape } from "../workflow/codex-pet/codex-pet-route-types.js";
+import { portraitBlobUrl } from "../workflow/portrait/portrait-routes.js";
+import { tryOnBlobUrl } from "../workflow/try-on/try-on-routes.js";
 import { imageBlobUrl } from "../workflow/image/image-route-helpers.js";
 import { classifyImageRequestId, imageAdmissionWhere, imageGroupKey } from "./asset-classify.js";
 import { ASSET_SOURCE_ID_PREFIXES, keysetWhere } from "./asset-cursor.js";
@@ -23,6 +25,8 @@ import type { AssetCursor, AssetItem, AssetOrigin, AssetSourceModule } from "./a
 
 export interface AssetSourceDeps {
   readonly prisma: PrismaClient;
+  readonly portraitBlobUrl: (outputId: string, objectKey: string) => string;
+  readonly tryOnBlobUrl: (outputId: string, objectKey: string) => string;
   readonly imageBlobUrl: (imageId: string, objectKey: string) => string;
   readonly codexPetArtifactUrl: (artifact: CodexPetArtifactRow) => string | null;
 }
@@ -45,6 +49,104 @@ export interface AssetSource {
 }
 
 const P = ASSET_SOURCE_ID_PREFIXES;
+
+const portraitSource: AssetSource = {
+  key: "portrait",
+  modules: ["portrait"],
+  origins: ["ai"],
+  fetch: async (deps, query) => {
+    const rows = await deps.prisma.portraitOutput.findMany({
+      where: { userId: query.userId, AND: [keysetWhere(query.cursor, P.portrait)] },
+      orderBy: [...ROW_ORDER],
+      take: query.take,
+      select: {
+        id: true,
+        taskId: true,
+        requestIndex: true,
+        objectKey: true,
+        mime: true,
+        width: true,
+        height: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
+    });
+    // 形象照没有单独的缩略图，与 portrait-routes.ts 的 serializeOutput 一样只有一条签名链接。
+    return rows.map((row) => {
+      const url = deps.portraitBlobUrl(row.id, row.objectKey);
+      return {
+        id: `${P.portrait}${row.id}`,
+        sourceModule: "portrait" as const,
+        origin: "ai" as const,
+        mediaType: "image" as const,
+        title: `形象照 #${row.requestIndex + 1}`,
+        url,
+        thumbnailUrl: url,
+        mime: row.mime,
+        width: row.width,
+        height: row.height,
+        sizeBytes: row.sizeBytes,
+        durationSec: null,
+        createdAt: row.createdAt.toISOString(),
+        groupKey: row.taskId,
+        groupLabel: null,
+      };
+    });
+  },
+};
+
+/**
+ * 试穿输出与形象照同构（同样是 `taskId` + `requestIndex` + 唯一 `objectKey`），所以这一路是
+ * portrait 那一路的镜像。但 `sourceModule` 是独立的 `try-on` 而不是并进 `portrait`：
+ * 后台菜单里两者本来就是两个三级菜单（`workflow.image.portrait` / `workflow.image.try-on`），
+ * 找试穿结果的人不该去「形象照」筛选项下面翻。
+ */
+const tryOnSource: AssetSource = {
+  key: "tryOn",
+  modules: ["try-on"],
+  origins: ["ai"],
+  fetch: async (deps, query) => {
+    const rows = await deps.prisma.tryOnOutput.findMany({
+      where: { userId: query.userId, AND: [keysetWhere(query.cursor, P.tryOn)] },
+      orderBy: [...ROW_ORDER],
+      take: query.take,
+      select: {
+        id: true,
+        taskId: true,
+        requestIndex: true,
+        objectKey: true,
+        mime: true,
+        width: true,
+        height: true,
+        sizeBytes: true,
+        createdAt: true,
+      },
+    });
+    // 与 try-on-routes.ts 的 serializeOutput 一样：只有一条签名链接，没有单独的缩略图。
+    return rows.map((row) => {
+      const url = deps.tryOnBlobUrl(row.id, row.objectKey);
+      return {
+        id: `${P.tryOn}${row.id}`,
+        sourceModule: "try-on" as const,
+        origin: "ai" as const,
+        mediaType: "image" as const,
+        title: `试穿结果 #${row.requestIndex + 1}`,
+        url,
+        thumbnailUrl: url,
+        mime: row.mime,
+        width: row.width,
+        height: row.height,
+        sizeBytes: row.sizeBytes,
+        durationSec: null,
+        createdAt: row.createdAt.toISOString(),
+        groupKey: row.taskId,
+        groupLabel: null,
+      };
+    });
+  },
+};
+
+
 
 const MAX_TITLE_LENGTH = 80;
 
@@ -303,6 +405,8 @@ const codexPetSource: AssetSource = {
 /** 顺序只影响并发发起的次序，归并按全局键重排。 */
 export const ASSET_SOURCES: readonly AssetSource[] = [
   imageSource,
+  portraitSource,
+  tryOnSource,
   videoSource,
   audioSource,
   codexPetSource,
@@ -316,6 +420,8 @@ export function createAssetSourceDeps(prisma: PrismaClient): AssetSourceDeps {
   return {
     prisma,
     imageBlobUrl,
+    portraitBlobUrl: (id, key) => portraitBlobUrl("output", id, key),
+    tryOnBlobUrl: (id, key) => tryOnBlobUrl("output", id, key),
     // 非光栅图（交付包 zip）拿不到预览链接，取件仍走桌宠自己那条限流的安装链接接口。
     codexPetArtifactUrl: (artifact) => defaultArtifactPreviewUrl(artifact, {}),
   };

@@ -24,7 +24,7 @@ describe("resolveClientMenuItems", () => {
   it("生图模块的页内 tab 作为三级菜单默认开启，旧电商图二级菜单已下线", () => {
     const items = resolveClientMenuItems([]);
     const tabs = items.filter((item) => item.parentKey === "workflow.image");
-    expect(tabs.map((tab) => tab.key)).toEqual(["workflow.image.general"]);
+    expect(tabs.map((tab) => tab.key)).toEqual(["workflow.image.general", "workflow.image.ecom", "workflow.image.product-extraction", "workflow.image.portrait", "workflow.image.try-on"]);
     expect(tabs.every((tab) => tab.visible)).toBe(true);
     expect(items.some((item) => item.key === "workflow.commerce-long-image")).toBe(false);
   });

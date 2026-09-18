@@ -19,6 +19,10 @@ import { imageWorkflowRoutes } from "./workflow/image/index.js";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { announcementRoutes } from "./admin/announcement-routes.js";
 
+import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
+import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
+import { ecomWorkflowRoutes, ecomMainImageRoutes, ecomHelpWriteRoutes } from "./workflow/ecom/index.js";
+
 export async function registerApplicationRoutes(app: FastifyInstance): Promise<void> {
   await app.register(authRoutes);
   await app.register(chatRoutes);
@@ -30,6 +34,11 @@ export async function registerApplicationRoutes(app: FastifyInstance): Promise<v
   await app.register((instance) =>
     codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }),
   );
+  await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
+  await app.register((instance) => tryOnWorkflowRoutes(instance, { redis: getRedis() }));
+  await app.register(ecomWorkflowRoutes);
+  await app.register(ecomMainImageRoutes);
+  await app.register(ecomHelpWriteRoutes);
   await app.register(novelWorkflowRoutes);
   await app.register(novelEngineRoutes);
   await app.register(articleWorkflowRoutes);

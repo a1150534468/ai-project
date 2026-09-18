@@ -1,5 +1,5 @@
 /**
- * 四个源的 SQL **真的能跑**，且准入/隔离/分页在 Postgres 上成立。
+ * 六个源的 SQL **真的能跑**，且准入/隔离/分页在 Postgres 上成立。
  *
  * 这是 P3.1 唯一验证得了下面这几件事的地方：
  *   - `imageAdmissionWhere` 那坨嵌套 OR/AND/NOT 是合法的 Prisma 输入（单测只验语义，不验它能不能被翻成 SQL）；
@@ -22,6 +22,8 @@ const databaseEnabled = Boolean(process.env.DATABASE_URL);
 
 const deps: AssetSourceDeps = {
   prisma,
+  portraitBlobUrl: (id, key) => `portrait://${id}/${key}`,
+  tryOnBlobUrl: (id, key) => `try-on://${id}/${key}`,
   imageBlobUrl: (imageId, objectKey) => `img://${imageId}/${objectKey}`,
   codexPetArtifactUrl: (artifact) => `pet://${artifact.id}`,
 };
@@ -66,6 +68,23 @@ async function createImage(
 let ids: Record<string, string> = {};
 let mainUserId = "";
 let otherUserId = "";
+
+async function seedHumanImages(userId: string) {
+  const shared = { userId, model: "gpt-image-2", aspectRatio: "3:4", resolution: "1K", count: 1,
+    effectivePrompt: "local regression fixture", status: "succeeded", completedCount: 1,
+    billingResourceKey: "image", billingStatus: "settled", consentVersion: "test" };
+  const portrait = await prisma.portraitTask.create({ data: {
+    ...shared, requestId: `portrait-${userId}-${suffix}`, presetId: "business",
+    billingOperationId: `portrait-${userId}-${suffix}`,
+    outputs: { create: { userId, requestIndex: 0, objectKey: `qa/${suffix}/${userId}/portrait.png`, width: 768, height: 1024, sizeBytes: 10, createdAt: TIE } },
+  }, include: { outputs: true } });
+  const tryOn = await prisma.tryOnTask.create({ data: {
+    ...shared, requestId: `try-on-${userId}-${suffix}`, garmentFrontAssetId: "fixture-reference",
+    billingOperationId: `try-on-${userId}-${suffix}`,
+    outputs: { create: { userId, requestIndex: 0, objectKey: `qa/${suffix}/${userId}/try-on.png`, width: 768, height: 1024, sizeBytes: 10, createdAt: TIE } },
+  }, include: { outputs: true } });
+  return { portrait: portrait.outputs[0]!, tryOn: tryOn.outputs[0]! };
+}
 
 async function seedMainUser() {
   const admitted = await Promise.all([
@@ -163,7 +182,11 @@ beforeAll(async () => {
   // 另一个用户的同类素材：只要有一条漏进来，就是越权。
   await createImage(otherUserId, `req-other-${suffix}`, at(1));
   await seedCodexPet(otherUserId, false, `other-${suffix}`);
+  const human = await seedHumanImages(mainUserId);
+  await seedHumanImages(otherUserId);
   ids = {
+    portrait: `portrait:${human.portrait.id}`,
+    tryOn: `try-on:${human.tryOn.id}`,
     bareImage: `image:${seeded.admitted[0]!.id}`,
     articleImage: `image:${seeded.admitted[1]!.id}`,
     ecomMaster: `image:${seeded.admitted[2]!.id}`,
@@ -195,14 +218,24 @@ async function fullPage(query: Parameters<typeof listAssets>[1] = { userId: "" }
   return page.items;
 }
 
-describe.skipIf(!databaseEnabled)("四个源在真库上的准入", () => {
-  it("恰好收下该收的 12 条，一条不多", async () => {
+describe.skipIf(!databaseEnabled)("六个源在真库上的准入", () => {
+  it("恰好收下该收的 14 条，一条不多", async () => {
     const items = await fullPage();
     expect([...items.map((item) => item.id)].sort()).toEqual([
       ids.articleImage, ids.bareImage, ids.bgm, ids.ecomMaster, ids.ecomReference,
       ids.narration, ids.noKeyImage, ids.petBase, ids.petPackage, ids.tieImage,
-      ids.video, ids.voiceSample,
+      ids.video, ids.voiceSample, ids.portrait, ids.tryOn,
     ].sort());
+  });
+
+  it("恢复的形象照与试穿可独立筛选，并使用各自签名取件链接", async () => {
+    for (const sourceModule of ["portrait", "try-on"] as const) {
+      const items = await fullPage({ userId: mainUserId, sourceModule });
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({ sourceModule, mediaType: "image", origin: "ai" });
+      expect(items[0]!.url).toMatch(new RegExp(`^${sourceModule}://`));
+      expect(items[0]!.thumbnailUrl).toBe(items[0]!.url);
+    }
   });
 
   it("图片：中间件与未知 ecom 前缀都进不来（嵌套 OR/AND/NOT 真能翻成 SQL）", async () => {
@@ -253,8 +286,8 @@ describe.skipIf(!databaseEnabled)("四个源在真库上的准入", () => {
   it("只看自己的：两个用户的素材集合完全不相交", async () => {
     const mine = new Set((await fullPage()).map((item) => item.id));
     const otherPage = await listAssets(deps, { userId: otherUserId, limit: 100 });
-    // 另一个用户：1 张裸生图 + 被指针指着的 base/package 两个 artifact。
-    expect(otherPage.items.length).toBe(3);
+    // 另一个用户：裸生图、形象照、试穿各 1 张 + base/package 两个 artifact。
+    expect(otherPage.items.length).toBe(5);
     expect(otherPage.items.filter((item) => mine.has(item.id))).toEqual([]);
   });
 });
@@ -273,10 +306,10 @@ describe.skipIf(!databaseEnabled)("真库上的过滤与分页", () => {
     expect(items.map((item) => item.id).sort()).toEqual([ids.bgm, ids.ecomReference, ids.voiceSample].sort());
   });
 
-  it("同一毫秒上跨源按前缀定序（image: > codex-pet:）", async () => {
+  it("同一毫秒上跨源按前缀定序（try-on: > portrait: > image: > codex-pet:）", async () => {
     const items = await fullPage();
     const tieIds = items.filter((item) => item.createdAt === TIE.toISOString()).map((item) => item.id);
-    expect(tieIds).toEqual([ids.tieImage, ids.petBase]);
+    expect(tieIds).toEqual([ids.tryOn, ids.portrait, ids.tieImage, ids.petBase]);
   });
 
   it.each([1, 2, 3, 7])("limit=%i 在真 SQL 上翻到底：与单页结果逐条一致", async (limit) => {
@@ -308,7 +341,4 @@ describe.skipIf(!databaseEnabled)("真库上的过滤与分页", () => {
     expect(collected).toEqual(expected);
   });
 });
-
-
-
 

@@ -244,7 +244,7 @@ describe("Workflow 模块分派", () => {
 
 describe("Workflow 生图 Hub 的后台开关", () => {
   it("只剩一个 tab 时不渲染 tab 栏，通用生图直接铺满", async () => {
-    const scope = await mountWorkflow({ activeModuleId: "image" });
+    const scope = await mountWorkflow({ activeModuleId: "image", menuVisibility: { "workflow.image.ecom": false, "workflow.image.product-extraction": false, "workflow.image.portrait": false, "workflow.image.try-on": false } });
 
     const wrapper = (testId: string) => scope.querySelector(`[data-testid="${testId}"]`)?.parentElement?.className ?? "";
     expect(wrapper("image-studio")).not.toBe("hidden");
@@ -255,7 +255,7 @@ describe("Workflow 生图 Hub 的后台开关", () => {
   it("tab 全被后台关掉时给出「生图模块暂未开放」", async () => {
     const scope = await mountWorkflow({
       activeModuleId: "image",
-      menuVisibility: { "workflow.image.general": false },
+      menuVisibility: { "workflow.image.general": false, "workflow.image.ecom": false, "workflow.image.product-extraction": false, "workflow.image.portrait": false, "workflow.image.try-on": false },
     });
 
     expect(scope.textContent).toContain("生图模块暂未开放");

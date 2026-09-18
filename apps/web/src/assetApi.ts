@@ -13,6 +13,8 @@ import { request } from "./http";
 /** 与服务端 `ASSET_SOURCE_MODULES` 同序同值。`comic` 当前不会被收进来，但类型要留着（见 assetLibrary.ts）。 */
 export const ASSET_SOURCE_MODULES = [
   "image",
+  "portrait",
+  "try-on",
   "article",
   "ecom",
   "comic",

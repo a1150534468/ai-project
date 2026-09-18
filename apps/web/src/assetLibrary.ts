@@ -27,6 +27,8 @@ export const ASSET_ORIGIN_TABS: readonly AssetOriginTab[] = [
 
 export const ASSET_MODULE_LABELS: Readonly<Record<AssetSourceModule, string>> = {
   image: "AI 生图",
+  portrait: "形象照",
+  "try-on": "万物试穿",
   article: "文章配图",
   ecom: "电商图",
   comic: "漫画分镜",
@@ -39,6 +41,8 @@ export const ASSET_MODULE_LABELS: Readonly<Record<AssetSourceModule, string>> = 
 /** 筛选项的展示顺序：先图、再视频音频、最后成品类。与服务端的枚举顺序无关。 */
 const MODULE_ORDER: readonly AssetSourceModule[] = [
   "image",
+  "portrait",
+  "try-on",
   "article",
   "ecom",
   "comic",
@@ -56,6 +60,8 @@ const MODULE_ORDER: readonly AssetSourceModule[] = [
  */
 const MODULE_ORIGINS: Readonly<Record<AssetSourceModule, readonly AssetOrigin[]>> = {
   image: ["ai"],
+  portrait: ["ai"],
+  "try-on": ["ai"],
   article: ["ai"],
   ecom: ["ai"],
   comic: [],
