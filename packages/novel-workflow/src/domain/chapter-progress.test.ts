@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { completedNovelChapterCount, nextNovelChapterIndex } from "./chapter-progress.js";
 
 describe("novel chapter progress", () => {
+  it("uses compact progress without requiring chapter prose", () => {
+    expect(nextNovelChapterIndex([{ chapterIndex: 1, hasContent: true }, { chapterIndex: 2, hasContent: false }, { chapterIndex: 3, hasContent: true }])).toBe(2);
+    expect(completedNovelChapterCount([{ chapterIndex: 1, hasContent: true }, { chapterIndex: 2, hasContent: true }])).toBe(2);
+  });
+
   it("starts from chapter one for an empty book", () => {
     expect(nextNovelChapterIndex([])).toBe(1);
     expect(completedNovelChapterCount([])).toBe(0);

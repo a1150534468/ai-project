@@ -2,7 +2,7 @@
  * novel-task-runner 拆分后的读取层:任务对外 JSON 形状、项目详情聚合读、下一章序号。
  *
  * `serializeTask` 是任务行对前端可见形状的唯一出处;`getProjectDetail` 里逐字段列出的
- * project / bible / chapters 也是同一个约定 —— 这里不 `...spread` 库行,是为了让"新增库字段
+ * project / bible / chapters 也是同一个约定（compact 章节使用独立 allowlist） —— 这里不 `...spread` 库行,是为了让"新增库字段
  * 默认不外泄"成为默认行为。要给前端就往这里加一行,不给就什么都不做。
  *
  * `nextChapterIndex` 只负责读齐章节再交给 `nextNovelChapterIndex` 判:序号规则(空洞、
@@ -11,6 +11,7 @@
  * 依赖方向:shared → 本文件。不 import context / persist / run。
  */
 
+import { novelChapterSummarySelect, serializeNovelChapterSummary } from "./novel-chapter-summary.js";
 import type { PrismaClient } from "@prisma/client";
 import { nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
 import type { NovelTaskRow } from "./novel-task-shared.js";
@@ -36,7 +37,13 @@ export function serializeTask(task: NovelTaskRow) {
   };
 }
 
-export async function getProjectDetail(prisma: PrismaClient, userId: string, projectId: string) {
+/** Polling/setup views need progress, not saved model requests or completed prose. */
+export function serializeCompactNovelTask(task: NovelTaskRow) {
+  const serialized = serializeTask(task);
+  return { ...serialized, requestPayload: null, progressPreview: ["queued", "running"].includes(task.status) ? (task.progressPreview ?? "").slice(-4000) : "" };
+}
+
+export async function getProjectDetail(prisma: PrismaClient, userId: string, projectId: string, compact = false) {
   const project = await prisma.novelProject.findFirst({
     where: { id: projectId, userId },
     include: {
@@ -45,7 +52,7 @@ export async function getProjectDetail(prisma: PrismaClient, userId: string, pro
     },
   });
   if (!project) return null;
-  const chapters = await prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } });
+  const chapters = await prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" }, ...(compact ? { select: novelChapterSummarySelect } : {}) });
   return {
     project: {
       id: project.id,
@@ -75,7 +82,7 @@ export async function getProjectDetail(prisma: PrismaClient, userId: string, pro
       styleNotes: project.bible.styleNotes,
       updatedAt: project.bible.updatedAt.toISOString(),
     } : null,
-    chapters: chapters.map((chapter) => ({
+    chapters: compact ? chapters.map(serializeNovelChapterSummary) : chapters.map((chapter) => ({
       id: chapter.id,
       volumeIndex: chapter.volumeIndex,
       chapterIndex: chapter.chapterIndex,
@@ -107,7 +114,7 @@ export async function getProjectDetail(prisma: PrismaClient, userId: string, pro
       lastTaskId: chapter.lastTaskId,
       updatedAt: chapter.updatedAt.toISOString(),
     })),
-    tasks: project.tasks.map(serializeTask),
+    tasks: project.tasks.map((task) => compact ? serializeCompactNovelTask(task) : serializeTask(task)),
   };
 }
 

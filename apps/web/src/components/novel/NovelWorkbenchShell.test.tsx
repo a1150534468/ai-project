@@ -113,6 +113,15 @@ beforeEach(() => {
 });
 
 describe("NovelWorkbenchShell 设置未完成提示", () => {
+  it("keeps unloaded chapters out of the editor and offers retry on error", async () => {
+    const onRetryChapter = vi.fn();
+    await renderShell({ detail: makeDetail(true), chapterLoading: true, chapterLoadError: "读取失败", onRetryChapter });
+    expect(screen.queryByTestId("chapter-desk")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("读取失败");
+    fireEvent.click(screen.getByRole("button", { name: "重试加载章节" }));
+    expect(onRetryChapter).toHaveBeenCalledTimes(1);
+  });
+
   it("设置没做完就挂一条警告条，并给一条回向导的路", async () => {
     await renderShell({ detail: makeDetail(false) });
 

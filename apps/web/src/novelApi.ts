@@ -1,15 +1,14 @@
 /**
- * 小说工作流的前端 API 客户端。P2.4 批次二 Step 2 从 `api.ts` 整块搬来：48 个函数、23 个类型
- * 逐字未动，只换了 import 头，所以调用方和测试文件一行都不用改 —— `api.ts` 仍是门面，
- * 用 `export *` 原样转发本文件的全部导出。
- *
- * 两处和同目录其它 API 文件不一样的地方：
- *  - `novelEngineRequest` 是本文件私有的薄封装（统一「小说引擎请求失败」fallback），不对外导出。
- *  - `exportNovelProject` / `streamNovelEngineEvents` 走 `requestResponse` 而不是 `request<T>()`：
- *    前者要的是 blob，后者要把 response.body 留给 SSE reader。
+ * 小说 API 客户端：api.ts 仍为统一导出入口。
+ * 普通 JSON GET 仅共享同身份同资源的在途请求，写操作前后使在途索引失效。
+ * SSE / Blob 继续走 requestResponse；旧完整详情保持兼容，工作台显式选择 compact。
  */
 import type { NovelRunEvent, NovelRunSnapshot } from "@ai-assistant/novel-workflow/contracts";
-import { type HttpMethod, request, requestResponse } from "./http";
+import { type HttpMethod, requestResponse } from "./http";
+
+import { createNovelRequest } from "./novelReadRequest";
+
+const request = createNovelRequest();
 
 export interface NovelProjectSummary {
   id: string;
@@ -26,6 +25,10 @@ export interface NovelProjectSummary {
 }
 
 export interface NovelChapter {
+  /** False means a directory entry, not an editable empty chapter. */
+  detailLoaded?: boolean;
+  hasContent?: boolean;
+  wordCount?: number;
   id: string;
   volumeIndex: number;
   chapterIndex: number;
@@ -165,7 +168,7 @@ export interface NovelSetupPayload {
   locations: Array<Record<string, unknown>>;
   storylines: Array<Record<string, unknown>>;
   structure: NovelStructureNode[];
-  chapters: NovelChapter[];
+  chapters: Array<Pick<NovelChapter, "id" | "volumeIndex" | "chapterIndex" | "title" | "summary" | "outline" | "generationHint" | "status" | "updatedAt">>;
   activeTask: NovelTask | null;
   latestTask: NovelTask | null;
 }
@@ -188,11 +191,19 @@ export async function completeNovelSetup(token: string, projectId: string): Prom
   return data.project;
 }
 
-export async function getNovelProject(token: string, projectId: string): Promise<NovelProjectDetail> {
-  return request<NovelProjectDetail>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}`, {
+export async function getNovelProject(token: string, projectId: string, compact = false): Promise<NovelProjectDetail> {
+  const detail = await request<NovelProjectDetail>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}${compact ? "?view=compact" : ""}`, {
     token,
     fallback: "获取小说项目失败",
   });
+  // Normalize only for existing list components. detailLoaded=false prevents
+  // this placeholder from ever being passed to editing/saving code.
+  return { ...detail, chapters: detail.chapters.map((chapter) => ({ ...chapter, content: chapter.content ?? "" })) };
+}
+
+export async function getNovelChapter(token: string, projectId: string, chapterIndex: number): Promise<NovelChapter> {
+  const data = await request<{ chapter: NovelChapter }>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/chapters/${chapterIndex}`, { token, fallback: "加载章节失败" });
+  return data.chapter;
 }
 
 export async function deleteNovelProject(token: string, projectId: string): Promise<void> {
@@ -203,8 +214,8 @@ export async function deleteNovelProject(token: string, projectId: string): Prom
   });
 }
 
-export async function getNovelWorkbench(token: string, projectId: string): Promise<NovelWorkbenchPayload> {
-  return request<NovelWorkbenchPayload>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/workbench`, {
+export async function getNovelWorkbench(token: string, projectId: string, compact = false): Promise<NovelWorkbenchPayload> {
+  return request<NovelWorkbenchPayload>(`/api/workflow/novels/projects/${encodeURIComponent(projectId)}/workbench${compact ? "?view=compact" : ""}`, {
     token,
     fallback: "获取小说工作台失败",
   });

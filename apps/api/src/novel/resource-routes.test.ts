@@ -108,6 +108,11 @@ describe("novel checkpoint resources", () => {
     const response = await app.inject({ method: "GET", url: "/api/workflow/novels/projects/project-1/setup" });
 
     expect(response.statusCode).toBe(200);
+    expect(prisma.novelChapter.findMany).toHaveBeenCalledWith(expect.objectContaining({ select: expect.objectContaining({ title: true, outline: true, generationHint: true }) }));
+    const selection = vi.mocked(prisma.novelChapter.findMany).mock.calls[0]?.[0]?.select;
+    expect(selection).not.toHaveProperty("content");
+    expect(selection).not.toHaveProperty("rawContent");
+    expect(selection).not.toHaveProperty("contextSnapshot");
     expect(response.json().data).toMatchObject({
       activeTask: null,
       latestTask: { id: "task-1", targetKind: "setupPlot", status: "failed", error: "Unique constraint failed" },

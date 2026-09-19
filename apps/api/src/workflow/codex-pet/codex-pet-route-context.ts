@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { createImageUrlSigner } from "../../storage/cos-image-url.js";
 import { getPrisma } from "@ai-assistant/db";
 import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import { enqueueCodexPetRun } from "./codex-pet-queue.js";
@@ -17,6 +18,7 @@ import type { CodexPetRouteDeps, RunShape } from "./codex-pet-route-types.js";
 export function createCodexPetRouteContext(app: FastifyInstance, deps: CodexPetRouteDeps) {
   const prisma = deps.prisma ?? getPrisma();
   const enqueueRun = deps.enqueueRun ?? ((runId: string) => enqueueCodexPetRun({ runId }));
+  const signImageUrl = deps.signImageUrl ?? createImageUrlSigner();
   const now = deps.now ?? (() => new Date());
   const loadArtifact = deps.loadArtifact ?? ((objectKey: string) => {
     // The production loader is the last boundary before S3. Embedded tests
@@ -169,6 +171,7 @@ export function createCodexPetRouteContext(app: FastifyInstance, deps: CodexPetR
     enqueueRun,
     now,
     loadArtifact,
+    signImageUrl,
     validateReferenceAsset,
     ownedProject,
     ownedRun,

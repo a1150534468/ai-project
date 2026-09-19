@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NovelContextInspector } from "./NovelContextInspector";
 
@@ -25,6 +25,21 @@ describe("NovelContextInspector chapter context", () => {
     api.listNovelCharacters.mockImplementation(pending);
     api.listNovelProps.mockImplementation(pending);
     api.listNovelStorylines.mockImplementation(pending);
+  });
+
+  it("reuses setup characters and storylines instead of requesting them twice", async () => {
+    api.getNovelSetup.mockResolvedValue({ bible: null, locations: [], characters: [{ id: "c1", name: "目录角色" }], storylines: [{ id: "s1", title: "目录故事线" }] });
+    api.listNovelProps.mockResolvedValue([]);
+    render(<NovelContextInspector token="token" projectId="project-1" chapter={null} workbench={null} isReviewSaving={false} onSaveReview={vi.fn()} onAnalyze={vi.fn()} />);
+    await act(async () => {});
+    expect(api.getNovelSetup).toHaveBeenCalledTimes(1);
+    expect(api.listNovelProps).toHaveBeenCalledTimes(1);
+    expect(api.listNovelCharacters).not.toHaveBeenCalled();
+    expect(api.listNovelStorylines).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "人物" }));
+    expect(screen.getByText("目录角色")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "故事线" }));
+    expect(screen.getByText("目录故事线")).toBeVisible();
   });
 
   it("shows the selected chapter snapshot instead of next-chapter highlights", () => {

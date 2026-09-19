@@ -31,6 +31,9 @@ export function NovelWorkbenchShell({
   detail,
   workbench,
   selectedChapter,
+  chapterLoading = false,
+  chapterLoadError = "",
+  onRetryChapter,
   selectedChapterId,
   chapterTitle,
   chapterSummary,
@@ -68,6 +71,9 @@ export function NovelWorkbenchShell({
   readonly detail: NovelProjectDetail;
   readonly workbench: NovelWorkbenchPayload | null;
   readonly selectedChapter: NovelChapter | null;
+  readonly chapterLoading?: boolean;
+  readonly chapterLoadError?: string;
+  readonly onRetryChapter?: () => void;
   readonly selectedChapterId: string;
   readonly chapterTitle: string;
   readonly chapterSummary: string;
@@ -105,10 +111,10 @@ export function NovelWorkbenchShell({
   const [structure, setStructure] = useState<NovelStructureNode[]>([]);
   const [leftOpen, setLeftOpen] = useState(true);
   const [rightOpen, setRightOpen] = useState(true);
-  useEffect(() => { void getNovelStructure(token, detail.project.id).then(setStructure).catch(() => setStructure([])); }, [detail.project.id, detail.project.updatedAt, token, workbench?.chapters.length]);
-  const chapters = workbench?.chapters ?? detail.chapters;
+  useEffect(() => { void getNovelStructure(token, detail.project.id).then(setStructure).catch(() => setStructure([])); }, [detail.project.id, detail.project.updatedAt, token, detail.chapters.length]);
+  const chapters = detail.chapters;
   const totalWords = workbench?.stats.totalWords ?? chapters.reduce((sum, chapter) => sum + chapter.billableChars, 0);
-  const completed = workbench?.stats.finishedChapters ?? chapters.filter((chapter) => Boolean(chapter.content)).length;
+  const completed = workbench?.stats.finishedChapters ?? chapters.filter((chapter) => (chapter.hasContent ?? Boolean(chapter.content?.trim()))).length;
   const progress = detail.project.targetChapters > 0 ? Math.min(100, Math.round(completed / detail.project.targetChapters * 100)) : 0;
   const activeRun = detail.tasks.find((task) => task.status === "queued" || task.status === "running");
   const runningChapter = useMemo(() => {
@@ -143,7 +149,7 @@ export function NovelWorkbenchShell({
       <main className="min-h-0 flex-1">
         {workspace === "writing" ? <div className={`grid h-full min-h-0 grid-cols-1 overflow-hidden ${leftOpen && rightOpen ? "xl:grid-cols-[230px_minmax(0,1fr)_290px] 2xl:grid-cols-[250px_minmax(0,1fr)_310px]" : leftOpen ? "xl:grid-cols-[230px_minmax(0,1fr)] 2xl:grid-cols-[250px_minmax(0,1fr)]" : rightOpen ? "xl:grid-cols-[minmax(0,1fr)_290px] 2xl:grid-cols-[minmax(0,1fr)_310px]" : ""}`}>
           {leftOpen && <NovelStructureSidebar nodes={structure} chapters={chapters} selectedChapterId={selectedChapterId} runningChapter={runningChapter} onSelectChapter={onSelectChapter} onCreateChapter={onCreateChapter} onOpenPlanning={() => setWorkspace("story")} />}
-          <NovelChapterDesk token={token} projectId={detail.project.id} chapter={selectedChapter} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} chapterContent={chapterContent} targetChars={targetChars} saveStatus={saveStatus} isGenerating={isGenerating} isRewriting={isRewriting} onTitleChange={onTitleChange} onSummaryChange={onSummaryChange} onOutlineChange={onOutlineChange} onGenerationHintChange={onGenerationHintChange} onContentChange={onContentChange} onTargetCharsChange={onTargetCharsChange} onGenerate={onGenerate} onRewrite={onRewrite} onAnalyze={onAnalyze} onVersionRestored={onVersionRestored} />
+          {chapterLoading ? <div className="grid h-full place-items-center p-6" role="status"><div className="text-center"><p>{chapterLoadError || "正在加载章节正文…"}</p>{chapterLoadError && <button type="button" onClick={onRetryChapter} className="mt-3 rounded-lg border px-4 py-2">重试加载章节</button>}</div></div> : <NovelChapterDesk token={token} projectId={detail.project.id} chapter={selectedChapter} chapterTitle={chapterTitle} chapterSummary={chapterSummary} chapterOutline={chapterOutline} generationHint={generationHint} chapterContent={chapterContent} targetChars={targetChars} saveStatus={saveStatus} isGenerating={isGenerating} isRewriting={isRewriting} onTitleChange={onTitleChange} onSummaryChange={onSummaryChange} onOutlineChange={onOutlineChange} onGenerationHintChange={onGenerationHintChange} onContentChange={onContentChange} onTargetCharsChange={onTargetCharsChange} onGenerate={onGenerate} onRewrite={onRewrite} onAnalyze={onAnalyze} onVersionRestored={onVersionRestored} />}
           {rightOpen && <NovelContextInspector token={token} projectId={detail.project.id} chapter={selectedChapter} workbench={workbench} isReviewSaving={isReviewSaving} onSaveReview={onSaveReview} onAnalyze={onAnalyze} />}
         </div> : workspace === "autopilot" ? <div className="h-full min-h-0 overflow-hidden p-4 sm:p-6"><NovelRunCockpit token={token} projectId={detail.project.id} nextChapter={nextNovelChapterIndex(chapters)} onProjectChanged={onRefresh} /></div> : <div className="h-full overscroll-contain overflow-y-auto [scrollbar-gutter:stable] [scrollbar-width:thin]">{workspace === "story" ? <div className="p-4 sm:p-6"><NovelIntelligenceWorkspace token={token} projectId={detail.project.id} showPrompts={false} /></div> : workspace === "bible" ? <NovelBibleWorkspace token={token} projectId={detail.project.id} onOpenSetup={onOpenSetup} /> : <div className="p-4 sm:p-6"><NovelPromptWorkbench token={token} projectId={detail.project.id} /></div>}</div>}
       </main>

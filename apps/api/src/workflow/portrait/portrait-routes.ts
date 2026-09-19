@@ -9,6 +9,8 @@ import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
 import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
+import { sendImageBlob } from "../_shared/image-blob-response.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -175,6 +177,7 @@ interface PortraitRouteDeps {
     acl: "private";
   }) => Promise<StoredImage>;
   readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
+  readonly signImageUrl?: ImageUrlSigner;
   readonly deleteStoredImage?: (objectKey: string) => Promise<void>;
   readonly callImageEdit?: (args: {
     config: ImageGenerationConfig;
@@ -497,6 +500,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   const fetchFn = deps.fetchFn ?? fetch;
   const storeImage = deps.storeImage ?? storeWorkflowImageService;
   const loadStoredImage = deps.loadStoredImage ?? ((objectKey: string) => getObject(makeS3(loadS3Config()), objectKey));
+  const signImageUrl = deps.signImageUrl ?? createImageUrlSigner();
   const deleteStoredImage = deps.deleteStoredImage ?? ((objectKey: string) => deleteObject(makeS3(loadS3Config()), objectKey));
   const callImageEdit = deps.callImageEdit ?? (async (args: Parameters<typeof callImageEditService>[0]) => callImageEditService(args));
   const scheduleTask = deps.scheduleTask ?? ((work: () => Promise<void>) => { void work().catch(() => undefined); });
@@ -629,8 +633,9 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     const row = await prisma.portraitReferenceAsset.findUnique({ where: { id: params.data.id } }) as unknown as PortraitReferenceRow | null;
     if (!row || row.deletedAt || !isPortraitObjectKeyForUser(row.objectKey, row.userId, "references") || !hasValidBlobSignature("reference", row.id, row.objectKey, query.data.exp, query.data.sig)) return reply.code(404).send({ error: "图片不存在或地址已失效" });
     try {
-      const buffer = await loadStoredImage(row.objectKey);
-      return reply.header("Cache-Control", "private, max-age=300").type(row.mime).send(buffer);
+      return await sendImageBlob(reply, {
+        objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
+      }, { signImageUrl, loadStoredImage });
     } catch {
       return reply.code(502).send({ error: "图片加载失败" });
     }
@@ -643,8 +648,10 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     const row = await prisma.portraitOutput.findUnique({ where: { id: params.data.id } }) as unknown as PortraitOutputRow | null;
     if (!row || !isPortraitObjectKeyForUser(row.objectKey, row.userId, "outputs") || !hasValidBlobSignature("output", row.id, row.objectKey, query.data.exp, query.data.sig)) return reply.code(404).send({ error: "图片不存在或地址已失效" });
     try {
-      const buffer = await loadStoredImage(row.objectKey);
-      return reply.header("Cache-Control", "private, max-age=300").type(row.mime).header("Content-Disposition", `inline; filename="portrait-${row.requestIndex + 1}.png"`).send(buffer);
+      return await sendImageBlob(reply, {
+        objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
+        contentDisposition: `inline; filename="portrait-${row.requestIndex + 1}.png"`,
+      }, { signImageUrl, loadStoredImage });
     } catch {
       return reply.code(502).send({ error: "图片加载失败" });
     }

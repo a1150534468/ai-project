@@ -25,7 +25,7 @@ import type { CodexPetRouteContext } from "./codex-pet-route-context.js";
 import type { CodexPetArtifactShape, ProjectShape, RunShape } from "./codex-pet-route-types.js";
 
 export function registerCodexPetDeliveryRoutes(app: FastifyInstance, ctx: CodexPetRouteContext) {
-  const { deps, prisma, now, loadArtifact, ownedProject } = ctx;
+  const { deps, prisma, now, loadArtifact, signImageUrl, ownedProject } = ctx;
 
   async function readyProjectAssets(userId: string, projectId: string, requestedRunId?: string) {
     const project = await ownedProject(userId, projectId);
@@ -173,6 +173,20 @@ export function registerCodexPetDeliveryRoutes(app: FastifyInstance, ctx: CodexP
     }
     if (!shape) return reply.code(404).send({ error: "桌宠资源不存在" });
     try {
+      // Row ownership includes the private namespace guard; never sign before it.
+      const url = await signImageUrl({
+        objectKey: shape.objectKey,
+        mime: shape.mime,
+        expiresAt: Math.min(query.data.exp * 1_000, shape.expiresAt?.getTime() ?? Infinity),
+        contentDisposition: "inline",
+      });
+      if (url) {
+        return reply
+          .header("Cache-Control", "private, no-store")
+          .header("Referrer-Policy", "no-referrer")
+          .header("X-Content-Type-Options", "nosniff")
+          .redirect(url, 302);
+      }
       const bytes = await loadArtifact(shape.objectKey);
       const maxAge = Math.max(0, Math.min(300, query.data.exp - Math.floor(now().getTime() / 1_000)));
       app.log.info({ runId: shape.runId, status: query.data.purpose === "preview" ? "preview_served" : "install_image_served" }, "Codex pet signed artifact served");

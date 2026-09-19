@@ -17,6 +17,11 @@ export type NovelChapterRow = {
   readonly microBeats?: JsonValue;
   readonly content: string;
   readonly rawContent?: string;
+  readonly tensionScore?: number;
+  readonly plotTension?: number;
+  readonly emotionalTension?: number;
+  readonly pacingTension?: number;
+  readonly qualityScore?: number;
   readonly openThreads?: JsonValue;
   readonly contextSnapshot?: JsonValue;
   readonly generationMeta?: JsonValue;
@@ -112,13 +117,18 @@ export function serializeNovelWorkbenchChapter(chapter: NovelChapterRow) {
     aiActionItems: jsonStringArray(chapter.aiActionItems),
     modificationRate: chapter.modificationRate ?? 0,
     reviewedAt: chapter.reviewedAt?.toISOString() ?? null,
+    tensionScore: chapter.tensionScore,
+    plotTension: chapter.plotTension,
+    emotionalTension: chapter.emotionalTension,
+    pacingTension: chapter.pacingTension,
+    qualityScore: chapter.qualityScore,
     billableChars: chapter.billableChars,
     lastTaskId: chapter.lastTaskId,
     updatedAt: chapter.updatedAt.toISOString(),
   };
 }
 
-export async function getNovelWorkbench(prisma: PrismaClient, userId: string, projectId: string) {
+export async function getNovelWorkbench(prisma: PrismaClient, userId: string, projectId: string, compact = false) {
   const project = await prisma.novelProject.findFirst({ where: { id: projectId, userId } });
   if (!project) return null;
   const store = prisma as PrismaClient & {
@@ -130,7 +140,7 @@ export async function getNovelWorkbench(prisma: PrismaClient, userId: string, pr
     prisma.novelStoryline.findMany({ where: { projectId: project.id, status: "active" }, include: { milestones: { orderBy: { chapterNumber: "asc" }, take: 12 } } }),
     prisma.novelCharacter.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "asc" }, take: 24 }),
     prisma.novelLocation.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "asc" }, take: 24 }),
-    prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } }),
+    prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" }, ...(compact ? { omit: { rawContent: true, contextSnapshot: true, generationMeta: true } } : {}) }),
     store.novelKnowledgeFact?.findMany({ where: { projectId: project.id }, orderBy: { updatedAt: "desc" }, take: 80 }) ?? Promise.resolve([]),
     store.novelForeshadowItem?.findMany({ where: { projectId: project.id }, orderBy: [{ status: "asc" }, { expectedPayoffChapter: "asc" }], take: 80 }) ?? Promise.resolve([]),
   ]);
@@ -194,7 +204,7 @@ export async function getNovelWorkbench(prisma: PrismaClient, userId: string, pr
       averageWords: finishedChapters ? Math.round(totalWords / finishedChapters) : 0,
       lastUpdate: serializedChapters.at(-1)?.updatedAt ?? project.updatedAt.toISOString(),
     },
-    chapters: serializedChapters,
+    chapters: compact ? [] : serializedChapters,
     knowledgeFacts,
     foreshadowItems,
     workbenchHighlights: {

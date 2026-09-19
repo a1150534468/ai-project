@@ -3,6 +3,7 @@ import sharp from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import { LOOK_DIRECTIONS } from "@ai-assistant/codex-pet-pipeline";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createImageUrlSigner } from "../../storage/cos-image-url.js";
 import { GPT_IMAGE_MODEL, QWEN_IMAGE_MODEL } from "../_shared/image-service.js";
 import { CODEX_PET_BAILIAN_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import {
@@ -1564,6 +1565,91 @@ describe("Codex pet routes", () => {
     state.runs[0]!.userId = "u2";
     expect((await app.inject({ method: "POST", url: installUrl, headers: auth })).statusCode).toBe(409);
     expect((await app.inject({ method: "GET", url: "/api/workflow/codex-pets/projects/project-1/download?runId=run-selected", headers: { "x-test-user": "u2" } })).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it.each([
+    ["preview", "sprite.webp"],
+    ["install", "sprite.webp"],
+    ["preview", "最终形象 · 预览.webp"],
+    ["install", "最终动画 图.webp"],
+  ])("signs validated %s %s images for CDN with bounded expiry", async (purpose, filename) => {
+    vi.spyOn(Date, "now").mockReturnValue(NOW.getTime());
+    const expiresAt = purpose === "preview" ? new Date(NOW.getTime() + 60_000) : null;
+    const sprite = artifactRow({ id: "sprite-final", kind: "spritesheet", objectKey: `workflow/codex-pets/u1/project-1/run-1/${filename}`, width: 1536, height: 2288, expiresAt });
+    const { prisma } = createPrismaMock({ artifacts: [sprite], runs: [runRow({ status: "ready", spritesheetArtifactId: "sprite-final" })] });
+    const signImageUrl = createImageUrlSigner({
+      WORKFLOW_IMAGE_DELIVERY: "cdn",
+      WORKFLOW_IMAGE_CDN_BASE_URL: "https://images.example.com",
+      WORKFLOW_IMAGE_CDN_SIGNING_KEY: "0123456789abcdef0123456789abcdef",
+    });
+    const loadArtifact = vi.fn(async () => Buffer.from("unused"));
+    const { app } = await createApp(prisma, { signImageUrl, loadArtifact });
+    try {
+      const exp = Math.floor(NOW.getTime() / 1_000) + 900;
+      const sig = signCodexPetArtifact(sprite.id, exp, "test-signing-secret-that-is-long-enough", purpose === "preview" ? CODEX_PET_PREVIEW_ARTIFACT_PURPOSE : undefined);
+      const response = await app.inject({ url: `/api/public/codex-pets/artifacts/${sprite.id}?exp=${exp}&sig=${sig}${purpose === "preview" ? "&purpose=preview" : ""}` });
+      expect(response.statusCode).toBe(302);
+      const location = new URL(response.headers.location!);
+      expect(location.origin).toBe("https://images.example.com");
+      expect(location.pathname).toBe(`/${sprite.objectKey.split("/").map(encodeURIComponent).join("/")}`);
+      expect(location.searchParams.get("sign")).toMatch(/^[a-f0-9]{64}$/);
+      expect((Number(location.searchParams.get("t")) + 300) * 1_000).toBeLessThan(expiresAt?.getTime() ?? NOW.getTime() + 300_000);
+      expect(loadArtifact).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it.each(["preview", "install"])("redirects validated %s images without loading bytes", async (purpose) => {
+    const expiresAt = purpose === "preview" ? new Date(NOW.getTime() + 60_000) : null;
+    const sprite = artifactRow({ id: "sprite-final", kind: "spritesheet", width: 1536, height: 2288, expiresAt });
+    const { prisma } = createPrismaMock({
+      artifacts: [sprite],
+      runs: [runRow({ status: "ready", spritesheetArtifactId: "sprite-final" })],
+    });
+    const signImageUrl = vi.fn(async () => "https://private.cos.example/signed-image");
+    const loadArtifact = vi.fn(async () => Buffer.from("unused"));
+    const { app } = await createApp(prisma, { signImageUrl, loadArtifact });
+    const exp = Math.floor(NOW.getTime() / 1_000) + 900;
+    const sig = signCodexPetArtifact(sprite.id, exp, "test-signing-secret-that-is-long-enough", purpose === "preview" ? CODEX_PET_PREVIEW_ARTIFACT_PURPOSE : undefined);
+    const response = await app.inject({ url: `/api/public/codex-pets/artifacts/${sprite.id}?exp=${exp}&sig=${sig}${purpose === "preview" ? "&purpose=preview" : ""}` });
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe("https://private.cos.example/signed-image");
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.headers["referrer-policy"]).toBe("no-referrer");
+    expect(signImageUrl).toHaveBeenCalledWith({ objectKey: sprite.objectKey, mime: sprite.mime, contentDisposition: "inline", expiresAt: expiresAt?.getTime() ?? exp * 1_000 });
+    expect(loadArtifact).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each([
+    { status: "deleted" },
+    { mime: "image/svg+xml" },
+    { objectKey: "workflow/codex-pets/u2/project-1/run-1/image.png" },
+    { objectKey: "workflow/codex-pets/u1/project-1/run-1/../image.png" },
+    { expiresAt: new Date(NOW.getTime() - 1) },
+  ])("does not sign invalid preview artifacts: %j", async (override) => {
+    const { prisma } = createPrismaMock({ artifacts: [artifactRow(override)] });
+    const signImageUrl = vi.fn(async () => "https://private.cos.example/image");
+    const { app } = await createApp(prisma, { signImageUrl });
+    const exp = Math.floor(NOW.getTime() / 1_000) + 300;
+    const sig = signCodexPetArtifact("artifact-1", exp, "test-signing-secret-that-is-long-enough", CODEX_PET_PREVIEW_ARTIFACT_PURPOSE);
+    const response = await app.inject({ url: `/api/public/codex-pets/artifacts/artifact-1?exp=${exp}&sig=${sig}&purpose=preview` });
+    expect(response.statusCode).toBe(404);
+    expect(signImageUrl).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("does not silently proxy on signer failure", async () => {
+    const { prisma } = createPrismaMock({ artifacts: [artifactRow()] });
+    const loadArtifact = vi.fn(async () => Buffer.from("unused"));
+    const { app } = await createApp(prisma, { loadArtifact, signImageUrl: async () => { throw new Error("sign failed"); } });
+    const exp = Math.floor(NOW.getTime() / 1_000) + 300;
+    const sig = signCodexPetArtifact("artifact-1", exp, "test-signing-secret-that-is-long-enough", CODEX_PET_PREVIEW_ARTIFACT_PURPOSE);
+    expect((await app.inject({ url: `/api/public/codex-pets/artifacts/artifact-1?exp=${exp}&sig=${sig}&purpose=preview` })).statusCode).toBe(502);
+    expect(loadArtifact).not.toHaveBeenCalled();
     await app.close();
   });
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import { getNovelSetup, listNovelCharacters, listNovelProps, listNovelStorylines, type NovelChapter, type NovelSetupPayload, type NovelWorkbenchPayload } from "../../api";
+import { getNovelSetup, listNovelProps, type NovelChapter, type NovelSetupPayload, type NovelWorkbenchPayload } from "../../api";
 import { NovelReviewPanel } from "../workflow/NovelReviewPanel";
 
 type InspectorTab = "context" | "characters" | "storylines" | "foreshadow" | "world" | "quality";
@@ -35,14 +35,13 @@ export function NovelContextInspector({ token, projectId, chapter, workbench, is
 
   useEffect(() => {
     let cancelled = false;
+    setSetup(null); setCharacters([]); setStorylines([]); setProps([]);
     void Promise.all([
       getNovelSetup(token, projectId).catch(() => null),
-      listNovelCharacters(token, projectId).catch(() => ({ characters: [], relations: [] })),
-      listNovelStorylines(token, projectId).catch(() => []),
       listNovelProps(token, projectId).catch(() => []),
-    ]).then(([nextSetup, cast, lines, nextProps]) => {
+    ]).then(([nextSetup, nextProps]) => {
       if (cancelled) return;
-      setSetup(nextSetup); setCharacters(cast.characters); setStorylines(lines); setProps(nextProps);
+      setSetup(nextSetup); setCharacters(nextSetup?.characters ?? []); setStorylines(nextSetup?.storylines ?? []); setProps(nextProps);
     });
     return () => { cancelled = true; };
   }, [projectId, token]);

@@ -9,6 +9,8 @@ import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
 import { requireUser } from "../../auth/require-user.js";
 import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
+import { sendImageBlob } from "../_shared/image-blob-response.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import {
   callImageEdit as callImageEditService,
@@ -130,6 +132,7 @@ interface TryOnRouteDeps {
     acl: "private";
   }) => Promise<StoredImage>;
   readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
+  readonly signImageUrl?: ImageUrlSigner;
   readonly deleteStoredImage?: (objectKey: string) => Promise<void>;
   readonly callImageEdit?: (args: {
     config: ImageGenerationConfig;
@@ -575,6 +578,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
   const fetchFn = deps.fetchFn ?? fetch;
   const storeImage = deps.storeImage ?? storeWorkflowImageService;
   const loadStoredImage = deps.loadStoredImage ?? ((key: string) => getObject(makeS3(loadS3Config()), key));
+  const signImageUrl = deps.signImageUrl ?? createImageUrlSigner();
   const deleteStoredImage = deps.deleteStoredImage ?? ((key: string) => deleteObject(makeS3(loadS3Config()), key));
   const callImageEdit =
     deps.callImageEdit ?? ((args: Parameters<typeof callImageEditService>[0]) => callImageEditService(args));
@@ -742,10 +746,9 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     )
       return reply.code(404).send({ error: "图片不存在或地址已失效" });
     try {
-      return reply
-        .header("Cache-Control", "private, max-age=300")
-        .type(row.mime)
-        .send(await loadStoredImage(row.objectKey));
+      return await sendImageBlob(reply, {
+        objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
+      }, { signImageUrl, loadStoredImage });
     } catch {
       return reply.code(502).send({ error: "图片加载失败" });
     }
@@ -765,11 +768,10 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     )
       return reply.code(404).send({ error: "图片不存在或地址已失效" });
     try {
-      return reply
-        .header("Cache-Control", "private, max-age=300")
-        .type(row.mime)
-        .header("Content-Disposition", `inline; filename="try-on-${row.requestIndex + 1}.png"`)
-        .send(await loadStoredImage(row.objectKey));
+      return await sendImageBlob(reply, {
+        objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
+        contentDisposition: `inline; filename="try-on-${row.requestIndex + 1}.png"`,
+      }, { signImageUrl, loadStoredImage });
     } catch {
       return reply.code(502).send({ error: "图片加载失败" });
     }

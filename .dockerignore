@@ -16,3 +16,6 @@ dist
 coverage
 docs
 **/*.test.ts
+
+# Local investigation payloads and private verification configuration must not enter image builds.
+.codex

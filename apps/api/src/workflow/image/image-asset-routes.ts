@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { requireUser } from "../../auth/require-user.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
+import { sendImageBlob } from "../_shared/image-blob-response.js";
 import {
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
@@ -32,7 +33,7 @@ async function isReadableRaster(bytes: Buffer): Promise<boolean> {
 }
 
 export function registerImageAssetRoutes(context: ImageRouteContext): void {
-  const { app, prisma, fetchFn, loadStoredImage } = context;
+  const { app, prisma, fetchFn, loadStoredImage, signImageUrl } = context;
 
   app.get("/api/workflow/images/:imageId/blob", async (req, reply) => {
     const params = imageBlobParamsSchema.safeParse(req.params);
@@ -49,11 +50,11 @@ export function registerImageAssetRoutes(context: ImageRouteContext): void {
     }
 
     try {
-      const bytes = await loadStoredImage(image.objectKey);
-      return reply
-        .header("Cache-Control", "private, max-age=300")
-        .type(image.mime.startsWith("image/") ? image.mime : "image/png")
-        .send(bytes);
+      return await sendImageBlob(reply, {
+        objectKey: image.objectKey,
+        mime: image.mime.startsWith("image/") ? image.mime : "image/png",
+        expiresAt: query.data.exp,
+      }, { signImageUrl, loadStoredImage });
     } catch (error) {
       app.log.error(error);
       return reply.code(502).send({ error: "图片加载失败" });

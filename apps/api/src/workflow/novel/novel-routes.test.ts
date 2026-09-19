@@ -207,6 +207,50 @@ async function createApp(options: {
 describe("PlotPilot novel workflow routes", () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it("serves a compact directory and loads one owned chapter on demand", async () => {
+    const state = createPrismaMock();
+    const app = await createApp({ prisma: state.prisma });
+    const created = await app.inject({ method: "POST", url: "/api/workflow/novels/projects", payload: { title: "减量测试", premise: "一部用于验证长篇小说传输体积的作品。" } });
+    const id = created.json().data.project.id;
+    for (let index = 1; index <= 34; index += 1) {
+      state.rows.chapters.push({ id: `c-${index}`, projectId: id, chapterIndex: index, volumeIndex: 1, title: `第${index}章`, summary: "摘要", content: "正文".repeat(1500), rawContent: "原文".repeat(1500), contextSnapshot: { source: "上下文".repeat(5000) }, generationMeta: { trace: "内部".repeat(1000) }, status: "draft", billableChars: 3000, qualityScore: 88, tensionScore: 70, lastTaskId: null, updatedAt: fixedNow });
+    }
+    Object.assign(state.prisma, {
+      novelStoryline: { findMany: vi.fn(async () => []) },
+      novelCharacter: { findMany: vi.fn(async () => []) },
+      novelLocation: { findMany: vi.fn(async () => []) },
+    });
+    const fullWorkbench = await app.inject({ url: `/api/workflow/novels/projects/${id}/workbench` });
+    const compactWorkbench = await app.inject({ url: `/api/workflow/novels/projects/${id}/workbench?view=compact` });
+    expect(compactWorkbench.statusCode).toBe(200);
+    expect(compactWorkbench.json().data.chapters).toEqual([]);
+    expect(compactWorkbench.json().data.stats).toEqual(fullWorkbench.json().data.stats);
+    expect(compactWorkbench.json().data.stats.finishedChapters).toBe(34);
+    expect(compactWorkbench.json().data.workbenchHighlights).toEqual(fullWorkbench.json().data.workbenchHighlights);
+    expect(Buffer.byteLength(compactWorkbench.body)).toBeLessThan(Buffer.byteLength(fullWorkbench.body) * 0.05);
+    const full = await app.inject({ url: `/api/workflow/novels/projects/${id}` });
+    const compact = await app.inject({ url: `/api/workflow/novels/projects/${id}?view=compact` });
+    expect(compact.statusCode).toBe(200);
+    const first = compact.json().data.chapters[0];
+    expect(first).toMatchObject({ detailLoaded: false, hasContent: true, wordCount: 3000, qualityScore: 88 });
+    for (const key of ["content", "rawContent", "contextSnapshot", "generationMeta"]) expect(first).not.toHaveProperty(key);
+    expect(Buffer.byteLength(compact.body)).toBeLessThan(Buffer.byteLength(full.body) * 0.05);
+    const chapter = await app.inject({ url: `/api/workflow/novels/projects/${id}/chapters/2` });
+    expect(chapter.json().data.chapter).toMatchObject({ id: "c-2", content: state.rows.chapters[1].content, rawContent: state.rows.chapters[1].rawContent, contextSnapshot: state.rows.chapters[1].contextSnapshot, qualityScore: 88 });
+    expect((await app.inject({ url: `/api/workflow/novels/projects/${id}/chapters/999` })).statusCode).toBe(404);
+    expect((await app.inject({ url: `/api/workflow/novels/projects/${id}/chapters/not-a-number` })).statusCode).toBe(400);
+    expect((await app.inject({ url: `/api/workflow/novels/projects/${id}?view=invalid` })).statusCode).toBe(400);
+    console.info("NOVEL_PAYLOAD_BYTES", JSON.stringify({ full: Buffer.byteLength(full.body), compact: Buffer.byteLength(compact.body), singleChapter: Buffer.byteLength(chapter.body), fullWorkbench: Buffer.byteLength(fullWorkbench.body), compactWorkbench: Buffer.byteLength(compactWorkbench.body) }));
+    await app.close();
+    const stranger = await createApp({ prisma: state.prisma, userId: "other-user" });
+    expect((await stranger.inject({ url: `/api/workflow/novels/projects/${id}?view=compact` })).statusCode).toBe(404);
+    expect((await stranger.inject({ url: `/api/workflow/novels/projects/${id}/chapters/2` })).statusCode).toBe(404);
+    await stranger.close();
+    const anonymous = await createApp({ prisma: state.prisma, userId: "" });
+    expect((await anonymous.inject({ url: `/api/workflow/novels/projects/${id}/chapters/2` })).statusCode).toBe(401);
+    await anonymous.close();
+  });
+
   it("creates a premise-first project and its locked Bible without legacy sections", async () => {
     const state = createPrismaMock();
     const app = await createApp({ prisma: state.prisma });

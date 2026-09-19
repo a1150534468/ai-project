@@ -57,6 +57,11 @@ interface WizardProbeProps {
 }
 
 interface ShellProbeProps {
+  readonly selectedChapter: NovelChapter | null;
+  readonly chapterLoading: boolean;
+  readonly chapterLoadError: string;
+  readonly onRetryChapter: () => void;
+  readonly onRefresh: () => void;
   readonly selectedChapterId: string;
   readonly chapterTitle: string;
   readonly chapterContent: string;
@@ -79,6 +84,7 @@ const api = vi.hoisted(() => ({
   deleteNovelProject: vi.fn(),
   getNovelEngineRun: vi.fn(),
   getNovelProject: vi.fn(),
+  getNovelChapter: vi.fn(),
   getNovelWorkbench: vi.fn(),
   listNovelProjects: vi.fn(),
   rewriteNovelChapterSelection: vi.fn(),
@@ -319,6 +325,7 @@ beforeEach(() => {
   api.listNovelProjects.mockResolvedValue([makeSummary()]);
   api.getNovelProject.mockResolvedValue(makeDetail());
   api.getNovelWorkbench.mockResolvedValue(makeWorkbench());
+  api.getNovelChapter.mockResolvedValue(makeChapter());
   api.deleteNovelProject.mockResolvedValue(undefined);
   api.saveNovelChapter.mockImplementation(
     async (_token: string, _projectId: string, chapterIndex: number, payload: Partial<NovelChapter>) =>
@@ -377,7 +384,7 @@ describe("NovelWorkflowStudio 书库与建档", () => {
 
     await advance();
 
-    expect(api.getNovelProject).toHaveBeenCalledWith("token", "project-1");
+    expect(api.getNovelProject).toHaveBeenCalledWith("token", "project-1", true);
     expect(screen.getByRole("main", { name: "写作工作台" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "新书设置" })).not.toBeInTheDocument();
   });
@@ -723,3 +730,83 @@ describe("小说工作台情报面板", () => {
 
 
 
+
+
+describe("NovelWorkflowStudio compact reads", () => {
+  function directory(chapters = [makeChapter()]) {
+    return makeDetail({}, { chapters: chapters.map((chapter) => ({ ...chapter, content: "", rawContent: undefined, contextSnapshot: undefined, detailLoaded: false, hasContent: true })) });
+  }
+
+  it("loads only the selected chapter and cannot autosave an unloaded directory entry", async () => {
+    let resolve!: (chapter: NovelChapter) => void;
+    api.getNovelProject.mockResolvedValue(directory());
+    api.getNovelWorkbench.mockResolvedValue(makeWorkbench([]));
+    api.getNovelChapter.mockImplementationOnce(() => new Promise<NovelChapter>((done) => { resolve = done; }));
+    await openWorkbench();
+    expect(api.getNovelProject).toHaveBeenCalledWith("token", "project-1", true);
+    expect(api.getNovelWorkbench).toHaveBeenCalledWith("token", "project-1", true);
+    expect(api.getNovelChapter).toHaveBeenCalledWith("token", "project-1", 1);
+    expect(shellProps().selectedChapter).toBeNull();
+    expect(shellProps().chapterLoading).toBe(true);
+    await advance(2000);
+    expect(api.saveNovelChapter).not.toHaveBeenCalled();
+    await act(async () => resolve(makeChapter()));
+    expect(shellProps().chapterContent).toBe(makeChapter().content);
+    expect(shellProps().chapterLoading).toBe(false);
+    await act(async () => shellProps().onRefresh());
+    await advance();
+    expect(api.getNovelChapter).toHaveBeenCalledTimes(1);
+    expect(api.saveNovelChapter).not.toHaveBeenCalled();
+  });
+
+  it("ignores a late chapter response after switching chapters", async () => {
+    const second = makeChapter({ id: "chapter-2", chapterIndex: 2, content: "第二章正文" });
+    let resolve!: (chapter: NovelChapter) => void;
+    api.getNovelProject.mockResolvedValue(directory([makeChapter(), second]));
+    api.getNovelChapter.mockImplementationOnce(() => new Promise<NovelChapter>((done) => { resolve = done; })).mockResolvedValueOnce(second);
+    await openWorkbench();
+    await act(async () => shellProps().onSelectChapter("chapter-2"));
+    await advance();
+    expect(shellProps().chapterContent).toBe("第二章正文");
+    await act(async () => resolve(makeChapter()));
+    expect(shellProps().chapterContent).toBe("第二章正文");
+    expect(api.saveNovelChapter).not.toHaveBeenCalled();
+  });
+
+  it("shows a retryable load failure and retries without saving an empty chapter", async () => {
+    api.getNovelProject.mockResolvedValue(directory());
+    api.getNovelChapter.mockRejectedValueOnce(new Error("网络暂不可用")).mockResolvedValueOnce(makeChapter());
+    await openWorkbench();
+    expect(shellProps().chapterLoadError).toBe("网络暂不可用");
+    expect(shellProps().selectedChapter).toBeNull();
+    await act(async () => shellProps().onRetryChapter());
+    await advance();
+    expect(shellProps().chapterContent).toBe(makeChapter().content);
+    expect(api.getNovelChapter).toHaveBeenCalledTimes(2);
+    expect(api.saveNovelChapter).not.toHaveBeenCalled();
+  });
+
+  it("does not overlap slow polls and ignores refreshes after leaving the project", async () => {
+    api.getNovelProject.mockResolvedValueOnce(makeDetail({}, { tasks: [QUEUED_TASK] }));
+    await openWorkbench();
+    let resolve!: (detail: NovelProjectDetail) => void;
+    api.getNovelProject.mockImplementationOnce(() => new Promise<NovelProjectDetail>((done) => { resolve = done; }));
+    await advance(8800);
+    expect(api.getNovelProject).toHaveBeenCalledTimes(2);
+    expect(api.getNovelWorkbench).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "返回书库" }));
+    await act(async () => resolve(makeDetail()));
+    expect(screen.queryByRole("main", { name: "写作工作台" })).not.toBeInTheDocument();
+  });
+
+  it("keeps a dirty draft when a compact refresh reports a newer chapter version", async () => {
+    api.getNovelProject.mockResolvedValue(directory());
+    await openWorkbench();
+    await act(async () => shellProps().onContentChange("尚未保存的修改"));
+    api.getNovelProject.mockResolvedValue(directory([makeChapter({ updatedAt: "2026-09-19T00:00:00Z" })]));
+    await act(async () => shellProps().onRefresh());
+    await advance();
+    expect(shellProps().chapterContent).toBe("尚未保存的修改");
+    expect(api.getNovelChapter).toHaveBeenCalledTimes(1);
+  });
+});

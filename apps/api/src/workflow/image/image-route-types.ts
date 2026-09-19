@@ -8,6 +8,7 @@
 import type { Buffer } from "node:buffer";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
+import type { ImageUrlSigner } from "../../storage/cos-image-url.js";
 import type { IMAGE_TASK_STATUS } from "./image-shared.js";
 
 export type ScheduleTask = (work: () => Promise<void>) => void;
@@ -24,6 +25,7 @@ export interface ImageWorkflowRouteDeps {
   readonly maxAttempts?: number;
   readonly staleTaskMs?: number;
   readonly loadStoredImage?: (objectKey: string) => Promise<Buffer>;
+  readonly signImageUrl?: ImageUrlSigner;
   /**
    * 给了才起主动扫的定时器。留成可选是为了让既有测试注册插件时不需要 redis，
    * 也避免测试进程里凭空多一个后台定时器。生产在 server.ts 注入。

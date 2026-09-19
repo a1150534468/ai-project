@@ -1,3 +1,5 @@
+import { serializeCompactNovelTask } from "../workflow/novel/novel-task-read.js";
+import { novelSetupChapterSelect } from "../workflow/novel/novel-chapter-summary.js";
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { completedNovelChapterCount } from "@ai-assistant/novel-workflow";
 import type { FastifyInstance } from "fastify";
@@ -243,11 +245,11 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
       prisma.novelLocation.findMany({ where: { projectId: project.id }, orderBy: { createdAt: "asc" } }),
       prisma.novelStoryline.findMany({ where: { projectId: project.id }, include: { milestones: { orderBy: { chapterNumber: "asc" } } } }),
       prisma.novelStructureNode.findMany({ where: { projectId: project.id }, orderBy: [{ nodeType: "asc" }, { number: "asc" }] }),
-      prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" } }),
+      prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" }, select: novelSetupChapterSelect }),
       prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind: { in: ["setupBible", "setupCharacters", "setupLocations", "setupPlot"] }, status: { in: ["queued", "running"] } }, orderBy: { createdAt: "desc" } }),
       prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind: { in: ["setupBible", "setupCharacters", "setupLocations", "setupPlot"] } }, orderBy: { createdAt: "desc" } }),
     ]);
-    const serializeSetupTask = (task: typeof activeTask) => task ? { ...task, createdAt: task.createdAt.toISOString(), updatedAt: task.updatedAt.toISOString(), completedAt: task.completedAt?.toISOString() ?? null, cancelledAt: task.cancelledAt?.toISOString() ?? null } : null;
+    const serializeSetupTask = (task: typeof activeTask) => task ? serializeCompactNovelTask(task) : null;
     return { success: true, data: { project: { id: project.id, setupStage: project.setupStage, setupCompleted: project.setupCompleted }, bible, characters, relations, locations, storylines, structure, chapters, activeTask: serializeSetupTask(activeTask), latestTask: serializeSetupTask(latestTask) } };
   });
 

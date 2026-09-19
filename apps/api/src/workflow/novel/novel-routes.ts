@@ -31,6 +31,7 @@ interface NovelWorkflowRouteDeps {
   readonly scheduleTask?: ScheduleTask;
 }
 
+const compactQuerySchema = z.object({ view: z.enum(["compact"]).optional() });
 const projectParamsSchema = z.object({ projectId: z.string().trim().min(1) });
 const taskParamsSchema = z.object({ taskId: z.string().trim().min(1) });
 const setupParamsSchema = projectParamsSchema.extend({
@@ -98,7 +99,7 @@ function jsonStringArray(value: unknown): string[] {
 }
 
 export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkflowRouteDeps = {}) {
-  // 本文件 17 个路由全部必须登录，挂插件级。
+  // 本文件所有路由（包括轻量目录与单章详情）必须登录，挂插件级。
   app.addHook("preHandler", requireUser);
 
   const prisma = deps.prisma ?? getPrisma();
@@ -176,7 +177,9 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const userId = req.userId;
     const parsed = projectParamsSchema.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
-    const detail = await getProjectDetail(prisma, userId, parsed.data.projectId);
+    const query = compactQuerySchema.safeParse(req.query);
+    if (!query.success) return reply.code(400).send({ error: "查询参数不合法" });
+    const detail = await getProjectDetail(prisma, userId, parsed.data.projectId, query.data.view === "compact");
     if (!detail) return reply.code(404).send({ error: "项目不存在" });
     return { success: true, data: detail };
   });
@@ -185,9 +188,23 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const userId = req.userId;
     const parsed = projectParamsSchema.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
-    const workbench = await getNovelWorkbench(prisma, userId, parsed.data.projectId);
+    const query = compactQuerySchema.safeParse(req.query);
+    if (!query.success) return reply.code(400).send({ error: "查询参数不合法" });
+    const workbench = await getNovelWorkbench(prisma, userId, parsed.data.projectId, query.data.view === "compact");
     if (!workbench) return reply.code(404).send({ error: "项目不存在" });
     return { success: true, data: workbench };
+  });
+
+  app.get("/api/workflow/novels/projects/:projectId/chapters/:chapterIndex", async (req, reply) => {
+    const params = chapterParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "章节参数不合法" });
+    const project = await findOwnedProject(prisma, req.userId, params.data.projectId);
+    if (!project) return reply.code(404).send({ error: "项目不存在" });
+    const chapter = await prisma.novelChapter.findUnique({
+      where: { projectId_chapterIndex: { projectId: project.id, chapterIndex: params.data.chapterIndex } },
+    });
+    if (!chapter) return reply.code(404).send({ error: "章节不存在" });
+    return { success: true, data: { chapter: serializeNovelWorkbenchChapter(chapter) } };
   });
 
   app.patch("/api/workflow/novels/projects/:projectId", async (req, reply) => {

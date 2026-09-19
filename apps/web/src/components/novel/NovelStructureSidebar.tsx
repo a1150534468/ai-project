@@ -6,7 +6,7 @@ import type { NovelChapter, NovelStructureNode } from "../../api";
 const NODE_LABELS: Record<string, string> = { book: "书", volume: "卷", act: "幕", chapter: "章" };
 
 function chapterState(chapter: NovelChapter | undefined): { label: string; className: string } {
-  if (!chapter?.content) return { label: "待写", className: "bg-surface-muted text-ink-tertiary" };
+  if (!chapter || !(chapter.hasContent ?? Boolean(chapter?.content?.trim()))) return { label: "待写", className: "bg-surface-muted text-ink-tertiary" };
   if (chapter.reviewStatus === "approved") return { label: "定稿", className: "bg-brand-soft text-brand-ink" };
   if (chapter.reviewStatus === "revise") return { label: "修订", className: "bg-warning/15 text-warning-ink" };
   return { label: "草稿", className: "bg-info/15 text-info-ink" };
@@ -57,7 +57,7 @@ export function NovelStructureSidebar({
     const state = chapterState(chapter);
     return <div key={node.id}>
       <button type="button" onClick={() => isChapter && chapter ? onSelectChapter(chapter.id) : toggle(node.id)} className={`group flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition ${active ? "bg-brand-soft text-brand-ink ring-1 ring-brand/20" : ""}`} style={{ paddingLeft: `${8 + depth * 12}px` }}>
-        <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center text-ink-tertiary">{children.length ? <Icon icon={hidden ? "mdi:chevron-right" : "mdi:chevron-down"} /> : <Icon icon={chapter?.content ? "mdi:file-document-check-outline" : "mdi:file-document-outline"} />}</span>
+        <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center text-ink-tertiary">{children.length ? <Icon icon={hidden ? "mdi:chevron-right" : "mdi:chevron-down"} /> : <Icon icon={(chapter?.hasContent ?? Boolean(chapter?.content?.trim())) ? "mdi:file-document-check-outline" : "mdi:file-document-outline"} />}</span>
         <span className="min-w-0 flex-1"><span className="flex min-w-0 items-center gap-1.5"><span className="shrink-0 text-[10px] font-bold uppercase text-ink-tertiary">{NODE_LABELS[node.nodeType] ?? node.nodeType}</span><span className="truncate text-xs font-semibold text-ink">{node.title}</span>{runningChapter === node.number && isChapter && <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-brand" />}</span>{isChapter && <span className="mt-1 flex items-center gap-1.5"><span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${state.className}`}>{state.label}</span><span className="text-[9px] text-ink-tertiary">{chapter?.billableChars ?? 0} 字</span></span>}</span>
       </button>
       {!hidden && children.map((child) => renderNode(child, depth + 1))}

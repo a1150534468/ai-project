@@ -2,6 +2,8 @@ import type { Buffer } from "node:buffer";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyReply, FastifyRequest } from "fastify";
 
+import type { ImageUrlSigner } from "../../storage/cos-image-url.js";
+
 export interface CodexPetArtifactShape {
   readonly id: string;
   readonly projectId: string;
@@ -34,6 +36,7 @@ export interface CodexPetRouteDeps {
     runId: string,
     onMessage: () => void,
   ) => Promise<(() => Promise<void> | void) | void>;
+  readonly signImageUrl?: ImageUrlSigner;
   readonly loadArtifact?: (objectKey: string) => Promise<Buffer>;
   /** Revalidates persisted reference bytes before a project can use them. */
   readonly validateReferenceAsset?: (asset: {

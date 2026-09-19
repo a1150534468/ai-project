@@ -2,30 +2,9 @@
  * 小说工作流的容器：书库 / 设置向导 / 写作工作台三个界面共用一份项目状态，页面本身不画任何 UI，
  * 只负责取数、轮询、章节草稿的自动保存，以及把这些分给三个子页面。
  *
- * 重写时收掉与修掉的七处：
- *  - **「保存回来的章节写回两份状态」原来抄了五遍**（自动保存 / 新建章节 / 章节分析 / 保存审阅 /
- *    恢复版本），每遍都是 `setDetail` + `setWorkbench` + `upsertChapter` 三件套。收成一个
- *    `mergeChapter(projectId, saved)`，**并且五处都带上项目 id 校验** —— 原来只有自动保存那一处
- *    有，另外四处在「请求还在飞、用户已经切走」时会把这一章塞进另一个项目的状态里。
- *  - **「已保存」原来一闪就没**。章节重置 effect 盯的是 `selectedChapter` 的 `id` 与 `updatedAt`，
- *    而我们自己那次保存恰好会把 `updatedAt` 顶上来 —— 于是状态刚写成 `saved` 就被重置回 `idle`。
- *    现在内容一致就不重置（服务端真的推了新正文时照旧重置，那条路要留着）。
- *  - **「自动保存中」原来一进书就卡住不走了**。打开作品那一次提交里，重置 effect 刚把服务端那一章
- *    写进草稿，同一次提交里的自动保存 effect 读到的还是**上一帧的空草稿**配**新一章** —— 于是判成
- *    脏、写下 `saving`；下一帧草稿追上了，effect 早退，`saving` 再没人改。`NovelChapterDesk` 的
- *    局部改写按钮恰好 `disabled={… || saveStatus === "saving" || …}`，所以那颗按钮从进书起就一直是灰的。
- *    换章同理。现在草稿连着「它属于哪一章」一起存（`ChapterEditor`），两者对不上就不判脏。
- *  - **五个章节草稿字段收成一个对象**。原来 `chapterTitle` / `chapterSummary` / `chapterOutline` /
- *    `generationHint` / `chapterContent` 五个 `useState`，重置、脏判定、提交三处各点一遍名字。
- *  - **任务轮询的依赖从整个 `detail` 换成「有没有在跑的任务 + 项目 id」**。`refreshProject` 每 2.2 秒
- *    换一个新的 `detail` 对象，于是那个 `setInterval` 每一轮都被拆掉重建一次。
- *  - **两处 `window.history.replaceState` 收成 `setNovelHash`**，进工作台写 hash、回书库清 hash。
- *  - **建档的梗概门槛改用 `hasNovelPremise`**，不再和 `NovelCreatePage` 各写一遍 `>= 10`。
- *  - **新书设置向导原来两个 return 各写一遍**（五个 props 一字不差），收成一个 `setupWizard`。
- *
- * 顺带：`createProject` 里那个 `chapters` 遮住了组件作用域里的章节列表，改叫 `targetChapters`；
- * `busy` 从裸字符串收成联合类型；`applyDetail` 与 `applyWorkbench` 里那句「选中的章节还在就留着，
- * 不在就选第一章」收成 `selectChapterFrom`。
+ * 项目目录使用 compact 读取，选中章节按需加载；未加载条目不能进入编辑器。
+ * detail 是章节唯一来源，workbench 仅提供统计/上下文摘要。刷新共享在途请求，
+ * 用项目身份、版本和本地修改保护迟到响应，保持已有自动保存与生成流程。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
@@ -35,6 +14,7 @@ import {
   deleteNovelProject,
   getNovelEngineRun,
   getNovelProject,
+  getNovelChapter,
   getNovelWorkbench,
   listNovelProjects,
   rewriteNovelChapterSelection,
@@ -180,11 +160,20 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
-  const chapters = workbench?.chapters ?? detail?.chapters ?? [];
-  const selectedChapter = useMemo(
+  const [chapterLoadError, setChapterLoadError] = useState("");
+  const [chapterLoadAttempt, setChapterLoadAttempt] = useState(0);
+  const requestedProjectRef = useRef("");
+  const mutationRevisionRef = useRef(0);
+  const tokenRef = useRef(token);
+  tokenRef.current = token;
+  const refreshesRef = useRef(new Map<string, Promise<NovelProjectDetail | null>>());
+  const chapters = detail?.chapters ?? [];
+  const selectedEntry = useMemo(
     () => chapters.find((chapter) => chapter.id === selectedChapterId) ?? chapters[0] ?? null,
     [chapters, selectedChapterId],
   );
+
+  const selectedChapter = selectedEntry?.detailLoaded === false ? null : selectedEntry;
 
   /** 章节重置 effect 要读当下的草稿，但不能跟着草稿重跑 —— 那就是每敲一个字重置一次。 */
   const chapterEditorRef = useRef(chapterEditor);
@@ -201,19 +190,25 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
     setSelectedChapterId((current) => (next.some((chapter) => chapter.id === current) ? current : next[0]?.id ?? ""));
   }, []);
 
-  /** 保存回来的那一章写回 detail 与 workbench。请求飞在路上时用户可能已经切走了，所以两边都认项目 id。 */
+  /** 目录与已加载章节以 detail 为唯一来源；迟到的保存结果不能写入其他项目。 */
   const mergeChapter = useCallback((projectId: string, saved: NovelChapter) => {
+    mutationRevisionRef.current += 1;
     setDetail((current) =>
-      current?.project.id === projectId ? { ...current, chapters: upsertChapter(current.chapters, saved) } : current,
-    );
-    setWorkbench((current) =>
       current?.project.id === projectId ? { ...current, chapters: upsertChapter(current.chapters, saved) } : current,
     );
   }, []);
 
   const applyDetail = useCallback(
     (next: NovelProjectDetail) => {
-      setDetail(next);
+      setDetail((current) => ({
+        ...next,
+        chapters: next.chapters.map((chapter) => {
+          const cached = current?.project.id === next.project.id ? current.chapters.find((item) => item.id === chapter.id) : null;
+          const editor = chapterEditorRef.current;
+          const dirty = cached && editor.chapterId === cached.id && !sameChapterDraft(normalizeChapterDraft(editor.draft), chapterDraftOf(cached));
+          return chapter.detailLoaded === false && cached && cached.detailLoaded !== false && (cached.updatedAt === chapter.updatedAt || dirty) ? cached : chapter;
+        }),
+      }));
       setTargetChars(String(next.project.targetCharsPerChapter || 3000));
       selectChapterFrom(next.chapters);
     },
@@ -223,9 +218,8 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
   const applyWorkbench = useCallback(
     (next: NovelWorkbenchPayload) => {
       setWorkbench(next);
-      selectChapterFrom(next.chapters);
     },
-    [selectChapterFrom],
+    [],
   );
 
   const loadProjects = useCallback(async () => {
@@ -239,26 +233,62 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
     }
   }, [token]);
 
-  /** 工作台那一份数据分两个接口，工作台视图缺了也能用 detail 顶着，所以后者失败不算失败。 */
+  /** Compact directory + highlights; concurrent refresh triggers share one flight. */
   const refreshProject = useCallback(
-    async (projectId: string, quiet = false) => {
-      try {
-        const [nextDetail, nextWorkbench] = await Promise.all([
-          getNovelProject(token, projectId),
-          getNovelWorkbench(token, projectId).catch(() => null),
-        ]);
-        applyDetail(nextDetail);
-        if (nextWorkbench) applyWorkbench(nextWorkbench);
-        setProjects((current) => [projectSummary(nextDetail), ...current.filter((item) => item.id !== projectId)]);
-        if (!quiet) setError("");
-        return nextDetail;
-      } catch (reason) {
-        if (!quiet) setError(errorMessage(reason, "加载作品失败"));
-        return null;
-      }
+    (projectId: string, quiet = false) => {
+      if (!quiet) requestedProjectRef.current = projectId;
+      const key = `${token}:${projectId}:${mutationRevisionRef.current}`;
+      const existing = refreshesRef.current.get(key);
+      if (existing) return existing;
+      const revision = mutationRevisionRef.current;
+      const load = async () => {
+        try {
+          const [nextDetail, nextWorkbench] = await Promise.all([
+            getNovelProject(token, projectId, true),
+            getNovelWorkbench(token, projectId, true).catch(() => null),
+          ]);
+          if (requestedProjectRef.current !== projectId || tokenRef.current !== token || mutationRevisionRef.current !== revision) return null;
+          applyDetail(nextDetail);
+          if (nextWorkbench) applyWorkbench(nextWorkbench);
+          else setWorkbench(null);
+          setProjects((current) => [projectSummary(nextDetail), ...current.filter((item) => item.id !== projectId)]);
+          if (!quiet) setError("");
+          return nextDetail;
+        } catch (reason) {
+          if (!quiet && requestedProjectRef.current === projectId) setError(errorMessage(reason, "加载作品失败"));
+          return null;
+        }
+      };
+      const flight = load().finally(() => {
+        if (refreshesRef.current.get(key) === flight) refreshesRef.current.delete(key);
+      });
+      refreshesRef.current.set(key, flight);
+      return flight;
     },
     [applyDetail, applyWorkbench, token],
   );
+
+  // An unloaded directory entry is never editable or eligible for autosave.
+  useEffect(() => {
+    if (!detail || !selectedEntry || selectedEntry.detailLoaded !== false) return;
+    let cancelled = false;
+    const projectId = detail.project.id;
+    const entry = selectedEntry;
+    setChapterLoadError("");
+    void getNovelChapter(token, projectId, entry.chapterIndex).then((chapter) => {
+      if (cancelled) return;
+      setDetail((current) => {
+        if (current?.project.id !== projectId) return current;
+        const currentEntry = current.chapters.find((item) => item.id === entry.id);
+        // A save or a newer refresh may have overtaken this read.
+        if (currentEntry?.detailLoaded !== false || currentEntry.updatedAt !== entry.updatedAt) return current;
+        return { ...current, chapters: upsertChapter(current.chapters, chapter) };
+      });
+    }).catch((reason) => {
+      if (!cancelled) setChapterLoadError(errorMessage(reason, "加载章节失败"));
+    });
+    return () => { cancelled = true; };
+  }, [detail?.project.id, selectedEntry?.id, selectedEntry?.updatedAt, selectedEntry?.detailLoaded, chapterLoadAttempt, token]);
 
   useEffect(() => {
     void loadProjects();
@@ -403,6 +433,7 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
         targetChapters,
         targetCharsPerChapter: charsPerChapter,
       });
+      requestedProjectRef.current = created.project.id;
       applyDetail(created);
       setWorkbench(null);
       setProjects((current) => [projectSummary(created), ...current]);
@@ -586,6 +617,7 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
   };
 
   const backToLibrary = () => {
+    requestedProjectRef.current = "";
     setView("library");
     setDetail(null);
     setWorkbench(null);
@@ -636,6 +668,9 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
         detail={detail}
         workbench={workbench}
         selectedChapter={selectedChapter}
+        chapterLoading={selectedEntry?.detailLoaded === false}
+        chapterLoadError={chapterLoadError}
+        onRetryChapter={() => setChapterLoadAttempt((value) => value + 1)}
         selectedChapterId={selectedChapterId}
         chapterTitle={chapterDraft.title}
         chapterSummary={chapterDraft.summary}

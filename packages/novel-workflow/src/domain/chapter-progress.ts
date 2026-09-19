@@ -1,6 +1,8 @@
 export interface NovelChapterProgressLike {
   readonly chapterIndex: number;
   readonly content?: string | null;
+  /** Lightweight chapter directories carry progress without carrying prose. */
+  readonly hasContent?: boolean;
 }
 
 function validChapterIndex(value: number): number | null {
@@ -9,6 +11,7 @@ function validChapterIndex(value: number): number | null {
 }
 
 export function isNovelChapterComplete(chapter: NovelChapterProgressLike): boolean {
+  if (typeof chapter.hasContent === "boolean") return chapter.hasContent;
   return typeof chapter.content === "string" && chapter.content.trim().length > 0;
 }
 
