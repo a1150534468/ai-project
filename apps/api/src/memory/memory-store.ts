@@ -151,14 +151,6 @@ async function insertInto(
   return id;
 }
 
-function sameSnapshot(record: MemoryRecord, expected: MemorySnapshot): boolean {
-  return record.title === expected.title
-    && record.text === expected.text
-    && record.type === expected.type
-    && record.importance === expected.importance
-    && JSON.stringify(record.tags) === JSON.stringify(expected.tags);
-}
-
 async function updateIn(
   db: MemoryDb,
   userId: string,

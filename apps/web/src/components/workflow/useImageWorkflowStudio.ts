@@ -99,7 +99,6 @@ export function useImageWorkflowStudio(args: {
   const [editBaseImageId, setEditBaseImageId] = useState<string | null>(null);
   const [compareImageIds, setCompareImageIds] = useState<readonly [string, string] | null>(null);
   const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
-  const [isEditDirty, setIsEditDirty] = useState(false);
   const [imageGenerationIntent, setImageGenerationIntent] = useState<ImageGenerationIntent>("new");
   const [pendingVersionRequestId, setPendingVersionRequestId] = useState<string | null>(null);
   const hasInitializedImageState = useRef(false);
@@ -128,9 +127,8 @@ export function useImageWorkflowStudio(args: {
     [previewTasks],
   );
 
-  const updateImageDraft = (updates: Partial<ImageDraft>, markDirty = true) => {
+  const updateImageDraft = (updates: Partial<ImageDraft>) => {
     setImageDraft((current) => ({ ...current, ...updates }));
-    if (markDirty && workspaceMode === "editing") setIsEditDirty(true);
   };
 
   const refreshImageState = useCallback(async (showFailureNotice: boolean) => {
@@ -317,7 +315,6 @@ export function useImageWorkflowStudio(args: {
             ? current.referenceImages
             : [...current.referenceImages, asset].slice(0, maxReferenceCount),
         }));
-        if (workspaceMode === "editing") setIsEditDirty(true);
         setNotice("参考图已上传，生成时将作为画面参考");
         toast.show("ok", "参考图已上传");
       } catch (uploadError) {
@@ -455,7 +452,6 @@ export function useImageWorkflowStudio(args: {
     setCompareImageIds(null);
     setImageGenerationIntent("edit");
     setWorkspaceMode("editing");
-    setIsEditDirty(false);
     setError("");
     setNotice("");
   };
@@ -467,7 +463,6 @@ export function useImageWorkflowStudio(args: {
     setEditBaseImageId(image.id);
     setSelectedImageId(image.id);
     setImageGenerationIntent("variation");
-    setIsEditDirty(false);
     submitImageDraft(nextDraft, "variation", image.id);
   };
   const handleCancelEditing = () => {
@@ -481,7 +476,6 @@ export function useImageWorkflowStudio(args: {
     setPendingVersionRequestId(null);
     setImageGenerationIntent("new");
     setPreEditDraft(null);
-    setIsEditDirty(false);
     setError("");
     setNotice("");
   };

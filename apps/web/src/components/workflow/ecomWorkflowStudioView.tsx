@@ -33,9 +33,6 @@ export type EcomWorkflowStudioViewProps = {
   readonly resolutionOptions: readonly { readonly value: WorkflowEcomResolution; readonly label: string; readonly size: string }[];
   readonly selectedSegmentCount: number;
   readonly segmentCountOptions: readonly { readonly value: string; readonly label: string }[];
-  readonly masterPointCost: number | null;
-  readonly segmentPointCost: number | null;
-  readonly stitchPointCost: number | null;
   readonly productName: string;
   readonly category: string;
   readonly sellingPointsInput: string;
@@ -119,14 +116,6 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
   const handleSegmentCountChange = (value: string) => {
     props.onSegmentCountChange(value);
   };
-  // 拼接免费：预估只含母版 + 分段
-  const totalPointCost = props.masterPointCost === null && props.segmentPointCost === null
-    ? null
-    : (props.masterPointCost ?? 0) + (props.segmentPointCost ?? 0);
-  const costDetail = totalPointCost === null
-    ? "拼接免费"
-    : `母版 ${props.masterPointCost ?? 0} + 分段 ${props.segmentPointCost ?? 0} · 拼接免费`;
-
   return (
     <section className="grid min-h-0 min-w-0 bg-surface xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
       <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">

@@ -6,10 +6,6 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-export function configuredFfmpegThreads(env: NodeJS.ProcessEnv = process.env): number {
-  return positiveInteger(env.FFMPEG_THREADS, 1);
-}
-
 export async function loadSharp(env: NodeJS.ProcessEnv = process.env): Promise<typeof import("sharp")["default"]> {
   sharpModule ??= import("sharp");
   const sharp = (await sharpModule).default;

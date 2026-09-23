@@ -6,7 +6,7 @@
 
   "expectedWorkspaces": 7,
   "minPassed": 1650,
-  "maxSkipped": 23,
+  "maxSkipped": 22,
 
   "_breakdown": {
     "passed": "api 1035 + web 463 + admin 9 + codex-pet-pipeline 54 + llm 49 + article-workflow 27 + novel-workflow 13 = 1650。",
@@ -16,6 +16,8 @@
   },
 
   "_skipsAreExpected": "CI 不配模型类 Key、不配 S3，故 .poc. 文件与 s3 的 1 例按预期跳过。.poc. 另有 RUN_*_POC=1 的独立开关，未设时无论有没有 Key 都跳过。",
+
+  "_cleanup20260920": "删除固定历史 run 的 r7-recovery 一次性 POC（1 个预期 skipped），maxSkipped 从 23 收紧至 22；minPassed=1650 与 expectedWorkspaces=7 不变。上方 _measured/_breakdown 保留原始测量记录。",
 
   "_howToUpdate": "只有在「真的删了测试」或「真的新增了预期 skip」时才改这里，并在 commit message 里写清原因。新增测试会让 passed 上升，不会触发防护（minPassed 是下限），无需改。绝不要为了让 CI 变绿而放宽数字——那正是这套防护要拦的事。",
 

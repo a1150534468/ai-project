@@ -98,7 +98,7 @@ jobs:
         # 已知不在集合里、因此不会触发重建的东西：基础镜像。node:24-bookworm-slim 和
         # gcr.io/distroless/static-debian12:nonroot 是按 tag 引的（不是 digest），上游重推
         # 同名 tag 时本机制察觉不到，会继续复用旧镜像。要强制重建就动集合里任何一个文件，
-        # 或者去 TCR 上删掉那个 src-<hash> tag。（ffmpeg 那个是 digest 钉死的，不受影响。）
+        # 或者去 TCR 上删掉那个 src-<hash> tag。
         include:
           - name: api
             context: .

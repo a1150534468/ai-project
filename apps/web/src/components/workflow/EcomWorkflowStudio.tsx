@@ -5,7 +5,6 @@ import type {
   WorkflowEcomImageAsset,
   WorkflowEcomPlatform,
   WorkflowEcomPlatformId,
-  WorkflowEcomPricing,
   WorkflowEcomResolution,
   WorkflowEcomSegmentIndex,
   WorkflowEcomTemplate,
@@ -73,7 +72,6 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   const actions = useMemo(() => createEcomWorkflowActions(client, token), [client, token]);
   const [platforms, setPlatforms] = useState<readonly WorkflowEcomPlatform[]>(FALLBACK_PLATFORMS);
   const [templates, setTemplates] = useState<readonly WorkflowEcomTemplate[]>(FALLBACK_TEMPLATES);
-  const [pricing, setPricing] = useState<WorkflowEcomPricing | null>(null);
   const [selectedPlatformId, setSelectedPlatformId] = useState<WorkflowEcomPlatformId>("taobao");
   const [selectedTemplateId, setSelectedTemplateId] = useState<WorkflowEcomTemplateId>("general");
   const [selectedResolution, setSelectedResolution] = useState<WorkflowEcomResolution>("1K");
@@ -140,17 +138,6 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
     }
   }, [loadWorkflow, applyWorkflow]);
 
-  useEffect(() => {
-    // 带上模型查询计价，预估与实际扣费保持同一条价格解析链路
-    void (async () => {
-      try {
-        setPricing(await client.getWorkflowEcomPricing(token, selectedModel ?? undefined));
-      } catch {
-        setPricing(null);
-      }
-    })();
-  }, [client, token, selectedModel]);
-
   const refreshCurrentWorkflow = useCallback(async () => {
     try {
       applyWorkflow(await client.getCurrentWorkflowEcom(token));
@@ -167,10 +154,7 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   const effReferenceAssets = shared?.referenceAssets ?? referenceAssets;
 
   const selectedPlatform = platforms.find((platform) => platform.id === effPlatformId) ?? FALLBACK_PLATFORMS[0];
-  const masterPointCost = pricing ? pricing.master[selectedResolution]?.rate ?? null : null;
   const activeSegmentCount = workflow?.segmentCount ?? selectedSegmentCount;
-  const segmentPointCost = pricing ? (pricing.segment[selectedResolution]?.rate ?? 0) * activeSegmentCount : null;
-  const stitchPointCost = pricing ? pricing.stitch.rate : null;
   const isServerGenerating = workflow?.stage === "master_running" || workflow?.stage === "segments_running";
   const remoteReferenceCount = shared ? shared.remoteReferenceCount : Math.max((workflow?.referenceAssetIds.length ?? 0) - referenceAssets.length, 0);
   const canStitch = hasAllSegmentUrls(workflow);
@@ -242,9 +226,6 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       resolutionOptions={ECOM_RESOLUTION_OPTIONS}
       selectedSegmentCount={selectedSegmentCount}
       segmentCountOptions={ECOM_SEGMENT_COUNT_OPTIONS}
-      masterPointCost={masterPointCost}
-      segmentPointCost={segmentPointCost}
-      stitchPointCost={stitchPointCost}
       productName={effProductName}
       category={effCategory}
       sellingPointsInput={effSellingPoints}

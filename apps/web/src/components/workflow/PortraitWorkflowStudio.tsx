@@ -137,7 +137,6 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
     extraPrompt: "",
   });
   const [authorizationAccepted, setAuthorizationAccepted] = useState(false);
-  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
@@ -174,8 +173,6 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
         setSelectedTaskId(state.tasks[0]?.id ?? null);
       } catch (loadError) {
         if (!cancelled) setError(errorMessage(loadError, "形象照工作台加载失败"));
-      } finally {
-        if (!cancelled) setIsBootstrapping(false);
       }
     })();
     return () => { cancelled = true; };
@@ -215,8 +212,6 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   }, [presets, legacyPresetNames]);
   const selectedTask = useMemo(() => tasks.find((task) => task.id === selectedTaskId) ?? tasks[0] ?? null, [tasks, selectedTaskId]);
   const selectedOutput = selectedTask?.outputs[selectedOutputIndex] ?? selectedTask?.outputs[0] ?? null;
-  const pointRate = options?.pricingByModel?.[model]?.[resolution] ?? options?.pricing[resolution]?.rate ?? null;
-  const pointCost = pointRate == null ? null : pointRate * count;
   const canSubmit = references.length > 0 && authorizationAccepted && !isSubmitting && !isUploading && !hasActiveTask;
 
   const handleDownload = (output: NonNullable<typeof selectedOutput>) => {

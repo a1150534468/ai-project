@@ -88,7 +88,6 @@ services:
       CODEX_PET_PUBLIC_BASE_URL: https://${API_DOMAIN}
       SHARP_CONCURRENCY: ${SHARP_CONCURRENCY:-1}
       SHARP_CACHE_MEMORY_MB: ${SHARP_CACHE_MEMORY_MB:-32}
-      FFMPEG_THREADS: ${FFMPEG_THREADS:-1}
       TMPDIR: /var/tmp/ai-assistant/api
     volumes:
       - media_tmp:/var/tmp/ai-assistant
@@ -120,7 +119,6 @@ services:
       WORKER_HEALTH_PORT: "8091"
       SHARP_CONCURRENCY: ${SHARP_CONCURRENCY:-1}
       SHARP_CACHE_MEMORY_MB: ${SHARP_CACHE_MEMORY_MB:-32}
-      FFMPEG_THREADS: ${FFMPEG_THREADS:-1}
       TMPDIR: /var/tmp/ai-assistant/worker
     volumes:
       - media_tmp:/var/tmp/ai-assistant

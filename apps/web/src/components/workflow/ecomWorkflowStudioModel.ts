@@ -70,7 +70,6 @@ export type EcomMasterDraft = {
 export type EcomWorkflowStudioClient = Pick<
   typeof workflowEcomApi,
   | "getWorkflowEcomOptions"
-  | "getWorkflowEcomPricing"
   | "getCurrentWorkflowEcom"
   | "createWorkflowEcomReference"
   | "createWorkflowEcomMaster"

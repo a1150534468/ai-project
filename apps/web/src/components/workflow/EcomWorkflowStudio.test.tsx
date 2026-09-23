@@ -69,9 +69,6 @@ function renderView(workflow: WorkflowEcomWorkflow | null, overrides: Partial<Pa
       resolutionOptions={ECOM_RESOLUTION_OPTIONS}
       selectedSegmentCount={3}
       segmentCountOptions={[{ value: "2", label: "2 段" }, { value: "3", label: "3 段" }, { value: "4", label: "4 段" }, { value: "5", label: "5 段" }, { value: "6", label: "6 段" }, { value: "7", label: "7 段" }, { value: "8", label: "8 段" }]}
-      masterPointCost={null}
-      segmentPointCost={null}
-      stitchPointCost={null}
       productName="山茶花面霜"
       category="护肤"
       sellingPointsInput={"修护\n轻盈\n送礼"}
@@ -167,7 +164,7 @@ describe("EcomWorkflowStudioView", () => {
   });
 
   it("keeps generation actions without retired billing UI", () => {
-    const html = renderView(makeWorkflow(), { masterPointCost: 20, segmentPointCost: 60 });
+    const html = renderView(makeWorkflow());
 
     expect(html).not.toContain("算力点");
     expect(html).toContain("生成母版");

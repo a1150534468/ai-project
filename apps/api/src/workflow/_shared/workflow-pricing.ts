@@ -1,8 +1,7 @@
 import { imageGenerationResourceKey, imageModelResourceKey, type ImageResolutionLabel } from "./image-upstream-options.js";
 
 /**
- * 电商长图拼接的计费 key。放在这里而不是 ecom 域：本文件的默认费率表要用它，
- * 而 ecom 域反过来要用本文件的 `WorkflowResourcePriceRow`，放在域里就成了模块环。
+ * 电商长图拼接的资源 key，与模型/分辨率价格解析工具集中维护。
  */
 export const ECOM_RESOURCE_KEYS = {
   stitch: "ecom_stitch",
@@ -34,7 +33,6 @@ export function resolveResourcePrice(
 const IMAGE_RESOLUTION_LABELS: readonly ImageResolutionLabel[] = ["1K", "2K", "4K"];
 const IMAGE_DEFAULT_RATE: Readonly<Record<ImageResolutionLabel, number>> = { "1K": 0, "2K": 0, "4K": 0 };
 const ECOM_DEFAULT_RATE: Readonly<Record<ImageResolutionLabel, number>> = { "1K": 0, "2K": 0, "4K": 0 };
-const ECOM_STITCH_DEFAULT_RATE = 0;
 
 function imagePriceFallback(resolution: ImageResolutionLabel): WorkflowResourcePriceRow {
   return {
@@ -69,48 +67,7 @@ function ecomSegmentPriceFallback(resolution: ImageResolutionLabel): WorkflowRes
   };
 }
 
-const ECOM_STITCH_PRICE_FALLBACK: WorkflowResourcePriceRow = {
-  resourceKey: ECOM_RESOURCE_KEYS.stitch,
-  displayName: "电商长图拼接",
-  pricingType: "PER_CALL",
-  rate: ECOM_STITCH_DEFAULT_RATE,
-  perUnits: 1,
-  enabled: true,
-};
-
 export type ImagePricing = Record<ImageResolutionLabel, WorkflowResourcePriceRow>;
-
-export interface EcomPricing {
-  readonly master: Record<ImageResolutionLabel, WorkflowResourcePriceRow>;
-  readonly segment: Record<ImageResolutionLabel, WorkflowResourcePriceRow>;
-  readonly stitch: WorkflowResourcePriceRow;
-}
-
-function byResolution(
-  rows: readonly WorkflowResourcePriceRow[],
-  fallback: (resolution: ImageResolutionLabel) => WorkflowResourcePriceRow,
-): Record<ImageResolutionLabel, WorkflowResourcePriceRow> {
-  return IMAGE_RESOLUTION_LABELS.reduce((acc, resolution) => {
-    acc[resolution] = resolveResourcePrice(rows, fallback(resolution));
-    return acc;
-  }, {} as Record<ImageResolutionLabel, WorkflowResourcePriceRow>);
-}
-
-/** 生图三档清晰度价格；billing 缺失或无 listResourcePrices 时回落默认。 */
-export async function resolveImagePricing(billing: ResourcePriceLister): Promise<ImagePricing> {
-  const rows = billing.listResourcePrices ? (await billing.listResourcePrices()).data ?? [] : [];
-  return byResolution(rows, imagePriceFallback);
-}
-
-/** 电商长图母版/分段/拼接价格；billing 缺失或无 listResourcePrices 时回落默认。 */
-export async function resolveEcomPricing(billing: ResourcePriceLister): Promise<EcomPricing> {
-  const rows = billing.listResourcePrices ? (await billing.listResourcePrices()).data ?? [] : [];
-  return {
-    master: byResolution(rows, ecomMasterPriceFallback),
-    segment: byResolution(rows, ecomSegmentPriceFallback),
-    stitch: resolveResourcePrice(rows, ECOM_STITCH_PRICE_FALLBACK),
-  };
-}
 
 /**
  * 选择实际用于扣费/展示的价格行，优先级：
@@ -173,12 +130,4 @@ function ecomMainImagePriceFallback(resolution: ImageResolutionLabel): WorkflowR
     perUnits: 1,
     enabled: true,
   };
-}
-
-export type EcomMainImagePricing = Record<ImageResolutionLabel, WorkflowResourcePriceRow>;
-
-/** 电商主图三档清晰度价格；billing 缺失或无 listResourcePrices 时回落默认。 */
-export async function resolveEcomMainImagePricing(billing: ResourcePriceLister): Promise<EcomMainImagePricing> {
-  const rows = billing.listResourcePrices ? (await billing.listResourcePrices()).data ?? [] : [];
-  return byResolution(rows, ecomMainImagePriceFallback);
 }

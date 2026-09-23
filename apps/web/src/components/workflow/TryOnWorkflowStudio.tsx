@@ -247,8 +247,6 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
     [selectedTaskId, tasks],
   );
   const selectedOutput = selectedTask?.outputs[selectedOutputIndex] ?? selectedTask?.outputs[0] ?? null;
-  const pointRate = options?.pricingByModel?.[model]?.[resolution] ?? options?.pricing[resolution]?.rate ?? null;
-  const pointCost = pointRate == null ? null : pointRate * count;
   const busyInputs = Boolean(uploadingKind || deletingReferenceId || hasActiveTask);
   const canSubmit =
     Boolean(targetItem) &&

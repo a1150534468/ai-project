@@ -6,10 +6,6 @@ import { listNovelChapterVersions, listNovelGenerationRequests, restoreNovelChap
 
 type DeskTab = "prose" | "plan" | "prompts" | "compare" | "versions";
 
-function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
-
 export function NovelChapterDesk({
   chapter,
   token,

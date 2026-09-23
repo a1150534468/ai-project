@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
 import { InAppSelect } from "../ui/InAppSelect";
@@ -15,7 +15,6 @@ import {
   ECOM_MAIN_TEXT_OPTIONS,
   buildCreateMainPayload,
   coerceEcomMainResolution,
-  estimateMainPointCost,
   formatEcomMainError,
   isEcomMainResolutionBlocked,
   isMainJobGenerating,
@@ -39,7 +38,7 @@ interface EcomMainImageStudioProps {
   readonly onActivity?: () => void;
   readonly controlsHeader?: ReactNode;
   readonly historyFooter?: ReactNode;
-  readonly client?: Pick<typeof api, "getEcomMainPricing" | "getCurrentEcomMainJob" | "createEcomMainJob" | "redrawEcomMainImage">;
+  readonly client?: Pick<typeof api, "getCurrentEcomMainJob" | "createEcomMainJob" | "redrawEcomMainImage">;
 }
 
 const DEFAULT_CLIENT = api;
@@ -52,29 +51,11 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   const [customStyle, setCustomStyle] = useState("");
   const [withText, setWithText] = useState(true);
   const [count, setCount] = useState(4);
-  const [pricing, setPricing] = useState<api.EcomMainPricing | null>(null);
   const [job, setJob] = useState<EcomMainJob | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [redrawingIndexes, setRedrawingIndexes] = useState<readonly number[]>([]);
-  const pricingRequestSeq = useRef(0);
-
-  useEffect(() => {
-    // 带上模型查询计价，预估与实际扣费保持同一条价格解析链路；
-    // 请求计数器丢弃乱序返回的旧响应，避免连续切模型后显示上一次的价格。
-    const seq = pricingRequestSeq.current + 1;
-    pricingRequestSeq.current = seq;
-    void (async () => {
-      try {
-        const next = await client.getEcomMainPricing(token, model);
-        if (seq === pricingRequestSeq.current) setPricing(next);
-      } catch {
-        if (seq === pricingRequestSeq.current) setPricing(null);
-      }
-    })();
-  }, [client, token, model]);
-
   useEffect(() => {
     void (async () => {
       try { setJob((await client.getCurrentEcomMainJob(token)).job); } catch { /* 忽略：无历史任务 */ }
@@ -88,8 +69,6 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
     }
   }, [loadJob]);
 
-  const perImageRate = pricing ? pricing[resolution]?.rate ?? null : null;
-  const estimated = useMemo(() => estimateMainPointCost(perImageRate, count), [perImageRate, count]);
   const busy = isSubmitting || redrawingIndexes.length > 0 || isMainJobGenerating(job?.stage);
   const clearFeedback = () => { setError(""); setNotice(""); };
 

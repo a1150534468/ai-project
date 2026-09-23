@@ -26,12 +26,11 @@ import { useImageWorkflowStudio } from "./useImageWorkflowStudio";
 
 interface ProductExtractionWorkflowStudioProps {
   readonly token: string;
-  readonly onBalanceRefresh?: () => void;
 }
 
 const PRODUCT_DESCRIPTION_MAX_LENGTH = 1200;
 
-export function ProductExtractionWorkflowStudio({ token, onBalanceRefresh }: ProductExtractionWorkflowStudioProps) {
+export function ProductExtractionWorkflowStudio({ token }: ProductExtractionWorkflowStudioProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const controller = useImageWorkflowStudio({
     token,

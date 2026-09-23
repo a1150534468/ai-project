@@ -25,7 +25,6 @@ import type {
   NovelTask,
   NovelWorkbenchPayload,
 } from "../../api";
-import { NovelChapterIntelligencePanel } from "./NovelChapterIntelligencePanel";
 import { NovelReviewPanel } from "./NovelReviewPanel";
 import { NovelWorkflowStudio } from "./NovelWorkflowStudio";
 import { createDefaultNovelDraft, type NovelCreateDraft } from "./NovelCreatePage";
@@ -704,15 +703,14 @@ describe("NovelWorkflowStudio 工作台", () => {
 });
 
 /**
- * 这两个面板没有自己的用例文件，所以冒烟留在这里：容器的用例把 `NovelWorkbenchShell` 换成了探针，
- * 面板在探针后面永远渲染不到。断言只认面板标题，别的交给 `NovelChapterDesk` 那些用例。
+ * 审阅面板没有自己的用例文件，所以冒烟留在这里：容器的用例把 `NovelWorkbenchShell` 换成了探针，
+ * 面板在探针后面永远渲染不到。断言只认审阅标题，其他情报面板交给 `NovelChapterDesk` 那些用例。
  */
-describe("小说工作台情报面板", () => {
-  it("渲染章节情报、质量诊断与审阅三块", () => {
+describe("小说工作台审阅面板", () => {
+  it("渲染现役审阅面板", () => {
     const workbench = makeWorkbench();
     render(
       <>
-        <NovelChapterIntelligencePanel chapter={workbench.chapters[0] ?? null} workbench={workbench} />
         <NovelReviewPanel
           chapter={workbench.chapters[0] ?? null}
           isSaving={false}
@@ -722,8 +720,6 @@ describe("小说工作台情报面板", () => {
       </>,
     );
 
-    expect(screen.getByText("章节情报")).toBeInTheDocument();
-    expect(screen.getByText("质量诊断")).toBeInTheDocument();
     expect(screen.getByText("审阅")).toBeInTheDocument();
   });
 });

@@ -269,39 +269,6 @@ export async function optimizeWorkflowPrompt(token: string, prompt: string): Pro
   return data.prompt;
 }
 
-// ── 微信绑定 ─────────────────────────────────────────────────────────────────
-
-export interface WechatBinding {
-  id: string;
-  deviceId: string;
-  targetType: string;
-  targetId: string;
-  online: boolean;
-}
-
-/** 目前只能把设备绑到智能体上，`targetType` 因此写死。 */
-export function createWechatBinding(
-  token: string,
-  deviceId: string,
-  targetId: string,
-  model?: string,
-): Promise<{ id: string }> {
-  return request<{ id: string }>("/api/wechat/bindings", {
-    method: "POST",
-    token,
-    body: { deviceId, targetType: "agent", targetId, model },
-    fallback: "绑定失败",
-  });
-}
-
-export function listWechatBindings(token: string): Promise<WechatBinding[]> {
-  return getList<WechatBinding>("/api/wechat/bindings", token, "获取绑定列表失败");
-}
-
-export function deleteWechatBinding(token: string, id: string): Promise<void> {
-  return remove(`/api/wechat/bindings/${encodeURIComponent(id)}`, token, "删除绑定失败");
-}
-
 // ── 模型列表 ─────────────────────────────────────────────────────────────────
 
 export interface ModelOption {

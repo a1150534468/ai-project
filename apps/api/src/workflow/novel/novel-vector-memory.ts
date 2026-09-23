@@ -48,8 +48,6 @@ export async function refreshNovelVectorMemory(args: {
   }
 }
 
-export const queryNovelVectorMemory = findNearestNovelVectors;
-
 export function buildNovelVectorQuery(args: {
   readonly projectTitle: string;
   readonly genre: string;

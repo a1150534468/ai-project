@@ -1,6 +1,5 @@
 # api + worker: 同一镜像、tsx 直跑源码。编译工具只留在 builder。
 FROM gcr.io/distroless/static-debian12:nonroot AS certs
-FROM mwader/static-ffmpeg:7.1@sha256:a8090df5f5608daef387e1b2e93b98aaacb4d92153ad904e7d715c725724fca4 AS ffmpeg
 
 FROM node:24-bookworm-slim AS builder
 ARG USE_CHINA_APT_MIRROR=true
@@ -73,8 +72,6 @@ FROM node:24-bookworm-slim
 ARG USE_CHINA_APT_MIRROR=true
 WORKDIR /repo
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=ffmpeg /ffmpeg /usr/local/bin/ffmpeg
-COPY --from=ffmpeg /ffprobe /usr/local/bin/ffprobe
 RUN if [ "$USE_CHINA_APT_MIRROR" = true ]; then \
       printf 'deb https://repo.huaweicloud.com/debian bookworm main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian bookworm-updates main contrib non-free non-free-firmware\ndeb https://repo.huaweicloud.com/debian-security bookworm-security main contrib non-free non-free-firmware\n' > /etc/apt/sources.list; \
       rm -f /etc/apt/sources.list.d/debian.sources; \

@@ -11,7 +11,7 @@ name: Warm image build cache
 #
 # 命中省下的不是构建时间，是出境字节：buildkit 命中缓存时复用的是同一个 layer blob、
 # 同一个 digest，TCR 直接判 Layer already exists。runner 出境到国内实测 0.15~0.40 MB/s
-# （probe-egress.yml 的结论），少传 ffmpeg + apt 那 185 MB 就是少 8~20 分钟。
+# （历史出口探针的测量结果），复用依赖层可以减少重复上传。
 on: workflow_dispatch
 
 concurrency:

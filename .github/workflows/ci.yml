@@ -110,7 +110,7 @@ jobs:
       LLM_BASE_URL: http://127.0.0.1:9
       LLM_API_KEY: ci-placeholder-not-a-real-key
       # 模型类 Key 与 S3 一律留空：不在 CI 花钱、不依赖外部服务。
-      # 后果是 8 个 .poc. 文件与 s3.test.ts 的 1 例按预期跳过，已计入 skip 基线。
+      # 后果是 7 个 .poc. 文件与 s3.test.ts 的 1 例按预期跳过，已计入 skip 基线。
 
     steps:
       - uses: actions/checkout@v4

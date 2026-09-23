@@ -13,6 +13,8 @@ out
 *.tsbuildinfo
 *.timestamp-*.mjs
 .superpowers/
+# codex agent 工作区：调查/验收/迁移/发布产物，含迁移数据、私有素材和验收密钥，一律不入库
+.codex/
 # Go binaries
 /services/billing/billing
 infra/k8s/secrets.env
