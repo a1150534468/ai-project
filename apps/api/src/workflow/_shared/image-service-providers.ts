@@ -199,11 +199,31 @@ export function loadImageGenerationConfig(env: NodeJS.ProcessEnv = process.env):
   return loadImageGenerationConfigForModel(model, env);
 }
 
+/**
+ * 从模型名解析上游协议（不读 env、不校验密钥）。`loadImageGenerationConfigForModel`
+ * 的分支据此展开，避免协议判定散落两处。
+ */
+export function imageProtocolForModel(model: string): ImageGenerationConfig["protocol"] {
+  if (model === DOUBAO_IMAGE_MODEL || model.toLowerCase().startsWith("doubao")) return "volcengine";
+  if (model === GPT_IMAGE_MODEL) return "openai";
+  return "bailian";
+}
+
+/**
+ * 是否支持独立 mask 做局部重绘。只有 openai 协议（当前 gpt-image-2）的 images/edits
+ * 接受 mask；volcengine(Seedream)/bailian(Qwen) 传 mask 会被 image-service-calls 直接抛错。
+ * 试甲台据此决定「下发蒙版锁手」还是「降级为整图编辑」。
+ */
+export function imageModelSupportsMask(model: string): boolean {
+  return imageProtocolForModel(model) === "openai";
+}
+
 export function loadImageGenerationConfigForModel(
   model: string,
   env: NodeJS.ProcessEnv = process.env,
 ): ImageGenerationConfig {
-  if (model === DOUBAO_IMAGE_MODEL || model.toLowerCase().startsWith("doubao")) {
+  const protocol = imageProtocolForModel(model);
+  if (protocol === "volcengine") {
     const apiKey = env.ARK_API_KEY?.trim() || "";
     if (!apiKey) throw new Error("ARK_API_KEY required for doubao image generation");
     return {
@@ -213,7 +233,7 @@ export function loadImageGenerationConfigForModel(
       protocol: "volcengine",
     };
   }
-  if (model === GPT_IMAGE_MODEL) {
+  if (protocol === "openai") {
     const apiKey = env.GPT_IMAGE_API_KEY?.trim() || "";
     if (!apiKey) throw new Error("GPT_IMAGE_API_KEY required for gpt-image-2");
     return {

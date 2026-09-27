@@ -15,6 +15,7 @@ import { CommerceImageStudio } from "../components/workflow/CommerceImageStudio"
 import { PortraitWorkflowStudio } from "../components/workflow/PortraitWorkflowStudio";
 import { ProductExtractionWorkflowStudio } from "../components/workflow/ProductExtractionWorkflowStudio";
 import { TryOnWorkflowStudio } from "../components/workflow/TryOnWorkflowStudio";
+import { NailTryOnWorkflowStudio } from "../components/workflow/NailTryOnWorkflowStudio";
 import { isGeneralImageRequestId } from "../components/workflow/productExtractionWorkflowModel";
 import type { EcomMainJob } from "../workflowEcomMainApi";
 import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
@@ -123,7 +124,8 @@ export default function Workflow({ token, activeModuleId, initialCodexPetProject
                       onSelectDetailHistory={(workflow) => { setCommerceTab("detail"); setCommerceLoadDetailWorkflow(workflow); }} /> :
                     tab.id === "product-extraction" ? <ProductExtractionWorkflowStudio token={token} /> :
                     tab.id === "portrait" ? <PortraitWorkflowStudio token={token} /> :
-                    <TryOnWorkflowStudio token={token} />
+                    tab.id === "try-on" ? <TryOnWorkflowStudio token={token} /> :
+                    <NailTryOnWorkflowStudio token={token} />
                   )}
                 </div>
               ))

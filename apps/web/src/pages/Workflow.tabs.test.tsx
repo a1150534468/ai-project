@@ -28,6 +28,9 @@ vi.mock("../components/workflow/PortraitWorkflowStudio", () => ({
 vi.mock("../components/workflow/TryOnWorkflowStudio", () => ({
   TryOnWorkflowStudio: () => <Draft label="万物试穿" />,
 }));
+vi.mock("../components/workflow/NailTryOnWorkflowStudio", () => ({
+  NailTryOnWorkflowStudio: () => <Draft label="试甲台" />,
+}));
 
 afterEach(() => {
   cleanup();
@@ -37,8 +40,8 @@ afterEach(() => {
 describe("完整生图工作台回归", () => {
   it("五个入口挂载各自工作台，来回切换不丢任何已填写草稿", () => {
     render(<Workflow token="local-test" activeModuleId="image" />);
-    const labels = ["通用生图", "电商图", "商品提取", "形象照", "万物试穿"];
-    expect(screen.getAllByRole("tab")).toHaveLength(5);
+    const labels = ["通用生图", "电商图", "商品提取", "形象照", "万物试穿", "试甲台"];
+    expect(screen.getAllByRole("tab")).toHaveLength(6);
     expect(screen.queryByLabelText("形象照草稿")).toBeNull();
     for (const label of labels) {
       fireEvent.click(screen.getByRole("tab", { name: label }));
@@ -79,6 +82,7 @@ describe("完整生图工作台回归", () => {
           "workflow.image.product-extraction": false,
           "workflow.image.portrait": false,
           "workflow.image.try-on": false,
+          "workflow.image.nail-try-on": false,
         }}
       />,
     );

@@ -27,6 +27,7 @@ export const CLIENT_MENU_CATALOG: readonly ClientMenuDefinition[] = [
   { key: "workflow.image.product-extraction", label: "商品提取", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.image.portrait", label: "形象照", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.image.try-on", label: "万物试穿", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
+  { key: "workflow.image.nail-try-on", label: "试甲台", group: "workflow", defaultVisible: true, parentKey: "workflow.image" },
   { key: "workflow.novel", label: "小说模块", group: "workflow", defaultVisible: true },
   { key: "workflow.codex-pet", label: "Codex 桌宠工坊", group: "workflow", defaultVisible: false },
   // key 是客户端菜单可见性的存量标识，只改展示名，不能动 key

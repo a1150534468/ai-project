@@ -9,10 +9,10 @@ import Workflow from "./Workflow";
 import { ToastProvider } from "../motion";
 
 describe("Workflow image hub", () => {
-  it("完整生图包含五个场景入口，默认显示通用生图", () => {
+  it("完整生图包含六个场景入口，默认显示通用生图", () => {
     const html = renderToStaticMarkup(<ToastProvider><Workflow token="token" activeModuleId="image" /></ToastProvider>);
-    expect((html.match(/role="tab"/g) ?? [])).toHaveLength(5);
-    for (const label of ["通用生图", "电商图", "商品提取", "形象照", "万物试穿"]) expect(html).toContain(label);
+    expect((html.match(/role="tab"/g) ?? [])).toHaveLength(6);
+    for (const label of ["通用生图", "电商图", "商品提取", "形象照", "万物试穿", "试甲台"]) expect(html).toContain(label);
     expect(html).toContain("生成图片");
     expect(html).not.toContain("生图模块暂未开放");
   });
@@ -23,7 +23,7 @@ describe("Workflow image hub", () => {
         <Workflow
           token="token"
           activeModuleId="image"
-          menuVisibility={{ "workflow.image.general": false, "workflow.image.ecom": false, "workflow.image.product-extraction": false, "workflow.image.portrait": false, "workflow.image.try-on": false }}
+          menuVisibility={{ "workflow.image.general": false, "workflow.image.ecom": false, "workflow.image.product-extraction": false, "workflow.image.portrait": false, "workflow.image.try-on": false, "workflow.image.nail-try-on": false }}
         />
       </ToastProvider>,
     );

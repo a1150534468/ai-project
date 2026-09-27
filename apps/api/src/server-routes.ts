@@ -21,6 +21,7 @@ import { announcementRoutes } from "./admin/announcement-routes.js";
 
 import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
 import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
+import { nailTryOnWorkflowRoutes } from "./workflow/nail-try-on/index.js";
 import { ecomWorkflowRoutes, ecomMainImageRoutes, ecomHelpWriteRoutes } from "./workflow/ecom/index.js";
 
 export async function registerApplicationRoutes(app: FastifyInstance): Promise<void> {
@@ -36,6 +37,8 @@ export async function registerApplicationRoutes(app: FastifyInstance): Promise<v
   );
   await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => tryOnWorkflowRoutes(instance, { redis: getRedis() }));
+  // 决定 A：试甲台不养常驻 reaper（超时任务在 /state 读取时收尸），照 ecom 裸注册，不传 redis。
+  await app.register(nailTryOnWorkflowRoutes);
   await app.register(ecomWorkflowRoutes);
   await app.register(ecomMainImageRoutes);
   await app.register(ecomHelpWriteRoutes);
