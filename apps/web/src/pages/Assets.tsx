@@ -34,6 +34,13 @@ export default function Assets({ token }: AssetsPageProps) {
   const requestSeq = useRef(0);
 
   const loadFirstPage = useCallback(async () => {
+    // 未登录：素材库是用户态数据，不发请求，直接给空态（页面展示「登录查看」）。
+    if (!token) {
+      setList(EMPTY_ASSET_LIST);
+      setLoading(false);
+      setError("");
+      return;
+    }
     const seq = requestSeq.current + 1;
     requestSeq.current = seq;
     setLoading(true);
@@ -62,7 +69,12 @@ export default function Assets({ token }: AssetsPageProps) {
     setLoadingMore(true);
     setError("");
     try {
-      const page = await listAssets(token, { limit: PAGE_SIZE, origin, sourceModule: moduleFilter, cursor: list.cursor });
+      const page = await listAssets(token, {
+        limit: PAGE_SIZE,
+        origin,
+        sourceModule: moduleFilter,
+        cursor: list.cursor,
+      });
       // 期间换过筛选：这一页属于上一套条件，丢掉。
       if (requestSeq.current !== seq) return;
       setList((current) => appendAssetPage(current, page));

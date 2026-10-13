@@ -10,9 +10,11 @@ interface LoginProps {
   onLogin: (token: string) => void;
   onSwitchToRegister: () => void;
   isLoading?: boolean;
+  /** 嵌入登录弹窗时传 true，去掉全屏外壳。 */
+  embedded?: boolean;
 }
 
-export default function Login({ onLogin, onSwitchToRegister, isLoading = false }: LoginProps) {
+export default function Login({ onLogin, onSwitchToRegister, isLoading = false, embedded = false }: LoginProps) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("password123");
   const [error, setError] = useState("");
@@ -92,6 +94,7 @@ export default function Login({ onLogin, onSwitchToRegister, isLoading = false }
 
   return (
     <AuthScreen
+      embedded={embedded}
       title="登录账户"
       error={error}
       busy={busy}

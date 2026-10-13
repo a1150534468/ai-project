@@ -3,7 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { Icon } from "@iconify/react";
 import { BrandLogo, spring } from "../../motion";
 import { cx } from "../ui";
-import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
+import { isNavItemVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { WORKFLOW_MODULES, type WorkflowModuleId } from "../../workflowState";
 import { ThemeToggle } from "../ThemeToggle";
 import { HoverPopover } from "./HoverPopover";
@@ -54,7 +54,8 @@ export function isWorkflowSubActive(
   return currentView === "workflow" && sub.id === workflowModule;
 }
 const ROW = "relative flex w-full items-center rounded-[10px] text-left transition-colors";
-const SUB_ROW = "relative flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left text-sm transition-colors";
+const SUB_ROW =
+  "relative flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-left text-sm transition-colors";
 /** 图标与文案都要压在选中底色之上，z-10 是它们和 ActivePill 的分层约定 */
 const OVER_PILL = "relative z-10 flex-none";
 const TIP = "whitespace-nowrap rounded-md bg-surface-inverse px-2.5 py-1.5 text-[11px] text-ink-inverse shadow-lg";
@@ -291,8 +292,22 @@ function BrandHeader({
   );
 }
 
-/** 底部两条：主题开关与登出。折叠态都收成居中图标。 */
-function RailFooter({ collapsed, onLogout }: { readonly collapsed: boolean; readonly onLogout?: () => void }) {
+/** 底部两条：主题开关与登出/登录。折叠态都收成居中图标。 */
+function RailFooter({
+  collapsed,
+  onLogout,
+  onLogin,
+  authed,
+}: {
+  readonly collapsed: boolean;
+  readonly onLogout?: () => void;
+  readonly onLogin?: () => void;
+  readonly authed: boolean;
+}) {
+  // 未登录：页脚变成「登录」入口（点它弹登录框），而不是无意义的「登出」。
+  const action = authed
+    ? { onClick: onLogout, label: "登出", icon: "mdi:exit-to-app" }
+    : { onClick: onLogin, label: "登录", icon: "mdi:login" };
   return (
     <div className="flex-none border-t border-hairline-subtle">
       <div className={cx("border-b border-hairline-subtle", collapsed ? "flex justify-center py-2.5" : "px-3 py-2")}>
@@ -301,14 +316,14 @@ function RailFooter({ collapsed, onLogout }: { readonly collapsed: boolean; read
       <div className={cx("flex-none border-t border-hairline-subtle", collapsed ? "flex justify-center py-3" : "p-4")}>
         <button
           type="button"
-          onClick={onLogout}
-          title={collapsed ? "登出" : undefined}
+          onClick={action.onClick}
+          title={collapsed ? action.label : undefined}
           className={cx(
             "text-ink-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/30",
             collapsed ? "text-lg" : "w-full text-xs",
           )}
         >
-          {collapsed ? <Icon icon="mdi:exit-to-app" aria-hidden /> : "登出"}
+          {collapsed ? <Icon icon={action.icon} aria-hidden /> : action.label}
         </button>
       </div>
     </div>
@@ -320,6 +335,8 @@ interface NavRailProps {
   workflowModule?: WorkflowModuleId;
   onSelectWorkflowSub?: (id: WorkflowSubId) => void;
   onLogout?: () => void;
+  onLogin?: () => void;
+  authed?: boolean;
   collapsed?: boolean;
   onToggleCollapsed?: () => void;
   menuVisibility?: ClientMenuVisibility;
@@ -332,6 +349,8 @@ export function NavRail({
   workflowModule,
   onSelectWorkflowSub,
   onLogout,
+  onLogin,
+  authed = true,
   collapsed = false,
   onToggleCollapsed,
   menuVisibility,
@@ -345,7 +364,8 @@ export function NavRail({
     if (onWorkflowPage) setSubOpen(true);
   }, [onWorkflowPage]);
 
-  const items = NAV_ITEMS.filter((item) => isClientMenuVisible(menuVisibility, `nav.${item.id}`));
+  // 「设置」是账号页：未登录时按 authed 直接不渲染这一项（App 里还有路由守卫兜深链）
+  const items = NAV_ITEMS.filter((item) => isNavItemVisible(menuVisibility, item.id, authed));
   const subItems = WORKFLOW_SUB_ITEMS.filter((sub) => isWorkflowSubVisible(menuVisibility, sub.id));
 
   // 开发中的模块点了不跳页 —— 两处入口（浮层与展开的二级菜单）共用这一道闸
@@ -400,8 +420,7 @@ export function NavRail({
         </AnimatePresence>
       </nav>
 
-      <RailFooter collapsed={collapsed} onLogout={onLogout} />
+      <RailFooter collapsed={collapsed} onLogout={onLogout} onLogin={onLogin} authed={authed} />
     </div>
   );
 }
-

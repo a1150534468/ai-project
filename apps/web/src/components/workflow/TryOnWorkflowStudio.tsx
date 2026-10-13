@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
+import { useAuthGate } from "../../app/authGate";
 import { DownloadOverlayButton } from "./DownloadOverlayButton";
 import { downloadImageFile, imageDownloadFileName } from "./imageDownload";
 import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
@@ -68,7 +69,9 @@ function ReferenceSlot(props: ReferenceSlotProps) {
     <div className="min-w-0">
       <div className="mb-1.5 flex items-center gap-1 text-xs font-semibold text-ink-secondary">
         <span className="truncate">{props.label}</span>
-        <span className={props.required ? "text-danger-ink" : "text-ink-tertiary"}>{props.required ? "*" : "可选"}</span>
+        <span className={props.required ? "text-danger-ink" : "text-ink-tertiary"}>
+          {props.required ? "*" : "可选"}
+        </span>
       </div>
       <div className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-dashed border-hairline bg-surface-subtle">
         {props.reference ? (
@@ -153,6 +156,7 @@ function formattedDate(value: string): string {
 }
 
 export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowStudioProps) {
+  const { requireAuth } = useAuthGate();
   const [options, setOptions] = useState<TryOnOptions | null>(null);
   const [references, setReferences] = useState<readonly TryOnReference[]>([]);
   const [tasks, setTasks] = useState<readonly TryOnTask[]>([]);
@@ -187,6 +191,14 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
     let cancelled = false;
     void (async () => {
       try {
+        // options 公开（样张/价格），未登录也拉；state 用户态，未登录跳过给空工作台。
+        if (!token) {
+          const nextOptions = await getTryOnOptions(token);
+          if (cancelled) return;
+          setOptions(nextOptions);
+          setModel(nextOptions.model);
+          return;
+        }
         const [nextOptions, state] = await Promise.all([getTryOnOptions(token), getTryOnState(token)]);
         if (cancelled) return;
         setOptions(nextOptions);
@@ -263,6 +275,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   };
 
   const handleFile = (kind: TryOnReferenceKind, file: File) => {
+    if (!requireAuth()) return;
     if (uploadingKind || hasActiveTask) return;
     if (file.size > MAX_REFERENCE_BYTES) {
       setError(`${file.name} 超过 10MB`);
@@ -308,6 +321,7 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   };
 
   const handleSubmit = () => {
+    if (!requireAuth()) return;
     if (!targetItem) {
       setError("请先上传一张目标素材图");
       return;
@@ -393,7 +407,10 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
   };
 
   return (
-    <section data-testid="try-on-studio" className="relative flex min-h-0 flex-col overflow-hidden bg-surface xl:h-full">
+    <section
+      data-testid="try-on-studio"
+      className="relative flex min-h-0 flex-col overflow-hidden bg-surface xl:h-full"
+    >
       <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
         <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
@@ -506,7 +523,6 @@ export function TryOnWorkflowStudio({ token, onBalanceRefresh }: TryOnWorkflowSt
             {isBootstrapping && !error && <p className="mt-3 text-xs text-ink-tertiary">正在加载试穿配置…</p>}
           </div>
           <SubmitBar
-
             submitLabel="生成试穿效果"
             submitIcon="mdi:auto-fix"
             submitDisabled={!canSubmit}

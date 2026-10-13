@@ -100,6 +100,14 @@ export function useKnowledgeState(token: string): KnowledgeState {
   useEffect(() => {
     let alive = true;
 
+    // 未登录：知识库是用户态数据，不发请求，直接给空态。
+    if (!token) {
+      setList([]);
+      setLoadError("");
+      setLoading(false);
+      return;
+    }
+
     void (async () => {
       try {
         await fetchList();
@@ -113,7 +121,7 @@ export function useKnowledgeState(token: string): KnowledgeState {
     return () => {
       alive = false;
     };
-  }, [fetchList]);
+  }, [fetchList, token]);
 
   const selectedKb = list.find((kb) => kb.id === selectedId) ?? null;
   const official = selectedKb?.ownerType === OFFICIAL;

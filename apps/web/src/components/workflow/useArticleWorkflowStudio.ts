@@ -36,6 +36,7 @@ import {
 } from "@ai-assistant/article-workflow";
 import { errorMessage } from "../../apiError";
 import { useToast } from "../../motion";
+import { useAuthGate } from "../../app/authGate";
 import {
   applyArticleWorkflowTheme,
   createArticleWorkflowProject,
@@ -160,14 +161,13 @@ export function useArticleWorkflowStudio({
   initialBootstrapping,
 }: ArticleWorkflowStudioProps) {
   const toast = useToast();
+  const { requireAuth } = useAuthGate();
   const previewBodyRef = useRef<HTMLDivElement | null>(null);
 
   const [bootstrapping, setBootstrapping] = useState(initialBootstrapping ?? !initialHistory);
   const [history, setHistory] = useState<readonly ArticleWorkflowProjectSummary[]>(initialHistory ?? []);
   const [batch, setBatch] = useState<BatchView>(() =>
-    initialProject
-      ? { projects: [initialProject], platform: initialProject.platform, syncKey: "" }
-      : EMPTY_BATCH,
+    initialProject ? { projects: [initialProject], platform: initialProject.platform, syncKey: "" } : EMPTY_BATCH,
   );
   const [pending, setPending] = useState(NOTHING_PENDING);
   const [rewritePanel, setRewritePanel] = useState<RewritePanel>(() => ({
@@ -318,10 +318,15 @@ export function useArticleWorkflowStudio({
       setBootstrapping(false);
       return;
     }
+    // 未登录：历史是用户态数据，不拉，直接给空态收起骨架。
+    if (!token) {
+      setBootstrapping(false);
+      return;
+    }
     void refreshHistory()
       .catch(() => setError("加载图文工作台失败"))
       .finally(() => setBootstrapping(false));
-  }, [initialHistory, refreshHistory, setError]);
+  }, [initialHistory, refreshHistory, setError, token]);
 
   // 直出的那个项目也要先立 hash 基线，否则编辑器载入时的规范化回写会被当成用户编辑
   useEffect(() => {
@@ -380,7 +385,17 @@ export function useArticleWorkflowStudio({
    * 「置忙 → 清提示 → try → catch 里 `err instanceof Error ? err.message : 兜底` → finally 解忙」，
    * 其中「成功后刷一次历史列表」抄了六份，`finally` 里解忙还要各自记得写 `null` 还是 `false`。
    */
-  const runAction = ({ pending: busy, failure, toastFailure, saveDirtyFirst, keepHistory, run, recover }: ActionSpec) => {
+  const runAction = ({
+    pending: busy,
+    failure,
+    toastFailure,
+    saveDirtyFirst,
+    keepHistory,
+    run,
+    recover,
+  }: ActionSpec) => {
+    // 所有写/生成动作都经这里。未登录先弹登录框——匿名没有历史，读类动作本就不可达。
+    if (!requireAuth()) return;
     void (async () => {
       // 先把当前平台的脏草稿存下来。存不成（409 / 网络错）就整个动作都不做
       if (saveDirtyFirst && dirty && !(await saveProject("manual"))) return;
@@ -577,7 +592,12 @@ export function useArticleWorkflowStudio({
         // 一发失败不该拖累其他平台，所以是 allSettled 而不是 all
         const results = await Promise.allSettled(targets.map((item) => generateArticleWorkflowImages(token, item.id)));
         const failed = results.filter((result) => result.status === "rejected").length;
-        await loadBatch({ batchId: anchor.batchId, projectId: anchor.id, force: false, focusPlatform: anchor.platform });
+        await loadBatch({
+          batchId: anchor.batchId,
+          projectId: anchor.id,
+          force: false,
+          focusPlatform: anchor.platform,
+        });
         if (failed > 0) setError(`${failed} 个平台提交配图失败`);
         else if (scope === "current") setNotice("已开始生成当前平台配图");
         else setNotice(`已开始生成 ${targets.length} 个平台配图`);

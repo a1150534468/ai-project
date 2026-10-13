@@ -24,6 +24,17 @@ export function setAuthToken(token: string | null): void {
   currentToken = token && token.length > 0 ? token : null;
 }
 
+/**
+ * 鉴权失效（401/403）的集中回调。由 `App.tsx` 注册：清登录态 + 弹登录框。
+ * 只在「确实带了 token 发出去」时触发（见 `requestResponse`），所以匿名浏览命中受保护接口
+ * 不会误弹 —— 匿名根本不带 token，走的是公开接口或被前端提前拦下。
+ */
+let onAuthError: (() => void) | null = null;
+
+export function setAuthErrorHandler(handler: (() => void) | null): void {
+  onAuthError = handler;
+}
+
 function readStoredToken(): string | null {
   if (typeof localStorage === "undefined") return null;
   try {
@@ -83,7 +94,12 @@ export async function requestResponse(path: string, options: RequestOptions = {}
     signal,
     credentials,
   });
-  if (!response.ok) throw await ApiError.fromResponse(response, fallback);
+  if (!response.ok) {
+    // 带着 token 还被判 401/403 —— token 过期/失效了。通知集中回调去清态、弹登录框。
+    // 守卫 `resolvedToken`：匿名请求（没带 token）即便 401 也不弹，交给前端的提前拦截处理。
+    if ((response.status === 401 || response.status === 403) && resolvedToken) onAuthError?.();
+    throw await ApiError.fromResponse(response, fallback);
+  }
   return response;
 }
 

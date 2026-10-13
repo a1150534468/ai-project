@@ -7,6 +7,8 @@ interface RegisterProps {
   onAuthed: (token: string) => void;
   onSwitchToLogin: () => void;
   isLoading?: boolean;
+  /** 嵌入登录弹窗时传 true，去掉全屏外壳。 */
+  embedded?: boolean;
 }
 
 interface Draft {
@@ -32,7 +34,7 @@ function firstProblem(draft: Draft): string | null {
   return RULES.find((rule) => !rule.ok(draft))?.message ?? null;
 }
 
-export default function Register({ onAuthed, onSwitchToLogin, isLoading = false }: RegisterProps) {
+export default function Register({ onAuthed, onSwitchToLogin, isLoading = false, embedded = false }: RegisterProps) {
   const [draft, setDraft] = useState<Draft>({ username: "", password: "", confirm: "" });
   const [error, setError] = useState("");
 
@@ -57,6 +59,7 @@ export default function Register({ onAuthed, onSwitchToLogin, isLoading = false 
   return (
     <AuthScreen
       scroll
+      embedded={embedded}
       title="创建账户"
       error={error}
       busy={isLoading}

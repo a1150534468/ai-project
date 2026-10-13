@@ -688,7 +688,7 @@ describe("NovelWorkflowStudio 工作台", () => {
     expect(api.getNovelProject).toHaveBeenCalledTimes(3);
   });
 
-  it("返回书库会清掉 hash 并重新取一遍书目", async () => {
+  it("返回书库会回到小说模块顶层路由并重新取一遍书目", async () => {
     await openWorkbench();
     expect(window.location.hash).toBe("#novel/project-1/workbench");
 
@@ -697,7 +697,8 @@ describe("NovelWorkflowStudio 工作台", () => {
 
     expect(screen.getByTestId("library-state")).toHaveTextContent("books:1");
     expect(screen.queryByRole("main", { name: "写作工作台" })).not.toBeInTheDocument();
-    expect(window.location.hash).toBe("");
+    // 回书库不再清空 hash，而是落到小说模块的顶层路由（见 clientRoute.ts）。
+    expect(window.location.hash).toBe("#workflow/novel");
     expect(api.listNovelProjects).toHaveBeenCalledTimes(2);
   });
 });

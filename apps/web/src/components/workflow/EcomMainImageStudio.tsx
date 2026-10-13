@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
+import { useAuthGate } from "../../app/authGate";
 import { InAppSelect } from "../ui/InAppSelect";
 import * as api from "../../workflowEcomMainApi";
 import type { EcomMainJob, EcomMainRatio, EcomMainResolution, EcomMainStyleId } from "../../workflowEcomMainApi";
@@ -43,7 +44,18 @@ interface EcomMainImageStudioProps {
 
 const DEFAULT_CLIENT = api;
 
-export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloadImage, loadJob, onActivity, controlsHeader, historyFooter, client = DEFAULT_CLIENT }: EcomMainImageStudioProps) {
+export function EcomMainImageStudio({
+  token,
+  shared,
+  onBalanceRefresh,
+  onDownloadImage,
+  loadJob,
+  onActivity,
+  controlsHeader,
+  historyFooter,
+  client = DEFAULT_CLIENT,
+}: EcomMainImageStudioProps) {
+  const { requireAuth } = useAuthGate();
   const [ratio, setRatio] = useState<EcomMainRatio>("1:1");
   const [resolution, setResolution] = useState<EcomMainResolution>("1K");
   const [model, setModel] = useState<ImageModel>(IMAGE_MODEL_OPTIONS[0].value);
@@ -58,7 +70,11 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   const [redrawingIndexes, setRedrawingIndexes] = useState<readonly number[]>([]);
   useEffect(() => {
     void (async () => {
-      try { setJob((await client.getCurrentEcomMainJob(token)).job); } catch { /* 忽略：无历史任务 */ }
+      try {
+        setJob((await client.getCurrentEcomMainJob(token)).job);
+      } catch {
+        /* 忽略：无历史任务 */
+      }
     })();
   }, [client, token]);
 
@@ -70,19 +86,39 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   }, [loadJob]);
 
   const busy = isSubmitting || redrawingIndexes.length > 0 || isMainJobGenerating(job?.stage);
-  const clearFeedback = () => { setError(""); setNotice(""); };
+  const clearFeedback = () => {
+    setError("");
+    setNotice("");
+  };
 
   const handleGenerate = () => {
-    if (!shared.productName.trim()) { setError("请先填写商品名称"); return; }
-    if (style === "custom" && !customStyle.trim()) { setError("请填写自定义风格描述"); return; }
+    if (!requireAuth()) return;
+    if (!shared.productName.trim()) {
+      setError("请先填写商品名称");
+      return;
+    }
+    if (style === "custom" && !customStyle.trim()) {
+      setError("请填写自定义风格描述");
+      return;
+    }
     clearFeedback();
     setIsSubmitting(true);
     void (async () => {
       try {
         const payload = buildCreateMainPayload({
-          platformId: shared.platformId, ratio, resolution, model, style, customStyle, withText,
-          productName: shared.productName, category: shared.category, sellingPointsInput: shared.sellingPointsInput,
-          extra: shared.extra, referenceAssetIds: shared.referenceAssetIds, count,
+          platformId: shared.platformId,
+          ratio,
+          resolution,
+          model,
+          style,
+          customStyle,
+          withText,
+          productName: shared.productName,
+          category: shared.category,
+          sellingPointsInput: shared.sellingPointsInput,
+          extra: shared.extra,
+          referenceAssetIds: shared.referenceAssetIds,
+          count,
         });
         const result = await client.createEcomMainJob(token, payload);
         setJob(result.job);
@@ -102,9 +138,10 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
   };
 
   const handleRedraw = (index: number) => {
+    if (!requireAuth()) return;
     if (!job) return;
     clearFeedback();
-    setRedrawingIndexes((current) => current.includes(index) ? current : [...current, index]);
+    setRedrawingIndexes((current) => (current.includes(index) ? current : [...current, index]));
     void (async () => {
       try {
         const result = await client.redrawEcomMainImage(token, job.id, index);
@@ -130,53 +167,114 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
             <h3 className="mt-1 text-base font-semibold text-ink">主图设置</h3>
           </div>
           <div className="mt-4 grid gap-3">
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            模型
-            <InAppSelect icon="mdi:creation-outline" label="模型" value={model} options={IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))} onChange={(v) => {
-              if (!isImageModel(v)) return;
-              setModel(v);
-              setResolution((current) => coerceEcomMainResolution(v, current, ratio));
-              clearFeedback();
-            }} />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            图片比例
-            <InAppSelect icon="mdi:crop" label="图片比例" value={ratio} options={ECOM_MAIN_RATIO_OPTIONS} onChange={(v) => {
-              const nextRatio = v as EcomMainRatio;
-              setRatio(nextRatio);
-              setResolution((current) => coerceEcomMainResolution(model, current, nextRatio));
-              clearFeedback();
-            }} />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            清晰度
-            <InAppSelect icon="mdi:high-definition" label="清晰度" value={resolution} options={ECOM_MAIN_RESOLUTION_OPTIONS.filter((option) => !isEcomMainResolutionBlocked(model, option.value, ratio))} onChange={(v) => { setResolution(v as EcomMainResolution); clearFeedback(); }} />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            做图风格
-            <InAppSelect icon="mdi:palette-outline" label="做图风格" value={style} options={ECOM_MAIN_STYLE_OPTIONS} onChange={(v) => { setStyle(v as EcomMainStyleId); clearFeedback(); }} />
-          </div>
-          {style === "custom" && (
-            <label className="grid gap-2 text-sm font-semibold text-ink">
-              自定义风格描述
-              <textarea value={customStyle} onChange={(e) => { setCustomStyle(e.target.value); clearFeedback(); }} placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片" className="min-h-[72px] rounded-lg border border-hairline p-3 text-sm leading-6 text-ink" />
-            </label>
-          )}
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            画面文字
-            <InAppSelect icon="mdi:format-text" label="画面文字" value={withText ? "with" : "no"} options={ECOM_MAIN_TEXT_OPTIONS} onChange={(v) => { setWithText(v === "with"); clearFeedback(); }} />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            生成张数
-            <InAppSelect icon="mdi:numeric" label="生成张数" value={String(count)} options={ECOM_MAIN_COUNT_OPTIONS} onChange={(v) => { setCount(Number(v)); clearFeedback(); }} />
-          </div>
+            <div className="grid gap-2 text-sm font-semibold text-ink">
+              模型
+              <InAppSelect
+                icon="mdi:creation-outline"
+                label="模型"
+                value={model}
+                options={IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                onChange={(v) => {
+                  if (!isImageModel(v)) return;
+                  setModel(v);
+                  setResolution((current) => coerceEcomMainResolution(v, current, ratio));
+                  clearFeedback();
+                }}
+              />
+            </div>
+            <div className="grid gap-2 text-sm font-semibold text-ink">
+              图片比例
+              <InAppSelect
+                icon="mdi:crop"
+                label="图片比例"
+                value={ratio}
+                options={ECOM_MAIN_RATIO_OPTIONS}
+                onChange={(v) => {
+                  const nextRatio = v as EcomMainRatio;
+                  setRatio(nextRatio);
+                  setResolution((current) => coerceEcomMainResolution(model, current, nextRatio));
+                  clearFeedback();
+                }}
+              />
+            </div>
+            <div className="grid gap-2 text-sm font-semibold text-ink">
+              清晰度
+              <InAppSelect
+                icon="mdi:high-definition"
+                label="清晰度"
+                value={resolution}
+                options={ECOM_MAIN_RESOLUTION_OPTIONS.filter(
+                  (option) => !isEcomMainResolutionBlocked(model, option.value, ratio),
+                )}
+                onChange={(v) => {
+                  setResolution(v as EcomMainResolution);
+                  clearFeedback();
+                }}
+              />
+            </div>
+            <div className="grid gap-2 text-sm font-semibold text-ink">
+              做图风格
+              <InAppSelect
+                icon="mdi:palette-outline"
+                label="做图风格"
+                value={style}
+                options={ECOM_MAIN_STYLE_OPTIONS}
+                onChange={(v) => {
+                  setStyle(v as EcomMainStyleId);
+                  clearFeedback();
+                }}
+              />
+            </div>
+            {style === "custom" && (
+              <label className="grid gap-2 text-sm font-semibold text-ink">
+                自定义风格描述
+                <textarea
+                  value={customStyle}
+                  onChange={(e) => {
+                    setCustomStyle(e.target.value);
+                    clearFeedback();
+                  }}
+                  placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片"
+                  className="min-h-[72px] rounded-lg border border-hairline p-3 text-sm leading-6 text-ink"
+                />
+              </label>
+            )}
+            <div className="grid gap-2 text-sm font-semibold text-ink">
+              画面文字
+              <InAppSelect
+                icon="mdi:format-text"
+                label="画面文字"
+                value={withText ? "with" : "no"}
+                options={ECOM_MAIN_TEXT_OPTIONS}
+                onChange={(v) => {
+                  setWithText(v === "with");
+                  clearFeedback();
+                }}
+              />
+            </div>
+            <div className="grid gap-2 text-sm font-semibold text-ink">
+              生成张数
+              <InAppSelect
+                icon="mdi:numeric"
+                label="生成张数"
+                value={String(count)}
+                options={ECOM_MAIN_COUNT_OPTIONS}
+                onChange={(v) => {
+                  setCount(Number(v));
+                  clearFeedback();
+                }}
+              />
+            </div>
           </div>
           {(error || notice) && (
-            <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}>{error || notice}</p>
+            <p
+              className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}
+            >
+              {error || notice}
+            </p>
           )}
         </div>
         <SubmitBar
-
           submitLabel="生成主图"
           submitIcon="mdi:image-plus-outline"
           submitDisabled={busy}
@@ -188,61 +286,109 @@ export function EcomMainImageStudio({ token, shared, onBalanceRefresh, onDownloa
 
       <div className="flex min-h-[420px] min-w-0 flex-col bg-surface xl:h-full">
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
-        <div className="flex items-center justify-between gap-3">
-          <div><p className="text-xs font-semibold text-ink-secondary">当前结果</p><h3 className="mt-1 text-base font-semibold text-ink">图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}</h3></div>
-          {isSubmitting && <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink"><Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />正在生成</span>}
-        </div>
-        {isSubmitting && (
-          <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
-            <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
-            正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold text-ink-secondary">当前结果</p>
+              <h3 className="mt-1 text-base font-semibold text-ink">
+                图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}
+              </h3>
+            </div>
+            {isSubmitting && (
+              <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink">
+                <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
+                正在生成
+              </span>
+            )}
           </div>
-        )}
-        {!job && !isSubmitting && <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle px-6 text-center"><div><Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden /><p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p></div></div>}
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          {isSubmitting
-            ? Array.from({ length: count }).map((_, skeletonIndex) => (
-                <article key={`skeleton-${skeletonIndex}`} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
-                  <div className="relative grid aspect-square place-items-center overflow-hidden bg-surface-muted">
-                    <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-muted via-surface-subtle to-surface-muted" />
-                    <Icon icon="mdi:image-outline" className="relative animate-pulse text-3xl text-ink-tertiary" aria-hidden />
-                  </div>
-                  <div className="grid gap-2 p-3">
-                    <div className="h-3 w-1/3 animate-pulse rounded bg-surface-muted" />
-                    <div className="h-3 w-full animate-pulse rounded bg-surface-muted" />
-                    <div className="h-3 w-2/3 animate-pulse rounded bg-surface-muted" />
-                  </div>
-                </article>
-              ))
-            : job?.images.map((image) => (
-                <article key={image.index} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
-                  <div className="group relative grid aspect-square place-items-center bg-surface-muted">
-                    {image.originalUrl
-                      ? <img src={image.thumbnailUrl || image.originalUrl} alt={`主图 ${image.index + 1}`} className="h-full w-full object-cover" />
-                      : <span className="text-xs text-ink-tertiary">{image.status === "failed" ? "生成失败" : "待生成"}</span>}
-                    {image.originalUrl && onDownloadImage && (
-                      <DownloadOverlayButton onClick={() => onDownloadImage(image.originalUrl!)} />
-                    )}
-                    {redrawingIndexes.includes(image.index) && (
-                      <div className="absolute inset-0 grid place-items-center bg-surface/70">
-                        <Icon icon="mdi:loading" className="animate-spin text-2xl text-brand" aria-hidden />
-                      </div>
-                    )}
-                  </div>
-                  <div className="grid gap-2 p-3">
-                    <p className="text-sm font-semibold text-ink break-words">{image.index === 0 ? "商品图 · 主图" : `商品图 ${image.index + 1}`}</p>
-                    <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">主题：</span>{image.theme}</p>
-                    <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">画面要求：</span>{image.sceneRequirement}</p>
-                    <p className="text-xs leading-5 text-ink-secondary break-words"><span className="font-semibold">文案要求：</span>{image.copyRequirement}</p>
-                    {image.status === "failed" && (
-                      <RippleButton type="button" onClick={() => handleRedraw(image.index)} disabled={busy} className="h-9 rounded-[8px] border border-hairline text-xs font-semibold text-brand-ink disabled:text-ink-tertiary">
-                        {redrawingIndexes.includes(image.index) ? "重绘中…" : "重绘这张"}
-                      </RippleButton>
-                    )}
-                  </div>
-                </article>
-              ))}
-        </div>
+          {isSubmitting && (
+            <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
+              <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
+              正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
+            </div>
+          )}
+          {!job && !isSubmitting && (
+            <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle px-6 text-center">
+              <div>
+                <Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden />
+                <p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p>
+              </div>
+            </div>
+          )}
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {isSubmitting
+              ? Array.from({ length: count }).map((_, skeletonIndex) => (
+                  <article
+                    key={`skeleton-${skeletonIndex}`}
+                    className="overflow-hidden rounded-[12px] border border-hairline-subtle"
+                  >
+                    <div className="relative grid aspect-square place-items-center overflow-hidden bg-surface-muted">
+                      <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-muted via-surface-subtle to-surface-muted" />
+                      <Icon
+                        icon="mdi:image-outline"
+                        className="relative animate-pulse text-3xl text-ink-tertiary"
+                        aria-hidden
+                      />
+                    </div>
+                    <div className="grid gap-2 p-3">
+                      <div className="h-3 w-1/3 animate-pulse rounded bg-surface-muted" />
+                      <div className="h-3 w-full animate-pulse rounded bg-surface-muted" />
+                      <div className="h-3 w-2/3 animate-pulse rounded bg-surface-muted" />
+                    </div>
+                  </article>
+                ))
+              : job?.images.map((image) => (
+                  <article key={image.index} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
+                    <div className="group relative grid aspect-square place-items-center bg-surface-muted">
+                      {image.originalUrl ? (
+                        <img
+                          src={image.thumbnailUrl || image.originalUrl}
+                          alt={`主图 ${image.index + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs text-ink-tertiary">
+                          {image.status === "failed" ? "生成失败" : "待生成"}
+                        </span>
+                      )}
+                      {image.originalUrl && onDownloadImage && (
+                        <DownloadOverlayButton onClick={() => onDownloadImage(image.originalUrl!)} />
+                      )}
+                      {redrawingIndexes.includes(image.index) && (
+                        <div className="absolute inset-0 grid place-items-center bg-surface/70">
+                          <Icon icon="mdi:loading" className="animate-spin text-2xl text-brand" aria-hidden />
+                        </div>
+                      )}
+                    </div>
+                    <div className="grid gap-2 p-3">
+                      <p className="text-sm font-semibold text-ink break-words">
+                        {image.index === 0 ? "商品图 · 主图" : `商品图 ${image.index + 1}`}
+                      </p>
+                      <p className="text-xs leading-5 text-ink-secondary break-words">
+                        <span className="font-semibold">主题：</span>
+                        {image.theme}
+                      </p>
+                      <p className="text-xs leading-5 text-ink-secondary break-words">
+                        <span className="font-semibold">画面要求：</span>
+                        {image.sceneRequirement}
+                      </p>
+                      <p className="text-xs leading-5 text-ink-secondary break-words">
+                        <span className="font-semibold">文案要求：</span>
+                        {image.copyRequirement}
+                      </p>
+                      {image.status === "failed" && (
+                        <RippleButton
+                          type="button"
+                          onClick={() => handleRedraw(image.index)}
+                          disabled={busy}
+                          className="h-9 rounded-[8px] border border-hairline text-xs font-semibold text-brand-ink disabled:text-ink-tertiary"
+                        >
+                          {redrawingIndexes.includes(image.index) ? "重绘中…" : "重绘这张"}
+                        </RippleButton>
+                      )}
+                    </div>
+                  </article>
+                ))}
+          </div>
         </div>
         {historyFooter}
       </div>

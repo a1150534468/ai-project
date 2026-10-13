@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Icon } from "@iconify/react";
 import type { AgentOption, Session } from "../../api";
-import { isClientMenuVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
+import { isNavItemVisible, isWorkflowSubVisible, type ClientMenuVisibility } from "../../clientMenu";
 import { spring } from "../../motion";
 import { loadNavCollapsed, saveNavCollapsed } from "../../shellState";
 import type { WorkflowModuleId } from "../../workflowState";
@@ -46,6 +46,10 @@ interface ShellProps {
   workflowModule?: WorkflowModuleId;
   onSelectWorkflowSub?: (id: WorkflowSubId) => void;
   onLogout?: () => void;
+  /** 未登录时侧栏/移动端显示「登录」入口，点它弹登录框。 */
+  onLogin?: () => void;
+  /** 是否已登录：决定页脚显示「登出」还是「登录」。 */
+  authed?: boolean;
   token: string;
   agents: { presets: AgentOption[]; custom: AgentOption[] };
   sessions?: Session[];
@@ -72,6 +76,8 @@ export default function Shell({
   workflowModule,
   onSelectWorkflowSub,
   onLogout,
+  onLogin,
+  authed = true,
   token,
   agents,
   sessions = [],
@@ -103,7 +109,8 @@ export default function Shell({
     if (!sub?.developing) onSelectWorkflowSub?.(id);
   };
 
-  const items = NAV_ITEMS.filter((item) => isClientMenuVisible(menuVisibility, `nav.${item.id}`));
+  // 与 NavRail 同一套可见性规则：后台开关 ∩ 登录态（「设置」未登录时不出现）
+  const items = NAV_ITEMS.filter((item) => isNavItemVisible(menuVisibility, item.id, authed));
   const subItems = WORKFLOW_SUB_ITEMS.filter((sub) => isWorkflowSubVisible(menuVisibility, sub.id));
 
   // 「工作流」在窄屏没有二级菜单可展，所以把可用的子模块直接铺成同级胶囊
@@ -141,6 +148,8 @@ export default function Shell({
           workflowModule={workflowModule}
           onSelectWorkflowSub={onSelectWorkflowSub}
           onLogout={onLogout}
+          onLogin={onLogin}
+          authed={authed}
           collapsed={collapsed}
           onToggleCollapsed={toggleCollapsed}
           menuVisibility={menuVisibility}
@@ -185,11 +194,15 @@ export default function Shell({
           </div>
         </nav>
 
-        <div className={cx("min-h-0 flex-1", ownsScrolling(currentView, workflowModule) ? "overflow-hidden" : "overflow-y-auto")}>
+        <div
+          className={cx(
+            "min-h-0 flex-1",
+            ownsScrolling(currentView, workflowModule) ? "overflow-hidden" : "overflow-y-auto",
+          )}
+        >
           {children}
         </div>
       </main>
     </div>
   );
 }
-

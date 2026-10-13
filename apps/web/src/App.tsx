@@ -10,19 +10,22 @@
  * 视图切换仍然是 `ViewType` 字符串（本计划不引入 react-router），`renderContent` 里那个 switch
  * 就是唯一的路由表。
  *
- * 两条顺序约定，动这个文件之前先读：
+ * 几条顺序约定，动这个文件之前先读：
  *  - **所有 hook 都排在登录闸门之前。** 闸门是提前 return，hook 落到它后面就会随登录态时有时无。
  *  - **`useAuthSession` 必须是第一个 hook。** 它那个把 token 同步进 `http.ts` 的 effect 要先于
  *    所有拉数据的 effect 执行，否则首屏那几个请求全都没有鉴权头。
  *
+ * 另外 `enteredApp` 这个 state 排在 `useClientNavigation` 之前：地址栏同步要不要生效由它决定
+ * （落地页显示时不写 hash，见 useClientNavigation 的 `hashEnabled`）。
+ *
  * 回调命名：带真逻辑的（异步、要找东西、要收窄类型）叫 `handleXxx`，单纯改一下本地状态的
  * 就用动词本身（`enterChat` / `closeAgentPicker` / `logout`）。
  */
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { AgentOption } from "./api";
 import Shell, { type ViewType } from "./components/shell/Shell";
-import Login from "./components/Login";
-import Register from "./components/Register";
+import LoginModal from "./components/LoginModal";
+import Landing from "./components/landing/Landing";
 import Chat from "./pages/Chat";
 import Knowledge from "./pages/Knowledge";
 import Assets from "./pages/Assets";
@@ -37,13 +40,30 @@ import { useAuthSession } from "./app/useAuthSession";
 import { useChatSessions } from "./app/useChatSessions";
 import { useChatStream } from "./app/useChatStream";
 import { useClientNavigation } from "./app/useClientNavigation";
+import { AuthGateProvider } from "./app/authGate";
+import { firstVisibleClientView } from "./clientMenu";
+import { AUTH_TOKEN_STORAGE_KEY, setAuthErrorHandler } from "./http";
 
 /** 首选模型存在 localStorage 里。设置页也按这个键自己写了一遍，换键要两边一起改。 */
 const PREFERRED_MODEL_KEY = "preferredModel";
 
+/**
+ * 「已进入应用」标记：未登录用户点过落地页「开始使用」后就不再回落地页。
+ * **只活在内存里，不写 localStorage** —— token 是唯一能留在应用里的凭证：
+ * 匿名进入只管当前这一趟页面会话，刷新/重开新标签页都先回营销落地页，
+ * 登出更是直接打回落地页。`enteredApp` 是历史上的持久化键名，登出时清掉残留值。
+ */
+const ENTERED_APP_KEY = "enteredApp";
+
 export default function App() {
   const { token, setToken, me, authView, setAuthView } = useAuthSession();
-  const nav = useClientNavigation(token);
+  /**
+   * 未登录也先进应用外壳：点过「开始使用」后不再回落地页（仅当前页面会话，不持久化）。
+   * 声明在 `useClientNavigation` 之前 —— 它要拿这个值判断「应用外壳是否在展示」，
+   * 落地页显示时导航不接管地址栏，免得地址栏里挂着 `#chat`。
+   */
+  const [enteredApp, setEnteredApp] = useState(() => Boolean(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)));
+  const nav = useClientNavigation(token, enteredApp || Boolean(token));
   const account = useAccountOverview(token);
   const { confirm, Dialog } = useConfirm();
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
@@ -54,20 +74,75 @@ export default function App() {
    * 「设置页显示 A、对话页发 B」，所以合成一个，两个 prop 都从它出。
    */
   const [model, setModel] = useState(() => localStorage.getItem(PREFERRED_MODEL_KEY) ?? "");
+  const [loginOpen, setLoginOpen] = useState(false);
   const { setView } = nav;
   const { refreshAgents } = account;
+
+  const openLogin = useCallback(() => setLoginOpen(true), []);
+  /** 鉴权闸：已登录放行；未登录弹登录框并拦下。动作 handler 顶部 `if (!requireAuth()) return;`。 */
+  const requireAuth = useCallback(() => {
+    if (token) return true;
+    setLoginOpen(true);
+    return false;
+  }, [token]);
+  /** 登录/注册成功：落 token（触发持久化 + 拉 me）并关弹窗。 */
+  const handleAuthed = useCallback(
+    (next: string) => {
+      setToken(next);
+      setLoginOpen(false);
+    },
+    [setToken],
+  );
+  const enterApp = useCallback(() => setEnteredApp(true), []);
+
+  // token 带着却被判 401/403（过期/失效）：清登录态 + 弹登录框。匿名请求不带 token，不会触发（见 http.ts）。
+  useEffect(() => {
+    setAuthErrorHandler(() => {
+      setToken("");
+      setLoginOpen(true);
+    });
+    return () => setAuthErrorHandler(null);
+  }, [setToken]);
+
+  /**
+   * 设置页路由守卫：未登录时不该看到设置页。导航入口已按登录态藏掉（clientMenu.isNavItemVisible），
+   * 这里兜住手动改地址栏 / 旧 hash 直达的情况 —— 弹登录框说明「为什么要登录」，再跳去第一个可见页。
+   * 落点同样排除「设置」，否则会和「当前页被后台隐藏」的回跳互相弹来弹去。
+   */
+  useEffect(() => {
+    if (!token && nav.view === "settings") {
+      setView(firstVisibleClientView(nav.menuVisibility, false));
+      openLogin();
+    }
+  }, [token, nav.view, nav.menuVisibility, setView, openLogin]);
+
+  const authGate = useMemo(() => ({ token, requireAuth, openLogin }), [token, requireAuth, openLogin]);
 
   const enterChat = useCallback(() => setView("chat"), [setView]);
   const closeAgentPicker = useCallback(() => setAgentPickerOpen(false), []);
   const collapseAgentPanel = useCallback(() => setAgentPanelCollapsed(true), []);
   const toggleAgentPanel = useCallback(() => setAgentPanelCollapsed((collapsed) => !collapsed), []);
-  const logout = useCallback(() => setToken(""), [setToken]);
+  /**
+   * 登出 = 回到营销落地页。三件事一起做：
+   *  - 清 token（持久化 effect 跟着把它从 localStorage 拿走）；
+   *  - 清「已进入应用」标记（内存 + 历史遗留的持久化值），登录闸门重新落回 Landing；
+   *  - 视图复位到对话页，下次「开始使用」从首页重新开始，不会把登出前那一页带回来。
+   */
+  const logout = useCallback(() => {
+    setToken("");
+    localStorage.removeItem(ENTERED_APP_KEY);
+    setEnteredApp(false);
+    setLoginOpen(false);
+    setView("chat");
+  }, [setToken, setView]);
 
   /** 挑 Agent 得先回对话页：从记忆页点「换 Agent」，挑完人还停在原地就看不到新开的对话。 */
   const openAgentPicker = useCallback(() => {
+    // 新建/切换 Agent 要落到后端账号上，未登录先弹登录。
+    if (!requireAuth()) return;
     setView("chat");
     setAgentPickerOpen(true);
-  }, [setView]);
+  }, [requireAuth, setView]);
 
   /** 会话一开就把挑人面板关掉、Agent 栏收起来，宽度让给刚开的对话。 */
   const startedAgentSession = useCallback(() => {
@@ -85,6 +160,15 @@ export default function App() {
   });
 
   const handleChatSend = useChatStream({ token, chat });
+
+  /** 发送是消耗型动作：未登录先弹登录框，不发请求（登录后让用户再点一次，草稿还在）。 */
+  const guardedChatSend = useCallback(
+    (payload: Parameters<typeof handleChatSend>[0]) => {
+      if (!requireAuth()) return;
+      handleChatSend(payload);
+    },
+    [requireAuth, handleChatSend],
+  );
 
   const { refreshSessions, startAgentSession } = chat;
 
@@ -122,18 +206,29 @@ export default function App() {
   /** 知识库那侧的 `onViewChange` 收的是宽 `string`，跨页深链的目标在这里收窄回 `ViewType`。 */
   const handleKnowledgeViewChange = useCallback((view: string) => setView(view as ViewType), [setView]);
 
-  if (!token) {
-    return authView === "register" ? (
-      <Register onAuthed={setToken} onSwitchToLogin={() => setAuthView("login")} />
-    ) : (
-      <Login onLogin={setToken} onSwitchToRegister={() => setAuthView("register")} />
+  /**
+   * 落地页闸门：没有 token 且没点过「开始使用」时，先看营销落地页而不是直接进应用。
+   * 必须排在所有 hook 之后（和原来那道登录闸门同一条规则）。
+   * 「开始使用」只在内存里放行（见 ENTERED_APP_KEY 注释）：匿名浏览不跨会话，
+   * 所以直接访问 / 刷新 / 登出后重新进站，看到的都是这一页。
+   */
+  if (!enteredApp && !token) {
+    return (
+      <Landing
+        onEnter={enterApp}
+        onLogin={() => {
+          enterApp();
+          openLogin();
+        }}
+      />
     );
   }
 
   /**
-   * 路由表。写在闸门之后有两个原因：`token` 到这里才收窄成非空串，而且它不是 hook，
-   * 不受调用顺序约束。`default` 兜住 `chat` 和任何认不出来的值 —— 深链是从 localStorage
-   * 读回来的字符串，认不出来时落到对话页，而不是白屏。
+   * 路由表。`token` 可能是空串（未登录浏览）—— 各页面都容忍空 token：跳过用户态拉取、
+   * 渲染空态/预览，真正需要登录的动作处才弹登录框。`settings` 分支有上面的路由守卫兜底，
+   * 未登录到不了这里。`default` 兜住 `chat` 和任何认不出来的值 —— 深链是地址栏里读回来的
+   * 字符串，认不出来时落到对话页，而不是白屏。
    */
   const renderContent = (): ReactNode => {
     switch (nav.view) {
@@ -152,6 +247,8 @@ export default function App() {
           <Settings
             uid={me?.uid}
             userName={me?.username}
+            authed={Boolean(token)}
+            onLogin={openLogin}
             preferredModel={model}
             onPreferredModelChange={handleModelChange}
             onLogout={logout}
@@ -179,7 +276,7 @@ export default function App() {
             selectedModel={model}
             preferredModel={model}
             onModelChange={handleModelChange}
-            onSend={handleChatSend}
+            onSend={guardedChatSend}
             agentPanelCollapsed={agentPanelCollapsed}
             onToggleAgentPanel={toggleAgentPanel}
           />
@@ -189,13 +286,15 @@ export default function App() {
   };
 
   return (
-    <>
+    <AuthGateProvider value={authGate}>
       <Shell
         currentView={nav.view}
         onViewChange={setView}
         workflowModule={nav.workflowModule}
         onSelectWorkflowSub={nav.selectWorkflowSub}
         onLogout={logout}
+        onLogin={openLogin}
+        authed={Boolean(token)}
         token={token}
         agents={account.agents}
         sessions={chat.sessions}
@@ -214,6 +313,13 @@ export default function App() {
       </Shell>
       <Dialog />
       <AgentPicker token={token} open={agentPickerOpen} onClose={closeAgentPicker} onSelect={handlePickAgent} />
-    </>
+      <LoginModal
+        open={loginOpen}
+        view={authView}
+        onViewChange={setAuthView}
+        onAuthed={handleAuthed}
+        onClose={() => setLoginOpen(false)}
+      />
+    </AuthGateProvider>
   );
 }

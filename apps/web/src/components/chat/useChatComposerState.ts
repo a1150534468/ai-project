@@ -10,17 +10,9 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
-import {
-  listKb,
-  listModels,
-  type ChatAttachmentPayload,
-  type KnowledgeBase,
-} from "../../api";
-import {
-  filesToChatAttachments,
-  stripAttachmentForApi,
-  type ChatAttachment,
-} from "../../chatAttachments";
+import { useAuthGate } from "../../app/authGate";
+import { listKb, listModels, type ChatAttachmentPayload, type KnowledgeBase } from "../../api";
+import { filesToChatAttachments, stripAttachmentForApi, type ChatAttachment } from "../../chatAttachments";
 import { pickInitialModel } from "../../chatState";
 
 export interface ChatSendPayload {
@@ -40,6 +32,7 @@ export function useChatComposerState(args: {
   readonly onSend: (payload: ChatSendPayload) => void;
 }) {
   const { token, isLoading, selectedModel, preferredModel, onModelChange, onSend } = args;
+  const { requireAuth } = useAuthGate();
   const [input, setInput] = useState("");
   const [models, setModels] = useState<Array<{ model: string; displayName: string }>>([]);
   const [kbList, setKbList] = useState<KnowledgeBase[]>([]);
@@ -88,9 +81,7 @@ export function useChatComposerState(args: {
 
   const toggleDraftKb = (id: string) => {
     setDraftAttachAllOwn(false);
-    setDraftSelectedKbIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
+    setDraftSelectedKbIds((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   };
 
   /** 「全库智能搜索」是排他项:选它就把逐库勾选清空。 */
@@ -103,17 +94,22 @@ export function useChatComposerState(args: {
     attachmentsRef.current = attachments;
   }, [attachments]);
 
-  useEffect(() => () => {
-    attachmentsRef.current.forEach((item) => {
-      if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
-    });
-  }, []);
+  useEffect(
+    () => () => {
+      attachmentsRef.current.forEach((item) => {
+        if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     const init = async () => {
       try {
         const modelsData = await listModels();
         setModels(modelsData);
+        // 知识库是用户态数据，未登录不拉（避免落地页/匿名浏览时打出 401）。
+        if (!token) return;
         const kbsData = await listKb(token);
         setKbList(kbsData);
       } catch (err) {
@@ -152,6 +148,8 @@ export function useChatComposerState(args: {
   const handleSend = async () => {
     const msg = input.trim();
     if ((!msg && attachments.length === 0) || isLoading) return;
+    // 未登录先弹登录框，且保留草稿（在清空输入之前拦下，登录后再点一次即可）。
+    if (!requireAuth()) return;
 
     const outgoingAttachments = attachments;
     setInput("");

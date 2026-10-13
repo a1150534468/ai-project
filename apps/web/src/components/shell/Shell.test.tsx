@@ -65,6 +65,18 @@ describe("Shell 骨架", () => {
     expect(shell()).toContain("新建 Agent");
     expect(shell({ currentView: "kb" })).not.toContain("新建 Agent");
   });
+
+  it("已登录页脚是「登出」，未登录是「登录」", () => {
+    expect(buttonWith(shell({ authed: true }), "登出")).toBeTruthy();
+    const anon = shell({ authed: false });
+    expect(buttonWith(anon, "登录")).toBeTruthy();
+    expect(anon).not.toContain(">登出<");
+  });
+
+  it("未登录时导航藏掉「设置」，已登录时露出", () => {
+    expect(shell({ authed: false })).not.toContain("设置");
+    expect(shell({ authed: true })).toContain("设置");
+  });
 });
 
 describe("Shell 折叠态", () => {

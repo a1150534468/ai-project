@@ -61,6 +61,19 @@ export function clientMenuKeyForView(view: ViewType): string | null {
   return view === "workflow" ? null : `nav.${view}`;
 }
 
+/**
+ * 一级导航项的可见性 = 后台开关 ∩ 登录要求。
+ * 「设置」是账号页：未登录时入口直接藏掉，深链由 App 里的路由守卫兜（见 App.tsx）。
+ */
+export function isNavItemVisible(
+  visibility: ClientMenuVisibility | undefined,
+  id: ViewType,
+  authed: boolean,
+): boolean {
+  if (id === "settings" && !authed) return false;
+  return isClientMenuVisible(visibility, `nav.${id}`);
+}
+
 const FALLBACK_VIEW_ORDER: readonly ViewType[] = [
   "chat",
   "models",
@@ -70,11 +83,13 @@ const FALLBACK_VIEW_ORDER: readonly ViewType[] = [
   "settings",
 ];
 
-/** 当前页面被后台隐藏时，跳到第一个仍显示的主菜单；全关时回落到对话页作为安全落点。 */
-export function firstVisibleClientView(visibility: ClientMenuVisibility): ViewType {
-  return FALLBACK_VIEW_ORDER.find((view) =>
-    isClientMenuVisible(visibility, `nav.${view}`),
-  ) ?? "chat";
+/**
+ * 当前页面被后台隐藏时，跳到第一个仍显示的主菜单；全关时回落到对话页作为安全落点。
+ * `authed=false` 时跳过「设置」—— 未登录用户本来就不该落到设置页，
+ * 否则会和 App 里的路由守卫互相弹来弹去。
+ */
+export function firstVisibleClientView(visibility: ClientMenuVisibility, authed = true): ViewType {
+  return FALLBACK_VIEW_ORDER.find((view) => isNavItemVisible(visibility, view, authed)) ?? "chat";
 }
 
 export async function getClientMenuVisibility(token?: string): Promise<ClientMenuVisibility> {

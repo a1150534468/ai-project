@@ -22,6 +22,7 @@ import {
   type WorkflowImageAsset,
 } from "../../api";
 import { useToast } from "../../motion";
+import { useAuthGate } from "../../app/authGate";
 import {
   advanceImageTaskStatus,
   buildImageSize,
@@ -83,12 +84,16 @@ export function useImageWorkflowStudio(args: {
   const requestFilter = args.requestFilter ?? includeEveryRequest;
   const buildSubmissionPrompt = args.buildSubmissionPrompt ?? preservePrompt;
   const requiredReferenceCount = args.requiredReferenceCount ?? 0;
-  const maxReferenceCount = Math.min(Math.max(args.maxReferenceCount ?? IMAGE_MAX_REFERENCE_COUNT, 1), IMAGE_MAX_REFERENCE_COUNT);
+  const maxReferenceCount = Math.min(
+    Math.max(args.maxReferenceCount ?? IMAGE_MAX_REFERENCE_COUNT, 1),
+    IMAGE_MAX_REFERENCE_COUNT,
+  );
   const emptyPromptMessage = args.emptyPromptMessage ?? "请输入提示词";
   const referenceRequiredMessage = args.referenceRequiredMessage ?? "请先上传参考图";
   const submittedMessage = args.submittedMessage ?? "生图任务已提交，后台生成中";
   const downloadPrefix = args.downloadPrefix ?? "generated-image";
   const toast = useToast();
+  const { requireAuth } = useAuthGate();
   const [imageDraft, setImageDraft] = useState<ImageDraft>(() => args.initialDraft ?? DEFAULT_IMAGE_DRAFT);
   const [preEditDraft, setPreEditDraft] = useState<ImageDraft | null>(null);
   const [tasks, setTasks] = useState<readonly ImageTask[]>([]);
@@ -114,53 +119,60 @@ export function useImageWorkflowStudio(args: {
   const selectedQuickCount = [1, 2, 4, 8].includes(parsedQuickCount) ? parsedQuickCount : 0;
   const size = buildImageSize(aspectRatio, resolution);
   const previewTasks = useMemo(
-    () => selectedRequestId ? tasks.filter((task) => task.id === selectedRequestId) : tasks.filter(isActiveTask),
+    () => (selectedRequestId ? tasks.filter((task) => task.id === selectedRequestId) : tasks.filter(isActiveTask)),
     [selectedRequestId, tasks],
   );
   const previewImages = useMemo(
-    () => selectedRequestId ? images.filter((image) => image.requestId === selectedRequestId) : [],
+    () => (selectedRequestId ? images.filter((image) => image.requestId === selectedRequestId) : []),
     [images, selectedRequestId],
   );
   const isPreviewGenerating = previewTasks.some(isActiveTask);
-  const previewGeneratingCount = useMemo(
-    () => remainingImageCount(previewTasks),
-    [previewTasks],
-  );
+  const previewGeneratingCount = useMemo(() => remainingImageCount(previewTasks), [previewTasks]);
 
   const updateImageDraft = (updates: Partial<ImageDraft>) => {
     setImageDraft((current) => ({ ...current, ...updates }));
   };
 
-  const refreshImageState = useCallback(async (showFailureNotice: boolean) => {
-    try {
-      const state = await getWorkflowImageState(token);
-      const scopedImages = state.images.filter((image) => requestFilter(image.requestId));
-      const nextTasks = state.tasks.filter((task) => requestFilter(task.requestId)).map(toImageTask);
-      setImages(scopedImages);
-      setTasks(nextTasks);
+  const refreshImageState = useCallback(
+    async (showFailureNotice: boolean) => {
+      // 未登录：生图记录是用户态数据，不发请求（options/模板照常加载，工作区留空等登录）。
+      if (!token) return;
+      try {
+        const state = await getWorkflowImageState(token);
+        const scopedImages = state.images.filter((image) => requestFilter(image.requestId));
+        const nextTasks = state.tasks.filter((task) => requestFilter(task.requestId)).map(toImageTask);
+        setImages(scopedImages);
+        setTasks(nextTasks);
 
-      if (!hasInitializedImageState.current) {
-        hasInitializedImageState.current = true;
-        const initialTask = nextTasks.find(isActiveTask) ?? nextTasks[0] ?? null;
-        const initialImage = initialTask
-          ? scopedImages.find((image) => image.requestId === initialTask.id) ?? null
-          : scopedImages[0] ?? null;
-        if (initialTask || initialImage) {
-          setSelectedRequestId(initialTask?.id ?? initialImage?.requestId ?? null);
-          setSelectedImageId(initialImage?.id ?? null);
-          if (initialTask?.generationIntent !== "new" && initialTask?.sourceImageAssetId && initialTask.status === "completed" && initialImage) {
-            setCompareImageIds([initialTask.sourceImageAssetId, initialImage.id]);
-            setWorkspaceMode("comparing");
-          } else {
-            setWorkspaceMode("result");
+        if (!hasInitializedImageState.current) {
+          hasInitializedImageState.current = true;
+          const initialTask = nextTasks.find(isActiveTask) ?? nextTasks[0] ?? null;
+          const initialImage = initialTask
+            ? (scopedImages.find((image) => image.requestId === initialTask.id) ?? null)
+            : (scopedImages[0] ?? null);
+          if (initialTask || initialImage) {
+            setSelectedRequestId(initialTask?.id ?? initialImage?.requestId ?? null);
+            setSelectedImageId(initialImage?.id ?? null);
+            if (
+              initialTask?.generationIntent !== "new" &&
+              initialTask?.sourceImageAssetId &&
+              initialTask.status === "completed" &&
+              initialImage
+            ) {
+              setCompareImageIds([initialTask.sourceImageAssetId, initialImage.id]);
+              setWorkspaceMode("comparing");
+            } else {
+              setWorkspaceMode("result");
+            }
           }
         }
+        if (showFailureNotice) setNotice("");
+      } catch {
+        if (showFailureNotice) setNotice("生图任务暂时无法加载");
       }
-      if (showFailureNotice) setNotice("");
-    } catch {
-      if (showFailureNotice) setNotice("生图任务暂时无法加载");
-    }
-  }, [requestFilter, token]);
+    },
+    [requestFilter, token],
+  );
 
   useEffect(() => {
     void refreshImageState(true);
@@ -200,6 +212,8 @@ export function useImageWorkflowStudio(args: {
   };
 
   const submitImageDraft = (draft: ImageDraft, intent: ImageGenerationIntent, sourceImageAssetId: string | null) => {
+    // 生成是消耗型动作：未登录先弹登录框，不占额度、不打图像模型。
+    if (!requireAuth()) return;
     const trimmedPrompt = draft.prompt.trim();
     if (!trimmedPrompt) {
       setError(emptyPromptMessage);
@@ -223,17 +237,16 @@ export function useImageWorkflowStudio(args: {
     const effectivePrompt = buildSubmissionPrompt(trimmedPrompt);
     const requestId = createRequestId(requestIdPrefix);
     const draftSize = buildImageSize(draft.aspectRatio, draft.resolution);
-    const referenceAssetIds = Array.from(new Set([
-      ...(sourceImageAssetId ? [sourceImageAssetId] : []),
-      ...draft.referenceImages.map((image) => image.id),
-    ])).slice(0, maxReferenceCount);
+    const referenceAssetIds = Array.from(
+      new Set([...(sourceImageAssetId ? [sourceImageAssetId] : []), ...draft.referenceImages.map((image) => image.id)]),
+    ).slice(0, maxReferenceCount);
     const task: ImageTask = {
       ...createImageTask({
-      id: requestId,
-      prompt: effectivePrompt,
-      size: draftSize,
-      count: parsedCount.value,
-      createdAt: new Date().toISOString(),
+        id: requestId,
+        prompt: effectivePrompt,
+        size: draftSize,
+        count: parsedCount.value,
+        createdAt: new Date().toISOString(),
       }),
       model: draft.model,
       referenceAssetIds,
@@ -278,9 +291,13 @@ export function useImageWorkflowStudio(args: {
         const message = errorMessage(err, "创建生图任务失败");
         setError(message);
         toast.show("err", message);
-        setTasks((prev) => prev.map((item) => (item.id === requestId
-          ? { ...item, status: "failed", error: message, updatedAt: new Date().toISOString() }
-          : item)));
+        setTasks((prev) =>
+          prev.map((item) =>
+            item.id === requestId
+              ? { ...item, status: "failed", error: message, updatedAt: new Date().toISOString() }
+              : item,
+          ),
+        );
       }
     })();
   };
@@ -292,6 +309,7 @@ export function useImageWorkflowStudio(args: {
   };
 
   const handleReferenceUpload = (file: File) => {
+    if (!requireAuth()) return;
     if (isUploadingReference || referenceImages.length >= maxReferenceCount) return;
     const mime = file.type.toLowerCase();
     if (!IMAGE_REFERENCE_MIME_TYPES.has(mime)) {
@@ -333,9 +351,8 @@ export function useImageWorkflowStudio(args: {
   };
 
   const handleSelectTask = (task: ImageTask) => {
-    const firstImage = images
-      .filter((image) => image.requestId === task.id)
-      .sort((a, b) => a.requestIndex - b.requestIndex)[0] ?? null;
+    const firstImage =
+      images.filter((image) => image.requestId === task.id).sort((a, b) => a.requestIndex - b.requestIndex)[0] ?? null;
     setSelectedRequestId(task.id);
     setSelectedImageId(firstImage?.id ?? null);
     const comparison = resolveImageVersionComparison(task, firstImage?.id);
@@ -352,6 +369,7 @@ export function useImageWorkflowStudio(args: {
   };
 
   const handleOptimizePrompt = () => {
+    if (!requireAuth()) return;
     const trimmedPrompt = prompt.trim();
     if (!trimmedPrompt) {
       setError("请输入提示词");
@@ -379,12 +397,10 @@ export function useImageWorkflowStudio(args: {
     if (!isActiveTask(task) || cancellingTaskIds.includes(task.id)) return;
     setError("");
     setNotice("");
-    setCancellingTaskIds((prev) => prev.includes(task.id) ? prev : [...prev, task.id]);
-    setTasks((prev) => prev.map((item) =>
-      item.id === task.id
-        ? { ...item, status: "cancelled", error: "用户已取消" }
-        : item
-    ));
+    setCancellingTaskIds((prev) => (prev.includes(task.id) ? prev : [...prev, task.id]));
+    setTasks((prev) =>
+      prev.map((item) => (item.id === task.id ? { ...item, status: "cancelled", error: "用户已取消" } : item)),
+    );
 
     void (async () => {
       try {
@@ -406,12 +422,19 @@ export function useImageWorkflowStudio(args: {
   const openSingleDownload = (image: WorkflowImageAsset) => {
     void downloadImageFile({
       url: image.originalUrl,
-      fileName: imageDownloadFileName({ prefix: downloadPrefix, url: image.originalUrl, mime: image.mime, index: image.requestIndex }),
-    }).then(() => toast.show("ok", "已开始下载原图")).catch((downloadError) => {
-      const message = errorMessage(downloadError, "下载原图失败");
-      setError(message);
-      toast.show("err", message);
-    });
+      fileName: imageDownloadFileName({
+        prefix: downloadPrefix,
+        url: image.originalUrl,
+        mime: image.mime,
+        index: image.requestIndex,
+      }),
+    })
+      .then(() => toast.show("ok", "已开始下载原图"))
+      .catch((downloadError) => {
+        const message = errorMessage(downloadError, "下载原图失败");
+        setError(message);
+        toast.show("err", message);
+      });
   };
 
   const handleSelectHistoryImage = (image: WorkflowImageAsset) => {
@@ -424,8 +447,10 @@ export function useImageWorkflowStudio(args: {
   };
   const draftFromImage = (image: WorkflowImageAsset): ImageDraft => {
     const task = tasks.find((item) => item.id === image.requestId);
-    const selection = resolveImageSizeSelection(task?.size ?? image.size)
-      ?? { aspectRatio: DEFAULT_ASPECT_RATIO, resolution: DEFAULT_RESOLUTION };
+    const selection = resolveImageSizeSelection(task?.size ?? image.size) ?? {
+      aspectRatio: DEFAULT_ASPECT_RATIO,
+      resolution: DEFAULT_RESOLUTION,
+    };
     const inheritedReferences = (task?.referenceAssetIds ?? [])
       .map((id) => [...imageDraft.referenceImages, ...images].find((asset) => asset.id === id))
       .filter((asset): asset is WorkflowImageAsset => Boolean(asset));
@@ -528,9 +553,13 @@ export function useImageWorkflowStudio(args: {
         const message = errorMessage(err, "创建生图任务失败");
         setError(message);
         toast.show("err", message);
-        setTasks((prev) => prev.map((item) => (item.id === requestId
-          ? { ...item, status: "failed", error: message, updatedAt: new Date().toISOString() }
-          : item)));
+        setTasks((prev) =>
+          prev.map((item) =>
+            item.id === requestId
+              ? { ...item, status: "failed", error: message, updatedAt: new Date().toISOString() }
+              : item,
+          ),
+        );
       } finally {
         retryingRequestIds.current.delete(task.id);
       }

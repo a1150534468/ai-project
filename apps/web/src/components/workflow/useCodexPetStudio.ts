@@ -13,20 +13,11 @@
  * `persistDraft` 与 `handleStart` 的校验强度**故意不同**:存草稿不要求视觉输入(允许先存名字风格,
  * 回头再补图),开始制作才走完整校验。这不是漏检,是两个动作的语义差别。
  */
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ChangeEvent,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { errorMessage } from "../../apiError";
+import { useAuthGate } from "../../app/authGate";
 import * as codexPetApi from "../../codexPetApi";
-import {
-  CODEX_PET_IMAGE_MODEL,
-  CODEX_PET_VISUAL_QA_MODEL,
-} from "../../codexPetApi";
+import { CODEX_PET_IMAGE_MODEL, CODEX_PET_VISUAL_QA_MODEL } from "../../codexPetApi";
 import type {
   CodexPetActionPromptKey,
   CodexPetBaseSelection,
@@ -52,10 +43,7 @@ import {
   validateCodexPetDraft,
   type CodexPetDraft,
 } from "./codexPetStudioModel";
-import {
-  DEFAULT_CODEX_PET_STUDIO_CLIENT,
-  type CodexPetStudioClient,
-} from "./codexPetStudioClient";
+import { DEFAULT_CODEX_PET_STUDIO_CLIENT, type CodexPetStudioClient } from "./codexPetStudioClient";
 import {
   isAbortError,
   launchInstallUrl,
@@ -63,11 +51,7 @@ import {
   TERMINAL_RUN_STATUSES,
   type CodexPetBusyAction,
 } from "./codexPetStudioFormat";
-import {
-  deriveCodexPetArtifacts,
-  deriveCodexPetRunGates,
-  upsertProjectSummary,
-} from "./codexPetStudioDerived";
+import { deriveCodexPetArtifacts, deriveCodexPetRunGates, upsertProjectSummary } from "./codexPetStudioDerived";
 import { useCodexPetRunStream } from "./useCodexPetRunStream";
 
 export interface CodexPetStudioProps {
@@ -91,6 +75,7 @@ export function useCodexPetStudio({
   onInstallUrl,
   client = DEFAULT_CODEX_PET_STUDIO_CLIENT,
 }: CodexPetStudioProps) {
+  const { requireAuth } = useAuthGate();
   const [projects, setProjects] = useState<readonly CodexPetProjectSummary[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null | undefined>(initialProjectId ?? undefined);
   const [detail, setDetail] = useState<CodexPetProjectDetail | null>(null);
@@ -145,20 +130,23 @@ export function useCodexPetStudio({
     }
   }, []);
 
-  const refreshSelectedProject = useCallback(async (silent = true): Promise<CodexPetProjectDetail | null> => {
-    const projectId = selectedProjectIdRef.current;
-    if (!projectId) return null;
-    const revision = detailRevisionRef.current;
-    try {
-      const next = await client.getProject(token, projectId);
-      if (selectedProjectIdRef.current !== projectId || detailRevisionRef.current !== revision) return null;
-      applyDetail(next, false);
-      return next;
-    } catch (refreshError) {
-      if (!silent) setError(errorMessage(refreshError, "刷新桌宠项目失败"));
-      return null;
-    }
-  }, [applyDetail, client, token]);
+  const refreshSelectedProject = useCallback(
+    async (silent = true): Promise<CodexPetProjectDetail | null> => {
+      const projectId = selectedProjectIdRef.current;
+      if (!projectId) return null;
+      const revision = detailRevisionRef.current;
+      try {
+        const next = await client.getProject(token, projectId);
+        if (selectedProjectIdRef.current !== projectId || detailRevisionRef.current !== revision) return null;
+        applyDetail(next, false);
+        return next;
+      } catch (refreshError) {
+        if (!silent) setError(errorMessage(refreshError, "刷新桌宠项目失败"));
+        return null;
+      }
+    },
+    [applyDetail, client, token],
+  );
 
   const { events, streamState, eventCursorRef, resetEvents } = useCodexPetRunStream({
     client,
@@ -178,18 +166,22 @@ export function useCodexPetStudio({
   // never let actions use it with the newly selected project id. Without this
   // gate a fast click on “保存草稿” could PATCH the new project with the old
   // project's still-rendered inputs before its detail request completed.
-  const detailMatchesSelection = selectedProjectId === null
-    || selectedProjectId === undefined
-    || detail?.project.id === selectedProjectId;
+  const detailMatchesSelection =
+    selectedProjectId === null || selectedProjectId === undefined || detail?.project.id === selectedProjectId;
   const selectionIsPending = Boolean(loadingDetail && selectedProjectId && !detailMatchesSelection);
   const interactionLocked = busyAction !== null || bootstrapping || loadingDetail || selectionIsPending;
-  const canEdit = !historicalImageModel && !readOnlyArchive && !interactionLocked && (
-    selectedProjectId === null
-    || selectedProjectId === undefined
-    || (detailMatchesSelection && canEditCodexPetProject(projectStatus) && runAllowsInputEdit)
-  );
-  const canStart = !historicalImageModel && !readOnlyArchive && !interactionLocked
-    && (!selectedProjectId || (detailMatchesSelection && projectStatus === "draft" && (!latestRun || runIsTerminal)));
+  const canEdit =
+    !historicalImageModel &&
+    !readOnlyArchive &&
+    !interactionLocked &&
+    (selectedProjectId === null ||
+      selectedProjectId === undefined ||
+      (detailMatchesSelection && canEditCodexPetProject(projectStatus) && runAllowsInputEdit));
+  const canStart =
+    !historicalImageModel &&
+    !readOnlyArchive &&
+    !interactionLocked &&
+    (!selectedProjectId || (detailMatchesSelection && projectStatus === "draft" && (!latestRun || runIsTerminal)));
 
   const clearFeedback = useCallback(() => {
     setError("");
@@ -211,9 +203,20 @@ export function useCodexPetStudio({
   useEffect(() => {
     let disposed = false;
     void (async () => {
+      const loadModelOptions = (client.getModelOptions ?? codexPetApi.getCodexPetModelOptions)(token);
+      // 未登录：项目列表是用户态数据，跳过只拉公开的模型目录，工作台留空等登录。
+      if (!token) {
+        const modelOptionsResult = await loadModelOptions.catch(() => null);
+        if (disposed) return;
+        if (modelOptionsResult) setModelOptions(modelOptionsResult);
+        else setNotice("模型目录暂时无法加载，已保留 GPT 默认选项");
+        if (selectedProjectIdRef.current === undefined) setSelectedProjectId(null);
+        setBootstrapping(false);
+        return;
+      }
       const [projectsResult, modelOptionsResult] = await Promise.allSettled([
         client.listProjects(token),
-        (client.getModelOptions ?? codexPetApi.getCodexPetModelOptions)(token),
+        loadModelOptions,
       ]);
       if (disposed) return;
       if (projectsResult.status === "fulfilled") {
@@ -229,7 +232,9 @@ export function useCodexPetStudio({
       else setNotice("模型目录暂时无法加载，已保留 GPT 默认选项");
       setBootstrapping(false);
     })();
-    return () => { disposed = true; };
+    return () => {
+      disposed = true;
+    };
   }, [client, token]);
 
   useEffect(() => {
@@ -246,7 +251,8 @@ export function useCodexPetStudio({
     const controller = new AbortController();
     setLoadingDetail(true);
     resetEvents();
-    void client.getProject(token, projectId, controller.signal)
+    void client
+      .getProject(token, projectId, controller.signal)
       .then((next) => {
         if (selectedProjectIdRef.current !== projectId || detailRevisionRef.current !== revision) return;
         applyDetail(next, true);
@@ -268,7 +274,10 @@ export function useCodexPetStudio({
     }
     setSelectedBaseArtifactId((current) => {
       if (current && baseCandidates.some((candidate) => candidate.id === current)) return current;
-      if (latestRun?.selectedBaseArtifactId && baseCandidates.some((candidate) => candidate.id === latestRun.selectedBaseArtifactId)) {
+      if (
+        latestRun?.selectedBaseArtifactId &&
+        baseCandidates.some((candidate) => candidate.id === latestRun.selectedBaseArtifactId)
+      ) {
         return latestRun.selectedBaseArtifactId;
       }
       return baseCandidates[0]?.id ?? null;
@@ -334,14 +343,17 @@ export function useCodexPetStudio({
     draftProjectIdRef.current = project.id;
     setDraft(codexPetDraftFromProject(project));
     detailRevisionRef.current += 1;
-    setDetail((current) => current?.project.id === project.id
-      ? { ...current, project }
-      : { project, latestRun: null, runs: [], artifacts: [], jobs: [] });
+    setDetail((current) =>
+      current?.project.id === project.id
+        ? { ...current, project }
+        : { project, latestRun: null, runs: [], artifacts: [], jobs: [] },
+    );
     if (!currentProjectId) createIdempotencyKeyRef.current = makeCodexPetIdempotencyKey("project");
     return project;
   };
 
   const handleSaveDraft = () => {
+    if (!requireAuth()) return;
     if (interactionLocked || !canEdit) return;
     clearFeedback();
     setBusyAction("saving");
@@ -359,6 +371,7 @@ export function useCodexPetStudio({
   };
 
   const handleStart = () => {
+    if (!requireAuth()) return;
     if (interactionLocked || !canStart) return;
     const validationError = validateCodexPetDraft(draft);
     if (validationError) {
@@ -370,13 +383,17 @@ export function useCodexPetStudio({
     void (async () => {
       try {
         const project = await persistDraft();
-        const currentKey = runIdempotencyKeyRef.current?.projectId === project.id
-          ? runIdempotencyKeyRef.current.key
-          : makeCodexPetIdempotencyKey("run");
+        const currentKey =
+          runIdempotencyKeyRef.current?.projectId === project.id
+            ? runIdempotencyKeyRef.current.key
+            : makeCodexPetIdempotencyKey("run");
         runIdempotencyKeyRef.current = { projectId: project.id, key: currentKey };
         const started = await client.startRun(token, project.id, currentKey);
         runIdempotencyKeyRef.current = null;
-        applyDetail({ project: started.project, latestRun: started.run, runs: [started.run], artifacts: [], jobs: [] }, false);
+        applyDetail(
+          { project: started.project, latestRun: started.run, runs: [started.run], artifacts: [], jobs: [] },
+          false,
+        );
         setNotice("制作任务已提交，实时进度已连接");
         void refreshSelectedProject(true);
       } catch (startError) {
@@ -388,6 +405,10 @@ export function useCodexPetStudio({
   };
 
   const handleReferenceFiles = (event: ChangeEvent<HTMLInputElement>) => {
+    if (!requireAuth()) {
+      event.currentTarget.value = "";
+      return;
+    }
     const input = event.currentTarget;
     const available = Math.max(0, CODEX_PET_MAX_REFERENCES - draft.referenceAssets.length);
     const files = Array.from(input.files ?? []).slice(0, available);
@@ -431,14 +452,25 @@ export function useCodexPetStudio({
     if (!project || !run || !canContinueFailedBase || interactionLocked) return;
     clearFeedback();
     setBusyAction("continuing");
-    const currentKey = continuationIdempotencyKeyRef.current?.runId === run.id
-      ? continuationIdempotencyKeyRef.current.key
-      : makeCodexPetIdempotencyKey("continue");
+    const currentKey =
+      continuationIdempotencyKeyRef.current?.runId === run.id
+        ? continuationIdempotencyKeyRef.current.key
+        : makeCodexPetIdempotencyKey("continue");
     continuationIdempotencyKeyRef.current = { runId: run.id, key: currentKey };
-    void client.continueFailedRun(token, project.id, run.id, currentKey)
+    void client
+      .continueFailedRun(token, project.id, run.id, currentKey)
       .then((continued) => {
         continuationIdempotencyKeyRef.current = null;
-        applyDetail({ project: continued.project, latestRun: continued.run, runs: [continued.run, run], artifacts: detail?.artifacts ?? [], jobs: [] }, false);
+        applyDetail(
+          {
+            project: continued.project,
+            latestRun: continued.run,
+            runs: [continued.run, run],
+            artifacts: detail?.artifacts ?? [],
+            jobs: [],
+          },
+          false,
+        );
         setNotice("候选 1 已保留；候选 2 的 429 重试等待单次额外调用授权");
         void refreshSelectedProject(true);
       })
@@ -450,16 +482,28 @@ export function useCodexPetStudio({
     const project = detail?.project;
     const run = latestRun;
     if (!project || !run || !canResumeGateFailure || interactionLocked) return;
-    const confirmed = typeof window === "undefined" || window.confirm(
-      `将只重做闸门指认的动作组：${resumableGateRowLabels}。`
-      + "\n这些动作组的旧画面会作废，但每次重出图都要单独授权一次调用。确认继续？",
-    );
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        `将只重做闸门指认的动作组：${resumableGateRowLabels}。` +
+          "\n这些动作组的旧画面会作废，但每次重出图都要单独授权一次调用。确认继续？",
+      );
     if (!confirmed) return;
     clearFeedback();
     setBusyAction("resuming-gate");
-    void client.resumeGateFailure(token, project.id, run.id)
+    void client
+      .resumeGateFailure(token, project.id, run.id)
       .then((resumed) => {
-        applyDetail({ project: resumed.project, latestRun: resumed.run, runs: [resumed.run], artifacts: detail?.artifacts ?? [], jobs: [] }, false);
+        applyDetail(
+          {
+            project: resumed.project,
+            latestRun: resumed.run,
+            runs: [resumed.run],
+            artifacts: detail?.artifacts ?? [],
+            jobs: [],
+          },
+          false,
+        );
         setNotice(`已排队重做：${resumableGateRowLabels}；每次重出图仍需单独授权`);
         void refreshSelectedProject(true);
       })
@@ -471,15 +515,16 @@ export function useCodexPetStudio({
     if (interactionLocked) return;
     const projectId = project.id;
     const selectedRunIsActive = detail?.project.id === projectId && latestRun && !runIsTerminal;
-    const projectMayBeRunning = Boolean(selectedRunIsActive)
-      || (project.status !== "draft"
-        && project.status !== "deleting"
-        && !TERMINAL_RUN_STATUSES.has(project.status));
-    const confirmed = typeof window === "undefined" || window.confirm(
-      projectMayBeRunning
-        ? "项目仍可能在运行。删除后会停止制作；项目数据和产物会保留，但不再显示在历史中。确认删除？"
-        : "删除后项目将从历史中隐藏，项目数据和产物仍会保留。确认删除？",
-    );
+    const projectMayBeRunning =
+      Boolean(selectedRunIsActive) ||
+      (project.status !== "draft" && project.status !== "deleting" && !TERMINAL_RUN_STATUSES.has(project.status));
+    const confirmed =
+      typeof window === "undefined" ||
+      window.confirm(
+        projectMayBeRunning
+          ? "项目仍可能在运行。删除后会停止制作；项目数据和产物会保留，但不再显示在历史中。确认删除？"
+          : "删除后项目将从历史中隐藏，项目数据和产物仍会保留。确认删除？",
+      );
     if (!confirmed) return;
     clearFeedback();
     setBusyAction("deleting");
@@ -501,7 +546,8 @@ export function useCodexPetStudio({
       setNotice("项目已从历史中删除，数据和产物仍保留");
     };
 
-    void client.deleteProject(token, projectId)
+    void client
+      .deleteProject(token, projectId)
       .then(() => {
         const remaining = projects.filter((item) => item.id !== projectId);
         applyDeletedProject(remaining);
@@ -535,9 +581,10 @@ export function useCodexPetStudio({
     if (typeof window !== "undefined" && !window.confirm("已发出的生图不会撤回。确认取消本次制作？")) return;
     clearFeedback();
     setBusyAction("cancelling");
-    void client.cancelRun(token, project.id, run.id)
+    void client
+      .cancelRun(token, project.id, run.id)
       .then((cancelled) => {
-        setDetail((current) => current ? { ...current, latestRun: cancelled } : current);
+        setDetail((current) => (current ? { ...current, latestRun: cancelled } : current));
         setNotice("已提交取消请求，Worker 会在安全检查点停止");
         // The cancel response is an acknowledgement, not necessarily the
         // terminal run/project state.  Refresh immediately so project history
@@ -559,9 +606,10 @@ export function useCodexPetStudio({
     if (!project || !run || run.status !== "awaiting_base_review" || interactionLocked) return;
     clearFeedback();
     setBusyAction(action);
-    void client.selectBase(token, project.id, run.id, selection)
+    void client
+      .selectBase(token, project.id, run.id, selection)
       .then((nextRun) => {
-        setDetail((current) => current ? { ...current, latestRun: nextRun } : current);
+        setDetail((current) => (current ? { ...current, latestRun: nextRun } : current));
         setNotice(success);
         void refreshSelectedProject(true);
       })
@@ -572,12 +620,19 @@ export function useCodexPetStudio({
   const handleApproveNextImage = () => {
     const project = detail?.project;
     const run = latestRun;
-    if (!project || !run || !["awaiting_direction_review", "awaiting_regeneration_approval"].includes(run.status) || interactionLocked) return;
+    if (
+      !project ||
+      !run ||
+      !["awaiting_direction_review", "awaiting_regeneration_approval"].includes(run.status) ||
+      interactionLocked
+    )
+      return;
     clearFeedback();
     setBusyAction("approving-image");
-    void client.approveNextImage(token, project.id, run.id, makeCodexPetIdempotencyKey("extra"))
+    void client
+      .approveNextImage(token, project.id, run.id, makeCodexPetIdempotencyKey("extra"))
       .then((nextRun) => {
-        setDetail((current) => current ? { ...current, latestRun: nextRun } : current);
+        setDetail((current) => (current ? { ...current, latestRun: nextRun } : current));
         setNotice(`已批准 ${run.pendingImageJobKey || "当前方向任务"} 的 1 次真实生图调用；失败后会立即停下`);
         void refreshSelectedProject(true);
       })
@@ -590,7 +645,8 @@ export function useCodexPetStudio({
     if (!projectId || !deliveryReady || interactionLocked) return;
     clearFeedback();
     setBusyAction("installing");
-    void client.createInstallLink(token, projectId)
+    void client
+      .createInstallLink(token, projectId)
       .then((result) => {
         if (onInstallUrl) onInstallUrl(result.installUrl);
         else launchInstallUrl(result.installUrl);
@@ -605,7 +661,8 @@ export function useCodexPetStudio({
     if (!projectId || !deliveryReady || interactionLocked) return;
     clearFeedback();
     setBusyAction("downloading");
-    void client.downloadPackage(token, projectId)
+    void client
+      .downloadPackage(token, projectId)
       .then((result) => {
         openDownload(result.blob, result.filename);
         setNotice("兼容包已开始下载");

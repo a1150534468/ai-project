@@ -4,6 +4,7 @@ import {
   clientMenuKeyForView,
   firstVisibleClientView,
   isClientMenuVisible,
+  isNavItemVisible,
   isWorkflowSubVisible,
   visibleImageHubTabs,
 } from "./clientMenu";
@@ -24,6 +25,29 @@ describe("clientMenu", () => {
 
   it("当前入口隐藏后选择仍显示的主菜单作为落点", () => {
     expect(firstVisibleClientView({ "nav.chat": false, "nav.models": true })).toBe("models");
+  });
+
+  it("「设置」入口按登录态隐藏，其余入口不受影响", () => {
+    expect(isNavItemVisible(undefined, "settings", true)).toBe(true);
+    expect(isNavItemVisible(undefined, "settings", false)).toBe(false);
+    expect(isNavItemVisible(undefined, "chat", false)).toBe(true);
+    // 后台开关仍然优先于登录态：关了就是谁都看不到
+    expect(isNavItemVisible({ "nav.settings": false }, "settings", true)).toBe(false);
+  });
+
+  it("未登录时的落点跳过设置页，全关时回落对话页", () => {
+    expect(firstVisibleClientView({ "nav.chat": false, "nav.models": true }, false)).toBe("models");
+    // 只有「设置」可见时，未登录用户也不能落过去，回落到对话页
+    const onlySettings = {
+      "nav.chat": false,
+      "nav.models": false,
+      "nav.kb": false,
+      "nav.assets": false,
+      "nav.memory": false,
+      "nav.settings": true,
+    };
+    expect(firstVisibleClientView(onlySettings, false)).toBe("chat");
+    expect(firstVisibleClientView(onlySettings, true)).toBe("settings");
   });
 
   it("生图模块页内 tab 按后台开关过滤", () => {

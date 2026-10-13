@@ -54,6 +54,8 @@ const probes = vi.hoisted(() => ({
   agentPicker: null as Record<string, any> | null,
   login: null as Record<string, any> | null,
   register: null as Record<string, any> | null,
+  landing: null as Record<string, any> | null,
+  loginModal: null as Record<string, any> | null,
   confirmOptions: null as Record<string, any> | null,
   confirmAnswer: true,
   streamArgs: [] as any[],
@@ -113,6 +115,22 @@ vi.mock("./components/Register", () => ({
   default: (props: Record<string, any>) => {
     probes.register = props;
     return <div data-testid="register-page" />;
+  },
+}));
+
+/** 落地页探针：未登录入口。onEnter 进匿名外壳，onLogin 进外壳并弹登录框。 */
+vi.mock("./components/landing/Landing", () => ({
+  default: (props: Record<string, any>) => {
+    probes.landing = props;
+    return <div data-testid="landing-page" />;
+  },
+}));
+
+/** 登录弹窗探针：只在 open 时露出，onAuthed 回传 token。 */
+vi.mock("./components/LoginModal", () => ({
+  default: (props: Record<string, any>) => {
+    probes.loginModal = props;
+    return props.open ? <div data-testid="login-modal" /> : null;
   },
 }));
 
@@ -183,6 +201,8 @@ async function send(message = "你好") {
 beforeEach(() => {
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
+  // 路由现在会把当前页写进 hash（见 clientRoute.ts）；用例间重置，免得上一条的 hash 决定下一条的首页。
+  window.history.replaceState(null, "", "/");
   localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, "t-1");
   vi.clearAllMocks();
   probes.shell = null;
@@ -193,6 +213,8 @@ beforeEach(() => {
   probes.agentPicker = null;
   probes.login = null;
   probes.register = null;
+  probes.landing = null;
+  probes.loginModal = null;
   probes.confirmOptions = null;
   probes.confirmAnswer = true;
   probes.streamArgs = [];
@@ -222,42 +244,98 @@ afterEach(() => {
 });
 
 describe("App 登录态", () => {
-  it("没有 token 时渲染登录页,可切到注册页", async () => {
+  it("没有 token 时渲染落地页,点登录进外壳并弹登录框", async () => {
     localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     await mount();
-    expect(find("login-page")).not.toBeNull();
+    expect(find("landing-page")).not.toBeNull();
     expect(find("shell")).toBeNull();
     await act(async () => {
-      probes.login?.onSwitchToRegister();
+      probes.landing?.onLogin();
     });
-    expect(find("register-page")).not.toBeNull();
+    await flush();
+    // 落地页点「登录」= 进应用外壳 + 弹登录框
+    expect(find("shell")).not.toBeNull();
+    expect(find("login-modal")).not.toBeNull();
   });
 
-  it("登录成功后 token 落 localStorage 并进入 Shell", async () => {
+  it("点开始使用进匿名外壳,登录成功后 token 落 localStorage 并关弹窗", async () => {
     localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
     await mount();
+    // 「开始使用」= 不登录直接进外壳浏览
     await act(async () => {
-      probes.login?.onLogin("t-new");
+      probes.landing?.onEnter();
+    });
+    await flush();
+    expect(find("shell")).not.toBeNull();
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    // 匿名进入只活在当前页面会话：不写「已进入应用」标记，刷新/重开站点还是先看落地页
+    expect(localStorage.getItem("enteredApp")).toBeNull();
+    // 侧栏「登录」弹出登录框，登录成功回传 token
+    await act(async () => {
+      probes.shell?.onLogin();
+    });
+    expect(find("login-modal")).not.toBeNull();
+    await act(async () => {
+      probes.loginModal?.onAuthed("t-new");
     });
     await flush();
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBe("t-new");
+    expect(find("login-modal")).toBeNull();
     expect(find("shell")).not.toBeNull();
   });
 
-  it("登出清掉 token 与 localStorage", async () => {
+  it("登出清掉 token 并回到营销落地页", async () => {
     await mount();
+    await flush();
+    // 已登录：地址栏跟着当前页走
+    expect(window.location.hash).toBe("#chat");
     await act(async () => {
       probes.shell?.onLogout();
     });
+    await flush();
     expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
-    expect(find("login-page")).not.toBeNull();
+    // 登出 = 回落地页，而不是变 anonymous 赖在外壳里
+    expect(find("landing-page")).not.toBeNull();
+    expect(find("shell")).toBeNull();
+    expect(localStorage.getItem("enteredApp")).toBeNull();
+    // 落地页不属于路由表：地址栏里残留的应用路由要一并清掉
+    expect(window.location.hash).toBe("");
   });
 
-  it("getMe 返回 401 时清掉登录态", async () => {
+  it("落地页不接管地址栏：停在营销页时 hash 干净，进应用才写路由", async () => {
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    await mount();
+    expect(find("landing-page")).not.toBeNull();
+    // 眼前是落地页，地址栏就不该挂着 #chat
+    expect(window.location.hash).toBe("");
+    await act(async () => {
+      probes.landing?.onEnter();
+    });
+    await flush();
+    expect(find("shell")).not.toBeNull();
+    expect(window.location.hash).toBe("#chat");
+  });
+
+  it("未登录时设置页深链被路由守卫挡掉：跳去对话页并弹登录框", async () => {
+    // 手动把地址改成 #settings，且 token 已失效（getMe 401 会清登录态）
+    window.history.replaceState(null, "", "/#settings");
     apiMocks.getMe.mockRejectedValue(new ApiError("token 失效", 401));
     await mount();
     await flush();
-    expect(find("login-page")).not.toBeNull();
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    // 导航入口本来就按登录态藏掉设置，这里兜住深链：看不到设置页
+    expect(find("settings-page")).toBeNull();
+    expect(find("chat-page")).not.toBeNull();
+    // 弹登录框解释「为什么要登录」
+    expect(find("login-modal")).not.toBeNull();
+  });
+
+  it("getMe 返回 401 时清掉登录态,落到匿名外壳", async () => {
+    apiMocks.getMe.mockRejectedValue(new ApiError("token 失效", 401));
+    await mount();
+    await flush();
+    expect(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)).toBeNull();
+    expect(find("shell")).not.toBeNull();
   });
 
   it("设置页拿到当前账号信息", async () => {
@@ -464,9 +542,10 @@ describe("App 会话切换与删除", () => {
     await mount();
     let resolveStale: ((value: unknown) => void) | null = null;
     apiMocks.getSessionMessages.mockImplementationOnce(
-      () => new Promise((resolve) => {
-        resolveStale = resolve;
-      }),
+      () =>
+        new Promise((resolve) => {
+          resolveStale = resolve;
+        }),
     );
     await act(async () => {
       void probes.shell?.onSelectSession("s-1");

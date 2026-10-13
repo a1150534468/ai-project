@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
+import { useAuthGate } from "../../app/authGate";
 import {
   analyzeNovelChapter,
   createNovelProject,
@@ -31,6 +32,7 @@ import { NovelLibraryPage } from "../novel/NovelLibraryPage";
 import { NovelSetupWizard } from "../novel/NovelSetupWizard";
 import { NovelWorkbenchShell } from "../novel/NovelWorkbenchShell";
 import { novelProjectIdFromHash } from "../../novelRoute";
+import { hashForRoute } from "../../clientRoute";
 import {
   createDefaultNovelDraft,
   hasNovelPremise,
@@ -142,6 +144,7 @@ function setNovelHash(hash: string) {
 }
 
 export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
+  const { requireAuth } = useAuthGate();
   const [projects, setProjects] = useState<readonly NovelProjectSummary[]>([]);
   const [detail, setDetail] = useState<NovelProjectDetail | null>(null);
   const [workbench, setWorkbench] = useState<NovelWorkbenchPayload | null>(null);
@@ -187,7 +190,7 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
 
   /** 选中的章节还在新列表里就留着，不在（被删掉、或换了项目）就选第一章。 */
   const selectChapterFrom = useCallback((next: readonly NovelChapter[]) => {
-    setSelectedChapterId((current) => (next.some((chapter) => chapter.id === current) ? current : next[0]?.id ?? ""));
+    setSelectedChapterId((current) => (next.some((chapter) => chapter.id === current) ? current : (next[0]?.id ?? "")));
   }, []);
 
   /** 目录与已加载章节以 detail 为唯一来源；迟到的保存结果不能写入其他项目。 */
@@ -203,10 +206,19 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
       setDetail((current) => ({
         ...next,
         chapters: next.chapters.map((chapter) => {
-          const cached = current?.project.id === next.project.id ? current.chapters.find((item) => item.id === chapter.id) : null;
+          const cached =
+            current?.project.id === next.project.id ? current.chapters.find((item) => item.id === chapter.id) : null;
           const editor = chapterEditorRef.current;
-          const dirty = cached && editor.chapterId === cached.id && !sameChapterDraft(normalizeChapterDraft(editor.draft), chapterDraftOf(cached));
-          return chapter.detailLoaded === false && cached && cached.detailLoaded !== false && (cached.updatedAt === chapter.updatedAt || dirty) ? cached : chapter;
+          const dirty =
+            cached &&
+            editor.chapterId === cached.id &&
+            !sameChapterDraft(normalizeChapterDraft(editor.draft), chapterDraftOf(cached));
+          return chapter.detailLoaded === false &&
+            cached &&
+            cached.detailLoaded !== false &&
+            (cached.updatedAt === chapter.updatedAt || dirty)
+            ? cached
+            : chapter;
         }),
       }));
       setTargetChars(String(next.project.targetCharsPerChapter || 3000));
@@ -215,14 +227,18 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
     [selectChapterFrom],
   );
 
-  const applyWorkbench = useCallback(
-    (next: NovelWorkbenchPayload) => {
-      setWorkbench(next);
-    },
-    [],
-  );
+  const applyWorkbench = useCallback((next: NovelWorkbenchPayload) => {
+    setWorkbench(next);
+  }, []);
 
   const loadProjects = useCallback(async () => {
+    // 未登录：小说书库是用户态数据，不拉，直接给空态。
+    if (!token) {
+      setProjects([]);
+      setError("");
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       setProjects(await listNovelProjects(token));
@@ -247,7 +263,12 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
             getNovelProject(token, projectId, true),
             getNovelWorkbench(token, projectId, true).catch(() => null),
           ]);
-          if (requestedProjectRef.current !== projectId || tokenRef.current !== token || mutationRevisionRef.current !== revision) return null;
+          if (
+            requestedProjectRef.current !== projectId ||
+            tokenRef.current !== token ||
+            mutationRevisionRef.current !== revision
+          )
+            return null;
           applyDetail(nextDetail);
           if (nextWorkbench) applyWorkbench(nextWorkbench);
           else setWorkbench(null);
@@ -275,20 +296,31 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
     const projectId = detail.project.id;
     const entry = selectedEntry;
     setChapterLoadError("");
-    void getNovelChapter(token, projectId, entry.chapterIndex).then((chapter) => {
-      if (cancelled) return;
-      setDetail((current) => {
-        if (current?.project.id !== projectId) return current;
-        const currentEntry = current.chapters.find((item) => item.id === entry.id);
-        // A save or a newer refresh may have overtaken this read.
-        if (currentEntry?.detailLoaded !== false || currentEntry.updatedAt !== entry.updatedAt) return current;
-        return { ...current, chapters: upsertChapter(current.chapters, chapter) };
+    void getNovelChapter(token, projectId, entry.chapterIndex)
+      .then((chapter) => {
+        if (cancelled) return;
+        setDetail((current) => {
+          if (current?.project.id !== projectId) return current;
+          const currentEntry = current.chapters.find((item) => item.id === entry.id);
+          // A save or a newer refresh may have overtaken this read.
+          if (currentEntry?.detailLoaded !== false || currentEntry.updatedAt !== entry.updatedAt) return current;
+          return { ...current, chapters: upsertChapter(current.chapters, chapter) };
+        });
+      })
+      .catch((reason) => {
+        if (!cancelled) setChapterLoadError(errorMessage(reason, "加载章节失败"));
       });
-    }).catch((reason) => {
-      if (!cancelled) setChapterLoadError(errorMessage(reason, "加载章节失败"));
-    });
-    return () => { cancelled = true; };
-  }, [detail?.project.id, selectedEntry?.id, selectedEntry?.updatedAt, selectedEntry?.detailLoaded, chapterLoadAttempt, token]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    detail?.project.id,
+    selectedEntry?.id,
+    selectedEntry?.updatedAt,
+    selectedEntry?.detailLoaded,
+    chapterLoadAttempt,
+    token,
+  ]);
 
   useEffect(() => {
     void loadProjects();
@@ -407,6 +439,7 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
   }, [chapterEditor, mergeChapter, openProjectId, selectedChapter, token]);
 
   const createProject = async () => {
+    if (!requireAuth()) return;
     if (!hasNovelPremise(createDraft)) {
       setError("请先用一段话写清故事梗概");
       return;
@@ -622,7 +655,8 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
     setDetail(null);
     setWorkbench(null);
     void loadProjects();
-    setNovelHash("");
+    // 回书库 = 回到小说模块的顶层路由，而不是清空 hash（否则地址栏对不上当前页）。
+    setNovelHash(hashForRoute({ view: "workflow", workflowModule: "novel" }));
   };
 
   /** 书库与工作台都可能挂着新书设置向导，props 一字不差，所以只写一份。 */

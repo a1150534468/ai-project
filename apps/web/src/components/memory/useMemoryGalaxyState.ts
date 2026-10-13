@@ -76,6 +76,15 @@ export function useMemoryGalaxyState(token: string): MemoryGalaxyState {
   useEffect(() => {
     let alive = true;
 
+    // 未登录：记忆是用户态数据，不发请求也不轮询，直接给空态。
+    if (!token) {
+      setLoading(false);
+      setLoadError("");
+      setEnabled(false);
+      setAllNodes([]);
+      return;
+    }
+
     /** `background` 为真表示这是自动刷新：不亮 loading，失败也不打扰用户（8 秒后自己再试）。 */
     const load = async (background: boolean) => {
       if (!background) {

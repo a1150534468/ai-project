@@ -85,6 +85,18 @@ describe("账号信息", () => {
     expect(screen.getByText("未知用户")).toBeInTheDocument();
     expect(screen.getByText("用户")).toBeInTheDocument();
   });
+
+  it("未登录时隐藏账号/登出，改成登录入口", async () => {
+    const onLogin = vi.fn();
+    mount({ authed: false, onLogin });
+    await loaded();
+
+    expect(screen.queryByText("未知用户")).not.toBeInTheDocument();
+    expect(screen.queryByText("退出登录")).not.toBeInTheDocument();
+    const loginButton = screen.getByRole("button", { name: /登录 \/ 注册/ });
+    fireEvent.click(loginButton);
+    expect(onLogin).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("模型列表的三档", () => {

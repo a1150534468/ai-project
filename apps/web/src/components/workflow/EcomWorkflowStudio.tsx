@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useAuthGate } from "../../app/authGate";
 import * as workflowEcomApi from "../../workflowEcomApi";
 import type { ImageModel } from "../../workflowState";
 import type {
@@ -63,12 +64,28 @@ type StitchedPreview = {
 };
 
 export { EcomWorkflowStudioView } from "./ecomWorkflowStudioView";
-export { createEcomMasterPayload, createEcomWorkflowActions, type EcomWorkflowStudioClient } from "./ecomWorkflowStudioModel";
+export {
+  createEcomMasterPayload,
+  createEcomWorkflowActions,
+  type EcomWorkflowStudioClient,
+} from "./ecomWorkflowStudioModel";
 
 const DEFAULT_CLIENT: EcomWorkflowStudioClient = workflowEcomApi;
 const ECOM_POLL_MS = 3000;
 
-export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, loadWorkflow, onActivity, client = DEFAULT_CLIENT, shared, mainImages, controlsHeader, historyFooter }: EcomWorkflowStudioProps) {
+export function EcomWorkflowStudio({
+  token,
+  onBalanceRefresh,
+  onDownloadImage,
+  loadWorkflow,
+  onActivity,
+  client = DEFAULT_CLIENT,
+  shared,
+  mainImages,
+  controlsHeader,
+  historyFooter,
+}: EcomWorkflowStudioProps) {
+  const { requireAuth } = useAuthGate();
   const actions = useMemo(() => createEcomWorkflowActions(client, token), [client, token]);
   const [platforms, setPlatforms] = useState<readonly WorkflowEcomPlatform[]>(FALLBACK_PLATFORMS);
   const [templates, setTemplates] = useState<readonly WorkflowEcomTemplate[]>(FALLBACK_TEMPLATES);
@@ -97,21 +114,24 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   const [selectedSegmentCount, setSelectedSegmentCount] = useState(3);
   const [selectedMasterAssetId, setSelectedMasterAssetId] = useState<string | null>(null);
 
-  const applyWorkflow = useCallback((nextWorkflow: WorkflowEcomWorkflow | null) => {
-    if (!nextWorkflow) return;
-    setWorkflow(nextWorkflow);
-    setSelectedTemplateId(nextWorkflow.template);
-    setSelectedResolution(nextWorkflow.resolution);
-    setSelectedModel((current) => seedEcomModelSelection(current, nextWorkflow.model));
-    setSelectedSegmentCount(nextWorkflow.segmentCount);
-    if (!shared) {
-      setSelectedPlatformId(nextWorkflow.platform);
-      setProductName(nextWorkflow.product.name);
-      setCategory(nextWorkflow.product.category);
-      setSellingPointsInput(nextWorkflow.product.sellingPoints.join("\n"));
-      setExtra(nextWorkflow.product.extra);
-    }
-  }, [shared]);
+  const applyWorkflow = useCallback(
+    (nextWorkflow: WorkflowEcomWorkflow | null) => {
+      if (!nextWorkflow) return;
+      setWorkflow(nextWorkflow);
+      setSelectedTemplateId(nextWorkflow.template);
+      setSelectedResolution(nextWorkflow.resolution);
+      setSelectedModel((current) => seedEcomModelSelection(current, nextWorkflow.model));
+      setSelectedSegmentCount(nextWorkflow.segmentCount);
+      if (!shared) {
+        setSelectedPlatformId(nextWorkflow.platform);
+        setProductName(nextWorkflow.product.name);
+        setCategory(nextWorkflow.product.category);
+        setSellingPointsInput(nextWorkflow.product.sellingPoints.join("\n"));
+        setExtra(nextWorkflow.product.extra);
+      }
+    },
+    [shared],
+  );
 
   useEffect(() => {
     void (async () => {
@@ -156,7 +176,9 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   const selectedPlatform = platforms.find((platform) => platform.id === effPlatformId) ?? FALLBACK_PLATFORMS[0];
   const activeSegmentCount = workflow?.segmentCount ?? selectedSegmentCount;
   const isServerGenerating = workflow?.stage === "master_running" || workflow?.stage === "segments_running";
-  const remoteReferenceCount = shared ? shared.remoteReferenceCount : Math.max((workflow?.referenceAssetIds.length ?? 0) - referenceAssets.length, 0);
+  const remoteReferenceCount = shared
+    ? shared.remoteReferenceCount
+    : Math.max((workflow?.referenceAssetIds.length ?? 0) - referenceAssets.length, 0);
   const canStitch = hasAllSegmentUrls(workflow);
   const segmentCards: readonly EcomWorkflowStudioViewSegment[] = segmentOrder(activeSegmentCount).map((index) => ({
     index,
@@ -181,18 +203,52 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
   });
 
   useEffect(() => {
-    if (!isServerGenerating && !isSubmittingMaster && !isRetryingMaster && !isConfirmingSegments && redrawingIndexes.length === 0) return undefined;
+    if (
+      !isServerGenerating &&
+      !isSubmittingMaster &&
+      !isRetryingMaster &&
+      !isConfirmingSegments &&
+      redrawingIndexes.length === 0
+    )
+      return undefined;
     const timer = window.setInterval(() => {
       void refreshCurrentWorkflow();
     }, ECOM_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [isConfirmingSegments, isRetryingMaster, isServerGenerating, isSubmittingMaster, redrawingIndexes.length, refreshCurrentWorkflow]);
+  }, [
+    isConfirmingSegments,
+    isRetryingMaster,
+    isServerGenerating,
+    isSubmittingMaster,
+    redrawingIndexes.length,
+    refreshCurrentWorkflow,
+  ]);
 
-  const clearFeedback = () => { setError(""); setNotice(""); };
+  const clearFeedback = () => {
+    setError("");
+    setNotice("");
+  };
 
-  const refreshWorkflow = (nextWorkflow: WorkflowEcomWorkflow, successNotice: string) => { applyWorkflow(nextWorkflow); setNotice(successNotice); setError(""); onActivity?.(); onBalanceRefresh?.(); };
+  const refreshWorkflow = (nextWorkflow: WorkflowEcomWorkflow, successNotice: string) => {
+    applyWorkflow(nextWorkflow);
+    setNotice(successNotice);
+    setError("");
+    onActivity?.();
+    onBalanceRefresh?.();
+  };
 
-  const buildDraft = (): EcomMasterDraft => ({ platformId: effPlatformId, templateId: selectedTemplateId, resolution: selectedResolution, model: selectedModel, productName: effProductName, category: effCategory, sellingPointsInput: effSellingPoints, extra: effExtra, referenceAssetIds: effReferenceAssets.map((asset) => asset.id), segmentCount: selectedSegmentCount });
+  const buildDraft = (): EcomMasterDraft => ({
+    platformId: effPlatformId,
+    templateId: selectedTemplateId,
+    resolution: selectedResolution,
+    model: selectedModel,
+    productName: effProductName,
+    category: effCategory,
+    sellingPointsInput: effSellingPoints,
+    extra: effExtra,
+    referenceAssetIds: effReferenceAssets.map((asset) => asset.id),
+    segmentCount: selectedSegmentCount,
+  });
   const runWorkflowMutation = (args: {
     readonly start: () => void;
     readonly finish: () => void;
@@ -201,6 +257,7 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
     readonly fallback: string;
     readonly invalidatePreview?: boolean;
   }) => {
+    if (!requireAuth()) return;
     clearFeedback();
     if (args.invalidatePreview) setStitchedPreview(null);
     args.start();
@@ -257,16 +314,46 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       hideProductForm={Boolean(shared)}
       controlsHeader={controlsHeader}
       historyFooter={historyFooter}
-      onPlatformChange={(value) => { setSelectedPlatformId(value); clearFeedback(); }}
-      onTemplateChange={(value) => { setSelectedTemplateId(value); clearFeedback(); }}
-      onModelChange={(value) => { setSelectedModel(value); clearFeedback(); }}
-      onResolutionChange={(value) => { setSelectedResolution(value); clearFeedback(); setStitchedPreview(null); }}
-      onSegmentCountChange={(value) => { setSelectedSegmentCount(Number(value)); clearFeedback(); setStitchedPreview(null); }}
-      onProductNameChange={(value) => { setProductName(value); clearFeedback(); }}
-      onCategoryChange={(value) => { setCategory(value); clearFeedback(); }}
-      onSellingPointsChange={(value) => { setSellingPointsInput(value); clearFeedback(); }}
-      onExtraChange={(value) => { setExtra(value); clearFeedback(); }}
+      onPlatformChange={(value) => {
+        setSelectedPlatformId(value);
+        clearFeedback();
+      }}
+      onTemplateChange={(value) => {
+        setSelectedTemplateId(value);
+        clearFeedback();
+      }}
+      onModelChange={(value) => {
+        setSelectedModel(value);
+        clearFeedback();
+      }}
+      onResolutionChange={(value) => {
+        setSelectedResolution(value);
+        clearFeedback();
+        setStitchedPreview(null);
+      }}
+      onSegmentCountChange={(value) => {
+        setSelectedSegmentCount(Number(value));
+        clearFeedback();
+        setStitchedPreview(null);
+      }}
+      onProductNameChange={(value) => {
+        setProductName(value);
+        clearFeedback();
+      }}
+      onCategoryChange={(value) => {
+        setCategory(value);
+        clearFeedback();
+      }}
+      onSellingPointsChange={(value) => {
+        setSellingPointsInput(value);
+        clearFeedback();
+      }}
+      onExtraChange={(value) => {
+        setExtra(value);
+        clearFeedback();
+      }}
       onReferenceUpload={(file) => {
+        if (!requireAuth()) return;
         if (referenceAssets.length + remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT) return;
         clearFeedback();
         setIsUploadingReference(true);
@@ -274,7 +361,11 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
           try {
             const inlineImage = await readFileAsInlineImage(file);
             const asset = await client.createWorkflowEcomReference(token, inlineImage);
-            setReferenceAssets((current) => current.some((item) => item.id === asset.id) ? current : [...current, asset].slice(0, ECOM_MAX_REFERENCE_COUNT));
+            setReferenceAssets((current) =>
+              current.some((item) => item.id === asset.id)
+                ? current
+                : [...current, asset].slice(0, ECOM_MAX_REFERENCE_COUNT),
+            );
             setNotice("参考图已上传");
           } catch (uploadError) {
             setError(formatEcomError(uploadError, "上传参考图失败"));
@@ -284,20 +375,41 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
         })();
       }}
       onCreateMaster={() => {
-        runWorkflowMutation({ start: () => setIsSubmittingMaster(true), finish: () => setIsSubmittingMaster(false), run: () => actions.createMaster(buildDraft()), successNotice: "母版生成请求已提交", fallback: "生成母版失败", invalidatePreview: true });
+        runWorkflowMutation({
+          start: () => setIsSubmittingMaster(true),
+          finish: () => setIsSubmittingMaster(false),
+          run: () => actions.createMaster(buildDraft()),
+          successNotice: "母版生成请求已提交",
+          fallback: "生成母版失败",
+          invalidatePreview: true,
+        });
       }}
       onRetryMaster={() => {
         if (!workflow) return;
-        runWorkflowMutation({ start: () => setIsRetryingMaster(true), finish: () => setIsRetryingMaster(false), run: () => actions.retryMaster(workflow.id), successNotice: "已重新提交母版生成", fallback: "重试主图失败", invalidatePreview: true });
+        runWorkflowMutation({
+          start: () => setIsRetryingMaster(true),
+          finish: () => setIsRetryingMaster(false),
+          run: () => actions.retryMaster(workflow.id),
+          successNotice: "已重新提交母版生成",
+          fallback: "重试主图失败",
+          invalidatePreview: true,
+        });
       }}
       onConfirmSegments={() => {
         if (!workflow) return;
-        runWorkflowMutation({ start: () => setIsConfirmingSegments(true), finish: () => setIsConfirmingSegments(false), run: () => actions.confirmSegments(workflow.id), successNotice: "分段生成请求已提交", fallback: "确认分段失败", invalidatePreview: true });
+        runWorkflowMutation({
+          start: () => setIsConfirmingSegments(true),
+          finish: () => setIsConfirmingSegments(false),
+          run: () => actions.confirmSegments(workflow.id),
+          successNotice: "分段生成请求已提交",
+          fallback: "确认分段失败",
+          invalidatePreview: true,
+        });
       }}
       onRedrawSegment={(index) => {
         if (!workflow) return;
         runWorkflowMutation({
-          start: () => setRedrawingIndexes((current) => current.includes(index) ? current : [...current, index]),
+          start: () => setRedrawingIndexes((current) => (current.includes(index) ? current : [...current, index])),
           finish: () => setRedrawingIndexes((current) => current.filter((item) => item !== index)),
           run: () => actions.redrawSegment(workflow.id, index),
           successNotice: `第 ${index + 1} 段已重新生成`,
@@ -333,15 +445,31 @@ export function EcomWorkflowStudio({ token, onBalanceRefresh, onDownloadImage, l
       }}
       onSaveStitched={() => {
         if (!workflow || !stitchedPreview) return;
-        runWorkflowMutation({ start: () => setIsSavingStitched(true), finish: () => setIsSavingStitched(false), run: () => actions.saveStitched(workflow.id, stitchedPreview.b64), successNotice: "已保存", fallback: "保存拼接长图失败" });
+        runWorkflowMutation({
+          start: () => setIsSavingStitched(true),
+          finish: () => setIsSavingStitched(false),
+          run: () => actions.saveStitched(workflow.id, stitchedPreview.b64),
+          successNotice: "已保存",
+          fallback: "保存拼接长图失败",
+        });
       }}
       onAdoptMaster={() => {
         if (!selectedMasterAssetId) return;
-        runWorkflowMutation({ start: () => setIsSubmittingMaster(true), finish: () => setIsSubmittingMaster(false), run: () => actions.adoptMaster(buildDraft(), selectedMasterAssetId), successNotice: "已用所选主图作为母版", fallback: "选用主图失败", invalidatePreview: true });
+        runWorkflowMutation({
+          start: () => setIsSubmittingMaster(true),
+          finish: () => setIsSubmittingMaster(false),
+          run: () => actions.adoptMaster(buildDraft(), selectedMasterAssetId),
+          successNotice: "已用所选主图作为母版",
+          fallback: "选用主图失败",
+          invalidatePreview: true,
+        });
       }}
       mainImages={mainImages ?? []}
       selectedMasterAssetId={selectedMasterAssetId}
-      onSelectMainImage={(id) => { setSelectedMasterAssetId(id); clearFeedback(); }}
+      onSelectMainImage={(id) => {
+        setSelectedMasterAssetId(id);
+        clearFeedback();
+      }}
       onDownloadImage={onDownloadImage}
     />
   );

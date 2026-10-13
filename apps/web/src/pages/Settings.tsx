@@ -36,6 +36,10 @@ import {
 interface SettingsPageProps {
   readonly uid?: string;
   readonly userName?: string;
+  /** 是否已登录：未登录时账号卡显示「登录」入口，隐藏登出。 */
+  readonly authed?: boolean;
+  /** 未登录时点「登录」弹登录框。 */
+  readonly onLogin?: () => void;
   /** 勾选哪个模型完全由这个 prop 决定，本页不留副本 */
   readonly preferredModel?: string;
   readonly onPreferredModelChange?: (model: string) => void;
@@ -84,7 +88,15 @@ function InfoRow({
 }
 
 /** 模型卡的三种「没得选」：加载中 / 拉挂了 / 服务端没给，都只有一个图标加一句话。 */
-function Notice({ icon, text, spinning = false }: { readonly icon: string; readonly text: string; readonly spinning?: boolean }) {
+function Notice({
+  icon,
+  text,
+  spinning = false,
+}: {
+  readonly icon: string;
+  readonly text: string;
+  readonly spinning?: boolean;
+}) {
   return (
     <p className="py-8 text-center text-sm text-ink-secondary">
       <Icon icon={icon} aria-hidden className={cx("mx-auto mb-2 block text-2xl", spinning && "animate-spin")} />
@@ -96,6 +108,8 @@ function Notice({ icon, text, spinning = false }: { readonly icon: string; reado
 export default function SettingsPage({
   uid = "未知用户",
   userName = "用户",
+  authed = true,
+  onLogin,
   preferredModel = "",
   onPreferredModelChange,
   onLogout,
@@ -160,10 +174,23 @@ export default function SettingsPage({
 
       <div className="mx-auto max-w-3xl space-y-6 px-8 py-8">
         <SectionCard icon="mdi:account-circle-outline" title="账号信息">
-          <dl className="space-y-4">
-            <InfoRow label="用户 ID" value={uid} mono />
-            <InfoRow label="用户名" value={userName} />
-          </dl>
+          {authed ? (
+            <dl className="space-y-4">
+              <InfoRow label="用户 ID" value={uid} mono />
+              <InfoRow label="用户名" value={userName} />
+            </dl>
+          ) : (
+            <>
+              <p className="mb-4 text-sm text-ink-secondary">登录后可查看账号信息、保存会话与作品</p>
+              <RippleButton
+                onClick={() => onLogin?.()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition-colors"
+              >
+                <Icon icon="mdi:login" aria-hidden />
+                登录 / 注册
+              </RippleButton>
+            </>
+          )}
         </SectionCard>
 
         <SectionCard icon="mdi:theme-light-dark" title="外观">
@@ -227,16 +254,18 @@ export default function SettingsPage({
             ))}
         </SectionCard>
 
-        <SectionCard icon="mdi:logout-variant" title="登出" quiet>
-          <p className="mb-4 text-sm text-ink-secondary">登出后需要重新输入用户名和密码才能登录</p>
-          <RippleButton
-            onClick={logout}
-            className="flex w-full items-center justify-center gap-2 rounded-lg bg-danger/10 px-4 py-2.5 font-medium text-danger-ink transition-colors"
-          >
-            <Icon icon="mdi:logout-variant" aria-hidden />
-            退出登录
-          </RippleButton>
-        </SectionCard>
+        {authed && (
+          <SectionCard icon="mdi:logout-variant" title="登出" quiet>
+            <p className="mb-4 text-sm text-ink-secondary">登出后需要重新输入用户名和密码才能登录</p>
+            <RippleButton
+              onClick={logout}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-danger/10 px-4 py-2.5 font-medium text-danger-ink transition-colors"
+            >
+              <Icon icon="mdi:logout-variant" aria-hidden />
+              退出登录
+            </RippleButton>
+          </SectionCard>
+        )}
       </div>
     </div>
   );

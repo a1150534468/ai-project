@@ -81,6 +81,11 @@ interface AuthScreenProps {
   readonly footer: ReactNode;
   /** 需要滚动的那页（字段多）传 true */
   readonly scroll?: boolean;
+  /**
+   * 嵌入模式：登录框弹窗里复用这张卡时传 true —— 去掉全屏外壳、固定 ThemeToggle 和大标题品牌区，
+   * 只渲染卡片本身。默认 false，独立整页用法不变。
+   */
+  readonly embedded?: boolean;
   /** 输入框们 */
   readonly children: ReactNode;
 }
@@ -94,8 +99,41 @@ export function AuthScreen({
   onSubmit,
   footer,
   scroll = false,
+  embedded = false,
   children,
 }: AuthScreenProps) {
+  const card = (
+    <div className={CARD}>
+      <h2 className="mb-6 text-xl font-semibold text-ink">{title}</h2>
+      <div className="mb-6 space-y-4">{children}</div>
+
+      {error !== "" && (
+        <div className={ERROR_BOX}>
+          <p className="flex items-center text-sm text-danger-ink">
+            <Icon icon="mdi:alert-circle" className="mr-2" aria-hidden />
+            {error}
+          </p>
+        </div>
+      )}
+
+      <RippleButton onClick={onSubmit} disabled={busy} className={SUBMIT}>
+        {busy ? (
+          <span className="flex items-center justify-center">
+            <Icon icon="mdi:loading" className="mr-2 animate-spin" aria-hidden />
+            {busyLabel}
+          </span>
+        ) : (
+          submitLabel
+        )}
+      </RippleButton>
+
+      <p className="mt-6 text-center text-xs text-ink-secondary">{footer}</p>
+    </div>
+  );
+
+  // 嵌入弹窗：只给卡片，外壳/品牌区/固定主题开关都交给弹窗那层。
+  if (embedded) return card;
+
   return (
     <div className={cx(SHELL, scroll && SHELL_SCROLL)}>
       <ThemeToggle compact className="fixed right-5 top-5 z-10" />
@@ -108,32 +146,7 @@ export function AuthScreen({
           <p className="text-[15px] text-ink-secondary">您的全能 AI 助手</p>
         </div>
 
-        <div className={CARD}>
-          <h2 className="mb-6 text-xl font-semibold text-ink">{title}</h2>
-          <div className="mb-6 space-y-4">{children}</div>
-
-          {error !== "" && (
-            <div className={ERROR_BOX}>
-              <p className="flex items-center text-sm text-danger-ink">
-                <Icon icon="mdi:alert-circle" className="mr-2" aria-hidden />
-                {error}
-              </p>
-            </div>
-          )}
-
-          <RippleButton onClick={onSubmit} disabled={busy} className={SUBMIT}>
-            {busy ? (
-              <span className="flex items-center justify-center">
-                <Icon icon="mdi:loading" className="mr-2 animate-spin" aria-hidden />
-                {busyLabel}
-              </span>
-            ) : (
-              submitLabel
-            )}
-          </RippleButton>
-
-          <p className="mt-6 text-center text-xs text-ink-secondary">{footer}</p>
-        </div>
+        {card}
       </div>
     </div>
   );
