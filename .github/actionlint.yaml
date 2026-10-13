@@ -1,12 +1,19 @@
 # actionlint 的配置。
 #
-# 这里原本声明了一个自建 runner 标签 release-mac（当时 production.yml 的 images job 和
-# production-diagnostics.yml 都跑在那台 Mac 上）。2026-10-13 两个工作流都换成了
-# ubuntu-latest（理由：缓存 scope 不再随发布 tag 漂移、原生 linux/amd64 免 Rosetta 模拟、
-# 不再要求发布时那台 Mac 醒着；aiproject 是公开仓库，标准托管 runner 不额外计费），
-# 于是没有任何工作流再用自建 runner，这个声明也就没有对应物了。
+# 这里声明自建 runner 的标签。**以后再引入自建 runner，必须把标签写在这里**，
+# 否则 actionlint 会把 runs-on 里的自定义标签判成未知标签。
 #
-# 留这个空壳而不是删文件，是为了保留一条信息：**以后再引入自建 runner，必须把标签写在这里**，
-# 否则 actionlint 会把 runs-on 里的自定义标签判成未知标签。当前合法标签集为空。
+# release-mac：production.yml 的 images job 专用（只服务发布镜像）。
+#
+# 2026-10-13 的反复值得留档：当天曾把 images 换成 ubuntu-latest（理由是缓存 scope 不再
+# 随发布 tag 漂移、原生 linux/amd64 免 Rosetta 模拟、不必要求那台 Mac 醒着），并把这个
+# 标签清空。当晚一次真实发布的实测把其中大部分收益作废 —— GitHub 托管 runner 出境到 TCR
+# 约 **17 KB/s**（regctl 每 4 MiB 分块约 4 分钟），api 的 522 MB 归档按此速率要几小时，
+# 三个 job 全部在 60 分钟上限被强杀、deploy 跳过；而同一天 Mac→TCR 实测 0.44~0.84 MB/s，
+# 用的是逐字相同的 regctl 参数 ⇒ 瓶颈是链路不是分块机制。换回 Mac 后标签重新声明。
+#
+# 教训一句话：这条实测**仓库自己的注释里本来就有**（旧 production.yml 写着「实测
+# GitHub→TCR <0.17 MB/s，Mac→TCR 为 0.44 MB/s」），改这块之前应当先给它称重。
 self-hosted-runner:
-  labels: []
+  labels:
+    - release-mac

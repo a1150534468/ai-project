@@ -91,9 +91,15 @@ bash /opt/ai-assistant/rollback-compose.sh <previous-commit-sha>
 
 ## 5. CI/CD 配置
 
-发布由 `.github/workflows/production.yml` 负责，**手动触发，且只允许从 `main` 触发**，并会先校验该提交有一次成功的 `CI` 记录。校验通过后在 GitHub 托管 runner（`ubuntu-latest`）上构建 `api`/`migrate`/`gateway` 三个镜像推到 TCR，最后 SSH 到服务器执行 `remote-deploy.sh`。
+发布由 `.github/workflows/production.yml` 负责，**手动触发，且只允许从 `main` 触发**，并会先校验该提交有一次成功的 `CI` 记录。校验通过后在**自建 Mac runner**（标签 `release-mac`）上构建 `api`/`migrate`/`gateway` 三个镜像，经 regctl 按 4 MiB 分块推到 TCR，最后 SSH 到服务器执行 `remote-deploy.sh`。
 
-> 2026-10-13 之前这里跑在自建 Mac runner 上。换成托管 runner 的原因是：发布触发从 tag 改成了 `main` 上的手动触发，构建缓存才可能跨次命中；同时拿到原生 `linux/amd64`（免 Rosetta 模拟）、三个镜像真正并行，以及不再要求发布时那台 Mac 醒着且 Docker Desktop 在跑。aiproject 是公开仓库，标准托管 runner 不占免费额度。
+> **为什么镜像构建仍在自建 Mac runner 上**（2026-10-13 反复过一次，结论是不要换）：当天一度改成 `ubuntu-latest`，理由是缓存 scope 不再随发布 tag 漂移、原生 `linux/amd64` 免 Rosetta、不必要求那台 Mac 醒着。当晚一次真实发布的实测推翻了其中大部分收益 ——
+>
+> - GitHub 托管 runner 出境到 TCR 实测约 **17 KB/s**（regctl 每 4 MiB 分块耗时约 4 分钟）。api 的 522 MB 归档按此速率要几小时，三个镜像全部耗满 60 分钟上限被强杀，`deploy` 跳过。
+> - 同一时刻 Mac→TCR 是 **0.44~0.84 MB/s**，用的是逐字相同的 regctl 参数，快约 50 倍。
+> - 参照物：同一天 blog（`ubuntu-latest` + 裸 `push: true`，同一个 TCR）的 backend 光 `pushing layers` 就要 **988 秒**。**blog 不是「推得动」，是它的最终镜像只有 alpine + 一个 Go 静态二进制，量小到能忍。** 本项目 api 是长驻 Node 服务，必须带 node_modules。
+>
+> 所以这里保留自建 runner。代价照旧：发布时那台 Mac 必须醒着且 Docker Desktop 在跑，构建走 Rosetta 模拟 `amd64`。触发方式（`workflow_dispatch` on main）与缓存 scope 的改动则保留 —— 那部分是对的。
 
 日常发布：在 Actions 里对着 `main` 手动跑一次 `Release to production`，或命令行：
 
