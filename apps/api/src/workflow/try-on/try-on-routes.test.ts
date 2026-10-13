@@ -353,7 +353,6 @@ describe("try-on workflow routes", () => {
     const db = createPrismaMock([reference("garment_front", "front-1")]);
     const { app, billing, storeImage } = await createApp(db, undefined, { authenticated: false });
     const cases = [
-      { method: "GET" as const, url: "/api/workflow/try-ons/options" },
       { method: "POST" as const, url: "/api/workflow/try-ons/references", payload: {} },
       { method: "DELETE" as const, url: "/api/workflow/try-ons/references/front-1" },
       { method: "GET" as const, url: "/api/workflow/try-ons/state" },
@@ -365,6 +364,8 @@ describe("try-on workflow routes", () => {
       const response = await app.inject(one);
       expect(response.statusCode, `${one.method} ${one.url}`).toBe(401);
     }
+    // options 是只读目录，开放给未登录浏览。
+    expect((await app.inject({ method: "GET", url: "/api/workflow/try-ons/options" })).statusCode).toBe(200);
     expect(billing.reserveResource).not.toHaveBeenCalled();
     expect(storeImage).not.toHaveBeenCalled();
     expect(db.prisma.tryOnTask.create).not.toHaveBeenCalled();

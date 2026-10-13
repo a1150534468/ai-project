@@ -1,12 +1,11 @@
 import type { FastifyInstance } from "fastify";
-import { requireUser } from "../../auth/require-user.js";
 import { safeDiagnostic } from "./codex-pet-route-helpers.js";
 import type { CodexPetRouteContext } from "./codex-pet-route-context.js";
 
 export function registerCodexPetCatalogRoutes(app: FastifyInstance, ctx: CodexPetRouteContext) {
   const { codexPetModelOptions } = ctx;
 
-  app.get("/api/workflow/codex-pets/models", { preHandler: requireUser }, async (request, reply) => {
+  app.get("/api/workflow/codex-pets/models", async (request, reply) => {
     try {
       return { success: true, data: await codexPetModelOptions() };
     } catch (error) {

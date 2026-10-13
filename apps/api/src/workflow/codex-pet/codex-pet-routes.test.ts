@@ -1734,12 +1734,12 @@ describe("Codex pet routes", () => {
   });
 
   // 本插件是「逐路由挂 requireUser」而不是插件级钩子，因为
-  // /api/public/codex-pets/artifacts/:artifactId 必须公开（凭签名访问，没有登录态）。
+  // /api/public/codex-pets/artifacts/:artifactId 必须公开（凭签名访问，没有登录态），
+  // 且 /models 只读目录也已开放给未登录浏览。
   // 逐路由的后果是每条路由各自独立：少挂一条不会有任何别的测试变红。
-  // 所以下面这张表必须和生产代码里 15 处 `{ preHandler: requireUser }` 一一对应，
+  // 所以下面这张表必须和生产代码里 14 处 `{ preHandler: requireUser }` 一一对应，
   // 新增需要登录的路由时同步加一行。
   const guardedRoutes: Array<[method: "GET" | "POST" | "PATCH" | "DELETE", url: string]> = [
-    ["GET", "/api/workflow/codex-pets/models"],
     ["GET", "/api/workflow/codex-pets/projects"],
     ["POST", "/api/workflow/codex-pets/projects"],
     ["GET", "/api/workflow/codex-pets/projects/project-1"],
@@ -1767,6 +1767,16 @@ describe("Codex pet routes", () => {
     // 「资源地址已失效」是另一条 URL），只断 statusCode 会给未来的改动留假绿空间。
     expect(response.json()).toEqual({ error: "未登录" });
     expect(enqueueRun).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("/models 只读目录开放给未登录浏览", async () => {
+    const { prisma } = createPrismaMock({});
+    const { app } = await createApp(prisma);
+    // 不带 x-test-user：目录供落地页/未登录工作台展示，不应被拦。
+    const response = await app.inject({ method: "GET", url: "/api/workflow/codex-pets/models" });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toHaveProperty("imageModels");
     await app.close();
   });
 

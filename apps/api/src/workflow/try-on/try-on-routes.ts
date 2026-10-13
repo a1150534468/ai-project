@@ -705,7 +705,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     activeTasks.clear();
   });
 
-  app.get("/api/workflow/try-ons/options", { preHandler: requireUser }, async () => {
+  app.get("/api/workflow/try-ons/options", async () => {
     const priceRows = await listPriceRows();
     const pricingByModel: Record<string, Partial<Record<HumanImageResolution, number>>> = {};
     for (const model of HUMAN_IMAGE_MODELS) {

@@ -398,16 +398,26 @@ describe("POST /api/agents/:id/avatar/upload", () => {
 });
 
 /**
- * 守卫是插件级的 preHandler（见 routes.ts），一条一条挂容易漏；这条用例把 6 条路由全扫一遍。
+ * 守卫逐条挂在 5 条变更路由上（见 routes.ts）；这条用例把它们全扫一遍。
+ * `GET /api/agents` 现在开放给未登录浏览，单独验它匿名可读、只给 presets。
  *
  * 不光看状态码，还要确认这一轮**什么都没写** —— 401 之后仍然落了库或者传了文件，
  * 那 401 就只是个装饰。
  */
 describe("未登录", () => {
-  it("6 条路由全部 401，且不写库、不碰对象存储", async () => {
+  it("GET /api/agents 匿名可读，只返回 presets、custom 为空", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/agents" });
+
+    expect(res.statusCode).toBe(200);
+    const { presets, custom } = res.json().data;
+    expect(presets[0]).toMatchObject({ id: "preset-1", type: "preset" });
+    expect(presets.every((one: Record<string, unknown>) => one.prompt === undefined)).toBe(true);
+    expect(custom).toEqual([]);
+  });
+
+  it("5 条变更路由全部 401，且不写库、不碰对象存储", async () => {
     const agentsBefore = await prisma.userAgent.count();
     const cases = [
-      { method: "GET" as const, url: "/api/agents" },
       { method: "POST" as const, url: "/api/agents/generate", payload: { requirement: "复盘一下" } },
       { method: "PATCH" as const, url: "/api/agents/some-id", payload: { name: "x" } },
       { method: "DELETE" as const, url: "/api/agents/some-id" },

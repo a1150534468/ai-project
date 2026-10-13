@@ -273,10 +273,11 @@ beforeEach(() => {
 });
 
 describe("portrait workflow routes", () => {
-  it("requires authentication and explicit likeness authorization", async () => {
+  it("exposes options to anonymous visitors but still requires explicit likeness authorization", async () => {
     const db = createPrismaMock({ references: [reference()] });
     const unauthenticated = await createApp({ db, authenticated: false });
-    expect((await unauthenticated.app.inject({ method: "GET", url: "/api/workflow/portraits/options" })).statusCode).toBe(401);
+    // options 是只读目录，开放给未登录浏览（样张/价格要在落地页展示）。
+    expect((await unauthenticated.app.inject({ method: "GET", url: "/api/workflow/portraits/options" })).statusCode).toBe(200);
     await unauthenticated.app.close();
 
     const authenticated = await createApp({ db });
@@ -532,18 +533,16 @@ describe("portrait workflow routes", () => {
   });
 
   /**
-   * P1.1 把这 7 个路由的内联 401 守卫换成了逐路由 `{ preHandler: requireUser }`。
+   * 这 6 条受保护路由逐路由挂 `{ preHandler: requireUser }`。
    *
    * 本文件不能挂插件级钩子：references/outputs 两个 blob 路由是签名 URL 取图，
-   * 故意不要登录态（前端 <img src> 带不了 Authorization 头）。所以守卫一条一条挂，
-   * 一条断言只钉一条路由 —— 上面那条 "requires authentication" 只测了 /options，
-   * 剩下 6 条谁的 preHandler 被删都不会有人发现。故此处逐条断言。
+   * 故意不要登录态（前端 <img src> 带不了 Authorization 头）；/options 也已开放给未登录
+   * 浏览。所以守卫一条一条挂，一条断言只钉一条路由，谁的 preHandler 被删都当场可见。
    */
-  it("未登录时 7 个受保护路由逐条返回 401，两个签名取图路由不受影响", async () => {
+  it("未登录时 6 个受保护路由逐条返回 401，options 与两个签名取图路由不受影响", async () => {
     const db = createPrismaMock({ references: [reference()] });
     const { app, billing, storeImage } = await createApp({ db, authenticated: false });
     const cases = [
-      { method: "GET" as const, url: "/api/workflow/portraits/options" },
       { method: "POST" as const, url: "/api/workflow/portraits/references", payload: {} },
       { method: "DELETE" as const, url: "/api/workflow/portraits/references/ref-1" },
       { method: "GET" as const, url: "/api/workflow/portraits/state" },

@@ -41,10 +41,9 @@ interface AgentRoutesOpts {
 }
 
 export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = {}) {
-  // 本文件 6 条路由全部要求登录，所以守卫挂在插件级而不是逐条挂。
-  // 钩子和它保护的路由写在同一个文件里：测试单独注册这个插件时，守卫不会凭空消失，
-  // 漏挂也就不可能表现为「测试全绿但线上没鉴权」。
-  app.addHook("preHandler", requireUser);
+  // `GET /api/agents` 开放给未登录浏览（匿名只拿到 presets，custom 查 userId="" 得空数组），
+  // 其余 5 条会写库/花模型钱的路由逐条挂 `requireUser`。守卫逐条挂而非插件级，是因为这里
+  // 公开路由与受保护路由混在同一个插件里；每条变更路由自带守卫，漏挂一条即当场可见。
 
   const prisma = getPrisma();
   const redis = opts.redis ?? getRedis();
@@ -74,7 +73,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
     },
   }));
 
-  app.post("/api/agents/generate", async (req, reply) => {
+  app.post("/api/agents/generate", { preHandler: requireUser }, async (req, reply) => {
     const parsed = generateSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
@@ -87,7 +86,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
     }
   });
 
-  app.patch<{ Params: { id: string } }>("/api/agents/:id", async (req, reply) => {
+  app.patch<{ Params: { id: string } }>("/api/agents/:id", { preHandler: requireUser }, async (req, reply) => {
     const parsed = renameSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
 
@@ -98,7 +97,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
     return { success: true, data: null };
   });
 
-  app.delete<{ Params: { id: string } }>("/api/agents/:id", async (req, reply) => {
+  app.delete<{ Params: { id: string } }>("/api/agents/:id", { preHandler: requireUser }, async (req, reply) => {
     const deleted = await deleteAgentCascade(prisma, req.userId, req.params.id);
     if (!deleted) return reply.code(404).send({ error: "智能体不存在" });
 
@@ -113,7 +112,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
     return { success: true, data: null };
   });
 
-  app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/regenerate", async (req, reply) => {
+  app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/regenerate", { preHandler: requireUser }, async (req, reply) => {
     // 限流放在查存在性**之前**。顺序是有意的：先查再限流的话，攻击者可以用不同 id 反复试探，
     // 靠 404 和 429 的区别把「哪些 id 存在」枚举出来，而且每一次试探都真的花了模型的钱。
     if (!(await consumeAvatarQuota(redis, req.userId))) {
@@ -126,7 +125,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
     return { success: true, data: result };
   });
 
-  app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/upload", async (req, reply) => {
+  app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/upload", { preHandler: requireUser }, async (req, reply) => {
     // 同上：额度先扣。上传这条路更值得这么做 —— 后面要读整个请求体、还要跑一次图片解码。
     if (!(await consumeAvatarQuota(redis, req.userId))) {
       return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });

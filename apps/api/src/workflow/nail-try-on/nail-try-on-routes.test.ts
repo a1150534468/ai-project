@@ -328,7 +328,6 @@ describe("nail try-on workflow routes", () => {
     const db = createPrismaMock([reference("hand", "hand-1")]);
     const { app, billing, storeImage } = await createApp(db, undefined, { authenticated: false });
     const cases = [
-      { method: "GET" as const, url: "/api/workflow/nail-try-ons/options" },
       { method: "POST" as const, url: "/api/workflow/nail-try-ons/references", payload: {} },
       { method: "DELETE" as const, url: "/api/workflow/nail-try-ons/references/hand-1" },
       { method: "GET" as const, url: "/api/workflow/nail-try-ons/state" },
@@ -340,6 +339,8 @@ describe("nail try-on workflow routes", () => {
       const response = await app.inject(one);
       expect(response.statusCode, `${one.method} ${one.url}`).toBe(401);
     }
+    // options 是只读目录，开放给未登录浏览。
+    expect((await app.inject({ method: "GET", url: "/api/workflow/nail-try-ons/options" })).statusCode).toBe(200);
     expect(billing.reserveResource).not.toHaveBeenCalled();
     expect(storeImage).not.toHaveBeenCalled();
     expect(db.prisma.nailTryOnTask.create).not.toHaveBeenCalled();

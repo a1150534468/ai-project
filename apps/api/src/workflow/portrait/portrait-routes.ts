@@ -599,8 +599,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     activeTasks.clear();
   });
 
-  app.get("/api/workflow/portraits/options", { preHandler: requireUser }, async (req, reply) => {
-    const userId = req.userId;
+  app.get("/api/workflow/portraits/options", async () => {
     const priceRows = await listPriceRows();
     const resolutions: readonly PortraitResolution[] = ["1K", "2K", "4K"];
     const pricingByModel: Record<string, Partial<Record<PortraitResolution, number>>> = {};
