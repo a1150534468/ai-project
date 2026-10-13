@@ -209,12 +209,20 @@ jobs:
           #      没有这条判断，workflow 会把同一个镜像原样重传一遍 —— api 约 200 MB，
           #      按这条链路实测的速率就是几分钟到几十分钟白烧。
           #   2. `gh run rerun` 天然幂等：上一次已经推成功的镜像不再重传。
+          #
+          # 下面两处 `${IMAGE_REF}` 的**大括号是必须的**，不是风格：变量后面紧跟中文标点时，
+          # macOS 自带的 bash 3.2 会把那个多字节字符的首字节折进变量名，于是 `$IMAGE_REF，`
+          # 被当成未定义变量 `IMAGE_REF<0xef>`，配合 `set -u` 直接致命
+          # （实测：`bash-3.2 -u -c 'X=abc; echo "$X，"'` → `X?: unbound variable`）。
+          # 同一个坑 `scripts/dev-local.sh:210` 已经踩过并写了注释，这里是第二次。
+          # 注意它**只在自建 Mac runner 上炸**（那边是 bash 3.2）：同一份 workflow 在
+          # ubuntu-latest（bash 5）上跑得好好的 —— 所以换 runner 前一定要在两个 shell 上都过一遍。
           if docker buildx imagetools inspect "$IMAGE_REF" >/dev/null 2>&1; then
             echo "hit=true" >> "$GITHUB_OUTPUT"
-            echo "TCR 上已经有 $IMAGE_REF，构建与推送整段跳过"
+            echo "TCR 上已经有 ${IMAGE_REF}，构建与推送整段跳过"
           else
             echo "hit=false" >> "$GITHUB_OUTPUT"
-            echo "TCR 上没有 $IMAGE_REF，走完整构建"
+            echo "TCR 上没有 ${IMAGE_REF}，走完整构建"
           fi
       - name: 构建镜像
         if: steps.skip.outputs.hit != 'true'
