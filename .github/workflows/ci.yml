@@ -64,15 +64,21 @@ jobs:
           DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder
 
   test:
-    name: test
-    # 按项目所有者要求：测试目前只在 main 跑。ci-verify/** 用于验证本工作流自身，
+    name: test + build
+    # 按项目所有者要求：测试与构建目前只在 main 跑。ci-verify/** 用于验证本工作流自身，
     # workflow_dispatch 用于手动补跑。
+    #
+    # 代价写明：feature 分支上的构建错误不会在这里被拦住，要等合进 main 才知道。
+    # 换来的是每次 push 少一份 45 分钟的账单（Free 计划 2000 分钟/月的教训见 production.yml）。
     if: >-
       github.ref == 'refs/heads/main' ||
       startsWith(github.ref, 'refs/heads/ci-verify/') ||
       github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 45 → 55：这个 job 现在多背了一步全仓 build（原 production.yml 的 verify job 实测
+    # install+build ≤6 分钟，而这里是 install 之后才 build，多出的墙钟时间更少）。
+    # 上限只在真卡住时才产生费用，但卡在 45 会把原本刚好跑完的测试判成超时，所以留余量。
+    timeout-minutes: 55
 
     services:
       postgres:
@@ -137,6 +143,17 @@ jobs:
         run: >-
           pnpm exec turbo run test --force --continue --
           --reporter=default --reporter=json --outputFile.json=.vitest-report.json
+
+      - name: 全仓构建（vite 打包）
+        # 这一步是为了让「打不出包」在 push 阶段就暴露。在此之前全仓只有
+        # production.yml 会跑 pnpm build，于是打包失败要等到发布那一刻才发现 ——
+        # 而那时已经没法「先不发布」了。2026-10 把 build 挪进来之后，
+        # production.yml 的 verify job 就没有存在理由了（已删）。
+        #
+        # 放这里不需要任何额外 env：全仓只有 web/admin 两个 workspace 有 build 脚本，
+        # 且它们的构建不读构建期变量（源码里没有 import.meta.env；apps/api 的
+        # process.env 全是运行时读取）。
+        run: pnpm build
 
       - name: 假绿防护（skip 计数与基线比对）
         # always()：测试红了也要跑，这一步的表格是判断「红在哪」的主要依据。

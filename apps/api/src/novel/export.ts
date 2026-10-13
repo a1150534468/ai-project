@@ -95,23 +95,77 @@ async function epub(title: string, chapters: readonly ExportChapter[]): Promise<
   return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE", compressionOptions: { level: 9 } });
 }
 
-function cjkFontPath(): string | null {
-  const candidates = [
-    process.env.NOVEL_EXPORT_CJK_FONT,
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc",
-    "/System/Library/Fonts/PingFang.ttc",
-    "C:\\Windows\\Fonts\\msyh.ttc",
-  ].filter((value): value is string => Boolean(value));
-  return candidates.find((candidate) => existsSync(candidate)) ?? null;
+/**
+ * 候选 CJK 字体。`postscriptName` 是 .ttc（字体集合）里**具体成员**的名字，不是可选项：
+ * pdfkit 的 `PDFFontFactory.open` 会调 `fontkit.create(buffer, family)`，传 .ttc 又不给
+ * family 时 fontkit 返回的是 TrueTypeCollection 对象，而嵌入式字体的构造函数要调
+ * `this.font.createSubset()` —— 集合本身没有这个方法，于是导出直接抛
+ * `TypeError: this.font.createSubset is not a function`（2026-10-13 实测）。
+ *
+ * 每条的 postscriptName 都用 fontkit 的 `openSync(file).fonts` 从**字体文件本身**读出来，
+ * 不是查文档猜的（名字给错会抛另一个错，见 applyCjkFont）：
+ *   fonts-noto-cjk 的 NotoSansCJK-Regular.ttc → NotoSansCJKsc-Regular（Noto Sans CJK SC）
+ *   fonts-noto-cjk 的 NotoSerifCJK-Regular.ttc → NotoSerifCJKsc-Regular
+ *   macOS Hiragino Sans GB.ttc → HiraginoSansGB-W3
+ *   macOS STHeiti Light.ttc → STHeitiSC-Light
+ * 原先的 `/System/Library/Fonts/PingFang.ttc` 已去掉：近年的 macOS 上该路径并不存在
+ * （2026-10-13 本机实测），留着只会让 macOS 一路落到内置 Helvetica。
+ * 原先的 `C:\Windows\Fonts\msyh.ttc` 也去掉了：拿不到它的成员名去验证，留着等于埋一个
+ * 必然抛错的候选；Windows 下现在会**明确降级**到 Helvetica 而不是崩溃。
+ */
+type CjkFontCandidate = { readonly path: string; readonly postscriptName?: string };
+
+function cjkFontCandidates(): readonly CjkFontCandidate[] {
+  const customPath = process.env.NOVEL_EXPORT_CJK_FONT;
+  const customPostscript = process.env.NOVEL_EXPORT_CJK_FONT_POSTSCRIPT;
+  return [
+    ...(customPath ? [{ path: customPath, postscriptName: customPostscript || undefined }] : []),
+    { path: "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", postscriptName: "NotoSansCJKsc-Regular" },
+    { path: "/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc", postscriptName: "NotoSerifCJKsc-Regular" },
+    { path: "/System/Library/Fonts/Hiragino Sans GB.ttc", postscriptName: "HiraginoSansGB-W3" },
+    { path: "/System/Library/Fonts/STHeiti Light.ttc", postscriptName: "STHeitiSC-Light" },
+  ];
+}
+
+/**
+ * 装上第一个**能真正打开**的 CJK 字体；一个都装不上就保持内置 Helvetica ——
+ * 中文会变方框，但「导出成功但字体不对」远好过「整个导出 500」。
+ *
+ * 这里必须兜住异常：postscriptName 给错时 fontkit 查不到成员，抛的是
+ * `Cannot read properties of null`；而 .ttc 不给 postscriptName 时抛的是
+ * `this.font.createSubset is not a function`。两种都不能让它冒泡。
+ * 实测：`document.font()` 抛错时只是没给 `this._font` 赋值（pdfkit 先写了
+ * `_fontSource`/`_fontFamily`、自增了 `_fontCount`），后续 `text()` 照旧走内置字体，
+ * 文档不会坏。
+ */
+function applyCjkFont(document: InstanceType<typeof PDFDocument>): void {
+  for (const candidate of cjkFontCandidates()) {
+    if (!existsSync(candidate.path)) continue;
+    try {
+      // pdfkit 的重载不接受「显式传 undefined 的 family」：给了第二个参数就必须是 string
+      // （family），不给则第二个参数只能是 number（size）。所以要按有无 postscriptName
+      // 分成两个调用，不能靠 `document.font(path, maybeUndefined)` 蒙过去。
+      if (candidate.postscriptName) {
+        document.font(candidate.path, candidate.postscriptName);
+      } else {
+        document.font(candidate.path);
+      }
+      return;
+    } catch (error) {
+      console.warn(
+        `[novel-export] CJK 字体 ${candidate.path} 装载失败（postscriptName=${
+          candidate.postscriptName ?? "(未给)"
+        }）：${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 }
 
 async function pdf(title: string, chapters: readonly ExportChapter[]): Promise<Buffer> {
   const document = new PDFDocument({ size: "A4", margins: { top: 54, bottom: 54, left: 58, right: 58 }, info: { Title: title } });
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
-  const font = cjkFontPath();
-  if (font) document.font(font);
+  applyCjkFont(document);
   document.fontSize(24).text(title, { align: "center" });
   for (const chapter of chapters) {
     document.addPage();

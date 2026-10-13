@@ -6,7 +6,7 @@
 
 | 文件 | 模块 | 一句话 |
 | --- | --- | --- |
-| [chat.md](chat.md) | 对话助手 | SSE 流式多轮对话 + Agent 工具循环 + 记忆/知识库/本地设备 |
+| [chat.md](chat.md) | 对话助手 | SSE 流式多轮对话 + Agent 工具循环 + 记忆/知识库 |
 | [novel.md](novel.md) | 小说引擎 | 最重的业务线：PlotPilot 叙事状态机 + 独立 Worker + 35 张表 |
 | [codex-pet.md](codex-pet.md) | Codex 桌宠 | 像素动画角色生成：模型合同 + 确定性流水线 + 签名交付 + 运维 |
 | [image.md](image.md) | AI 生图 | 双轨模型（百炼 Qwen + GPT Image），所有图片类工作流的底层能力 |

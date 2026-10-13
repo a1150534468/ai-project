@@ -425,7 +425,7 @@ flowchart TD
 
 `codex-pet` 菜单默认隐藏。只有下列生产门槛全部通过后，才应在客户端菜单配置中开启 `workflow.codex-pet`：
 
-- PostgreSQL migrations 已应用；API、Redis、私有 S3 与 Billing 可用。
+- PostgreSQL migrations 已应用；API、Redis 与私有 S3 可用。
 - `codex-pet-worker` 的 `/health` 返回 200，`/metrics` 可被监控系统采集。
 - GPT Image edits 真实 POC 通过单参考图、多参考图和 `1536×1024` 任务。
 - 文字、单参考图和不对称多参考图三类桌宠均通过 v2 验证。
@@ -465,15 +465,15 @@ POC 只在部署、图片网关切换或模型升级时运行，不进入普通 
 
 ### 模型选择合同（运维视角）
 
-新项目使用 `selectable-visual-v2` 合同。生图选项复用现有生图模块的模型目录；视觉理解与质检选项来自 Billing 的已启用模型广场，并排除 embedding、图片生成模型和所有 `qwen3.7*`。GPT 生图和 GPT 视觉模型继续通过 `https://api.ai-pixel.online` 路由，其他视觉模型通过百炼 Workspace 路由。
+新项目使用 `selectable-visual-v2` 合同。生图选项复用现有生图模块的模型目录；视觉理解与质检选项来自 **codex-pet 模型合约里的固定清单**（`codexPetModelOptions()`，见 `codex-pet-route-context.ts`），不再走模型广场的动态目录 —— 那条链路随计费退役一并下线。清单排除 embedding、图片生成模型和所有 `qwen3.7*`。GPT 生图和 GPT 视觉模型继续通过 `https://api.ai-pixel.online` 路由，其他视觉模型通过百炼 Workspace 路由。
 
 项目开始运行时，`imageModel` 与 `visualQaModel` 会写入运行快照。Worker 恢复或重试时只使用该快照，禁止中途静默切换模型；最终交付也会核验每次上游返回的实际模型与所选模型一致。历史 `gpt-only-v1` 项目仅保留只读交付兼容，不用于创建新项目。
 
-本地首次验收优先选择 `gpt-image-2` 与 `gpt-5.6-sol`，并确认模型目录中不出现任何 `qwen3.7*`。阿里模型验收必须选择模型广场中的其他可用模型。
+本地首次验收优先选择 `gpt-image-2` 与 `gpt-5.6-sol`，并确认模型目录中不出现任何 `qwen3.7*`。阿里模型验收必须选择模型合约清单中的其他可用模型。
 
 ### 本地开发
 
-仓库根目录执行 `pnpm dev` 会同时启动 API、Codex 桌宠 Worker、Web、Admin 和 Billing；桌宠 Worker 健康检查默认位于 `http://localhost:8092/health`。脚本会为未配置的 `CODEX_PET_PUBLIC_BASE_URL` 使用 `http://localhost:8090`，仅用于本地验证签名资源和界面流程。目标 Codex 的真实安装验收仍必须使用外网可达的 HTTPS 地址。
+仓库根目录执行 `pnpm dev` 会同时启动 5 个进程：API(8090)、Novel Worker(8091)、Codex 桌宠 Worker(8092)、Web(5174)、Admin(5175)；桌宠 Worker 健康检查默认位于 `http://localhost:8092/health`。脚本会为未配置的 `CODEX_PET_PUBLIC_BASE_URL` 使用 `http://localhost:8090`，仅用于本地验证签名资源和界面流程。目标 Codex 的真实安装验收仍必须使用外网可达的 HTTPS 地址。
 
 ### 运行与健康检查
 

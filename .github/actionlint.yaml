@@ -1,3 +1,12 @@
+# actionlint 的配置。
+#
+# 这里原本声明了一个自建 runner 标签 release-mac（当时 production.yml 的 images job 和
+# production-diagnostics.yml 都跑在那台 Mac 上）。2026-10-13 两个工作流都换成了
+# ubuntu-latest（理由：缓存 scope 不再随发布 tag 漂移、原生 linux/amd64 免 Rosetta 模拟、
+# 不再要求发布时那台 Mac 醒着；aiproject 是公开仓库，标准托管 runner 不额外计费），
+# 于是没有任何工作流再用自建 runner，这个声明也就没有对应物了。
+#
+# 留这个空壳而不是删文件，是为了保留一条信息：**以后再引入自建 runner，必须把标签写在这里**，
+# 否则 actionlint 会把 runs-on 里的自定义标签判成未知标签。当前合法标签集为空。
 self-hosted-runner:
-  labels:
-    - release-mac
+  labels: []

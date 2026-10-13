@@ -1,17 +1,18 @@
 # 对话助手（深读）
 
 > 这是一篇「自包含」的学习文档：读完这一篇就能理解对话助手的设计取舍、完整链路、关键参数和踩过的坑，不需要来回跳别的文件。文中只写环境变量名与占位符，不含任何真实密钥。
+>
+> **2026-10-13 校订**：计费与桌面端（本机设备工具）已随 ADR-012 整块下线，本文对应段落已改写或标注为历史。
 
 ## 一、这个模块是什么
 
-对话助手是整个平台的入口能力：一个**流式（SSE）多轮对话**，同时具备四种增强——
+对话助手是整个平台的入口能力：一个**流式（SSE）多轮对话**，同时具备三种增强——
 
 1. **Agent 人格**：每条对话归属一个 Agent（系统提示词、头像、可用工具集不同）。
 2. **长期记忆**：把跨会话记住的事实注入本轮上下文。
 3. **知识库检索（RAG）**：命中用户选择的知识库时，把相关切片和引用注入上下文。
-4. **本地设备工具**：用户开着桌面端时，模型可以经连接器读写用户本机文件、执行终端命令。
 
-它是「模型网关 + Agent 工具循环 + 记忆/知识库 + 计费」的集大成者，后面所有工作流复用的基础设施（模型路由、计费包裹、流式）都在这里第一次成型。
+它是「模型网关 + Agent 工具循环 + 记忆/知识库」的集大成者，后面所有工作流复用的基础设施（模型路由、流式）都在这里第一次成型。
 
 后端入口 `apps/api/src/chat/`，模型层 `packages/llm/`，Agent 循环 `apps/api/src/agent/`，前端 `apps/web/src/pages/Chat.tsx` + `chatState.ts`。
 
@@ -29,11 +30,11 @@
 
 ### 2.2 为什么用 SSE 而不是 WebSocket
 
-对话是「一问一答、服务端单向持续推送 token」的形态，SSE（`content-type: text/event-stream`）刚好够用，比 WebSocket 少一套连接管理。真正需要双向长连接的是桌面设备（那才用 WebSocket）。SSE 还带一个 15 秒心跳（`SSE_HEARTBEAT_MS = 15_000`）防止中间代理断流。
+对话是「一问一答、服务端单向持续推送 token」的形态，SSE（`content-type: text/event-stream`）刚好够用，比 WebSocket 少一套连接管理。SSE 还带一个 15 秒心跳（`SSE_HEARTBEAT_MS = 15_000`）防止中间代理断流。（历史上唯一需要双向长连接的场景是桌面端设备通道，该模块已下线。）
 
 ### 2.3 会话串行锁：同一会话不允许并发生成
 
-用户快速连发、或多标签页同一会话同时提交，会造成消息错乱、记忆重复写、计费并发。解决办法是 Redis 单飞锁（`apps/api/src/chat/lock.ts`）：
+用户快速连发、或多标签页同一会话同时提交，会造成消息错乱、记忆重复写。解决办法是 Redis 单飞锁（`apps/api/src/chat/lock.ts`）：
 
 ```ts
 const key = `ai-assistant:lock:session:${sessionId}`;
@@ -42,9 +43,11 @@ const ok = await redis.set(key, token, "PX", ttlMs, "NX"); // ttlMs 默认 12000
 
 `NX` 保证只有第一个抢到，`PX` 到期自动释放（防止进程崩溃后死锁），释放时校验 token 只删自己的锁。拿不到锁就直接拒绝本次并发请求。
 
-### 2.4 计费包裹：先预扣、后按实结算、故障降级放行
+### 2.4 计费包裹（**已下线**，留作历史）
 
-所有付费操作的统一骨架在这里定型：**reserve（预扣）→ 生成 → settle（结算）**。对话按固定 `CHAT_RESERVE_OUTPUT_TOKENS = 10_000` 的输出上限预扣（Go 侧按模型输出单价折算算力点），生成结束用真实 `usage` 结算，多退少补。一个刻意的取舍是**计费故障降级放行**：billing 服务不可用时不阻断对话（源码注释原文：「billing 故障降级放行；reserve 计价仍是安全网」），把可用性放在严格计费之上，靠 reserve 兜底。
+> **2026-09 随 ADR-012 整块下线。** 对话链路里现在已无任何预扣/结算调用，对接的 Go `services/billing` 也已从仓库删除。
+
+本节保留的原因：当年「**reserve（预扣）→ 生成 → settle（按真实 `usage` 结算）**、且计费故障时降级放行」这套骨架在这里第一次成型，后面所有付费工作流都照抄过它。真正值得记的是那个取舍——**可用性优先于严格计费**：billing 不可用时不阻断主流程，靠预扣兜底，而不是让用户聊天聊到一半报错。骨架没变，变的是它已经没有调用方了。
 
 ## 三、端到端流程
 
@@ -53,18 +56,15 @@ flowchart TD
     A["前端 Chat.tsx 提交<br/>message / agentId / kbIds / toolIds / attachments"] --> B["POST 聊天接口"]
     B --> C{"acquireSessionLock<br/>Redis NX"}
     C -->|抢不到| X["拒绝：会话正在生成"]
-    C -->|抢到| D["reserve 预扣 10000 out-tokens"]
-    D --> E["组装 system 提示词"]
+    C -->|抢到| E["组装 system 提示词"]
     E --> E1["Agent 人格 resolveAgent"]
     E --> E2["长期记忆 memory.search → 注入‘相关记忆’"]
     E --> E3["知识库门控 shouldRetrieveKbForQuery<br/>→ retrieveChunks → 注入切片+引用"]
-    E --> E4["本地工具：有在线设备才挂载 device tools"]
-    E1 & E2 & E3 & E4 --> F["runTurn 工具循环（SSE 逐 token）"]
+    E1 & E2 & E3 --> F["runTurn 工具循环（SSE 逐 token）"]
     F --> G{"stop_reason"}
     G -->|tool_use| H["执行工具→结果回灌→下一轮"] --> F
     G -->|max_tokens| I["自动续写（最多 20 次）"] --> F
-    G -->|end| J["settle 按真实 usage 结算"]
-    J --> K["addTurn 写长期记忆（embedding）"]
+    G -->|end| K["addTurn 写长期记忆（embedding）"]
     K --> L["SSE done"]
 ```
 
@@ -72,16 +72,19 @@ flowchart TD
 
 | 文件 | 职责 |
 | --- | --- |
-| `apps/api/src/chat/routes.ts` | HTTP/SSE 边界：入参 zod 校验、会话锁、计费、system 组装、KB/记忆/工具编排、错误文案 |
+| `apps/api/src/chat/routes.ts` | HTTP/SSE 边界：入参 zod 校验、会话锁、system 组装、KB/记忆/工具编排、错误文案 |
 | `apps/api/src/chat/attachments.ts` | 附件处理：图片走多模态、文件走 `kb/parse` 解析为文本块；`resolveChatModel` 决定是否切多模态模型 |
 | `apps/api/src/chat/lock.ts` | 会话串行锁（Redis NX + token 释放） |
-| `apps/api/src/chat/sessions.ts` | 会话/消息读写 |
+| `apps/api/src/chat/session-routes.ts` | 会话与消息的读写路由（会话列表/重命名/删除、消息分页；`sessionOwner` 做归属校验） |
+| `apps/api/src/chat/routes-runtime.ts` · `routes-schemas.ts` · `routes-errors.ts` | `routes.ts` 拆分出的运行期常量、入参 zod schema、错误文案 |
+| `apps/api/src/chat/sse.ts` | SSE 公共实现（多域共用；`text/event-stream` 头、心跳、事件分帧） |
 | `apps/api/src/agent/run.ts` | **Agent 工具循环 `runTurn`**：迭代上限、续写、工具调用、流式重试、超时/空响应 |
 | `apps/api/src/agent/tools.ts` | 默认（服务端）工具实现 |
 | `packages/llm/src/client.ts` | 模型层：provider 归一化、百炼 baseURL 拼装、按模型名多网关路由、百炼 thinking 默认 |
+| `packages/llm/src/routes.ts` | 「按模型名多网关路由」的解析（`CHATGPT_MODELS`、两组凭据解析），原先散在三处，2026-10 收敛到这里 |
+| `packages/llm/src/retry.ts` | 分类重试 + 退避 + 可取消等待（`withLlmRetry`），原先各调用点自研 |
 | `apps/api/src/memory/memory-service.ts` | 长期记忆 `search` / `addTurn`（1024 维向量） |
 | `apps/api/src/kb/retrieve.ts` | 知识库检索：`shouldRetrieveKbForQuery` 门控、`retrieveChunks`、`filterRelevantChunks`、`dedupeKbCitations` |
-| `apps/api/src/connector/{hub,local-tools,select-device}.ts` | 本地设备工具派发（`getDispatcher` / `makeLocalExecTool` / `pickActiveDevice`） |
 | `apps/web/src/pages/Chat.tsx` · `chatState.ts` · `chatAttachments.ts` | 前端视图 / 纯逻辑状态 / 附件处理 |
 
 ## 五、关键机制与参数
@@ -91,7 +94,6 @@ flowchart TD
 - **百炼 thinking 默认关闭（带工具时）**：`withBailianMessageDefaults` 在客户端层统一处理——**只要请求带 `tools` 且调用方没显式设 `thinking`，就注入 `thinking: { type: "disabled" }`**。这是踩坑 6.3 的收敛点，不让每个业务调用点各自打补丁。
 - **多模态回退**：`attachments.ts` 的 `resolveChatModel` 在检测到图片附件时切到 `CHAT_MULTIMODAL_MODEL`（缺省 `qwen3.7-plus`）。文件附件（非图片）经 `kb/parse` 的 `parseDocument` 抽成文本块塞进上下文。附件入参上限：单请求 ≤8 个、单个 ≤10MB、base64 ≤14MB。
 - **模型名别名**：`BAILIAN_MODEL_ALIASES` 把历史 `GLM-5.2` 映射为百炼实际 id `glm-5.2`（`providerModelId`）。
-- **本地工具的暴露条件**：只有当用户有在线设备（`pickActiveDevice`）时，才向模型暴露本地工具集，并通过 SSE 的 `device` 事件把工具名回给前端；没有设备就完全不挂。
 - **友好错误文案**：`chatModelErrorMessage` 把上游错误按 provider（百炼 / AI Pixel / 模型服务）翻译成中文——`401`/`invalid api key`→「API Key 无效」、`Model.AccessDenied`→「业务空间未授权该模型」、`404`→「不存在该模型或地域不可用」、`ECONNREFUSED/ENOTFOUND`→「无法连接，请检查接入地址与网络」。这些文案本身就是踩坑清单的浓缩。
 
 ## 六、踩坑记录（现象 / 根因 / 修法 / 预防）
@@ -119,11 +121,11 @@ flowchart TD
 ### 6.4 老会话一打开就失败——模型名大小写
 - **现象**：迁移前用户浏览器里记住了 `GLM-5.2`，打开老会话直接失败。
 - **根因**：百炼正式模型 id 是小写 `glm-5.2`。
-- **修法**：`BAILIAN_MODEL_ALIASES` 精确别名映射，保留用户选择与计费目录不变，只在真正请求时转换。
+- **修法**：`BAILIAN_MODEL_ALIASES` 精确别名映射，保留用户选择不变，只在真正请求时转换。
 - **预防**：迁移要保证「历史用户选择」继续可用，别让存量数据变成故障源。
 
 ### 6.5 开启记忆的用户每次聊天都白打一次旧向量网关
-- **现象**：迁移后开「长期记忆」的用户每轮聊天会访问已失效的 4096 维旧向量网关，虽被降级捕获、不致对话失败，但白白产生一次无效预扣与请求。
+- **现象**：迁移后开「长期记忆」的用户每轮聊天会访问已失效的 4096 维旧向量网关，虽被降级捕获、不致对话失败，但白白产生一次无效请求。
 - **根因**：记忆/知识库向量链路尚未随对话一起迁移，旧回退还在。
 - **修法**：先切断旧回退；等知识库/记忆迁移时按百炼 `text-embedding-v4` 的 **1024 维**重建索引。
 - **预防**：分模块迁移时，注意「顺带被调用」的隐性链路，别让它继续打死端点。
@@ -147,10 +149,11 @@ flowchart TD
 - `2026-07-13`（会话「替换云豆为 AI 助手」`019f5a45` + 「修复对话助手接入」`019f5b4d`）：品牌改名；迁移后逐项修复对话链路、真实接通百炼（见第六节全部踩坑）。
 - `2026-07-14` `67ccae3` `feat: migrate project and integrate Bailian models` 落地。
 - `2026-07-16` `33179d1` 新增接入 gpt 模型：通过 `CHATGPT_MODELS` 白名单把 gpt-5.x 经 AI Pixel 的 Anthropic 兼容端点接入对话（多网关路由）。
+- `2026-09 ~ 10`：计费与桌面端整块下线（ADR-012 及后续精简）；`packages/llm` 从「双层 monkey-patch」加厚为 `client.ts` + `routes.ts` + `retry.ts`，重试与路由解析收敛进包内。
 
 ## 八、自己动手学习入口
 
-1. 读 `packages/llm/src/client.ts` 全文（很短）：一次性理解 provider 归一化、百炼 baseURL、`withBailianMessageDefaults`、`withModelRoutes`/`applyModelRoutes` 四件事。
+1. 读 `packages/llm/src/client.ts` 全文（很短）：一次性理解 provider 归一化、百炼 baseURL、`withBailianMessageDefaults`、`withModelRoutes`/`applyModelRoutes` 四件事；再读 `routes.ts` 看路由解析、`retry.ts` 看分类重试。
 2. 读 `apps/api/src/agent/run.ts` 的 `runTurn`：抓住「迭代上限 / max_tokens 续写 / tool_use 文本不计入最终答案」三条主线。
-3. 读 `apps/api/src/chat/routes.ts`：从会话锁 → reserve → system 组装（记忆/KB/工具）→ runTurn → settle → addTurn 顺着走一遍。
+3. 读 `apps/api/src/chat/routes.ts`：从会话锁 → system 组装（记忆/KB/工具）→ runTurn → addTurn 顺着走一遍。
 4. 真实验证工具调用：`set -a; source .env; set +a; RUN_TOOLUSE_POC=1 pnpm --filter @ai-assistant/api exec vitest run src/agent/__tests__/tooluse.poc.test.ts`（以仓库实际 POC 路径为准）。

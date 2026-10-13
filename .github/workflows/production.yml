@@ -1,323 +1,234 @@
-name: Verify and deploy production
+name: Release to production
 
 on:
-  # 只在打 tag 或手动触发时跑。原来是「push 到 main 就跑」，于是每次 push 都要把
-  # ci.yml 刚跑过的 typecheck + 全量测试再跑一遍，再接着 build 当时的 4 个镜像并部署一次
-  # 生产 —— 一次 push 约 50 个计费分钟。Free 计划每月 2000 分钟只够 40 次，
-  # 2026-08 就是这么在 08-27 把额度用光，之后每个 job 都以「The job was not started
-  # because ... spending limit」直接不启动，连着红了三天。
+  # 只在手动触发时跑，且只允许从 main 触发。做法与 blog
+  # （/Users/z/code/blog/.github/workflows/deploy.yml）一致。
   #
-  # 随之而来的约定：**tag 只打在 main 上 CI 已经绿灯的 commit 上**。ci.yml 的触发条件
-  # 是 push 到分支，而 tag push 不算分支，所以本工作流跑起来时那个 commit 不会再有
-  # 一次 CI —— 它的测试结论来自它当初在 main 上那一次。想额外保一道，就对着 tag 手动
-  # 触发一次 ci.yml 的 workflow_dispatch。
-  push:
-    tags: ["v*"]
+  # 为什么不再用 tag push（2026-10-13 改）：GitHub 的 Actions 缓存按 github.ref 隔离，
+  # 官方文档写得很直白 ——「一个为 tag release-a 创建的缓存，对由 tag release-b 触发的
+  # 工作流不可用」。每次发布打一个新 tag 就等于每次都换一个 ref，构建缓存永远命中不了。
+  # 改成 dispatch on main 之后 ref 恒为 refs/heads/main，缓存才可能跨次复用。blog 就是
+  # 靠这一点：它的 deploy 走 workflow_dispatch，所以 type=gha 缓存从来没冷过。
+  #
+  # 代价写明：tag 不再是发布动作，只是提交上的书签；发出去的是 main 的 HEAD。
+  # 要让「tag 和线上版本」对齐，就先打 tag、再点发布，中间别往 main 合东西。
+  #
+  # 附一条不能回去的历史：最早这里是「push 到 main 就跑」，一次 push 约 50 个计费分钟，
+  # 2026-08 在 08-27 把 Free 计划的 2000 分钟用光，之后每个 job 都以
+  # 「The job was not started because ... spending limit」直接不启动，连着红了三天。
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+  # verify-release 要调 listWorkflowRuns 查 ci.yml 的历史结论。
+  # 没有 packages: write —— 镜像推到的是腾讯云 TCR（用 secrets 里的账号密码登录），
+  # 不是 GHCR，这个权限整个工作流没人用。
+  actions: read
 
 concurrency:
   group: production-release
   cancel-in-progress: false
 
 jobs:
-  verify:
+  verify-release:
+    name: 这次发布是否合法
     runs-on: ubuntu-latest
-    # 20 分钟够跑完（含 go test 与 smoke 时实测 ~6 分钟；现在只剩 install + build，
-    # 只会更短，没有新实测数字所以上限不往下压）。压低上限是为了防「卡住的 job
-    # 一个人吃掉 45 分钟额度」——额度是按 job 实际墙钟时间向上取整计费的。
-    timeout-minutes: 20
-    # 没有 service 容器、也没有 env：这个 job 只过一遍 pnpm build，不连库、不连 redis。
-    # 测试都在 ci.yml 上跑，而 service 容器的拉起时间也是算在 job 计费里的。
+    # 只有一个 API 调用，5 分钟是防卡死的上限，正常几秒。
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      # 不 checkout：下面两步都不需要工作区，省掉一次克隆和一次 git fetch。
+      # （2026-10-13 之前这里要 fetch-depth: 0 去判「tag 是不是 origin/main 的祖先」，
+      # 改成 dispatch on main 之后那个判断恒真，整段删了。）
+      - name: 只允许从 main 发布
+        # workflow_dispatch 可以对着任意分支或 tag 点，所以这道守卫不能省。
+        # 判据用完整的 github.ref，不用 github.ref_name：分支名和 tag 名共用一个命名空间，
+        # 一个**名字恰好叫 main 的 tag**（refs/tags/main）能让 ref_name 判断放行。
+        # github.ref 带 refs/heads 或 refs/tags 前缀，没有这个歧义。
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::生产发布只能从 main 这个分支触发，当前是 ${{ github.ref }}" >&2
+          exit 1
+      - name: 该提交必须有一次成功的 CI
+        # 「只发绿灯 commit」这条约定的强制实现。不要退回到只写在注释里的口头约定 ——
+        # 那样链路上就没有任何校验点，一次误操作就能把没跑过测试的提交发到生产。
+        # github-script 需要 workflow 顶部的 permissions: actions: read。
+        uses: actions/github-script@v7
         with:
-          version: 10.26.2
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      # 刻意不再跑 pnpm typecheck / pnpm test --force：同一个 commit 在 main 上已经
-      # 被 ci.yml 跑过（见文件顶部「tag 只打绿灯 commit」的约定），再跑一遍只是花
-      # 双倍额度买同一个结论。跟着一起删的是 prisma migrate deploy —— 那一步只为
-      # pnpm test 存在。
-      #
-      # 留下 pnpm build 是因为 ci.yml 里没有 build 步骤，全仓只有这里会真的过一遍
-      # vite 打包。代价写明：**打不出包这件事从此只在打 tag 时才暴露**。
-      # 想在 push 阶段就拦住，得往 ci.yml 加 build，那是每次 push 再多几分钟。
-      - run: pnpm build
+          script: |
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'ci.yml',
+              head_sha: context.sha,
+              status: 'completed',
+              per_page: 100,
+            });
+            const passed = data.workflow_runs.filter((run) => run.conclusion === 'success');
+            if (passed.length === 0) {
+              core.setFailed(`没有找到 ${context.sha} 的成功 CI 记录，拒绝发布`);
+              return;
+            }
+            core.info(`找到 ${passed.length} 次成功的 CI，通过`);
 
   images:
-    # 原来这里有 `if: github.event_name != 'pull_request'`，是为了让 PR 只验证不
-    # 发布。现在触发条件里已经没有 pull_request，这个判断恒为真，删掉免得误读成
-    # 「还有某种情况不发布」。
-    needs: verify
-    # 专用 Mac Runner 只服务发布镜像：仓库没有 PR 触发这份工作流，
-    # 而 release-mac 自定义标签防止普通 self-hosted job 误占用这台电脑。
-    runs-on: [self-hosted, macOS, ARM64, release-mac]
-    # 每个镜像走三条路之一，判定在下面的 Resolve source hash 那步：
-    #   1. TCR 上已经有 :src-<内容哈希> ⇒ imagetools create 在 registry 内部复制出
-    #      :<sha>，只传一份 manifest，十秒级完事，连 dockerd 都不用重启。
-    #   2. 没有 ⇒ 在 Mac 的持久 Docker Desktop BuildKit 上 build，再将本地镜像归档交给
-    #      regctl 按 4 MiB 分块 push TCR。后续发布同时复用本机构建缓存和 TCR 已落地的层。
-    #   3. 查不动（网络抖、凭据不对、任何非零退出）⇒ 一律当成「没有」，走第 2 条。
-    # 绕这一圈是因为发布慢的根本不是构建，而是 GitHub Runner 出境：
-    # 实测 GitHub→TCR <0.17 MB/s，Mac→TCR 为 0.44 MB/s。生产机仍从 TCR 拉取，
-    # 不在生产机构建，也不让生产机走 GHCR 的慢速 Blob 链路。
-    # gateway（前端静态产物）和 migrate（内容只跟 packages/db/prisma 有关）平时几乎
-    # 不变，第 1 条路主要是给它们省的。
+    name: 构建并推送 ${{ matrix.name }}
+    needs: verify-release
+    # 2026-10-13 从自建 Mac runner 换到 ubuntu-latest。换的前提是上面把触发改成了
+    # dispatch on main —— 缓存 scope 才不会再随 tag 漂移，type=gha 才可能命中。
+    # 顺带拿到三件事：原生 linux/amd64（Mac 上是 Rosetta 模拟）、三个镜像各自一台机器
+    # 可以真并行、以及不再要求「发布时那台 Mac 必须醒着且 Docker Desktop 在跑」。
+    # aiproject 是公开仓库，标准托管 runner 不占免费额度。
+    runs-on: ubuntu-latest
+    # 每个镜像只有两条路，判定在下面的「这个提交已经推过了就跳过」这步：
+    #   1. TCR 上已经有 :<sha> ⇒ 整个构建与推送跳过（让 `gh run rerun` 天然幂等）。
+    #   2. 没有 ⇒ build 出 amd64 镜像，再把本地镜像归档交给 regctl 按 4 MiB 分块 push TCR。
     #
-    # 455 MB 冷推按 Mac→TCR 实测约 17 分钟；60 分钟同时容纳首次 amd64
-    # 跨架构构建。regctl 让大层不再依赖一条长连接，单个分块失败由客户端短重试。
+    # 为什么还留着 regctl 而不是像 blog 那样直接用 build-push-action 的 push：
+    # blog 那两个镜像每次真正新增的字节只有几 MB，裸 docker push 赌得起。这里 api 是
+    # 200 MB 量级，而这条出境链路实测极不稳定 —— 同一批镜像推 TCR 的耗时在
+    # 3.2s ~ 376.8s 之间抖（差 100 倍，最慢那次日志里没有任何逐层进度，是卡死不是匀速慢）。
+    # 裸 push 是一次长 PUT，被切断就从该层的 0 字节重来；regctl 切成 4 MiB 小块，
+    # 断线只重试当前小块。换 runner 和换推送机制不要同时做，否则出问题分不清是谁的锅。
+    #
+    # 2026-10 删掉了旧的 :src-<内容哈希> 内容寻址机制（它当时是「第 1 条路」）。理由是它和
+    # 已有的层复用机制重叠：原注释里自己写着「digest 不变 ⇒ Layer already exists ⇒ 出境 0 字节」，
+    # 也就是「没变的层本来就不会重传」，内容哈希额外省的只是「Mac 本地构建缓存冷掉」
+    # 这一种罕见情况；而它的代价是一份**手工维护**的 hash_paths —— 写窄了不会报错，
+    # 只会静默把旧代码发上生产。收益窄、风险专一，故删。
+    #
+    # 从 Mac 换过来之后少掉的是一台机器上累积的 28.8 GB BuildKit 缓存，所以这里必须
+    # 显式声明 type=gha，否则每次发布都是冷构建。缓存 scope 用镜像名，三个镜像互不覆盖。
+    # mode=max 会把 builder 阶段的中间层（apt、pnpm install）也存进去，这是必要的：
+    # 只缓存最终镜像的层（mode=min）解决不了最贵的那步 pnpm install。
     timeout-minutes: 60
     strategy:
-      max-parallel: 1
       # fail-fast: false 是必须的。默认 true 时 api 一失败，还在 queued 的 migrate/
       # gateway 会被连带取消 —— 但这三个镜像互不依赖，而且推送是**累积**的：
       # 每个成功落地的层都留在 TCR 里，下次重跑直接跳过。把它们一起取消等于白白放弃
       # 两个小镜像本来能推完的进度。v0.1.3 就是这样只推了 api 一个就整轮报废。
       fail-fast: false
       matrix:
-        # name / context / file / build_args 必须跟 warm-image-cache.yml 的 matrix 逐字
-        # 一致——那边预热出来的 gha 缓存键就是按这四项算的，差一个字就是静默不命中。
-        # hash_paths 是本工作流独有的（预热不需要它），warm 那边没这一项不算不一致。
+        # 下面是「每个镜像的内容由哪些文件决定」的文档，**不再参与任何哈希计算**
+        # （2026-10 删掉了内容寻址机制，只留这份注释，方便判断一次改动会波及哪个镜像）：
+        #   api     ← apps/api、packages/ 整个（不挑包：api 用 pnpm deploy 把 workspace
+        #             依赖打进 node_modules，挑包等于赌 import 图）
+        #   migrate ← packages/db/prisma（全镜像只有这一条业务 COPY）
+        #   gateway ← apps/web、apps/admin、它们 workspace:* 引到的 article-workflow /
+        #             novel-workflow，以及 infra/caddy/Caddyfile
         #
-        # hash_paths = 「这个镜像的内容由哪些文件决定」，逐个从 Dockerfile 里真实的 COPY
-        # 源头倒推，外加 Dockerfile 本身和 .dockerignore（它决定构建上下文里到底有什么）。
-        # 这份集合宁可写宽不能写窄：**写宽只是白构建一次（慢），写窄是把旧代码发上生产
-        # （静默事故）**。所以 api 直接把整个 packages/ 算进去，而不是去挑它 import 了哪几个包。
-        # 同理，被 .dockerignore 排掉的文件（**/*.test.ts、docs/ 等）也照样算进 hash：改一个
-        # 测试文件会白重建一次，但那次构建出来的层内容跟 TCR 上的完全一样（那些文件根本没进
-        # 构建上下文），digest 不变 ⇒ Layer already exists ⇒ 出境仍然是 0 字节，只亏构建分钟。
-        #
-        # 已知不在集合里、因此不会触发重建的东西：基础镜像。node:24-bookworm-slim 和
-        # gcr.io/distroless/static-debian12:nonroot 是按 tag 引的（不是 digest），上游重推
-        # 同名 tag 时本机制察觉不到，会继续复用旧镜像。要强制重建就动集合里任何一个文件，
-        # 或者去 TCR 上删掉那个 src-<hash> tag。
+        # 两条与「重传」有关的既有事实，仍然生效：
+        #  · Dockerfile 已把「易变的源码」与「稳定的 node_modules」分成两条 COPY，所以改
+        #    源码只重传小的那层；没变的层 digest 不变，TCR 直接判 Layer already exists ⇒
+        #    出境 0 字节。这也是删掉内容寻址后仍然不会重复传的原因。
+        #  · 基础镜像 node:24-bookworm-slim / gcr.io/distroless/static-debian12:nonroot 是按
+        #    tag 引的（不是 digest），上游重推同名 tag 时察觉不到，会继续复用旧镜像。
+        #    要强制重建就动 Dockerfile，或清掉 TCR 上对应的 tag。
         include:
           - name: api
-            context: .
             file: infra/docker/api/Dockerfile
             build_args: |
               USE_CHINA_APT_MIRROR=true
               NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
               PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
-            # 对应 Dockerfile 第 34-42、50-52 行的 COPY。packages/ 整个进来：api 是
-            # `pnpm deploy` 把 workspace 依赖打包进 node_modules 的，挑包等于赌 import 图。
-            hash_paths: |
-              apps/api
-              packages
-              pnpm-lock.yaml
-              pnpm-workspace.yaml
-              package.json
-              tsconfig.base.json
-              infra/docker/api/Dockerfile
-              .dockerignore
           - name: migrate
-            context: .
             file: infra/docker/migrate/Dockerfile
             build_args: |
               USE_CHINA_APT_MIRROR=true
               NPM_CONFIG_REGISTRY=https://registry.npmmirror.com
               PRISMA_ENGINES_MIRROR=https://registry.npmmirror.com/-/binary/prisma
-            # 全镜像只有一条业务 COPY（Dockerfile 第 35 行 packages/db/prisma）。
-            # 刻意不含 pnpm-lock.yaml：这个镜像不跑 pnpm，prisma 版本是第 30 行
-            # `npm i prisma@6.19.3` 写死的字面量，而 Dockerfile 自己在集合里。
-            hash_paths: |
-              packages/db/prisma
-              infra/docker/migrate/Dockerfile
-              .dockerignore
           - name: gateway
-            context: .
             file: infra/docker/gateway/Dockerfile
             build_args: ""
-            # 对应 Dockerfile 第 6-10、15-19、23 行的 COPY。只有 web/admin 两个 app 加上
-            # 它们 package.json 里 workspace:* 引到的 article-workflow / novel-workflow
-            # （已核对：这两个 app 没有别的 workspace 依赖）——别的包根本不在构建上下文里。
-            hash_paths: |
-              apps/web
-              apps/admin
-              packages/article-workflow
-              packages/novel-workflow
-              pnpm-lock.yaml
-              pnpm-workspace.yaml
-              package.json
-              tsconfig.base.json
-              turbo.json
-              infra/caddy/Caddyfile
-              infra/docker/gateway/Dockerfile
-              .dockerignore
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare dedicated Mac builder
-        env:
-          DOCKER_CONFIG: ${{ runner.temp }}/docker-config-${{ github.run_id }}-${{ matrix.name }}
-        run: |
-          set -euo pipefail
-          test "$(uname -s)" = Darwin
-          test "$(uname -m)" = arm64
-          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
-          umask 077
-          mkdir -p "$DOCKER_CONFIG/cli-plugins"
-          # macOS 上如果 config.json 不存在，docker login 会自动启用 Keychain helper；
-          # launchd Runner 无法弹交互授权。先放一个显式的临时配置，后面直接写 auths。
-          jq -n '{auths:{}}' > "$DOCKER_CONFIG/config.json"
-          ln -sf "$HOME/.docker/cli-plugins/docker-buildx" \
-            "$DOCKER_CONFIG/cli-plugins/docker-buildx"
-          export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
-          echo "DOCKER_HOST=$DOCKER_HOST" >> "$GITHUB_ENV"
-          docker info >/dev/null
-          buildx_info=$(docker buildx inspect default --bootstrap)
-          grep -q 'linux/amd64' <<< "$buildx_info"
-      - name: Configure temporary TCR credentials
-        env:
-          REGISTRY: ${{ secrets.REGISTRY }}
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -n "$REGISTRY"
-          test -n "$REGISTRY_USERNAME"
-          test -n "$REGISTRY_PASSWORD"
-          umask 077
-          temp_config=$(mktemp "$DOCKER_CONFIG/config.json.XXXXXX")
-          jq -n \
-            --arg registry "$REGISTRY" \
-            --arg username "$REGISTRY_USERNAME" \
-            --rawfile password <(printf '%s' "$REGISTRY_PASSWORD") \
-            '{auths:{($registry):{auth:([$username,$password] | join(":") | @base64)}}}' \
-            > "$temp_config"
-          mv "$temp_config" "$DOCKER_CONFIG/config.json"
-      - name: Resolve source hash
-        id: src
-        env:
-          IMAGE_REPO: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}
-          # SPEC 一起进 hash：context / file / build_args 一变镜像内容就会变，可这三样
-          # 在任何文件里都找不到，只写在上面那份 matrix 里。PATHS 自己也进 hash——以后谁改了
-          # 路径集合，旧 hash 自动失效，不会拿一个「按旧规则算出来的」镜像顶上。
-          # 都走 env 而不是把 ${{ }} 直接拼进 run 脚本：拼进去是文本替换，多行值会把脚本撑坏。
-          SPEC: ${{ matrix.name }}|${{ matrix.context }}|${{ matrix.file }}|${{ matrix.build_args }}
-          PATHS: ${{ matrix.hash_paths }}
-        run: |
-          set -uo pipefail
-          # 用 git ls-files -s 而不是 find + sha256sum：它输出「mode blob stage path」，其中
-          # blob 就是 git 的内容哈希——不含 mtime、不含构建时刻、按路径排序稳定，换一台 runner
-          # 也算得出同一个值。checkout 出来的工作区是干净的，索引内容 = 这个 tag 的内容。
-          # read 循环而不是 mapfile：pathspec 要按行切开，且不能被 shell 当 glob 展开。
-          specs=()
-          while IFS= read -r line; do
-            [ -n "$line" ] && specs+=("$line")
-          done < <(printf '%s\n' "$PATHS")
-          if [ "${#specs[@]}" -eq 0 ]; then
-            echo "::error::hash_paths 是空的"
-            exit 1
-          fi
-          tree=$(git ls-files -s -- "${specs[@]}")
-          # 一个文件都没匹配到只可能是集合写错了（路径改名或被删）。这时候宁可让发布红，也不能
-          # 算出一个「所有 commit 都一样」的 hash——那会让之后每次发布都复用第一次那个镜像。
-          if [ -z "$tree" ]; then
-            echo "::error::hash_paths 没匹配到任何文件，集合写错了"
-            exit 1
-          fi
-          hash=$(printf '%s\n%s\n%s\n' "$SPEC" "$PATHS" "$tree" | shasum -a 256 | cut -c1-16)
-          echo "hash=$hash" >> "$GITHUB_OUTPUT"
-          echo "参与计算 $(printf '%s\n' "$tree" | wc -l) 个文件，hash=$hash"
-          # 查得到就复用；查不到——404、网络抖、凭据不对，任何非零退出——都当作没有，重新构建。
-          # 「判断不准时一律重新构建」：多构建一次只是慢，少构建一次是把旧代码发上生产。
-          # 这里用的 buildx 是 runner 自带的 CLI 插件，imagetools 只说 registry 的 HTTP 协议、
-          # 不需要 builder 实例，所以排在 setup-buildx 之前也能跑。
-          # 两条复用依据，先查更硬的那条 :<sha>。它钉的是整棵树，而 src-<hash> 钉的只是
-          # hash_paths 那个集合（写窄了就会错）——所以 :<sha> 在的时候没有任何理由再构建。
-          #
-          # 平时它不会命中（同一个 commit 不会发两次），加它是为了两件具体的事：
-          #   1. 出境被限速的这段时间里，镜像是在别处构建好、直接推到 TCR 的（本机就行，
-          #      不占生产机、不多开机器）。推完再跑本工作流，images 这一整段空转，只剩
-          #      deploy 真的做事。没有这条判断，workflow 会把同一个镜像原样重传一遍——
-          #      api 是 462 MB，按实测速率就是 19~51 分钟白烧。
-          #   2. `gh run rerun` 天然幂等：上一次已经推成功的镜像不再重传。
-          if docker buildx imagetools inspect "$IMAGE_REPO:$GITHUB_SHA" >/dev/null 2>&1; then
-            echo "hit=true" >> "$GITHUB_OUTPUT"
-            echo "sha_present=true" >> "$GITHUB_OUTPUT"
-            echo "TCR 上已经有 :${GITHUB_SHA}，构建与推送整段跳过"
-          elif docker buildx imagetools inspect "$IMAGE_REPO:src-$hash" >/dev/null 2>&1; then
-            echo "hit=true" >> "$GITHUB_OUTPUT"
-            echo "TCR 上已有同源镜像，跳过构建与推送"
-          else
-            echo "hit=false" >> "$GITHUB_OUTPUT"
-            echo "TCR 上没有 :$GITHUB_SHA 也没有 src-${hash}，走完整构建"
-          fi
-      - name: Reuse identical image already in TCR
-        if: steps.src.outputs.hit == 'true'
+      # 换到托管 runner 之后，Mac 上那两步手写的准备全都不需要了：
+      # DOCKER_CONFIG / jq 拼 auths / 软链 cli-plugins / 查 Rosetta 支持 amd64，
+      # 当初都是为了让 launchd 起的 runner 绕过 macOS Keychain 交互授权。
+      # ubuntu 上就是标准两步。
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: 这个提交已经推过了就跳过
+        id: skip
         env:
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
-          SRC_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
-          SHA_PRESENT: ${{ steps.src.outputs.sha_present }}
         run: |
-          # registry 内部复制 manifest。源和目标在同一个仓库、层已经在那儿了，所以这一步只
-          # PUT 一份 manifest（几 KB），不碰那根 0.15~0.40 MB/s 的出境管子——这才是 P3 省下的
-          # 东西：不是「少构建」，是「少传」。
+          set -uo pipefail
+          # imagetools 只走 registry 的 HTTP 协议、不需要 builder 实例，排在哪一步都可以；
+          # 放这里是因为前面已经 login 过了，查私有仓库要凭据。
+          # 查得到就跳过；查不到 —— 404、网络抖、凭据不对、任何非零退出 —— 一律当作没有，
+          # 重新构建。「判断不准时一律重新构建」：多构建一次只是慢，少构建一次是把旧代码漏发。
           #
-          # 为什么必须做这一步而不是干脆跳过整个 job：deploy 用的引用是 <sha> 那个 tag，
-          # 它不存在的话 compose pull 直接失败。「跳过构建」不等于「跳过打 tag」。
-          if [ "${SHA_PRESENT:-}" = true ]; then
-            # deploy 要的 tag 本来就在，方向反过来：把 src tag 指到它身上，让下一次同源发布
-            # 也能命中。失败不该让发布挂——后果只是下次多构建一次。
-            docker buildx imagetools create -t "$SRC_REF" "$IMAGE_REF" \
-              || echo "::warning::src tag 回填失败，下次同源发布会重新构建这个镜像"
+          # 平时不会命中（同一个 commit 不会发两次），留着是为了两件事：
+          #   1. 出境被限速的这段时间里，镜像可以在别处构建好直接推到 TCR（本机就行，不占
+          #      生产机、不多开机器）。推完再跑本工作流，images 整段空转，只剩 deploy 做事。
+          #      没有这条判断，workflow 会把同一个镜像原样重传一遍 —— api 约 200 MB，
+          #      按这条链路实测的速率就是几分钟到几十分钟白烧。
+          #   2. `gh run rerun` 天然幂等：上一次已经推成功的镜像不再重传。
+          if docker buildx imagetools inspect "$IMAGE_REF" >/dev/null 2>&1; then
+            echo "hit=true" >> "$GITHUB_OUTPUT"
+            echo "TCR 上已经有 $IMAGE_REF，构建与推送整段跳过"
           else
-            docker buildx imagetools create -t "$IMAGE_REF" "$SRC_REF"
+            echo "hit=false" >> "$GITHUB_OUTPUT"
+            echo "TCR 上没有 $IMAGE_REF，走完整构建"
           fi
-      - uses: docker/build-push-action@v6
-        if: steps.src.outputs.hit != 'true'
+      - name: 构建镜像
+        if: steps.skip.outputs.hit != 'true'
+        uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
+          context: .
           file: ${{ matrix.file }}
           platforms: linux/amd64
           build-args: ${{ matrix.build_args }}
-          # Docker Desktop BuildKit v0.27 禁止 docker exporter 的隐式 unpack 与
-          # rewrite-timestamp 同时使用；标准 load 路径已在同一台 Mac 上验证。
-          # 镜像先加载到 Docker Desktop，再由下一步单独 push，失败重跑时可复用
-          # 本地 BuildKit 缓存和 TCR 已经接收完成的层。
+          # 镜像先 load 进 runner 的 docker daemon，再由下一步交给 regctl 推。
+          # 不用 build-push-action 自带的 push 是为了保留 4 MiB 分块重试，理由见本 job 顶部。
+          # 失败重跑时这一步能吃 gha 缓存，而 TCR 那边已经收下的层不用重传。
           load: true
           provenance: false
           sbom: false
-          # 两个 tag 指向同一个 image id：`:<sha>` 是 deploy 用的（remote-deploy.sh 收的就是
-          # 它），`:src-<hash>` 是给「下次发布」留的路标。层是共享的，多这一个 tag 只多推一份
-          # manifest（几 KB），换来的是下次同源发布一个字节都不用传。
-          tags: |
-            ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
-            ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
-      - name: Push image to TCR
-        if: steps.src.outputs.hit != 'true'
+          # 缓存必须显式声明：托管 runner 每次都是全新实例，没有任何跨次活着的构建缓存
+          # （Mac 上那 28.8 GB BuildKit 缓存换过来就没了）。
+          # scope 按镜像名分开，三个镜像互不覆盖。
+          # mode=max：连 builder 阶段的中间层一起存。只存最终镜像的层（mode=min）解决不了
+          # 最贵的 pnpm install —— api 的 node_modules 解压后 459 MiB，是这一步的主要成本。
+          # 仓库有 10 GB 缓存上限，三个 scope 加起来仍在限额内。
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # 只打 :<sha> 一个 tag —— deploy 用的就是它（remote-deploy.sh 收的正是这个值）。
+          # 原来那个 :src-<hash>「路标 tag」随内容寻址机制一起删了，理由见本 job 顶部注释。
+          tags: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
+      - name: 分块推送到 TCR
+        if: steps.skip.outputs.hit != 'true'
         env:
           IMAGE_NAME: ${{ matrix.name }}
           IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
-          SRC_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:src-${{ steps.src.outputs.hash }}
           REGISTRY: ${{ secrets.REGISTRY }}
           REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
           REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
         run: |
           set -euo pipefail
 
-          # Docker push 会把整个压缩层放进一次长 PUT。Mac 直连 TCR 时实测同一连接传到
-          # 36.3 MB 后被中断，下一次只能从该层的 0 字节重新开始。regctl 导入 docker save
-          # 归档时使用 Registry V2 PATCH，把大层切成 4 MiB 小块；断线只重试当前小块。
-          # 固定版本和 SHA-256，避免发布机每次拿到未经验证的 latest 二进制。
+          # Docker push 会把整个压缩层放进一次长 PUT。当初在 Mac 直连 TCR 时实测同一连接
+          # 传到 36.3 MB 后被中断，下一次只能从该层的 0 字节重新开始；换到 ubuntu 之后
+          # 链条换成「GitHub 托管 → TCR」，但 blog 的实测证明这条出境链路一样会卡
+          # （同一批镜像的推层耗时在 3.2s ~ 376.8s 之间抖）。所以这里继续用 regctl：
+          # 导入 docker save 归档时走 Registry V2 PATCH，把大层切成 4 MiB 小块，断线只重试
+          # 当前小块。固定版本和 SHA-256，避免发布机每次拿到未经验证的 latest 二进制。
           regctl_version=v0.11.6
-          regctl_sha256=5b52b71861abc300ab513e87a4c3794cff6508035ac7f6b6bdfa1fa5688c0040
+          # linux-amd64（换 runner 时从 darwin-arm64 换过来，哈希重新核对过）。
+          # 拿法：curl -sL <release>/regctl-linux-amd64 | shasum -a 256
+          regctl_sha256=8e0e62a497fcdb8048d18aa927a139613176ba0531f412bc541044e28f9856bd
           temp_dir=$(mktemp -d "$RUNNER_TEMP/regctl-${IMAGE_NAME}.XXXXXX")
           trap 'rm -rf "$temp_dir"' EXIT
           regctl="$temp_dir/regctl"
           curl --fail --location --silent --show-error \
             --retry 5 --retry-all-errors --connect-timeout 15 --max-time 180 \
-            "https://github.com/regclient/regclient/releases/download/${regctl_version}/regctl-darwin-arm64" \
+            "https://github.com/regclient/regclient/releases/download/${regctl_version}/regctl-linux-amd64" \
             --output "$regctl"
-          printf '%s  %s\n' "$regctl_sha256" "$regctl" | shasum -a 256 -c -
+          printf '%s  %s\n' "$regctl_sha256" "$regctl" | sha256sum -c -
           chmod 700 "$regctl"
 
           export REGCTL_CONFIG="$temp_dir/config.json"
@@ -334,17 +245,7 @@ jobs:
           docker save "$IMAGE_REF" --output "$archive"
           echo "本地镜像归档大小：$(du -h "$archive" | awk '{print $1}')"
           "$regctl" --verbosity debug image import "$IMAGE_REF" "$archive"
-          image_digest=$("$regctl" image digest "$IMAGE_REF")
-          echo "TCR 已写入 $IMAGE_REF ($image_digest)"
-
-          # 层已经全部落地，同仓库复制只提交一份 manifest（几 KB）。它失败不该让发布挂：
-          # 后果仅仅是下次发布查不到这个 hash，多构建一次而已。
-          if "$regctl" image copy "$IMAGE_REF" "$SRC_REF"; then
-            src_digest=$("$regctl" image digest "$SRC_REF")
-            test "$image_digest" = "$src_digest"
-          else
-            echo "::warning::src tag 推送失败，下次发布会重新构建这个镜像"
-          fi
+          echo "TCR 已写入 $IMAGE_REF ($("$regctl" image digest "$IMAGE_REF"))"
 
   deploy:
     needs: images

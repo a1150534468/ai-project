@@ -17,7 +17,11 @@ concurrency:
 
 jobs:
   inspect:
-    runs-on: [self-hosted, macOS, ARM64, release-mac]
+    # 2026-10-13 从自建 Mac runner 换成 ubuntu-latest，与 production.yml 的 images job 保持一致。
+    # 这一步只是 ssh 出去做只读巡检（ssh-keyscan + ssh + $RUNNER_TEMP 拼密钥文件，全部是
+    # 通用命令，没有一处依赖 macOS）。原来钉在 Mac 上的后果是：这台 Mac 休眠 / Docker Desktop
+    # 没开 / runner 没起，巡检就点不动 —— 而巡检恰恰是出故障时才要用的东西。
+    runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 10
     env:

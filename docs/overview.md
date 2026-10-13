@@ -4,7 +4,7 @@
 
 ## 一句话概括
 
-**React 多端前端 + Fastify 单体 API + 独立 Worker 进程 + Go 计费微服务**。数据层 PostgreSQL（pgvector）+ Redis + MinIO；所有对话类模型统一走 Anthropic Messages 协议，接入阿里云百炼与 AI Pixel 网关。
+**React 前端（Web + Admin）+ Fastify 单体 API + 独立 Worker 进程**。数据层 PostgreSQL（pgvector）+ Redis + MinIO；所有对话类模型统一走 Anthropic Messages 协议，接入阿里云百炼与 AI Pixel 网关。
 
 ## 运行时拓扑
 
@@ -15,9 +15,8 @@
 | API（Fastify 单体） | 8090 | `apps/api/src/server.ts` |
 | Novel Worker | 8091 | `apps/api/src/workers/novel-worker.ts` |
 | Codex Pet Worker | 8092 | `apps/api/src/workers/codex-pet-worker.ts` |
-| Desktop（Electron） | 本机 | `apps/desktop` |
 
-数据层：PostgreSQL 17 + pgvector（主库，90 个模型）+ Billing 独立 PG + Redis + MinIO/S3。
+数据层：PostgreSQL 17 + pgvector（主库，90 个模型）+ Redis + MinIO/S3。
 外部模型：百炼 Anthropic 兼容（qwen 对话/embedding/生图）+ AI Pixel 网关（gpt-5.x 对话/gpt-image-2）。
 
 ## 怎么跑起来
@@ -28,18 +27,23 @@ pnpm install
 pnpm dev                     # 数据层进 Docker、业务进程热更新
 ```
 
-`pnpm dev` 启动全部服务：Docker 承载 pgvector(5433)/Redis(6380)/Billing PG(5434)/MinIO(9000)，本机拉起 API(8090)/Workers/Web/Admin。`Ctrl+C` 只停业务进程；`pnpm dev:infra:stop` 停数据层。详见 [setup.md](./overview.md)。
+`pnpm dev` 启动全部服务：Docker 承载 pgvector(5433)/Redis(6380)/MinIO(9000)，本机拉起 API(8090)/Workers/Web/Admin。`Ctrl+C` 只停业务进程；`pnpm dev:infra:stop` 停数据层。完整步骤见仓库根 `README.md` 的「本地开发」一节。
 
 ## 仓库布局
 
 ```
-apps/       api（Fastify + workers）、web、admin、desktop
+apps/       api（Fastify + workers）、web、admin
 packages/   db（Prisma）、llm（模型路由）、
-            novel-workflow / article-workflow / codex-pet-pipeline（纯逻辑流水线）、
-            connector-protocol（桌面连接协议 zod）
+            novel-workflow / article-workflow / codex-pet-pipeline（纯逻辑流水线）
 infra/      Dockerfile + K8s Kustomize
 docs/       本文档体系
 ```
+
+> 曾经存在的 `services/`（Go 计费微服务）、`apps/desktop`（Electron 桌面端）与
+> `packages/connector-protocol`（桌面连接协议）已于 2026-09 起陆续退役（见
+> [decisions.md](./decisions.md) 的 ADR-012），仓库里已无对应源码。
+> 其它文档里出现的 `billing*` 字样与「桌面端」描述，除本节这类明确标注历史的段落外，
+> 都只作历史参考。
 
 ## 技术选型速览
 
@@ -49,9 +53,7 @@ docs/       本文档体系
 | Fastify 5 + TS ESM + tsx | 单体承载全部路由，开发热更新 |
 | Prisma + pgvector | 单一 schema 90 模型；向量检索不引入额外组件 |
 | Postgres 即任务队列（租约模式）| 任务状态本来就要落库，事务认领免去双写一致性 |
-| Go + Gin 独立计费 | 账本与业务库物理隔离 |
 | React 19 + Vite + Tailwind + motion | Studio + Model 分层，刻意少依赖 |
-| Electron + 自定义 WS 协议 | 用户本机成为 agent 执行节点 |
 
 ## 项目血统与时间线
 

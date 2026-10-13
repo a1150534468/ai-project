@@ -13,8 +13,7 @@ AI 每次新会话都没有记忆，最容易犯的错就是重新提议已经�
 | 决策 | 内容 | 出处 |
 |---|---|---|
 | **编排框架** | 存量工作流（codex-pet / novel / article 等）**不迁框架**，只做代码优化；**新工作流**才走框架选型（倾向 Inngest 类轻量 durable 引擎，定型前需再调研） | `docs/orchestration.md`，2026-07-27 拍板。该决策推翻了 `docs/decisions.md` 的 ADR-004 |
-| **计费语义** | `reserve → work → 写终态 → settle`，失败走 `refundResource`（按 `operationId` 幂等）。次序与幂等口径不动 | 阶段 4 执行记录 |
-| **钱在 Go 侧** | `services/billing` 独立管账，TS 侧 `packages/billing` 只做瘦客户端（446 行）。不要在 TS 侧重新实现计费逻辑 | 现状即约定 |
+| **计费已整块下线** | 计费于 2026-09 退役（ADR-012）：`services/billing`（Go，原 :8093）与 `packages/billing`（TS 瘦客户端）都**已从仓库删除**，`apps/` 与 `packages/` 下已无任何 `billing*` 源码文件。**不要再去实现、排查或"修复"计费逻辑**；库表里遗留的一批 `billing*` 列只是历史数据，没有人读写 | `docs/decisions.md` ADR-012；本条取代旧版的「钱在 Go 侧」约定 |
 | **不做 history rewrite** | `.cc-tmp` 的 220MB 已在 git 历史里，只阻止继续增长，不重写历史 | 整治计划 P1.3 |
 
 **讨论存量工作流改动时不要再建议迁框架。新工作流立项时主动提示走框架选型。**
@@ -98,9 +97,9 @@ pnpm test                                       # 全量，仅阶段收尾
 
 | 情况 | 位置 |
 |---|---|
-| 某个业务域独有 | `apps/api/src/workflow/<域>/`（P2.1 已完成目录化，根目录只剩 13 个域子目录）。**域外只能从 `<域>/index.ts` 门面 import，不许直接引内部实现文件** |
+| 某个业务域独有 | `apps/api/src/workflow/<域>/`（P2.1 已完成目录化，根目录只剩 8 个域子目录 + `_shared/`）。**域外只能从 `<域>/index.ts` 门面 import，不许直接引内部实现文件** |
 | 跨域共用（后端） | `workflow/_shared/`（判据是**实测有 ≥2 个域消费且属基建**，不看文件名前缀）或 `apps/api/src/shared/` |
-| 前后端共用的**类型契约** | `packages/<域>-workflow/`。这是本项目已验证有效的模式（`article-workflow` / `novel-workflow` / `connector-protocol` 三个包确实双端消费） |
+| 前后端共用的**类型契约** | `packages/<域>-workflow/`。这是本项目已验证有效的模式（`article-workflow` / `novel-workflow` 两个包确实双端消费；`connector-protocol` 已随桌面端下线） |
 | 前端基础组件 | `apps/web/src/components/ui/`（当前仅 2 文件 198 行，急需加厚） |
 | 前端 HTTP 调用 | 走统一 `http.ts`，不要新建第 14 个 API 模块 |
 

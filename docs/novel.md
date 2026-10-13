@@ -30,7 +30,6 @@ flowchart LR
     API -->|命令写入| OB["NovelCommandOutbox 发件箱"]
     OB --> Worker["独立 Novel Worker 容器"]
     Worker --> DB
-    Worker --> Billing["计费服务"]
     Worker --> LLM["模型网关"]
     Pkg["packages/novel-workflow<br/>共享 TS 代码库"] -.导入.-> API
     Pkg -.导入.-> Worker

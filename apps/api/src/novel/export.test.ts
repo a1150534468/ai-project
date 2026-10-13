@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import JSZip from "jszip";
 import type { PrismaClient } from "@prisma/client";
@@ -45,6 +46,27 @@ describe("novel exports", () => {
     const output = await novelExportBuilders.pdf("Novel", [{ chapterIndex: 1, title: "Opening", content: "First paragraph." }]);
     expect(output.subarray(0, 5).toString()).toBe("%PDF-");
     expect(output.length).toBeGreaterThan(500);
+  });
+
+  /**
+   * 回归点：`document.font()` 抛错时以前会直接冒泡，整个导出 500。
+   * 线上就是这么坏的（线上镜像里 NotoSansCJK-Regular.ttc 是个 .ttc 集合，
+   * 不给 postscriptName 时 pdfkit 必然抛 this.font.createSubset is not a function）。
+   * 这里指向一个「存在但不是字体」的文件来逼出 catch 分支，不依赖机器上装没装中文字体。
+   */
+  it("字体装不上时退回内置字体，不让整个导出失败", async () => {
+    const previous = process.env.NOVEL_EXPORT_CJK_FONT;
+    process.env.NOVEL_EXPORT_CJK_FONT = fileURLToPath(new URL("./export.ts", import.meta.url));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const output = await novelExportBuilders.pdf("Novel", [{ chapterIndex: 1, title: "Opening", content: "First paragraph." }]);
+      expect(output.subarray(0, 5).toString()).toBe("%PDF-");
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("[novel-export]"));
+    } finally {
+      warn.mockRestore();
+      if (previous === undefined) delete process.env.NOVEL_EXPORT_CJK_FONT;
+      else process.env.NOVEL_EXPORT_CJK_FONT = previous;
+    }
   });
 });
 
