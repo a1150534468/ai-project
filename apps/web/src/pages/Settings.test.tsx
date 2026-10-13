@@ -10,7 +10,7 @@
  * 5. 「跟随系统」是 `components/ui/Switch`，偏好只经 THEME_CHANGE_EVENT / storage 这一条路回来。
  */
 import "@testing-library/jest-dom";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelOption } from "../api";
@@ -54,9 +54,21 @@ function mount(props: Partial<Props> = {}) {
   };
 }
 
-/** 模型列表拉回来之后才算渲染完 —— 三个用例之外都不该在「加载中」上做断言 */
-function loaded() {
-  return screen.findByRole("radio", { name: "通义千问 Max" });
+/**
+ * 模型列表拉回来之后才算渲染完 —— 三个用例之外都不该在「加载中」上做断言。
+ *
+ * 这里必须再冲一次 effect 队列，不能只 `await findByRole`：`findByRole` 是看到 DOM 里
+ * 有了那个 radio 就 resolve（靠 MutationObserver，走的是微任务），而「把兜底的模型报上去」
+ * 是在 passive effect 里做的（React 用调度器，走的是宏任务）。两者之间隔着一次调度，
+ * 于是 `await loaded()` 之后立刻断言「报过了没」会偶发读到「还没报」——
+ * 本地重复跑 8 次复现 1 次，CI 上就是这么红的（同一份 web 代码上一个提交是绿的）。
+ * 断言处改 `waitFor` 也能绕开，但在这里冲干净才算根治：`not.toHaveBeenCalled()` 那几条
+ * 同样需要「effect 已经跑完」才作数。
+ */
+async function loaded() {
+  const radio = await screen.findByRole("radio", { name: "通义千问 Max" });
+  await act(async () => {});
+  return radio;
 }
 
 beforeEach(() => {
