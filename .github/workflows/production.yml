@@ -83,13 +83,37 @@ jobs:
     #   apt + 中文字体     18.3 MiB  只在改 Dockerfile 时变
     #   node_modules       77.1 MiB  改依赖 / schema.prisma / packages/* 任何源码时变
     #   应用源码            0.56 MiB  **每轮都变**
-    # ⇒ 只改 apps/api 的一轮，真正出境的只有 **0.56 MiB**；托管 runner→TCR 实测约 17 KB/s，
-    #   也就是 ~35 秒。10-13 那轮之所以推了约 100 MiB 并耗满 60 分钟被强杀，是因为那个
-    #   提交**还改了 Dockerfile**（字体剪枝 + node_modules 剪枝），逼着 77.1 MiB 与
-    #   18.3 MiB 两层一起重推 ≈ 95 MiB ≈ 95 分钟。**那是特例，不是规律。**
     #
-    # 所以 timeout 从 60 提到 120 分钟，把「同时动了依赖 / schema / Dockerfile 的那一轮」
-    # 也容纳进来（≈80~95 分钟）。万一某轮真的太久，还有兜底：下面的「这个提交已经推过了
+    # 同一天换回托管 runner 后的第一轮真实发布（run 38496624858，commit caaac3a）实况：
+    #   校验 4s ｜ api 10m08s（推送 576s）｜ migrate 11m02s（推送 638s）｜ gateway 51s
+    #   （推送 **5s**）｜ deploy 1m56s ｜ **合计 13m06s** —— 比 Mac 那轮的 15m13s 还快。
+    # 三个镜像的时间差全部解释得通，不是随机抖动：
+    #   · **gateway 只推了 5 秒**，因为它终帧是 `FROM caddy:2.10-alpine`，基础层在 TCR 里
+    #     早就有；它唯一的新层是构建出来的前端产物，几 MB。
+    #   · api / migrate 都基于 `node:24-bookworm-slim`，那一轮把**整份镜像**重推了一遍
+    #     （api ≈181 MB），原因不是速率不够，而是**换了构建机**：BuildKit 会把目录的 mtime
+    #     写进层的 tar，所以「同一份内容在不同机器上构建」得到的层 digest 不同，
+    #     TCR 认的是 digest、不是「内容差不多」。Dockerfile 里那串
+    #     `find /runtime -exec touch -h -d @0 {} +` 与删 apt 日志，都只能保证**同一台机器
+    #     上**两次构建逐字相同（那是在 Mac 上实测的结论）。**换构建机 ⇒ 第一次必然整镜像重推。**
+    #   · 实测速率：181 MB / 576s ≈ **0.3 MB/s**，与 Mac→TCR 的 0.44~0.84 MB/s 同一量级。
+    #     ❗**此前记的「托管 runner 只有 17 KB/s」是误判**：那是 regctl `--req-concurrent 1`
+    #     把 4 MiB 分块串行 PATCH 出来的假象，不是这条链路的能力。裸 `push: true` 快约 18 倍。
+    #
+    # 构建本身几乎不花时间：那一轮所有步骤都是 `CACHED`（10-13 那次 ubuntu 尝试已经把
+    # BuildKit 缓存写进了 gha，scope=api/migrate/gateway，7 天内可命中），构建只用了约 25 秒，
+    # 10 分钟几乎全是推送。**gha 缓存还有一个隐性作用**：它把层内容钉住，于是层 digest
+    # 跨轮次稳定，TCR 才会认 `Layer already exists`。缓存若过期（7 天不访问）就要重建，
+    # digest 随之改变 ⇒ 整镜像重推一轮（api ≈576s、migrate ≈638s，合计约 20~25 分钟）。
+    # **这是「慢」，不是「失败」**，120 分钟的 timeout 容得下，所以不必为它加东西。
+    # 真要消掉它，办法是给 build 加 `outputs: type=image,rewrite-timestamp=true`
+    # （把层内 mtime 全部归一，让 digest 与构建时刻/机器无关）；暂不加，因为它会改动
+    # 全镜像文件的时间戳，属于需要单独验证的改动，不该和「换 runner」同批做。
+    #
+    # 10-13 那轮之所以推了约 100 MiB 并耗满 60 分钟被强杀，是因为那个提交**还改了
+    # Dockerfile**（字体剪枝 + node_modules 剪枝），逼着 77.1 MiB 与 18.3 MiB 两层一起重推。
+    #
+    # timeout 因此从 60 提到 120 分钟。万一某轮真的太久，还有兜底：下面的「这个提交已经推过了
     # 就跳过」让镜像可以先用本机推到 TCR，再跑本工作流 —— images 整段空转，只剩 deploy 做事。
     #
     # 另一颗**仍未拆**的雷，写在这里免得下次误判：node_modules 那 77.1 MiB 里第三者占 99.8%
