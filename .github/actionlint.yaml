@@ -1,19 +1,18 @@
 # actionlint 的配置。
 #
-# 这里声明自建 runner 的标签。**以后再引入自建 runner，必须把标签写在这里**，
+# 目前**没有自建 runner**：所有 workflow（production.yml / ci.yml /
+# production-diagnostics.yml）都跑在 GitHub 托管 runner 上，因此
+# self-hosted-runner.labels 是空的。以后若重新引入自建 runner，必须把它的标签写在下面，
 # 否则 actionlint 会把 runs-on 里的自定义标签判成未知标签。
 #
-# release-mac：production.yml 的 images job 专用（只服务发布镜像）。
-#
-# 2026-10-13 的反复值得留档：当天曾把 images 换成 ubuntu-latest（理由是缓存 scope 不再
-# 随发布 tag 漂移、原生 linux/amd64 免 Rosetta 模拟、不必要求那台 Mac 醒着），并把这个
-# 标签清空。当晚一次真实发布的实测把其中大部分收益作废 —— GitHub 托管 runner 出境到 TCR
-# 约 **17 KB/s**（regctl 每 4 MiB 分块约 4 分钟），api 的 522 MB 归档按此速率要几小时，
-# 三个 job 全部在 60 分钟上限被强杀、deploy 跳过；而同一天 Mac→TCR 实测 0.44~0.84 MB/s，
-# 用的是逐字相同的 regctl 参数 ⇒ 瓶颈是链路不是分块机制。换回 Mac 后标签重新声明。
-#
-# 教训一句话：这条实测**仓库自己的注释里本来就有**（旧 production.yml 写着「实测
-# GitHub→TCR <0.17 MB/s，Mac→TCR 为 0.44 MB/s」），改这块之前应当先给它称重。
+# 2026-10-13~14 这段反复值得留档，因为它记录的是一条**被证伪的推论**：
+#   · 10-13 把 images 从托管 runner 换到自建 Mac（标签 release-mac），理由是
+#     「托管 runner 出境到 TCR 只有 17 KB/s，api 的 522 MB 归档要几小时，必然超时」。
+#   · 10-14 把这份账逐层算清了才发现那条理由站不住：**关键从来不是 runner 快慢，
+#     而是每轮真正要出境的字节**。只改 apps/api 的一轮只出境 0.56 MiB（≈35 秒）；
+#     10-13 那轮之所以推了约 100 MiB，是因为同一个提交还改了 Dockerfile，
+#     逼着 77.1 MiB 与 18.3 MiB 两层一起重推。**那是特例，不是规律。**
+#   · 结论：换回 ubuntu-latest，形态与 blog 的 build job 对齐，标签清空。
+#     逐层字节账见 docs/deploy-compose.md 第 5 节。
 self-hosted-runner:
-  labels:
-    - release-mac
+  labels: []

@@ -73,45 +73,43 @@ jobs:
   images:
     name: 构建并推送 ${{ matrix.name }}
     needs: verify-release
-    # 2026-10-13 晚**换回**自建 Mac runner。当天早些时候这里被改成 ubuntu-latest
-    # （理由是缓存 scope 不再随发布 tag 漂移、原生 linux/amd64 免 Rosetta 模拟、
-    # 不必要求那台 Mac 醒着）。当晚一次真实发布把「不必醒着」以外的收益全部作废：
-    #   · GitHub 托管 runner 出境到 TCR 实测约 **17 KB/s**（regctl 每 4 MiB 分块
-    #     耗时约 4 分钟）。api 的 522 MB 归档、migrate 392 MB、gateway 59 MB，
-    #     三个 job 全部耗满 60 分钟被强杀 ⇒ deploy 跳过，发布失败。
-    #   · 同一天 Mac→TCR 实测 0.44~0.84 MB/s，用的是**逐字相同**的 regctl 参数，
-    #     快约 50 倍 ⇒ 瓶颈是链路而不是分块机制，换 push 方式救不了。
-    #   · 这条事实**仓库里本来就写着**（旧注释：「实测 GitHub→TCR <0.17 MB/s，
-    #     Mac→TCR 为 0.44 MB/s」）。改成 ubuntu 时只盯着缓存 scope，没给它称重。
-    # 所以回到已验证的那条路。代价照旧写明：发布时那台 Mac 必须醒着且 Docker Desktop
-    # 在跑，构建走 Rosetta 模拟 amd64。
-    runs-on: [self-hosted, macOS, ARM64, release-mac]
-    # 每个镜像只有两条路，判定在下面的「这个提交已经推过了就跳过」这步：
-    #   1. TCR 上已经有 :<sha> ⇒ 整个构建与推送跳过（让 `gh run rerun` 天然幂等）。
-    #   2. 没有 ⇒ build 出 amd64 镜像，再把本地镜像归档交给 regctl 按 4 MiB 分块 push TCR。
+    # 2026-10-14 **改回托管 runner**。前一天晚上曾经改回自建 Mac runner，理由是
+    # 「托管 runner 出境到 TCR 只有 17 KB/s，必然超时」。这一天把那份账逐层算清了，
+    # 结论是那条理由站不住 —— 关键从来不是 runner 快慢，而是**每轮真正要出境的字节**。
     #
-    # 为什么还留着 regctl 而不是像 blog 那样直接用 build-push-action 的 push：
-    # blog 那两个镜像每次真正新增的字节只有几 MB，裸 docker push 赌得起。这里 api 是
-    # 200 MB 量级，而这条出境链路实测极不稳定 —— 同一批镜像推 TCR 的耗时在
-    # 3.2s ~ 376.8s 之间抖（差 100 倍，最慢那次日志里没有任何逐层进度，是卡死不是匀速慢）。
-    # 裸 push 是一次长 PUT，被切断就从该层的 0 字节重来；regctl 切成 4 MiB 小块，
-    # 断线只重试当前小块。换 runner 和换推送机制不要同时做，否则出问题分不清是谁的锅。
+    # api 镜像逐层实测（本机 docker save 后按每层 gzip blob 量，2026-10-14）：
+    #   Debian base        26.9 MiB  从不随发布变
+    #   node 24            48.0 MiB  从不随发布变
+    #   apt + 中文字体     18.3 MiB  只在改 Dockerfile 时变
+    #   node_modules       77.1 MiB  改依赖 / schema.prisma / packages/* 任何源码时变
+    #   应用源码            0.56 MiB  **每轮都变**
+    # ⇒ 只改 apps/api 的一轮，真正出境的只有 **0.56 MiB**；托管 runner→TCR 实测约 17 KB/s，
+    #   也就是 ~35 秒。10-13 那轮之所以推了约 100 MiB 并耗满 60 分钟被强杀，是因为那个
+    #   提交**还改了 Dockerfile**（字体剪枝 + node_modules 剪枝），逼着 77.1 MiB 与
+    #   18.3 MiB 两层一起重推 ≈ 95 MiB ≈ 95 分钟。**那是特例，不是规律。**
     #
-    # 2026-10 删掉了旧的 :src-<内容哈希> 内容寻址机制（它当时是「第 1 条路」）。理由是它和
-    # 已有的层复用机制重叠：原注释里自己写着「digest 不变 ⇒ Layer already exists ⇒ 出境 0 字节」，
-    # 也就是「没变的层本来就不会重传」，内容哈希额外省的只是「Mac 本地构建缓存冷掉」
-    # 这一种罕见情况；而它的代价是一份**手工维护**的 hash_paths —— 写窄了不会报错，
-    # 只会静默把旧代码发上生产。收益窄、风险专一，故删。
+    # 所以 timeout 从 60 提到 120 分钟，把「同时动了依赖 / schema / Dockerfile 的那一轮」
+    # 也容纳进来（≈80~95 分钟）。万一某轮真的太久，还有兜底：下面的「这个提交已经推过了
+    # 就跳过」让镜像可以先用本机推到 TCR，再跑本工作流 —— images 整段空转，只剩 deploy 做事。
     #
-    # 构建缓存靠的是这台 Mac 上 Docker Desktop 累积的持久 BuildKit 缓存（约 28.8 GB），
-    # 所以下面的 build step **刻意不声明 type=gha** —— 本地缓存本来就命中，加 gha 缓存
-    # 反而要每轮存取一次 1.3 GB 的 pnpm-install 层。（对比：blog 的 build job 在
-    # ubuntu-latest 上，那边每次全新实例，必须显式声明 type=gha,mode=max。）
-    timeout-minutes: 60
+    # 另一颗**仍未拆**的雷，写在这里免得下次误判：node_modules 那 77.1 MiB 里第三者占 99.8%
+    # （解压后 266.8 MiB / 14024 个文件，其中第三方 250.87 MiB，工作区包源码 @ai-assistant
+    # 只有 0.57 MiB / 135 个文件），而**一层就是一个 blob** ⇒ 改 packages/ 里一行代码
+    # 也会整层重推 77 MiB。拆它要把 pnpm 的 `.pnpm/@ai-assistant+*` 软链结构搬开
+    # （2026-10-13 的 Prisma 生成物拆分就是这么失败的），而收益只是把偶发的大轮次从
+    # 77 MiB 降到 ~7 MiB（打包实测 server bundle 6.6 MiB），代价却是把最常见的轮次
+    # 从 0.56 MiB 抬到 ~7 MiB —— 净亏，所以不做。
+    #
+    # 2026-10 删掉了旧的 :src-<内容哈希> 内容寻址机制。理由是它和已有的层复用机制重叠：
+    # 原注释里自己写着「digest 不变 ⇒ Layer already exists ⇒ 出境 0 字节」，也就是
+    # 「没变的层本来就不会重传」；它额外省的只是「构建缓存冷掉」这一种情况，而代价是
+    # 一份**手工维护**的 hash_paths —— 写窄了不会报错，只会静默把旧代码发上生产。故删。
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
     strategy:
-      # max-parallel: 1 在换回 Mac 之后**必须恢复**：三个 job 挤在同一台 Mac 的
-      # 同一条出境管子上，并行只会互相抢带宽（当年就是为此设的）。
-      max-parallel: 1
+      # 不需要 max-parallel: 1 —— 那是三个 job 挤在同一台 Mac、抢同一条出境管子时的设置。
+      # 托管 runner 每个 job 一台独立 VM、各走自己的出口。
+      #
       # fail-fast: false 是必须的。默认 true 时 api 一失败，还在 queued 的 migrate/
       # gateway 会被连带取消 —— 但这三个镜像互不依赖，而且推送是**累积**的：
       # 每个成功落地的层都留在 TCR 里，下次重跑直接跳过。把它们一起取消等于白白放弃
@@ -151,47 +149,15 @@ jobs:
             build_args: ""
     steps:
       - uses: actions/checkout@v4
-      # 回到 Mac 之后，这两步手写准备必须一并恢复 —— 它们不是「历史包袱」，而是
-      # launchd 起的 runner 无法弹 Keychain 交互授权所必需的绕行：显式造一份临时
-      # DOCKER_CONFIG（含 config.json + 软链 cli-plugins），再把 auths 直接写进去。
-      # 用 docker/login-action@v3 在这台机器上会走到 Keychain helper 而失败。
-      - name: Prepare dedicated Mac builder
-        env:
-          DOCKER_CONFIG: ${{ runner.temp }}/docker-config-${{ github.run_id }}-${{ matrix.name }}
-        run: |
-          set -euo pipefail
-          test "$(uname -s)" = Darwin
-          test "$(uname -m)" = arm64
-          echo "DOCKER_CONFIG=$DOCKER_CONFIG" >> "$GITHUB_ENV"
-          umask 077
-          mkdir -p "$DOCKER_CONFIG/cli-plugins"
-          jq -n '{auths:{}}' > "$DOCKER_CONFIG/config.json"
-          ln -sf "$HOME/.docker/cli-plugins/docker-buildx" \
-            "$DOCKER_CONFIG/cli-plugins/docker-buildx"
-          export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
-          echo "DOCKER_HOST=$DOCKER_HOST" >> "$GITHUB_ENV"
-          docker info >/dev/null
-          buildx_info=$(docker buildx inspect default --bootstrap)
-          grep -q 'linux/amd64' <<< "$buildx_info"
-      - name: Configure temporary TCR credentials
-        env:
-          REGISTRY: ${{ secrets.REGISTRY }}
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          test -n "$REGISTRY"
-          test -n "$REGISTRY_USERNAME"
-          test -n "$REGISTRY_PASSWORD"
-          umask 077
-          temp_config=$(mktemp "$DOCKER_CONFIG/config.json.XXXXXX")
-          jq -n \
-            --arg registry "$REGISTRY" \
-            --arg username "$REGISTRY_USERNAME" \
-            --rawfile password <(printf '%s' "$REGISTRY_PASSWORD") \
-            '{auths:{($registry):{auth:([$username,$password] | join(":") | @base64)}}}' \
-            > "$temp_config"
-          mv "$temp_config" "$DOCKER_CONFIG/config.json"
+      # 托管 runner 上用官方 action 就够了。之前那两步手写准备（自造临时 DOCKER_CONFIG
+      # + 用 jq 拼 auths + 软链 buildx 插件）只服务于「launchd 起的 runner 弹不出
+      # Keychain 授权」这一个 Mac 专有问题，换回 ubuntu 之后整段作废。
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ secrets.REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
       - name: 这个提交已经推过了就跳过
         id: skip
         env:
@@ -204,19 +170,17 @@ jobs:
           # 重新构建。「判断不准时一律重新构建」：多构建一次只是慢，少构建一次是把旧代码漏发。
           #
           # 平时不会命中（同一个 commit 不会发两次），留着是为了两件事：
-          #   1. 出境被限速的这段时间里，镜像可以在别处构建好直接推到 TCR（本机就行，不占
-          #      生产机、不多开机器）。推完再跑本工作流，images 整段空转，只剩 deploy 做事。
-          #      没有这条判断，workflow 会把同一个镜像原样重传一遍 —— api 约 200 MB，
-          #      按这条链路实测的速率就是几分钟到几十分钟白烧。
+          #   1. 万一某轮尺寸太极端（比如同时动了 Dockerfile 和依赖，要重推 ~95 MiB），
+          #      可以先用本机（或任何能直连 TCR 的机器）把镜像推上去，再跑本工作流 ——
+          #      images 整段空转，只剩 deploy 做事。没有这条判断，workflow 会把同一个镜像
+          #      原样重传一遍，那是几分钟到几十分钟的纯浪费。
           #   2. `gh run rerun` 天然幂等：上一次已经推成功的镜像不再重传。
           #
           # 下面两处 `${IMAGE_REF}` 的**大括号是必须的**，不是风格：变量后面紧跟中文标点时，
           # macOS 自带的 bash 3.2 会把那个多字节字符的首字节折进变量名，于是 `$IMAGE_REF，`
-          # 被当成未定义变量 `IMAGE_REF<0xef>`，配合 `set -u` 直接致命
-          # （实测：`bash-3.2 -u -c 'X=abc; echo "$X，"'` → `X?: unbound variable`）。
-          # 同一个坑 `scripts/dev-local.sh:210` 已经踩过并写了注释，这里是第二次。
-          # 注意它**只在自建 Mac runner 上炸**（那边是 bash 3.2）：同一份 workflow 在
-          # ubuntu-latest（bash 5）上跑得好好的 —— 所以换 runner 前一定要在两个 shell 上都过一遍。
+          # 被当成未定义变量 `IMAGE_REF<0xef>`，配合 `set -u` 直接致命。现在虽然跑在
+          # ubuntu 的 bash 5 上不会炸，但 `scripts/dev-local.sh:210` 已经踩过一次，
+          # 这条规则在整个仓库里保持统一，别改回去。
           if docker buildx imagetools inspect "$IMAGE_REF" >/dev/null 2>&1; then
             echo "hit=true" >> "$GITHUB_OUTPUT"
             echo "TCR 上已经有 ${IMAGE_REF}，构建与推送整段跳过"
@@ -224,7 +188,7 @@ jobs:
             echo "hit=false" >> "$GITHUB_OUTPUT"
             echo "TCR 上没有 ${IMAGE_REF}，走完整构建"
           fi
-      - name: 构建镜像
+      - name: 构建并推送镜像
         if: steps.skip.outputs.hit != 'true'
         uses: docker/build-push-action@v6
         with:
@@ -232,74 +196,28 @@ jobs:
           file: ${{ matrix.file }}
           platforms: linux/amd64
           build-args: ${{ matrix.build_args }}
-          # 镜像先 load 进 runner 的 docker daemon，再由下一步交给 regctl 推。
-          # 不用 build-push-action 自带的 push 是为了保留 4 MiB 分块重试，理由见本 job 顶部。
-          # 失败重跑时这一步吃的是这台 Mac 的持久 BuildKit 缓存，而 TCR 那边已经收下的
-          # 层不用重传。
-          load: true
+          # 构建完直接 push，和 blog 的 build job 完全同形。
+          #
+          # 历史上这里曾经是 `load: true` + 手工 `docker save` + regctl 4 MiB 分块推送，
+          # 那套东西只为绕开「Mac 直连 TCR 时一条长 PUT 传到 36 MB 被中断」——**Mac 专有**。
+          # 换回托管 runner 后它整段作废，而且分块本身从来不是瓶颈：同一天 blog 在
+          # ubuntu-latest 用裸 `push: true` 推**同一个** TCR，它 backend 的
+          # `pushing layers` 也要 988.2s。真正决定耗时的只有「每轮要出境多少新字节」。
+          push: true
           provenance: false
           sbom: false
-          # 刻意**不声明** gha 缓存：这套构建跑在自建 Mac 上，Docker Desktop 的 BuildKit
-          # 缓存是跨次持久的（不是每次全新实例），本地缓存本来就命中。加 type=gha 反而要
-          # 每轮存取一次 1.3 GB 的 pnpm-install 层，纯亏时间。
-          # （对比：blog 的 build job 在 ubuntu-latest 上，必须显式声明 type=gha,mode=max，
-          #   因为托管 runner 每次都换机器。）
+          # 托管 runner 每次都是全新 VM，本地没有 BuildKit 缓存 ⇒ **必须**显式声明 gha 缓存，
+          # 否则每轮都要重新跑一遍 apt + pnpm install（就是那 1.3 GB 的层）。这也是 blog 的
+          # build job 在 ubuntu-latest 上声明 type=gha,mode=max 的原因。
+          # scope 按镜像名分开：三个镜像的依赖树不同，共用 scope 会互相挤掉缓存。
+          #
+          # 注意 gha 缓存与「层复用」是两件事：缓存省的是**构建**时间，`Layer already exists`
+          # 省的是**上传**时间。即便缓存全冷，只要内容没变，层 digest 不变，TCR 那边依然零出境。
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
           # 只打 :<sha> 一个 tag —— deploy 用的就是它（remote-deploy.sh 收的正是这个值）。
           # 原来那个 :src-<hash>「路标 tag」随内容寻址机制一起删了，理由见本 job 顶部注释。
           tags: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
-      - name: 分块推送到 TCR
-        if: steps.skip.outputs.hit != 'true'
-        env:
-          IMAGE_NAME: ${{ matrix.name }}
-          IMAGE_REF: ${{ secrets.REGISTRY }}/${{ secrets.IMAGE_NAMESPACE }}/ai-assistant-${{ matrix.name }}:${{ github.sha }}
-          REGISTRY: ${{ secrets.REGISTRY }}
-          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
-          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
-        run: |
-          set -euo pipefail
-
-          # Docker push 会把整个压缩层放进一次长 PUT。Mac 直连 TCR 时实测同一连接传到
-          # 36.3 MB 后被中断，下一次只能从该层的 0 字节重新开始。regctl 导入 docker save
-          # 归档时走 Registry V2 PATCH，把大层切成 4 MiB 小块，断线只重试当前小块。
-          # 固定版本和 SHA-256，避免发布机每次拿到未经验证的 latest 二进制。
-          #
-          # 2026-10-13 补一条对比数据，免得再把「慢」误判成分块机制的问题：
-          #   · 同一天 blog 在 ubuntu-latest 上用裸 `push: true` 推**同一个** TCR，它 backend
-          #     的 `pushing layers` 也要 **988.2s（16.5 分钟）**。⇒ 这条出境链路对谁都不快，
-          #     blog 不是「推得动」，是「量小到能忍」。
-          #   · 真正拉开差距的是**每次要传的新字节量**。blog 最终镜像只有 alpine + 一个 Go
-          #     静态二进制 / `.output`（十几 MB 级），基础层在 TCR 里早就有；api 是长驻 Node
-          #     服务，必须带 node_modules（181 MB 镜像），而首次冷构建时 apt / pnpm 那些大层
-          #     全是新 digest，一个字节都躲不掉。
-          regctl_version=v0.11.6
-          # darwin-arm64（这台 Mac 是 Apple Silicon）。哈希是从 release 上重新核对过的。
-          # 拿法：curl -sL <release>/regctl-darwin-arm64 | shasum -a 256
-          regctl_sha256=5b52b71861abc300ab513e87a4c3794cff6508035ac7f6b6bdfa1fa5688c0040
-          temp_dir=$(mktemp -d "$RUNNER_TEMP/regctl-${IMAGE_NAME}.XXXXXX")
-          trap 'rm -rf "$temp_dir"' EXIT
-          regctl="$temp_dir/regctl"
-          curl --fail --location --silent --show-error \
-            --retry 5 --retry-all-errors --connect-timeout 15 --max-time 180 \
-            "https://github.com/regclient/regclient/releases/download/${regctl_version}/regctl-darwin-arm64" \
-            --output "$regctl"
-          printf '%s  %s\n' "$regctl_sha256" "$regctl" | shasum -a 256 -c -
-          chmod 700 "$regctl"
-
-          export REGCTL_CONFIG="$temp_dir/config.json"
-          "$regctl" registry set "$REGISTRY" \
-            --blob-chunk 4194304 \
-            --blob-max 4194304 \
-            --req-concurrent 1 \
-            --skip-check
-          printf '%s' "$REGISTRY_PASSWORD" \
-            | "$regctl" registry login "$REGISTRY" \
-                --user "$REGISTRY_USERNAME" --pass-stdin
-
-          archive="$temp_dir/image.tar"
-          docker save "$IMAGE_REF" --output "$archive"
-          echo "本地镜像归档大小：$(du -h "$archive" | awk '{print $1}')"
-          "$regctl" --verbosity debug image import "$IMAGE_REF" "$archive"
-          echo "TCR 已写入 $IMAGE_REF ($("$regctl" image digest "$IMAGE_REF"))"
 
   deploy:
     needs: images

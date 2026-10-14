@@ -91,15 +91,26 @@ bash /opt/ai-assistant/rollback-compose.sh <previous-commit-sha>
 
 ## 5. CI/CD 配置
 
-发布由 `.github/workflows/production.yml` 负责，**手动触发，且只允许从 `main` 触发**，并会先校验该提交有一次成功的 `CI` 记录。校验通过后在**自建 Mac runner**（标签 `release-mac`）上构建 `api`/`migrate`/`gateway` 三个镜像，经 regctl 按 4 MiB 分块推到 TCR，最后 SSH 到服务器执行 `remote-deploy.sh`。
+发布由 `.github/workflows/production.yml` 负责，**手动触发，且只允许从 `main` 触发**，并会先校验该提交有一次成功的 `CI` 记录。校验通过后在 `ubuntu-latest` 上构建 `api`/`migrate`/`gateway` 三个镜像，用 `docker/build-push-action` 直接 `push` 到 TCR，最后 SSH 到服务器执行 `remote-deploy.sh`。**这个形状和同服务器的 blog 项目（`.github/workflows/deploy.yml`）完全一致。**
 
-> **为什么镜像构建仍在自建 Mac runner 上**（2026-10-13 反复过一次，结论是不要换）：当天一度改成 `ubuntu-latest`，理由是缓存 scope 不再随发布 tag 漂移、原生 `linux/amd64` 免 Rosetta、不必要求那台 Mac 醒着。当晚一次真实发布的实测推翻了其中大部分收益 ——
+> **为什么是这个形状**（2026-10-14 定稿，此前在托管 runner 与自建 Mac runner 之间反复过两轮）：
 >
-> - GitHub 托管 runner 出境到 TCR 实测约 **17 KB/s**（regctl 每 4 MiB 分块耗时约 4 分钟）。api 的 522 MB 归档按此速率要几小时，三个镜像全部耗满 60 分钟上限被强杀，`deploy` 跳过。
-> - 同一时刻 Mac→TCR 是 **0.44~0.84 MB/s**，用的是逐字相同的 regctl 参数，快约 50 倍。
-> - 参照物：同一天 blog（`ubuntu-latest` + 裸 `push: true`，同一个 TCR）的 backend 光 `pushing layers` 就要 **988 秒**。**blog 不是「推得动」，是它的最终镜像只有 alpine + 一个 Go 静态二进制，量小到能忍。** 本项目 api 是长驻 Node 服务，必须带 node_modules。
+> 关键不是 runner 快慢，而是**每轮真正要出境的字节数**。api 镜像逐层实测（本机 `docker save` 后按每层 gzip blob 量）：
 >
-> 所以这里保留自建 runner。代价照旧：发布时那台 Mac 必须醒着且 Docker Desktop 在跑，构建走 Rosetta 模拟 `amd64`。触发方式（`workflow_dispatch` on main）与缓存 scope 的改动则保留 —— 那部分是对的。
+> | 层 | blob（压缩后） | 每轮会不会变 |
+> |---|---|---|
+> | Debian base | 26.9 MiB | 否 |
+> | node 24 | 48.0 MiB | 否 |
+> | apt + 中文字体 | 18.3 MiB | 只在改 Dockerfile 时 |
+> | `node_modules` | **77.1 MiB** | 改依赖 / `schema.prisma` / `packages/*` 任何源码时 |
+> | 应用源码 | **0.56 MiB** | **每轮都变** |
+> | 合计 | 172.6 MiB | |
+>
+> - 只改 `apps/api` 的一轮，真正出境的只有 **0.56 MiB**；托管 runner → TCR 实测约 17 KB/s，也就是 **~35 秒**。
+> - 2026-10-13 那次 `ubuntu-latest` 发布红掉，是因为那个提交**同时改了 Dockerfile**（字体剪枝 + `node_modules` 剪枝），逼着 77.1 MiB 与 18.3 MiB 两层一起重推 ≈95 MiB ≈95 分钟 > 当时的 60 分钟上限。**那是特例，不是规律** —— 所以现在 `timeout-minutes` 是 120。
+> - 参照物：同一天 blog（`ubuntu-latest` + 裸 `push: true`，同一个 TCR）的 backend 光 `pushing layers` 就要 **988 秒（16.5 分钟）**。**blog 不是「推得动」，是它每一轮要传的新字节少到能忍** —— 它的基础层在 TCR 里早就有，`Layer already exists` 零出境。
+> - 换回托管 runner 之后不再要求那台 Mac 醒着，也不必再跑 Rosetta 模拟 `amd64`。原先那套 `regctl` 4 MiB 分块推送是 Mac 专有的绕行手段，一并删除。
+> - **仍未拆的雷**：`node_modules` 那 77.1 MiB 里第三方依赖占 99.8%，而**一层就是一个 blob** ⇒ 改 `packages/` 一行代码也会整层重推。打包（esbuild 把 api 打成单文件）实测 6.6 MiB，代价是把最常见的轮次从 0.56 MiB 抬到 ~7 MiB，**净亏**，所以不做。
 
 日常发布：在 Actions 里对着 `main` 手动跑一次 `Release to production`，或命令行：
 

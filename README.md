@@ -63,7 +63,7 @@ gh workflow run production.yml --ref main
 跑起来后流水线做三件事：
 
 1. **校验发布是否合法**（ref 是 `main` + 该提交的 `CI` 曾经跑绿）
-2. **构建并推送镜像** —— api / migrate / gateway 三个镜像，在**自建 Mac runner**（标签 `release-mac`）上构建后经 regctl 分块推到腾讯云 TCR，镜像 tag 是 commit SHA（为什么不用 GitHub 托管 runner，见 [docs/deploy-compose.md](docs/deploy-compose.md) 第 5 节）
+2. **构建并推送镜像** —— api / migrate / gateway 三个镜像，在 `ubuntu-latest` 上用 `docker/build-push-action` 直接 `push` 到腾讯云 TCR（和 blog 的 build job 同形），镜像 tag 是 commit SHA
 3. **部署** —— SSH 到生产机执行 `remote-deploy.sh`：拉镜像 → 跑 Prisma 迁移 → 起容器 → 等 5 个服务健康，**失败自动回滚到上一版**
 
 版本号照旧用 git tag 记，但**打 tag 本身不再触发发布**（2026-10-13 从 tag 触发改成手动触发，原因见工作流顶部注释）。想让 tag 与线上版本对齐，就先打 tag、再点发布，中间别往 `main` 合东西。
