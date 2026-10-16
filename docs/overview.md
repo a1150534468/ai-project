@@ -74,3 +74,4 @@ docs/       本文档体系
 | 小说引擎 | [novel.md](./novel.md) | 最重的业务线：PlotPilot 叙事状态机 + 独立 Worker |
 | Codex 桌宠 | [codex-pet.md](./codex-pet.md) | 像素动画角色生成：模型合同 + 确定性流水线 + 签名交付 |
 | AI 生图 | [image.md](./image.md) | 双轨模型（百炼 Qwen + GPT Image）的底层图片能力 |
+| 表情包工坊 | — | 角色描述/参考图 → 16 张成套贴纸（复用生图 reference 编辑） |
