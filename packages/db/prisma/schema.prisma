@@ -171,6 +171,8 @@ model Document {
   error        String?
   chunkCount   Int           @default(0)
   tokensUsed   Int           @default(0)
+  // 解析质量追踪：{ chars, headingCount, tableSectionCount, strategy, parseMs }
+  parseMeta    Json?
   opId         String?
   lockedBy     String?
   lockedAt     DateTime?
