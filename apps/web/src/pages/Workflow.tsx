@@ -5,6 +5,7 @@ import { DownloadLinkDialog } from "../components/ui/DownloadLinkDialog";
 import { cx } from "../components/ui";
 import { ArticleWorkflowStudio } from "../components/workflow/ArticleWorkflowStudio";
 import { CodexPetStudio } from "../components/workflow/CodexPetStudio";
+import { StickerStudio } from "../components/workflow/StickerStudio";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
 import { useImageWorkflowStudio } from "../components/workflow/useImageWorkflowStudio";
@@ -67,6 +68,8 @@ const SHELL: Record<WorkflowModuleId, ModuleShell> = {
   // 录音转文字是单栏模块，还没并进三区骨架：保留它自己的页头与留白，别在合并里顺手改别人的界面
   transcription: { fullscreen: true, header: true, studio: PADDED_STUDIO },
   "codex-pet": { fullscreen: true, header: false, studio: A_SHAPE_STUDIO },
+  // 表情包工坊也是单栏模块
+  sticker: { fullscreen: true, header: true, studio: PADDED_STUDIO },
   novel: { fullscreen: true, header: false, studio: "min-w-0 min-h-0 flex-1 h-full" },
   ppt: { fullscreen: false, header: true, studio: "min-w-0" },
 };
@@ -144,8 +147,7 @@ export default function Workflow({ token, activeModuleId, initialCodexPetProject
                 <p className="mb-1 text-xs font-bold text-brand-ink">工作流 / {module.title}</p>
                 <h1 className="page-title text-[24px] text-ink">{module.title}</h1>
                 <p className="mt-1 max-w-2xl text-sm leading-6 text-ink-secondary">{module.description}</p>
-              </header>
-            )}
+              </header>            )}
 
             {activeModuleId === "image" && imageTabs.length > 1 && (
               <div role="tablist" aria-label="生图场景" className="flex flex-none gap-1 overflow-x-auto px-3.5 pt-3.5">
@@ -190,6 +192,8 @@ export default function Workflow({ token, activeModuleId, initialCodexPetProject
                 <ArticleWorkflowStudio token={token} />
               ) : activeModuleId === "transcription" ? (
                 <TranscriptionStudio token={token} />
+              ) : activeModuleId === "sticker" ? (
+                <StickerStudio token={token} />
               ) : (
                 <Placeholder icon="mdi:hammer-wrench" text="模块开发中" />
               )}
