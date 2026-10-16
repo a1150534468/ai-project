@@ -188,3 +188,22 @@
   不再存在待按本 ADR 重写的上游算法或业务控制流。逐批明细见 ADR-012 引用的方案文档。
 
 ---
+## ADR-013 · 录音转文字用百炼 qwen-audio-3.1-asr-flash-filetrans 异步接口
+
+- **日期**：2026-10-17
+- **背景**：新增录音转文字模块需要 ASR 能力，仓库内无现成实现（配音模块已随 ADR-012 删除）。
+  调研了两条路线：A）云端 ASR；B）效仿 WorkBuddy 的本机 Whisper 零费用路线。
+  WorkBuddy 的零费用真相是转写全程在用户本机用 Whisper medium + Metal GPU 完成、
+  不调任何云端 API；但 ai-project 是服务端产品，用不到用户本机 GPU，服务端 CPU
+  跑 Whisper 又慢、粤语效果又弱，故 v1 不采用。
+- **决策**：
+  1. 用 `qwen-audio-3.1-asr-flash-filetrans`（DashScope 原生异步接口，非 OpenAI 兼容——
+     qwen-audio-3.1 系列不支持 OpenAI 兼容调用），支持 12 小时/2GB 音频、句/字级时间戳。
+  2. 5 分钟上限的同步版 `qwen-audio-3.1-asr-flash` 不用：录音场景通常超过 5 分钟。
+  3. 语言：普通话/粤语/英语三选，经 `language_hints` 透传（粤语 hint code 待 live 验证校准）。
+  4. 音频 URL：复用 `storage/public-url.ts` 的 `publicObjectUrl`（生产 COS 有公网域名）；
+     对象 key 含 cuid 级 requestId，不可猜解。
+  5. 计费已下线，但 `TranscriptionTask` 预留 `asrInputTokens/asrOutputTokens/audioDurationSec`
+     字段先记账，为日后 metering 留数据。
+- **理由**：filetrans 的异步三段式（提交→轮询→下载结果 JSON）天然契合仓库既有的
+  租约 runner + reaper 模式；降价 95% 后输入 ¥0.8/百万 tokens，成本可接受；粤语有专门优化。
