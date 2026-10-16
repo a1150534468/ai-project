@@ -5,7 +5,7 @@
 
 // ── 工作流 Hub ───────────────────────────────────────────────────────────────
 
-export type WorkflowModuleId = "image" | "novel" | "codex-pet" | "article-workflow" | "ppt";
+export type WorkflowModuleId = "image" | "novel" | "codex-pet" | "article-workflow" | "sticker" | "ppt";
 
 /** `developing` 的模块照样列在导航里，点进去是占位页。 */
 export type WorkflowModuleStatus = "available" | "developing";
@@ -46,6 +46,13 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
     title: "多平台图文工作流",
     description: "一篇原文或一个主题生成公众号 / 小红书 / 抖音三版内容，配图排版后可编辑复制",
     icon: "mdi:newspaper-variant-outline",
+    status: "available",
+  },
+  {
+    id: "sticker",
+    title: "表情包工坊",
+    description: "描述角色或上传参考图，一键生成 16 张成套表情贴纸",
+    icon: "mdi:emoticon-happy-outline",
     status: "available",
   },
   {
