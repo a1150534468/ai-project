@@ -23,7 +23,6 @@ import {
 import {
   isTranscriptionLanguage,
   LANGUAGE_HINTS,
-  loadTranscriptionStaleTaskMs,
   TRANSCRIPTION_TASK_STATUS,
   type TranscriptionLanguage,
   type TranscriptionTaskRow,
