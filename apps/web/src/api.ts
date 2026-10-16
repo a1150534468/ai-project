@@ -397,3 +397,83 @@ export function uploadAgentAvatar(token: string, id: string, file: File): Promis
   });
   return rephrase(pending, TOO_OFTEN, 429);
 }
+
+// ── 录音转文字 ───────────────────────────────────────────────────────────────
+
+export type TranscriptionLanguage = "zh-CN" | "yue" | "en";
+
+export interface TranscriptionSegment {
+  readonly beginMs: number;
+  readonly endMs: number;
+  readonly text: string;
+}
+
+export interface TranscriptionTask {
+  readonly id: string;
+  readonly requestId: string;
+  readonly fileName: string;
+  readonly language: TranscriptionLanguage;
+  readonly status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  readonly transcriptText: string | null;
+  readonly segments: readonly TranscriptionSegment[] | null;
+  readonly error: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export function createTranscriptionRequestId(): string {
+  return `tr_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function uploadTranscriptionAudio(
+  token: string,
+  file: File,
+  requestId: string,
+  language: TranscriptionLanguage,
+): Promise<TranscriptionTask> {
+  const form = new FormData();
+  form.append("requestId", requestId);
+  form.append("language", language);
+  form.append("audio", file, file.name);
+  return request<TranscriptionTask>("/api/workflow/transcription/tasks", {
+    method: "POST",
+    token,
+    body: form,
+    fallback: "上传音频失败",
+  });
+}
+
+export function listTranscriptionTasks(token: string): Promise<TranscriptionTask[]> {
+  return request<TranscriptionTask[]>("/api/workflow/transcription/tasks", {
+    token,
+    fallback: "获取转写任务失败",
+  });
+}
+
+export function getTranscriptionTask(token: string, id: string): Promise<TranscriptionTask> {
+  return request<TranscriptionTask>(`/api/workflow/transcription/tasks/${encodeURIComponent(id)}`, {
+    token,
+    fallback: "获取转写任务失败",
+  });
+}
+
+export function updateTranscriptionText(
+  token: string,
+  id: string,
+  transcriptText: string,
+): Promise<TranscriptionTask> {
+  return request<TranscriptionTask>(`/api/workflow/transcription/tasks/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    token,
+    body: { transcriptText },
+    fallback: "保存文稿失败",
+  });
+}
+
+export function deleteTranscriptionTask(token: string, id: string): Promise<{ id: string }> {
+  return request<{ id: string }>(`/api/workflow/transcription/tasks/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    token,
+    fallback: "删除任务失败",
+  });
+}
