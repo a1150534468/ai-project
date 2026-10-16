@@ -1,4 +1,4 @@
-import { getRedis } from "@ai-assistant/db";
+import { getPrisma, getRedis } from "@ai-assistant/db";
 import type { FastifyInstance } from "fastify";
 import { adminAuditRoutes } from "./admin/audit-routes.js";
 import { clientMenuRoutes } from "./admin/client-menu-routes.js";
@@ -23,6 +23,7 @@ import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
 import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
 import { nailTryOnWorkflowRoutes } from "./workflow/nail-try-on/index.js";
 import { ecomWorkflowRoutes, ecomMainImageRoutes, ecomHelpWriteRoutes } from "./workflow/ecom/index.js";
+import { registerStickerRoutes } from "./workflow/sticker/index.js";
 
 export async function registerApplicationRoutes(app: FastifyInstance): Promise<void> {
   await app.register(authRoutes);
@@ -45,6 +46,10 @@ export async function registerApplicationRoutes(app: FastifyInstance): Promise<v
   await app.register(novelWorkflowRoutes);
   await app.register(novelEngineRoutes);
   await app.register(articleWorkflowRoutes);
+  await app.register((instance, _opts, done) => {
+    registerStickerRoutes(instance, getPrisma());
+    done();
+  });
   await app.register(memoryRoutes);
   await app.register(adminRoutes);
   await app.register(adminUserRoutes);
