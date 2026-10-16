@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chunkText } from "./chunk.js";
+import { chunkText, describeTextStructure } from "./chunk.js";
 
 const options = (overrides: Partial<Parameters<typeof chunkText>[1]> = {}) => ({
   maxTokens: 4,
@@ -51,5 +51,79 @@ describe("chunkText", () => {
     const chunks = chunkText("a😀bc", options({ maxTokens: 1, overlapTokens: 0 }));
     expect(chunks).toEqual(["a😀", "bc"]);
     expect(chunks[0]).toHaveLength(3);
+  });
+});
+
+describe("标题感知切块", () => {
+  const headingOptions = () => options({ maxTokens: 100, overlapTokens: 0 });
+
+  it("按标题分节，每块带上节标题", () => {
+    const text = "# 第一章\n这是第一章的内容。\n# 第二章\n这是第二章的内容。";
+    const chunks = chunkText(text, headingOptions());
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toBe("# 第一章\n这是第一章的内容。");
+    expect(chunks[1]).toBe("# 第二章\n这是第二章的内容。");
+  });
+
+  it("文档开头的导语（无标题）独立成块", () => {
+    const text = "导语部分。\n# 第一章\n正文。";
+    const chunks = chunkText(text, headingOptions());
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toBe("导语部分。");
+    expect(chunks[1]).toBe("# 第一章\n正文。");
+  });
+
+  it("节内超长时节内窗口切，每块都带标题", () => {
+    const body = "x".repeat(500);
+    const text = `# 长节\n${body}`;
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0, maxChunks: 20 }));
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) expect(chunk.startsWith("# 长节\n")).toBe(true);
+  });
+
+  it("表格节（# 表名 + TSV）不被拦腰切断", () => {
+    const rows = Array.from({ length: 10 }, (_, i) => `a${i}\tb${i}\tc${i}`).join("\n");
+    const text = `# 销售表\n${rows}\n# 另一节\n正文。`;
+    const chunks = chunkText(text, headingOptions());
+    const tableChunk = chunks.find((chunk) => chunk.startsWith("# 销售表"));
+    expect(tableChunk).toContain("a0\tb0\tc0");
+    expect(tableChunk).toContain("a9\tb9\tc9");
+  });
+
+  it("#hashtag 这类行不算标题，走原路径", () => {
+    const text = "谈 #AI 吧";
+    expect(chunkText(text, options())).toEqual(["谈 #AI 吧"]);
+    expect(describeTextStructure(text).strategy).toBe("plain");
+  });
+
+  it("空节（只有标题）被丢弃", () => {
+    const text = "# 空节\n# 实节\n有内容。";
+    const chunks = chunkText(text, headingOptions());
+    expect(chunks).toEqual(["# 实节\n有内容。"]);
+  });
+
+  it("maxChunks 上限仍然生效", () => {
+    const text = "# 一\n1\n# 二\n2\n# 三\n3\n# 四\n4";
+    expect(chunkText(text, options({ maxTokens: 100, overlapTokens: 0, maxChunks: 2 }))).toHaveLength(2);
+  });
+});
+
+describe("describeTextStructure", () => {
+  it("空文本", () => {
+    expect(describeTextStructure("  ")).toEqual({ headingCount: 0, tableSectionCount: 0, strategy: "plain" });
+  });
+
+  it("无标题文本走 plain", () => {
+    const result = describeTextStructure("普通文本，没有标题。");
+    expect(result.strategy).toBe("plain");
+    expect(result.headingCount).toBe(0);
+  });
+
+  it("识别标题数与表格节数", () => {
+    const text = "# 销售表\na\tb\n# 说明\n普通文本。";
+    const result = describeTextStructure(text);
+    expect(result.strategy).toBe("headings");
+    expect(result.headingCount).toBe(2);
+    expect(result.tableSectionCount).toBe(1);
   });
 });

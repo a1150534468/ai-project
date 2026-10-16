@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_EMBEDDING_DIMENSION, validateEmbeddingVector } from "../memory/embedding-client.js";
+import { describeTextStructure } from "./chunk.js";
 import { EmptyTextError, PermanentDocumentError } from "./parse.js";
 
 export { EmptyTextError } from "./parse.js";
@@ -147,6 +148,7 @@ async function publish(
   chunks: readonly string[],
   vectors: readonly string[],
   tokensUsed: number,
+  parseMeta: Record<string, number | string>,
 ): Promise<boolean> {
   return deps.prisma.$transaction(async (tx) => {
     const locked = await tx.$queryRaw<Array<{ id: string }>>`
@@ -169,6 +171,7 @@ async function publish(
         status: "indexed",
         chunkCount: chunks.length,
         tokensUsed,
+        parseMeta,
         lockedBy: null,
         lockedAt: null,
         error: null,
@@ -210,7 +213,17 @@ export async function indexOnce(deps: IndexDeps, docId: string, options: IndexOn
     const doc = await deps.prisma.document.findUnique({ where: { id: docId } });
     if (!doc) throw new PermanentIndexError(`Document not found: ${docId}`);
     const loaded = await deps.loadObject({ sourceType: doc.sourceType, sourceUri: doc.sourceUri });
+    const parseStartedAt = Date.now();
     const text = await deps.parse(loaded.buf, loaded.mime, loaded.filename);
+    const parseMs = Date.now() - parseStartedAt;
+    const structure = describeTextStructure(text);
+    const parseMeta = {
+      chars: text.length,
+      headingCount: structure.headingCount,
+      tableSectionCount: structure.tableSectionCount,
+      strategy: structure.strategy,
+      parseMs,
+    };
     const chunks = deps.chunk(text);
     if (chunks.length === 0) throw new PermanentIndexError("No chunks after splitting");
 
@@ -234,7 +247,7 @@ export async function indexOnce(deps: IndexDeps, docId: string, options: IndexOn
     const dimension = deps.embeddingDimension ?? DEFAULT_EMBEDDING_DIMENSION;
     const vectors = embeds.map(({ vector }) => vectorLiteral(vector, dimension));
     if (!(await heartbeat.stop())) return;
-    await publish(deps, doc, owner, chunks, vectors, totalTokens);
+    await publish(deps, doc, owner, chunks, vectors, totalTokens, parseMeta);
   } catch (error) {
     await heartbeat.stop();
     await recordFailure(deps.prisma, docId, owner, error, maxAttempts);
