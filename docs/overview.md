@@ -75,3 +75,4 @@ docs/       本文档体系
 | Codex 桌宠 | [codex-pet.md](./codex-pet.md) | 像素动画角色生成：模型合同 + 确定性流水线 + 签名交付 |
 | AI 生图 | [image.md](./image.md) | 双轨模型（百炼 Qwen + GPT Image）的底层图片能力 |
 | 录音转文字 | — | 百炼 qwen-audio-3.1-asr-flash-filetrans 异步转写：普通话/粤语/英语，句/字级时间戳 |
+| 表情包工坊 | — | 角色描述/参考图 → 16 张成套贴纸（复用生图 reference 编辑） |
