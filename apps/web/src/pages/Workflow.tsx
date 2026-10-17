@@ -5,6 +5,7 @@ import { DownloadLinkDialog } from "../components/ui/DownloadLinkDialog";
 import { cx } from "../components/ui";
 import { ArticleWorkflowStudio } from "../components/workflow/ArticleWorkflowStudio";
 import { CodexPetStudio } from "../components/workflow/CodexPetStudio";
+import { StickerStudio } from "../components/workflow/StickerStudio";
 import { ImageWorkflowStudio } from "../components/workflow/ImageWorkflowStudio";
 import { NovelWorkflowStudio } from "../components/workflow/NovelWorkflowStudio";
 import { useImageWorkflowStudio } from "../components/workflow/useImageWorkflowStudio";
@@ -43,6 +44,7 @@ const SHELL: Record<WorkflowModuleId, ModuleShell> = {
   image: { fullscreen: true, header: true, studio: PADDED_STUDIO },
   "article-workflow": { fullscreen: true, header: true, studio: PADDED_STUDIO },
   "codex-pet": { fullscreen: true, header: false, studio: PADDED_STUDIO },
+  sticker: { fullscreen: true, header: true, studio: PADDED_STUDIO },
   novel: { fullscreen: true, header: false, studio: "min-w-0 min-h-0 flex-1 h-full" },
   ppt: { fullscreen: false, header: true, studio: "min-w-0" },
 };
@@ -135,6 +137,8 @@ export default function Workflow({ token, activeModuleId, initialCodexPetProject
               <CodexPetStudio token={token} initialProjectId={initialCodexPetProjectId} />
             ) : activeModuleId === "article-workflow" ? (
               <ArticleWorkflowStudio token={token} />
+            ) : activeModuleId === "sticker" ? (
+              <StickerStudio token={token} />
             ) : (
               <Placeholder icon="mdi:hammer-wrench" text="模块开发中" />
             )}
