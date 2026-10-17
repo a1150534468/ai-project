@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { deleteObject } from "../../storage/s3-objects.js";
 import { requireUser } from "../../auth/require-user.js";
 import { cancelTranscriptionTask } from "./transcription-task-runner.js";
@@ -40,26 +41,44 @@ export function registerTranscriptionTaskRoutes(context: TranscriptionRouteConte
     if (!req.isMultipart()) {
       return reply.code(400).send({ error: "请以 multipart/form-data 上传音频文件" });
     }
+    // multipart 字段必须从 parts 流里取：未开 attachFieldsToBody 时 req.body 为 undefined，
+    // 且必须在迭代中消费掉每个 part（字段顺序不保证在文件之前，多余文件直接丢弃），
+    // 否则背压会卡住流。
+    const fields: Record<string, unknown> = {};
+    let audioFile: { filename: string; mimetype: string; bytes: Buffer } | undefined;
+    let audioTooLarge = false;
+    for await (const part of req.parts()) {
+      if (part.type === "field") {
+        fields[part.fieldname] = part.value;
+        continue;
+      }
+      if (audioFile) {
+        part.file.resume();
+        continue;
+      }
+      try {
+        const bytes = await part.toBuffer();
+        audioFile = { filename: part.filename, mimetype: part.mimetype, bytes };
+      } catch {
+        audioTooLarge = true;
+        part.file.resume();
+      }
+    }
     const parsed = transcriptionCreateSchema.safeParse({
-      requestId: (req.body as Record<string, unknown> | undefined)?.requestId,
-      language: (req.body as Record<string, unknown> | undefined)?.language,
+      requestId: fields["requestId"],
+      language: fields["language"],
     });
     if (!parsed.success) {
       return reply.code(400).send({ error: "请求参数无效" });
     }
-    const file = await req.file();
+    if (audioTooLarge || (audioFile && audioFile.bytes.length > context.maxBytes)) {
+      return reply.code(413).send({ error: `文件过大，最多 ${Math.round(context.maxBytes / 1024 / 1024)}MB` });
+    }
+    const file = audioFile;
     if (!file) return reply.code(400).send({ error: "未提供音频文件" });
 
-    let bytes: Buffer;
-    try {
-      bytes = await file.toBuffer();
-    } catch {
-      return reply.code(413).send({ error: `文件过大，最多 ${Math.round(context.maxBytes / 1024 / 1024)}MB` });
-    }
+    const bytes = file.bytes;
     if (bytes.length === 0) return reply.code(400).send({ error: "音频文件为空" });
-    if (bytes.length > context.maxBytes) {
-      return reply.code(413).send({ error: `文件过大，最多 ${Math.round(context.maxBytes / 1024 / 1024)}MB` });
-    }
     const filename = sanitizeFilename(file.filename);
     if (!extensionOf(filename)) {
       return reply.code(400).send({ error: "无法识别音频格式，请上传 mp3/wav/m4a/flac/ogg/aac" });
@@ -70,8 +89,10 @@ export function registerTranscriptionTaskRoutes(context: TranscriptionRouteConte
     }
 
     const { requestId, language } = parsed.data;
-    // requestId 取 cuid 强度，拼出的对象 key 不可猜解（publicObjectUrl 会暴露给百炼拉取）
-    const objectKey = `transcription/${req.userId}/${requestId}/${filename}`;
+    // 每次上传尝试独立 key：requestId 有唯一约束，重复提交会在 prisma.create 撞库；
+    // 若 key 是确定性的，失败清理时的 deleteObject 会误删原任务的音频。UUID 后缀保证
+    // 清理只删本次尝试的孤儿文件。publicObjectUrl 会暴露给百炼拉取，UUID 亦不可猜解。
+    const objectKey = `transcription/${req.userId}/${requestId}/${randomUUID()}/${filename}`;
     try {
       await context.storeAudio(objectKey, bytes, mimeType);
     } catch (error) {
