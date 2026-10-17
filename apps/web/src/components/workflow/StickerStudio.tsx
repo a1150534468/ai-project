@@ -5,11 +5,13 @@ import {
   deleteStickerPack,
   getStickerPack,
   listStickerPacks,
+  listStickerPresets,
   retryStickerPack,
   runStickerPack,
   uploadStickerReference,
   type StickerPack,
   type StickerPackDetail,
+  type StickerPreset,
 } from "../../stickerApi";
 import { cx } from "../ui/cx";
 
@@ -30,6 +32,8 @@ function downloadImage(url: string, filename: string): void {
   anchor.href = url;
   anchor.download = filename;
   anchor.rel = "noopener";
+  // 跨域 S3 URL 下 download 属性会被浏览器忽略，加 target 兜底避免当前页被导航走
+  anchor.target = "_blank";
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
@@ -39,6 +43,7 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   const [packs, setPacks] = useState<readonly StickerPack[]>([]);
   const [activePackId, setActivePackId] = useState<string | null>(null);
   const [detail, setDetail] = useState<StickerPackDetail | null>(null);
+  const [presets, setPresets] = useState<readonly StickerPreset[]>([]);
   const [name, setName] = useState("");
   const [characterPrompt, setCharacterPrompt] = useState("");
   const [referenceFile, setReferenceFile] = useState<File | null>(null);
@@ -61,13 +66,25 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
     try {
       const loaded = await getStickerPack(token, packId);
       setDetail(loaded);
-      if (selectedPresets === null) {
-        setSelectedPresets(new Set(loaded.presets.map((preset) => preset.key)));
-      }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "加载详情失败");
     }
-  }, [token, selectedPresets]);
+  }, [token]);
+
+  // 模板列表独立于 pack 获取：新用户还没有任何 pack 时也能选模板建首单
+  useEffect(() => {
+    let cancelled = false;
+    listStickerPresets(token)
+      .then((list) => {
+        if (cancelled) return;
+        setPresets(list);
+        setSelectedPresets((current) => current ?? new Set(list.map((preset) => preset.key)));
+      })
+      .catch((failure: unknown) => {
+        if (!cancelled) setError(failure instanceof Error ? failure.message : "加载模板失败");
+      });
+    return () => { cancelled = true; };
+  }, [token]);
 
   useEffect(() => { void refreshPacks(); }, [refreshPacks]);
 
@@ -138,6 +155,20 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
     }
   };
 
+  // queued 任务的启动入口：/run 是 fire-and-forget，若那次触发丢失，任务会卡在 queued
+  const handleStart = async (packId: string): Promise<void> => {
+    setBusy(true);
+    setError(null);
+    try {
+      await runStickerPack(token, packId);
+      await refreshDetail(packId);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "启动失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleDelete = async (packId: string): Promise<void> => {
     if (!window.confirm("确定删除这个表情包任务吗？已生成的贴纸会保留在素材库。")) return;
     try {
@@ -149,7 +180,6 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
     }
   };
 
-  const presetList = detail?.presets ?? [];
   const activePack = detail?.pack;
   const total = activePack?.presetKeys.length ?? 0;
   const done = (activePack?.completedCount ?? 0) + (activePack?.failedCount ?? 0);
@@ -179,12 +209,12 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
         {referenceFile && <p className="mt-1 text-xs text-ink-secondary">已选择：{referenceFile.name}</p>}
 
         <div className="mt-4 flex items-center justify-between">
-          <span className="text-sm font-semibold text-ink">表情模板（{selectedPresets?.size ?? presetList.length}/{presetList.length}）</span>
-          <button type="button" onClick={() => setSelectedPresets(new Set(presetList.map((preset) => preset.key)))}
+          <span className="text-sm font-semibold text-ink">表情模板（{selectedPresets?.size ?? presets.length}/{presets.length}）</span>
+          <button type="button" onClick={() => setSelectedPresets(new Set(presets.map((preset) => preset.key)))}
             className="text-xs text-brand-ink">全选</button>
         </div>
         <div className="mt-2 flex max-h-48 flex-wrap gap-1.5 overflow-y-auto">
-          {presetList.map((preset) => {
+          {presets.map((preset) => {
             const selected = selectedPresets?.has(preset.key) ?? true;
             return (
               <button key={preset.key} type="button" onClick={() => togglePreset(preset.key)}
@@ -243,6 +273,12 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
                 {activePack.error && <p className="mt-2 text-xs text-red-600">{activePack.error}</p>}
               </div>
               <div className="flex gap-2">
+                {activePack.status === "queued" && (
+                  <button type="button" onClick={() => handleStart(activePack.id)} disabled={busy}
+                    className="rounded-lg bg-brand px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
+                    开始生成
+                  </button>
+                )}
                 {activePack.status === "failed" && (
                   <button type="button" onClick={() => handleRetry(activePack.id)} disabled={busy}
                     className="rounded-lg border border-hairline-subtle px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-50">
@@ -270,7 +306,7 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
                 <p className="mb-2 text-xs font-semibold text-ink-secondary">贴纸（{detail.stickers.length}）</p>
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
                   {detail.stickers.map((sticker) => {
-                    const preset = presetList[sticker.requestIndex];
+                    const preset = presets[sticker.requestIndex];
                     return (
                       <button key={sticker.id} type="button" title={preset?.label ?? ""}
                         onClick={() => downloadImage(sticker.originalUrl, `sticker-${preset?.key ?? sticker.requestIndex}.png`)}

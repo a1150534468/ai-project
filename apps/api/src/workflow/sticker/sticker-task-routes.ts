@@ -48,7 +48,14 @@ function sanitizePresetKeys(input: unknown): string[] {
 }
 
 export function registerStickerTaskRoutes(app: FastifyInstance, prisma: PrismaClient): void {
-  // 创建 pack（不立即跑：由下面的 run 触发，或前端轮询时由服务端兜底触发）
+  // 模板列表：新建 pack 前独立获取，不依赖已有 pack（新用户首单必需）
+  app.get("/api/workflow/sticker/presets", async (request, reply) => {
+    const userId = request.userId;
+    if (!userId) return reply.code(401).send({ error: "unauthorized" });
+    return reply.send({ presets: STICKER_PRESETS });
+  });
+
+  // 创建 pack（不立即跑：由下面的 run 触发）
   app.post("/api/workflow/sticker/packs", async (request, reply) => {
     const userId = request.userId;
     if (!userId) return reply.code(401).send({ error: "unauthorized" });
@@ -72,6 +79,10 @@ export function registerStickerTaskRoutes(app: FastifyInstance, prisma: PrismaCl
     const name = typeof body.name === "string" && body.name.trim()
       ? body.name.trim().slice(0, MAX_NAME_LENGTH)
       : `表情包 ${new Date().toLocaleDateString("zh-CN")}`;
+    // referenceObjectKey 必须归属当前用户，防止传任意 key 读别人的对象
+    if (referenceObjectKey && !referenceObjectKey.startsWith(`workflow/stickers/${userId}/`)) {
+      return reply.code(400).send({ error: "参考图无效，请重新上传" });
+    }
     const presetKeys = sanitizePresetKeys(body.presetKeys);
     if (presetKeys.length === 0) return reply.code(400).send({ error: "请至少选择一个表情模板" });
 

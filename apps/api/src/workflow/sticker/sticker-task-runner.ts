@@ -13,11 +13,12 @@ import {
 } from "../_shared/image-service-calls.js";
 import { DEFAULT_IMAGE_MODEL } from "../_shared/image-service-constants.js";
 import { loadImageGenerationConfigForModel } from "../_shared/image-service-providers.js";
-import { measureBinary, storeWorkflowImage } from "../_shared/image-service-storage.js";
+import { storeWorkflowImage } from "../_shared/image-service-storage.js";
 import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
   buildBaseCharacterPrompt,
   buildStickerPrompt,
+  sniffImageMime,
   STICKER_PACK_FINAL_STATUSES,
   STICKER_PACK_STATUS,
   stickerPresetByKey,
@@ -81,9 +82,7 @@ async function resolveBaseImage(args: {
   if (pack.referenceObjectKey) {
     const s3 = makeS3(loadS3Config(env));
     const buffer = await getObject(s3, pack.referenceObjectKey);
-    const measured = await measureBinary(buffer);
-    void measured;
-    return { buffer, mime: "image/png" };
+    return { buffer, mime: sniffImageMime(buffer) };
   }
   // 2) 已生成的主形象（ImageAsset）
   if (pack.baseImageRequestId) {
@@ -219,20 +218,20 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
   const env = args.env ?? process.env;
   const maxAttempts = args.maxAttempts ?? 3;
 
-  // 租约：只有 queued 能被认领为 running
+  // 租约：只有 queued 能被认领为 running；没抢到就抛，后续流程（/run 的 TOCTOU、
+  // 重复调用）靠这个保证同一时间只有一个 runner 在推进，避免重复付费生成。
   const claimed = await prisma.stickerPack.updateMany({
     where: { id: packId, status: STICKER_PACK_STATUS.queued },
     data: { status: STICKER_PACK_STATUS.running, error: null, updatedAt: new Date() },
   });
-  let pack = await getPack(prisma, packId);
-  if (!pack) throw new Error("sticker pack not found");
-  if (claimed.count === 0 && pack.status !== STICKER_PACK_STATUS.running) {
-    const message = TERMINAL_STATUS_MESSAGE[pack.status] ?? `sticker pack is ${pack.status}`;
+  if (claimed.count === 0) {
+    const current = await getPack(prisma, packId);
+    if (!current) throw new Error("sticker pack not found");
+    const message = TERMINAL_STATUS_MESSAGE[current.status] ?? `sticker pack is ${current.status}, not queued`;
     throw new StickerPackStoppedError(message);
   }
-  if (pack.status !== STICKER_PACK_STATUS.running) {
-    pack = (await getPack(prisma, packId))!;
-  }
+  let pack = await getPack(prisma, packId);
+  if (!pack) throw new Error("sticker pack not found");
 
   const presets = pack.presetKeys
     .map((key) => stickerPresetByKey(key))

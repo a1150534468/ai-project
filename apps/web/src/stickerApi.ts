@@ -40,6 +40,14 @@ export interface StickerPackDetail {
   readonly presets: readonly StickerPreset[];
 }
 
+export async function listStickerPresets(token: string): Promise<StickerPreset[]> {
+  const { presets } = await request<{ presets: StickerPreset[] }>("/api/workflow/sticker/presets", {
+    token,
+    fallback: "加载表情模板失败",
+  });
+  return presets ?? [];
+}
+
 export async function createStickerPack(
   token: string,
   input: {
