@@ -16,6 +16,7 @@ import { PortraitWorkflowStudio } from "../components/workflow/PortraitWorkflowS
 import { ProductExtractionWorkflowStudio } from "../components/workflow/ProductExtractionWorkflowStudio";
 import { TryOnWorkflowStudio } from "../components/workflow/TryOnWorkflowStudio";
 import { NailTryOnWorkflowStudio } from "../components/workflow/NailTryOnWorkflowStudio";
+import { TranscriptionStudio } from "../components/workflow/TranscriptionStudio";
 import { isGeneralImageRequestId } from "../components/workflow/productExtractionWorkflowModel";
 import type { EcomMainJob } from "../workflowEcomMainApi";
 import type { WorkflowEcomWorkflow } from "../workflowEcomApi";
@@ -42,6 +43,7 @@ const PADDED_STUDIO = "min-w-0 min-h-0 flex-1 px-4 py-4 lg:px-6 lg:py-5";
 const SHELL: Record<WorkflowModuleId, ModuleShell> = {
   image: { fullscreen: true, header: true, studio: PADDED_STUDIO },
   "article-workflow": { fullscreen: true, header: true, studio: PADDED_STUDIO },
+  transcription: { fullscreen: true, header: true, studio: PADDED_STUDIO },
   "codex-pet": { fullscreen: true, header: false, studio: PADDED_STUDIO },
   novel: { fullscreen: true, header: false, studio: "min-w-0 min-h-0 flex-1 h-full" },
   ppt: { fullscreen: false, header: true, studio: "min-w-0" },
@@ -135,6 +137,8 @@ export default function Workflow({ token, activeModuleId, initialCodexPetProject
               <CodexPetStudio token={token} initialProjectId={initialCodexPetProjectId} />
             ) : activeModuleId === "article-workflow" ? (
               <ArticleWorkflowStudio token={token} />
+            ) : activeModuleId === "transcription" ? (
+              <TranscriptionStudio token={token} />
             ) : (
               <Placeholder icon="mdi:hammer-wrench" text="模块开发中" />
             )}
