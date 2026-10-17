@@ -1,6 +1,7 @@
 /** 表情包工坊：纯函数单测（prompt 构建 / 预设校验 / 状态常量）。 */
 import { describe, expect, it } from "vitest";
 import {
+  sniffImageMime,
   buildBaseCharacterPrompt,
   buildStickerPrompt,
   isStickerPresetKey,
@@ -70,5 +71,21 @@ describe("状态常量", () => {
     const b = newStickerRequestId();
     expect(a).not.toBe(b);
     expect(a.startsWith("sticker_")).toBe(true);
+  });
+});
+
+describe("sniffImageMime", () => {
+  it("识别 PNG/JPEG/WebP 文件头", () => {
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(10)]);
+    const jpeg = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(10)]);
+    const webp = Buffer.concat([Buffer.from("RIFF", "ascii"), Buffer.alloc(4), Buffer.from("WEBP", "ascii"), Buffer.alloc(10)]);
+    expect(sniffImageMime(png)).toBe("image/png");
+    expect(sniffImageMime(jpeg)).toBe("image/jpeg");
+    expect(sniffImageMime(webp)).toBe("image/webp");
+  });
+
+  it("未知头默认 png", () => {
+    expect(sniffImageMime(Buffer.from("hello"))).toBe("image/png");
+    expect(sniffImageMime(Buffer.alloc(0))).toBe("image/png");
   });
 });

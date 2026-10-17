@@ -34,3 +34,22 @@ export async function reapStickerPacks(
   });
   return { reaped: stale.length, packIds: stale.map((pack) => pack.id) };
 }
+
+/**
+ * 启动常驻 reaper：进程重启、runner 崩溃后卡在 running 的 pack 由它收尸。
+ * 状态机转换是幂等的（updateMany 带 status=running 守卫），多实例同时跑也不会
+ * 把同一个 pack 标记两次，所以这里不用 redis 分布式锁。
+ */
+export function startStickerReaper(args: {
+  readonly prisma: PrismaClient;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly intervalMs?: number;
+  readonly onError?: (error: unknown) => void;
+}): NodeJS.Timeout {
+  const intervalMs = args.intervalMs ?? 5 * 60 * 1000;
+  const timer = setInterval(() => {
+    void reapStickerPacks(args.prisma, args.env).catch((error) => args.onError?.(error));
+  }, intervalMs);
+  timer.unref();
+  return timer;
+}
