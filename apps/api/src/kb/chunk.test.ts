@@ -246,3 +246,13 @@ describe("第三轮 review 回归", () => {
     expect(chunks[0]).toContain("#\tB");
   });
 });
+
+describe("第四轮 review 回归", () => {
+  it("首列为 # A 的 TSV 行不被当成标题", () => {
+    const text = "# 表\n# A\t1\n# B\t2";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).not.toEqual([]);
+    expect(chunks[0]).toContain("# A\t1");
+    expect(chunks[0]).toContain("# B\t2");
+  });
+});

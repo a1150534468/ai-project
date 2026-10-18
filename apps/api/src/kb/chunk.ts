@@ -68,7 +68,9 @@ function splitSections(text: string): Section[] {
       currentLines.push(line);
       continue;
     }
-    const match = !inFence ? HEADING_PATTERN.exec(line.trimEnd()) : null;
+    // 含制表符的行是 TSV 数据行，不是标题：XLSX 单元格内容可能以 `#` 开头
+    //（如 `# A\t1`），误判为标题会导致整节被当成空节丢弃。
+    const match = !inFence && !line.includes("\t") ? HEADING_PATTERN.exec(line.trimEnd()) : null;
     if (match) {
       flush();
       currentHeading = line.trim();
