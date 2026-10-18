@@ -221,3 +221,28 @@ describe("第二轮 review 回归", () => {
     }
   });
 });
+
+describe("第三轮 review 回归", () => {
+  it("混合围栏字符不提前闭合", () => {
+    const text = "```\n# A\n```~~~\n# B\n```";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toEqual([text]);
+  });
+
+  it("超长表格行硬切时末尾制表符不丢", () => {
+    const text = "# 表\nab\tcde\t";
+    const chunks = chunkText(text, options({ maxTokens: 2, overlapTokens: 0, maxChunks: 20 }));
+    expect(chunks.length).toBeGreaterThan(0);
+    // 所有切片拼起来应还原原始行（含末尾制表符）
+    const reassembled = chunks.map((chunk) => chunk.replace("# 表\n", "")).join("");
+    expect(reassembled).toBe("ab\tcde\t");
+  });
+
+  it("TSV 数据行首列为 # 时不被当成标题", () => {
+    const text = "# 表\n#\tA\n#\tB";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).not.toEqual([]);
+    expect(chunks[0]).toContain("#\tA");
+    expect(chunks[0]).toContain("#\tB");
+  });
+});

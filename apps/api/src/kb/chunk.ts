@@ -6,8 +6,8 @@ export interface ChunkOpts {
 
 const APPROXIMATE_CHARS_PER_TOKEN = 3;
 
-/** markdown 标题行：`#`~`######` 后跟空格。`#hashtag` 这类不算标题。 */
-const HEADING_PATTERN = /^(#{1,6})\s+(\S.*)$/;
+/** markdown 标题行：`#`~`######` 后跟空格（刻意不用 \s：TSV 数据行如 `#\tA` 不是标题）。 */
+const HEADING_PATTERN = /^(#{1,6}) +(\S.*)$/;
 /** 围栏起始：3 个及以上的反引号或波浪号（info string 允许，如 ```sh） */
 const FENCE_PATTERN = /^(`{3,}|~{3,})/;
 
@@ -50,15 +50,20 @@ function splitSections(text: string): Section[] {
     const fenceMatch = FENCE_PATTERN.exec(trimmed);
     if (fenceMatch) {
       const seq = fenceMatch[1];
-      const isCloseCandidate = /^[`~]+\s*$/.test(trimmed);
       if (!inFence) {
         inFence = true;
         fenceChar = seq[0];
         fenceLen = seq.length;
-      } else if (seq[0] === fenceChar && seq.length >= fenceLen && isCloseCandidate) {
-        inFence = false;
-        fenceChar = "";
-        fenceLen = 0;
+      } else {
+        // 闭合：整行必须全是同种围栏字符（长度不小于 opening）+ 空白；
+        // 混合字符（如 ```~~~）不算闭合，避免提前退出围栏。
+        let i = 0;
+        while (i < trimmed.length && trimmed[i] === fenceChar) i++;
+        if (i >= fenceLen && trimmed.slice(i).trim() === "") {
+          inFence = false;
+          fenceChar = "";
+          fenceLen = 0;
+        }
       }
       currentLines.push(line);
       continue;
@@ -142,9 +147,9 @@ function chunkTableLines(
     if (line.trim() === "") continue;
     if (line.length > bodyBudgetChars) {
       pushChunk();
+      // 行内硬切：行已确认非空，切片即使全是空白（列分隔符）也有意义，不再 trim 过滤
       for (let start = 0; start < line.length && chunks.length < maxChunks; start += bodyBudgetChars) {
-        const piece = line.slice(start, start + bodyBudgetChars);
-        if (piece.trim() !== "") chunks.push(`${header}${piece}`);
+        chunks.push(`${header}${line.slice(start, start + bodyBudgetChars)}`);
       }
       continue;
     }
