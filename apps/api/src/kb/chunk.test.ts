@@ -298,3 +298,11 @@ describe("第七轮 review 回归", () => {
     expect(structure.tableSectionCount).toBe(0);
   });
 });
+
+  it("TSV 与围栏代码混在同一节时，围栏里的空行保留", () => {
+    const text = "# 示例\na\tb\n```python\ns = \"\"\"x\n\ny\"\"\"\n```";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toHaveLength(1);
+    // Python 字符串里的空行不能被表格切分删掉
+    expect(chunks[0]).toContain("x\n\ny");
+  });

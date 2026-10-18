@@ -180,9 +180,13 @@ function chunkTableLines(
     chunks.push(`${header}${currentLines.join("\n")}`);
     currentLines = [];
   };
+  // 围栏跟踪：节内混入代码块时，围栏里的空行是代码内容的一部分，必须保留
+  const fence = newFenceState();
   for (const line of body.split("\n")) {
-    // 表格内空行无意义，跳过（避免产生只有换行的块）
-    if (line.trim() === "") continue;
+    trackFence(fence, line.trim());
+    // 表格内空行无意义，跳过（避免产生只有换行的块）；
+    // 但围栏里的空行属于代码内容，不能删。
+    if (line.trim() === "" && !fence.inFence) continue;
     if (line.length > bodyBudgetChars) {
       pushChunk();
       // 行内硬切：行已确认非空，切片即使全是空白（列分隔符）也有意义，不再 trim 过滤
