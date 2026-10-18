@@ -24,7 +24,9 @@ export async function reapStickerPacks(
     take: 50,
   });
   if (stale.length === 0) return { reaped: 0, packIds: [] };
-  // 原子二次校验：查询与更新之间刷过心跳（updatedAt 已更新）的 pack 不会被误杀
+  // 原子二次校验：查询与更新之间刷过心跳（updatedAt 已更新）的 pack 不会被误杀。
+  // 撤销执行权时清空 executionToken：旧 runner 的归属写（要求 running + token）
+  // 必然失败，直接退出，不会把 failed 覆盖写回。
   const updated = await prisma.stickerPack.updateMany({
     where: {
       id: { in: stale.map((pack) => pack.id) },
@@ -33,6 +35,7 @@ export async function reapStickerPacks(
     },
     data: {
       status: STICKER_PACK_STATUS.failed,
+      executionToken: null,
       error: "生成超时未响应，已终止；可重新发起，已完成的贴纸不会重复生成",
       updatedAt: new Date(),
     },

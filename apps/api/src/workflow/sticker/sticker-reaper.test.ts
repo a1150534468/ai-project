@@ -31,6 +31,13 @@ describe("reapStickerPacks", () => {
       updatedAt: { lt: Date };
     };
     expect(updateWhere.updatedAt.lt.getTime()).toBe(findWhere.updatedAt.lt.getTime());
+    // 撤销执行权时清空 token：旧 runner 的归属写必然失败并退出
+    const updateData = stickerPack.updateMany.mock.calls[0]![0].data as {
+      status: string;
+      executionToken: null;
+    };
+    expect(updateData.status).toBe("failed");
+    expect(updateData.executionToken).toBeNull();
   });
 
   it("返回实际更新的行数，而非候选数", async () => {

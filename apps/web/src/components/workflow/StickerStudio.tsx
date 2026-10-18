@@ -75,6 +75,7 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
       setDetail(loaded);
     } catch (failure) {
       if (detailReqId.current !== reqId) return;
+      if (activePackIdRef.current !== packId) return;
       setError(failure instanceof Error ? failure.message : "加载详情失败");
     }
   }, [token]);
@@ -101,15 +102,23 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
     void refreshDetail(activePackId);
   }, [activePackId, refreshDetail]);
 
-  // 活跃任务 5 秒轮询
+  // 活跃任务 5 秒轮询：必须跟随 activePackId，不能用 detail.pack.id——
+  // 切 pack 后 detail 还是旧的，用旧 id 轮询会递增全局序号，把新 pack 的响应判为过期。
   useEffect(() => {
     if (pollTimer.current) window.clearInterval(pollTimer.current);
-    const active = detail?.pack;
-    if (active && (active.status === "queued" || active.status === "running")) {
-      pollTimer.current = window.setInterval(() => { void refreshDetail(active.id); void refreshPacks(); }, POLL_INTERVAL_MS);
+    const packId = activePackId;
+    const isActiveTarget =
+      packId !== null &&
+      detail?.pack?.id === packId &&
+      (detail.pack.status === "queued" || detail.pack.status === "running");
+    if (isActiveTarget) {
+      pollTimer.current = window.setInterval(() => {
+        void refreshDetail(packId);
+        void refreshPacks();
+      }, POLL_INTERVAL_MS);
     }
     return () => { if (pollTimer.current) window.clearInterval(pollTimer.current); };
-  }, [detail?.pack?.status, detail?.pack?.id, refreshDetail, refreshPacks]);
+  }, [activePackId, detail?.pack?.id, detail?.pack?.status, refreshDetail, refreshPacks]);
 
   const togglePreset = (key: string): void => {
     setSelectedPresets((current) => {

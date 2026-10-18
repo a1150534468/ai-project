@@ -119,14 +119,15 @@ export function registerStickerTaskRoutes(app: FastifyInstance, prisma: PrismaCl
     return reply.send({ ok: true });
   });
 
-  // 失败后重试：failed → queued，已落盘的贴纸会跳过
+  // 失败后重试：failed → queued，已落盘的贴纸会跳过。
+  // 清空 executionToken 撤销旧 runner 的执行权：它后续的归属写必然失败并退出。
   app.post("/api/workflow/sticker/packs/:id/retry", async (request, reply) => {
     const userId = request.userId;
     if (!userId) return reply.code(401).send({ error: "unauthorized" });
     const { id } = request.params as { id: string };
     const updated = await prisma.stickerPack.updateMany({
       where: { id, userId, status: STICKER_PACK_STATUS.failed },
-      data: { status: STICKER_PACK_STATUS.queued, error: null, updatedAt: new Date() },
+      data: { status: STICKER_PACK_STATUS.queued, executionToken: null, error: null, updatedAt: new Date() },
     });
     if (updated.count === 0) return reply.code(409).send({ error: "只有失败的任务可以重试" });
     return reply.send({ ok: true });

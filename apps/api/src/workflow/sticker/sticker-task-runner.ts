@@ -79,8 +79,9 @@ async function assertOwnsPack(
 }
 
 /**
- * 归属写：只有本轮 token 能更新。抢不到（易主/被删）就抛 StoppedError，
- * 调用方不再写库，直接退出。
+ * 归属写：只有「本轮 token 且状态仍为 running」能更新。reaper / /retry 撤销执行权
+ * 后（状态变为 failed/queued，或 token 被清空），旧 runner 抢不到就抛
+ * StickerPackStoppedError，直接退出，不再写库。
  */
 async function updateOwnedPack(
   prisma: PrismaClient,
@@ -89,7 +90,7 @@ async function updateOwnedPack(
   data: Record<string, unknown>,
 ): Promise<void> {
   const updated = await prisma.stickerPack.updateMany({
-    where: { id: packId, executionToken },
+    where: { id: packId, executionToken, status: STICKER_PACK_STATUS.running },
     data: { ...data, updatedAt: new Date() },
   });
   if (updated.count === 0) {
@@ -100,6 +101,63 @@ async function updateOwnedPack(
 interface BaseImage {
   readonly buffer: Buffer;
   readonly mime: string;
+}
+
+interface StickerAssetData {
+  readonly userId: string;
+  readonly requestId: string;
+  readonly requestIndex: number;
+  readonly prompt: string;
+  readonly model: string;
+  readonly size: string;
+  readonly originalUrl: string;
+  readonly thumbnailUrl: string;
+  readonly objectKey: string | null;
+  readonly mime: string;
+  readonly width: number | null;
+  readonly height: number | null;
+}
+
+/**
+ * 原子资产提交：在同一个事务里先校验执行归属（running + token），再 upsert 资产。
+ * 旧 runner 若在存储过程中被 reaper / /retry 撤销执行权，upsert 不会执行，
+ * 直接抛 StickerPackStoppedError，避免把旧结果写入新一轮的资产表。
+ */
+async function commitStickerAsset(
+  prisma: PrismaClient,
+  packId: string,
+  executionToken: string,
+  asset: StickerAssetData,
+): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    const pack = await tx.stickerPack.findUnique({
+      where: { id: packId },
+      select: { status: true, executionToken: true },
+    });
+    if (!pack || pack.status !== STICKER_PACK_STATUS.running || pack.executionToken !== executionToken) {
+      throw new StickerPackStoppedError("sticker pack execution superseded by a newer run");
+    }
+    await tx.imageAsset.upsert({
+      where: {
+        requestId_requestIndex: { requestId: asset.requestId, requestIndex: asset.requestIndex },
+      },
+      update: {},
+      create: {
+        userId: asset.userId,
+        requestId: asset.requestId,
+        requestIndex: asset.requestIndex,
+        prompt: asset.prompt,
+        model: asset.model,
+        size: asset.size,
+        originalUrl: asset.originalUrl,
+        thumbnailUrl: asset.thumbnailUrl,
+        objectKey: asset.objectKey,
+        mime: asset.mime,
+        width: asset.width,
+        height: asset.height,
+      },
+    });
+  });
 }
 
 async function downloadToBaseImage(args: {
@@ -188,23 +246,19 @@ async function resolveBaseImage(args: {
         env,
         namespace: "workflow/stickers",
       });
-      await prisma.imageAsset.upsert({
-        where: { requestId_requestIndex: { requestId: baseRequestId, requestIndex: 0 } },
-        update: {},
-        create: {
-          userId: pack.userId,
-          requestId: baseRequestId,
-          requestIndex: 0,
-          prompt,
-          model: config.model,
-          size: "1024x1024",
-          originalUrl: stored.originalUrl,
-          thumbnailUrl: stored.thumbnailUrl,
-          objectKey: stored.objectKey,
-          mime: stored.mime,
-          width: stored.width ?? null,
-          height: stored.height ?? null,
-        },
+      await commitStickerAsset(prisma, pack.id, executionToken, {
+        userId: pack.userId,
+        requestId: baseRequestId,
+        requestIndex: 0,
+        prompt,
+        model: config.model,
+        size: "1024x1024",
+        originalUrl: stored.originalUrl,
+        thumbnailUrl: stored.thumbnailUrl,
+        objectKey: stored.objectKey,
+        mime: stored.mime,
+        width: stored.width ?? null,
+        height: stored.height ?? null,
       });
       await updateOwnedPack(prisma, pack.id, executionToken, { baseImageRequestId: baseRequestId });
       return downloadToBaseImage({ fetchFn, url: stored.originalUrl, mime: stored.mime, signal });
@@ -234,6 +288,10 @@ async function generateOneSticker(args: {
   const config = loadImageGenerationConfigForModel(DEFAULT_IMAGE_MODEL, env);
   const prompt = buildStickerPrompt(pack.characterPrompt, preset, pack.style);
   const assetWhere = { requestId_requestIndex: { requestId: pack.requestId, requestIndex } };
+
+  // 付费前预查：资产已存在（快照过期、或并发写入）则直接成功，避免重复付费生成
+  const preExisting = await prisma.imageAsset.findUnique({ where: assetWhere });
+  if (preExisting) return { ok: true };
 
   // 阶段一：调模型（付费）。失败可重试；成功后进入阶段二，不再调模型。
   let generated: GeneratedImage | null = null;
@@ -266,6 +324,7 @@ async function generateOneSticker(args: {
   }
 
   // 阶段二：落盘（存储 + DB）。失败只重试落盘；先查资产是否已存在，避免重复落盘。
+  // 资产提交与归属校验在同一事务里原子执行：若本轮已被撤销，upsert 不执行。
   lastError = null;
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
     try {
@@ -282,23 +341,19 @@ async function generateOneSticker(args: {
           env,
           namespace: "workflow/stickers",
         });
-        await prisma.imageAsset.upsert({
-          where: assetWhere,
-          update: {},
-          create: {
-            userId: pack.userId,
-            requestId: pack.requestId,
-            requestIndex,
-            prompt,
-            model: config.model,
-            size: "1024x1024",
-            originalUrl: stored.originalUrl,
-            thumbnailUrl: stored.thumbnailUrl,
-            objectKey: stored.objectKey,
-            mime: stored.mime,
-            width: stored.width ?? null,
-            height: stored.height ?? null,
-          },
+        await commitStickerAsset(prisma, pack.id, executionToken, {
+          userId: pack.userId,
+          requestId: pack.requestId,
+          requestIndex,
+          prompt,
+          model: config.model,
+          size: "1024x1024",
+          originalUrl: stored.originalUrl,
+          thumbnailUrl: stored.thumbnailUrl,
+          objectKey: stored.objectKey,
+          mime: stored.mime,
+          width: stored.width ?? null,
+          height: stored.height ?? null,
         });
       }
       return { ok: true };
@@ -319,16 +374,6 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
   const env = args.env ?? process.env;
   const maxAttempts = args.maxAttempts ?? 3;
 
-  // 认领前先统计已落盘：断点续跑的进度基准（本轮只增量计数，不跨轮累加）
-  const packBefore = await getPack(prisma, packId);
-  if (!packBefore) throw new Error("sticker pack not found");
-  const existingAssets = await prisma.imageAsset.findMany({
-    where: { requestId: packBefore.requestId },
-    select: { requestIndex: true },
-  });
-  const doneIndexes = new Set(existingAssets.map((asset) => asset.requestIndex));
-  const completedBase = doneIndexes.size;
-
   // 租约：只有 queued 能被认领为 running，同时分配本轮 executionToken 并重置计数；
   // 没抢到就抛，避免重复付费生成。
   const executionToken = randomUUID();
@@ -337,8 +382,6 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
     data: {
       status: STICKER_PACK_STATUS.running,
       executionToken,
-      completedCount: completedBase,
-      failedCount: 0,
       error: null,
       updatedAt: new Date(),
     },
@@ -351,6 +394,19 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
   }
   let pack = await getPack(prisma, packId);
   if (!pack) throw new Error("sticker pack not found");
+
+  // 认领成功后再读续跑基准：认领前读到的快照可能过期（另一轮在此期间落盘），
+  // 用过期快照会导致重复生成。本轮只增量计数，不跨轮累加。
+  const existingAssets = await prisma.imageAsset.findMany({
+    where: { requestId: pack.requestId },
+    select: { requestIndex: true },
+  });
+  const doneIndexes = new Set(existingAssets.map((asset) => asset.requestIndex));
+  const completedBase = doneIndexes.size;
+  await updateOwnedPack(prisma, pack.id, executionToken, {
+    completedCount: completedBase,
+    failedCount: 0,
+  });
 
   const presets = pack.presetKeys
     .map((key) => stickerPresetByKey(key))

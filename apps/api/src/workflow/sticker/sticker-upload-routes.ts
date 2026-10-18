@@ -41,12 +41,14 @@ export function registerStickerUploadRoutes(app: FastifyInstance): void {
       return reply.code(400).send({ error: "图片文件为空" });
     }
     // 校验真实图片内容：客户端声明的 mimetype 不可信，空文件/任意字节冒充 image/png
-    // 在这里拦下，避免进入逐张付费生图与重试流程
+    // 在这里拦下，避免进入逐张付费生图与重试流程。
+    // metadata() 只读文件头，必须完整解码像素才能拦截「头有效、像素损坏/截断」的文件。
     try {
       const metadata = await sharp(body).metadata();
       if (!metadata.format || !["png", "jpeg", "webp"].includes(metadata.format)) {
         return reply.code(400).send({ error: "不是有效的图片文件" });
       }
+      await sharp(body).toBuffer();
     } catch {
       return reply.code(400).send({ error: "不是有效的图片文件" });
     }
