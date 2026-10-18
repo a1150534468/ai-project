@@ -193,6 +193,30 @@
      不阻断整包；每落一张刷 `updatedAt` 当心跳；reaper 阈值 20 分钟。
   4. **成本**：一套 16 张 + 主形象 = 约 17 次生图调用，UI 明确提示消耗量。
 - **范围外**：zip 打包下载、微信表情开放平台直传、自定义模板（v2）。
+## ADR-015 · RAG 切块：标题感知分节 + 解析质量追踪；OCR 暂缓
+
+> 编号说明：ADR-013（录音转文字）在 PR #3、ADR-014（表情包工坊）在 PR #4，
+> 三条线并行开发，本 PR 先记 ADR-015，合并顺序不影响编号。
+
+- **日期**：2026-10-17
+- **背景**：zz 定的新模块顺序第三项「RAG 文档解析链路优化」。当时列的方向：
+  OCR、版面/标题层级、表格结构、语义切块、质量追踪。
+- **决策（v1）**：
+  1. **标题感知切块**（`kb/chunk.ts`）：按 markdown 标题行分节，节内超长仍用
+     字符窗口；每块前缀所属节标题补检索上下文。XLSX 每个 sheet（`# 表名`）、
+     PPTX 每页（`# Slide N`）不再被拦腰切断，表格行保持完整。
+  2. **无标题文档零漂移**：无标题文本走原字符窗口路径，字节级一致，
+     已有索引的块边界不受影响。
+  3. **质量追踪**：`Document.parseMeta`（JSONB）记录
+     `{ chars, headingCount, tableSectionCount, strategy, parseMs }`，
+     `indexer.ts` 在 publish 时写入。
+  4. **不改** `parse` 输出格式与 `parse`/`chunk` 签名（测试 mock 零波及）。
+- **暂缓**：
+  - **OCR**：生产 API 镜像由外部 registry 构建，仓库内无 Dockerfile，无法确认
+    tesseract 可用；云 OCR 按量付费需 key 与成本决策。`EmptyTextError` 的
+    "暂不支持 OCR" 提示保留，等 zz 拍板路线再做。
+  - **语义切块**（embedding 断句）：需调 embedding 模型判断边界，成本高；
+    v1 标题结构切块对结构化文档效果接近且零成本。
 
 ---
 
