@@ -24,15 +24,20 @@ export async function reapStickerPacks(
     take: 50,
   });
   if (stale.length === 0) return { reaped: 0, packIds: [] };
-  await prisma.stickerPack.updateMany({
-    where: { id: { in: stale.map((pack) => pack.id) }, status: STICKER_PACK_STATUS.running },
+  // 原子二次校验：查询与更新之间刷过心跳（updatedAt 已更新）的 pack 不会被误杀
+  const updated = await prisma.stickerPack.updateMany({
+    where: {
+      id: { in: stale.map((pack) => pack.id) },
+      status: STICKER_PACK_STATUS.running,
+      updatedAt: { lt: cutoff },
+    },
     data: {
       status: STICKER_PACK_STATUS.failed,
       error: "生成超时未响应，已终止；可重新发起，已完成的贴纸不会重复生成",
       updatedAt: new Date(),
     },
   });
-  return { reaped: stale.length, packIds: stale.map((pack) => pack.id) };
+  return { reaped: updated.count, packIds: stale.map((pack) => pack.id) };
 }
 
 /**

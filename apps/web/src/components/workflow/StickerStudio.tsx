@@ -51,6 +51,10 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<number | null>(null);
+  // 详情请求序号 + 当前选中 pack：丢弃乱序/过期响应，避免 A→B 切换后 A 的晚到响应覆盖 B
+  const detailReqId = useRef(0);
+  const activePackIdRef = useRef<string | null>(null);
+  useEffect(() => { activePackIdRef.current = activePackId; }, [activePackId]);
 
   const refreshPacks = useCallback(async () => {
     try {
@@ -63,10 +67,14 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   }, [token, activePackId]);
 
   const refreshDetail = useCallback(async (packId: string) => {
+    const reqId = ++detailReqId.current;
     try {
       const loaded = await getStickerPack(token, packId);
+      if (detailReqId.current !== reqId) return;
+      if (activePackIdRef.current !== packId) return;
       setDetail(loaded);
     } catch (failure) {
+      if (detailReqId.current !== reqId) return;
       setError(failure instanceof Error ? failure.message : "加载详情失败");
     }
   }, [token]);
@@ -306,7 +314,9 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
                 <p className="mb-2 text-xs font-semibold text-ink-secondary">贴纸（{detail.stickers.length}）</p>
                 <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8">
                   {detail.stickers.map((sticker) => {
-                    const preset = presets[sticker.requestIndex];
+                    // requestIndex 对应 pack.presetKeys 的顺序，不是全量模板数组的下标
+                    const presetKey = detail.pack.presetKeys[sticker.requestIndex];
+                    const preset = presets.find((item) => item.key === presetKey);
                     return (
                       <button key={sticker.id} type="button" title={preset?.label ?? ""}
                         onClick={() => downloadImage(sticker.originalUrl, `sticker-${preset?.key ?? sticker.requestIndex}.png`)}

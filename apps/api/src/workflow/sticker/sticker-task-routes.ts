@@ -32,6 +32,7 @@ function toPackRow(pack: {
   status: string;
   completedCount: number;
   failedCount: number;
+  executionToken: string | null;
   error: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -180,7 +181,13 @@ export function registerStickerTaskRoutes(app: FastifyInstance, prisma: PrismaCl
     if (!STICKER_PACK_FINAL_STATUSES.has(pack.status)) {
       return reply.code(409).send({ error: "任务进行中，完成后可删除" });
     }
-    await prisma.stickerPack.delete({ where: { id } });
+    // 原子删除：检查后若被并发 /retry 改为非终态，删不掉，避免删掉运行中的任务
+    const deleted = await prisma.stickerPack.deleteMany({
+      where: { id, userId, status: { in: [...STICKER_PACK_FINAL_STATUSES] } },
+    });
+    if (deleted.count === 0) {
+      return reply.code(409).send({ error: "任务状态已变化，请刷新后重试" });
+    }
     return reply.send({ ok: true });
   });
 }

@@ -5,6 +5,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
+import sharp from "sharp";
 import { loadS3Config, makeS3, putObject } from "../../storage/s3.js";
 
 const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
@@ -36,6 +37,19 @@ export function registerStickerUploadRoutes(app: FastifyInstance): void {
       chunks.push(buffer);
     }
     const body = Buffer.concat(chunks);
+    if (body.byteLength === 0) {
+      return reply.code(400).send({ error: "图片文件为空" });
+    }
+    // 校验真实图片内容：客户端声明的 mimetype 不可信，空文件/任意字节冒充 image/png
+    // 在这里拦下，避免进入逐张付费生图与重试流程
+    try {
+      const metadata = await sharp(body).metadata();
+      if (!metadata.format || !["png", "jpeg", "webp"].includes(metadata.format)) {
+        return reply.code(400).send({ error: "不是有效的图片文件" });
+      }
+    } catch {
+      return reply.code(400).send({ error: "不是有效的图片文件" });
+    }
     const extension = file.mimetype === "image/jpeg" ? "jpg" : file.mimetype === "image/webp" ? "webp" : "png";
     const key = `workflow/stickers/${userId}/reference-${randomUUID()}.${extension}`;
 

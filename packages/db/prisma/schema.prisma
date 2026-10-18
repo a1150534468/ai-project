@@ -1632,6 +1632,8 @@ model StickerPack {
   status             String   @default("queued")
   completedCount     Int      @default(0)
   failedCount        Int      @default(0)
+  // 本轮 runner 的执行归属 token：重试会启动新 token，旧 runner 抢不到写锁就停
+  executionToken     String?
   error              String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt

@@ -1,10 +1,15 @@
 /**
  * 表情包工坊：任务执行器。
  *
- * 租约模式：同一 pack 同一时间只有一个 runner 在推进；逐张贴纸生成，
- * 每落一张刷 updatedAt 当心跳。单张失败重试 3 次仍失败则记入 failedCount
- * 继续下一张，不阻断整包。
+ * 租约 + 执行归属：同一 pack 同一时间只有一个 runner 在推进；每轮执行分配唯一
+ * executionToken，重试（/retry 或 reaper 后）会启动新 token。旧 runner 在每次
+ * 落盘/状态更新时用 updateMany(where: { id, executionToken }) 校验归属，抢不到
+ * 就抛 StickerPackStoppedError 退出，避免两轮同时生成造成重复付费。
+ *
+ * 计费安全：模型调用（付费）与落盘（存储/DB）分属两个重试段。模型成功返回后，
+ * 若存储失败，重试只重跑落盘，不再调模型；落盘前先查资产是否已存在。
  */
+import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import type { PrismaClient } from "@prisma/client";
 import {
@@ -15,6 +20,7 @@ import { DEFAULT_IMAGE_MODEL } from "../_shared/image-service-constants.js";
 import { loadImageGenerationConfigForModel } from "../_shared/image-service-providers.js";
 import { storeWorkflowImage } from "../_shared/image-service-storage.js";
 import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import type { GeneratedImage } from "../_shared/image-service-types.js";
 import {
   buildBaseCharacterPrompt,
   buildStickerPrompt,
@@ -50,7 +56,15 @@ async function getPack(prisma: PrismaClient, packId: string): Promise<StickerPac
   return { ...pack, presetKeys: [...pack.presetKeys] };
 }
 
-async function assertPackRunning(prisma: PrismaClient, packId: string): Promise<StickerPackRow> {
+/**
+ * 归属校验：pack 必须处于 running，且 executionToken 与本轮一致。
+ * 新一轮已接管（/retry 或用户重新触发）时旧 runner 必须停。
+ */
+async function assertOwnsPack(
+  prisma: PrismaClient,
+  packId: string,
+  executionToken: string,
+): Promise<StickerPackRow> {
   const pack = await getPack(prisma, packId);
   if (!pack) throw new StickerPackStoppedError("sticker pack not found");
   const message = TERMINAL_STATUS_MESSAGE[pack.status];
@@ -58,11 +72,29 @@ async function assertPackRunning(prisma: PrismaClient, packId: string): Promise<
   if (pack.status !== STICKER_PACK_STATUS.running) {
     throw new StickerPackStoppedError(`sticker pack is ${pack.status}, not running`);
   }
+  if (pack.executionToken !== executionToken) {
+    throw new StickerPackStoppedError("sticker pack execution superseded by a newer run");
+  }
   return pack;
 }
 
-async function updatePack(prisma: PrismaClient, packId: string, data: Record<string, unknown>): Promise<void> {
-  await prisma.stickerPack.update({ where: { id: packId }, data: { ...data, updatedAt: new Date() } });
+/**
+ * 归属写：只有本轮 token 能更新。抢不到（易主/被删）就抛 StoppedError，
+ * 调用方不再写库，直接退出。
+ */
+async function updateOwnedPack(
+  prisma: PrismaClient,
+  packId: string,
+  executionToken: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  const updated = await prisma.stickerPack.updateMany({
+    where: { id: packId, executionToken },
+    data: { ...data, updatedAt: new Date() },
+  });
+  if (updated.count === 0) {
+    throw new StickerPackStoppedError("sticker pack execution superseded by a newer run");
+  }
 }
 
 interface BaseImage {
@@ -70,125 +102,99 @@ interface BaseImage {
   readonly mime: string;
 }
 
+async function downloadToBaseImage(args: {
+  fetchFn: typeof fetch;
+  url: string;
+  mime: string;
+  signal?: AbortSignal;
+}): Promise<BaseImage> {
+  const response = await args.fetchFn(args.url, { signal: args.signal });
+  if (!response.ok) throw new Error(`base character download ${response.status}`);
+  const buffer = Buffer.from(await response.arrayBuffer());
+  return { buffer, mime: args.mime };
+}
+
 async function resolveBaseImage(args: {
   prisma: PrismaClient;
   pack: StickerPackRow;
+  executionToken: string;
   fetchFn: typeof fetch;
   env: NodeJS.ProcessEnv;
   signal?: AbortSignal;
+  maxAttempts: number;
 }): Promise<BaseImage> {
-  const { prisma, pack, fetchFn, env, signal } = args;
+  const { prisma, pack, executionToken, fetchFn, env, signal, maxAttempts } = args;
   // 1) 用户上传的参考图
   if (pack.referenceObjectKey) {
     const s3 = makeS3(loadS3Config(env));
     const buffer = await getObject(s3, pack.referenceObjectKey);
     return { buffer, mime: sniffImageMime(buffer) };
   }
-  // 2) 已生成的主形象（ImageAsset）
+  const baseRequestId = `${pack.requestId}-base`;
+  // 2) pack 上已记录的主形象
   if (pack.baseImageRequestId) {
     const asset = await prisma.imageAsset.findUnique({
       where: { requestId_requestIndex: { requestId: pack.baseImageRequestId, requestIndex: 0 } },
     });
     if (!asset) throw new Error("base character image not found");
-    const response = await fetchFn(asset.originalUrl, { signal });
-    if (!response.ok) throw new Error(`base character download ${response.status}`);
-    const buffer = Buffer.from(await response.arrayBuffer());
-    const contentType = response.headers.get("content-type") ?? "image/png";
-    return { buffer, mime: contentType.startsWith("image/") ? contentType : "image/png" };
+    return downloadToBaseImage({ fetchFn, url: asset.originalUrl, mime: asset.mime, signal });
   }
-  // 3) 文字描述模式：先生成一张主形象
+  // 3) 资产已落盘但 pack 没记上（上轮落盘成功、更新 pack 失败）：直接复用，不再调模型
+  const existingBase = await prisma.imageAsset.findUnique({
+    where: { requestId_requestIndex: { requestId: baseRequestId, requestIndex: 0 } },
+  });
+  if (existingBase) {
+    await updateOwnedPack(prisma, pack.id, executionToken, { baseImageRequestId: baseRequestId });
+    return downloadToBaseImage({ fetchFn, url: existingBase.originalUrl, mime: existingBase.mime, signal });
+  }
+  // 4) 文字描述模式：生成主形象。生成与落盘分离：模型成功后落盘失败只重试落盘。
   const config = loadImageGenerationConfigForModel(DEFAULT_IMAGE_MODEL, env);
   const prompt = buildBaseCharacterPrompt(pack.characterPrompt, pack.style);
-  const generated = await callImageGeneration({
-    config,
-    prompt,
-    size: "1024x1024",
-    fetchFn,
-    signal,
-    env,
-  });
-  const stored = await storeWorkflowImage({
-    image: generated,
-    userId: pack.userId,
-    requestId: pack.baseImageRequestId ?? `${pack.requestId}-base`,
-    requestIndex: 0,
-    fetchFn,
-    signal,
-    env,
-    namespace: "workflow/stickers",
-  });
-  const baseRequestId = `${pack.requestId}-base`;
-  await prisma.imageAsset.upsert({
-    where: { requestId_requestIndex: { requestId: baseRequestId, requestIndex: 0 } },
-    update: {},
-    create: {
-      userId: pack.userId,
-      requestId: baseRequestId,
-      requestIndex: 0,
-      prompt,
-      model: config.model,
-      size: "1024x1024",
-      originalUrl: stored.originalUrl,
-      thumbnailUrl: stored.thumbnailUrl,
-      objectKey: stored.objectKey,
-      mime: stored.mime,
-      width: stored.width ?? null,
-      height: stored.height ?? null,
-    },
-  });
-  await updatePack(prisma, pack.id, { baseImageRequestId: baseRequestId });
-  const response = await fetchFn(stored.originalUrl, { signal });
-  if (!response.ok) throw new Error(`base character download ${response.status}`);
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return { buffer, mime: stored.mime };
-}
-
-async function generateOneSticker(args: {
-  prisma: PrismaClient;
-  pack: StickerPackRow;
-  base: BaseImage;
-  preset: StickerPreset;
-  requestIndex: number;
-  fetchFn: typeof fetch;
-  env: NodeJS.ProcessEnv;
-  signal?: AbortSignal;
-  maxAttempts: number;
-}): Promise<{ ok: boolean; error?: string }> {
-  const { prisma, pack, base, preset, requestIndex, fetchFn, env, signal, maxAttempts } = args;
-  const config = loadImageGenerationConfigForModel(DEFAULT_IMAGE_MODEL, env);
-  const prompt = buildStickerPrompt(pack.characterPrompt, preset, pack.style);
+  let generated: GeneratedImage | null = null;
   let lastError: unknown = null;
   for (let attempt = 0; attempt <= maxAttempts; attempt++) {
     try {
-      await assertPackRunning(prisma, pack.id);
-      const generated = await callImageEdit({
+      await assertOwnsPack(prisma, pack.id, executionToken);
+      generated = await callImageGeneration({
         config,
         prompt,
-        referenceImages: [{ b64: base.buffer.toString("base64"), mime: base.mime }],
-        fetchFn,
         size: "1024x1024",
-        outputFormat: "png",
+        fetchFn,
         signal,
         env,
       });
-      await assertPackRunning(prisma, pack.id);
+      break;
+    } catch (error) {
+      if (error instanceof StickerPackStoppedError) throw error;
+      lastError = error;
+      if (attempt < maxAttempts) await delay(5_000, undefined, { signal }).catch(() => {});
+    }
+  }
+  if (!generated) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new Error(`base character generation failed: ${message}`);
+  }
+  lastError = null;
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    try {
+      await assertOwnsPack(prisma, pack.id, executionToken);
       const stored = await storeWorkflowImage({
         image: generated,
         userId: pack.userId,
-        requestId: pack.requestId,
-        requestIndex,
+        requestId: baseRequestId,
+        requestIndex: 0,
         fetchFn,
         signal,
         env,
         namespace: "workflow/stickers",
       });
       await prisma.imageAsset.upsert({
-        where: { requestId_requestIndex: { requestId: pack.requestId, requestIndex } },
+        where: { requestId_requestIndex: { requestId: baseRequestId, requestIndex: 0 } },
         update: {},
         create: {
           userId: pack.userId,
-          requestId: pack.requestId,
-          requestIndex,
+          requestId: baseRequestId,
+          requestIndex: 0,
           prompt,
           model: config.model,
           size: "1024x1024",
@@ -200,6 +206,101 @@ async function generateOneSticker(args: {
           height: stored.height ?? null,
         },
       });
+      await updateOwnedPack(prisma, pack.id, executionToken, { baseImageRequestId: baseRequestId });
+      return downloadToBaseImage({ fetchFn, url: stored.originalUrl, mime: stored.mime, signal });
+    } catch (error) {
+      if (error instanceof StickerPackStoppedError) throw error;
+      lastError = error;
+      if (attempt < maxAttempts) await delay(5_000, undefined, { signal }).catch(() => {});
+    }
+  }
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  throw new Error(`base character persist failed: ${message}`);
+}
+
+async function generateOneSticker(args: {
+  prisma: PrismaClient;
+  pack: StickerPackRow;
+  executionToken: string;
+  base: BaseImage;
+  preset: StickerPreset;
+  requestIndex: number;
+  fetchFn: typeof fetch;
+  env: NodeJS.ProcessEnv;
+  signal?: AbortSignal;
+  maxAttempts: number;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { prisma, pack, executionToken, base, preset, requestIndex, fetchFn, env, signal, maxAttempts } = args;
+  const config = loadImageGenerationConfigForModel(DEFAULT_IMAGE_MODEL, env);
+  const prompt = buildStickerPrompt(pack.characterPrompt, preset, pack.style);
+  const assetWhere = { requestId_requestIndex: { requestId: pack.requestId, requestIndex } };
+
+  // 阶段一：调模型（付费）。失败可重试；成功后进入阶段二，不再调模型。
+  let generated: GeneratedImage | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    try {
+      await assertOwnsPack(prisma, pack.id, executionToken);
+      generated = await callImageEdit({
+        config,
+        prompt,
+        referenceImages: [{ b64: base.buffer.toString("base64"), mime: base.mime }],
+        fetchFn,
+        size: "1024x1024",
+        outputFormat: "png",
+        signal,
+        env,
+      });
+      break;
+    } catch (error) {
+      if (error instanceof StickerPackStoppedError) throw error;
+      lastError = error;
+      if (attempt < maxAttempts) {
+        await delay(5_000, undefined, { signal }).catch(() => {});
+      }
+    }
+  }
+  if (!generated) {
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    return { ok: false, error: message.slice(0, 500) };
+  }
+
+  // 阶段二：落盘（存储 + DB）。失败只重试落盘；先查资产是否已存在，避免重复落盘。
+  lastError = null;
+  for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+    try {
+      await assertOwnsPack(prisma, pack.id, executionToken);
+      const existing = await prisma.imageAsset.findUnique({ where: assetWhere });
+      if (!existing) {
+        const stored = await storeWorkflowImage({
+          image: generated,
+          userId: pack.userId,
+          requestId: pack.requestId,
+          requestIndex,
+          fetchFn,
+          signal,
+          env,
+          namespace: "workflow/stickers",
+        });
+        await prisma.imageAsset.upsert({
+          where: assetWhere,
+          update: {},
+          create: {
+            userId: pack.userId,
+            requestId: pack.requestId,
+            requestIndex,
+            prompt,
+            model: config.model,
+            size: "1024x1024",
+            originalUrl: stored.originalUrl,
+            thumbnailUrl: stored.thumbnailUrl,
+            objectKey: stored.objectKey,
+            mime: stored.mime,
+            width: stored.width ?? null,
+            height: stored.height ?? null,
+          },
+        });
+      }
       return { ok: true };
     } catch (error) {
       if (error instanceof StickerPackStoppedError) throw error;
@@ -218,11 +319,29 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
   const env = args.env ?? process.env;
   const maxAttempts = args.maxAttempts ?? 3;
 
-  // 租约：只有 queued 能被认领为 running；没抢到就抛，后续流程（/run 的 TOCTOU、
-  // 重复调用）靠这个保证同一时间只有一个 runner 在推进，避免重复付费生成。
+  // 认领前先统计已落盘：断点续跑的进度基准（本轮只增量计数，不跨轮累加）
+  const packBefore = await getPack(prisma, packId);
+  if (!packBefore) throw new Error("sticker pack not found");
+  const existingAssets = await prisma.imageAsset.findMany({
+    where: { requestId: packBefore.requestId },
+    select: { requestIndex: true },
+  });
+  const doneIndexes = new Set(existingAssets.map((asset) => asset.requestIndex));
+  const completedBase = doneIndexes.size;
+
+  // 租约：只有 queued 能被认领为 running，同时分配本轮 executionToken 并重置计数；
+  // 没抢到就抛，避免重复付费生成。
+  const executionToken = randomUUID();
   const claimed = await prisma.stickerPack.updateMany({
     where: { id: packId, status: STICKER_PACK_STATUS.queued },
-    data: { status: STICKER_PACK_STATUS.running, error: null, updatedAt: new Date() },
+    data: {
+      status: STICKER_PACK_STATUS.running,
+      executionToken,
+      completedCount: completedBase,
+      failedCount: 0,
+      error: null,
+      updatedAt: new Date(),
+    },
   });
   if (claimed.count === 0) {
     const current = await getPack(prisma, packId);
@@ -237,33 +356,38 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
     .map((key) => stickerPresetByKey(key))
     .filter((preset): preset is StickerPreset => preset !== null);
   if (presets.length === 0) {
-    await updatePack(prisma, pack.id, { status: STICKER_PACK_STATUS.failed, error: "没有选择任何表情模板" });
+    await updateOwnedPack(prisma, pack.id, executionToken, {
+      status: STICKER_PACK_STATUS.failed,
+      error: "没有选择任何表情模板",
+    });
     return (await getPack(prisma, pack.id))!;
   }
 
   try {
-    const base = await resolveBaseImage({ prisma, pack, fetchFn, env, signal: args.signal });
+    const base = await resolveBaseImage({
+      prisma,
+      pack,
+      executionToken,
+      fetchFn,
+      env,
+      signal: args.signal,
+      maxAttempts,
+    });
     // 主形象已就绪：baseImageRequestId 可能在 resolve 中被写入，重读一次
     pack = (await getPack(prisma, pack.id))!;
 
-    let completed = pack.completedCount;
-    let failed = pack.failedCount;
+    let completed = completedBase;
+    let failed = 0;
     const failedLabels: string[] = [];
 
     for (let index = 0; index < presets.length; index++) {
       const preset = presets[index];
-      // 断点续跑：已落盘的跳过
-      const existing = await prisma.imageAsset.findUnique({
-        where: { requestId_requestIndex: { requestId: pack.requestId, requestIndex: index } },
-      });
-      if (existing) {
-        completed += 1;
-        await updatePack(prisma, pack.id, { completedCount: completed });
-        continue;
-      }
+      // 断点续跑：已落盘的跳过（计数已在 completedBase 里，不重复加）
+      if (doneIndexes.has(index)) continue;
       const result = await generateOneSticker({
         prisma,
         pack,
+        executionToken,
         base,
         preset,
         requestIndex: index,
@@ -274,22 +398,41 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
       });
       if (result.ok) {
         completed += 1;
+        doneIndexes.add(index);
       } else {
         failed += 1;
         failedLabels.push(preset.label);
       }
       // 心跳：逐张刷 updatedAt，reaper 不会误判卡单
-      await updatePack(prisma, pack.id, { completedCount: completed, failedCount: failed });
+      await updateOwnedPack(prisma, pack.id, executionToken, {
+        completedCount: completed,
+        failedCount: failed,
+      });
       await args.onProgress?.(completed, failed, presets.length);
     }
 
-    const error = failedLabels.length > 0 ? `以下 ${failedLabels.length} 张生成失败：${failedLabels.join("、")}` : null;
-    await updatePack(prisma, pack.id, { status: STICKER_PACK_STATUS.completed, error });
+    // 有缺图 → failed（可 /retry 补跑已落盘跳过）；全成功 → completed
+    if (failed > 0) {
+      const error = `以下 ${failedLabels.length} 张生成失败：${failedLabels.join("、")}`;
+      await updateOwnedPack(prisma, pack.id, executionToken, {
+        status: STICKER_PACK_STATUS.failed,
+        error,
+      });
+    } else {
+      await updateOwnedPack(prisma, pack.id, executionToken, {
+        status: STICKER_PACK_STATUS.completed,
+        error: null,
+      });
+    }
     return (await getPack(prisma, pack.id))!;
   } catch (error) {
     if (error instanceof StickerPackStoppedError) throw error;
     const message = error instanceof Error ? error.message : String(error);
-    await updatePack(prisma, pack.id, { status: STICKER_PACK_STATUS.failed, error: message.slice(0, 1000) });
+    // 终态写也带归属校验：若已易主（抛 StoppedError），新一轮负责 outcome，本轮直接退出
+    await updateOwnedPack(prisma, pack.id, executionToken, {
+      status: STICKER_PACK_STATUS.failed,
+      error: message.slice(0, 1000),
+    });
     return (await getPack(prisma, pack.id))!;
   }
 }

@@ -118,6 +118,7 @@ export interface StickerPackRow {
   readonly status: string;
   readonly completedCount: number;
   readonly failedCount: number;
+  readonly executionToken: string | null;
   readonly error: string | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
