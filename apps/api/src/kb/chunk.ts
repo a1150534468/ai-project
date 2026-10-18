@@ -8,6 +8,8 @@ const APPROXIMATE_CHARS_PER_TOKEN = 3;
 
 /** markdown 标题行：`#`~`######` 后跟空格。`#hashtag` 这类不算标题。 */
 const HEADING_PATTERN = /^(#{1,6})\s+(\S.*)$/;
+/** 围栏起始：3 个及以上的反引号或波浪号（info string 允许，如 ```sh） */
+const FENCE_PATTERN = /^(`{3,}|~{3,})/;
 
 export type ChunkStrategy = "headings" | "plain";
 
@@ -29,10 +31,13 @@ function splitSections(text: string): Section[] {
   const sections: Section[] = [];
   let currentHeading: string | null = null;
   let currentLines: string[] = [];
-  // 代码围栏内的 `# 注释` 不是标题：跟踪围栏状态，避免把代码当标题切分丢内容
+  // 代码围栏跟踪：围栏内的 `# 注释` 不是标题。记录围栏字符与长度，
+  // 闭合须同字符、长度不小于 opening、且整行只有围栏字符（info string 不算闭合）。
   let inFence = false;
+  let fenceChar = "";
+  let fenceLen = 0;
   const flush = (): void => {
-    // 只去掉首尾空行：行首/行尾的空格与制表符可能有意义（TSV 首列为空），
+    // 只去掉首尾空行：行首/行尾的空格与制表符可能有意义（TSV 首列/末列为空），
     // 必须原样保留；用 trim() 仅做判空，不修改正文内容。
     const body = currentLines.join("\n").replace(/^\n+/, "").replace(/\n+$/, "");
     if (body.trim() !== "" || currentHeading !== null) {
@@ -42,8 +47,19 @@ function splitSections(text: string): Section[] {
   };
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed.startsWith("```")) {
-      inFence = !inFence;
+    const fenceMatch = FENCE_PATTERN.exec(trimmed);
+    if (fenceMatch) {
+      const seq = fenceMatch[1];
+      const isCloseCandidate = /^[`~]+\s*$/.test(trimmed);
+      if (!inFence) {
+        inFence = true;
+        fenceChar = seq[0];
+        fenceLen = seq.length;
+      } else if (seq[0] === fenceChar && seq.length >= fenceLen && isCloseCandidate) {
+        inFence = false;
+        fenceChar = "";
+        fenceLen = 0;
+      }
       currentLines.push(line);
       continue;
     }
@@ -72,9 +88,8 @@ function isTableSection(section: Section): boolean {
 
 /** 纯函数：描述文本结构，供质量追踪与策略选择。 */
 export function describeTextStructure(text: string): TextStructure {
-  const input = text.trim();
-  if (input === "") return { headingCount: 0, tableSectionCount: 0, strategy: "plain" };
-  const sections = splitSections(input);
+  if (text.trim() === "") return { headingCount: 0, tableSectionCount: 0, strategy: "plain" };
+  const sections = splitSections(text);
   const headingCount = sections.filter((section) => section.heading !== null).length;
   const tableSectionCount = nonEmptySections(sections).filter(isTableSection).length;
   return {
@@ -106,40 +121,87 @@ function chunkPlain(text: string, options: ChunkOpts): string[] {
 }
 
 /**
+ * 表格节按行切分：整行入块，表格行不被拦腰切断（ADR-015 的承诺）。
+ * 单行本身超长时该行内按字符硬切（极少数情况）。
+ */
+function chunkTableLines(
+  body: string,
+  header: string,
+  bodyBudgetChars: number,
+  maxChunks: number,
+): string[] {
+  const chunks: string[] = [];
+  let currentLines: string[] = [];
+  const pushChunk = (): void => {
+    if (currentLines.length === 0 || chunks.length >= maxChunks) return;
+    chunks.push(`${header}${currentLines.join("\n")}`);
+    currentLines = [];
+  };
+  for (const line of body.split("\n")) {
+    // 表格内空行无意义，跳过（避免产生只有换行的块）
+    if (line.trim() === "") continue;
+    if (line.length > bodyBudgetChars) {
+      pushChunk();
+      for (let start = 0; start < line.length && chunks.length < maxChunks; start += bodyBudgetChars) {
+        const piece = line.slice(start, start + bodyBudgetChars);
+        if (piece.trim() !== "") chunks.push(`${header}${piece}`);
+      }
+      continue;
+    }
+    const trial = currentLines.length === 0 ? line : `${currentLines.join("\n")}\n${line}`;
+    if (trial.length > bodyBudgetChars) {
+      pushChunk();
+      if (chunks.length >= maxChunks) return chunks;
+    }
+    currentLines.push(line);
+  }
+  pushChunk();
+  return chunks;
+}
+
+/**
  * 标题感知切块：
- * - 按标题分节（代码围栏内的 `#` 不算标题），节内超长仍用字符窗口切；
+ * - 按标题分节（代码围栏内的 `#` 不算标题，支持 ``` / ~~~ 及不同长度围栏）；
  * - 每块前缀所属节标题，给检索补上下文；标题计入块预算，避免拼接后超窗；
- * - 无标题文档走 chunkPlain，与旧边界完全一致；纯标题文档返回空数组。
+ * - 表格节按行切分，行不被拦腰切断；
+ * - 无标题文档走 chunkPlain（trim 后），与旧边界完全一致；
+ * - 纯标题文档返回空数组；标题路径保留原始空白（TSV 空列的制表符）。
  *
- * 性能说明：describeTextStructure 与 chunkText 各做一次全量分节（O(n) 小常数，
- * 相对 embedding 网络耗时可忽略），刻意不做跨调用缓存以保持纯函数。
+ * 边界策略：标题占满预算时正文保留最小 1 token 窗口，块可能超窗（极端情况，
+ * 调用方应保证标题长度合理）；overlap 不超过正文窗口 - 1，避免步长退化。
  */
 export function chunkText(text: string, options: ChunkOpts): string[] {
-  const input = text.trim();
-  if (input === "") return [];
+  if (text.trim() === "") return [];
 
-  const sections = nonEmptySections(splitSections(input));
+  const allSections = splitSections(text);
+  // 标题存在性按未过滤节判断：「导语 + 纯标题」这种组合过滤后只剩导语，
+  // 若按过滤后判断会误回退到旧路径，把已丢弃的标题带回来。
+  const hasHeadings = allSections.some((section) => section.heading !== null);
+  // 无标题文档：trim 后走旧路径，字节级一致
+  if (!hasHeadings) return chunkPlain(text.trim(), options);
+
+  const sections = nonEmptySections(allSections);
   // 纯标题文档：空节已丢弃，无内容可切
   if (sections.length === 0) return [];
-  const hasHeadings = sections.some((section) => section.heading !== null);
-  // 无标题文档：input 已 trim，与旧实现逐字节一致
-  if (!hasHeadings) return chunkPlain(input, options);
 
   const chunks: string[] = [];
   for (const section of sections) {
+    if (chunks.length >= options.maxChunks) break;
     const header = section.heading ? `${section.heading}\n` : "";
-    // 标题计入预算：先按完整窗口切正文再拼标题会超窗
     const headerTokens = Math.ceil(header.length / APPROXIMATE_CHARS_PER_TOKEN);
+    const bodyTokens = Math.max(1, options.maxTokens - headerTokens);
     const bodyOptions: ChunkOpts = {
-      ...options,
-      maxTokens: Math.max(1, options.maxTokens - headerTokens),
+      maxTokens: bodyTokens,
+      overlapTokens: Math.min(options.overlapTokens, Math.max(0, bodyTokens - 1)),
+      maxChunks: options.maxChunks - chunks.length,
     };
-    const pieces = chunkPlain(section.body, bodyOptions);
+    const pieces = isTableSection(section)
+      ? chunkTableLines(section.body, header, bodyTokens * APPROXIMATE_CHARS_PER_TOKEN, bodyOptions.maxChunks)
+      : chunkPlain(section.body, bodyOptions).map((piece) => `${header}${piece}`);
     for (const piece of pieces) {
       if (chunks.length >= options.maxChunks) break;
-      chunks.push(`${header}${piece}`);
+      chunks.push(piece);
     }
-    if (chunks.length >= options.maxChunks) break;
   }
   return chunks;
 }

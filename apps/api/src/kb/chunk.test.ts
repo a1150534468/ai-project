@@ -161,3 +161,63 @@ describe("review 修复回归", () => {
     for (const chunk of chunks) expect(chunk.length).toBeLessThanOrEqual(windowSize);
   });
 });
+
+describe("第二轮 review 回归", () => {
+  it("文档末尾 TSV 空列的制表符保留", () => {
+    const text = "# 表\nQ1\tQ2\n1\t2\t";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].endsWith("1\t2\t")).toBe(true);
+  });
+
+  it("波浪号围栏内的 # 注释不算标题", () => {
+    const text = "~~~sh\n# A\n# B\necho ok\n~~~";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toEqual([text]);
+    expect(describeTextStructure(text).strategy).toBe("plain");
+  });
+
+  it("四反引号围栏内的三反引号不提前闭合", () => {
+    const text = "````\ncode ``` here\n# not a heading\n````";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toEqual([text]);
+  });
+
+  it("导语 + 纯标题：只保留导语，不回退旧路径", () => {
+    const text = "导语。\n# A\n# B";
+    expect(chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }))).toEqual(["导语。"]);
+    expect(describeTextStructure(text).strategy).toBe("headings");
+  });
+
+  it("标题占满预算时行为确定：正文保留最小窗口", () => {
+    const heading = `# ${"h".repeat(27)}`; // + \n = 30 字符，占满 10 tokens 窗口
+    const chunks = chunkText(`${heading}\nabc`, options({ maxTokens: 10, overlapTokens: 0, maxChunks: 20 }));
+    expect(chunks.length).toBeGreaterThan(0);
+    for (const chunk of chunks) expect(chunk.startsWith(`${heading}\n`)).toBe(true);
+  });
+
+  it("overlap 不超过正文窗口，步长不退化", () => {
+    const heading = `# ${"h".repeat(20)}`; // 24 字符（含换行）
+    const body = "abcdefghijklmnopqrst";
+    const chunks = chunkText(
+      `${heading}\n${body}`,
+      options({ maxTokens: 10, overlapTokens: 2, maxChunks: 10 }),
+    );
+    // 正文窗口 6 字符、overlap 钳制为 1 token：必须覆盖到末尾，不能截断
+    expect(chunks.join("").replaceAll(`${heading}\n`, "")).toContain("pqrst");
+  });
+
+  it("表格节按行切分，行不被拦腰切断", () => {
+    const rows = ["aa\tbb\tcc", "dd\tee\tff", "gg\thh\tii", "jj\tkk\tll"].join("\n");
+    const text = `# 表\n${rows}`;
+    const chunks = chunkText(text, options({ maxTokens: 10, overlapTokens: 0, maxChunks: 20 }));
+    expect(chunks.length).toBeGreaterThan(1);
+    for (const chunk of chunks) {
+      const body = chunk.replace("# 表\n", "");
+      for (const line of body.split("\n")) {
+        // 每行都是完整的一行，不存在被切断的行片段
+        expect(["aa\tbb\tcc", "dd\tee\tff", "gg\thh\tii", "jj\tkk\tll"]).toContain(line);
+      }
+    }
+  });
+});
