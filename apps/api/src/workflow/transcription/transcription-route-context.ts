@@ -44,7 +44,13 @@ export function createTranscriptionRouteContext(
 ): TranscriptionRouteContext {
   const prisma = deps.prisma ?? getPrisma();
   const fetchFn = deps.fetchFn ?? fetch;
-  const s3 = makeS3(loadS3Config());
+  // S3 懒加载：测试/CI 环境可能没配 S3_ENDPOINT，路由注册时不能炸；
+  // 第一次真正上传/删除音频时才初始化，配错了报错信息也更贴近实际操作。
+  let cachedS3: S3 | undefined;
+  const getS3 = (): S3 => {
+    if (!cachedS3) cachedS3 = makeS3(loadS3Config());
+    return cachedS3;
+  };
   const maxBytes = deps.maxBytes ?? loadTranscriptionMaxBytes();
   const staleTaskMs = loadTranscriptionStaleTaskMs();
   const scheduleTask: ScheduleTask = deps.scheduleTask
@@ -70,11 +76,13 @@ export function createTranscriptionRouteContext(
     app,
     prisma,
     fetchFn,
-    s3,
+    get s3(): S3 {
+      return getS3();
+    },
     loadRunnerConfig: () => deps.runnerConfig ?? loadTranscriptionRunnerConfig(),
     maxBytes,
     staleTaskMs,
-    storeAudio: (objectKey, body, contentType) => putObject(s3, objectKey, body, contentType),
+    storeAudio: (objectKey, body, contentType) => putObject(getS3(), objectKey, body, contentType),
     startTask,
     resumeStale: (tasks) => resumeStaleTasks({
       prisma,

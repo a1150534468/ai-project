@@ -18,6 +18,7 @@ vi.mock("../../storage/s3-objects.js", () => ({
   getObject: vi.fn(),
 }));
 
+import { createTranscriptionRouteContext } from "./transcription-route-context.js";
 import { registerTranscriptionTaskRoutes } from "./transcription-task-routes.js";
 import type { TranscriptionRouteContext } from "./transcription-route-context.js";
 
@@ -162,5 +163,21 @@ describe("POST /api/workflow/transcription/tasks", () => {
     expect(secondKey).not.toBe(firstKey);
     expect(mocks.deleteObject).toHaveBeenCalledTimes(1);
     expect(mocks.deleteObject.mock.calls[0][1]).toBe(secondKey);
+  });
+});
+
+describe("createTranscriptionRouteContext", () => {
+  it("未配 S3_ENDPOINT 时可创建（路由注册不炸），首次访问 s3 才报错", async () => {
+    const saved = process.env.S3_ENDPOINT;
+    delete process.env.S3_ENDPOINT;
+    try {
+      const app = Fastify({ logger: false });
+      // 不传 prisma 会走 getPrisma() 连真实 DB，这里只验证 S3 懒加载，传 mock
+      const ctx = createTranscriptionRouteContext(app, { prisma: {} as never });
+      expect(() => ctx.s3).toThrow("S3_ENDPOINT required");
+      await app.close();
+    } finally {
+      if (saved !== undefined) process.env.S3_ENDPOINT = saved;
+    }
   });
 });
