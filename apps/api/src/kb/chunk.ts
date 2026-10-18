@@ -89,7 +89,8 @@ function splitSections(text: string): Section[] {
       currentHeading = line.trim();
     } else {
       currentLines.push(line);
-      if (line.includes("\t")) inTable = true;
+      // 只统计围栏外的正文行：代码块里的 tab（如 TSV 示例）不能污染表格上下文
+      if (!inFence && line.includes("\t")) inTable = true;
     }
   }
   flush();

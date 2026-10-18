@@ -275,3 +275,14 @@ describe("第五轮 review 回归", () => {
     expect(body).toContain("# C\t");
   });
 });
+
+describe("第六轮 review 回归", () => {
+  it("围栏内的 tab 不污染表格上下文", () => {
+    const text = "# 前节\n```text\na\tb\n```\n# 第一章\t\n正文。";
+    const structure = describeTextStructure(text);
+    expect(structure.headingCount).toBe(2);
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toHaveLength(2);
+    expect(chunks[1]).toBe("# 第一章\n正文。");
+  });
+});
