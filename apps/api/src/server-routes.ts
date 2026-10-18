@@ -16,6 +16,7 @@ import { novelEngineRoutes } from "./novel/routes.js";
 import { articleWorkflowRoutes } from "./workflow/article/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
 import { imageWorkflowRoutes } from "./workflow/image/index.js";
+import { transcriptionWorkflowRoutes } from "./workflow/transcription/index.js";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { announcementRoutes } from "./admin/announcement-routes.js";
 
@@ -32,6 +33,7 @@ export async function registerApplicationRoutes(app: FastifyInstance): Promise<v
   await app.register(modelRoutes);
   await app.register(agentRoutes, { redis: getRedis() });
   await app.register((instance) => imageWorkflowRoutes(instance, { redis: getRedis() }));
+  await app.register((instance) => transcriptionWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) =>
     codexPetRoutes(instance, { enqueueProjectCleanup: enqueueCodexPetProjectCleanup }),
   );

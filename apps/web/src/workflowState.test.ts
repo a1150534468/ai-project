@@ -167,10 +167,10 @@ describe("resolveImageVersionComparison", () => {
 });
 
 describe("WORKFLOW_MODULES", () => {
-  it("四个模块可用、只有 PPT 在建，顺序就是导航顺序", () => {
+  it("五个模块可用、只有 PPT 在建，顺序就是导航顺序", () => {
     const byStatus = (status: string) => WORKFLOW_MODULES.filter((card) => card.status === status).map((card) => card.id);
 
-    expect(byStatus("available")).toEqual(["image", "novel", "codex-pet", "article-workflow"]);
+    expect(byStatus("available")).toEqual(["image", "novel", "codex-pet", "article-workflow", "transcription"]);
     expect(byStatus("developing")).toEqual(["ppt"]);
   });
 
