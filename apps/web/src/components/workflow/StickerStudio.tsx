@@ -50,9 +50,9 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   const [selectedPresets, setSelectedPresets] = useState<ReadonlySet<string> | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const pollTimer = useRef<number | null>(null);
-  // 详情请求序号 + 当前选中 pack：丢弃乱序/过期响应，避免 A→B 切换后 A 的晚到响应覆盖 B
-  const detailReqId = useRef(0);
+  // 详情请求按 pack 隔离序号：A 的晚到调用不会作废 B 的请求；
+  // 响应时再校验仍是当前选中 pack，避免旧 pack 覆盖新详情。
+  const detailReqIds = useRef(new Map<string, number>());
   const activePackIdRef = useRef<string | null>(null);
   useEffect(() => { activePackIdRef.current = activePackId; }, [activePackId]);
 
@@ -67,14 +67,15 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   }, [token, activePackId]);
 
   const refreshDetail = useCallback(async (packId: string) => {
-    const reqId = ++detailReqId.current;
+    const reqId = (detailReqIds.current.get(packId) ?? 0) + 1;
+    detailReqIds.current.set(packId, reqId);
     try {
       const loaded = await getStickerPack(token, packId);
-      if (detailReqId.current !== reqId) return;
+      if (detailReqIds.current.get(packId) !== reqId) return;
       if (activePackIdRef.current !== packId) return;
       setDetail(loaded);
     } catch (failure) {
-      if (detailReqId.current !== reqId) return;
+      if (detailReqIds.current.get(packId) !== reqId) return;
       if (activePackIdRef.current !== packId) return;
       setError(failure instanceof Error ? failure.message : "加载详情失败");
     }
@@ -102,22 +103,30 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
     void refreshDetail(activePackId);
   }, [activePackId, refreshDetail]);
 
-  // 活跃任务 5 秒轮询：必须跟随 activePackId，不能用 detail.pack.id——
-  // 切 pack 后 detail 还是旧的，用旧 id 轮询会递增全局序号，把新 pack 的响应判为过期。
+  // 活跃任务轮询：跟随 activePackId（不用 stale 的 detail.pack.id），
+  // 递归 setTimeout 等上一轮完成再调度，避免慢请求下多轮重叠互相作废。
   useEffect(() => {
-    if (pollTimer.current) window.clearInterval(pollTimer.current);
-    const packId = activePackId;
-    const isActiveTarget =
-      packId !== null &&
-      detail?.pack?.id === packId &&
-      (detail.pack.status === "queued" || detail.pack.status === "running");
-    if (isActiveTarget) {
-      pollTimer.current = window.setInterval(() => {
-        void refreshDetail(packId);
-        void refreshPacks();
-      }, POLL_INTERVAL_MS);
-    }
-    return () => { if (pollTimer.current) window.clearInterval(pollTimer.current); };
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async (): Promise<void> => {
+      if (cancelled) return;
+      timer = null;
+      const packId = activePackId;
+      if (
+        packId !== null &&
+        detail?.pack?.id === packId &&
+        (detail.pack.status === "queued" || detail.pack.status === "running")
+      ) {
+        await refreshDetail(packId).catch(() => {});
+        if (!cancelled) await refreshPacks().catch(() => {});
+      }
+      if (!cancelled) timer = window.setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
+    };
+    timer = window.setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [activePackId, detail?.pack?.id, detail?.pack?.status, refreshDetail, refreshPacks]);
 
   const togglePreset = (key: string): void => {

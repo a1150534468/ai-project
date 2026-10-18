@@ -119,9 +119,10 @@ interface StickerAssetData {
 }
 
 /**
- * 原子资产提交：在同一个事务里先校验执行归属（running + token），再 upsert 资产。
- * 旧 runner 若在存储过程中被 reaper / /retry 撤销执行权，upsert 不会执行，
- * 直接抛 StickerPackStoppedError，避免把旧结果写入新一轮的资产表。
+ * 原子资产提交：在同一个事务里先用带归属条件的 updateMany 拿 pack 行锁
+ * （行锁保持到事务提交，并发 reaper/retry 无法在此期间撤权），再 upsert 资产。
+ * 旧 runner 若已被撤销，updateMany 返回 0，直接抛 StickerPackStoppedError，
+ * upsert 不会执行，避免把旧结果写入新一轮的资产表。
  */
 async function commitStickerAsset(
   prisma: PrismaClient,
@@ -130,11 +131,11 @@ async function commitStickerAsset(
   asset: StickerAssetData,
 ): Promise<void> {
   await prisma.$transaction(async (tx) => {
-    const pack = await tx.stickerPack.findUnique({
-      where: { id: packId },
-      select: { status: true, executionToken: true },
+    const locked = await tx.stickerPack.updateMany({
+      where: { id: packId, executionToken, status: STICKER_PACK_STATUS.running },
+      data: { updatedAt: new Date() },
     });
-    if (!pack || pack.status !== STICKER_PACK_STATUS.running || pack.executionToken !== executionToken) {
+    if (locked.count === 0) {
       throw new StickerPackStoppedError("sticker pack execution superseded by a newer run");
     }
     await tx.imageAsset.upsert({
