@@ -36,6 +36,10 @@ function splitSections(text: string): Section[] {
   let inFence = false;
   let fenceChar = "";
   let fenceLen = 0;
+  // 表格上下文：当前节正文已出现含 tab 的行。置于表格中的 `# X\t`
+  // （行尾 tab 的手写极端情况）应视为数据行而非标题。
+  // 注：parse.ts 的 rowText 会 pop 掉末尾空单元格，真实解析输出的行尾不可能有 tab。
+  let inTable = false;
   const flush = (): void => {
     // 只去掉首尾空行：行首/行尾的空格与制表符可能有意义（TSV 首列/末列为空），
     // 必须原样保留；用 trim() 仅做判空，不修改正文内容。
@@ -44,6 +48,7 @@ function splitSections(text: string): Section[] {
       sections.push({ heading: currentHeading, body });
     }
     currentLines = [];
+    inTable = false;
   };
   for (const line of lines) {
     const trimmed = line.trim();
@@ -70,12 +75,21 @@ function splitSections(text: string): Section[] {
     }
     // 含制表符的行是 TSV 数据行，不是标题：XLSX 单元格内容可能以 `#` 开头
     //（如 `# A\t1`），误判为标题会导致整节被当成空节丢弃。
-    const match = !inFence && !line.includes("\t") ? HEADING_PATTERN.exec(line.trimEnd()) : null;
-    if (match) {
+    // 判定顺序：围栏 > 行内 tab（trimEnd 后仍有 tab）> 表格上下文中的带 tab 行。
+    // 正常标题末尾的 tab 属空白，trimEnd 后不影响识别。
+    const trimmedEnd = line.trimEnd();
+    let isHeading = false;
+    if (!inFence && HEADING_PATTERN.test(trimmedEnd)) {
+      if (!trimmedEnd.includes("\t") && !(inTable && line.includes("\t"))) {
+        isHeading = true;
+      }
+    }
+    if (isHeading) {
       flush();
       currentHeading = line.trim();
     } else {
       currentLines.push(line);
+      if (line.includes("\t")) inTable = true;
     }
   }
   flush();

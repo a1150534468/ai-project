@@ -256,3 +256,22 @@ describe("第四轮 review 回归", () => {
     expect(chunks[0]).toContain("# B\t2");
   });
 });
+
+describe("第五轮 review 回归", () => {
+  it("正常标题末尾带 tab 仍被识别", () => {
+    const text = "# 第一章\t\n正文。";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toEqual(["# 第一章\n正文。"]);
+    const structure = describeTextStructure(text);
+    expect(structure.headingCount).toBe(1);
+    expect(structure.strategy).toBe("headings");
+  });
+
+  it("表格上下文中的 # X\\t 行视为数据", () => {
+    const text = "# 表\na\tb\n# C\t\nd\te";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).not.toEqual([]);
+    const body = chunks[0].replace("# 表\n", "");
+    expect(body).toContain("# C\t");
+  });
+});
