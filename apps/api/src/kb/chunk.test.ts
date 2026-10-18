@@ -286,3 +286,15 @@ describe("第六轮 review 回归", () => {
     expect(chunks[1]).toBe("# 第一章\n正文。");
   });
 });
+
+describe("第七轮 review 回归", () => {
+  it("围栏内的 tab 不触发表格切分，空行保留", () => {
+    const text = "# 示例\n```python\ns = \"\"\"a\tb\n\nc\"\"\"\n```";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toHaveLength(1);
+    // 空行保留，Python 字符串内容不变
+    expect(chunks[0]).toContain("a\tb\n\nc");
+    const structure = describeTextStructure(text);
+    expect(structure.tableSectionCount).toBe(0);
+  });
+});

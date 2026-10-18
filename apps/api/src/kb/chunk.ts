@@ -26,6 +26,41 @@ interface Section {
   readonly body: string;
 }
 
+/** 代码围栏状态跟踪：起止标记可复用，供分节与表格判定共享。 */
+interface FenceState {
+  inFence: boolean;
+  fenceChar: string;
+  fenceLen: number;
+}
+
+function newFenceState(): FenceState {
+  return { inFence: false, fenceChar: "", fenceLen: 0 };
+}
+
+/**
+ * 处理一行是否为围栏标记，并更新状态。返回 true 表示该行是围栏标记行。
+ * 闭合要求：整行全是同种围栏字符（长度不小于 opening）+ 空白。
+ */
+function trackFence(state: FenceState, trimmedLine: string): boolean {
+  const fenceMatch = FENCE_PATTERN.exec(trimmedLine);
+  if (!fenceMatch) return false;
+  const seq = fenceMatch[1];
+  if (!state.inFence) {
+    state.inFence = true;
+    state.fenceChar = seq[0];
+    state.fenceLen = seq.length;
+  } else {
+    let i = 0;
+    while (i < trimmedLine.length && trimmedLine[i] === state.fenceChar) i++;
+    if (i >= state.fenceLen && trimmedLine.slice(i).trim() === "") {
+      state.inFence = false;
+      state.fenceChar = "";
+      state.fenceLen = 0;
+    }
+  }
+  return true;
+}
+
 function splitSections(text: string): Section[] {
   const lines = text.split("\n");
   const sections: Section[] = [];
@@ -33,9 +68,7 @@ function splitSections(text: string): Section[] {
   let currentLines: string[] = [];
   // 代码围栏跟踪：围栏内的 `# 注释` 不是标题。记录围栏字符与长度，
   // 闭合须同字符、长度不小于 opening、且整行只有围栏字符（info string 不算闭合）。
-  let inFence = false;
-  let fenceChar = "";
-  let fenceLen = 0;
+  const fence = newFenceState();
   // 表格上下文：当前节正文已出现含 tab 的行。置于表格中的 `# X\t`
   // （行尾 tab 的手写极端情况）应视为数据行而非标题。
   // 注：parse.ts 的 rowText 会 pop 掉末尾空单元格，真实解析输出的行尾不可能有 tab。
@@ -52,24 +85,7 @@ function splitSections(text: string): Section[] {
   };
   for (const line of lines) {
     const trimmed = line.trim();
-    const fenceMatch = FENCE_PATTERN.exec(trimmed);
-    if (fenceMatch) {
-      const seq = fenceMatch[1];
-      if (!inFence) {
-        inFence = true;
-        fenceChar = seq[0];
-        fenceLen = seq.length;
-      } else {
-        // 闭合：整行必须全是同种围栏字符（长度不小于 opening）+ 空白；
-        // 混合字符（如 ```~~~）不算闭合，避免提前退出围栏。
-        let i = 0;
-        while (i < trimmed.length && trimmed[i] === fenceChar) i++;
-        if (i >= fenceLen && trimmed.slice(i).trim() === "") {
-          inFence = false;
-          fenceChar = "";
-          fenceLen = 0;
-        }
-      }
+    if (trackFence(fence, trimmed)) {
       currentLines.push(line);
       continue;
     }
@@ -79,7 +95,7 @@ function splitSections(text: string): Section[] {
     // 正常标题末尾的 tab 属空白，trimEnd 后不影响识别。
     const trimmedEnd = line.trimEnd();
     let isHeading = false;
-    if (!inFence && HEADING_PATTERN.test(trimmedEnd)) {
+    if (!fence.inFence && HEADING_PATTERN.test(trimmedEnd)) {
       if (!trimmedEnd.includes("\t") && !(inTable && line.includes("\t"))) {
         isHeading = true;
       }
@@ -90,7 +106,7 @@ function splitSections(text: string): Section[] {
     } else {
       currentLines.push(line);
       // 只统计围栏外的正文行：代码块里的 tab（如 TSV 示例）不能污染表格上下文
-      if (!inFence && line.includes("\t")) inTable = true;
+      if (!fence.inFence && line.includes("\t")) inTable = true;
     }
   }
   flush();
@@ -105,7 +121,12 @@ function nonEmptySections(sections: readonly Section[]): Section[] {
 
 function isTableSection(section: Section): boolean {
   if (!section.heading) return false;
-  return section.body.split("\n").some((line) => line.includes("\t"));
+  // 只统计围栏外的 tab：代码块里的制表符（如 Python 字符串中的 \t）不是表格
+  const fence = newFenceState();
+  return section.body.split("\n").some((line) => {
+    if (trackFence(fence, line.trim())) return false;
+    return !fence.inFence && line.includes("\t");
+  });
 }
 
 /** 纯函数：描述文本结构，供质量追踪与策略选择。 */
