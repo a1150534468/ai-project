@@ -127,3 +127,37 @@ describe("describeTextStructure", () => {
     expect(result.tableSectionCount).toBe(1);
   });
 });
+
+describe("review 修复回归", () => {
+  it("TSV 首行行首制表符保留，不错列", () => {
+    const text = "# 表\n\tQ1\tQ2\n产品A\t10\t20";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toContain("\tQ1\tQ2");
+    expect(chunks[0].startsWith("# 表\n\tQ1")).toBe(true);
+  });
+
+  it("代码围栏内的 # 注释不算标题，内容不丢", () => {
+    const text = "```sh\n# 注释 A\n# 注释 B\necho ok\n```";
+    const chunks = chunkText(text, options({ maxTokens: 100, overlapTokens: 0 }));
+    // 无真实标题：走原路径，字节级一致
+    expect(chunks).toEqual([text]);
+    expect(describeTextStructure(text).strategy).toBe("plain");
+  });
+
+  it("纯标题文档返回空数组，不回退到旧路径", () => {
+    expect(chunkText("# A\n# B", options({ maxTokens: 100, overlapTokens: 0 }))).toEqual([]);
+    const structure = describeTextStructure("# A\n# B");
+    expect(structure.headingCount).toBe(2);
+    expect(structure.strategy).toBe("headings");
+  });
+
+  it("标题计入块预算，拼接后不超窗", () => {
+    const heading = "# 123456789012345"; // 16 chars + \n = 17
+    const body = "x".repeat(20);
+    const chunks = chunkText(`${heading}\n${body}`, options({ maxTokens: 10, overlapTokens: 0, maxChunks: 20 }));
+    expect(chunks.length).toBeGreaterThan(1);
+    const windowSize = 10 * 3;
+    for (const chunk of chunks) expect(chunk.length).toBeLessThanOrEqual(windowSize);
+  });
+});
