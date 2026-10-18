@@ -5,7 +5,7 @@
 
 // ── 工作流 Hub ───────────────────────────────────────────────────────────────
 
-export type WorkflowModuleId = "image" | "novel" | "codex-pet" | "article-workflow" | "transcription" | "ppt";
+export type WorkflowModuleId = "image" | "novel" | "codex-pet" | "article-workflow" | "transcription" | "sticker" | "ppt";
 
 /** `developing` 的模块照样列在导航里，点进去是占位页。 */
 export type WorkflowModuleStatus = "available" | "developing";
@@ -60,6 +60,14 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
     shortTitle: "转写",
     description: "上传录音转写成文字，支持普通话 / 粤语 / 英语，可编辑校对并导出 txt / md / 字幕",
     icon: "mdi:microphone-outline",
+    status: "available",
+  },
+  {
+    id: "sticker",
+    title: "表情包工坊",
+    shortTitle: "贴纸",
+    description: "描述角色或上传参考图，一键生成 16 张成套表情贴纸",
+    icon: "mdi:emoticon-happy-outline",
     status: "available",
   },
   {

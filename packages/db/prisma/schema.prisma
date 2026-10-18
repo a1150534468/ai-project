@@ -44,6 +44,7 @@ model User {
   codexPetArtifacts           CodexPetArtifact[]
   codexPetEvents              CodexPetEvent[]
   codexPetImageCalls          CodexPetImageCall[]
+  stickerPacks                StickerPack[]
 
 }
 
@@ -1614,4 +1615,30 @@ model EcomMainImageJob {
 
   @@index([userId, createdAt])
   @@index([userId, stage])
+}
+
+model StickerPack {
+  id                 String   @id @default(cuid())
+  userId             String
+  requestId          String   @unique
+  name               String
+  characterPrompt    String
+  style              String   @default("cute")
+  // 用户上传的参考图在对象存储中的 key；与 baseImageRequestId 二选一
+  referenceObjectKey String?
+  // 文字描述模式下先生成的主形象（ImageAsset.requestId）
+  baseImageRequestId String?
+  presetKeys         String[] @default([])
+  status             String   @default("queued")
+  completedCount     Int      @default(0)
+  failedCount        Int      @default(0)
+  // 本轮 runner 的执行归属 token：重试会启动新 token，旧 runner 抢不到写锁就停
+  executionToken     String?
+  error              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([status, updatedAt])
 }
