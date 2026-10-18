@@ -3,6 +3,8 @@ import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
 import { useAuthGate } from "../../app/authGate";
 import { InAppSelect } from "../ui/InAppSelect";
+import { cx } from "../ui/cx";
+import { SETTINGS_CONTROL, SETTINGS_TEXTAREA, SettingsField, SettingsGroup } from "./SettingsSlots";
 import * as workflowEcomApi from "../../workflowEcomApi";
 import type {
   WorkflowEcomImageAsset,
@@ -53,6 +55,29 @@ const CATEGORY_OPTIONS: readonly { readonly value: string; readonly label: strin
   { value: "珠宝配饰", label: "珠宝配饰" },
   { value: CATEGORY_OTHER, label: "其他" },
 ];
+
+/** 「AI 帮我写」小按钮：卖点文案与额外说明各一颗，两处长得一样，抽出来只写一遍。 */
+function HelpWriteButton({
+  busy,
+  disabled,
+  onClick,
+}: {
+  readonly busy: boolean;
+  readonly disabled: boolean;
+  readonly onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="inline-flex h-8 items-center gap-1 rounded-[10px] border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      <Icon icon={busy ? "mdi:loading" : "mdi:auto-fix"} className={busy ? "animate-spin" : ""} aria-hidden />
+      {busy ? "生成中" : "AI 帮我写"}
+    </button>
+  );
+}
 
 export function CommerceImageStudio({
   token,
@@ -192,114 +217,92 @@ export function CommerceImageStudio({
     <EcomHistorySidebar
       token={token}
       refreshKey={historyRefreshKey}
+      variant="rail"
       onSelectMain={onSelectMainHistory}
       onSelectDetail={onSelectDetailHistory}
     />
   );
 
   const productControls = (
-    <section className="border-b border-hairline-subtle pb-5">
-      <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
-      <h2 className="mt-1 text-base font-semibold text-ink">产品资料</h2>
-      <p className="mt-1 text-xs leading-5 text-ink-tertiary">主图与详情图共用。</p>
-      <div className="mt-4 grid gap-3">
-        <div className="grid gap-2 text-sm font-semibold text-ink">
-          平台
-          <InAppSelect
-            icon="mdi:storefront-outline"
-            label="平台"
-            value={platformId}
-            options={platforms.map((platform) => ({ value: platform.id, label: platform.name }))}
-            onChange={(value) => setPlatformId(value as WorkflowEcomPlatformId)}
-          />
-        </div>
-        <label className="grid gap-2 text-sm font-semibold text-ink">
-          商品名称
+    <SettingsGroup title="产品资料" hint="主图与详情图共用">
+      <SettingsField label="平台">
+        <InAppSelect
+          icon="mdi:storefront-outline"
+          label="平台"
+          value={platformId}
+          options={platforms.map((platform) => ({ value: platform.id, label: platform.name }))}
+          onChange={(value) => setPlatformId(value as WorkflowEcomPlatformId)}
+        />
+      </SettingsField>
+      <SettingsField label="商品名称">
+        <input
+          value={productName}
+          onChange={(event) => setProductName(event.target.value)}
+          className={SETTINGS_CONTROL}
+        />
+      </SettingsField>
+      <SettingsField label="商品类目">
+        <InAppSelect
+          icon="mdi:shape-outline"
+          label="商品类目"
+          value={categoryChoice}
+          options={CATEGORY_OPTIONS}
+          onChange={setCategoryChoice}
+        />
+        {categoryChoice === CATEGORY_OTHER && (
           <input
-            value={productName}
-            onChange={(event) => setProductName(event.target.value)}
-            className="h-10 rounded-lg border border-hairline px-3 text-sm font-normal text-ink"
+            value={categoryOther}
+            onChange={(event) => setCategoryOther(event.target.value)}
+            placeholder="请填写商品类目"
+            className={SETTINGS_CONTROL}
           />
-        </label>
-        <div className="grid gap-2 text-sm font-semibold text-ink">
-          商品类目
-          <InAppSelect
-            icon="mdi:shape-outline"
-            label="商品类目"
-            value={categoryChoice}
-            options={CATEGORY_OPTIONS}
-            onChange={setCategoryChoice}
+        )}
+      </SettingsField>
+      <SettingsField
+        label="卖点文案"
+        hint={(
+          <HelpWriteButton
+            busy={helpWriting === "sellingPoints"}
+            disabled={helpWriting !== null}
+            onClick={() => handleHelpWrite("sellingPoints")}
           />
-          {categoryChoice === CATEGORY_OTHER && (
-            <input
-              value={categoryOther}
-              onChange={(event) => setCategoryOther(event.target.value)}
-              placeholder="请填写商品类目"
-              className="h-10 rounded-lg border border-hairline px-3 text-sm font-normal text-ink"
-            />
-          )}
-        </div>
-        <div className="grid gap-2 text-sm font-semibold text-ink">
-          <div className="flex items-center justify-between gap-3">
-            <span>卖点文案</span>
-            <button
-              type="button"
-              onClick={() => handleHelpWrite("sellingPoints")}
-              disabled={helpWriting !== null}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Icon
-                icon={helpWriting === "sellingPoints" ? "mdi:loading" : "mdi:auto-fix"}
-                className={helpWriting === "sellingPoints" ? "animate-spin" : ""}
-                aria-hidden
-              />
-              {helpWriting === "sellingPoints" ? "生成中" : "AI 帮我写"}
-            </button>
-          </div>
-          <textarea
-            value={sellingPointsInput}
-            onChange={(event) => setSellingPointsInput(event.target.value)}
-            placeholder="一行一个卖点"
-            className="min-h-[88px] rounded-lg border border-hairline p-3 text-sm font-normal leading-5"
+        )}
+      >
+        <textarea
+          value={sellingPointsInput}
+          onChange={(event) => setSellingPointsInput(event.target.value)}
+          placeholder="一行一个卖点"
+          className={cx(SETTINGS_TEXTAREA, "min-h-[88px]")}
+        />
+      </SettingsField>
+      <SettingsField
+        label="额外说明"
+        hint={(
+          <HelpWriteButton
+            busy={helpWriting === "extra"}
+            disabled={helpWriting !== null}
+            onClick={() => handleHelpWrite("extra")}
           />
-        </div>
-        <div className="grid gap-2 text-sm font-semibold text-ink">
-          <div className="flex items-center justify-between gap-3">
-            <span>额外说明</span>
-            <button
-              type="button"
-              onClick={() => handleHelpWrite("extra")}
-              disabled={helpWriting !== null}
-              className="inline-flex h-8 items-center gap-1 rounded-lg border border-brand/40 px-2 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Icon
-                icon={helpWriting === "extra" ? "mdi:loading" : "mdi:auto-fix"}
-                className={helpWriting === "extra" ? "animate-spin" : ""}
-                aria-hidden
-              />
-              {helpWriting === "extra" ? "生成中" : "AI 帮我写"}
-            </button>
-          </div>
-          <textarea
-            value={extra}
-            onChange={(event) => setExtra(event.target.value)}
-            className="min-h-[72px] rounded-lg border border-hairline p-3 text-sm font-normal leading-5"
-          />
-        </div>
-      </div>
+        )}
+      >
+        <textarea
+          value={extra}
+          onChange={(event) => setExtra(event.target.value)}
+          className={cx(SETTINGS_TEXTAREA, "min-h-[72px]")}
+        />
+      </SettingsField>
       {helpWriteError && (
-        <p className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger-ink">{helpWriteError}</p>
+        <p className="rounded-[10px] bg-danger/10 px-3 py-2 text-xs text-danger-ink">{helpWriteError}</p>
       )}
-      <div className="mt-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-semibold text-ink">
-            参考图 ({referenceAssets.length}/{ECOM_MAX_REFERENCE_COUNT})
-          </p>
+
+      <SettingsField
+        label={`参考图 (${referenceAssets.length}/${ECOM_MAX_REFERENCE_COUNT})`}
+        hint={(
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading || referenceAssets.length >= ECOM_MAX_REFERENCE_COUNT}
-            className="inline-flex h-9 items-center gap-1 rounded-lg border border-dashed border-hairline px-3 text-xs font-semibold disabled:cursor-not-allowed disabled:text-ink-tertiary"
+            className="inline-flex h-8 items-center gap-1 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-ink-tertiary"
           >
             <Icon
               icon={isUploading ? "mdi:loading" : "mdi:plus"}
@@ -308,7 +311,8 @@ export function CommerceImageStudio({
             />
             {isUploading ? "上传中" : "上传"}
           </button>
-        </div>
+        )}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -320,37 +324,39 @@ export function CommerceImageStudio({
             event.currentTarget.value = "";
           }}
         />
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {referenceAssets.map((asset) => (
             <img
               key={asset.id}
               src={asset.thumbnailUrl || asset.originalUrl}
               alt="参考图缩略图"
-              className="h-14 w-14 rounded-lg border border-hairline object-cover"
+              className="h-14 w-14 rounded-[10px] border border-hairline object-cover"
             />
           ))}
           {referenceAssets.length === 0 && <p className="text-xs text-ink-tertiary">暂无参考图</p>}
         </div>
-        {uploadError && <p className="mt-2 rounded-lg bg-danger/10 px-3 py-2 text-xs text-danger-ink">{uploadError}</p>}
-      </div>
-    </section>
+        {uploadError && <p className="rounded-[10px] bg-danger/10 px-3 py-2 text-xs text-danger-ink">{uploadError}</p>}
+      </SettingsField>
+    </SettingsGroup>
   );
 
   return (
-    <section className="relative flex min-h-0 flex-col bg-surface xl:h-full xl:overflow-hidden">
-      <header className="flex h-14 flex-none items-center justify-between gap-3 border-b border-hairline-subtle bg-surface px-4 lg:px-6">
-        <div className="inline-flex rounded-lg bg-surface-muted p-1" aria-label="电商图类型">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* 二级切换（一级 tab「电商图」在页面顶栏下面）：主图 / 详情图 共用这一行，与生图场景 tab
+          同款 —— 通栏、无底、只圈住按钮本身；「生成概览」是工作区的附属视图，靠右。 */}
+      <div className="flex flex-none items-center gap-3 px-3.5 pt-3.5">
+        <div role="group" aria-label="电商图类型" className="inline-flex gap-1">
           <RippleButton
             type="button"
             onClick={() => onTabChange("main")}
-            className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "main" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"}`}
+            className={`h-9 flex-none whitespace-nowrap rounded-[10px] px-4 text-sm font-medium ${tab === "main" ? "bg-surface text-ink" : "text-ink-secondary"}`}
           >
             商品主图
           </RippleButton>
           <RippleButton
             type="button"
             onClick={() => onTabChange("detail")}
-            className={`h-8 rounded-lg px-3 text-xs font-semibold ${tab === "detail" ? "bg-surface text-ink shadow-sm" : "text-ink-secondary"}`}
+            className={`h-9 flex-none whitespace-nowrap rounded-[10px] px-4 text-sm font-medium ${tab === "detail" ? "bg-surface text-ink" : "text-ink-secondary"}`}
           >
             商品详情图
           </RippleButton>
@@ -359,39 +365,42 @@ export function CommerceImageStudio({
           type="button"
           onClick={() => setIsOverviewOpen(true)}
           aria-expanded={isOverviewOpen}
-          className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-semibold text-ink"
+          className="ml-auto inline-flex h-9 flex-none items-center gap-2 rounded-[10px] border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
         >
           <Icon icon="mdi:view-dashboard-outline" className="text-base" aria-hidden />
           生成概览
         </button>
-      </header>
-
-      <div className="min-h-0 flex-1 overflow-y-auto xl:overflow-hidden">
-        {tab === "main" ? (
-          <EcomMainImageStudio
-            token={token}
-            shared={mainShared}
-            controlsHeader={productControls}
-            historyFooter={historyFooter}
-            loadJob={loadMainJob}
-            onActivity={onActivity}
-            onBalanceRefresh={onBalanceRefresh}
-            onDownloadImage={openDownload}
-          />
-        ) : (
-          <EcomWorkflowStudio
-            token={token}
-            shared={detailShared}
-            controlsHeader={productControls}
-            historyFooter={historyFooter}
-            mainImages={mainImages}
-            loadWorkflow={loadDetailWorkflow}
-            onActivity={onActivity}
-            onBalanceRefresh={onBalanceRefresh}
-            onDownloadImage={openDownload}
-          />
-        )}
       </div>
+
+      {/* 主图 / 详情图两个档位也走同一段依次入场（`wf-studio-in`：三个区 40ms 间隔）。
+          这里的 DOM 是条件渲染（两个档位不同时挂载），所以 key 加不加都能重播；
+          但给 key 更直白 —— 换档就是换一棵子树，旧树卸载、新树从 initial 起步。 */}
+      {tab === "main" ? (
+        <EcomMainImageStudio
+          key="ecom-main"
+          token={token}
+          shared={mainShared}
+          controlsHeader={productControls}
+          historyFooter={historyFooter}
+          loadJob={loadMainJob}
+          onActivity={onActivity}
+          onBalanceRefresh={onBalanceRefresh}
+          onDownloadImage={openDownload}
+        />
+      ) : (
+        <EcomWorkflowStudio
+          key="ecom-detail"
+          token={token}
+          shared={detailShared}
+          controlsHeader={productControls}
+          historyFooter={historyFooter}
+          mainImages={mainImages}
+          loadWorkflow={loadDetailWorkflow}
+          onActivity={onActivity}
+          onBalanceRefresh={onBalanceRefresh}
+          onDownloadImage={openDownload}
+        />
+      )}
 
       {isOverviewOpen && (
         <div className="fixed inset-0 z-50 bg-scrim/20" onClick={() => setIsOverviewOpen(false)}>
@@ -411,33 +420,33 @@ export function CommerceImageStudio({
                 type="button"
                 onClick={() => setIsOverviewOpen(false)}
                 aria-label="关闭生成概览"
-                className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"
+                className="grid h-9 w-9 place-items-center rounded-[10px] hover:bg-surface-muted"
               >
                 <Icon icon="mdi:close" className="text-xl" aria-hidden />
               </button>
             </div>
             <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
-              <div className="rounded-[11px] border border-hairline-subtle bg-surface-subtle p-3">
-                <p className="text-[11px] font-semibold text-ink-tertiary">当前视图</p>
+              <div className="rounded-[10px] border border-hairline-subtle bg-surface-subtle p-3">
+                <p className="text-xs font-semibold text-ink-tertiary">当前视图</p>
                 <p className="mt-1 text-sm font-semibold text-ink">{tab === "main" ? "商品主图" : "商品详情图"}</p>
               </div>
-              <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
-                <p className="text-[11px] font-semibold text-ink-tertiary">平台</p>
+              <div className="rounded-[10px] border border-hairline-subtle bg-surface p-3">
+                <p className="text-xs font-semibold text-ink-tertiary">平台</p>
                 <p className="mt-1 truncate text-sm font-semibold text-ink">
                   {platforms.find((p) => p.id === platformId)?.name ?? platformId}
                 </p>
               </div>
-              <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
-                <p className="text-[11px] font-semibold text-ink-tertiary">商品名称</p>
+              <div className="rounded-[10px] border border-hairline-subtle bg-surface p-3">
+                <p className="text-xs font-semibold text-ink-tertiary">商品名称</p>
                 <p className="mt-1 truncate text-sm font-semibold text-ink">{productName.trim() || "未填写"}</p>
               </div>
-              <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
-                <p className="text-[11px] font-semibold text-ink-tertiary">商品类目</p>
+              <div className="rounded-[10px] border border-hairline-subtle bg-surface p-3">
+                <p className="text-xs font-semibold text-ink-tertiary">商品类目</p>
                 <p className="mt-1 truncate text-sm font-semibold text-ink">{effectiveCategory || "未选择"}</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
-                  <p className="text-[11px] font-semibold text-ink-tertiary">卖点</p>
+                <div className="rounded-[10px] border border-hairline-subtle bg-surface p-3">
+                  <p className="text-xs font-semibold text-ink-tertiary">卖点</p>
                   <p className="mt-1 text-sm font-semibold text-ink">
                     {
                       sellingPointsInput
@@ -448,12 +457,12 @@ export function CommerceImageStudio({
                     条
                   </p>
                 </div>
-                <div className="rounded-[11px] border border-hairline-subtle bg-surface p-3">
-                  <p className="text-[11px] font-semibold text-ink-tertiary">参考图</p>
+                <div className="rounded-[10px] border border-hairline-subtle bg-surface p-3">
+                  <p className="text-xs font-semibold text-ink-tertiary">参考图</p>
                   <p className="mt-1 text-sm font-semibold text-ink">{referenceAssets.length} 张</p>
                 </div>
               </div>
-              <p className="rounded-[11px] bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-ink">
+              <p className="rounded-[10px] bg-brand-soft px-3 py-2 text-xs font-semibold text-brand-ink">
                 主图与详情图共用产品资料，可在中间工作区设置生成参数。
               </p>
             </div>
@@ -462,6 +471,6 @@ export function CommerceImageStudio({
       )}
 
       {downloadDialog && <DownloadLinkDialog dialog={downloadDialog} onClose={() => setDownloadDialog(null)} />}
-    </section>
+    </div>
   );
 }

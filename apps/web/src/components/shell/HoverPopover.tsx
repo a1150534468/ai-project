@@ -6,6 +6,13 @@ const CLOSE_DELAY_MS = 150;
 const OFFSET_X = 8;
 const MAX_POPOVER_HEIGHT = 320;
 
+/**
+ * 浮层展开：220ms，从触发点方向 scale .96→1 + 位移 4px（原型「浮层展开」那一行的参数）。
+ * 缓动用 pop 而不是弹簧：浮层是「快出、微过冲」的小件，弹簧在这儿会显得拖。
+ */
+const OPEN_SECONDS = 0.22;
+const OPEN_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+
 /** 浮层左上角在视口中的落点（fixed 定位，px）。null 即未展开 —— 位置与开合是同一份状态。 */
 interface Placement {
   readonly left: number;
@@ -80,7 +87,7 @@ export function HoverPopover({ children, content, disabled = false, className = 
             onMouseLeave={closeLater}
             initial={reduce ? false : { opacity: 0, scale: 0.96, x: -4 }}
             animate={{ opacity: 1, scale: 1, x: 0 }}
-            transition={{ duration: 0.14 }}
+            transition={{ duration: OPEN_SECONDS, ease: OPEN_EASE }}
             style={{
               position: "fixed",
               left: placement.left,

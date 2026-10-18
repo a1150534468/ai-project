@@ -2,6 +2,10 @@ import { useRef, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { RippleButton, spring } from "../../motion";
 import { InAppSelect } from "../ui/InAppSelect";
+import { cx } from "../ui/cx";
+import { SETTINGS_CONTROL, SETTINGS_SLOT, SETTINGS_TEXTAREA, SettingsField, SettingsGroup } from "./SettingsSlots";
+import { usePanelVisibility } from "./panelVisibility";
+import { WF_PANEL, WF_PANEL_HEAD, wfShell, WF_WORKSPACE } from "./workflowLayout";
 import { IMAGE_MODEL_OPTIONS, isImageModel, type ImageModel } from "../../workflowState";
 import type {
   WorkflowEcomImageAsset,
@@ -101,6 +105,7 @@ function formatStageLabel(stage: string, isServerGenerating: boolean): string {
 
 export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const panels = usePanelVisibility();
   const handlePlatformChange = (value: string) => {
     const platform = props.platforms.find((item) => item.id === value);
     if (platform) props.onPlatformChange(platform.id);
@@ -117,159 +122,161 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
     props.onSegmentCountChange(value);
   };
   return (
-    <section className="grid min-h-0 min-w-0 bg-surface xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
-        {props.controlsHeader}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold text-ink-secondary">电商工作台</p>
-            <h2 className="mt-1 text-base font-semibold text-ink">电商长图工作台</h2>
-            <p className="mt-2 text-sm leading-6 text-ink-secondary">上传参考图、生成母版、确认分段并在浏览器完成白底纵向拼接。</p>
-          </div>
-          {props.isForeignPlatform && <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">海外平台文案</span>}
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {!props.hideProductForm && (
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              平台
-              <InAppSelect
-                icon="mdi:storefront-outline"
-                label="平台"
-                value={props.selectedPlatformId}
-                options={props.platforms.map((platform) => ({ value: platform.id, label: platform.name }))}
-                onChange={handlePlatformChange}
-              />
-            </div>
+    <section className={cx(wfShell(panels.left, panels.right), "wf-studio-in")}>
+      {/* 左栏由顶栏「面板开关」控制：收起的那一列连缝一起从栅格里消失，工作区直接吃掉那份宽度。 */}
+      {panels.left && (
+        <aside className={cx(WF_PANEL, "xl:h-full")}>
+        <div className={WF_PANEL_HEAD}>
+          <h2 className="min-w-0 truncate text-sm font-semibold text-ink">商品详情图设置</h2>
+          {props.isForeignPlatform && (
+            <span className="flex-none rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">海外平台文案</span>
           )}
-          <div className="grid gap-2 text-sm font-semibold text-ink">
-            模板
-            <InAppSelect
-              icon="mdi:file-document-outline"
-              label="模板"
-              value={props.selectedTemplateId}
-              options={props.templates.map((template) => ({ value: template.id, label: template.name }))}
-              onChange={handleTemplateChange}
-            />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink sm:col-span-2">
-            模型
-            <InAppSelect
-              icon="mdi:creation-outline"
-              label="模型"
-              value={props.selectedModel ?? ECOM_DEFAULT_MODEL_OPTION_VALUE}
-              options={[
-                { value: ECOM_DEFAULT_MODEL_OPTION_VALUE, label: ECOM_DEFAULT_MODEL_LABEL },
-                ...IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
-              ]}
-              onChange={(value) => {
-                if (value === ECOM_DEFAULT_MODEL_OPTION_VALUE) props.onModelChange(null);
-                else if (isImageModel(value)) props.onModelChange(value);
-              }}
-            />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink sm:col-span-2">
-            清晰度
-            <InAppSelect
-              icon="mdi:high-definition"
-              label="清晰度"
-              value={props.selectedResolution}
-              options={props.resolutionOptions.map((option) => ({ value: option.value, label: `${option.label} · ${option.size}` }))}
-              onChange={handleResolutionChange}
-            />
-          </div>
-          <div className="grid gap-2 text-sm font-semibold text-ink sm:col-span-2">
-            分段数
-            <InAppSelect
-              icon="mdi:view-agenda-outline"
-              label="分段数"
-              value={String(props.selectedSegmentCount)}
-              options={props.segmentCountOptions}
-              onChange={handleSegmentCountChange}
-            />
-          </div>
         </div>
 
-        {!props.hideProductForm && (
-          <div className="mt-4 grid gap-3">
-            <label className="grid gap-2 text-sm font-semibold text-ink">
-              商品名称
-              <input value={props.productName} onChange={(event) => props.onProductNameChange(event.target.value)} className="h-10 rounded-lg border border-hairline px-3 text-sm text-ink" />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold text-ink">
-              商品类目
-              <input value={props.category} onChange={(event) => props.onCategoryChange(event.target.value)} className="h-10 rounded-lg border border-hairline px-3 text-sm text-ink" />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold text-ink">
-              卖点文案
-              <textarea value={props.sellingPointsInput} onChange={(event) => props.onSellingPointsChange(event.target.value)} className="min-h-[108px] rounded-lg border border-hairline p-3 text-sm leading-6 text-ink" />
-            </label>
-            <label className="grid gap-2 text-sm font-semibold text-ink">
-              额外说明
-              <textarea value={props.extra} onChange={(event) => props.onExtraChange(event.target.value)} className="min-h-[88px] rounded-lg border border-hairline p-3 text-sm leading-6 text-ink" />
-            </label>
-          </div>
-        )}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+          {props.controlsHeader}
 
-        {!props.hideProductForm && (
-          <div className="mt-4 rounded-lg border border-hairline-subtle bg-surface-subtle p-3">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-semibold text-ink">参考图 ({props.referenceAssets.length + props.remoteReferenceCount}/{ECOM_MAX_REFERENCE_COUNT})</p>
-              <button type="button" onClick={() => fileInputRef.current?.click()} disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT} className="h-10 rounded-lg border border-dashed border-hairline px-3 text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:text-ink-tertiary">
-                {props.isUploadingReference ? "上传中" : "上传参考图"}
-              </button>
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => {
-              const file = event.target.files?.[0];
-              if (file) props.onReferenceUpload(file);
-              event.currentTarget.value = "";
-            }} />
-            <div className="mt-3 flex flex-wrap gap-2">
-              {props.referenceAssets.map((asset) => (
-                <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-lg border border-hairline object-cover" />
-              ))}
-              {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-lg border border-dashed border-hairline px-3 text-center text-xs text-ink-secondary">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
-              {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-lg border border-dashed border-hairline px-3 py-4 text-xs text-ink-tertiary">上传后会展示本地缩略图。</div>}
-            </div>
-          </div>
-        )}
-
-        {(props.error || props.notice || props.workflowError) && (
-          <p className={`mt-4 rounded-lg px-3 py-2 text-sm ${props.error || props.workflowError ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}>
-            {props.error || props.workflowError || props.notice}
+          <p className={cx(SETTINGS_SLOT, "mt-4 leading-6")}>
+            上传参考图、生成母版、确认分段并在浏览器完成白底纵向拼接。
           </p>
-        )}
 
-        <div className="mt-4 grid gap-2 text-sm font-semibold text-ink">
-          从主图选母版
-          {(props.mainImages?.length ?? 0) === 0 ? (
-            <p className="rounded-lg border border-dashed border-hairline px-3 py-3 text-xs font-normal text-ink-tertiary">先在「商品主图」生成主图，即可选一张作为母版（省一次母版出图）。</p>
-          ) : (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {props.mainImages!.map((img) => (
-                  <button
-                    key={img.assetId}
-                    type="button"
-                    onClick={() => props.onSelectMainImage?.(img.assetId)}
-                    className={`h-16 w-16 overflow-hidden rounded-lg border-2 transition-colors ${props.selectedMasterAssetId === img.assetId ? "border-brand" : "border-transparent"}`}
-                  >
-                    <img src={img.thumbnailUrl} alt="主图缩略图" className="h-full w-full object-cover" />
-                  </button>
-                ))}
-              </div>
-              <RippleButton
-                type="button"
-                onClick={() => props.onAdoptMaster?.()}
-                disabled={!props.selectedMasterAssetId || props.isWorkflowMutating}
-                className="h-10 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40"
-              >
-                用所选主图作为母版
-              </RippleButton>
-            </>
+          <SettingsGroup title="长图参数" className="mt-5">
+            {!props.hideProductForm && (
+              <SettingsField label="平台">
+                <InAppSelect
+                  icon="mdi:storefront-outline"
+                  label="平台"
+                  value={props.selectedPlatformId}
+                  options={props.platforms.map((platform) => ({ value: platform.id, label: platform.name }))}
+                  onChange={handlePlatformChange}
+                />
+              </SettingsField>
+            )}
+            <SettingsField label="模板">
+              <InAppSelect
+                icon="mdi:file-document-outline"
+                label="模板"
+                value={props.selectedTemplateId}
+                options={props.templates.map((template) => ({ value: template.id, label: template.name }))}
+                onChange={handleTemplateChange}
+              />
+            </SettingsField>
+            <SettingsField label="模型">
+              <InAppSelect
+                icon="mdi:creation-outline"
+                label="模型"
+                value={props.selectedModel ?? ECOM_DEFAULT_MODEL_OPTION_VALUE}
+                options={[
+                  { value: ECOM_DEFAULT_MODEL_OPTION_VALUE, label: ECOM_DEFAULT_MODEL_LABEL },
+                  ...IMAGE_MODEL_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
+                ]}
+                onChange={(value) => {
+                  if (value === ECOM_DEFAULT_MODEL_OPTION_VALUE) props.onModelChange(null);
+                  else if (isImageModel(value)) props.onModelChange(value);
+                }}
+              />
+            </SettingsField>
+            <SettingsField label="清晰度">
+              <InAppSelect
+                icon="mdi:high-definition"
+                label="清晰度"
+                value={props.selectedResolution}
+                options={props.resolutionOptions.map((option) => ({ value: option.value, label: `${option.label} · ${option.size}` }))}
+                onChange={handleResolutionChange}
+              />
+            </SettingsField>
+            <SettingsField label="分段数">
+              <InAppSelect
+                icon="mdi:view-agenda-outline"
+                label="分段数"
+                value={String(props.selectedSegmentCount)}
+                options={props.segmentCountOptions}
+                onChange={handleSegmentCountChange}
+              />
+            </SettingsField>
+          </SettingsGroup>
+
+          {!props.hideProductForm && (
+            <SettingsGroup title="商品资料" className="mt-5">
+              <SettingsField label="商品名称">
+                <input value={props.productName} onChange={(event) => props.onProductNameChange(event.target.value)} className={SETTINGS_CONTROL} />
+              </SettingsField>
+              <SettingsField label="商品类目">
+                <input value={props.category} onChange={(event) => props.onCategoryChange(event.target.value)} className={SETTINGS_CONTROL} />
+              </SettingsField>
+              <SettingsField label="卖点文案">
+                <textarea value={props.sellingPointsInput} onChange={(event) => props.onSellingPointsChange(event.target.value)} className={cx(SETTINGS_TEXTAREA, "min-h-[108px]")} />
+              </SettingsField>
+              <SettingsField label="额外说明">
+                <textarea value={props.extra} onChange={(event) => props.onExtraChange(event.target.value)} className={cx(SETTINGS_TEXTAREA, "min-h-[88px]")} />
+              </SettingsField>
+            </SettingsGroup>
           )}
-        </div>
+
+          {!props.hideProductForm && (
+            <SettingsField
+              className="mt-5"
+              label={`参考图 (${props.referenceAssets.length + props.remoteReferenceCount}/${ECOM_MAX_REFERENCE_COUNT})`}
+              hint={(
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={props.isUploadingReference || props.referenceAssets.length + props.remoteReferenceCount >= ECOM_MAX_REFERENCE_COUNT}
+                  className="inline-flex h-8 items-center gap-1 text-xs font-semibold text-brand-ink disabled:cursor-not-allowed disabled:text-ink-tertiary"
+                >
+                  {props.isUploadingReference ? "上传中" : "上传参考图"}
+                </button>
+              )}
+            >
+              <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) props.onReferenceUpload(file);
+                event.currentTarget.value = "";
+              }} />
+              <div className="flex flex-wrap gap-2">
+                {props.referenceAssets.map((asset) => (
+                  <img key={asset.id} src={asset.thumbnailUrl || asset.originalUrl} alt="参考图缩略图" className="h-16 w-16 rounded-[10px] border border-hairline object-cover" />
+                ))}
+                {props.remoteReferenceCount > 0 && <div className="grid h-16 min-w-16 place-items-center rounded-[10px] border border-dashed border-hairline px-3 text-center text-xs text-ink-secondary">已关联 {props.remoteReferenceCount} 张线上参考图</div>}
+                {props.referenceAssets.length === 0 && props.remoteReferenceCount === 0 && <div className="rounded-[10px] border border-dashed border-hairline px-3 py-4 text-xs text-ink-tertiary">上传后会展示本地缩略图。</div>}
+              </div>
+            </SettingsField>
+          )}
+
+          {(props.error || props.notice || props.workflowError) && (
+            <p className={`mt-4 rounded-[10px] px-3 py-2 text-sm ${props.error || props.workflowError ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}>
+              {props.error || props.workflowError || props.notice}
+            </p>
+          )}
+
+          <SettingsGroup title="从主图选母版" className="mt-5">
+            {(props.mainImages?.length ?? 0) === 0 ? (
+              <p className="rounded-[10px] border border-dashed border-hairline px-3 py-3 text-xs leading-5 text-ink-tertiary">先在「商品主图」生成主图，即可选一张作为母版（省一次母版出图）。</p>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {props.mainImages!.map((img) => (
+                    <button
+                      key={img.assetId}
+                      type="button"
+                      onClick={() => props.onSelectMainImage?.(img.assetId)}
+                      className={`h-16 w-16 overflow-hidden rounded-[10px] border-2 transition-colors ${props.selectedMasterAssetId === img.assetId ? "border-brand" : "border-transparent"}`}
+                    >
+                      <img src={img.thumbnailUrl} alt="主图缩略图" className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+                <RippleButton
+                  type="button"
+                  onClick={() => props.onAdoptMaster?.()}
+                  disabled={!props.selectedMasterAssetId || props.isWorkflowMutating}
+                  className="h-10 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40"
+                >
+                  用所选主图作为母版
+                </RippleButton>
+              </>
+            )}
+          </SettingsGroup>
         </div>
 
         <SubmitBar
@@ -277,27 +284,33 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           submitLabel="生成母版"
           actions={
             <div className="grid grid-cols-2 gap-2">
-              <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
+              <RippleButton type="button" onClick={props.onCreateMaster} disabled={props.isWorkflowMutating || props.isBootstrapping} className="h-11 rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
                 {props.isSubmittingMaster ? "生成中" : "生成母版"}
               </RippleButton>
-              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
+              <RippleButton type="button" onClick={props.onRetryMaster} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-[10px] border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
                 {props.isRetryingMaster ? "重试中" : "重试主图"}
               </RippleButton>
-              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
+              <RippleButton type="button" onClick={props.onConfirmSegments} disabled={props.stageLabel === "draft" || props.isWorkflowMutating} className="h-11 rounded-[10px] border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
                 {props.isConfirmingSegments ? "确认中" : "确认分段"}
               </RippleButton>
-              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-lg border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
+              <RippleButton type="button" aria-label="浏览器拼接长图" onClick={props.onStitchPreview} disabled={!props.canStitch || props.isWorkflowMutating} className="h-11 rounded-[10px] border border-hairline text-sm font-semibold text-ink disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-tertiary">
                 {props.isStitchingPreview ? "拼接中" : "浏览器拼接长图"}
               </RippleButton>
             </div>
           }
         />
       </aside>
+      )}
 
-      <div className="flex min-h-[420px] min-w-0 flex-col bg-surface xl:h-full">
+      <main className={WF_WORKSPACE}>
+        <div className={WF_PANEL_HEAD}>
+          <p className="truncate text-sm font-semibold text-ink">详情图工作台</p>
+          <span className="flex-none rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">{formatStageLabel(props.stageLabel, props.isServerGenerating)}</span>
+        </div>
+
         <div className="min-h-0 flex-1 overflow-y-auto">
-        <section className="border-b border-hairline-subtle bg-surface px-4 py-5 lg:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <section className="border-b border-hairline-subtle px-4 py-5">
+          <div className="flex flex-wrap items-center gap-3">
             <div>
               <p className="text-xs font-semibold text-ink-secondary">任务阶段</p>
               <h3 className="mt-1 flex items-center gap-2 text-base font-semibold text-ink">
@@ -306,11 +319,10 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               </h3>
               <p className="mt-2 text-sm leading-6 text-ink-secondary">{props.stageDescription}</p>
             </div>
-            <span className="rounded-full bg-brand-soft px-3 py-1 text-xs font-semibold text-brand-ink">{formatStageLabel(props.stageLabel, props.isServerGenerating)}</span>
           </div>
           {props.masterAsset && (
             <div className="group relative mt-4 grid gap-3">
-              <img src={props.masterAsset.thumbnailUrl || props.masterAsset.originalUrl} alt="母版预览" className="max-h-[360px] w-full rounded-lg border border-hairline object-contain" />
+              <img src={props.masterAsset.thumbnailUrl || props.masterAsset.originalUrl} alt="母版预览" className="max-h-[360px] w-full rounded-[10px] border border-hairline object-contain" />
               {props.masterAsset.originalUrl && props.onDownloadImage && (
                 <DownloadOverlayButton onClick={() => props.onDownloadImage?.(props.masterAsset!.originalUrl)} />
               )}
@@ -318,7 +330,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           )}
         </section>
 
-        <section className="border-b border-hairline-subtle bg-surface px-4 py-5 lg:px-6">
+        <section className="border-b border-hairline-subtle px-4 py-5">
           <p className="text-xs font-semibold text-ink-secondary">分段</p>
           <h3 className="mt-1 text-base font-semibold text-ink">分段预览</h3>
           <div className="mt-4 grid gap-4 lg:grid-cols-3">
@@ -327,7 +339,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                 <div key={index}>
                   <motion.article
                     layout
-                    className="rounded-lg border border-hairline-subtle bg-surface-subtle p-3"
+                    className="rounded-[10px] border border-hairline-subtle bg-surface-subtle p-3"
                     whileHover={{ y: -4, boxShadow: "0 8px 20px rgba(15, 23, 42, 0.12)" }}
                     transition={spring.smooth}
                   >
@@ -340,7 +352,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                     {segment ? (
                       <div className="mt-3 grid gap-3">
                         <div className="group relative">
-                          <img src={segment.thumbnailUrl || segment.originalUrl} alt={`第 ${index + 1} 段预览`} className="aspect-[3/4] w-full rounded-lg border border-hairline object-cover" />
+                          <img src={segment.thumbnailUrl || segment.originalUrl} alt={`第 ${index + 1} 段预览`} className="aspect-[3/4] w-full rounded-[10px] border border-hairline object-cover" />
                           {segment.originalUrl && props.onDownloadImage && (
                             <DownloadOverlayButton onClick={() => props.onDownloadImage?.(segment.originalUrl)} />
                           )}
@@ -348,7 +360,7 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
                         <p className="line-clamp-3 text-xs leading-5 text-ink-secondary">{segment.prompt}</p>
                       </div>
                     ) : (
-                      <div className="mt-3 grid min-h-48 place-items-center rounded-lg border border-dashed border-hairline bg-surface text-center text-xs text-ink-tertiary">
+                      <div className="mt-3 grid min-h-48 place-items-center rounded-[10px] border border-dashed border-hairline bg-surface text-center text-xs text-ink-tertiary">
                         {props.stageLabel === "segments_running" ? (
                           <span className="grid place-items-center gap-2">
                             <span className="h-5 w-5 rounded-full border-2 border-brand/20 border-t-brand animate-spin" />
@@ -364,14 +376,14 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
           </div>
         </section>
 
-        <section className="bg-surface px-4 py-5 lg:px-6">
+        <section className="px-4 py-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-ink-secondary">浏览器拼接</p>
               <h3 className="mt-1 text-base font-semibold text-ink">浏览器白底拼接</h3>
               <p className="mt-2 text-sm leading-6 text-ink-secondary">分段原图齐全后，在浏览器中纵向拼接，再保存回工作流。拼接在本地浏览器完成。</p>
             </div>
-            <RippleButton type="button" aria-label="保存拼接长图" onClick={props.onSaveStitched} disabled={!props.canSave || props.isWorkflowMutating} className="h-11 rounded-lg bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
+            <RippleButton type="button" aria-label="保存拼接长图" onClick={props.onSaveStitched} disabled={!props.canSave || props.isWorkflowMutating} className="h-11 rounded-[10px] bg-brand px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40">
               {props.isSavingStitched ? "保存中" : "保存拼接长图"}
             </RippleButton>
           </div>
@@ -380,40 +392,42 @@ export function EcomWorkflowStudioView(props: EcomWorkflowStudioViewProps) {
               {props.stitchedPreviewDataUrl && (
                 <div className="grid gap-3">
                   <div className="group relative">
-                    <img src={props.stitchedPreviewDataUrl} alt="本地拼接长图预览" className="max-h-[720px] w-full rounded-lg border border-hairline object-contain" />
+                    <img src={props.stitchedPreviewDataUrl} alt="本地拼接长图预览" className="max-h-[720px] w-full rounded-[10px] border border-hairline object-contain" />
                     {props.onDownloadImage && (
                       <DownloadOverlayButton onClick={() => props.onDownloadImage?.(props.stitchedPreviewDataUrl!)} />
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <a href={props.stitchedPreviewDataUrl} download="workflow-ecom-stitched.png" className="inline-flex h-10 items-center rounded-lg border border-hairline px-4 text-sm font-semibold text-ink">下载本地预览</a>
-                    <a href={props.stitchedPreviewDataUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-lg border border-hairline px-4 text-sm font-semibold text-ink">打开本地预览</a>
+                    <a href={props.stitchedPreviewDataUrl} download="workflow-ecom-stitched.png" className="inline-flex h-10 items-center rounded-[10px] border border-hairline px-4 text-sm font-semibold text-ink">下载本地预览</a>
+                    <a href={props.stitchedPreviewDataUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-[10px] border border-hairline px-4 text-sm font-semibold text-ink">打开本地预览</a>
                   </div>
                 </div>
               )}
               {props.stitchedAsset && (
-                <div className="grid gap-3 rounded-lg border border-hairline-subtle bg-surface-subtle p-3">
+                <div className="grid gap-3 rounded-[10px] border border-hairline-subtle bg-surface-subtle p-3">
                   <div className="group relative">
-                    <img src={props.stitchedAsset.thumbnailUrl || props.stitchedAsset.originalUrl} alt="已保存长图预览" className="max-h-[480px] w-full rounded-lg border border-hairline object-contain" />
+                    <img src={props.stitchedAsset.thumbnailUrl || props.stitchedAsset.originalUrl} alt="已保存长图预览" className="max-h-[480px] w-full rounded-[10px] border border-hairline object-contain" />
                     {props.stitchedAsset.originalUrl && props.onDownloadImage && (
                       <DownloadOverlayButton onClick={() => props.onDownloadImage?.(props.stitchedAsset!.originalUrl)} />
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <a href={props.stitchedAsset.originalUrl} download="workflow-ecom-saved.png" className="inline-flex h-10 items-center rounded-lg border border-hairline px-4 text-sm font-semibold text-ink">下载已保存长图</a>
-                    <a href={props.stitchedAsset.originalUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-lg border border-hairline px-4 text-sm font-semibold text-ink">打开已保存长图</a>
+                    <a href={props.stitchedAsset.originalUrl} download="workflow-ecom-saved.png" className="inline-flex h-10 items-center rounded-[10px] border border-hairline px-4 text-sm font-semibold text-ink">下载已保存长图</a>
+                    <a href={props.stitchedAsset.originalUrl} target="_blank" rel="noreferrer" className="inline-flex h-10 items-center rounded-[10px] border border-hairline px-4 text-sm font-semibold text-ink">打开已保存长图</a>
                   </div>
                 </div>
               )}
             </div>
           ) : (
-            <div className="mt-4 rounded-lg border border-dashed border-hairline bg-surface-subtle px-4 py-6 text-sm text-ink-tertiary">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
+            <div className="mt-4 rounded-[10px] border border-dashed border-hairline bg-surface-subtle px-4 py-6 text-sm text-ink-tertiary">{props.canStitch ? "点击\"浏览器拼接长图\"生成本地预览。" : "三段原图齐全后才可拼接与保存。"}</div>
           )}
         </section>
 
         </div>
-        {props.historyFooter}
-      </div>
+      </main>
+
+      {/* 历史从「工作区底部的横条」搬到右栏（统一规范 v2：左=设置、中=工作区、右=历史）。 */}
+      {panels.right && props.historyFooter}
     </section>
   );
 }

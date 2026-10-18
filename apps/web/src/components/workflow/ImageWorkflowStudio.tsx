@@ -31,6 +31,8 @@ import { ImageGenerationControls } from "./ImageGenerationControls";
 import { ImageHistoryStrip } from "./ImageHistoryStrip";
 import { ImageResultCanvas } from "./ImageResultCanvas";
 import { ImageTaskDrawer } from "./ImageTaskDrawer";
+import { usePanelVisibility } from "./panelVisibility";
+import { wfShell, WF_WORKSPACE } from "./workflowLayout";
 
 export type { ImageWorkspaceMode } from "../../workflowState";
 
@@ -102,43 +104,47 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
    */
   const editing = props.workspaceMode === "editing";
   const comparing = props.workspaceMode === "comparing" && Boolean(props.compareImageIds);
+  const panels = usePanelVisibility();
   const selectedTask = byId(props.tasks, props.selectedRequestId);
   const runningCount = props.tasks.filter((task) => task.status === "running").length;
   const selectImage = props.onSelectImage ?? props.onSelectHistoryImage;
   const editImage = props.onEditImage ?? noop;
 
   return (
-    <section className="relative min-h-0 overflow-hidden bg-surface xl:grid xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <ImageGenerationControls
-        prompt={props.prompt}
-        model={props.model}
-        size={props.size}
-        aspectRatio={props.aspectRatio}
-        resolution={props.resolution}
-        countInput={props.countInput}
-        selectedQuickCount={props.selectedQuickCount}
-        error={props.error}
-        notice={props.notice}
-        isOptimizingPrompt={props.isOptimizingPrompt}
-        referenceImages={props.referenceImages}
-        isUploadingReference={props.isUploadingReference}
-        isEditing={editing}
-        lockedReferenceId={props.editBaseImageId}
-        onPromptChange={props.onPromptChange}
-        onModelChange={props.onModelChange}
-        onAspectRatioChange={props.onAspectRatioChange}
-        onResolutionChange={props.onResolutionChange}
-        onCountInputChange={props.onCountInputChange}
-        onQuickCountChange={props.onQuickCountChange}
-        onSubmit={props.onSubmit}
-        onCancelEditing={props.onCancelEditing}
-        onOptimizePrompt={props.onOptimizePrompt}
-        onReferenceUpload={props.onReferenceUpload}
-        onRemoveReference={props.onRemoveReference}
-      />
+    <section className={wfShell(panels.left, panels.right)}>
+      {/* 左右两栏由顶栏「面板开关」控制：收起的那一列连缝一起从栅格里消失，工作区直接吃掉那份宽度。 */}
+      {panels.left && (
+        <ImageGenerationControls
+          prompt={props.prompt}
+          model={props.model}
+          size={props.size}
+          aspectRatio={props.aspectRatio}
+          resolution={props.resolution}
+          countInput={props.countInput}
+          selectedQuickCount={props.selectedQuickCount}
+          error={props.error}
+          notice={props.notice}
+          isOptimizingPrompt={props.isOptimizingPrompt}
+          referenceImages={props.referenceImages}
+          isUploadingReference={props.isUploadingReference}
+          isEditing={editing}
+          lockedReferenceId={props.editBaseImageId}
+          onPromptChange={props.onPromptChange}
+          onModelChange={props.onModelChange}
+          onAspectRatioChange={props.onAspectRatioChange}
+          onResolutionChange={props.onResolutionChange}
+          onCountInputChange={props.onCountInputChange}
+          onQuickCountChange={props.onQuickCountChange}
+          onSubmit={props.onSubmit}
+          onCancelEditing={props.onCancelEditing}
+          onOptimizePrompt={props.onOptimizePrompt}
+          onReferenceUpload={props.onReferenceUpload}
+          onRemoveReference={props.onRemoveReference}
+        />
+      )}
 
-      <div className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
-        <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4 lg:px-6">
+      <div className={WF_WORKSPACE}>
+        <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4">
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">
               {comparing ? "版本对比" : selectedTask?.prompt ?? "通用生图工作台"}
@@ -148,7 +154,7 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
             type="button"
             onClick={props.onOpenTaskDrawer}
             aria-expanded={props.isTaskDrawerOpen ?? false}
-            className="inline-flex h-9 flex-none items-center gap-2 rounded-lg border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
+            className="inline-flex h-9 flex-none items-center gap-2 rounded-[10px] border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
           >
             <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
             {runningCount > 0 ? `任务列表 · 生成中 ${runningCount}` : "任务列表"}
@@ -183,14 +189,19 @@ export function ImageWorkflowStudio(props: ImageWorkflowStudioProps) {
             />
           )}
         </div>
+      </div>
 
+      {/* 历史从「工作区底部的横条」搬到右栏（统一规范 v2：左=设置、中=工作区、右=历史）。
+          宽屏上是第三列，窄屏上顺序落到工作区下方 —— 与它原来贴底的位置是同一处。 */}
+      {panels.right && (
         <ImageHistoryStrip
+          variant="rail"
           images={props.images}
           selectedImageId={props.selectedImageId}
           onSelectImage={props.onSelectHistoryImage}
           onDownloadAll={props.onDownloadAll}
         />
-      </div>
+      )}
 
       <ImageTaskDrawer
         open={props.isTaskDrawerOpen ?? false}

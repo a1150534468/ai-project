@@ -12,7 +12,7 @@ function percent(value: number): number {
 export function NovelScoreTrend({ rows, compact = false }: { readonly rows: readonly NovelScoreTrendRow[]; readonly compact?: boolean }) {
   if (!rows.length) return <p className="grid h-48 place-items-center text-sm text-ink-tertiary">生成章节后显示张力与质量趋势</p>;
   return <div>
-    <div className="mb-3 flex items-center gap-4 text-[10px] font-semibold text-ink-secondary">
+    <div className="mb-3 flex items-center gap-4 text-xs font-semibold text-ink-secondary">
       <span className="flex items-center gap-1.5"><span className="h-2.5 w-4 rounded-sm bg-brand/75" />张力</span>
       <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-brand ring-2 ring-brand/20" />质量</span>
       <span className="ml-auto text-ink-tertiary">0–100 分</span>
@@ -26,7 +26,7 @@ export function NovelScoreTrend({ rows, compact = false }: { readonly rows: read
             <span className="absolute z-10 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-surface bg-brand shadow" style={{ bottom: `calc(${quality}% - 5px)`, left: "50%" }} />
             <div className="w-full max-w-9 rounded-t bg-brand/75" style={{ height: `${tension}%` }} />
           </div>
-          <span className="h-5 pt-1 text-center text-[9px] text-ink-tertiary">{chapter.chapterIndex}</span>
+          <span className="h-5 pt-1 text-center text-xs text-ink-tertiary">{chapter.chapterIndex}</span>
         </div>;
       })}
     </div>

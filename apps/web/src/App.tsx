@@ -21,7 +21,7 @@
  * 回调命名：带真逻辑的（异步、要找东西、要收窄类型）叫 `handleXxx`，单纯改一下本地状态的
  * 就用动词本身（`enterChat` / `closeAgentPicker` / `logout`）。
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentOption } from "./api";
 import Shell, { type ViewType } from "./components/shell/Shell";
 import LoginModal from "./components/LoginModal";
@@ -43,6 +43,9 @@ import { useClientNavigation } from "./app/useClientNavigation";
 import { AuthGateProvider } from "./app/authGate";
 import { firstVisibleClientView } from "./clientMenu";
 import { AUTH_TOKEN_STORAGE_KEY, setAuthErrorHandler } from "./http";
+import { NAV_ITEMS } from "./components/shell/NavRail";
+import { PageTransition, canAnimateTransitions } from "./motion/PageTransition";
+import { AnimatePresence } from "motion/react";
 
 /** 首选模型存在 localStorage 里。设置页也按这个键自己写了一遍，换键要两边一起改。 */
 const PREFERRED_MODEL_KEY = "preferredModel";
@@ -67,7 +70,11 @@ export default function App() {
   const account = useAccountOverview(token);
   const { confirm, Dialog } = useConfirm();
   const [agentPickerOpen, setAgentPickerOpen] = useState(false);
-  const [agentPanelCollapsed, setAgentPanelCollapsed] = useState(false);
+  /**
+   * 对话列表滑入面板是否打开。默认**关**：它是覆盖层、不占文档流（原型 layout1「用完即走」），
+   * 所以「收起」不再需要记状态 —— 关着就是常态，开一下、选完就关。
+   */
+  const [agentPanelOpen, setAgentPanelOpen] = useState(false);
   /**
    * 「当前选中的模型」与「首选模型」在这里是同一个值 —— Chat 里换模型走的就是写 localStorage
    * 那条路，没有「只这一轮换个模型」的档位。原先用两个 state 存同一个值，任何一处漏改都会变成
@@ -120,8 +127,8 @@ export default function App() {
 
   const enterChat = useCallback(() => setView("chat"), [setView]);
   const closeAgentPicker = useCallback(() => setAgentPickerOpen(false), []);
-  const collapseAgentPanel = useCallback(() => setAgentPanelCollapsed(true), []);
-  const toggleAgentPanel = useCallback(() => setAgentPanelCollapsed((collapsed) => !collapsed), []);
+  const closeAgentPanel = useCallback(() => setAgentPanelOpen(false), []);
+  const toggleAgentPanel = useCallback(() => setAgentPanelOpen((open) => !open), []);
   /**
    * 登出 = 回到营销落地页。三件事一起做：
    *  - 清 token（持久化 effect 跟着把它从 localStorage 拿走）；
@@ -144,10 +151,10 @@ export default function App() {
     setAgentPickerOpen(true);
   }, [requireAuth, setView]);
 
-  /** 会话一开就把挑人面板关掉、Agent 栏收起来，宽度让给刚开的对话。 */
+  /** 会话一开就把挑人面板关掉、对话列表收起来，宽度让给刚开的对话。 */
   const startedAgentSession = useCallback(() => {
     setAgentPickerOpen(false);
-    setAgentPanelCollapsed(true);
+    setAgentPanelOpen(false);
   }, []);
 
   const chat = useChatSessions({
@@ -207,6 +214,25 @@ export default function App() {
   const handleKnowledgeViewChange = useCallback((view: string) => setView(view as ViewType), [setView]);
 
   /**
+   * 转场方向：按侧栏顺序比新旧视图，往下切从下方进、往上切从上方进。
+   * 用 ref 记「上一次的 view」而不是把方向算进 setView 里 —— 浏览器后退与地址栏直达都会
+   * 绕开点击，那时候方向该由新旧两帧自己算出来，而不是由某个 onClick 单方面决定。
+   * 首屏（没有上一次）记 0：不分方向，只做一次轻微的原地淡入。
+   */
+  const previousViewRef = useRef<ViewType | null>(null);
+  const transitionDirection = useMemo<1 | -1 | 0>(() => {
+    const previous = previousViewRef.current;
+    if (previous === null || previous === nav.view) return 0;
+    const previousIndex = NAV_ITEMS.findIndex((item) => item.id === previous);
+    const nextIndex = NAV_ITEMS.findIndex((item) => item.id === nav.view);
+    if (previousIndex < 0 || nextIndex < 0) return 0;
+    return nextIndex > previousIndex ? 1 : -1;
+  }, [nav.view]);
+  useEffect(() => {
+    previousViewRef.current = nav.view;
+  }, [nav.view]);
+
+  /**
    * 落地页闸门：没有 token 且没点过「开始使用」时，先看营销落地页而不是直接进应用。
    * 必须排在所有 hook 之后（和原来那道登录闸门同一条规则）。
    * 「开始使用」只在内存里放行（见 ENTERED_APP_KEY 注释）：匿名浏览不跨会话，
@@ -237,11 +263,11 @@ export default function App() {
       case "models":
         return <ModelMarketplace />;
       case "assets":
-        return <Assets token={token} />;
+        return <Assets token={token} onCreate={() => setView("workflow")} />;
       case "kb":
         return <Knowledge token={token} onViewChange={handleKnowledgeViewChange} />;
       case "workflow":
-        return <Workflow token={token} activeModuleId={nav.workflowModule} menuVisibility={nav.menuVisibility} />;
+        return <Workflow token={token} activeModuleId={nav.workflowModule} menuVisibility={nav.menuVisibility} onSelectModule={nav.selectWorkflowSub} />;
       case "settings":
         return (
           <Settings
@@ -277,7 +303,7 @@ export default function App() {
             preferredModel={model}
             onModelChange={handleModelChange}
             onSend={guardedChatSend}
-            agentPanelCollapsed={agentPanelCollapsed}
+            agentPanelOpen={agentPanelOpen}
             onToggleAgentPanel={toggleAgentPanel}
           />
         );
@@ -305,11 +331,25 @@ export default function App() {
         onDeleteSession={chat.handleDeleteSession}
         onOpenAgentPicker={openAgentPicker}
         onAgentsChanged={handleAgentsChanged}
-        agentPanelCollapsed={agentPanelCollapsed}
-        onRequestCollapseAgentPanel={collapseAgentPanel}
+        agentPanelOpen={agentPanelOpen}
+        onRequestCloseAgentPanel={closeAgentPanel}
         menuVisibility={nav.menuVisibility}
       >
-        {renderContent()}
+        {/* key = 当前视图：换视图就是换子树，旧的才会走 exit、新的才会从 initial 起步。
+              少了 key 或少了 AnimatePresence，两者都不播 —— 转场就成了「只改字的硬切」。
+              没有帧循环的环境（jsdom）不包：exit 永远等不到完成，旧视图会一直留在 DOM 里，
+              于是「切到 B 页」会被断言成「A 和 B 都在」。 */}
+        {canAnimateTransitions ? (
+          <AnimatePresence mode="wait" initial={false}>
+            <PageTransition key={nav.view} direction={transitionDirection} className="flex min-h-0 flex-1 flex-col">
+              {renderContent()}
+            </PageTransition>
+          </AnimatePresence>
+        ) : (
+          <PageTransition key={nav.view} direction={transitionDirection} className="flex min-h-0 flex-1 flex-col">
+            {renderContent()}
+          </PageTransition>
+        )}
       </Shell>
       <Dialog />
       <AgentPicker token={token} open={agentPickerOpen} onClose={closeAgentPicker} onSelect={handlePickAgent} />

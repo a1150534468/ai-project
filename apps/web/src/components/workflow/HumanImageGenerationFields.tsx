@@ -1,4 +1,11 @@
 import { InAppSelect, type SelectOption } from "../ui/InAppSelect";
+import { cx } from "../ui/cx";
+import {
+  SETTINGS_SEGMENT,
+  SETTINGS_SEGMENT_OFF,
+  SETTINGS_SEGMENT_ON,
+  SettingsField,
+} from "./SettingsSlots";
 
 export const HUMAN_ASPECT_OPTIONS: readonly SelectOption[] = [
   { value: "1:1", label: "1:1 · 方形" },
@@ -28,11 +35,17 @@ interface HumanImageGenerationFieldsProps {
   readonly onCountChange: (value: number) => void;
 }
 
+/**
+ * 形象照 / 万物试穿 / 试甲台三个工作台共用的「参数」字段组（模型 / 画面比例 / 清晰度 / 生成张数）。
+ *
+ * 改版前是 `mt-4`/`mt-3` 外边距 + `text-sm font-semibold` 字段名 + `rounded-lg` 控件的旧写法，
+ * 与隔壁 `SettingsSlots` 的语言对不上（字段名词重、控件圆角都差一档）。现在整套走 `SettingsField`
+ * 与「分段选择」槽位，宽度由调用点的 `SettingsGroup` 决定，这边只摆字段。
+ */
 export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProps) {
   return (
-    <>
-      <div className="mt-4 grid gap-2 text-sm font-semibold text-ink">
-        <p>模型</p>
+    <div className="grid gap-3">
+      <SettingsField label="模型">
         <InAppSelect
           icon="mdi:creation-outline"
           label="模型"
@@ -41,10 +54,9 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
           disabled={props.disabled}
           onChange={props.onModelChange}
         />
-      </div>
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <div className="grid gap-2 text-sm font-semibold text-ink">
-          <p>画面比例</p>
+      </SettingsField>
+      <div className="grid grid-cols-2 gap-3">
+        <SettingsField label="画面比例">
           <InAppSelect
             icon="mdi:aspect-ratio"
             label="画面比例"
@@ -53,9 +65,8 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
             disabled={props.disabled}
             onChange={props.onAspectRatioChange}
           />
-        </div>
-        <div className="grid gap-2 text-sm font-semibold text-ink">
-          <p>清晰度</p>
+        </SettingsField>
+        <SettingsField label="清晰度">
           <InAppSelect
             icon="mdi:image-size-select-large"
             label="清晰度"
@@ -64,24 +75,26 @@ export function HumanImageGenerationFields(props: HumanImageGenerationFieldsProp
             disabled={props.disabled}
             onChange={props.onResolutionChange}
           />
-        </div>
+        </SettingsField>
       </div>
-      <div className="mt-3">
-        <p className="mb-2 text-sm font-semibold text-ink">生成张数</p>
-        <div className="grid grid-cols-4 overflow-hidden rounded-lg border border-hairline">
+      <SettingsField label="生成张数">
+        <div className={cx(SETTINGS_SEGMENT, "grid-cols-4")}>
           {[1, 2, 3, 4].map((value) => (
             <button
               key={value}
               type="button"
               disabled={props.disabled}
               onClick={() => props.onCountChange(value)}
-              className={`h-9 border-r border-hairline-subtle text-sm font-semibold last:border-r-0 disabled:opacity-50 ${props.count === value ? "bg-brand-soft text-brand-ink" : "bg-surface text-ink-secondary"}`}
+              className={cx(
+                "h-9 border-r border-hairline-subtle text-sm last:border-r-0 disabled:cursor-not-allowed disabled:opacity-50",
+                props.count === value ? SETTINGS_SEGMENT_ON : SETTINGS_SEGMENT_OFF,
+              )}
             >
               {value}
             </button>
           ))}
         </div>
-      </div>
-    </>
+      </SettingsField>
+    </div>
   );
 }

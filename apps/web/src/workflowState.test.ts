@@ -167,18 +167,21 @@ describe("resolveImageVersionComparison", () => {
 });
 
 describe("WORKFLOW_MODULES", () => {
-  it("五个模块可用、只有 PPT 在建，顺序就是导航顺序", () => {
+  it("六个模块可用、只有 PPT 在建，顺序就是导航顺序", () => {
     const byStatus = (status: string) => WORKFLOW_MODULES.filter((card) => card.status === status).map((card) => card.id);
 
     expect(byStatus("available")).toEqual(["image", "novel", "codex-pet", "article-workflow", "transcription"]);
     expect(byStatus("developing")).toEqual(["ppt"]);
   });
 
-  it("每个模块都有标题、说明和图标", () => {
+  it("每个模块都有标题、短名、说明和图标", () => {
     for (const card of WORKFLOW_MODULES) {
       expect(card.title).not.toBe("");
       expect(card.description).not.toBe("");
       expect(card.icon).toMatch(/^mdi:/);
+      // `shortTitle` 是顶栏模块切换上显示的短名：56px 的顶栏放不下「多平台图文工作流」
+      expect(card.shortTitle).not.toBe("");
+      expect(card.shortTitle.length).toBeLessThanOrEqual(4);
     }
   });
 });

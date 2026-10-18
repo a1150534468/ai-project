@@ -14,9 +14,17 @@ export { Button, buttonClass } from "./Button";
 export type { ButtonProps, ButtonShape, ButtonSize, ButtonStyleOptions, ButtonVariant } from "./Button";
 export { Card, cardClass } from "./Card";
 export type { CardPadding, CardProps, CardRadius, CardStyleOptions, CardTone } from "./Card";
+export { PageHeader, pageHeaderClass } from "./PageHeader";
+export type { PageHeaderProps } from "./PageHeader";
 export { Badge, badgeClass } from "./Badge";
 export type { BadgeProps, BadgeSize, BadgeStyleOptions, BadgeTone, BadgeVariant } from "./Badge";
 export { Alert, alertClass } from "./Alert";
 export type { AlertProps, AlertSize, AlertStyleOptions, AlertTone } from "./Alert";
 export { Switch } from "./Switch";
 export type { SwitchProps } from "./Switch";
+/**
+ * 分段控件是唯一一个内部用 motion（滑动底板）的基元。仍然从这里出：它和 Switch 一样是
+ * 「一组互斥选项」的交互基元，调用方不该因为它在动就去记另一个路径。
+ */
+export { SegmentedControl } from "./SegmentedControl";
+export type { SegmentedControlProps, SegmentedOption } from "./SegmentedControl";

@@ -509,7 +509,7 @@ describe("App 会话流错误", () => {
 });
 
 describe("App 会话切换与删除", () => {
-  it("选 Agent 后开新对话:收起 Agent 栏,新会话才把 agentId 传给后端", async () => {
+  it("选 Agent 后开新对话:关掉对话列表面板,新会话才把 agentId 传给后端", async () => {
     await mount();
     await act(async () => {
       probes.agentPicker?.onSelect({
@@ -520,7 +520,8 @@ describe("App 会话切换与删除", () => {
         type: "preset",
       });
     });
-    expect(probes.shell?.agentPanelCollapsed).toBe(true);
+    // 滑入面板是「用完即走」：会话一开就关，极性从「collapsed」翻成「open」
+    expect(probes.shell?.agentPanelOpen).toBe(false);
     expect(probes.agentPicker?.open).toBe(false);
     expect(probes.chat?.agentName).toBe("写作助手");
     await send("你好");
@@ -612,7 +613,7 @@ describe("App 会话切换与删除", () => {
       probes.shell?.onNewSession("preset-1");
     });
     expect(probes.chat?.agentName).toBe("写作助手");
-    expect(probes.shell?.agentPanelCollapsed).toBe(true);
+    expect(probes.shell?.agentPanelOpen).toBe(false);
   });
 
   it("Agent 列表变更后同时刷新 Agent 与会话列表", async () => {

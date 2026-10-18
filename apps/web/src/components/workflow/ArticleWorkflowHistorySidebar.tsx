@@ -37,7 +37,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
       )}
 
       {!props.bootstrapping && props.batches.length === 0 && (
-        <div className="grid min-h-40 place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle px-4 text-center text-xs leading-5 text-ink-tertiary">
+        <div className="grid min-h-40 place-items-center rounded-[10px] border border-dashed border-hairline bg-surface-subtle px-4 text-center text-xs leading-5 text-ink-tertiary">
           还没有生成过图文
         </div>
       )}
@@ -50,7 +50,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
         return (
           <div
             key={item.key}
-            className={`group relative mb-1.5 w-full rounded-lg border transition ${
+            className={`group relative mb-1.5 w-full rounded-[10px] border transition ${
               selected
                 ? "border-brand/40 bg-brand-soft"
                 : "border-transparent bg-surface hover:border-hairline-subtle hover:bg-surface-subtle"
@@ -59,16 +59,16 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
             <button
               type="button"
               onClick={() => props.onSelectBatch(item)}
-              className="block w-full rounded-lg px-2.5 py-2.5 pr-11 text-left"
+              className="block w-full rounded-[10px] px-2.5 py-2.5 pr-11 text-left"
               aria-label={`打开 ${title}`}
             >
               <span className="block min-w-0">
                 <span className="block truncate text-xs font-semibold text-ink">{title}</span>
-                <span className="mt-1 block truncate text-[10px] text-ink-secondary">
+                <span className="mt-1 block truncate text-xs text-ink-secondary">
                   {item.platforms.map(shortPlatformLabel).join(" · ")}
                 </span>
               </span>
-              <span className="mt-2 flex items-center justify-between gap-2 text-[10px] text-ink-tertiary">
+              <span className="mt-2 flex items-center justify-between gap-2 text-xs text-ink-tertiary">
                 <span className={item.status === "failed" ? "font-semibold text-danger-ink" : ""}>{BATCH_STATUS_TEXT[item.status]}</span>
                 <span>{formatArticleWorkflowTime(item.updatedAt)}</span>
               </span>
@@ -83,7 +83,7 @@ function HistoryList(props: ArticleWorkflowHistoryProps) {
                 : props.deletingBatchKey
                   ? "正在删除其他项目"
                   : `删除 ${title}`}
-              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary hover:bg-danger/10 hover:text-danger-ink disabled:cursor-not-allowed disabled:text-ink-tertiary disabled:hover:bg-transparent"
+              className="absolute right-1.5 top-1.5 grid h-8 w-8 place-items-center rounded-[10px] text-ink-tertiary hover:bg-danger/10 hover:text-danger-ink disabled:cursor-not-allowed disabled:text-ink-tertiary disabled:hover:bg-transparent"
             >
               <Icon icon={deleting ? "mdi:loading" : "mdi:trash-can-outline"} className={`text-base ${deleting ? "animate-spin" : ""}`} aria-hidden />
             </button>
@@ -101,7 +101,7 @@ function NewProjectButton({ onClick, ariaLabel }: { readonly onClick: () => void
       onClick={onClick}
       aria-label={ariaLabel}
       title={ariaLabel}
-      className="grid h-8 w-8 place-items-center rounded-lg text-brand-ink hover:bg-brand-soft"
+      className="grid h-8 w-8 place-items-center rounded-[10px] text-brand-ink hover:bg-brand-soft"
     >
       <Icon icon="mdi:plus" className="text-lg" aria-hidden />
     </button>
@@ -110,13 +110,13 @@ function NewProjectButton({ onClick, ariaLabel }: { readonly onClick: () => void
 
 export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) {
   return (
-    <section className="flex min-h-0 min-w-0 flex-col bg-surface" aria-label="图文项目历史">
+    <section className="flex min-h-0 min-w-0 flex-col bg-surface" aria-label="图文历史">
       <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle px-3">
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-ink">项目历史</h2>
-          <p className="mt-0.5 text-[10px] text-ink-tertiary">{props.batches.length} 个生成批次</p>
+          <h2 className="text-sm font-semibold text-ink">历史</h2>
+          <p className="mt-0.5 text-xs text-ink-tertiary">{props.batches.length} 个生成批次</p>
         </div>
-        <NewProjectButton onClick={props.onNewProject} ariaLabel="新建项目" />
+        <NewProjectButton onClick={props.onNewProject} ariaLabel="新建图文" />
       </div>
       <HistoryList {...props} />
     </section>
@@ -124,7 +124,7 @@ export function ArticleWorkflowHistoryPanel(props: ArticleWorkflowHistoryProps) 
 }
 
 export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySidebarProps) {
-  const dialogProps = useDialog({ open: props.open, onClose: props.onClose, label: "图文项目记录" });
+  const dialogProps = useDialog({ open: props.open, onClose: props.onClose, label: "图文历史" });
 
   return (
     <AnimatePresence>
@@ -147,16 +147,16 @@ export function ArticleWorkflowHistorySidebar(props: ArticleWorkflowHistorySideb
           >
             <div className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle px-4">
               <div>
-                <h2 className="text-sm font-semibold text-ink">项目历史</h2>
-                <p className="mt-0.5 text-[10px] text-ink-tertiary">{props.batches.length} 个生成批次</p>
+                <h2 className="text-sm font-semibold text-ink">历史</h2>
+                <p className="mt-0.5 text-xs text-ink-tertiary">{props.batches.length} 个生成批次</p>
               </div>
               <div className="flex items-center gap-1">
                 <NewProjectButton onClick={props.onNewProject} ariaLabel="新建图文" />
                 <button
                   type="button"
                   onClick={props.onClose}
-                  aria-label="关闭项目记录"
-                  className="grid h-8 w-8 place-items-center rounded-lg text-ink hover:bg-surface-muted"
+                  aria-label="关闭历史"
+                  className="grid h-8 w-8 place-items-center rounded-[10px] text-ink hover:bg-surface-muted"
                 >
                   <Icon icon="mdi:close" className="text-lg" aria-hidden />
                 </button>

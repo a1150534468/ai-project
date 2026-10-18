@@ -22,7 +22,7 @@ import { Icon } from "@iconify/react";
 import { motion } from "motion/react";
 import { useModelCatalog } from "../app/useModelCatalog";
 import { pickInitialModel } from "../chatState";
-import { Switch, cx } from "../components/ui";
+import { Switch, PageHeader, cx } from "../components/ui";
 import { RippleButton, spring, useToast } from "../motion";
 import {
   THEME_CHANGE_EVENT,
@@ -59,8 +59,8 @@ function SectionCard({
   readonly children: ReactNode;
 }) {
   return (
-    <section className="rounded-xl2 border border-hairline-subtle bg-surface p-6 shadow-sm">
-      <h2 className="mb-6 flex items-center gap-3 text-lg font-bold text-ink">
+    <section className="rounded-2xl border border-hairline-subtle bg-surface p-6">
+      <h2 className="mb-6 flex items-center gap-3 text-lg font-semibold text-ink">
         <Icon icon={icon} aria-hidden className={cx("text-2xl", quiet ? "text-ink-tertiary" : "text-brand")} />
         {title}
       </h2>
@@ -80,8 +80,8 @@ function InfoRow({
   readonly mono?: boolean;
 }) {
   return (
-    <div className="border-b border-hairline-subtle pb-4 last:border-0">
-      <dt className="mb-2 text-xs font-medium uppercase text-ink-secondary">{label}</dt>
+    <div className="flex items-center justify-between gap-4 border-b border-hairline-subtle py-3 first:pt-0 last:border-0 last:pb-0">
+      <dt className="text-sm text-ink-secondary">{label}</dt>
       <dd className={cx("text-sm text-ink", mono && "font-mono")}>{value}</dd>
     </div>
   );
@@ -164,18 +164,15 @@ export default function SettingsPage({
   };
 
   return (
-    <div className="min-h-screen bg-surface">
-      <header className="border-b border-hairline-subtle">
-        <div className="mx-auto max-w-6xl px-8 py-8">
-          <h1 className="mb-2 text-3xl font-bold text-ink">设置</h1>
-          <p className="text-ink-secondary">管理账号信息和偏好设置</p>
-        </div>
-      </header>
+    <div className="flex min-h-full flex-col bg-surface-muted">
+      {/* 页头原来是 max-w-6xl 的一带、正文是 max-w-3xl 的一带 —— 两条中轴线不一样宽，
+          内容列就被推到了标题右边一百多像素。现在两者同一个宽度档，左起点对齐。 */}
+      <PageHeader title="设置" maxWidth="max-w-3xl" />
 
-      <div className="mx-auto max-w-3xl space-y-6 px-8 py-8">
+      <div className="mx-auto w-full max-w-3xl space-y-5 px-4 py-6 sm:px-6">
         <SectionCard icon="mdi:account-circle-outline" title="账号信息">
           {authed ? (
-            <dl className="space-y-4">
+            <dl>
               <InfoRow label="用户 ID" value={uid} mono />
               <InfoRow label="用户名" value={userName} />
             </dl>
@@ -184,7 +181,7 @@ export default function SettingsPage({
               <p className="mb-4 text-sm text-ink-secondary">登录后可查看账号信息、保存会话与作品</p>
               <RippleButton
                 onClick={() => onLogin?.()}
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2.5 font-medium text-white transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-brand px-4 py-2.5 font-medium text-white transition-colors"
               >
                 <Icon icon="mdi:login" aria-hidden />
                 登录 / 注册
@@ -199,7 +196,7 @@ export default function SettingsPage({
             label="跟随系统"
             description="使用设备或浏览器的显示模式"
             onToggle={toggleSystemTheme}
-            className="min-h-14 w-full rounded-lg border border-hairline-subtle px-4 py-3 focus-visible:ring-2 focus-visible:ring-brand/30"
+            className="min-h-14 w-full focus-visible:ring-2 focus-visible:ring-brand/30"
           />
         </SectionCard>
 
@@ -212,41 +209,48 @@ export default function SettingsPage({
             (catalog.models.length === 0 ? (
               <Notice icon="mdi:cloud-off-outline" text="服务端没有给出可选模型，新对话会用它自己的默认模型" />
             ) : (
-              <fieldset className="space-y-3">
+              <fieldset>
                 <legend className="sr-only">默认模型</legend>
-                {catalog.models.map((option) => {
-                  const checked = option.model === preferredModel;
+                {/* 原来每条模型自己一圈描边（八个模型就是八个盒子）。收成一张卡里的行 + 行间分隔线，
+                    勾中的那条用品牌弱底说话 —— 层次靠面，不靠每层再画一圈 */}
+                <div className="divide-y divide-hairline-subtle">
+                  {catalog.models.map((option) => {
+                    const checked = option.model === preferredModel;
 
-                  return (
-                    <label
-                      key={option.model}
-                      className="flex cursor-pointer items-center gap-3 rounded-lg border border-hairline-subtle p-4 transition-colors"
-                    >
-                      <motion.input
-                        type="radio"
-                        name="preferred-model"
-                        value={option.model}
-                        checked={checked}
-                        onChange={() => chooseModel(option.model)}
-                        className="size-4 cursor-pointer accent-brand"
-                        initial={false}
-                        animate={{ scale: checked ? 1.2 : 1 }}
-                        transition={spring.snappy}
-                      />
-                      <span className="flex-1 text-sm font-medium text-ink">{option.displayName}</span>
-                      {checked && (
-                        <motion.span
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={spring.bouncy}
-                        >
-                          <Icon icon="mdi:check-circle" aria-hidden className="text-lg text-brand" />
-                        </motion.span>
-                      )}
-                    </label>
-                  );
-                })}
-                <p className="pt-1 text-xs text-ink-secondary">
+                    return (
+                      <label
+                        key={option.model}
+                        className={cx(
+                          "flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors",
+                          checked ? "bg-brand-soft" : "hover:bg-surface-subtle",
+                        )}
+                      >
+                        <motion.input
+                          type="radio"
+                          name="preferred-model"
+                          value={option.model}
+                          checked={checked}
+                          onChange={() => chooseModel(option.model)}
+                          className="size-4 cursor-pointer accent-brand"
+                          initial={false}
+                          animate={{ scale: checked ? 1.2 : 1 }}
+                          transition={spring.snappy}
+                        />
+                        <span className="flex-1 text-sm font-medium text-ink">{option.displayName}</span>
+                        {checked && (
+                          <motion.span
+                            initial={{ scale: 0, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            transition={spring.bouncy}
+                          >
+                            <Icon icon="mdi:check-circle" aria-hidden className="text-lg text-brand" />
+                          </motion.span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="pt-3 text-xs text-ink-secondary">
                   <Icon icon="mdi:information-outline" aria-hidden className="mr-1 inline" />
                   所选模型已保存到本地，用于新对话时的默认选择
                 </p>
@@ -259,7 +263,7 @@ export default function SettingsPage({
             <p className="mb-4 text-sm text-ink-secondary">登出后需要重新输入用户名和密码才能登录</p>
             <RippleButton
               onClick={logout}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-danger/10 px-4 py-2.5 font-medium text-danger-ink transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-[10px] bg-danger/10 px-4 py-2.5 font-medium text-danger-ink transition-colors"
             >
               <Icon icon="mdi:logout-variant" aria-hidden />
               退出登录

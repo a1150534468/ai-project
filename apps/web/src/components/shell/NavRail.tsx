@@ -117,6 +117,8 @@ function NavButton({
       <button
         type="button"
         onClick={onPick}
+        // 收起态只剩一个图标，可访问名称必须显式给 —— 悬停标签是给眼睛的，读屏与自动化测试都读不到它
+        aria-label={collapsed ? item.label : undefined}
         aria-current={active ? "page" : undefined}
         className={cx(ROW, rowShape(collapsed), active ? "text-ink" : "text-ink-secondary")}
       >
@@ -206,6 +208,8 @@ function WorkflowGroup({
         <button
           type="button"
           aria-expanded={open}
+          // 与 NavButton 同一条理由：收起态只剩图标，可访问名称要显式给（浮层里的文字读屏也读不到）
+          aria-label={collapsed ? item.label : undefined}
           onClick={collapsed ? onOpenWorkflow : onToggle}
           className={cx(ROW, rowShape(collapsed), onWorkflowPage ? "text-ink" : "text-ink-secondary")}
         >

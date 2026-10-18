@@ -20,7 +20,18 @@ import { AgentActionMenu } from "./AgentActionMenu";
 import { DeleteAgentDialog } from "./DeleteAgentDialog";
 import { HoverPopover } from "./HoverPopover";
 
-const RAIL = "hidden w-[220px] flex-none flex-col overflow-hidden border-r border-hairline-subtle bg-surface lg:flex";
+/**
+ * 滑入面板的容器（原型 `layout1`：会话列表从左侧推上来，用完即走）。
+ *
+ * 改版前这里是**常驻第二栏**（`w-[220px] border-r`，`lg:flex`）—— 对话页一进来就被占掉
+ * 220px，而会话列表大多数时候只是「待选」。现在按原型收成 312px 的覆盖层：
+ * 不占文档流、点遮罩或 Esc 关掉，宽度全部还给对话流。
+ *
+ * 宽度取 312px 而不是沿用 220px：原型 `.slideover` 就是这个数，且要放得下
+ * 「头像 + 标题 + 元信息」一行与底部的「新对话」主按钮。
+ */
+const RAIL =
+  "fixed inset-y-0 left-0 z-50 flex w-[312px] flex-none flex-col overflow-hidden border-r border-hairline-subtle bg-surface shadow-[12px_0_32px_rgb(16_22_21/0.08)]";
 const PANE = "flex min-h-0 flex-1 flex-col";
 const PANE_HEAD = "flex-none border-b border-hairline-subtle p-4";
 const PANE_BODY = "min-h-0 flex-1 overflow-y-auto px-2.5 py-3";
@@ -42,7 +53,8 @@ interface AgentRailProps {
   onDeleteSession?: (id: string) => void;
   onOpenAgentPicker: () => void;
   onAgentsChanged: () => void;
-  onRequestCollapse?: () => void;
+  /** 选完会话 / 开完新对话就关面板：滑入面板是「用完即走」，不该停在屏幕上占地方 */
+  onRequestClose?: () => void;
 }
 
 /** 一行 Agent 能做的事。token 与「做完刷新」都在 AgentRail 那层绑好，行里只管调。 */
@@ -192,7 +204,7 @@ export function AgentRail({
   onDeleteSession,
   onOpenAgentPicker,
   onAgentsChanged,
-  onRequestCollapse,
+  onRequestClose,
 }: AgentRailProps) {
   const rail = useMemo(() => buildAgentRail(agents, sessions), [agents, sessions]);
   const allItems = useMemo(() => [...rail.mine, ...rail.used], [rail]);
@@ -219,7 +231,7 @@ export function AgentRail({
   const openAgent = (id: string) => {
     select(id);
     onNewSession?.(id);
-    onRequestCollapse?.();
+    onRequestClose?.();
   };
 
   /** 头像 / 重命名 / 删除都走这里：跑的时候锁住该行，成了就让上层重取，失败弹 toast。 */
@@ -260,7 +272,17 @@ export function AgentRail({
     : [];
 
   return (
-    <section className={RAIL}>
+    // 滑入面板本体。进出场是「打开 360ms 阻尼 / 关闭 240ms 加速」—— 离开比进入快，
+    // 元素已经在往外走，再慢慢滑只会显得黏。参数对齐原型 `.slideover` 那两条 transition。
+    // 关状 `x: -102%` 而不是 `-100%`：留 2% 在屏幕外，关闭过程不会有一帧「刚好贴边」的停顿感。
+    <motion.aside
+      aria-label="对话列表"
+      initial={{ x: "-102%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "-102%", transition: { duration: reduce ? 0 : 0.24, ease: "easeIn" } }}
+      transition={reduce ? { duration: 0 } : { x: { duration: 0.36, ease: [0.22, 1, 0.36, 1] } }}
+      className={RAIL}
+    >
       <AnimatePresence mode="wait">
         {selected === null ? (
           <motion.div key="agents" {...slide(reduce, 1)} className={PANE}>
@@ -305,7 +327,7 @@ export function AgentRail({
                       running={runningSessionIds.has(session.id)}
                       onOpen={() => {
                         onSelectSession?.(session.id);
-                        onRequestCollapse?.();
+                        onRequestClose?.();
                       }}
                       onDelete={onDeleteSession && (() => onDeleteSession(session.id))}
                     />
@@ -324,7 +346,7 @@ export function AgentRail({
         onCancel={() => setPendingDelete(null)}
         onConfirm={confirmDelete}
       />
-    </section>
+    </motion.aside>
   );
 }
 

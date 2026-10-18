@@ -37,7 +37,8 @@ export default function KbForm({ draft, editing, saving, onChange, onSubmit, onC
         if (ready && !saving) onSubmit();
       }}
     >
-      <h3 className="text-sm font-bold uppercase tracking-wider text-ink">{editing ? "编辑知识库" : "新建知识库"}</h3>
+      {/* 原来这里是 `uppercase tracking-wider`：中文标题大写什么都没变，只是把字距拉散 */}
+      <h3 className="text-sm font-semibold text-ink">{editing ? "编辑知识库" : "新建知识库"}</h3>
 
       <input
         aria-label="知识库名称"

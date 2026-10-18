@@ -61,9 +61,12 @@ describe("Shell 骨架", () => {
     expect(markup).toContain("生图模块");
   });
 
-  it("只有对话页挂 Agent 栏", () => {
-    expect(shell()).toContain("新建 Agent");
-    expect(shell({ currentView: "kb" })).not.toContain("新建 Agent");
+  // 会话列表从「常驻第二栏」改成「滑入面板」（原型 layout1：不占文档流、用完即走）之后，
+  // 「挂不挂」由两个条件共同决定：在对话页 **且** 面板开着。默认关着，所以 SSR 产物里没有它。
+  it("只有对话页且面板开着才挂 Agent 栏", () => {
+    expect(shell({ agentPanelOpen: true })).toContain("新建 Agent");
+    expect(shell({ currentView: "kb", agentPanelOpen: true })).not.toContain("新建 Agent");
+    expect(shell()).not.toContain("新建 Agent");
   });
 
   it("已登录页脚是「登出」，未登录是「登录」", () => {

@@ -290,6 +290,23 @@ Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif, Apple Color Emoji, …
 | `Alert` / `alertClass` | `tone` | `danger`（默认）/ `warning` / `info` / `success` / `brand` |
 | | `size` | `sm`（10px 圆角）/ `md`（默认） |
 | | `bordered` | 默认 `false`，开了走 `X/20` 描边 |
+| `PageHeader` / `pageHeaderClass` | `title` | 页名，14px/600。字号收小了但仍是本屏唯一的 `h1` |
+| | `meta` | 页名右侧一行 12px 弱信息（计数、来源），没有就不给 |
+| | `children` | 右侧就地控件（计数、开关、动作），靠 `ml-auto` 顶到另一头 |
+| | `maxWidth` | 与正文同一个 `max-w-*`；正文通栏的页面不要传 |
+| `SegmentedControl` | `value` / `options` / `onChange` | 一组互斥选项，选中项下面压一块会滑的白底板（`spring.smooth`） |
+| | `ariaLabel` | 整组名（`role="group"`，不是 `tablist` —— 它是筛选器，不切换面板） |
+| | 选项 | `value` / `label` / `icon` / `title` / `testId` / `disabled` |
+
+### 分段控件（`components/ui/SegmentedControl.tsx`）
+
+「在几个里选一个」全站只有这一种控件。**落地前有三种长相**：素材库是两排圆角胶囊、知识库是上下两个同名小节、工作流顶栏是实心品牌色胶囊 —— 同一件事三副长相，换页要重新认。现在统一到原型的那条带滑动底板的分段控件，落点：素材库的分区与类型筛选、知识库的「我的 / 官方」、工作流顶栏的模块切换。
+
+- **几何**（抄原型）：轨 3px 内距 / 圆角 11px / `surface-subtle` 底 + hairline 描边；选项高 28px、圆角 8px、13px 字；底板 `surface` 白 + hairline 描边 + 1px 投影。
+- **底板是量出来的，不是算出来的**：选项宽度由文案决定（「我的」和「官方知识库」不一样宽），均分格子会让短选项撑出空白。挂载后读 `getBoundingClientRect()` 拿选中项的 left/width，`x` + `width` 动画过去；轨可滚时两边一起滚，差值不变。
+- **底板只画量出来之后那一帧**（`initial={false}`），否则首次挂载会从 x=0 滑一段。
+- **语义是 `role="group"` + `aria-pressed`，不是 `role="tablist"`**：选项之间不切换面板，报成「选项卡 1 / 共 4」与真实交互不符。
+- **取消筛选是另一项，不是再点一次选中项**（素材库的「全部」）。分段控件没有「空选」态。
 
 尺寸档位不是拍的，取的是全站实测最高频值：按钮高度 `h-9` 117 处 / `h-10` 91 / `h-8` 74 / `h-11` 34；`cardClass()` 的默认输出 `rounded-2xl border border-hairline-subtle bg-surface p-5` 正是全站 23 处逐字重复的那串 className。
 
@@ -304,6 +321,108 @@ Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif, Apple Color Emoji, …
 - 浅色主题下 `surface-muted` 与 `canvas` 同值（`245 245 247`），所以 `Button variant="secondary"` 和 `Badge tone="neutral" variant="soft"` 直接放在页面画布上会「看不见底」—— 它们的位置是卡片（白面）之内。
 - 语义上该是 `<article>` / `<section>` 的地方直接 `className={cardClass(...)}`，别为了用组件把标签改成 `div`。
 - 特殊处理（segmented control、虚线空态、品牌浅色渐变价格块等）保持显式手写，不硬塞进工厂 —— 工厂只覆盖默认情形。
+
+### 对话列表滑入面板（`components/shell/AgentRail.tsx` + `Shell.tsx`）
+
+- **是什么**：`AgentRail` 从「常驻第二栏」改成**左侧滑入面板**。原型 `layout1` 的结论：会话列表大多数时候只是「待选」，常驻会白占 220px。现在 `fixed inset-y-0 left-0 z-50 w-[312px]`，不占文档流，宽度全还给对话流。
+- **Structure**：面板本体（`motion.aside`）+ 遮罩（`fixed inset-0 z-40 bg-scrim/25`）+ 对话页左上角的开关按钮（`Chat.tsx`，`aria-expanded` 跟着状态走）。
+- **进出场**：打开 360ms 阻尼（`ease: [0.22, 1, 0.36, 1]`，与 `spring.smooth` 同源的 cubic-bezier）/ 关闭 240ms `easeIn` —— **离开比进入快**，元素已经在往外走，再慢慢滑只会显得黏。关状 `x: -102%` 而不是 `-100%`：留 2% 在屏幕外，关闭过程不会有一帧「刚好贴边」的停顿感。
+- **Rules**:
+  - 「用完即走」：选会话、开新对话、挑完 Agent 都关面板（`onRequestClose`），不把「开着」当常态存起来。
+  - 遮罩与面板**一起**进 `AnimatePresence`：少了它，面板退场时遮罩先一步消失，中间闪一下空背景。
+  - `Esc` 关面板，监听挂 `window`（焦点在面板里的搜索框/列表项上，事件照样冒泡上来）。遮罩接点击，键盘用户没有「点遮罩」这个动作。
+  - 面板内部仍是两个子面板互切（Agent 列表 / 该 Agent 的对话），`AnimatePresence mode="wait"` + 左右滑动，这套没动。
+  - 宽度 312px 取自原型 `.slideover`，且要放得下「头像 + 标题 + 元信息」一行与底部主按钮。
+
+### 页面上下文条
+
+- **是什么**：`components/ui/PageHeader.tsx`。一条 56px 高、通栏、底色 `surface`、下沿一条 `hairline-subtle` 的条带，里面是页名 + 右侧就地控件。取代了原来每个功能页各自的「`H1` + 一句灰色说明句」页头带。
+- **为什么不是大标题**：左侧导航已经把「你在哪」说清楚了，页面上再喊一遍是后台的语法；改版前五个页面的标题用了 28 / 24 / 24 / 30 / 30 五种字号，一种都不在 §3 的 H1 档上。现在页名统一 14px/600。
+- **Structure**: `h1.title` + 可选 `meta` + 可选右侧控件区
+- **Variants**: 只有页名（设置、记忆）/ 页名 + 计数（模型广场、素材库）/ 页名 + 动作（知识库的「返回对话」）
+- **Rules**:
+  - **一个字号档、一个左起点**：正文用 `mx-auto max-w-* px-*` 的页面，必须把同一个 `max-w-*` 传给 `maxWidth`。注意内距与宽度上限要落在**同一个元素**上，否则同一段 max-width 会在页头与正文之间算出两个不同的左起点（设置页原来整体偏右 146px 就是这个成因）。
+  - 页面上**只说一遍**计数：数字落在你要对它做动作的那一行。模型广场把它放在条带右侧；记忆放在筛选条里（那里才是筛的对象）。两处都写就是重复。
+  - 条带里不放**说明句**。页面不解释自己。
+  - 不再给页面配 `H1` 之上的英文大写眉标。
+
+### 工作流设置栏（生图 / 小说 / 桌宠 / 图文）
+
+四个工作流模块的「你要填什么」那一栏共用同一套语言。真身在 `apps/web/src/components/workflow/SettingsSlots.tsx`，**只有三个层级和一组几何，没有任何布局**：
+
+| 常量 / 组件 | 值 | 用途 |
+|------|-----|------|
+| `SETTINGS_GROUP` | 12px / 600 / `ink-secondary` | 分组小标题。四个模块用同一套词：输入、参数、基本信息、外观与动作、生成选项、发布平台… |
+| `SETTINGS_LABEL` | 14px / 500 / `ink` | 字段名。**不再往下掉**（改版前桌宠 / 图文有 11px、10px、9px 三档） |
+| `SETTINGS_HINT` | 12px / `ink-tertiary` | 计数、上限、「可多选」这类辅助信息 |
+| `SETTINGS_CONTROL` / `SETTINGS_TEXTAREA` | `h-10` / `rounded-[10px]` / `border-hairline` / `bg-surface-subtle` | 单行与多行控件，与 `InAppSelect` 触发器同一副几何 |
+| `SETTINGS_DROPZONE` / `_TILE` | 同上但虚线边 | 上传位（整行 / 方形格子） |
+| `SETTINGS_SLOT` | `rounded-[10px]` / `bg-surface-subtle` | 只读槽位（模型名、配额说明） |
+| `SETTINGS_SEGMENT` + `_ON` / `_OFF` | 相邻格 + `border-r`，选中 `bg-brand-soft` | 分段选择（批量张数、创作方式、公众号生成方式） |
+
+- ⚠️ **栏头只有一份**：`WF_PANEL_HEAD`（见下一节）。原来左栏另有一份 `SETTINGS_PANEL_HEAD`，
+  两份只差 `gap` 与底色，同一屏里三区栏头就高矮不一 —— 已删掉，设置栏直接 import `WF_PANEL_HEAD`。
+
+- **分组用 `SettingsGroup`，字段用 `SettingsField`**。`SettingsField` 的 `hint` 刻意是 `<label>` 的**兄弟节点**：写进 label 会让可访问名变成「写作风格 0/500」，`getByLabelText("写作风格")` 与读屏一起失效。要 label 关联控件就传 `htmlFor` + 控件 `id`。
+- 三个层级以外的东西（卡片、栏宽、滚动、按钮位置）各模块自己定：A 形态（生图 / 桌宠 / 图文）= 设置左置 + 产出并存，主按钮在栏底；B 形态（小说创建）= 设置主导居中，主按钮在表单末尾。见 `prototype/说明.md` 的规范 v2。
+
+**三区骨架与栏宽**（左=设置、中=工作区、右=历史，不许串位）。**几何只此一份**，真身在
+`apps/web/src/components/workflow/workflowLayout.ts`：
+
+| 常量 | 用途 |
+|------|------|
+| `wfShell(left, right)` | A 形态外壳的**唯一**入口。列宽按开关组出去：`minmax(280px,22%)_minmax(0,1fr)_minmax(260px,20.5%)` / 收左 / 收右 / 全收，外加共同的 `flex-col gap-3.5 p-3.5` + `xl:grid xl:h-full xl:grid-rows-1 xl:overflow-hidden`（窄屏纵向堆叠，横排从 `xl` 起）。**没有常量版** —— 左右两栏的显隐由顶栏「面板开关」决定，收起的那一列连缝一起从栅格里消失，所以列数只有运行时才知道。曾经有个 `WF_SHELL` 常量写着三栏全展开，它和这个函数就是「同一副几何的两个来源」，已删 |
+| `WF_SHELL_FORM` | B 形态外壳（小说创建）：公共部分 + `xl:grid-cols-[minmax(0,1fr)_280px]` |
+| `WF_PANEL` / `WF_WORKSPACE` | 三区共用的卡壳：`rounded-2xl` + 一条 `hairline-subtle` + `overflow-hidden`；工作区底色再弱一档 |
+| `WF_PANEL_HEAD` | 三个区共用的 56px 栏头 |
+
+❗**四条列宽必须是完整的类名字面量，不能拼**。早先的写法是把 `grid-cols-[` 留在公共前缀、运行时再拼列宽 ——
+Tailwind 只扫源码里的完整字面量，拼出来的类名它不认识 ⇒ `xl:grid` 生成了、列定义没生成 ⇒
+`display:grid` 但没有 `grid-template-columns`，栅格退化成单列、**宽屏下三区全部纵向堆叠**。
+`tsc` 不看类名、jsdom 不套 CSS、dev server 还留着上一轮产物，三层检查全绿 —— 是用户在界面上发现的。
+`workflowLayout.test.ts` 现在有一条守卫：断言每种组合的候选类都**逐字**出现在源码里。**改宽度时四条一起改。**
+
+❗**两侧是「百分比 + 像素下限」，不是死像素**。原型 `layout3` 给的 300 / 280 是 1440 下的绝对值；
+写死它的话，多出来的宽度**全归中间** —— 2560 的屏上设置栏还是 300px（只占 11.7%），被挤得读不动，
+中间却空一大片。`minmax(280px, 22%)` 两头都占：1440 下 ≈298 / 278（与原型差 2px 以内），
+窗口越宽两侧越宽，窄到 1330 以下由 280 / 260 兜住。⚠️ 百分比是对**栅格容器的内容宽**算的
+（≈ 视口 − 84px），调比例时按 `比例 × (视口 − 84)` 估。
+
+❗**外壳还需要「父级高度确定」**，两处缺一不可：
+
+1. 行要锁住 —— `xl:grid-rows-1`（落到 `grid-template-rows: repeat(1, minmax(0,1fr))`）。只给列不给行，
+   隐式 `auto` 行会被**最高的一栏**（设置）撑到两三千像素，三张卡一起变高：工作区明明只有一张占位图，
+   却长成跟设置栏一样高、底边还被裁掉。锁住之后三栏各自内部滚动（每栏 body 本来就是
+   `min-h-0 flex-1 overflow-y-auto`，只是过去没人约束它们）。
+2. 内容槽要能把高度传下来 —— `components/shell/Shell.tsx` 的 `contentScroll()`：
+   **靠 `flex-1` / `xl:h-full` 填满视口的模块**（三区：生图 / 图文 / 桌宠；单栏：录音转文字）
+   走 `page-wide` = **`flex flex-col overflow-y-auto xl:overflow-hidden`**。
+   ⚠️ **前面那个 `flex flex-col` 不能省**：内容槽原来是 `display:block`，页面里所有
+   `flex-1 / h-full / min-h-0` 都会解析成 `auto`，外壳的 `xl:h-full` 跟着失效。
+   症状看起来在 studio（工作台高度跟着设置栏走），根因却在外壳槽里。
+
+- **哪些页面落哪副骨架**：生图（**模块内 6 个场景全部**：通用生图 / 电商图 / 商品提取 / 形象照 /
+  万物试穿 / 试甲台）、图文、桌宠 = `wfShell(true, true)`（桌宠右栏是「一叠卡」，间距同为 `gap-3.5`）；
+  小说创建 = `WF_SHELL_FORM`（小说工作台自带全屏外壳，不接面板开关，所以这里留常量）。
+- ⚠️ **生图模块内 6 个场景是同一份骨架**。改版前只有「通用生图」是留缝圆角卡三区，
+  其余 5 个场景仍是 `minmax(360px,30%)_1fr` 的**通栏直角两栏**、历史还贴在内容底部 ——
+  同一个生图模块里切个场景，圆角变直角、历史条从右栏掉到底部。新增场景一律从
+  `ImageWorkflowStudio` 抄骨架，别从 `ecomWorkflowStudioView` 抄（它已经是新骨架了，但
+  它的中间工作区是三段 `border-b` 竖排，抄的时候留意）。
+- **面板开关**：顶栏右侧两颗（`mdi:arrow-collapse-left|right` / `mdi:arrow-expand-left|right`），
+  `aria-pressed` 报「当前是展开的」。可见性经 `PanelVisibilityProvider` 下发（`usePanelVisibility()`），
+  不给 9 个 studio 串 props；只有三区模块（生图 / 图文 / 桌宠）配开关，小说与 ppt 不配。
+  ⚠️ 收起那一栏用**条件渲染**而不是加 `hidden`：`hidden` 会被同元素的 `flex` 覆盖（`cx` 不做
+  tailwind-merge），而且栅格里少一列才是「连缝一起消失」——留一列空白等于没收起。
+- 电商图是「场景内再分档」（商品主图 / 商品详情图），它的二级切换做成**通栏胶囊行**放在
+  `wfShell` 上面（与 `Workflow.tsx` 的场景 tab 同款），**不要**做成 `role="tab"`：
+  `Workflow.image-hub.test.tsx` 锁死了页面里 `role="tab"` 的数量（6 个场景 tab），多一个就红。
+- 内距只由外壳提供一层。`Workflow.tsx` 的工作区容器是 `A_SHAPE_STUDIO`，**只负责撑满不加内距**；
+  两边都加就会叠成 38px。
+- 三区里只有「历史」不许各写各的：统一叫「历史」，统一「＋ 新建 → 搜索 → 条目（缩略 + 名称 + 元信息）」，当前项品牌弱底高亮。
+- ⚠️ 历史如果同时要有「宽屏右栏」与「窄屏底部/抽屉」两种位置，**只渲染一份 DOM**：宽屏是 grid 的第三列，窄屏顺序落到工作区下方。写成「两份 DOM + hidden 二选一」会让 `getByRole("region"/"dialog", …)` 取到两个。
+- ⚠️ 右栏容器用 `<section aria-label>` 而不是 `<aside aria-label>`：`aside` 有可访问名时 role 是 `complementary`，按 `region` 取的断言会全红。
+- ⚠️ 复用常量时**不要覆写同族 utility**（`SETTINGS_DROPZONE` 是 `text-sm`，要 `text-xs` 就用 `SETTINGS_DROPZONE_TILE`）——`cx` 不做冲突消解，谁生效看构建顺序。
 
 ### Shell Sidebar Item
 
@@ -360,15 +479,44 @@ Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif, Apple Color Emoji, …
 | duration.micro / std / emph | 0.17s / 0.34s / 0.48s | 退出动画取进入的 ~75% |
 | easing.outExpo | `[.16,1,.3,1]` | 缓动补充 |
 | enterY / enterScale / enterBlur | 26 / 0.9 / 8px | 入场位移·缩放·模糊 |
-| lift / press | -5 / 0.93 | hover 抬升 · 点击回弹 |
+| lift / press | -2 / 0.97 | hover 抬升 · 点击回弹（原型「按压 + 水波」一行的实测值） |
+| hoverEase | 0.18s + `[.22,1,.36,1]` | hover 上浮专用：不用弹簧 —— 悬停要跟手，弹簧的 settling 尾巴会像在抖 |
 
 ### 惊艳时刻（仅关键节点，避免疲劳）
 
 - **扣算力点**：粒子迸发 + `-n` 浮层 + 余额数字滚动脉冲（`SpendBurst`）。
 - **成功反馈**：Toast 弹入 + 五彩纸屑（`Confetti`）。
-- **列表/卡片/网格**：`Stagger` 依次入场（大列表只对首屏 ~20 项）。
-- **页面转场**：缩放 + 模糊淡入，方向滑出（`PageTransition`）。
+- **列表/卡片/网格**：`Stagger` 依次入场（大列表只对首屏 ~20 项）。落点：模型广场卡片墙
+  （`pages/ModelMarketplace.tsx`），每项 40ms 间隔、最多 7 项累加。
+- **页面转场**：缩放 + 模糊淡入，方向滑出（`PageTransition`）。落点：`App.tsx` 的路由分派处，
+  包在 `AnimatePresence mode="wait"` 里，`key={nav.view}`。
+- **工作流模块内切换**：三区依次进场（`.wf-studio-in`，40ms 间隔，纯 CSS）。为什么不用
+  motion 的 stagger —— 场景 tab 的 DOM 是**常驻挂载**的（切走再切回草稿还在），加 key 让
+  React 卸了重装会把草稿一起卸掉；CSS 动画跟着 active 类走，`display:none` 的隐藏页不跑动画，
+  正好是「只对可见的那一屏播」。
 - **品牌 logo**：漂浮 + hover 眨眼。
+
+### 两个实现位置（2026-10-14 落地）
+
+| 动效 | 真身 | 参数来源 |
+|------|------|---------|
+| 页面转场 / 依次入场 | `motion/PageTransition.tsx`（`PageTransition` / `Stagger` / `staggerItem`） | `motion/tokens.ts` 的 `spring.smooth` / `spring.bouncy` |
+| 工作流三区依次进场 | `index.css` 的 `.wf-studio-in` + `@keyframes studioItemIn` | 规范 340ms / 40ms 间隔 |
+| 选中指示器（导航底板 / 分段控件底板） | `NavRail.tsx` 的 `ActivePill`（`layoutId` 共享）、`ui/SegmentedControl.tsx` 的 thumb | 都是 `spring.smooth`（规范 440ms smooth，即该弹簧的 settle 时长） |
+| 滑入面板 | `shell/AgentRail.tsx` + `Shell.tsx` 的同一份 `AnimatePresence` | 开 360ms 阻尼 / 关 240ms / 遮罩 200ms |
+| 浮层展开 | `shell/HoverPopover.tsx` | 220ms，scale .96→1 + 位移 4px，`[.22,1,.36,1]` |
+| 按压 + 水波 | `motion/RippleButton.tsx` | hover 2px/180ms、press .97、水波 600ms |
+
+⚠️ `PageTransition` 会按**能力**判断跑不跑动画：没有 `window.matchMedia`（jsdom，没有帧循环，
+`AnimatePresence` 的 exit 永远等不到 `onComplete`）就退化成普通容器，`App.tsx` 也不包
+`AnimatePresence`。这不是为测试开后门，是按环境能力分流 —— 别改成读 `NODE_ENV`，那会让生产
+构建永远带着这条分支，而真实用户的「减少动效」偏好由 `MotionConfig reducedMotion="user"` 管。
+
+⚠️ **面板收纳（顶栏「面板开关」收起设置/历史栏）目前仍是即时切换**，规范里「面板、抽屉
+250–400ms」那一档**没落地**。原因是面板是**条件渲染**的：收起那一列连 DOM 一起从栅格里消失，
+`grid-template-columns` 的轨道数变了，CSS 只能离散插值（同名轨道数不同的两个列表不可动画）。
+要补这档过渡，得让两块侧栏**常驻挂载**、靠自身宽度动画收放（或给每个子项显式 `grid-column`），
+那是跨 8 个 studio 的结构性改动，做之前先想清楚测试里「收起后查不到内容」的断言要不要跟着改。
 
 ### Rules
 

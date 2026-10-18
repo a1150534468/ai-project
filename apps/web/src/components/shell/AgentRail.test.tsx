@@ -4,7 +4,9 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComponentProps, ReactNode } from "react";
 
-/** 动画在这里只会带来时序噪声：AnimatePresence 直通，motion.div 摘掉动画描述项。 */
+/** 动画在这里只会带来时序噪声：AnimatePresence 直通，motion.* 摘掉动画描述项。
+ *  `aside` 也要替：滑入面板的容器是 `motion.aside`（语义上是 complementary 侧栏），
+ *  少它这一项整个组件就渲染不出来。 */
 type FakeMotionProps = ComponentProps<"div"> & {
   initial?: unknown;
   animate?: unknown;
@@ -18,6 +20,7 @@ vi.mock("motion/react", () => ({
   useReducedMotion: () => false,
   motion: {
     div: ({ initial, animate, exit, transition, layoutId, ...dom }: FakeMotionProps) => <div {...dom} />,
+    aside: ({ initial, animate, exit, transition, layoutId, ...dom }: FakeMotionProps) => <aside {...dom} />,
   },
 }));
 

@@ -17,6 +17,13 @@
  */
 import { useState } from "react";
 import { Icon } from "@iconify/react";
+import {
+  SETTINGS_CONTROL,
+  SETTINGS_TEXTAREA,
+  SettingsField,
+  SettingsGroup,
+} from "./SettingsSlots";
+import { cx } from "../ui/cx";
 
 export type NovelLengthTier = "starter" | "standard" | "long" | "epic";
 
@@ -115,11 +122,6 @@ const ADVANCED_FIELDS: readonly {
   { key: "chapterChars", label: "每章字数", numeric: true },
 ];
 
-const INPUT_CLASS =
-  "h-10 rounded-xl border border-hairline bg-surface px-3 text-sm text-ink outline-none focus:border-brand/60";
-const CONSTRAINT_TEXTAREA_CLASS =
-  "resize-y rounded-xl border border-hairline bg-surface-subtle p-3 text-sm leading-6 text-ink outline-none focus:border-brand/60";
-
 const PREMISE_PLACEHOLDER = `用一段话写清主角、核心困境、主线目标与爽点预期……
 
 例如：被逐出宗门的阵法师发现自己能听见古阵残响，他必须在王朝封锁前修复失落阵图，也逐渐发现师门覆灭与皇室气运有关。`;
@@ -199,49 +201,43 @@ export function NovelCreatePage({
   const ready = hasNovelPremise(draft) && draft.subgenre.trim().length > 0;
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-hairline-subtle bg-surface shadow-[0_18px_60px_rgba(15,23,42,0.07)]">
-      <div className="border-b border-hairline-subtle bg-surface-muted px-5 py-5 sm:px-7">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="flex items-center gap-2 text-xs font-bold text-brand-ink">
-              <Icon icon="mdi:creation-outline" /> STORY FOUNDRY
-            </p>
-            <h2 className="mt-1 text-xl font-semibold text-ink">把一个故事想法，变成长篇叙事工程</h2>
-            <p className="mt-1 text-sm leading-6 text-ink-secondary">
-              先写清主线与读者期待，系统会在设置向导中逐步生成文风、世界、人物、地图和剧情总纲。
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowAdvanced((value) => !value)}
-            className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-hairline bg-surface px-3 text-xs font-semibold text-ink-secondary"
-          >
-            <Icon icon={showAdvanced ? "mdi:tune-vertical-variant" : "mdi:tune-variant"} />
-            {showAdvanced ? "使用篇幅档位" : "高级设置"}
-          </button>
+    <section className="overflow-hidden rounded-2xl border border-hairline-subtle bg-surface">
+      {/* 卡头原来带一条灰底带 + 「STORY FOUNDRY」英文大写眉标（中文界面里的英文标签，评审点名要删），
+          标题 20px 也不在规范的标题档上。现在与另外三栏的设置栏同一副头：一行标题 + 一句说明。 */}
+      <div className="flex flex-col gap-3 border-b border-hairline-subtle px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-ink">创建新作品</h2>
+          <p className="mt-1 text-sm leading-6 text-ink-secondary">
+            先写清主线与读者期待，系统会在设置向导中逐步生成文风、世界、人物、地图和剧情总纲。
+          </p>
         </div>
+        <button
+          type="button"
+          onClick={() => setShowAdvanced((value) => !value)}
+          className="flex h-9 shrink-0 items-center gap-2 rounded-[10px] border border-hairline bg-surface-subtle px-3 text-xs font-semibold text-ink-secondary"
+        >
+          <Icon icon={showAdvanced ? "mdi:tune-vertical-variant" : "mdi:tune-variant"} />
+          {showAdvanced ? "使用篇幅档位" : "高级设置"}
+        </button>
       </div>
 
       <div className="grid gap-6 p-5 sm:p-7">
-        <label className="grid gap-2">
-          <span className="flex items-center justify-between gap-3 text-sm font-semibold text-ink">
-            <span>故事梗概</span>
-            <span className="text-xs font-normal text-ink-tertiary">{draft.premise.length}/2000</span>
-          </span>
+        <SettingsField
+          label="故事梗概"
+          htmlFor="novel-premise"
+          hint={`${draft.premise.length}/2000`}
+        >
           <textarea
+            id="novel-premise"
             value={draft.premise}
             onChange={(event) => setText("premise", event.currentTarget.value.slice(0, 2000))}
             placeholder={PREMISE_PLACEHOLDER}
             rows={6}
-            className="w-full resize-y rounded-2xl border border-hairline bg-surface-subtle p-4 text-sm leading-7 text-ink outline-none transition placeholder:text-ink-tertiary focus:border-brand/60 focus:bg-surface focus:ring-4 focus:ring-brand/10"
+            className={cx(SETTINGS_TEXTAREA, "min-h-[168px] leading-7")}
           />
-        </label>
+        </SettingsField>
 
-        <div className="grid gap-3">
-          <div>
-            <p className="text-sm font-semibold text-ink">市场分区</p>
-            <p className="mt-1 text-xs text-ink-tertiary">大类 → 细分主题；选择后自动推导世界、结构、节奏与文风，后续都可修改。</p>
-          </div>
+        <SettingsGroup title="市场分区" hint="选完自动推导世界 / 结构 / 节奏 / 文风">
           <div className="flex flex-wrap gap-2">
             {MARKET_TAXONOMY.map((item) => {
               const active = draft.market === item.label;
@@ -250,7 +246,10 @@ export function NovelCreatePage({
                   key={item.label}
                   type="button"
                   onClick={() => chooseMarket(item)}
-                  className={`flex h-10 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${active ? "border-brand bg-brand text-white shadow-sm" : "border-hairline bg-surface text-ink-secondary"}`}
+                  className={cx(
+                    "flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition",
+                    active ? "border-brand bg-brand text-white" : "border-hairline-subtle bg-surface-subtle text-ink-secondary",
+                  )}
                 >
                   <Icon icon={item.icon} />
                   {item.label}
@@ -258,41 +257,44 @@ export function NovelCreatePage({
               );
             })}
           </div>
-          <div className="flex flex-wrap gap-2 rounded-2xl bg-surface-subtle p-3">
+          <div className="flex flex-wrap gap-2 rounded-[10px] bg-surface-subtle p-3">
             {taxonomy.topics.map((topic) => (
               <button
                 key={topic}
                 type="button"
                 onClick={() => setText("subgenre", topic)}
-                className={`h-8 rounded-lg px-3 text-xs font-semibold transition ${draft.subgenre === topic ? "bg-surface text-brand-ink shadow-sm ring-1 ring-brand/30" : "text-ink-secondary"}`}
+                className={cx(
+                  "h-8 rounded-full px-3 text-xs transition",
+                  draft.subgenre === topic
+                    ? "bg-surface font-semibold text-brand-ink ring-1 ring-brand/30"
+                    : "font-medium text-ink-secondary",
+                )}
               >
                 {topic}
               </button>
             ))}
           </div>
-        </div>
+        </SettingsGroup>
 
         {showAdvanced ? (
-          <div className="grid gap-4 rounded-2xl border border-hairline-subtle bg-surface-subtle p-4 sm:grid-cols-3">
-            {ADVANCED_FIELDS.map((field) => (
-              <label key={field.key} className="grid gap-2 text-xs font-semibold text-ink-secondary">
-                {field.label}
-                <input
-                  value={draft[field.key]}
-                  onChange={(event) => setText(field.key, event.currentTarget.value)}
-                  inputMode={field.numeric ? "numeric" : undefined}
-                  placeholder={field.placeholder}
-                  className={INPUT_CLASS}
-                />
-              </label>
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-3">
-            <div>
-              <p className="text-sm font-semibold text-ink">目标篇幅</p>
-              <p className="mt-1 text-xs text-ink-tertiary">按网文常用节奏推导章数与单章字数。</p>
+          <SettingsGroup title="高级设置" hint="留空则按梗概生成">
+            <div className="grid gap-4 rounded-[10px] bg-surface-subtle p-4 sm:grid-cols-3">
+              {ADVANCED_FIELDS.map((field) => (
+                <SettingsField key={field.key} label={field.label} htmlFor={`novel-${field.key}`}>
+                  <input
+                    id={`novel-${field.key}`}
+                    value={draft[field.key]}
+                    onChange={(event) => setText(field.key, event.currentTarget.value)}
+                    inputMode={field.numeric ? "numeric" : undefined}
+                    placeholder={field.placeholder}
+                    className={SETTINGS_CONTROL}
+                  />
+                </SettingsField>
+              ))}
             </div>
+          </SettingsGroup>
+        ) : (
+          <SettingsGroup title="目标篇幅" hint="按网文常用节奏推导章数与单章字数">
             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               {LENGTH_TIERS.map((option) => {
                 const active = draft.lengthTier === option.value;
@@ -301,19 +303,22 @@ export function NovelCreatePage({
                     key={option.value}
                     type="button"
                     onClick={() => chooseLength(option)}
-                    className={`rounded-xl border p-3 text-left transition ${active ? "border-brand bg-brand-soft ring-1 ring-brand/20" : "border-hairline-subtle bg-surface"}`}
+                    className={cx(
+                      "rounded-[10px] border p-3 text-left transition",
+                      active ? "border-brand bg-brand-soft" : "border-hairline-subtle bg-surface",
+                    )}
                   >
-                    <span className="block text-sm font-semibold text-ink">{option.title}</span>
+                    <span className="block text-sm font-medium text-ink">{option.title}</span>
                     <span className="mt-1 block text-xs text-ink-tertiary">{option.hint}</span>
                   </button>
                 );
               })}
             </div>
-          </div>
+          </SettingsGroup>
         )}
 
-        <details className="group rounded-2xl border border-hairline-subtle bg-surface">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-ink-secondary">
+        <details className="group rounded-[10px] border border-hairline-subtle bg-surface">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-ink-secondary">
             <span className="flex items-center gap-2">
               <Icon icon="mdi:layers-triple-outline" className="text-brand-ink" />
               查看自动推导的创作约束
@@ -322,18 +327,20 @@ export function NovelCreatePage({
           </summary>
           <div className="grid gap-3 border-t border-hairline-subtle p-4 sm:grid-cols-2">
             {CONSTRAINT_FIELDS.map((field) => (
-              <label
+              <SettingsField
                 key={field.key}
-                className={`grid gap-1.5 text-xs font-semibold text-ink-secondary ${field.wide ? "sm:col-span-2" : ""}`}
+                label={field.label}
+                htmlFor={`novel-constraint-${field.key}`}
+                className={field.wide ? "sm:col-span-2" : undefined}
               >
-                {field.label}
                 <textarea
+                  id={`novel-constraint-${field.key}`}
                   value={draft[field.key]}
                   onChange={(event) => setText(field.key, event.currentTarget.value)}
                   rows={3}
-                  className={CONSTRAINT_TEXTAREA_CLASS}
+                  className={SETTINGS_TEXTAREA}
                 />
-              </label>
+              </SettingsField>
             ))}
           </div>
         </details>
@@ -347,7 +354,7 @@ export function NovelCreatePage({
             type="button"
             onClick={onSubmit}
             disabled={!ready || isSubmitting}
-            className="flex h-11 items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-sm transition disabled:cursor-not-allowed disabled:opacity-45"
+            className="flex h-11 items-center justify-center gap-2 rounded-[10px] bg-brand px-5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-brand/40"
           >
             <Icon icon={isSubmitting ? "mdi:loading" : "mdi:creation-outline"} className={isSubmitting ? "animate-spin" : ""} />
             {isSubmitting ? "正在建档" : "建档并进入设置向导"}

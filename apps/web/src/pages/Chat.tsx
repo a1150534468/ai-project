@@ -43,7 +43,8 @@ interface ChatProps {
   readonly preferredModel?: string;
   readonly onModelChange: (model: string) => void;
   readonly onSend: (payload: ChatSendPayload) => void;
-  readonly agentPanelCollapsed?: boolean;
+  /** 对话列表滑入面板是否打开（打开时这颗按钮变成「关」的语义） */
+  readonly agentPanelOpen?: boolean;
   readonly onToggleAgentPanel?: () => void;
 }
 
@@ -63,7 +64,7 @@ export default function Chat({
   preferredModel,
   onModelChange,
   onSend,
-  agentPanelCollapsed = false,
+  agentPanelOpen = false,
   onToggleAgentPanel,
 }: ChatProps) {
   const composer = useChatComposerState({ token, isLoading, selectedModel, preferredModel, onModelChange, onSend });
@@ -111,7 +112,8 @@ export default function Chat({
           <button
             type="button"
             onClick={onToggleAgentPanel}
-            aria-label={agentPanelCollapsed ? "展开对话列表" : "收起对话列表"}
+            aria-label={agentPanelOpen ? "关闭对话列表" : "打开对话列表"}
+            aria-expanded={agentPanelOpen}
             className="flex size-9 flex-none items-center justify-center rounded-lg text-ink-tertiary transition-colors"
           >
             <Icon icon="mdi:dock-left" aria-hidden className="text-xl" />

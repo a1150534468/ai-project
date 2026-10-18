@@ -3,11 +3,15 @@ import { Icon } from "@iconify/react";
 import { RippleButton } from "../../motion";
 import { useAuthGate } from "../../app/authGate";
 import { InAppSelect } from "../ui/InAppSelect";
+import { cx } from "../ui/cx";
 import * as api from "../../workflowEcomMainApi";
 import type { EcomMainJob, EcomMainRatio, EcomMainResolution, EcomMainStyleId } from "../../workflowEcomMainApi";
 import { IMAGE_MODEL_OPTIONS, isImageModel, type ImageModel } from "../../workflowState";
 import { DownloadOverlayButton } from "./DownloadOverlayButton";
 import { SubmitBar } from "./SubmitBar";
+import { SETTINGS_TEXTAREA, SettingsField, SettingsGroup } from "./SettingsSlots";
+import { usePanelVisibility } from "./panelVisibility";
+import { WF_PANEL, WF_PANEL_HEAD, wfShell, WF_WORKSPACE } from "./workflowLayout";
 import {
   ECOM_MAIN_COUNT_OPTIONS,
   ECOM_MAIN_RATIO_OPTIONS,
@@ -157,18 +161,22 @@ export function EcomMainImageStudio({
     })();
   };
 
+  const panels = usePanelVisibility();
+
   return (
-    <section className="grid min-h-0 bg-surface xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside className="flex h-[calc(100dvh-19rem)] min-h-[460px] max-h-[680px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+    <section className={cx(wfShell(panels.left, panels.right), "wf-studio-in")}>
+      {/* 左栏由顶栏「面板开关」控制：收起的那一列连缝一起从栅格里消失，工作区直接吃掉那份宽度。 */}
+      {panels.left && (
+        <aside className={cx(WF_PANEL, "xl:h-full")}>
+        <div className={WF_PANEL_HEAD}>
+          <h2 className="min-w-0 truncate text-sm font-semibold text-ink">商品主图设置</h2>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
           {controlsHeader}
-          <div className="pt-5">
-            <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
-            <h3 className="mt-1 text-base font-semibold text-ink">主图设置</h3>
-          </div>
-          <div className="mt-4 grid gap-3">
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              模型
+
+          <SettingsGroup title="主图参数" className="mt-5">
+            <SettingsField label="模型">
               <InAppSelect
                 icon="mdi:creation-outline"
                 label="模型"
@@ -181,9 +189,8 @@ export function EcomMainImageStudio({
                   clearFeedback();
                 }}
               />
-            </div>
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              图片比例
+            </SettingsField>
+            <SettingsField label="图片比例">
               <InAppSelect
                 icon="mdi:crop"
                 label="图片比例"
@@ -196,9 +203,8 @@ export function EcomMainImageStudio({
                   clearFeedback();
                 }}
               />
-            </div>
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              清晰度
+            </SettingsField>
+            <SettingsField label="清晰度">
               <InAppSelect
                 icon="mdi:high-definition"
                 label="清晰度"
@@ -211,9 +217,8 @@ export function EcomMainImageStudio({
                   clearFeedback();
                 }}
               />
-            </div>
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              做图风格
+            </SettingsField>
+            <SettingsField label="做图风格">
               <InAppSelect
                 icon="mdi:palette-outline"
                 label="做图风格"
@@ -224,10 +229,9 @@ export function EcomMainImageStudio({
                   clearFeedback();
                 }}
               />
-            </div>
+            </SettingsField>
             {style === "custom" && (
-              <label className="grid gap-2 text-sm font-semibold text-ink">
-                自定义风格描述
+              <SettingsField label="自定义风格描述">
                 <textarea
                   value={customStyle}
                   onChange={(e) => {
@@ -235,12 +239,11 @@ export function EcomMainImageStudio({
                     clearFeedback();
                   }}
                   placeholder="例如：赛博朋克霓虹夜景、暖调日系胶片"
-                  className="min-h-[72px] rounded-lg border border-hairline p-3 text-sm leading-6 text-ink"
+                  className={cx(SETTINGS_TEXTAREA, "min-h-[72px]")}
                 />
-              </label>
+              </SettingsField>
             )}
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              画面文字
+            <SettingsField label="画面文字">
               <InAppSelect
                 icon="mdi:format-text"
                 label="画面文字"
@@ -251,9 +254,8 @@ export function EcomMainImageStudio({
                   clearFeedback();
                 }}
               />
-            </div>
-            <div className="grid gap-2 text-sm font-semibold text-ink">
-              生成张数
+            </SettingsField>
+            <SettingsField label="生成张数">
               <InAppSelect
                 icon="mdi:numeric"
                 label="生成张数"
@@ -264,16 +266,18 @@ export function EcomMainImageStudio({
                   clearFeedback();
                 }}
               />
-            </div>
-          </div>
+            </SettingsField>
+          </SettingsGroup>
+
           {(error || notice) && (
             <p
-              className={`mt-4 rounded-lg px-3 py-2 text-sm ${error ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}
+              className={`mt-4 rounded-[10px] px-3 py-2 text-sm ${error ? "bg-danger/10 text-danger-ink" : "bg-brand-soft text-brand-ink"}`}
             >
               {error || notice}
             </p>
           )}
         </div>
+
         <SubmitBar
           submitLabel="生成主图"
           submitIcon="mdi:image-plus-outline"
@@ -283,43 +287,42 @@ export function EcomMainImageStudio({
           onSubmit={handleGenerate}
         />
       </aside>
+      )}
 
-      <div className="flex min-h-[420px] min-w-0 flex-col bg-surface xl:h-full">
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold text-ink-secondary">当前结果</p>
-              <h3 className="mt-1 text-base font-semibold text-ink">
-                图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}
-              </h3>
-            </div>
-            {isSubmitting && (
-              <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink">
-                <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
-                正在生成
-              </span>
-            )}
-          </div>
+      <main className={WF_WORKSPACE}>
+        <div className={WF_PANEL_HEAD}>
+          <p className="truncate text-sm font-semibold text-ink">
+            图组预览 {job && !isSubmitting ? `(${job.images.length} 张)` : ""}
+          </p>
           {isSubmitting && (
-            <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
+            <span role="status" className="inline-flex items-center gap-2 text-xs font-semibold text-brand-ink">
+              <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
+              正在生成
+            </span>
+          )}
+        </div>
+
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+          {isSubmitting && (
+            <div className="flex items-center gap-2 rounded-[10px] bg-brand-soft px-3 py-2 text-sm font-medium text-brand-ink">
               <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />
               正在按张生成 {count} 张主图，请稍候...（离开页面会中断本次生成）
             </div>
           )}
           {!job && !isSubmitting && (
-            <div className="mt-4 grid min-h-[340px] place-items-center rounded-lg border border-dashed border-hairline bg-surface-subtle px-6 text-center">
+            <div className="grid min-h-[340px] place-items-center rounded-[10px] border border-dashed border-hairline bg-surface px-6 text-center">
               <div>
                 <Icon icon="mdi:image-plus-outline" className="mx-auto mb-3 text-4xl text-ink-tertiary" aria-hidden />
                 <p className="text-sm font-semibold text-ink-secondary">填写左侧产品资料后开始生成</p>
               </div>
             </div>
           )}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             {isSubmitting
               ? Array.from({ length: count }).map((_, skeletonIndex) => (
                   <article
                     key={`skeleton-${skeletonIndex}`}
-                    className="overflow-hidden rounded-[12px] border border-hairline-subtle"
+                    className="overflow-hidden rounded-[10px] border border-hairline-subtle"
                   >
                     <div className="relative grid aspect-square place-items-center overflow-hidden bg-surface-muted">
                       <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-surface-muted via-surface-subtle to-surface-muted" />
@@ -337,7 +340,7 @@ export function EcomMainImageStudio({
                   </article>
                 ))
               : job?.images.map((image) => (
-                  <article key={image.index} className="overflow-hidden rounded-[12px] border border-hairline-subtle">
+                  <article key={image.index} className="overflow-hidden rounded-[10px] border border-hairline-subtle">
                     <div className="group relative grid aspect-square place-items-center bg-surface-muted">
                       {image.originalUrl ? (
                         <img
@@ -380,7 +383,7 @@ export function EcomMainImageStudio({
                           type="button"
                           onClick={() => handleRedraw(image.index)}
                           disabled={busy}
-                          className="h-9 rounded-[8px] border border-hairline text-xs font-semibold text-brand-ink disabled:text-ink-tertiary"
+                          className="h-9 rounded-[10px] border border-hairline text-xs font-semibold text-brand-ink disabled:text-ink-tertiary"
                         >
                           {redrawingIndexes.includes(image.index) ? "重绘中…" : "重绘这张"}
                         </RippleButton>
@@ -390,8 +393,10 @@ export function EcomMainImageStudio({
                 ))}
           </div>
         </div>
-        {historyFooter}
-      </div>
+      </main>
+
+      {/* 历史从「工作区底部的横条」搬到右栏（统一规范 v2：左=设置、中=工作区、右=历史）。 */}
+      {panels.right && historyFooter}
     </section>
   );
 }

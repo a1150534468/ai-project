@@ -7,13 +7,17 @@
  */
 import { Icon } from "@iconify/react";
 import type { AssetItem, AssetMediaType, AssetOrigin, AssetSourceModule } from "../../assetApi";
+import { Button, PageHeader, SegmentedControl } from "../ui";
 import {
   ASSET_MODULE_LABELS,
   ASSET_ORIGIN_TABS,
+  moduleFiltersForOrigin,
   formatAssetDuration,
   formatAssetSize,
-  moduleFiltersForOrigin,
 } from "../../assetLibrary";
+
+/** 「全部」在 UI 里是分段控件的一项，落到接口是 `sourceModule: null`。 */
+const ALL_MODULES = "all";
 
 const MEDIA_ICONS: Readonly<Record<AssetMediaType, string>> = {
   image: "mdi:image-outline",
@@ -43,6 +47,8 @@ export interface AssetLibraryViewProps {
   readonly onLoadMore: () => void;
   readonly onOpen: (item: AssetItem) => void;
   readonly onRetry: () => void;
+  /** 空态里「去创作」的去处（工作流）。没给就只留那句话，不给按钮。 */
+  readonly onCreate?: () => void;
 }
 
 function AssetCard({ item, onOpen }: { readonly item: AssetItem; readonly onOpen: (item: AssetItem) => void }) {
@@ -56,7 +62,7 @@ function AssetCard({ item, onOpen }: { readonly item: AssetItem; readonly onOpen
     <article
       data-testid="asset-card"
       data-asset-id={item.id}
-      className="flex flex-col overflow-hidden rounded-[14px] border border-hairline-subtle bg-surface"
+      className="flex flex-col overflow-hidden rounded-xl border border-hairline-subtle bg-surface"
     >
       <div className="relative grid aspect-square place-items-center bg-surface-subtle">
         {preview ? (
@@ -102,119 +108,104 @@ export function AssetLibraryView({
   onLoadMore,
   onOpen,
   onRetry,
+  onCreate,
 }: AssetLibraryViewProps) {
-  const tab = ASSET_ORIGIN_TABS.find((entry) => entry.origin === origin) ?? ASSET_ORIGIN_TABS[0]!;
   const modules = moduleFiltersForOrigin(origin);
 
   return (
-    <div className="min-h-full bg-surface-muted px-4 py-5 lg:px-8 lg:py-7">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <section className="rounded-[14px] border border-hairline-subtle bg-surface p-5">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-hairline-subtle bg-surface-subtle px-3 py-1 text-xs font-medium text-ink-secondary">
-            <Icon icon="mdi:folder-multiple-image" className="text-base" aria-hidden />
-            <span data-testid="asset-count">已加载 {items.length} 条</span>
-          </div>
-          <h1 className="text-2xl font-bold tracking-normal text-ink">素材库</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">
-            各个工作流产出的图片、视频、音频，以及你上传过的参考图与音色样本，都汇总在这里。
-            素材直接读自各模块自己的数据，不另存一份 —— 在原模块删掉，这里就跟着消失。
-          </p>
-
-          <div className="mt-4 flex flex-wrap gap-2">
-            {ASSET_ORIGIN_TABS.map((entry) => (
-              <button
-                key={entry.origin}
-                type="button"
-                data-testid={`asset-origin-${entry.origin}`}
-                aria-pressed={entry.origin === origin}
-                onClick={() => onOriginChange(entry.origin)}
-                className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs font-medium transition ${
-                  entry.origin === origin ? "bg-surface-inverse text-ink-inverse" : "bg-surface-subtle text-ink-secondary"
-                }`}
-              >
-                <Icon icon={entry.icon} className="text-base" aria-hidden />
-                {entry.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="flex flex-wrap items-center gap-2 rounded-[14px] border border-hairline-subtle bg-surface p-4">
-          <button
-            type="button"
-            data-testid="asset-module-all"
-            aria-pressed={module === null}
-            onClick={() => onModuleChange(null)}
-            className={`h-8 rounded-full border px-3 text-xs font-medium transition ${
-              module === null ? "border-brand/30 bg-brand-soft text-brand-ink" : "border-hairline bg-surface text-ink-secondary"
-            }`}
-          >
-            全部
-          </button>
-          {modules.map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              data-testid={`asset-module-${entry}`}
-              aria-pressed={module === entry}
-              onClick={() => onModuleChange(module === entry ? null : entry)}
-              className={`h-8 rounded-full border px-3 text-xs font-medium transition ${
-                module === entry ? "border-brand/30 bg-brand-soft text-brand-ink" : "border-hairline bg-surface text-ink-secondary"
-              }`}
-            >
-              {ASSET_MODULE_LABELS[entry]}
-            </button>
-          ))}
-        </section>
-
-        {error && (
-          <div
-            data-testid="asset-error"
-            className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink"
-          >
-            <span>{error}</span>
-            <button type="button" onClick={onRetry} className="h-8 rounded-[9px] border border-danger/30 px-3 text-xs font-medium">
-              重试
-            </button>
-          </div>
-        )}
-
-        {items.length > 0 ? (
-          <section className="flex flex-col gap-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
-              {items.map((item) => (
-                <AssetCard key={item.id} item={item} onOpen={onOpen} />
-              ))}
-            </div>
-            {hasMore && (
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  data-testid="asset-load-more"
-                  disabled={loadingMore}
-                  onClick={onLoadMore}
-                  className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-hairline bg-surface px-5 text-sm font-medium text-ink transition disabled:cursor-not-allowed disabled:text-ink-tertiary"
-                >
-                  {loadingMore && <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />}
-                  {loadingMore ? "加载中" : "加载更多"}
-                </button>
-              </div>
-            )}
-          </section>
-        ) : (
-          <section
-            data-testid="asset-empty"
-            className="flex min-h-[24rem] flex-col items-center justify-center rounded-[14px] border border-dashed border-hairline-subtle bg-surface px-6 text-center"
-          >
-            <Icon
-              icon={loading ? "mdi:loading" : "mdi:folder-open-outline"}
-              className={`text-3xl text-ink-tertiary ${loading ? "animate-spin" : ""}`}
-              aria-hidden
+    <div className="flex h-full min-h-0 flex-col bg-surface-muted">
+      {/* 页头原来是一张卡：胶囊眉标「已加载 N 条」+ H1 + 一段三行设计说明 —— 三样都在替这屏做
+          自我解释。现在报数进条带右侧，说明句删掉（页面不解释自己）。
+          两条筛选也在这一条上、紧挨页名 —— 规范里「上下文条 = 页名 + 就地控件」就是它，
+          原来那版把筛选放在正文里另起一张卡，等于给工具栏又套了一层容器。 */}
+      <PageHeader
+        title="素材库"
+        maxWidth="max-w-7xl"
+        meta={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <SegmentedControl
+              ariaLabel="素材分区"
+              value={origin}
+              onChange={onOriginChange}
+              options={ASSET_ORIGIN_TABS.map((entry) => ({
+                value: entry.origin,
+                label: entry.label,
+                icon: entry.icon,
+                testId: `asset-origin-${entry.origin}`,
+              }))}
             />
-            <p className="mt-3 text-sm font-semibold text-ink">{loading ? "正在加载" : "这里还没有素材"}</p>
-            {!loading && <p className="mt-1 max-w-md text-xs leading-6 text-ink-secondary">{tab.emptyText}</p>}
-          </section>
-        )}
+            <span className="h-5 w-px flex-none bg-hairline-subtle" aria-hidden />
+            <SegmentedControl
+              ariaLabel="素材类型"
+              value={module ?? ALL_MODULES}
+              onChange={(next) => onModuleChange(next === ALL_MODULES ? null : next)}
+              options={[
+                { value: ALL_MODULES, label: "全部", testId: "asset-module-all" },
+                ...modules.map((entry) => ({
+                  value: entry,
+                  label: ASSET_MODULE_LABELS[entry],
+                  testId: `asset-module-${entry}`,
+                })),
+              ]}
+            />
+          </div>
+        }
+      >
+        <span data-testid="asset-count">已加载 {items.length} 条</span>
+      </PageHeader>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-7xl flex-col gap-5 px-4 py-5 sm:px-6">
+          {error && (
+            <div
+              data-testid="asset-error"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink"
+            >
+              <span>{error}</span>
+              <button type="button" onClick={onRetry} className="h-8 rounded-[9px] border border-danger/30 px-3 text-xs font-medium">
+                重试
+              </button>
+            </div>
+          )}
+
+          {items.length > 0 ? (
+            <section className="flex flex-col gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                {items.map((item) => (
+                  <AssetCard key={item.id} item={item} onOpen={onOpen} />
+                ))}
+              </div>
+              {hasMore && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    data-testid="asset-load-more"
+                    disabled={loadingMore}
+                    onClick={onLoadMore}
+                    className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-hairline bg-surface px-5 text-sm font-medium text-ink transition disabled:cursor-not-allowed disabled:text-ink-tertiary"
+                  >
+                    {loadingMore && <Icon icon="mdi:loading" className="animate-spin text-base" aria-hidden />}
+                    {loadingMore ? "加载中" : "加载更多"}
+                  </button>
+                </div>
+              )}
+            </section>
+          ) : (
+            /* 空态只留一句 + 一个去处：原来这里还挂着一个 3xl 图标和一段按分区区分的说明句，
+               两样都在替这屏解释自己。分区那句说明进分段控件就够了。 */
+            <section
+              data-testid="asset-empty"
+              className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-hairline-subtle bg-surface px-6 py-16 text-center"
+            >
+              <p className="text-sm text-ink-secondary">{loading ? "正在加载…" : "这里还没有素材"}</p>
+              {!loading && onCreate && (
+                <Button variant="primary" size="md" shape="rounded" className="mt-4" onClick={onCreate}>
+                  去创作
+                </Button>
+              )}
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

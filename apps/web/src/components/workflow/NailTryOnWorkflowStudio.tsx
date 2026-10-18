@@ -6,12 +6,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { Icon } from "@iconify/react";
 import { useAuthGate } from "../../app/authGate";
+import { cx } from "../ui/cx";
 import { DownloadOverlayButton } from "./DownloadOverlayButton";
 import { downloadImageFile, imageDownloadFileName } from "./imageDownload";
 import { readFileAsInlineImage } from "./ecomWorkflowStudioModel";
 import { WorkflowHistoryStrip } from "./ImageHistoryStrip";
 import { SubmitBar } from "./SubmitBar";
 import { HumanImageGenerationFields, HUMAN_RESOLUTION_OPTIONS } from "./HumanImageGenerationFields";
+import { SETTINGS_HINT, SETTINGS_TEXTAREA, SettingsField, SettingsGroup } from "./SettingsSlots";
+import { usePanelVisibility } from "./panelVisibility";
+import { WF_PANEL, WF_PANEL_HEAD, wfShell, WF_WORKSPACE } from "./workflowLayout";
 import { buildNailSubmission, humanTierDimensions, loadImageFromFile } from "../../nailMaskCanvas";
 import {
   cancelNailTryOnTask,
@@ -111,7 +115,7 @@ function NailDesignSlot(props: NailDesignSlotProps) {
         <span className="truncate">美甲款式</span>
         <span className="text-ink-tertiary">可选</span>
       </div>
-      <div className="group relative aspect-square w-24 overflow-hidden rounded-lg border border-dashed border-hairline bg-surface-subtle">
+      <div className="group relative aspect-square w-24 overflow-hidden rounded-[10px] border border-dashed border-hairline bg-surface-subtle">
         {props.reference ? (
           <>
             <img src={props.reference.previewUrl} alt="美甲款式" className="h-full w-full object-cover" />
@@ -132,7 +136,7 @@ function NailDesignSlot(props: NailDesignSlotProps) {
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={props.disabled || busy}
-              className="absolute inset-x-1 bottom-1 h-7 rounded-[6px] bg-scrim/65 text-[11px] font-semibold text-white disabled:opacity-40"
+              className="absolute inset-x-1 bottom-1 h-7 rounded-[8px] bg-scrim/65 text-xs font-semibold text-white disabled:opacity-40"
             >
               更换
             </button>
@@ -150,7 +154,7 @@ function NailDesignSlot(props: NailDesignSlotProps) {
               className={`text-2xl ${props.isUploading ? "animate-spin" : ""}`}
               aria-hidden
             />
-            <span className="mt-1 text-[11px]">{props.isUploading ? "上传中" : "上传"}</span>
+            <span className="mt-1 text-xs">{props.isUploading ? "上传中" : "上传"}</span>
           </button>
         )}
       </div>
@@ -557,28 +561,23 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
       }),
     }).catch((downloadError) => setError(errorMessage(downloadError, "下载原图失败")));
   };
-  return (
-    <section
-      data-testid="nail-try-on-studio"
-      className="relative flex min-h-0 flex-col overflow-hidden bg-surface xl:h-full"
-    >
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-        <aside className="flex h-[calc(100dvh-15.5rem)] min-h-[500px] max-h-[720px] flex-col border-b border-hairline-subtle bg-surface xl:h-full xl:min-h-0 xl:max-h-none xl:border-b-0 xl:border-r">
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-28 pt-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-semibold text-ink-secondary">生成配置</p>
-                <h2 className="mt-1 text-base font-semibold text-ink">试甲台设置</h2>
-              </div>
-              <Icon icon="mdi:hand-back-right-outline" className="text-xl text-ink-tertiary" aria-hidden />
-            </div>
+  const panels = usePanelVisibility();
 
-            <div className="mt-5">
-              <p className="mb-2 text-sm font-semibold text-ink">手部照片与指甲标注</p>
-              <div
-                className="relative overflow-hidden rounded-lg border border-hairline bg-surface-inverse"
-                style={{ aspectRatio: `${editSize.width} / ${editSize.height}` }}
-              >
+  return (
+    <section data-testid="nail-try-on-studio" className={wfShell(panels.left, panels.right)}>
+      {/* 左栏由顶栏「面板开关」控制：收起的那一列连缝一起从栅格里消失，工作区直接吃掉那份宽度。 */}
+      {panels.left && (
+        <aside className={cx(WF_PANEL, "xl:h-full")}>
+        <div className={WF_PANEL_HEAD}>
+          <h2 className="min-w-0 truncate text-sm font-semibold text-ink">试甲台设置</h2>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 [scrollbar-gutter:stable] [scrollbar-width:thin] lg:px-5">
+          <SettingsGroup title="手部照片与指甲标注">
+            <div
+              className="relative overflow-hidden rounded-[10px] border border-hairline bg-surface-inverse"
+              style={{ aspectRatio: `${editSize.width} / ${editSize.height}` }}
+            >
                 <canvas
                   ref={displayCanvasRef}
                   data-testid="nail-mask-canvas"
@@ -621,7 +620,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                 }}
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <div className="inline-flex overflow-hidden rounded-lg border border-hairline">
+                <div className="inline-flex overflow-hidden rounded-[10px] border border-hairline">
                   <button
                     type="button"
                     onClick={() => setTool("brush")}
@@ -659,7 +658,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                   type="button"
                   onClick={handleClearMask}
                   disabled={!hasMask || hasActiveTask}
-                  className="ml-auto inline-flex h-8 items-center gap-1 rounded-lg border border-hairline px-2.5 text-xs font-semibold text-ink-secondary disabled:opacity-40"
+                  className="ml-auto inline-flex h-8 items-center gap-1 rounded-[10px] border border-hairline px-2.5 text-xs font-semibold text-ink-secondary disabled:opacity-40"
                 >
                   清除标注
                 </button>
@@ -668,36 +667,40 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                     type="button"
                     onClick={() => handInputRef.current?.click()}
                     disabled={isLoadingHand || hasActiveTask}
-                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-hairline px-2.5 text-xs font-semibold text-ink-secondary disabled:opacity-40"
+                    className="inline-flex h-8 items-center gap-1 rounded-[10px] border border-hairline px-2.5 text-xs font-semibold text-ink-secondary disabled:opacity-40"
                   >
                     更换照片
                   </button>
                 )}
               </div>
-              <p className="mt-2 text-[11px] leading-4 text-ink-tertiary">
-                只涂抹指甲：涂过的区域交给 AI 重绘，其余（手指、皮肤、背景）严格锁定不变。
-              </p>
-              <p className="mt-1 flex items-center gap-1 text-[11px] text-ink-tertiary">
-                <Icon icon="mdi:shield-lock-outline" aria-hidden />
-                手部照片仅本地处理，提交时才上传，任务结束 24 小时后自动清理
-              </p>
-            </div>
-            <div className="mt-5">
-              <NailDesignSlot
-                reference={nailDesignReference}
-                isUploading={uploadingDesign}
-                isDeleting={deletingReferenceId === nailDesignReference?.id}
-                disabled={busyInputs}
-                onFile={handleDesignFile}
-                onDelete={handleDeleteDesign}
-              />
-              <p className="mt-2 text-[11px] leading-4 text-ink-tertiary">
-                上传想要的美甲款式作参考；不上传则由描述文字与 AI 自由发挥。
-              </p>
-            </div>
+            <p className={cx(SETTINGS_HINT, "leading-5")}>
+              只涂抹指甲：涂过的区域交给 AI 重绘，其余（手指、皮肤、背景）严格锁定不变。
+            </p>
+            <p className={cx(SETTINGS_HINT, "flex items-center gap-1")}>
+              <Icon icon="mdi:shield-lock-outline" aria-hidden />
+              手部照片仅本地处理，提交时才上传，任务结束 24 小时后自动清理
+            </p>
+          </SettingsGroup>
 
-            <label className="mt-5 grid gap-2 text-sm font-semibold text-ink">
-              补充描述 <span className="text-xs font-normal text-ink-tertiary">可选</span>
+          <SettingsGroup title="参考款式" className="mt-5">
+            <NailDesignSlot
+              reference={nailDesignReference}
+              isUploading={uploadingDesign}
+              isDeleting={deletingReferenceId === nailDesignReference?.id}
+              disabled={busyInputs}
+              onFile={handleDesignFile}
+              onDelete={handleDeleteDesign}
+            />
+            <p className={cx(SETTINGS_HINT, "leading-5")}>
+              上传想要的美甲款式作参考；不上传则由描述文字与 AI 自由发挥。
+            </p>
+          </SettingsGroup>
+
+          <SettingsGroup title="描述" className="mt-5">
+            <SettingsField
+              label={<>补充描述 <span className="text-xs font-normal text-ink-tertiary">可选</span></>}
+              hint={`${description.length}/1200`}
+            >
               <textarea
                 aria-label="试甲补充描述"
                 value={description}
@@ -708,11 +711,12 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                 disabled={hasActiveTask}
                 maxLength={1200}
                 placeholder="想要的颜色、款式、图案、光泽或风格"
-                className="min-h-[92px] resize-y rounded-lg border border-hairline p-3 text-sm font-normal leading-5 disabled:bg-surface-muted"
+                className={cx(SETTINGS_TEXTAREA, "min-h-[92px]")}
               />
-              <span className="text-right text-[10px] font-normal text-ink-tertiary">{description.length}/1200</span>
-            </label>
+            </SettingsField>
+          </SettingsGroup>
 
+          <SettingsGroup title="参数" className="mt-5">
             <HumanImageGenerationFields
               models={models}
               model={model}
@@ -726,14 +730,16 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
               onResolutionChange={(value) => setResolution(value as NailResolution)}
               onCountChange={setCount}
             />
-            {maskUnsupported && (
-              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-warning/10 px-3 py-2 text-[11px] leading-4 text-warning-ink">
-                <Icon icon="mdi:alert-outline" className="mt-0.5 flex-none" aria-hidden />
-                <span>所选模型不支持蒙版，无法保证「只改指甲、锁定手部」，建议改用 GPT Image 2。</span>
-              </p>
-            )}
+          </SettingsGroup>
 
-            <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
+          {maskUnsupported && (
+            <p className="mt-3 flex items-start gap-1.5 rounded-[10px] bg-warning/10 px-3 py-2 text-xs leading-5 text-warning-ink">
+              <Icon icon="mdi:alert-outline" className="mt-0.5 flex-none" aria-hidden />
+              <span>所选模型不支持蒙版，无法保证「只改指甲、锁定手部」，建议改用 GPT Image 2。</span>
+            </p>
+          )}
+
+          <label className="mt-5 flex cursor-pointer items-start gap-2.5 rounded-[10px] border border-hairline-subtle bg-surface-subtle p-3 text-xs leading-5 text-ink-secondary">
               <input
                 aria-label="试甲手部照片授权确认"
                 type="checkbox"
@@ -748,156 +754,154 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
               <span>我确认手部照片由本人拍摄或已获得本人明确授权，并同意用于本次 AI 试甲生成。</span>
             </label>
 
-            {error && (
-              <p ref={errorRef} role="alert" className="mt-3 rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink">
-                {error}
-              </p>
-            )}
-            {isBootstrapping && !error && <p className="mt-3 text-xs text-ink-tertiary">正在加载试甲配置…</p>}
-          </div>
-          <SubmitBar
-            submitLabel="生成试甲效果"
-            submitIcon="mdi:hand-back-right-outline"
-            submitDisabled={!canSubmit}
-            busy={isSubmitting}
-            busyLabel="提交中"
-            onSubmit={handleSubmit}
-          />
-        </aside>
-        <main className="flex min-h-[520px] min-w-0 flex-col overflow-hidden bg-surface-subtle xl:h-full">
-          <header className="flex h-14 flex-none items-center justify-between border-b border-hairline-subtle bg-surface px-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[7px] bg-surface-inverse text-ink-inverse">
-                <Icon icon="mdi:hand-back-right-outline" className="text-lg" aria-hidden />
+          {error && (
+            <p ref={errorRef} role="alert" className="mt-3 rounded-[10px] bg-danger/10 px-3 py-2 text-sm text-danger-ink">
+              {error}
+            </p>
+          )}
+          {isBootstrapping && !error && <p className={cx(SETTINGS_HINT, "mt-3")}>正在加载试甲配置…</p>}
+        </div>
+        <SubmitBar
+          submitLabel="生成试甲效果"
+          submitIcon="mdi:hand-back-right-outline"
+          submitDisabled={!canSubmit}
+          busy={isSubmitting}
+          busyLabel="提交中"
+          onSubmit={handleSubmit}
+        />
+      </aside>
+      )}
+
+      <main className={WF_WORKSPACE}>
+        <div className={WF_PANEL_HEAD}>
+          <p className="truncate text-sm font-semibold text-ink">试甲台</p>
+          {selectedTask && (
+            <span
+              className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-success/10 text-success-ink" : selectedTask.status === "failed" ? "bg-danger/10 text-danger-ink" : "bg-surface-muted text-ink-secondary"}`}
+            >
+              {STATUS_LABEL[selectedTask.status]}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsTaskDrawerOpen(true)}
+            aria-expanded={isTaskDrawerOpen}
+            className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
+          >
+            <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
+            任务 {tasks.filter(isActive).length}
+          </button>
+        </div>
+
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5 lg:p-8">
+          {selectedOutput ? (
+            <>
+              <img
+                data-testid="nail-try-on-preview"
+                src={selectedOutput.originalUrl}
+                alt="AI 试甲预览"
+                className="max-h-full max-w-full rounded-[10px] object-contain shadow-[0_22px_70px_rgba(0,0,0,0.18)]"
+              />
+              <DownloadOverlayButton
+                positionClassName="right-4 top-4"
+                onClick={() => handleDownload(selectedOutput)}
+              />
+            </>
+          ) : selectedTask && isActive(selectedTask) ? (
+            <div className="grid max-w-sm place-items-center text-center">
+              <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-sm">
+                <Icon icon="mdi:hand-back-right-outline" className="text-4xl text-brand-ink" aria-hidden />
+                <span className="absolute inset-0 animate-ping rounded-full border border-brand/30" />
               </span>
-              <div className="min-w-0">
-                <h2 className="truncate text-sm font-semibold text-ink">试甲台</h2>
-                <p className="text-[11px] text-ink-tertiary">只重绘指甲 · 锁定手部</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {selectedTask && (
-                <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${selectedTask.status === "completed" ? "bg-success/10 text-success-ink" : selectedTask.status === "failed" ? "bg-danger/10 text-danger-ink" : "bg-surface-muted text-ink-secondary"}`}
-                >
-                  {STATUS_LABEL[selectedTask.status]}
-                </span>
-              )}
+              <p className="mt-5 text-base font-semibold text-ink">正在生成试甲效果</p>
+              <p className="mt-2 text-sm text-ink-secondary">
+                已完成 {selectedTask.completedCount}/{selectedTask.count}
+              </p>
               <button
                 type="button"
-                onClick={() => setIsTaskDrawerOpen(true)}
-                aria-expanded={isTaskDrawerOpen}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-hairline bg-surface px-3 text-xs font-semibold text-ink"
+                onClick={() => handleCancel(selectedTask)}
+                disabled={busyTaskId === selectedTask.id}
+                className="mt-5 h-9 rounded-[10px] border border-hairline bg-surface px-4 text-sm font-semibold text-ink-secondary"
               >
-                <Icon icon="mdi:format-list-bulleted-square" className="text-base" aria-hidden />
-                任务 {tasks.filter(isActive).length}
+                取消任务
               </button>
             </div>
-          </header>
-          <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5 lg:p-8">
-            {selectedOutput ? (
-              <>
-                <img
-                  data-testid="nail-try-on-preview"
-                  src={selectedOutput.originalUrl}
-                  alt="AI 试甲预览"
-                  className="max-h-full max-w-full rounded-[8px] object-contain shadow-[0_22px_70px_rgba(0,0,0,0.18)]"
-                />
-                <DownloadOverlayButton
-                  positionClassName="right-4 top-4"
-                  onClick={() => handleDownload(selectedOutput)}
-                />
-              </>
-            ) : selectedTask && isActive(selectedTask) ? (
-              <div className="grid max-w-sm place-items-center text-center">
-                <span className="relative flex h-20 w-20 items-center justify-center rounded-full bg-surface shadow-sm">
-                  <Icon icon="mdi:hand-back-right-outline" className="text-4xl text-brand-ink" aria-hidden />
-                  <span className="absolute inset-0 animate-ping rounded-full border border-brand/30" />
-                </span>
-                <p className="mt-5 text-base font-semibold text-ink">正在生成试甲效果</p>
-                <p className="mt-2 text-sm text-ink-secondary">
-                  已完成 {selectedTask.completedCount}/{selectedTask.count}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => handleCancel(selectedTask)}
-                  disabled={busyTaskId === selectedTask.id}
-                  className="mt-5 h-9 rounded-[8px] border border-hairline bg-surface px-4 text-sm font-semibold text-ink-secondary"
-                >
-                  取消任务
-                </button>
-              </div>
-            ) : (
-              <div className="grid max-w-sm place-items-center text-center">
-                <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-surface/70">
-                  <Icon icon="mdi:hand-back-right-outline" className="text-4xl text-ink-tertiary" aria-hidden />
-                </span>
-                <p className="mt-5 text-base font-semibold text-ink-secondary">试甲效果预览</p>
-                <p className="mt-2 text-sm text-ink-tertiary">上传手部照片、标注指甲并提交后，结果将在这里显示</p>
-              </div>
-            )}
-            {selectedTask?.error && !isActive(selectedTask) && (
-              <div className="absolute bottom-4 left-4 right-4 rounded-[8px] border border-danger/30 bg-surface/95 px-3 py-2 text-center text-xs text-danger-ink shadow-sm">
-                {selectedTask.error}
-              </div>
-            )}
-          </div>
-          {selectedTask && selectedTask.outputs.length > 0 && (
-            <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-surface px-4 py-3">
-              <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
-                {selectedTask.outputs.map((output, index) => (
-                  <button
-                    key={output.id}
-                    type="button"
-                    onClick={() => setSelectedOutputIndex(index)}
-                    className={`h-12 w-10 flex-none overflow-hidden rounded-[6px] border-2 ${selectedOutput?.id === output.id ? "border-brand" : "border-transparent"}`}
-                  >
-                    <img
-                      src={output.originalUrl}
-                      alt={`试甲结果 ${index + 1}`}
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-            </footer>
+          ) : (
+            <div className="grid max-w-sm place-items-center text-center">
+              <span className="flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-hairline bg-surface/70">
+                <Icon icon="mdi:hand-back-right-outline" className="text-4xl text-ink-tertiary" aria-hidden />
+              </span>
+              <p className="mt-5 text-base font-semibold text-ink-secondary">试甲效果预览</p>
+              <p className="mt-2 text-sm text-ink-tertiary">上传手部照片、标注指甲并提交后，结果将在这里显示</p>
+            </div>
           )}
-          <WorkflowHistoryStrip
-            ariaLabel="试甲生成历史"
-            summary={`${tasks.length} 个任务`}
-            emptyText="暂无生成记录"
-            groups={tasks.map((task) => ({
-              id: task.id,
-              title: task.description || "试甲效果",
-              meta: `${STATUS_LABEL[task.status]} · ${formattedDate(task.createdAt)}`,
-              items: task.outputs.length
-                ? task.outputs.map((output, index) => ({
-                    id: output.id,
-                    imageUrl: output.originalUrl,
-                    alt: `试甲结果 ${index + 1}`,
-                    selected: selectedTask?.id === task.id && selectedOutputIndex === index,
-                    onSelect: () => {
-                      setSelectedTaskId(task.id);
-                      setSelectedOutputIndex(index);
-                    },
-                  }))
-                : [
-                    {
-                      id: `${task.id}-placeholder`,
-                      alt: `${STATUS_LABEL[task.status]}的试甲任务`,
-                      selected: selectedTask?.id === task.id,
-                      isLoading: isActive(task),
-                      placeholderIcon: isActive(task) ? "mdi:loading" : "mdi:hand-back-right-outline",
-                      onSelect: () => {
-                        setSelectedTaskId(task.id);
-                        setSelectedOutputIndex(0);
-                      },
-                    },
-                  ],
-            }))}
-          />
-        </main>
-      </div>
+          {selectedTask?.error && !isActive(selectedTask) && (
+            <div className="absolute bottom-4 left-4 right-4 rounded-[10px] border border-danger/30 bg-surface/95 px-3 py-2 text-center text-xs text-danger-ink shadow-sm">
+              {selectedTask.error}
+            </div>
+          )}
+        </div>
+        {selectedTask && selectedTask.outputs.length > 0 && (
+          <footer className="flex flex-none items-center gap-3 border-t border-hairline-subtle bg-surface px-4 py-3">
+            <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
+              {selectedTask.outputs.map((output, index) => (
+                <button
+                  key={output.id}
+                  type="button"
+                  onClick={() => setSelectedOutputIndex(index)}
+                  className={`h-12 w-10 flex-none overflow-hidden rounded-[8px] border-2 ${selectedOutput?.id === output.id ? "border-brand" : "border-transparent"}`}
+                >
+                  <img
+                    src={output.originalUrl}
+                    alt={`试甲结果 ${index + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          </footer>
+        )}
+      </main>
+
+      {/* 历史从「工作区底部的横条」搬到右栏（统一规范 v2：左=设置、中=工作区、右=历史）。 */}
+      {panels.right && (
+        <WorkflowHistoryStrip
+          variant="rail"
+          ariaLabel="试甲生成历史"
+        summary={`${tasks.length} 个任务`}
+        emptyText="暂无生成记录"
+        groups={tasks.map((task) => ({
+          id: task.id,
+          title: task.description || "试甲效果",
+          meta: `${STATUS_LABEL[task.status]} · ${formattedDate(task.createdAt)}`,
+          items: task.outputs.length
+            ? task.outputs.map((output, index) => ({
+                id: output.id,
+                imageUrl: output.originalUrl,
+                alt: `试甲结果 ${index + 1}`,
+                selected: selectedTask?.id === task.id && selectedOutputIndex === index,
+                onSelect: () => {
+                  setSelectedTaskId(task.id);
+                  setSelectedOutputIndex(index);
+                },
+              }))
+            : [
+                {
+                  id: `${task.id}-placeholder`,
+                  alt: `${STATUS_LABEL[task.status]}的试甲任务`,
+                  selected: selectedTask?.id === task.id,
+                  isLoading: isActive(task),
+                  placeholderIcon: isActive(task) ? "mdi:loading" : "mdi:hand-back-right-outline",
+                  onSelect: () => {
+                    setSelectedTaskId(task.id);
+                    setSelectedOutputIndex(0);
+                  },
+                },
+              ],
+        }))}
+      />
+      )}
+
       {isTaskDrawerOpen && (
         <div className="fixed inset-0 z-50 bg-scrim/20" onClick={() => setIsTaskDrawerOpen(false)}>
           <aside
@@ -916,7 +920,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                 type="button"
                 onClick={() => setIsTaskDrawerOpen(false)}
                 aria-label="关闭试甲任务队列"
-                className="grid h-9 w-9 place-items-center rounded-lg hover:bg-surface-muted"
+                className="grid h-9 w-9 place-items-center rounded-[10px] hover:bg-surface-muted"
               >
                 <Icon icon="mdi:close" className="text-xl" aria-hidden />
               </button>
@@ -928,7 +932,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                 tasks.map((task) => (
                   <article
                     key={task.id}
-                    className={`mb-2 rounded-lg border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle"}`}
+                    className={`mb-2 rounded-[10px] border ${selectedTask?.id === task.id ? "border-brand bg-brand-soft" : "border-hairline-subtle"}`}
                   >
                     <button
                       type="button"
@@ -944,7 +948,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                         </span>
                         <span className="flex-none text-xs text-ink-secondary">{STATUS_LABEL[task.status]}</span>
                       </span>
-                      <span className="mt-1 block text-[11px] text-ink-tertiary">
+                      <span className="mt-1 block text-xs text-ink-tertiary">
                         {task.completedCount}/{task.count} 张 · {formattedDate(task.createdAt)}
                       </span>
                       {task.error && <span className="mt-2 block text-xs text-danger-ink">{task.error}</span>}
@@ -955,7 +959,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                           type="button"
                           onClick={() => handleCancel(task)}
                           disabled={busyTaskId === task.id}
-                          className="h-7 rounded-lg border border-danger/30 px-2 text-xs font-semibold text-danger-ink disabled:opacity-50"
+                          className="h-7 rounded-[10px] border border-danger/30 px-2 text-xs font-semibold text-danger-ink disabled:opacity-50"
                         >
                           取消任务
                         </button>
@@ -964,7 +968,7 @@ export function NailTryOnWorkflowStudio({ token, onBalanceRefresh }: NailTryOnWo
                           type="button"
                           onClick={() => handleDeleteTask(task)}
                           disabled={busyTaskId === task.id}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-hairline px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"
+                          className="inline-flex h-7 items-center gap-1 rounded-[10px] border border-hairline px-2 text-xs font-semibold text-ink-secondary disabled:opacity-50"
                         >
                           <Icon
                             icon={busyTaskId === task.id ? "mdi:loading" : "mdi:delete-outline"}

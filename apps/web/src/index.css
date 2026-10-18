@@ -399,6 +399,41 @@ html[data-theme="dark"] .text-brand {
   }
 }
 
+/*
+ * 工作流模块内切换（生图场景 tab、电商图主图/详情图档）：三个区依次进场，
+ * 每项 40ms 间隔，参数对齐 `prototype/说明.md` 二节「工作流模块内切换」那一行。
+ *
+ * 为什么用 CSS 而不是 motion 的 stagger：这些场景 tab 的 DOM 是**常驻挂载**的
+ * （切走再切回草稿还在，`Workflow.tsx` 的 visitedTabs 就是干这个的），
+ * 所以不能给它们加 key 让 React 卸了重装。CSS 动画跟着 active 类走：
+ * 类挂上就播、类摘掉就停，而 `display:none` 的隐藏页不跑动画，正好是「只对可见的那一屏播」。
+ *
+ * 只取前三项 —— 三区就是三个；第四项往后是浮层（任务抽屉、下载弹窗），
+ * 它们不该跟着一起淡入，否则每次切 tab 抽屉都在背后闪一下。
+ */
+.wf-studio-in > *:nth-child(-n + 3) {
+  animation: studioItemIn 340ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.wf-studio-in > *:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.wf-studio-in > *:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+@keyframes studioItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* 移动端记忆抽屉：从屏幕下沿整张推上来。起始透明度不从 0 起，否则推上来的过程像在闪。 */
 .memory-sheet-enter {
   animation: memorySheetIn 280ms cubic-bezier(0.22, 1, 0.36, 1);

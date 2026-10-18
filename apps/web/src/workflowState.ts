@@ -13,6 +13,8 @@ export type WorkflowModuleStatus = "available" | "developing";
 export interface WorkflowModule {
   readonly id: WorkflowModuleId;
   readonly title: string;
+  /** 顶栏模块胶囊上的短名。侧栏能放下全称（「多平台图文工作流」），56px 的顶栏放不下 */
+  readonly shortTitle: string;
   readonly description: string;
   readonly icon: string;
   readonly status: WorkflowModuleStatus;
@@ -23,6 +25,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "image",
     title: "生图模块",
+    shortTitle: "生图",
     description: "通用生图、电商图、商品提取、形象照、万物试穿、试甲台",
     icon: "mdi:image-multiple-outline",
     status: "available",
@@ -30,6 +33,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "novel",
     title: "小说模块",
+    shortTitle: "小说",
     description: "长篇结构、章节生成、人物设定",
     icon: "mdi:book-open-page-variant-outline",
     status: "available",
@@ -37,6 +41,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "codex-pet",
     title: "Codex 桌宠工坊",
+    shortTitle: "桌宠",
     description: "参考图或文字生成，可直接安装到 Codex",
     icon: "mdi:egg-easter",
     status: "available",
@@ -44,6 +49,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "article-workflow",
     title: "多平台图文工作流",
+    shortTitle: "图文",
     description: "一篇原文或一个主题生成公众号 / 小红书 / 抖音三版内容，配图排版后可编辑复制",
     icon: "mdi:newspaper-variant-outline",
     status: "available",
@@ -51,6 +57,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "transcription",
     title: "录音转文字",
+    shortTitle: "转写",
     description: "上传录音转写成文字，支持普通话 / 粤语 / 英语，可编辑校对并导出 txt / md / 字幕",
     icon: "mdi:microphone-outline",
     status: "available",
@@ -58,6 +65,7 @@ export const WORKFLOW_MODULES: readonly WorkflowModule[] = [
   {
     id: "ppt",
     title: "PPT 助手",
+    shortTitle: "PPT",
     description: "大纲生成、页面规划、演示文稿",
     icon: "mdi:file-presentation-box-outline",
     status: "developing",

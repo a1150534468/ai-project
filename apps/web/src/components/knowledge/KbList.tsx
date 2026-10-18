@@ -13,7 +13,11 @@ import { Badge, cx } from "../ui";
 const ACTION = "inline-flex h-8 items-center gap-1 rounded-[10px] px-2.5 text-xs font-medium transition-colors";
 
 export interface KbListProps {
-  readonly title: string;
+  /**
+   * 小节标题。标题已经由外面的分段控件报了的时候就不给 —— 同一个词上下说两遍就是眉标。
+   * 刷新键的可访问名跟着它走，没给时落到通用名。
+   */
+  readonly title?: string;
   readonly items: readonly KnowledgeBase[];
   readonly selectedId: string | null;
   /** 一条都没有时显示什么。首屏还在加载和真的空库不是一回事，文案由调用方决定 */
@@ -45,15 +49,16 @@ export default function KbList({
 }: KbListProps) {
   return (
     <section className="glass-card space-y-4 rounded-xl p-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold uppercase tracking-wider text-ink">{title}</h3>
+      <div className="flex items-center justify-between gap-3">
+        {/* 原来这里是 `uppercase tracking-wider` 的英文眉标写法，中文上大写没有意义，只是把标题喊响一点 */}
+        {title != null && <h3 className="text-sm font-semibold text-ink">{title}</h3>}
         {onRefresh && (
           <button
             type="button"
-            aria-label={`刷新${title}`}
+            aria-label={title ? `刷新${title}` : "刷新列表"}
             disabled={busy}
             onClick={onRefresh}
-            className="p-1 text-ink-secondary disabled:text-ink-tertiary"
+            className="ml-auto p-1 text-ink-secondary disabled:text-ink-tertiary"
           >
             <Icon icon="mdi:refresh" className={cx("text-lg", busy && "animate-spin")} aria-hidden />
           </button>

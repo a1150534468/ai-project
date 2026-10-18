@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import type { NovelProjectSummary } from "../../api";
+import { cx } from "../ui";
+import { WF_PANEL, WF_SHELL_FORM } from "../workflow/workflowLayout";
 import { NovelCreatePage, type NovelCreateDraft } from "../workflow/NovelCreatePage";
 
 function formatUpdate(value: string): string {
@@ -47,64 +49,137 @@ export function NovelLibraryPage({
   };
 
   return (
-    <section className="grid min-h-full w-full gap-8 px-4 pb-32 pt-6 lg:px-7">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-brand-ink"><Icon icon="mdi:bookshelf" /> Novel Studio</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-ink">长篇叙事工作台</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-ink-secondary">从故事种子、世界与人物，到章节生产、叙事治理和全托管运行，都在同一个作品空间完成。</p>
+    <section className={WF_SHELL_FORM}>
+      <div className="min-w-0 flex-1 xl:min-h-0 xl:overflow-y-auto xl:pb-8">
+        {/* B 形态：设置主导居中，单列 768px（Tailwind 原生刻度）。
+            原来这里还有一行 `h1`「长篇叙事工作台」压在卡片上方 —— 模块名归顶栏的模块胶囊，
+            屏幕自己的名字由卡片头「创建新作品」承担（原型里也是这么排的）。
+            一行 80 字上下，比占满 880px 的 100+ 字好读。 */}
+        <div className="mx-auto w-full max-w-3xl">
+          <NovelCreatePage draft={draft} isSubmitting={isCreating} onChange={onDraftChange} onSubmit={onCreate} />
+          {error && <p className="mt-4 rounded-[10px] border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">{error}</p>}
         </div>
-        <div className="grid grid-cols-3 gap-2 rounded-2xl border border-hairline-subtle bg-surface p-2 text-center shadow-sm">
-          <div className="px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.length}</p><p className="text-[10px] text-ink-tertiary">作品</p></div>
-          <div className="border-x border-hairline-subtle px-3 py-1"><p className="text-lg font-semibold text-ink">{projects.filter((project) => project.status === "active").length}</p><p className="text-[10px] text-ink-tertiary">创作中</p></div>
-          <div className="px-3 py-1"><p className="text-lg font-semibold text-brand-ink">AI</p><p className="text-[10px] text-ink-tertiary">协同</p></div>
-        </div>
-      </header>
+      </div>
 
-      <NovelCreatePage draft={draft} isSubmitting={isCreating} onChange={onDraftChange} onSubmit={onCreate} />
-      {error && <p className="rounded-xl border border-danger/20 bg-danger/10 px-4 py-3 text-sm text-danger-ink">{error}</p>}
-
-      <section className="grid gap-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3"><h2 className="text-xl font-semibold text-ink">我的书目</h2><span className="rounded-full bg-surface-muted px-2.5 py-1 text-xs font-semibold text-ink-secondary">{visible.length} 本</span></div>
-          <div className="flex flex-wrap gap-2">
-            <label className="flex h-10 min-w-56 items-center gap-2 rounded-xl border border-hairline bg-surface px-3 text-sm text-ink-secondary shadow-sm transition focus-within:border-brand/60 focus-within:ring-2 focus-within:ring-brand/10"><Icon icon="mdi:magnify" /><input value={query} onChange={(event) => setQuery(event.currentTarget.value)} placeholder="搜索书名或类型" className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 outline-none shadow-none focus:border-0 focus:shadow-none" />{query && <button type="button" onClick={() => setQuery("")} aria-label="清除搜索"><Icon icon="mdi:close-circle" /></button>}</label>
-            {selected.length > 0 && <button type="button" onClick={removeSelected} className="h-10 rounded-xl border border-danger/30 bg-surface px-3 text-xs font-semibold text-danger-ink">删除选中 ({selected.length})</button>}
+      {/* 右=历史。原来书目长在表单**下面**（横向卡片轮播），现在是右栏的条目列表 ——
+          统一规范 v2：左=设置、中=工作区、右=历史；小说创建没有左栏，设置居中。 */}
+      <aside
+        className={cx(WF_PANEL, "xl:h-full")}
+        aria-label="书目历史"
+      >
+        <div className="flex min-h-14 flex-none items-center justify-between gap-2 border-b border-hairline-subtle px-3 py-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-ink">历史</h2>
+            <p className="mt-0.5 text-xs text-ink-tertiary">{projects.length} 本书目</p>
           </div>
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={removeSelected}
+              className="h-8 flex-none rounded-[10px] border border-danger/30 bg-surface px-2.5 text-xs font-semibold text-danger-ink"
+            >
+              删除选中 ({selected.length})
+            </button>
+          )}
         </div>
 
-        {loading && <div className="grid min-h-52 place-items-center rounded-2xl border border-dashed border-hairline bg-surface"><p className="flex items-center gap-2 text-sm font-semibold text-ink-secondary"><Icon icon="mdi:loading" className="animate-spin text-xl text-brand-ink" />加载书目中</p></div>}
+        <div className="flex-none px-3 py-2">
+          <label className="flex h-10 items-center gap-2 rounded-[10px] border border-hairline bg-surface-subtle px-3 text-sm text-ink-secondary focus-within:border-brand focus-within:ring-2 focus-within:ring-brand/10">
+            <Icon icon="mdi:magnify" aria-hidden />
+            <span className="sr-only">搜索书目</span>
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.currentTarget.value)}
+              placeholder="搜索书名或类型"
+              className="min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-ink outline-none shadow-none focus:border-0 focus:shadow-none"
+            />
+            {query && (
+              <button type="button" onClick={() => setQuery("")} aria-label="清除搜索">
+                <Icon icon="mdi:close-circle" />
+              </button>
+            )}
+          </label>
+        </div>
 
-        {!loading && projects.length === 0 && <div className="grid min-h-60 place-items-center rounded-2xl border border-dashed border-hairline bg-surface px-6 text-center"><div><div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-brand-soft text-3xl text-brand-ink"><Icon icon="mdi:book-plus-outline" /></div><h3 className="mt-4 text-base font-semibold text-ink">还没有书目</h3><p className="mt-2 text-sm text-ink-tertiary">在上方写下故事创意，创建第一本书。</p></div></div>}
+        <div className="min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-width:thin]">
+          {loading && (
+            <p className="px-2 py-5 text-center text-xs text-ink-secondary">
+              <Icon icon="mdi:loading" className="mx-auto mb-1 block animate-spin text-lg text-brand-ink" aria-hidden />
+              加载书目中
+            </p>
+          )}
 
-        {!loading && projects.length > 0 && visible.length === 0 && <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-hairline bg-surface text-center"><div><Icon icon="mdi:book-search-outline" className="mx-auto text-4xl text-ink-tertiary" /><p className="mt-2 text-sm text-ink-tertiary">没有找到匹配“{query}”的书目</p><button type="button" onClick={() => setQuery("")} className="mt-3 text-xs font-semibold text-brand-ink">清除搜索</button></div></div>}
+          {!loading && projects.length === 0 && (
+            <p className="grid min-h-40 place-items-center rounded-[10px] border border-dashed border-hairline bg-surface-subtle px-4 text-center text-xs leading-5 text-ink-tertiary">
+              还没有书目，在左边写下故事创意，创建第一本书
+            </p>
+          )}
 
-        {!loading && visible.length > 0 && (
-          <div className="flex snap-x gap-4 overflow-x-auto pb-3 [scrollbar-width:thin]">
-            {visible.map((project, index) => {
-              const checked = selected.includes(project.id);
-              return (
-                <article key={project.id} className={`group relative grid min-h-[218px] w-[310px] flex-none snap-start overflow-hidden rounded-2xl border bg-surface shadow-sm transition ${checked ? "border-brand ring-2 ring-brand/10" : "border-hairline-subtle "}`}>
-                  <div className={`h-2 ${index % 3 === 0 ? "bg-brand" : index % 3 === 1 ? "bg-[#557b95]" : "bg-[#8a7297]"}`} />
-                  <div className="grid content-between p-5">
-                    <div>
-                      <div className="flex items-start justify-between gap-3">
-                        <button type="button" onClick={() => toggleSelected(project.id)} className={`grid h-5 w-5 shrink-0 place-items-center rounded border text-xs ${checked ? "border-brand bg-brand text-white" : "border-hairline text-transparent"}`} aria-label={`选择${project.title}`}><Icon icon="mdi:check" /></button>
-                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${project.status === "active" ? "bg-brand-soft text-brand-ink" : "bg-surface-muted text-ink-secondary"}`}>{project.status === "active" ? "创作中" : project.status}</span>
-                      </div>
-                      <button type="button" onClick={() => onOpenProject(project.id)} className="mt-4 block w-full text-left"><h3 className="truncate text-lg font-semibold text-ink">{project.title}</h3><p className="mt-2 truncate text-sm text-ink-secondary">{project.genre || "未设置题材"}</p></button>
-                    </div>
-                    <div className="mt-8 flex items-end justify-between gap-3 border-t border-hairline-subtle pt-4">
-                      <p className="text-[11px] leading-5 text-ink-tertiary">最近更新<br />{formatUpdate(project.updatedAt)}</p>
-                      <div className="flex items-center gap-1"><button type="button" onClick={() => onDeleteProject(project)} className="grid h-8 w-8 place-items-center rounded-lg text-ink-tertiary opacity-100 transition " aria-label={`删除${project.title}`}><Icon icon="mdi:trash-can-outline" /></button><button type="button" onClick={() => onOpenProject(project.id)} className="flex h-9 items-center gap-1 rounded-xl bg-surface-subtle px-3 text-xs font-semibold text-brand-ink">进入工作台<Icon icon="mdi:arrow-right" /></button></div>
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+          {!loading && projects.length > 0 && visible.length === 0 && (
+            <p className="px-2 py-5 text-center text-xs leading-5 text-ink-tertiary">
+              没有找到匹配「{query}」的书目
+              <button type="button" onClick={() => setQuery("")} className="ml-2 font-semibold text-brand-ink">清除搜索</button>
+            </p>
+          )}
+
+          {!loading && visible.map((project) => {
+            const checked = selected.includes(project.id);
+            return (
+              <div
+                key={project.id}
+                className={cx(
+                  "group flex items-center gap-2 rounded-[10px] border p-1.5 transition",
+                  checked ? "border-brand/40 bg-brand-soft" : "border-transparent hover:bg-surface-subtle",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleSelected(project.id)}
+                  aria-label={`选择${project.title}`}
+                  aria-pressed={checked}
+                  className={cx(
+                    "grid size-5 flex-none place-items-center rounded-full border text-xs",
+                    checked ? "border-brand bg-brand text-white" : "border-hairline text-transparent",
+                  )}
+                >
+                  <Icon icon="mdi:check" aria-hidden />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onOpenProject(project.id)}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  <span aria-hidden className="grid size-9 flex-none place-items-center rounded-[10px] bg-brand-soft text-sm font-semibold text-brand-ink">
+                    {project.title.slice(0, 1)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium text-ink">{project.title}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                      <span className="min-w-0 truncate text-xs text-ink-tertiary">{project.genre || "未设置题材"} · {formatUpdate(project.updatedAt)}</span>
+                      <span className={cx(
+                        "flex-none rounded-full px-2 py-0.5 text-xs font-semibold",
+                        project.status === "active" ? "bg-brand-soft text-brand-ink" : "bg-surface-muted text-ink-secondary",
+                      )}>
+                        {project.status === "active" ? "创作中" : project.status}
+                      </span>
+                    </span>
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onDeleteProject(project)}
+                  aria-label={`删除${project.title}`}
+                  className="grid size-8 flex-none place-items-center rounded-[10px] text-ink-tertiary transition hover:bg-danger/10 hover:text-danger-ink"
+                >
+                  <Icon icon="mdi:trash-can-outline" aria-hidden />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
     </section>
   );
 }

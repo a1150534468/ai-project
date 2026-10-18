@@ -130,7 +130,7 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
             <p className="text-xs font-semibold text-danger-ink">
               {failed ? `${props.platformConfig.label}生成失败` : "配图生成失败"}
             </p>
-            <p className="mt-0.5 break-words text-[11px] leading-5 text-danger-ink">{props.project.error || "未知原因"}</p>
+            <p className="mt-0.5 break-words text-xs leading-5 text-danger-ink">{props.project.error || "未知原因"}</p>
           </div>
           {failed && (
             <button
@@ -166,9 +166,9 @@ export function ArticleWorkflowResultTools(props: ArticleWorkflowResultToolsProp
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-xs font-semibold text-ink">AI 重新生成</h3>
-                  <p className="mt-1 text-[11px] leading-5 text-ink-secondary">仅调整当前平台版本</p>
+                  <p className="mt-1 text-xs leading-5 text-ink-secondary">仅调整当前平台版本</p>
                 </div>
-                <label className="flex shrink-0 items-center gap-1.5 text-[11px] text-ink-secondary">
+                <label className="flex shrink-0 items-center gap-1.5 text-xs text-ink-secondary">
                   <input
                     type="checkbox"
                     checked={props.rewriteRegenerateImages}

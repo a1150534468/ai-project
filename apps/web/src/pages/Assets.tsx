@@ -17,12 +17,14 @@ import { appendAssetPage, ASSET_MODULE_LABELS, EMPTY_ASSET_LIST, type AssetListS
 
 interface AssetsPageProps {
   readonly token: string;
+  /** 空态「去创作」的去处。素材库自己不该知道别的页怎么去，由外壳给。 */
+  readonly onCreate?: () => void;
 }
 
 /** 一页 30 条是服务端缺省值；显式传，避免哪天服务端调缺省把前端网格的节奏也改了。 */
 const PAGE_SIZE = 30;
 
-export default function Assets({ token }: AssetsPageProps) {
+export default function Assets({ token, onCreate }: AssetsPageProps) {
   const toast = useToast();
   const [origin, setOrigin] = useState<AssetOrigin>("ai");
   const [moduleFilter, setModuleFilter] = useState<AssetSourceModule | null>(null);
@@ -118,6 +120,7 @@ export default function Assets({ token }: AssetsPageProps) {
         onLoadMore={() => void handleLoadMore()}
         onOpen={handleOpen}
         onRetry={() => void loadFirstPage()}
+        onCreate={onCreate}
       />
       {dialog && <DownloadLinkDialog dialog={dialog} onClose={() => setDialog(null)} />}
     </>

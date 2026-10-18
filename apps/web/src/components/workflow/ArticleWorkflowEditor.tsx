@@ -270,7 +270,7 @@ export function ArticleWorkflowEditor(props: ArticleWorkflowEditorProps) {
           <div className="hidden min-w-0 sm:block">
             <div className="flex flex-wrap items-center gap-2">
               {badges.map((badge) => (
-                <span key={badge.text} className={`rounded-md px-2 py-1 text-[11px] font-semibold ${badge.tone}`}>
+                <span key={badge.text} className={`rounded-md px-2 py-1 text-xs font-semibold ${badge.tone}`}>
                   {badge.text}
                 </span>
               ))}

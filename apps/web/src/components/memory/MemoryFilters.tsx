@@ -110,7 +110,7 @@ export default function MemoryFilters(props: MemoryFiltersProps) {
   const { counts, enabled, pending } = props;
 
   return (
-    <section className="rounded-[14px] border border-hairline-subtle bg-surface p-4">
+    <section className="rounded-2xl border border-hairline-subtle bg-surface p-4">
       <div className="flex flex-col gap-4">
         {/* 窄屏一列叠着，xl 才把「搜索」和「计数 + 开关」摆成一行 */}
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">

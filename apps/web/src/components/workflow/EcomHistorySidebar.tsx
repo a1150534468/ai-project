@@ -9,6 +9,8 @@ interface EcomHistorySidebarProps {
   readonly refreshKey: number;
   readonly onSelectMain: (job: EcomMainJob) => void;
   readonly onSelectDetail: (workflow: WorkflowEcomWorkflow) => void;
+  /** 与 `WorkflowHistoryStrip` 同义：`strip`＝贴在工作区底部，`rail`＝独立成右栏。 */
+  readonly variant?: "strip" | "rail";
 }
 
 export function EcomHistorySidebar({
@@ -16,6 +18,7 @@ export function EcomHistorySidebar({
   refreshKey,
   onSelectMain,
   onSelectDetail,
+  variant = "strip",
 }: EcomHistorySidebarProps) {
   const [mainHistory, setMainHistory] = useState<readonly EcomMainJob[]>([]);
   const [detailHistory, setDetailHistory] = useState<readonly WorkflowEcomWorkflow[]>([]);
@@ -87,6 +90,7 @@ export function EcomHistorySidebar({
 
   return (
     <WorkflowHistoryStrip
+      variant={variant}
       ariaLabel="电商图生成历史"
       summary={`${mainHistory.length + detailHistory.length} 个任务`}
       emptyText="暂无生成记录"

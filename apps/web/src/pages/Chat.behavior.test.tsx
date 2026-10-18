@@ -425,14 +425,14 @@ describe("Chat 侧栏折叠回调", () => {
     expect(buttons(scope).some((button) => button.getAttribute("aria-label")?.includes("对话列表"))).toBe(false);
   });
 
-  it("给了回调则按折叠状态切换 aria-label 并透传点击", async () => {
+  it("给了回调则按开关状态切换 aria-label 并透传点击", async () => {
     const onToggleAgentPanel = vi.fn();
     const scope = await mountChat({ onToggleAgentPanel });
 
-    await click(buttonByLabel(scope, "收起对话列表"));
+    await click(buttonByLabel(scope, "打开对话列表"));
     expect(onToggleAgentPanel).toHaveBeenCalledTimes(1);
 
-    await rerender({ onToggleAgentPanel, agentPanelCollapsed: true });
-    expect(buttonByLabel(scope, "展开对话列表")).toBeTruthy();
+    await rerender({ onToggleAgentPanel, agentPanelOpen: true });
+    expect(buttonByLabel(scope, "关闭对话列表")).toBeTruthy();
   });
 });

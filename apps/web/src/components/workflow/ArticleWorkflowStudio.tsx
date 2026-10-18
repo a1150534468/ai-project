@@ -11,6 +11,9 @@ import { ArticleWorkflowPlatformTabs } from "./ArticleWorkflowPlatformTabs";
 import { ArticleWorkflowResultTools } from "./ArticleWorkflowResultSidebar";
 import type { ArticleWorkflowStudioProps } from "./articleWorkflowStudioModel";
 import { isBusyArticleWorkflowStatus, needsArticleWorkflowImages } from "./articleWorkflowStudioModel";
+import { usePanelVisibility } from "./panelVisibility";
+import { WF_PANEL, wfShell, WF_WORKSPACE } from "./workflowLayout";
+import { cx } from "../ui/cx";
 import { useArticleWorkflowStudio } from "./useArticleWorkflowStudio";
 
 function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boolean }) {
@@ -37,6 +40,7 @@ function ArticleWorkflowOutputPlaceholder({ creating }: { readonly creating: boo
 
 export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
   const state = useArticleWorkflowStudio(props);
+  const panels = usePanelVisibility();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
@@ -84,33 +88,30 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
   );
 
   return (
-    <section className="relative min-h-0 overflow-hidden bg-surface xl:grid xl:h-full xl:grid-cols-[minmax(360px,30%)_minmax(0,1fr)]">
-      <aside
-        className="hidden min-h-0 border-r border-hairline-subtle bg-surface xl:grid xl:h-full xl:grid-rows-[minmax(120px,1fr)_minmax(0,3fr)] xl:divide-y xl:divide-hairline-subtle"
-        aria-label="项目与生成配置"
-      >
-        <ArticleWorkflowHistoryPanel
-          batches={state.historyBatches}
-          selectedBatchKey={state.selectedBatchKey}
-          bootstrapping={state.bootstrapping}
-          deletingBatchKey={state.deletingBatchKey}
-          onNewProject={state.handleNewProject}
-          onSelectBatch={state.handleSelectBatch}
-          onDeleteBatch={state.handleDeleteBatch}
-        />
-        {state.bootstrapping ? (
-          <div className="flex min-h-0 items-center justify-center text-sm text-ink-secondary">
-            <span className="inline-flex items-center gap-2">
-              <Icon icon="mdi:loading" className="animate-spin text-lg" aria-hidden />
-              正在加载配置
-            </span>
-          </div>
-        ) : (
-          inputPanel()
-        )}
-      </aside>
+    <section className={wfShell(panels.left, panels.right)}>
+      {/* 左=设置。原来这一栏是上下两层：项目历史占上面 1/4、设置压下面 3/4 —— 一进模块先看到
+          「你以前生成过什么」，要填的字段得往下找。按统一规范 v2（左=设置、中=工作区、右=历史），
+          历史搬去右栏，设置独占这一栏。窄屏它由工作区右上角「生成配置」按钮以抽屉形式给出，
+          所以这里是 `hidden xl:flex` —— 宽屏是常驻第三列之前的第一列。 */}
+      {panels.left && (
+        <aside
+          className={cx(WF_PANEL, "hidden xl:flex xl:h-full")}
+          aria-label="图文设置"
+        >
+          {state.bootstrapping ? (
+            <div className="flex min-h-0 items-center justify-center text-sm text-ink-secondary">
+              <span className="inline-flex items-center gap-2">
+                <Icon icon="mdi:loading" className="animate-spin text-lg" aria-hidden />
+                正在加载配置
+              </span>
+            </div>
+          ) : (
+            inputPanel()
+          )}
+        </aside>
+      )}
 
-      <main className="flex min-h-0 min-w-0 flex-col bg-surface-subtle xl:h-full">
+      <main className={cx(WF_WORKSPACE, "xl:h-full")}>
         <header
           className={`flex min-h-14 flex-none flex-col gap-2 border-b border-hairline-subtle bg-surface px-4 py-2 xl:items-center xl:px-5 ${
             state.project ? "xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(280px,420px)_minmax(0,1fr)]" : "xl:flex-row"
@@ -118,7 +119,7 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
         >
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-ink">{workspaceTitle}</p>
-            <p className="mt-0.5 truncate text-[10px] text-ink-tertiary">{workspaceMeta}</p>
+            <p className="mt-0.5 truncate text-xs text-ink-tertiary">{workspaceMeta}</p>
           </div>
 
           {state.project && (
@@ -137,17 +138,17 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
               type="button"
               onClick={() => setHistoryOpen(true)}
               aria-expanded={historyOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle"
             >
               <Icon icon="mdi:history" className="text-base" aria-hidden />
-              项目历史
+              历史
             </button>
             <button
               type="button"
               onClick={() => setConfigOpen(true)}
               disabled={state.bootstrapping}
               aria-expanded={configOpen}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle disabled:text-ink-tertiary"
+              className="inline-flex h-8 items-center gap-1.5 rounded-[10px] border border-hairline bg-surface px-2.5 text-xs font-semibold text-ink hover:bg-surface-subtle disabled:text-ink-tertiary"
             >
               <Icon icon="mdi:tune-variant" className="text-base" aria-hidden />
               生成配置
@@ -328,6 +329,25 @@ export function ArticleWorkflowStudio(props: ArticleWorkflowStudioProps) {
           )}
         </div>
       </main>
+
+      {/* 右=历史。窄屏没有这一栏，走顶栏那颗「历史」按钮开抽屉（下面那个 Sidebar）。
+          宽屏这一列由顶栏「面板开关」控制，收起就整列消失，工作区吃掉那份宽度。 */}
+      {panels.right && (
+        <aside
+          className={cx(WF_PANEL, "hidden xl:flex xl:h-full")}
+          aria-label="图文历史"
+        >
+          <ArticleWorkflowHistoryPanel
+            batches={state.historyBatches}
+            selectedBatchKey={state.selectedBatchKey}
+            bootstrapping={state.bootstrapping}
+            deletingBatchKey={state.deletingBatchKey}
+            onNewProject={state.handleNewProject}
+            onSelectBatch={state.handleSelectBatch}
+            onDeleteBatch={state.handleDeleteBatch}
+          />
+        </aside>
+      )}
 
       <ArticleWorkflowHistorySidebar
         open={historyOpen}

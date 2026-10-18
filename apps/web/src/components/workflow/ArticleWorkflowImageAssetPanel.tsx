@@ -109,7 +109,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
                 <div className="flex min-w-0 items-center gap-3 border-t border-hairline-subtle px-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-xs font-semibold text-ink">{image.alt || "未设置描述"}</div>
-                    <div className="mt-1 flex items-center gap-1.5 text-[11px] text-ink-tertiary">
+                    <div className="mt-1 flex items-center gap-1.5 text-xs text-ink-tertiary">
                       <span className="truncate">{image.slot}</span>
                       {ratio && <span className="rounded bg-surface-muted px-1.5 py-0.5">{ratio}</span>}
                     </div>
@@ -139,7 +139,7 @@ export function ArticleWorkflowImageAssetPanel(props: ArticleWorkflowImageAssetP
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5 text-[11px] text-ink-tertiary">
+                <div className="flex items-center gap-1.5 text-xs text-ink-tertiary">
                   <span className="truncate">{image.slot}</span>
                   {ratio && <span className="rounded bg-surface-muted px-1.5 py-0.5">{ratio}</span>}
                 </div>

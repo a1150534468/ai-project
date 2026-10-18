@@ -83,14 +83,16 @@ afterEach(() => {
 });
 
 describe("ArticleWorkflowStudio 失败行处理", () => {
-  it("从工作台顶栏打开项目记录，并可回到新建态", async () => {
+  it("从工作台顶栏打开历史，并可回到新建态", async () => {
     await renderStudio(captionProject());
 
-    fireEvent.click(screen.getByRole("button", { name: "项目历史" }));
-    expect(screen.getByRole("dialog", { name: "图文项目记录" })).toBeTruthy();
+    // 「历史」现在是右栏（宽屏）与抽屉（窄屏）同一个东西的两副壳，jsdom 里两副都在 DOM 里，
+    // 所以「新建图文」要限定在抽屉内查 —— 右栏那颗同名按钮不是这条用例要点的。
+    fireEvent.click(screen.getByRole("button", { name: "历史" }));
+    const drawer = screen.getByRole("dialog", { name: "图文历史" });
 
-    fireEvent.click(screen.getByRole("button", { name: "新建图文" }));
-    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图文项目记录" })).toBeNull());
+    fireEvent.click(within(drawer).getByRole("button", { name: "新建图文" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "图文历史" })).toBeNull());
     expect(screen.getByLabelText("文章原文")).toBeTruthy();
   });
 

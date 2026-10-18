@@ -25,7 +25,7 @@ export function SubmitBar(props: SubmitBarProps) {
           type="button"
           onClick={props.onSubmit}
           disabled={props.submitDisabled || props.busy}
-          className="flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40"
+          className="flex h-11 w-full items-center justify-center rounded-[10px] bg-brand text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-brand/40"
         >
           <Icon
             icon={props.busy ? "mdi:loading" : props.submitIcon ?? "mdi:image-plus-outline"}

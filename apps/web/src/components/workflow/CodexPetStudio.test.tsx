@@ -225,7 +225,9 @@ describe("CodexPetStudio", () => {
 
   it("renders the complete create contract before any network effect runs", () => {
     const html = renderToStaticMarkup(<CodexPetStudio token="token" client={makeClient()} />);
-    expect(html).toContain("Codex 桌宠工坊");
+    // 模块名归顶栏的模块胶囊了（页面级 `WorkflowTopBar`），studio 自己不再显示「Codex 桌宠工坊」；
+    // 这条冒烟断言改成压 studio 自己的根节点标记。
+    expect(html).toContain('data-testid="codex-pet-studio"');
     expect(html).toContain("角色提示词");
     expect(html).toContain("参考图");
     expect(html).toContain("主形象生成后自动继续");

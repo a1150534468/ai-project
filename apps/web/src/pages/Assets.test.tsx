@@ -143,11 +143,12 @@ describe("分区与筛选", () => {
     expect(apiMocks.listAssets).toHaveBeenCalledTimes(1);
   });
 
-  it("选 module 透传给接口，再点一次取消回到全部", async () => {
+  it("选 module 透传给接口，取消回到「全部」那一项", async () => {
     await mount();
     await click("asset-module-video");
     expect(queryOf(1)).toMatchObject({ sourceModule: "video" });
-    await click("asset-module-video");
+    // 类型筛选是分段控件：「全部」是独立的一项，取消筛选就是点回它，不再是「再点一次选中项」。
+    await click("asset-module-all");
     expect(queryOf(2)).toMatchObject({ sourceModule: null });
   });
 

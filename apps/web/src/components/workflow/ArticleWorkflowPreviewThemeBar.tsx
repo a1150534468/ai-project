@@ -95,7 +95,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                       dangerouslySetInnerHTML={{ __html: thumbnails.get(key) ?? "" }}
                     />
                   </span>
-                  <span className="mt-1 block truncate text-[10px] font-semibold text-ink">{theme.name}</span>
+                  <span className="mt-1 block truncate text-xs font-semibold text-ink">{theme.name}</span>
                 </button>
               );
             })}
@@ -112,7 +112,7 @@ export function ArticleWorkflowPreviewThemeBar(props: ArticleWorkflowPreviewThem
                   onChange={(event) => props.onPreviewThemeColor(event.target.value)}
                   className="h-7 w-10 cursor-pointer rounded border border-hairline bg-surface p-0.5"
                 />
-                <span className="font-mono text-[11px] text-ink-tertiary">
+                <span className="font-mono text-xs text-ink-tertiary">
                   {effectiveColor || ARTICLE_WORKFLOW_THEME_MAP[effectiveTheme]?.primary}
                 </span>
               </div>

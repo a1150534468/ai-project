@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 import { motion, useReducedMotion, type HTMLMotionProps } from "motion/react";
-import { motionAmount, spring } from "./tokens";
+import { motionAmount, hoverEase, spring } from "./tokens";
 
 interface Ripple {
   readonly id: number;
@@ -95,7 +95,7 @@ export function RippleButton({ children, className, onClick, style, ...rest }: R
       onClick={handleClick}
       // 水波是绝对定位的子元素：容器必须自己成为定位上下文，还得裁掉溢出的那圈
       style={{ position: "relative", overflow: "hidden", ...style }}
-      whileHover={reducedMotion ? undefined : { y: motionAmount.lift }}
+      whileHover={reducedMotion ? undefined : { y: motionAmount.lift, transition: hoverEase }}
       whileTap={reducedMotion ? undefined : { scale: motionAmount.press }}
       transition={spring.snappy}
     >
