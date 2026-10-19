@@ -41,6 +41,7 @@
         "S3_BUCKET",
         "S3_ENDPOINT",
         "S3_FORCE_PATH_STYLE",
+        "S3_KEY_PREFIX",
         "S3_PUBLIC_BASE_URL",
         "S3_REGION",
         "S3_SECRET_KEY",

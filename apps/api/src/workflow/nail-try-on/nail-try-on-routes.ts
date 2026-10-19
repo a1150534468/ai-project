@@ -714,7 +714,8 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
         { objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000 },
         { signImageUrl, loadStoredImage },
       );
-    } catch {
+    } catch (error) {
+      app.log.warn({ err: error, objectKey: row.objectKey }, "nail try-on reference blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
     }
   });
@@ -743,7 +744,8 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
         },
         { signImageUrl, loadStoredImage },
       );
-    } catch {
+    } catch (error) {
+      app.log.warn({ err: error, objectKey: row.objectKey }, "nail try-on output blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
     }
   });

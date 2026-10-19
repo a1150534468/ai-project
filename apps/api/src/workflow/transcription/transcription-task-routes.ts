@@ -14,17 +14,11 @@ import {
   transcriptionTaskParamsSchema,
   transcriptionTranscriptSchema,
 } from "./transcription-route-helpers.js";
-import {
-  TRANSCRIPTION_TASK_STATUS,
-  type TranscriptionTaskRow,
-} from "./transcription-shared.js";
+import { TRANSCRIPTION_TASK_STATUS, type TranscriptionTaskRow } from "./transcription-shared.js";
 
 const TASK_LIST_LIMIT = 50;
 
-async function listRecentTasks(
-  context: TranscriptionRouteContext,
-  userId: string,
-): Promise<TranscriptionTaskRow[]> {
+async function listRecentTasks(context: TranscriptionRouteContext, userId: string): Promise<TranscriptionTaskRow[]> {
   const rows = await context.prisma.transcriptionTask.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
@@ -165,7 +159,7 @@ export function registerTranscriptionTaskRoutes(context: TranscriptionRouteConte
     return { success: true, data: serializeTask(updated as unknown as TranscriptionTaskRow) };
   });
 
-  // 删除任务（含取消正在跑的任务、删除 MinIO 上的音频）
+  // 删除任务（含取消正在跑的任务、删除对象存储上的音频）
   app.delete("/api/workflow/transcription/tasks/:id", { preHandler: requireUser }, async (req, reply) => {
     const parsed = transcriptionTaskParamsSchema.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "请求参数无效" });

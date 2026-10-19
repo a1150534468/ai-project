@@ -28,7 +28,7 @@ const renameSchema = z.object({ name: z.string().trim().min(1).max(40) });
  * 头像文件的存放接口。
  *
  * 只抽了 put / remove 两个动作，是为了让测试能塞一个记录调用的假实现，
- * 不必为了跑一条上传用例去起 MinIO。
+ * 不必为了跑一条上传用例去起本地的对象存储服务。
  */
 export interface AvatarStorage {
   put(key: string, body: Buffer, mime: string): Promise<void>;
@@ -112,57 +112,65 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
     return { success: true, data: null };
   });
 
-  app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/regenerate", { preHandler: requireUser }, async (req, reply) => {
-    // 限流放在查存在性**之前**。顺序是有意的：先查再限流的话，攻击者可以用不同 id 反复试探，
-    // 靠 404 和 429 的区别把「哪些 id 存在」枚举出来，而且每一次试探都真的花了模型的钱。
-    if (!(await consumeAvatarQuota(redis, req.userId))) {
-      return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });
-    }
+  app.post<{ Params: { id: string } }>(
+    "/api/agents/:id/avatar/regenerate",
+    { preHandler: requireUser },
+    async (req, reply) => {
+      // 限流放在查存在性**之前**。顺序是有意的：先查再限流的话，攻击者可以用不同 id 反复试探，
+      // 靠 404 和 429 的区别把「哪些 id 存在」枚举出来，而且每一次试探都真的花了模型的钱。
+      if (!(await consumeAvatarQuota(redis, req.userId))) {
+        return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });
+      }
 
-    const result = await regenerateAgentAvatar(prisma, req.userId, req.params.id);
-    if (!result) return reply.code(404).send({ error: "智能体不存在" });
+      const result = await regenerateAgentAvatar(prisma, req.userId, req.params.id);
+      if (!result) return reply.code(404).send({ error: "智能体不存在" });
 
-    return { success: true, data: result };
-  });
+      return { success: true, data: result };
+    },
+  );
 
-  app.post<{ Params: { id: string } }>("/api/agents/:id/avatar/upload", { preHandler: requireUser }, async (req, reply) => {
-    // 同上：额度先扣。上传这条路更值得这么做 —— 后面要读整个请求体、还要跑一次图片解码。
-    if (!(await consumeAvatarQuota(redis, req.userId))) {
-      return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });
-    }
+  app.post<{ Params: { id: string } }>(
+    "/api/agents/:id/avatar/upload",
+    { preHandler: requireUser },
+    async (req, reply) => {
+      // 同上：额度先扣。上传这条路更值得这么做 —— 后面要读整个请求体、还要跑一次图片解码。
+      if (!(await consumeAvatarQuota(redis, req.userId))) {
+        return reply.code(429).send({ error: "操作过于频繁，请稍后再试" });
+      }
 
-    // 先确认 Agent 在，再去读文件：不存在的话没必要把几 MB 的 body 收完。
-    // 顺带取回旧的 key，等新图落好之后拿它删旧文件。
-    const existing = await agentAvatarUrlOf(prisma, req.userId, req.params.id);
-    if (!existing) return reply.code(404).send({ error: "智能体不存在" });
+      // 先确认 Agent 在，再去读文件：不存在的话没必要把几 MB 的 body 收完。
+      // 顺带取回旧的 key，等新图落好之后拿它删旧文件。
+      const existing = await agentAvatarUrlOf(prisma, req.userId, req.params.id);
+      if (!existing) return reply.code(404).send({ error: "智能体不存在" });
 
-    const data = await req.file();
-    if (!data) return reply.code(400).send({ error: "缺少文件" });
-    const raw = await data.toBuffer();
+      const data = await req.file();
+      if (!data) return reply.code(400).send({ error: "缺少文件" });
+      const raw = await data.toBuffer();
 
-    let webp: Buffer;
-    try {
-      webp = await normalizeAvatarImage(raw);
-    } catch (err) {
-      // 只有「这张图不合格」才是 400。其他异常（sharp 没装好之类）原样抛出去变成 500 ——
-      // 把基础设施故障说成用户的图有问题，只会让人对着一台坏机器反复换图。
-      if (err instanceof AvatarImageError) return reply.code(400).send({ error: err.message });
-      throw err;
-    }
+      let webp: Buffer;
+      try {
+        webp = await normalizeAvatarImage(raw);
+      } catch (err) {
+        // 只有「这张图不合格」才是 400。其他异常（sharp 没装好之类）原样抛出去变成 500 ——
+        // 把基础设施故障说成用户的图有问题，只会让人对着一台坏机器反复换图。
+        if (err instanceof AvatarImageError) return reply.code(400).send({ error: err.message });
+        throw err;
+      }
 
-    // key 带时间戳：同一个 Agent 反复换头像会得到不同的 key，CDN 和浏览器缓存自然就失效了。
-    // 带 userId 是为了让越权访问在存储层也说不通（即使 bucket 策略配错，路径也对不上）。
-    const key = `agent-avatars/${req.userId}/${req.params.id}/${Date.now()}.webp`;
-    await storage().put(key, webp, AVATAR_MIME);
-    await setAgentAvatarUrl(prisma, req.userId, req.params.id, key);
+      // key 带时间戳：同一个 Agent 反复换头像会得到不同的 key，CDN 和浏览器缓存自然就失效了。
+      // 带 userId 是为了让越权访问在存储层也说不通（即使 bucket 策略配错，路径也对不上）。
+      const key = `agent-avatars/${req.userId}/${req.params.id}/${Date.now()}.webp`;
+      await storage().put(key, webp, AVATAR_MIME);
+      await setAgentAvatarUrl(prisma, req.userId, req.params.id, key);
 
-    // 先写库再删旧图。反过来的话，写库失败会让库里指向一个已经删掉的文件 —— 头像直接变成坏链。
-    if (existing.avatarUrl && existing.avatarUrl !== key) {
-      void storage()
-        .remove(existing.avatarUrl)
-        .catch((err) => req.log.warn({ err }, "delete old avatar failed"));
-    }
+      // 先写库再删旧图。反过来的话，写库失败会让库里指向一个已经删掉的文件 —— 头像直接变成坏链。
+      if (existing.avatarUrl && existing.avatarUrl !== key) {
+        void storage()
+          .remove(existing.avatarUrl)
+          .catch((err) => req.log.warn({ err }, "delete old avatar failed"));
+      }
 
-    return { success: true, data: { avatarUrl: avatarPublicUrl(key) } };
-  });
+      return { success: true, data: { avatarUrl: avatarPublicUrl(key) } };
+    },
+  );
 }

@@ -26,7 +26,7 @@ function agent(): Agent {
 
 /**
  * 给 https 上游请求挂上关掉超时的 dispatcher。
- * - 本地 http（minio / 回环）保持默认，不受影响；
+ * - 本地 http（回环地址等）保持默认，不受影响；
  * - init 里已显式带 dispatcher 时不覆盖，保留测试注入的能力。
  */
 export function withImageStreamDispatcher(

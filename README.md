@@ -4,7 +4,7 @@
 
 ## 快速开始
 
-混合开发模式：PostgreSQL、Redis、MinIO 跑在 Docker 里，API、Web、Admin 与两个 Worker 在本机热更新。
+混合开发模式：PostgreSQL、Redis 跑在 Docker 里，API、Web、Admin 与两个 Worker 在本机热更新。对象存储用腾讯云 COS，dev 与 prod 共用一个桶、按 `S3_KEY_PREFIX` 分文件夹，不需要在本地起 MinIO。
 
 ```bash
 cp .env.example .env.local # 首次使用；已有 .env 可跳过

@@ -1,4 +1,5 @@
 import { S3Client } from "@aws-sdk/client-s3";
+import { normalizeKeyPrefix } from "./s3-key.js";
 import type { S3, S3Config } from "./s3-types.js";
 
 function required(env: NodeJS.ProcessEnv, key: string): string {
@@ -15,6 +16,7 @@ export function loadS3Config(env: NodeJS.ProcessEnv = process.env): S3Config {
     accessKey: required(env, "S3_ACCESS_KEY"),
     secretKey: required(env, "S3_SECRET_KEY"),
     forcePathStyle: env.S3_FORCE_PATH_STYLE === "true",
+    keyPrefix: normalizeKeyPrefix(env.S3_KEY_PREFIX),
   };
 }
 
@@ -29,5 +31,5 @@ export function makeS3(config: S3Config = loadS3Config()): S3 {
     },
     requestChecksumCalculation: "WHEN_REQUIRED",
   });
-  return { client, bucket: config.bucket };
+  return { client, bucket: config.bucket, keyPrefix: config.keyPrefix };
 }

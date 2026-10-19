@@ -66,6 +66,10 @@ export function TranscriptionStudio({ token }: TranscriptionStudioProps) {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  /** 同一时刻只允许一个列表请求在飞：轮询比响应还快时不该叠加请求。 */
+  const refreshingRef = useRef(false);
+  /** 上一条已经弹过的错误。后端持续不可用时，每 5 秒重弹同一条提示只会糊屏。 */
+  const lastErrorRef = useRef<string | null>(null);
 
   const selected = useMemo(
     () => tasks.find((task) => task.id === selectedId) ?? null,
@@ -75,16 +79,28 @@ export function TranscriptionStudio({ token }: TranscriptionStudioProps) {
   const draftDirty = selected?.transcriptText !== undefined && draft !== (selected?.transcriptText ?? "");
 
   const refresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
     try {
       const list = await listTranscriptionTasks(token);
+      lastErrorRef.current = null;
       setTasks(list);
-      if (list.length > 0 && !list.some((task) => task.id === selectedId)) {
-        setSelectedId(list[0].id);
-      }
+      // 用函数式更新读当前选中项，而不是把 selectedId 写进依赖：否则每切一次任务
+      // `refresh` 就换一个引用，挂在这个回调上的 effect 会跟着重跑一遍。
+      setSelectedId((current) => {
+        if (current && list.some((task) => task.id === current)) return current;
+        return list[0]?.id ?? null;
+      });
     } catch (error) {
-      toast.show("err", errorMessage(error, "获取转写任务失败"));
+      const message = errorMessage(error, "获取转写任务失败");
+      if (lastErrorRef.current !== message) {
+        lastErrorRef.current = message;
+        toast.show("err", message);
+      }
+    } finally {
+      refreshingRef.current = false;
     }
-  }, [token, selectedId, toast]);
+  }, [token, toast]);
 
   useEffect(() => {
     void refresh();

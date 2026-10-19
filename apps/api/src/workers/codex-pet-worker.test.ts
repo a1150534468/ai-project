@@ -22,14 +22,14 @@ describe("Codex pet worker health and Prometheus lifecycle", () => {
     const metrics = createCodexPetWorkerMetrics();
     metrics.runsCompleted = 3;
     metrics.gptQualityMismatches = 2;
-    const stages = new Map([["packaging\"\nunsafe", { seconds: 12.5, transitions: 2 }]]);
-    const actions = new Map([["row/idle\"", { completed: 4, failed: 1, retries: 2 }]]);
+    const stages = new Map([['packaging"\nunsafe', { seconds: 12.5, transitions: 2 }]]);
+    const actions = new Map([['row/idle"', { completed: 4, failed: 1, retries: 2 }]]);
     const serialized = codexPetWorkerMetricsText(metrics, stages, actions);
     expect(serialized).toContain("codex_pet_worker_runs_completed 3");
     expect(serialized).toContain("codex_pet_worker_gpt_quality_mismatches 2");
     expect(serialized).toContain('stage="packaging__unsafe"');
     expect(serialized).toContain('job_key="row_idle_"');
-    expect(serialized).not.toContain("\nunsafe\"");
+    expect(serialized).not.toContain('\nunsafe"');
 
     let healthy = true;
     const server = createCodexPetWorkerHealthServer({
@@ -47,7 +47,9 @@ describe("Codex pet worker health and Prometheus lifecycle", () => {
           result.status = status;
           result.headers = headers;
         },
-        end(body: string) { result.body = body; },
+        end(body: string) {
+          result.body = body;
+        },
       };
       server.emit("request", { url }, response);
       return result;
@@ -67,16 +69,18 @@ describe("Codex pet worker health and Prometheus lifecycle", () => {
 
 describe("Codex pet provider observability", () => {
   it("counts persisted low-to-auto quality and other provider mismatches", () => {
-    expect(codexPetProviderMetricDelta({
-      requestedModel: "gpt-image-2",
-      actualModel: "gpt-image-2-codex",
-      requestedSize: "1536x1024",
-      actualSize: "1024x1024",
-      requestedQuality: "low",
-      actualQuality: "auto",
-      upstreamRequestId: "req-worker-123",
-      usage: { inputTokens: 21, outputTokens: 34, totalTokens: 55 },
-    })).toEqual({
+    expect(
+      codexPetProviderMetricDelta({
+        requestedModel: "gpt-image-2",
+        actualModel: "gpt-image-2-codex",
+        requestedSize: "1536x1024",
+        actualSize: "1024x1024",
+        requestedQuality: "low",
+        actualQuality: "auto",
+        upstreamRequestId: "req-worker-123",
+        usage: { inputTokens: 21, outputTokens: 34, totalTokens: 55 },
+      }),
+    ).toEqual({
       calls: 1,
       inputTokens: 21,
       outputTokens: 34,
@@ -108,7 +112,8 @@ describe("Codex pet provider observability", () => {
       "moderation",
       "invalid_request",
       "unknown",
-    ]) recordCodexPetImageFailureMetric(category, metrics);
+    ])
+      recordCodexPetImageFailureMetric(category, metrics);
     expect(metrics).toMatchObject({
       rateLimitFailures: 1,
       timeoutFailures: 1,
@@ -124,14 +129,20 @@ describe("Codex pet provider observability", () => {
 describe("Codex pet retry observability", () => {
   it("counts one visual and action retry from a repair cycle without double-counting its job restart", () => {
     const metrics = createCodexPetWorkerMetrics();
-    const visualRepair = recordCodexPetRetryMetrics({
-      type: "run.repairing",
-      payload: { attempt: 1, maxAttempts: 3 },
-    }, metrics);
-    const visualRestart = recordCodexPetRetryMetrics({
-      type: "job.retrying",
-      payload: { retryKind: "visual", attempt: 2, maxAttempts: 3 },
-    }, metrics);
+    const visualRepair = recordCodexPetRetryMetrics(
+      {
+        type: "run.repairing",
+        payload: { attempt: 1, maxAttempts: 3 },
+      },
+      metrics,
+    );
+    const visualRestart = recordCodexPetRetryMetrics(
+      {
+        type: "job.retrying",
+        payload: { retryKind: "visual", attempt: 2, maxAttempts: 3 },
+      },
+      metrics,
+    );
 
     expect(visualRepair.actionRetries + visualRestart.actionRetries).toBe(1);
     expect(metrics).toMatchObject({
@@ -144,14 +155,20 @@ describe("Codex pet retry observability", () => {
 
   it("counts explicit and legacy transport retries with their failure category and action retry", () => {
     const metrics = createCodexPetWorkerMetrics();
-    const explicit = recordCodexPetRetryMetrics({
-      type: "job.retrying",
-      payload: { retryKind: "transport", transportAttempt: 1, category: "rate_limit" },
-    }, metrics);
-    const legacy = recordCodexPetRetryMetrics({
-      type: "job.retrying",
-      payload: { transportAttempt: 2, category: "timeout" },
-    }, metrics);
+    const explicit = recordCodexPetRetryMetrics(
+      {
+        type: "job.retrying",
+        payload: { retryKind: "transport", transportAttempt: 1, category: "rate_limit" },
+      },
+      metrics,
+    );
+    const legacy = recordCodexPetRetryMetrics(
+      {
+        type: "job.retrying",
+        payload: { transportAttempt: 2, category: "timeout" },
+      },
+      metrics,
+    );
 
     expect(explicit.actionRetries + legacy.actionRetries).toBe(2);
     expect(metrics).toMatchObject({
@@ -163,19 +180,23 @@ describe("Codex pet retry observability", () => {
   });
 
   it("does not treat historical visual attempt metadata as a transport retry", () => {
-    expect(codexPetRetryMetricDelta({
-      type: "job.retrying",
-      payload: { attempt: 2, maxAttempts: 3, category: "upstream" },
-    })).toEqual({
+    expect(
+      codexPetRetryMetricDelta({
+        type: "job.retrying",
+        payload: { attempt: 2, maxAttempts: 3, category: "upstream" },
+      }),
+    ).toEqual({
       visualRepairAttempts: 0,
       transportRetries: 0,
       actionRetries: 0,
       failureCategory: null,
     });
-    expect(codexPetRetryMetricDelta({
-      type: "job.retrying",
-      payload: { retryKind: "visual", transportAttempt: 2, category: "timeout" },
-    })).toEqual({
+    expect(
+      codexPetRetryMetricDelta({
+        type: "job.retrying",
+        payload: { retryKind: "visual", transportAttempt: 2, category: "timeout" },
+      }),
+    ).toEqual({
       visualRepairAttempts: 0,
       transportRetries: 0,
       actionRetries: 0,
@@ -198,13 +219,15 @@ describe("Codex pet intermediate artifact expiry", () => {
     const onError = vi.fn();
     const prisma = { codexPetArtifact: { findMany } } as unknown as PrismaClient;
 
-    await expect(cleanupExpiredCodexPetArtifacts({
-      prisma,
-      now,
-      limit: 25,
-      deleteArtifact: deleteArtifact as never,
-      onError,
-    })).resolves.toEqual({ scanned: 2, deleted: 1, failed: 1 });
+    await expect(
+      cleanupExpiredCodexPetArtifacts({
+        prisma,
+        now,
+        limit: 25,
+        deleteArtifact: deleteArtifact as never,
+        onError,
+      }),
+    ).resolves.toEqual({ scanned: 2, deleted: 1, failed: 1 });
 
     expect(findMany).toHaveBeenCalledWith({
       where: { expiresAt: { lte: now } },
@@ -212,16 +235,22 @@ describe("Codex pet intermediate artifact expiry", () => {
       select: { id: true, userId: true },
       take: 25,
     });
-    expect(deleteArtifact).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      prisma,
-      artifactId: "expired-1",
-      userId: "user-1",
-    }));
-    expect(deleteArtifact).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      prisma,
-      artifactId: "expired-2",
-      userId: "user-2",
-    }));
+    expect(deleteArtifact).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        prisma,
+        artifactId: "expired-1",
+        userId: "user-1",
+      }),
+    );
+    expect(deleteArtifact).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        prisma,
+        artifactId: "expired-2",
+        userId: "user-2",
+      }),
+    );
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "temporary S3 failure" }), "expired-2");
   });
 
@@ -246,15 +275,18 @@ describe("Codex pet intermediate artifact expiry", () => {
       accessKey: "access",
       secretKey: "secret",
       forcePathStyle: true,
+      keyPrefix: "dev",
     });
     const send = vi.fn(async (_command: unknown) => ({}));
     Object.assign(s3.client, { send });
 
-    await expect(cleanupExpiredCodexPetArtifacts({
-      prisma,
-      s3,
-      now: new Date("2026-07-18T00:00:00.000Z"),
-    })).resolves.toEqual({ scanned: 1, deleted: 1, failed: 0 });
+    await expect(
+      cleanupExpiredCodexPetArtifacts({
+        prisma,
+        s3,
+        now: new Date("2026-07-18T00:00:00.000Z"),
+      }),
+    ).resolves.toEqual({ scanned: 1, deleted: 1, failed: 0 });
 
     expect(findFirst).toHaveBeenCalledWith({
       where: { id: row.id, userId: row.userId },
@@ -284,11 +316,13 @@ describe("Codex pet deleting-project recovery", () => {
     });
     const enqueue = vi.fn(async (_payload: { readonly userId: string; readonly projectId: string }) => undefined);
 
-    await expect(recoverDeletingProjects({
-      prisma: { codexPetProject: { findMany } } as unknown as PrismaClient,
-      enqueue,
-      env: { CODEX_PET_CLEANUP_RECOVERY_LIMIT: "2" },
-    })).resolves.toEqual({ scanned: 2, enqueued: 2, failed: 0 });
+    await expect(
+      recoverDeletingProjects({
+        prisma: { codexPetProject: { findMany } } as unknown as PrismaClient,
+        enqueue,
+        env: { CODEX_PET_CLEANUP_RECOVERY_LIMIT: "2" },
+      }),
+    ).resolves.toEqual({ scanned: 2, enqueued: 2, failed: 0 });
     expect(enqueue).toHaveBeenNthCalledWith(1, { userId: "user-1", projectId: "project-old" });
     expect(enqueue).toHaveBeenNthCalledWith(2, { userId: "user-2", projectId: "project-new" });
   });
@@ -308,8 +342,11 @@ describe("Codex pet deleting-project recovery", () => {
       },
     } as unknown as PrismaClient;
 
-    await expect(recoverDeletingProjects({ prisma, enqueue, onEnqueueError }))
-      .resolves.toEqual({ scanned: 2, enqueued: 1, failed: 1 });
+    await expect(recoverDeletingProjects({ prisma, enqueue, onEnqueueError })).resolves.toEqual({
+      scanned: 2,
+      enqueued: 1,
+      failed: 1,
+    });
     expect(enqueue).toHaveBeenCalledTimes(2);
     expect(onEnqueueError).toHaveBeenCalledWith(queueError, "project-1");
   });
@@ -334,12 +371,13 @@ describe("Codex pet parked-approval expiry", () => {
       codexPetRun: { findMany, updateMany, findUniqueOrThrow },
       codexPetEvent: { create: createEvent },
       codexPetProject: { updateMany: updateProject },
-      $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
-        $queryRawUnsafe: queryRawUnsafe,
-        codexPetRun: { updateMany, findUniqueOrThrow },
-        codexPetEvent: { create: createEvent },
-        codexPetProject: { updateMany: updateProject },
-      }),
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          $queryRawUnsafe: queryRawUnsafe,
+          codexPetRun: { updateMany, findUniqueOrThrow },
+          codexPetEvent: { create: createEvent },
+          codexPetProject: { updateMany: updateProject },
+        }),
     };
     return { prisma: prisma as unknown as PrismaClient, findMany, updateMany, createEvent, updateProject };
   }
@@ -350,30 +388,40 @@ describe("Codex pet parked-approval expiry", () => {
     const at = new Date("2026-07-31T00:00:00.000Z");
     const { prisma, findMany, updateMany, createEvent, updateProject } = parkedPrisma([parkedRun]);
 
-    await expect(expireParkedCodexPetRuns({
-      prisma, now: () => at, expiryMs: 7 * 24 * 60 * 60_000,
-    })).resolves.toBe(1);
+    await expect(
+      expireParkedCodexPetRuns({
+        prisma,
+        now: () => at,
+        expiryMs: 7 * 24 * 60 * 60_000,
+      }),
+    ).resolves.toBe(1);
 
     // Only a run whose lease is free and whose wait has actually elapsed.
-    expect(findMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: expect.objectContaining({
-        status: "awaiting_regeneration_approval",
-        workerId: null,
-        updatedAt: { lte: new Date("2026-07-24T00:00:00.000Z") },
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: "awaiting_regeneration_approval",
+          workerId: null,
+          updatedAt: { lte: new Date("2026-07-24T00:00:00.000Z") },
+        }),
       }),
-    }));
+    );
     // Same transition a user could make by hand.
-    expect(updateMany).toHaveBeenCalledWith(expect.objectContaining({
-      where: { id: "run-parked", status: "awaiting_regeneration_approval", workerId: null },
-      data: expect.objectContaining({ status: "cancelled", cancelRequested: true, completedAt: at }),
-    }));
-    expect(createEvent).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        type: "run.cancelled",
-        sequence: 12,
-        payload: { reason: "approval_expired", expiryMs: 7 * 24 * 60 * 60_000 },
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "run-parked", status: "awaiting_regeneration_approval", workerId: null },
+        data: expect.objectContaining({ status: "cancelled", cancelRequested: true, completedAt: at }),
       }),
-    }));
+    );
+    expect(createEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          type: "run.cancelled",
+          sequence: 12,
+          payload: { reason: "approval_expired", expiryMs: 7 * 24 * 60 * 60_000 },
+        }),
+      }),
+    );
     expect(updateProject).toHaveBeenCalledOnce();
   });
 
@@ -388,15 +436,18 @@ describe("Codex pet parked-approval expiry", () => {
   it("does not count a run the user approved between the scan and the write", async () => {
     const at = new Date("2026-07-31T00:00:00.000Z");
     const { prisma, createEvent } = parkedPrisma([parkedRun]);
-    (prisma as unknown as { codexPetRun: { updateMany: unknown } }).codexPetRun.updateMany = vi.fn(async () => ({ count: 0 }));
+    (prisma as unknown as { codexPetRun: { updateMany: unknown } }).codexPetRun.updateMany = vi.fn(async () => ({
+      count: 0,
+    }));
     const raced = {
       ...(prisma as unknown as Record<string, unknown>),
-      $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
-        $queryRawUnsafe: async () => [],
-        codexPetRun: { updateMany: async () => ({ count: 0 }), findUniqueOrThrow: vi.fn() },
-        codexPetEvent: { create: createEvent },
-        codexPetProject: { updateMany: vi.fn() },
-      }),
+      $transaction: async (callback: (tx: unknown) => Promise<unknown>) =>
+        callback({
+          $queryRawUnsafe: async () => [],
+          codexPetRun: { updateMany: async () => ({ count: 0 }), findUniqueOrThrow: vi.fn() },
+          codexPetEvent: { create: createEvent },
+          codexPetProject: { updateMany: vi.fn() },
+        }),
     } as unknown as PrismaClient;
 
     await expect(expireParkedCodexPetRuns({ prisma: raced, now: () => at })).resolves.toBe(0);
@@ -410,12 +461,17 @@ describe("Codex pet parked-approval expiry", () => {
       { ...parkedRun, id: "run-ok" },
     ]);
     let call = 0;
-    (prisma as unknown as { $transaction: unknown }).$transaction = async (callback: (tx: unknown) => Promise<unknown>) => {
+    (prisma as unknown as { $transaction: unknown }).$transaction = async (
+      callback: (tx: unknown) => Promise<unknown>,
+    ) => {
       call += 1;
       if (call === 1) throw new Error("deadlock detected");
       return callback({
         $queryRawUnsafe: async () => [],
-        codexPetRun: { updateMany: async () => ({ count: 1 }), findUniqueOrThrow: async () => ({ lastEventSequence: 3, progressPercent: 40 }) },
+        codexPetRun: {
+          updateMany: async () => ({ count: 1 }),
+          findUniqueOrThrow: async () => ({ lastEventSequence: 3, progressPercent: 40 }),
+        },
         codexPetEvent: { create: async () => ({}) },
         codexPetProject: { updateMany: async () => ({ count: 1 }) },
       });
@@ -450,50 +506,62 @@ describe("Codex pet stale-run recovery", () => {
       // exclusion; the database predicate below models its stale heartbeat
       // OR and keeps a live cancelled worker protected by its lease.
       expect(where.cancelRequested).toBeUndefined();
-      expect((where.status as { readonly in: readonly string[] }).in).not.toEqual(expect.arrayContaining([
-        "awaiting_base_review",
-        "awaiting_direction_review",
-        "awaiting_regeneration_approval",
-      ]));
+      expect((where.status as { readonly in: readonly string[] }).in).not.toEqual(
+        expect.arrayContaining(["awaiting_base_review", "awaiting_direction_review", "awaiting_regeneration_approval"]),
+      );
       const clauses = where.OR as readonly Record<string, unknown>[];
-      expect(clauses).toEqual(expect.arrayContaining([
-        { heartbeatAt: null },
-        { heartbeatAt: { lt: new Date("2026-07-18T00:00:09.000Z") } },
-        { status: "queued" },
-      ]));
-      return rows.filter((row) => row.heartbeatAt === null || row.heartbeatAt < new Date("2026-07-18T00:00:09.000Z") || row.status === "queued");
+      expect(clauses).toEqual(
+        expect.arrayContaining([
+          { heartbeatAt: null },
+          { heartbeatAt: { lt: new Date("2026-07-18T00:00:09.000Z") } },
+          { status: "queued" },
+        ]),
+      );
+      return rows.filter(
+        (row) =>
+          row.heartbeatAt === null || row.heartbeatAt < new Date("2026-07-18T00:00:09.000Z") || row.status === "queued",
+      );
     });
     const enqueue = vi.fn(async (_runId: string) => undefined);
 
-    await expect(recoverStaleRuns({
-      prisma: { codexPetRun: { findMany } } as unknown as PrismaClient,
-      enqueue,
-      now: () => now,
-      env: { CODEX_PET_STALE_RUN_MS: "1000" },
-    })).resolves.toBe(1);
+    await expect(
+      recoverStaleRuns({
+        prisma: { codexPetRun: { findMany } } as unknown as PrismaClient,
+        enqueue,
+        now: () => now,
+        env: { CODEX_PET_STALE_RUN_MS: "1000" },
+      }),
+    ).resolves.toBe(1);
     expect(enqueue).toHaveBeenCalledWith("cancel-stale");
     expect(enqueue).not.toHaveBeenCalledWith("cancel-fresh");
   });
 
   it("releases and immediately requeues only leases still owned during graceful shutdown", async () => {
-    const updateMany = vi.fn(async ({ where, data }: {
-      readonly where: { readonly id: string; readonly workerId: string; readonly status: unknown };
-      readonly data: Record<string, unknown>;
-    }) => {
-      expect(where.status).toEqual({ in: expect.arrayContaining(["standard_generating", "archiving"]) });
-      expect(data).toEqual({ workerId: null, heartbeatAt: null });
-      return { count: where.id === "run-active" && where.workerId === "lease-active" ? 1 : 0 };
-    });
+    const updateMany = vi.fn(
+      async ({
+        where,
+        data,
+      }: {
+        readonly where: { readonly id: string; readonly workerId: string; readonly status: unknown };
+        readonly data: Record<string, unknown>;
+      }) => {
+        expect(where.status).toEqual({ in: expect.arrayContaining(["standard_generating", "archiving"]) });
+        expect(data).toEqual({ workerId: null, heartbeatAt: null });
+        return { count: where.id === "run-active" && where.workerId === "lease-active" ? 1 : 0 };
+      },
+    );
     const enqueue = vi.fn(async (_runId: string) => undefined);
 
-    await expect(releasePreemptedRuns({
-      prisma: { codexPetRun: { updateMany } } as unknown as PrismaClient,
-      deliveries: [
-        { runId: "run-active", workerLeaseId: "lease-active" },
-        { runId: "run-finished", workerLeaseId: "lease-old" },
-      ],
-      enqueue,
-    })).resolves.toBe(1);
+    await expect(
+      releasePreemptedRuns({
+        prisma: { codexPetRun: { updateMany } } as unknown as PrismaClient,
+        deliveries: [
+          { runId: "run-active", workerLeaseId: "lease-active" },
+          { runId: "run-finished", workerLeaseId: "lease-old" },
+        ],
+        enqueue,
+      }),
+    ).resolves.toBe(1);
 
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith("run-active");
@@ -506,12 +574,16 @@ describe("Codex pet stale-run recovery", () => {
       codexPetRun: { updateMany: vi.fn(async () => ({ count: 1 })) },
     } as unknown as PrismaClient;
 
-    await expect(releasePreemptedRuns({
-      prisma,
-      deliveries: [{ runId: "run-active", workerLeaseId: "lease-active" }],
-      enqueue: vi.fn(async () => { throw enqueueError; }),
-      onEnqueueError,
-    })).resolves.toBe(1);
+    await expect(
+      releasePreemptedRuns({
+        prisma,
+        deliveries: [{ runId: "run-active", workerLeaseId: "lease-active" }],
+        enqueue: vi.fn(async () => {
+          throw enqueueError;
+        }),
+        onEnqueueError,
+      }),
+    ).resolves.toBe(1);
 
     expect(onEnqueueError).toHaveBeenCalledWith(enqueueError, "run-active");
   });

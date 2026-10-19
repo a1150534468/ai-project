@@ -9,19 +9,18 @@ const cfg: S3Config = {
   accessKey: "a",
   secretKey: "s",
   forcePathStyle: false,
+  keyPrefix: "",
 };
 
 describe("publicObjectUrl", () => {
   it("优先用 S3_PUBLIC_BASE_URL", () => {
-    expect(publicObjectUrl(cfg, "a/b.webp", { S3_PUBLIC_BASE_URL: "https://cdn.x/" })).toBe(
-      "https://cdn.x/a/b.webp",
-    );
+    expect(publicObjectUrl(cfg, "a/b.webp", { S3_PUBLIC_BASE_URL: "https://cdn.x/" })).toBe("https://cdn.x/a/b.webp");
   });
 
   it("path-style", () => {
-    expect(
-      publicObjectUrl({ ...cfg, forcePathStyle: true }, "a/b.webp", {})
-    ).toBe("https://oss.example.com/buck/a/b.webp");
+    expect(publicObjectUrl({ ...cfg, forcePathStyle: true }, "a/b.webp", {})).toBe(
+      "https://oss.example.com/buck/a/b.webp",
+    );
   });
 
   it("virtual-host style", () => {
@@ -29,13 +28,35 @@ describe("publicObjectUrl", () => {
   });
 
   it("key 分段做 URL 编码，不吃掉斜杠", () => {
-    expect(publicObjectUrl(cfg, "a b/c+d.webp", {})).toBe(
-      "https://buck.oss.example.com/a%20b/c%2Bd.webp",
-    );
+    expect(publicObjectUrl(cfg, "a b/c+d.webp", {})).toBe("https://buck.oss.example.com/a%20b/c%2Bd.webp");
   });
 
   it("保留 endpoint 的端口和路径前缀", () => {
     const endpoint = { ...cfg, endpoint: "http://localhost:9000/root", forcePathStyle: true };
     expect(publicObjectUrl(endpoint, "a.png", {})).toBe("http://localhost:9000/root/buck/a.png");
+  });
+
+  // The URL is what the model provider or the browser fetches. Omitting the
+  // folder here yields a 404 that looks exactly like "the object was never written".
+  describe("环境文件夹", () => {
+    const devCfg = { ...cfg, keyPrefix: "dev" };
+
+    it("virtual-host style", () => {
+      expect(publicObjectUrl(devCfg, "workflow/images/a.png", {})).toBe(
+        "https://buck.oss.example.com/dev/workflow/images/a.png",
+      );
+    });
+
+    it("配合 S3_PUBLIC_BASE_URL", () => {
+      expect(publicObjectUrl(devCfg, "a/b.webp", { S3_PUBLIC_BASE_URL: "https://cdn.x/" })).toBe(
+        "https://cdn.x/dev/a/b.webp",
+      );
+    });
+
+    it("同样对 path style 生效", () => {
+      expect(publicObjectUrl({ ...devCfg, forcePathStyle: true }, "a/b.webp", {})).toBe(
+        "https://oss.example.com/buck/dev/a/b.webp",
+      );
+    });
   });
 });

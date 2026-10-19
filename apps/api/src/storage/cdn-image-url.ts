@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ImageUrlSigner } from "./cos-image-url.js";
 import { validateSignedImageRequest } from "./image-url-validation.js";
+import { normalizeKeyPrefix, resolveKey } from "./s3-key.js";
 
 // Must match Tencent CDN: TypeD / SHA256 / dec / sign / t / all files / 300 seconds.
 export const CDN_IMAGE_AUTH_TTL_SECONDS = 300;
@@ -27,6 +28,9 @@ export function createCdnImageUrlSigner(env: NodeJS.ProcessEnv): ImageUrlSigner 
   if (!/^[A-Za-z0-9]{6,32}$/.test(key)) {
     throw new Error("WORKFLOW_IMAGE_CDN_SIGNING_KEY must contain 6-32 alphanumeric characters");
   }
+  // CDN signs the request path, which includes the environment folder. The CDN
+  // origin is the bucket, so `/dev/workflow/...` is the path that exists.
+  const keyPrefix = normalizeKeyPrefix(env.S3_KEY_PREFIX);
 
   return async (image) => {
     validateSignedImageRequest(image);
@@ -46,7 +50,7 @@ export function createCdnImageUrlSigner(env: NodeJS.ProcessEnv): ImageUrlSigner 
     // Leave one second of slack because the edge may accept equality at its expiry boundary.
     const end = Math.min(now + CDN_IMAGE_AUTH_TTL_SECONDS, Math.floor(image.expiresAt / 1_000)) - 1;
     const timestamp = String(end - CDN_IMAGE_AUTH_TTL_SECONDS);
-    const path = `/${image.objectKey.split("/").map(encodeURIComponent).join("/")}`;
+    const path = `/${resolveKey({ keyPrefix }, image.objectKey).split("/").map(encodeURIComponent).join("/")}`;
     const signature = createHash("sha256").update(`${key}${path}${timestamp}`).digest("hex");
     const url = new URL(path, base.origin);
     url.searchParams.set("sign", signature);

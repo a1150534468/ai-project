@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { open, rm, stat } from "node:fs/promises";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { resolveKey } from "./s3-key.js";
 import type { DownloadedObject, GetObjectToFileOptions, PutObjectOptions, S3 } from "./s3-types.js";
 
 export async function putObjectFile(
@@ -15,14 +16,16 @@ export async function putObjectFile(
   const { size } = await stat(filePath);
   const body = createReadStream(filePath);
   try {
-    await s3.client.send(new PutObjectCommand({
-      Bucket: s3.bucket,
-      Key: key,
-      Body: body,
-      ContentLength: size,
-      ContentType: contentType,
-      ...(options.acl ? { ACL: options.acl } : {}),
-    }));
+    await s3.client.send(
+      new PutObjectCommand({
+        Bucket: s3.bucket,
+        Key: resolveKey(s3, key),
+        Body: body,
+        ContentLength: size,
+        ContentType: contentType,
+        ...(options.acl ? { ACL: options.acl } : {}),
+      }),
+    );
   } finally {
     body.destroy();
   }
@@ -63,7 +66,12 @@ export async function getObjectToFile(
     throw new Error("maxBytes must be a non-negative safe integer");
   }
 
-  const response = await s3.client.send(new GetObjectCommand({ Bucket: s3.bucket, Key: key }));
+  const response = await s3.client.send(
+    new GetObjectCommand({
+      Bucket: s3.bucket,
+      Key: resolveKey(s3, key),
+    }),
+  );
   if (!response.Body) throw new Error(`S3 object ${key} returned an empty body`);
   if (maxBytes !== undefined && response.ContentLength !== undefined && response.ContentLength > maxBytes) {
     await discardBody(response.Body).catch(() => undefined);

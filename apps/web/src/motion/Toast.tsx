@@ -5,7 +5,7 @@
  * 状态用 reducer 而不是 `useState`：删除发生在 2.6 秒后的定时器回调里，
  * 那时候闭包捕获的数组早就旧了 —— 走 reducer 才不会把这期间新弹的提示一起抹掉。
  */
-import { createContext, useCallback, useContext, useReducer, useRef, type CSSProperties, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useReducer, useRef, type CSSProperties, type ReactNode } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { Confetti } from "./Confetti";
 import { toastIn } from "./variants";
@@ -93,8 +93,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   // 有成功提示就撒纸屑。挂在 provider 上而不是每条提示里 —— 连着成功两次只该撒一轮
   const hasOk = toasts.some((item) => item.kind === "ok");
 
+  /**
+   * context value 必须记住引用。`show` 自己已经是 `useCallback` 稳定的，但内联对象
+   * `{ show }` 每次 render 都是新的 —— 而本组件每次弹/撤提示都会 render 一次。
+   * 消费方普遍把 `toast` 放进 `useCallback` 的依赖里，引用一变回调就重建，挂在
+   * `useEffect([refresh])` 上的请求就会再发一遍：请求失败 → 弹提示 → 本组件 render →
+   * 新 value → 新 refresh → 再请求…… 这就是「接口无限调用」的成因。
+   */
+  const api = useMemo<ToastApi>(() => ({ show }), [show]);
+
   return (
-    <ToastCtx.Provider value={{ show }}>
+    <ToastCtx.Provider value={api}>
       {children}
       {/* aria-live 让读屏软件念出来：提示只出现 2.6 秒，光靠视觉的用户看不到 */}
       <div style={STACK_STYLE} role="status" aria-live="polite">

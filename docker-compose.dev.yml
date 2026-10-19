@@ -1,3 +1,6 @@
+# 本地开发的数据层：只保留有状态的自建服务。
+# 对象存储不再本地起服务——dev 与 prod 连同一个 COS 桶，用 S3_KEY_PREFIX
+# （dev/prod）区分文件夹，见 apps/api/src/storage/s3-key.ts。
 services:
   postgres:
     image: pgvector/pgvector:pg17
@@ -10,36 +13,5 @@ services:
   redis:
     image: redis:7
     ports: ["6380:6379"]
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio-access-key-placeholder}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio-secret-key-placeholder}
-    ports: ["9000:9000", "9001:9001"]
-    volumes: ["minio-data:/data"]
-  minio-init:
-    image: minio/mc:latest
-    depends_on:
-      - minio
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minio-access-key-placeholder}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minio-secret-key-placeholder}
-      S3_BUCKET: ${S3_BUCKET:-ai-assistant-local}
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        attempts=0
-        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null 2>&1; do
-          attempts=$$((attempts + 1))
-          if [ "$$attempts" -ge 60 ]; then
-            echo "MinIO 在 60 秒内未就绪" >&2
-            exit 1
-          fi
-          sleep 1
-        done
-        mc mb --ignore-existing "local/$$S3_BUCKET"
 volumes:
   ai_assistant_pg:
-  minio-data:

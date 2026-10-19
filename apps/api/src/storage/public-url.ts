@@ -1,4 +1,5 @@
-import type { S3Config } from "./s3.js";
+import { resolveKey } from "./s3-key.js";
+import type { S3Config } from "./s3-types.js";
 
 function encodedObjectKey(key: string): string {
   return key.split("/").map(encodeURIComponent).join("/");
@@ -10,12 +11,11 @@ function appendPath(url: URL, suffix: string): string {
   return url.toString();
 }
 
-export function publicObjectUrl(
-  cfg: S3Config,
-  key: string,
-  env: NodeJS.ProcessEnv = process.env,
-): string {
-  const encodedKey = encodedObjectKey(key);
+export function publicObjectUrl(cfg: S3Config, key: string, env: NodeJS.ProcessEnv = process.env): string {
+  // The environment folder is part of the physical path, so the public URL has
+  // to carry it too. Without this every `dev/...` object would be requested as
+  // `/workflow/...` and 404 against the bucket root.
+  const encodedKey = encodedObjectKey(resolveKey(cfg, key));
   const publicBase = env.S3_PUBLIC_BASE_URL?.trim();
   if (publicBase) return appendPath(new URL(publicBase), encodedKey);
 

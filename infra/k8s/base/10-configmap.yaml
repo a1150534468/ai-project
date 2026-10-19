@@ -19,12 +19,14 @@ data:
   EMBEDDING_MODEL: "text-embedding-v4"
   EMBEDDING_DIM: "1024"
   CORS_ORIGIN: "https://app.example.com,https://admin.example.com"
-  # 知识库对象存储（S3 兼容）；AK/SK 在 Secret。同资源池走内网 endpoint。
-  S3_ENDPOINT: "http://s3.internal.example.com"
-  S3_REGION: "example-region"
-  S3_BUCKET: "aiproject-assets"
+  # 知识库对象存储（腾讯云 COS，走 S3 兼容协议）；AK/SK 在 Secret。
+  S3_ENDPOINT: "https://cos.ap-guangzhou.myqcloud.com"
+  S3_REGION: "ap-guangzhou"
+  S3_BUCKET: "aiproject-assets-1250000000"
   S3_PUBLIC_BASE_URL: "https://assets.example.com"
   S3_FORCE_PATH_STYLE: "false"
+  # 同桶内用文件夹区分环境；前缀只在存储层施加，objectKey 存相对 key。
+  S3_KEY_PREFIX: "prod"
   # 生图复用同一业务空间的 BAILIAN_WORKSPACE_ID / BAILIAN_API_KEY，直连百炼原生多模态接口。
   IMAGE_GENERATION_MODEL: "qwen-image-2.0-pro-2026-04-22"
   GPT_IMAGE_GENERATION_ENDPOINT: "https://api.ai-pixel.online/v1/images/generations"

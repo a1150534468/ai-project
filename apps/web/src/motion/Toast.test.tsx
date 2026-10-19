@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { fireEvent, render } from "@testing-library/react";
+import { useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider, toastReducer, useToast, type ToastKind, type ToastState } from "./Toast";
@@ -99,6 +100,44 @@ describe("ToastProvider", () => {
     );
 
     expect(getByRole("status").getAttribute("aria-live")).toBe("polite");
+  });
+
+  /**
+   * 这条守的是「接口无限调用」那类事故：消费方普遍把 `toast` 放进 `useCallback` 依赖，
+   * 一旦弹一条提示就换掉 context value 的引用，回调重建 → 依赖它的 effect 重跑 → 再请求
+   * → 再失败 → 再弹……请求自己喂自己。value 必须跨 render 稳定。
+   */
+  it("弹提示不换 context value 的引用：消费方的 useCallback 依赖才不会被重建", () => {
+    const seen: ReturnType<typeof useToast>[] = [];
+
+    function Probe() {
+      const toast = useToast();
+      const [renders, setRenders] = useState(0);
+      seen.push(toast);
+
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            toast.show("err", "保存失败");
+            setRenders(renders + 1);
+          }}
+        >
+          弹一条
+        </button>
+      );
+    }
+
+    const { getByRole } = render(
+      <ToastProvider>
+        <Probe />
+      </ToastProvider>,
+    );
+
+    fireEvent.click(getByRole("button", { name: "弹一条" }));
+
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.every((value) => value === seen[0])).toBe(true);
   });
 });
 

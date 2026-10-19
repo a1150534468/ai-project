@@ -64,6 +64,25 @@ describe("COS private image URL signing (no cloud requests)", () => {
     expect(end! * 1000).toBeLessThanOrEqual(now + 12_500);
   });
 
+  // COS signs the exact key, so the environment folder must be inside BOTH the
+  // path and the signature. Signing the logical key would produce a valid-looking
+  // URL for an object that does not exist.
+  it("signs the environment folder into both the path and the signature", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const url = new URL((await createImageUrlSigner({ ...env, S3_KEY_PREFIX: "dev" })(request))!);
+    const physicalKey = `dev/${request.objectKey}`;
+    expect(decodeURIComponent(url.pathname)).toBe(`/${physicalKey}`);
+
+    const encode = (value: string) =>
+      encodeURIComponent(value).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+    const keys = ["response-cache-control", "response-content-disposition", "response-content-type"];
+    const query = keys.map((key) => `${key}=${encode(url.searchParams.get(key)!)}`).join("&");
+    const httpString = `get\n/${physicalKey}\n${query}\nhost=${url.hostname}\n`;
+    const signKey = createHmac("sha1", env.S3_SECRET_KEY).update(url.searchParams.get("q-key-time")!).digest("hex");
+    const stringToSign = `sha1\n${url.searchParams.get("q-sign-time")}\n${createHash("sha1").update(httpString).digest("hex")}\n`;
+    expect(url.searchParams.get("q-signature")).toBe(createHmac("sha1", signKey).update(stringToSign).digest("hex"));
+  });
+
   it.each([now - 1, now, now + 999, now + 1_999, Number.NaN, Number.POSITIVE_INFINITY])(
     "rejects expired, near-expiry or invalid expiry %s",
     async (expiresAt) => {

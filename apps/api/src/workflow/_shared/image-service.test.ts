@@ -26,7 +26,11 @@ import {
 const PNG_B64 = Buffer.from("png").toString("base64");
 
 async function pngB64(width = 48, height = 32): Promise<string> {
-  return (await sharp({ create: { width, height, channels: 4, background: "#ff00ff" } }).png().toBuffer()).toString("base64");
+  return (
+    await sharp({ create: { width, height, channels: 4, background: "#ff00ff" } })
+      .png()
+      .toBuffer()
+  ).toString("base64");
 }
 
 vi.mock("../../storage/s3.js", async () => {
@@ -38,7 +42,9 @@ vi.mock("../../storage/s3.js", async () => {
   };
 });
 
-function createConfig(endpoint = "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"): ImageGenerationConfig {
+function createConfig(
+  endpoint = "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+): ImageGenerationConfig {
   return {
     endpoint,
     apiKey: "image-key",
@@ -78,45 +84,53 @@ describe("image service", () => {
   });
 
   it("loads public Qwen Image from DashScope while preserving explicit and custom routes", () => {
-    expect(loadImageGenerationConfig({
-      BAILIAN_WORKSPACE_ID: "ws-123",
-      BAILIAN_REGION: "cn-beijing",
-      BAILIAN_API_KEY: "bailian-key",
-      IMAGE_API_KEY: "",
-    })).toEqual({
+    expect(
+      loadImageGenerationConfig({
+        BAILIAN_WORKSPACE_ID: "ws-123",
+        BAILIAN_REGION: "cn-beijing",
+        BAILIAN_API_KEY: "bailian-key",
+        IMAGE_API_KEY: "",
+      }),
+    ).toEqual({
       endpoint: "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
       apiKey: "bailian-key",
       model: "qwen-image-2.0-pro-2026-04-22",
       protocol: "bailian",
     });
 
-    expect(loadImageGenerationConfig({
-      IMAGE_BASE_URL: "https://image.test/api/v1",
-      IMAGE_API_KEY: "image-key",
-      IMAGE_GENERATION_MODEL: "custom-image-model",
-    })).toEqual({
+    expect(
+      loadImageGenerationConfig({
+        IMAGE_BASE_URL: "https://image.test/api/v1",
+        IMAGE_API_KEY: "image-key",
+        IMAGE_GENERATION_MODEL: "custom-image-model",
+      }),
+    ).toEqual({
       endpoint: "https://image.test/api/v1/services/aigc/multimodal-generation/generation",
       apiKey: "image-key",
       model: "custom-image-model",
       protocol: "bailian",
     });
 
-    expect(loadImageGenerationConfig({
-      IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
-      DASHSCOPE_API_KEY: "dashscope-key",
-    })).toEqual({
+    expect(
+      loadImageGenerationConfig({
+        IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
+        DASHSCOPE_API_KEY: "dashscope-key",
+      }),
+    ).toEqual({
       endpoint: "https://relay.test/custom-endpoint",
       apiKey: "dashscope-key",
       model: "qwen-image-2.0-pro-2026-04-22",
       protocol: "bailian",
     });
 
-    expect(loadImageGenerationConfig({
-      BAILIAN_WORKSPACE_ID: "ws-123",
-      BAILIAN_REGION: "cn-beijing",
-      BAILIAN_API_KEY: "bailian-key",
-      IMAGE_GENERATION_MODEL: "custom-workspace-image-model",
-    })).toEqual({
+    expect(
+      loadImageGenerationConfig({
+        BAILIAN_WORKSPACE_ID: "ws-123",
+        BAILIAN_REGION: "cn-beijing",
+        BAILIAN_API_KEY: "bailian-key",
+        IMAGE_GENERATION_MODEL: "custom-workspace-image-model",
+      }),
+    ).toEqual({
       endpoint: "https://ws-123.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
       apiKey: "bailian-key",
       model: "custom-workspace-image-model",
@@ -135,16 +149,24 @@ describe("image service", () => {
       model: "gpt-image-2",
       protocol: "openai",
     });
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      data: [{ b64_json: PNG_B64 }],
-    }), { status: 200 }));
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            data: [{ b64_json: PNG_B64 }],
+          }),
+          { status: 200 },
+        ),
+    );
 
-    await expect(callImageGeneration({
-      config,
-      prompt: "minimal product photo",
-      size: "2048x1152",
-      fetchFn,
-    })).resolves.toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
+    await expect(
+      callImageGeneration({
+        config,
+        prompt: "minimal product photo",
+        size: "2048x1152",
+        fetchFn,
+      }),
+    ).resolves.toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
 
     expect(fetchFn).toHaveBeenCalledWith(
       "https://pixel.test/v1/images/generations",
@@ -171,9 +193,15 @@ describe("image service", () => {
       GPT_IMAGE_API_KEY: "gpt-image-key",
       GPT_IMAGE_GENERATION_ENDPOINT: "https://pixel.test/v1/images/generations",
     });
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      data: [{ b64_json: PNG_B64 }],
-    }), { status: 200 }));
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            data: [{ b64_json: PNG_B64 }],
+          }),
+          { status: 200 },
+        ),
+    );
     await callImageGeneration({ config, prompt: "p", size: "2048x1152", fetchFn, env: { IMAGE_UPSTREAM_STREAM: "0" } });
     const body = JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body));
     expect(body.stream).toBeUndefined();
@@ -191,12 +219,18 @@ describe("image service", () => {
       "data: [DONE]",
       "",
     ].join("\n");
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(sse, {
-      status: 200,
-      headers: { "content-type": "text/event-stream" },
-    }));
-    await expect(callImageGeneration({ config, prompt: "p", size: "2048x1152", fetchFn }))
-      .resolves.toEqual({ kind: "b64", b64: PNG_B64, mime: "image/png" });
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(sse, {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    await expect(callImageGeneration({ config, prompt: "p", size: "2048x1152", fetchFn })).resolves.toEqual({
+      kind: "b64",
+      b64: PNG_B64,
+      mime: "image/png",
+    });
   });
 
   it("times out a stream that stalls mid-body instead of hanging past the attempt deadline", async () => {
@@ -210,21 +244,31 @@ describe("image service", () => {
     const stalling = new ReadableStream<Uint8Array>({
       start(controller) {
         // 头到了、第一个 partial 也到了，然后上游沉默——正是实测的卡死形状。
-        controller.enqueue(new TextEncoder().encode(`data: {"type":"image_generation.partial_image","b64_json":"cGFydGlhbA=="}\n`));
+        controller.enqueue(
+          new TextEncoder().encode(`data: {"type":"image_generation.partial_image","b64_json":"cGFydGlhbA=="}\n`),
+        );
       },
     });
     const fetchFn = vi.fn(async (_url: string, init?: RequestInit) => {
-      init?.signal?.addEventListener("abort", () => { upstreamAborted = true; }, { once: true });
+      init?.signal?.addEventListener(
+        "abort",
+        () => {
+          upstreamAborted = true;
+        },
+        { once: true },
+      );
       return new Response(stalling, { status: 200, headers: { "content-type": "text/event-stream" } });
     });
 
-    await expect(callImageGeneration({
-      config,
-      prompt: "p",
-      size: "2048x1152",
-      fetchFn,
-      env: { IMAGE_ATTEMPT_TIMEOUT_MS: "30" },
-    })).rejects.toBeInstanceOf(ImageGenerationTimeoutError);
+    await expect(
+      callImageGeneration({
+        config,
+        prompt: "p",
+        size: "2048x1152",
+        fetchFn,
+        env: { IMAGE_ATTEMPT_TIMEOUT_MS: "30" },
+      }),
+    ).rejects.toBeInstanceOf(ImageGenerationTimeoutError);
     // 超时同时要真的把 abort 传给上游连接，别只是本地放手、让请求继续挂着。
     expect(upstreamAborted).toBe(true);
   });
@@ -242,21 +286,25 @@ describe("image service", () => {
       return new Response(JSON.stringify({ data: [{ b64_json: PNG_B64 }] }), { status: 200 });
     });
     // 用户主动取消照旧抛 AbortError，不能被伪装成可重试的超时。
-    await expect(callImageGeneration({
-      config,
-      prompt: "p",
-      size: "2048x1152",
-      fetchFn,
-      signal: controller.signal,
-      env: { IMAGE_ATTEMPT_TIMEOUT_MS: "60000" },
-    })).rejects.not.toBeInstanceOf(ImageGenerationTimeoutError);
+    await expect(
+      callImageGeneration({
+        config,
+        prompt: "p",
+        size: "2048x1152",
+        fetchFn,
+        signal: controller.signal,
+        env: { IMAGE_ATTEMPT_TIMEOUT_MS: "60000" },
+      }),
+    ).rejects.not.toBeInstanceOf(ImageGenerationTimeoutError);
   });
 
   it("loads the portrait-only Seedream 5.0 Lite model through Ark", () => {
-    expect(loadImageGenerationConfigForModel("doubao-seedream-5-0-260128", {
-      ARK_API_KEY: "ark-key",
-      ARK_IMAGE_ENDPOINT: "https://ark.test/api/v3/images/generations",
-    })).toEqual({
+    expect(
+      loadImageGenerationConfigForModel("doubao-seedream-5-0-260128", {
+        ARK_API_KEY: "ark-key",
+        ARK_IMAGE_ENDPOINT: "https://ark.test/api/v3/images/generations",
+      }),
+    ).toEqual({
       endpoint: "https://ark.test/api/v3/images/generations",
       apiKey: "ark-key",
       model: "doubao-seedream-5-0-260128",
@@ -283,10 +331,13 @@ describe("image service", () => {
       prompt: "mascot portrait",
       size: "1024x1024",
       quality: "low",
-      fetchFn: vi.fn(async () => new Response(JSON.stringify(responsePayload), {
-        status: 200,
-        headers: { "x-request-id": "req-generation-123" },
-      })),
+      fetchFn: vi.fn(
+        async () =>
+          new Response(JSON.stringify(responsePayload), {
+            status: 200,
+            headers: { "x-request-id": "req-generation-123" },
+          }),
+      ),
     });
     const legacy = await callImageGeneration({
       config,
@@ -319,35 +370,40 @@ describe("image service", () => {
   it("posts Seedream reference images through the official image field", async () => {
     const firstReference = Buffer.from("reference-one").toString("base64");
     const secondReference = Buffer.from("reference-two").toString("base64");
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      model: "doubao-seedream-4-5-251128",
-      data: [{ url: "https://image.test/portrait.png", size: "1728x2304" }],
-    }), { status: 200, headers: { "x-request-id": "seedream-request-1" } }));
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            model: "doubao-seedream-4-5-251128",
+            data: [{ url: "https://image.test/portrait.png", size: "1728x2304" }],
+          }),
+          { status: 200, headers: { "x-request-id": "seedream-request-1" } },
+        ),
+    );
 
-    await expect(callImageEdit({
-      config: {
-        endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
-        apiKey: "ark-key",
-        model: "doubao-seedream-4-5-251128",
-        protocol: "volcengine",
-      },
-      prompt: "keep the same person",
-      referenceImages: [
-        { b64: firstReference, mime: "image/jpeg" },
-        { b64: secondReference, mime: "image/png" },
-      ],
-      size: "1728x2304",
-      outputFormat: "png",
-      fetchFn,
-    })).resolves.toEqual({ kind: "url", url: "https://image.test/portrait.png" });
+    await expect(
+      callImageEdit({
+        config: {
+          endpoint: "https://ark.cn-beijing.volces.com/api/v3/images/generations",
+          apiKey: "ark-key",
+          model: "doubao-seedream-4-5-251128",
+          protocol: "volcengine",
+        },
+        prompt: "keep the same person",
+        referenceImages: [
+          { b64: firstReference, mime: "image/jpeg" },
+          { b64: secondReference, mime: "image/png" },
+        ],
+        size: "1728x2304",
+        outputFormat: "png",
+        fetchFn,
+      }),
+    ).resolves.toEqual({ kind: "url", url: "https://image.test/portrait.png" });
 
     expect(JSON.parse(String(fetchFn.mock.calls[0]?.[1]?.body))).toEqual({
       model: "doubao-seedream-4-5-251128",
       prompt: "keep the same person",
-      image: [
-        `data:image/jpeg;base64,${firstReference}`,
-        `data:image/png;base64,${secondReference}`,
-      ],
+      image: [`data:image/jpeg;base64,${firstReference}`, `data:image/png;base64,${secondReference}`],
       size: "1728x2304",
       response_format: "url",
       sequential_image_generation: "disabled",
@@ -362,14 +418,26 @@ describe("image service", () => {
       model: "doubao-seedream-4-5-251128",
       protocol: "volcengine",
     };
-    const generationFetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      model: config.model,
-      data: [{ url: "https://image.test/base.png" }],
-    }), { status: 200 }));
-    const editFetch = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      model: config.model,
-      data: [{ url: "https://image.test/row.png" }],
-    }), { status: 200 }));
+    const generationFetch = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            model: config.model,
+            data: [{ url: "https://image.test/base.png" }],
+          }),
+          { status: 200 },
+        ),
+    );
+    const editFetch = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            model: config.model,
+            data: [{ url: "https://image.test/row.png" }],
+          }),
+          { status: 200 },
+        ),
+    );
 
     await callImageGeneration({ config, prompt: "base", size: "1024x1024", fetchFn: generationFetch });
     await callImageEdit({
@@ -388,19 +456,25 @@ describe("image service", () => {
     const outputB64 = await pngB64(64, 40);
     const firstReference = Buffer.from("reference-one").toString("base64");
     const secondReference = Buffer.from("reference-two").toString("base64");
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      model: "gpt-image-2-codex",
-      size: "1536x1024",
-      quality: "auto",
-      data: [{ b64_json: outputB64, mime_type: "image/png" }],
-      usage: {
-        input_tokens: 101,
-        input_tokens_details: { image_tokens: 90, text_tokens: 11 },
-        output_tokens: 202,
-        output_tokens_details: { image_tokens: 202 },
-        total_tokens: 303,
-      },
-    }), { status: 200, headers: { "x-openai-request-id": "req-edit-456" } }));
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            model: "gpt-image-2-codex",
+            size: "1536x1024",
+            quality: "auto",
+            data: [{ b64_json: outputB64, mime_type: "image/png" }],
+            usage: {
+              input_tokens: 101,
+              input_tokens_details: { image_tokens: 90, text_tokens: 11 },
+              output_tokens: 202,
+              output_tokens_details: { image_tokens: 202 },
+              total_tokens: 303,
+            },
+          }),
+          { status: 200, headers: { "x-openai-request-id": "req-edit-456" } },
+        ),
+    );
 
     const result = await callImageEditDetailed({
       config: {
@@ -458,13 +532,26 @@ describe("image service", () => {
 
   it("normalizes legacy raster references to PNG before GPT Image multipart edits", async () => {
     const outputB64 = await pngB64(32, 24);
-    const tiff = await sharp({ create: { width: 40, height: 28, channels: 4, background: "#2266aa" } }).tiff().toBuffer();
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({
-      data: [{ b64_json: outputB64, mime_type: "image/png" }],
-    }), { status: 200 }));
+    const tiff = await sharp({ create: { width: 40, height: 28, channels: 4, background: "#2266aa" } })
+      .tiff()
+      .toBuffer();
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            data: [{ b64_json: outputB64, mime_type: "image/png" }],
+          }),
+          { status: 200 },
+        ),
+    );
 
     await callImageEditDetailed({
-      config: { endpoint: "https://pixel.test/v1/images/generations", apiKey: "generation-key", model: "gpt-image-2", protocol: "openai" },
+      config: {
+        endpoint: "https://pixel.test/v1/images/generations",
+        apiKey: "generation-key",
+        model: "gpt-image-2",
+        protocol: "openai",
+      },
       prompt: "normalize the reference",
       referenceImages: [{ b64: tiff.toString("base64"), mime: "image/tiff", filename: "reference.tiff" }],
       size: "1024x1024",
@@ -508,10 +595,14 @@ describe("image service", () => {
   });
 
   it("posts native Bailian multimodal JSON and extracts its image URL", async () => {
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
-      new Response(JSON.stringify({
-        output: { choices: [{ message: { content: [{ image: "https://image.test/result.png" }] } }] },
-      }), { status: 200 })
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            output: { choices: [{ message: { content: [{ image: "https://image.test/result.png" }] } }] },
+          }),
+          { status: 200 },
+        ),
     );
 
     const result = await callImageGenerationDetailed({
@@ -540,8 +631,15 @@ describe("image service", () => {
     const [, init] = fetchFn.mock.calls[0] ?? [];
     const body = JSON.parse(String(init?.body)) as {
       readonly model: string;
-      readonly input: { readonly messages: readonly [{ readonly role: string; readonly content: readonly [{ readonly text: string }] }] };
-      readonly parameters: { readonly n: number; readonly prompt_extend: boolean; readonly watermark: boolean; readonly size: string };
+      readonly input: {
+        readonly messages: readonly [{ readonly role: string; readonly content: readonly [{ readonly text: string }] }];
+      };
+      readonly parameters: {
+        readonly n: number;
+        readonly prompt_extend: boolean;
+        readonly watermark: boolean;
+        readonly size: string;
+      };
     };
     expect(body).toEqual({
       model: "qwen-image-2.0-pro-2026-04-22",
@@ -555,9 +653,15 @@ describe("image service", () => {
       config: createConfig("https://relay.test/native-generation"),
       prompt: "one mascot",
       size: "1024x1024",
-      fetchFn: vi.fn(async () => new Response(JSON.stringify({
-        output: { choices: [{ message: { content: [{ image: "https://image.test/result.png" }] } }] },
-      }), { status: 200 })),
+      fetchFn: vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              output: { choices: [{ message: { content: [{ image: "https://image.test/result.png" }] } }] },
+            }),
+            { status: 200 },
+          ),
+      ),
     });
 
     expect(result.requestedModel).toBe("qwen-image-2.0-pro-2026-04-22");
@@ -567,18 +671,26 @@ describe("image service", () => {
   it("rejects output sizes beyond Qwen Image 2.0's total-pixel limit", async () => {
     const fetchFn = vi.fn();
 
-    await expect(callImageGeneration({
-      config: createConfig(),
-      prompt: "oversized poster",
-      size: "3840x2160",
-      fetchFn,
-    })).rejects.toThrow("between 512*512 and 2048*2048 total pixels");
+    await expect(
+      callImageGeneration({
+        config: createConfig(),
+        prompt: "oversized poster",
+        size: "3840x2160",
+        fetchFn,
+      }),
+    ).rejects.toThrow("between 512*512 and 2048*2048 total pixels");
     expect(fetchFn).not.toHaveBeenCalled();
   });
 
   it("posts Qwen edits as multimodal JSON with base64 reference images", async () => {
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
-      new Response(JSON.stringify({ output: { choices: [{ message: { content: [{ image: "https://image.test/edited.png" }] } }] } }), { status: 200 })
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(
+          JSON.stringify({
+            output: { choices: [{ message: { content: [{ image: "https://image.test/edited.png" }] } }] },
+          }),
+          { status: 200 },
+        ),
     );
     const firstReference = Buffer.from("segment-a").toString("base64");
     const secondReference = Buffer.from("segment-b").toString("base64");
@@ -596,25 +708,35 @@ describe("image service", () => {
 
     expect(image).toEqual({ kind: "url", url: "https://image.test/edited.png" });
     expect(fetchFn).toHaveBeenCalledTimes(1);
-    expect(fetchFn.mock.calls[0]?.[0]).toBe("https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
+    expect(fetchFn.mock.calls[0]?.[0]).toBe(
+      "https://workspace.cn-beijing.maas.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+    );
     const [, init] = fetchFn.mock.calls[0] ?? [];
     expect(init?.method).toBe("POST");
     expect(init?.headers).toEqual({ "content-type": "application/json", authorization: "Bearer image-key" });
     const body = JSON.parse(String(init?.body));
     expect(body).toEqual({
       model: "qwen-image-2.0-pro-2026-04-22",
-      input: { messages: [{ role: "user", content: [
-        { image: `data:image/png;base64,${firstReference}` },
-        { image: `data:image/png;base64,${secondReference}` },
-        { text: "extend the poster" },
-      ] }] },
+      input: {
+        messages: [
+          {
+            role: "user",
+            content: [
+              { image: `data:image/png;base64,${firstReference}` },
+              { image: `data:image/png;base64,${secondReference}` },
+              { text: "extend the poster" },
+            ],
+          },
+        ],
+      },
       parameters: { n: 1, prompt_extend: true, watermark: false, size: "1024*1024" },
     });
   });
 
   it("preserves explicit width-height and auto sizes for image edits", async () => {
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
-      new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 })
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 }),
     );
     const reference = { b64: Buffer.from("segment").toString("base64"), mime: "image/png" };
 
@@ -640,8 +762,9 @@ describe("image service", () => {
   });
 
   it("uses the same native multimodal endpoint for generation and editing", async () => {
-    const fetchFn = vi.fn(async (_url: string, _init?: RequestInit) =>
-      new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 })
+    const fetchFn = vi.fn(
+      async (_url: string, _init?: RequestInit) =>
+        new Response(JSON.stringify({ data: [{ b64_json: PNG_B64, mime_type: "image/png" }] }), { status: 200 }),
     );
 
     const image = await callImageEdit({
@@ -660,20 +783,25 @@ describe("image service", () => {
   });
 
   it("prefers an explicit edit endpoint and otherwise uses the native generation endpoint", () => {
-    expect(loadImageEditEndpoint({
-      IMAGE_EDIT_ENDPOINT: "https://relay.test/v1/images/edits",
-    })).toBe("https://relay.test/v1/images/edits");
+    expect(
+      loadImageEditEndpoint({
+        IMAGE_EDIT_ENDPOINT: "https://relay.test/v1/images/edits",
+      }),
+    ).toBe("https://relay.test/v1/images/edits");
 
-    expect(loadImageEditEndpoint({
-      IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
-    })).toBe("https://relay.test/custom-endpoint");
+    expect(
+      loadImageEditEndpoint({
+        IMAGE_GENERATION_ENDPOINT: "https://relay.test/custom-endpoint",
+      }),
+    ).toBe("https://relay.test/custom-endpoint");
 
-    expect(loadImageEditEndpoint({
-      BAILIAN_WORKSPACE_ID: "ws-123",
-    })).toBe("https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
+    expect(
+      loadImageEditEndpoint({
+        BAILIAN_WORKSPACE_ID: "ws-123",
+      }),
+    ).toBe("https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation");
 
-    expect(loadImageEditEndpoint({}, "https://generation.test/native"))
-      .toBe("https://generation.test/native");
+    expect(loadImageEditEndpoint({}, "https://generation.test/native")).toBe("https://generation.test/native");
   });
 
   it("throws when the upstream image payload has no url or b64 output", () => {
@@ -687,13 +815,21 @@ describe("image service", () => {
     expect(sanitizeImageUpstreamRequestId("Bearer secret-value")).toBeNull();
     expect(sanitizeImageUpstreamRequestId("sk-test-secret-value")).toBeNull();
     expect(sanitizeImageUpstreamRequestId("x".repeat(201))).toBeNull();
-    expect(imageUpstreamRequestIdFromHeaders(new Headers({
-      "x-request-id": "unsafe request id",
-      "x-openai-request-id": "req-fallback-789",
-    }))).toBe("req-fallback-789");
-    expect(imageUpstreamRequestIdFromHeaders(new Headers({
-      "x-dashscope-request-id": "dashscope-request-456",
-    }))).toBe("dashscope-request-456");
+    expect(
+      imageUpstreamRequestIdFromHeaders(
+        new Headers({
+          "x-request-id": "unsafe request id",
+          "x-openai-request-id": "req-fallback-789",
+        }),
+      ),
+    ).toBe("req-fallback-789");
+    expect(
+      imageUpstreamRequestIdFromHeaders(
+        new Headers({
+          "x-dashscope-request-id": "dashscope-request-456",
+        }),
+      ),
+    ).toBe("dashscope-request-456");
   });
 
   it.each([
@@ -711,9 +847,15 @@ describe("image service", () => {
       },
       prompt: "mascot",
       size: "1024x1024",
-      fetchFn: vi.fn(async () => new Response(JSON.stringify({
-        error: { code, type: "image_generation_error", message: code },
-      }), { status, headers: { "x-request-id": `req-error-${status}` } })),
+      fetchFn: vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: { code, type: "image_generation_error", message: code },
+            }),
+            { status, headers: { "x-request-id": `req-error-${status}` } },
+          ),
+      ),
     }).catch((caught: unknown) => caught);
 
     expect(classifyImageGenerationError(error)).toMatchObject({
@@ -737,7 +879,9 @@ describe("image service", () => {
   });
 
   it("keeps only allowlisted low-cardinality transport codes", () => {
-    const reset = new TypeError("fetch failed", { cause: Object.assign(new Error("socket closed"), { code: "ECONNRESET" }) });
+    const reset = new TypeError("fetch failed", {
+      cause: Object.assign(new Error("socket closed"), { code: "ECONNRESET" }),
+    });
     expect(imageTransportCode(reset)).toBe("ECONNRESET");
     expect(classifyImageGenerationError(reset)).toMatchObject({
       category: "network",
@@ -745,15 +889,27 @@ describe("image service", () => {
       transportCode: "ECONNRESET",
     });
 
-    expect(imageTransportCode(new TypeError("fetch failed", {
-      cause: { code: "sk-secret-should-never-be-persisted" },
-    }))).toBeNull();
-    expect(imageTransportCode(new TypeError("fetch failed", {
-      cause: { code: "econnreset" },
-    }))).toBeNull();
-    expect(imageTransportCode(new TypeError("fetch failed", {
-      cause: { code: "X".repeat(500) },
-    }))).toBeNull();
+    expect(
+      imageTransportCode(
+        new TypeError("fetch failed", {
+          cause: { code: "sk-secret-should-never-be-persisted" },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      imageTransportCode(
+        new TypeError("fetch failed", {
+          cause: { code: "econnreset" },
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      imageTransportCode(
+        new TypeError("fetch failed", {
+          cause: { code: "X".repeat(500) },
+        }),
+      ),
+    ).toBeNull();
   });
 
   it("returns a data url when storing a b64 image without s3 config", async () => {
@@ -778,7 +934,9 @@ describe("image service", () => {
   });
 
   it("measures the delivered pixels of a real image so callers can record the delivered tier", async () => {
-    const png = await sharp({ create: { width: 1086, height: 1448, channels: 3, background: "#406080" } }).png().toBuffer();
+    const png = await sharp({ create: { width: 1086, height: 1448, channels: 3, background: "#406080" } })
+      .png()
+      .toBuffer();
     const stored = await storeWorkflowImage({
       image: { kind: "b64", b64: png.toString("base64"), mime: "image/png" },
       userId: "u1",
@@ -844,29 +1002,70 @@ describe("image service", () => {
     );
   });
 
-  it("refuses private storage without S3 instead of leaking a data URL", async () => {
-    await expect(storeWorkflowImage({
-      image: { kind: "b64", b64: PNG_B64, mime: "image/png" },
+  // The environment folder is a storage-layer concern: business code and the
+  // `objectKey` column keep the relative key, so namespace validators and
+  // existing rows stay valid in every environment. Only the wire key changes.
+  it("keeps the persisted objectKey free of the environment folder", async () => {
+    const stored = await storeWorkflowImage({
+      image: { kind: "b64", b64: PNG_B64, mime: "image/webp" },
       userId: "u1",
       requestId: "pet-run-1",
-      requestIndex: 0,
+      requestIndex: 3,
+      namespace: "workflow/codex-pets",
       acl: "private",
-      fetchFn: vi.fn(),
-      env: {},
-    })).rejects.toThrow("private workflow image storage requires S3 configuration");
+      fetchFn: async () => new Response(null, { status: 500 }),
+      env: {
+        S3_ENDPOINT: "https://cos.ap-guangzhou.myqcloud.com",
+        S3_BUCKET: "aiproject-assets-1250000000",
+        S3_REGION: "ap-guangzhou",
+        S3_ACCESS_KEY: "test-s3-access-key",
+        S3_SECRET_KEY: "test-s3-secret-key",
+        S3_FORCE_PATH_STYLE: "false",
+        S3_KEY_PREFIX: "dev",
+      },
+    });
+
+    expect(stored.objectKey).toMatch(/^workflow\/codex-pets\/u1\/pet-run-1\/3-.*\.webp$/);
+    expect(stored.objectKey).not.toContain("dev/");
+    // A dev row must still satisfy the ownership validator that guards worker reads.
+    expect(isVerifiedWorkflowImageObjectKeyForUser(stored.objectKey!, "u1")).toBe(true);
+    expect(putObject).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringMatching(/^workflow\/codex-pets\/u1\/pet-run-1\/3-/),
+      expect.any(Buffer),
+      "image/webp",
+      {},
+    );
+  });
+
+  it("refuses private storage without S3 instead of leaking a data URL", async () => {
+    await expect(
+      storeWorkflowImage({
+        image: { kind: "b64", b64: PNG_B64, mime: "image/png" },
+        userId: "u1",
+        requestId: "pet-run-1",
+        requestIndex: 0,
+        acl: "private",
+        fetchFn: vi.fn(),
+        env: {},
+      }),
+    ).rejects.toThrow("private workflow image storage requires S3 configuration");
   });
 
   it("retries transient failures until the operation succeeds", async () => {
     let attempts = 0;
 
-    const result = await retryUntilSuccess(async () => {
-      attempts += 1;
-      if (attempts < 3) throw new Error(`transient-${attempts}`);
-      return "success";
-    }, {
-      retryDelayMs: 0,
-      maxAttempts: 5,
-    });
+    const result = await retryUntilSuccess(
+      async () => {
+        attempts += 1;
+        if (attempts < 3) throw new Error(`transient-${attempts}`);
+        return "success";
+      },
+      {
+        retryDelayMs: 0,
+        maxAttempts: 5,
+      },
+    );
 
     expect(result).toBe("success");
     expect(attempts).toBe(3);

@@ -10,15 +10,18 @@
 
 import type { PrismaClient } from "@prisma/client";
 import { publicObjectUrl } from "../../storage/public-url.js";
-import { loadS3Config } from "../../storage/s3.js";
+import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
   downloadTranscriptionResult,
+  isPubliclyReachableUrl,
   isRetryableAsrError,
   loadAsrConfig,
   pollTranscriptionStatus,
   submitTranscription,
+  uploadToDashScopeTempStorage,
   type AsrConfig,
   type AsrResult,
+  type TranscriptionJobStatus,
 } from "./transcription-asr.js";
 import {
   isTranscriptionLanguage,
@@ -70,11 +73,7 @@ export const activeTranscriptionTasks = new Map<string, AbortController>();
 
 export type ScheduleTask = (work: () => Promise<void>) => void;
 
-async function updateTask(
-  prisma: PrismaClient,
-  id: string,
-  data: Record<string, unknown>,
-): Promise<void> {
+async function updateTask(prisma: PrismaClient, id: string, data: Record<string, unknown>): Promise<void> {
   await prisma.transcriptionTask.update({ where: { id }, data });
 }
 
@@ -112,6 +111,49 @@ function languageOf(task: TranscriptionTaskRow): TranscriptionLanguage {
   return isTranscriptionLanguage(task.language) ? task.language : "zh-CN";
 }
 
+/**
+ * 交给百炼的音频地址。
+ *
+ * 对象存储是腾讯云 COS、地址公网可达，正常配置下直接给公网直链，不产生任何额外上传；
+ * 只有把 `S3_ENDPOINT` 配成内网地址时，百炼才拉不到 —— 这时先传到百炼的临时存储，
+ * 换成 `oss://` 地址。不这么兜的话，任务要跑四十多秒才失败，而且只回一个
+ * `code=SERVER_ERROR`，完全看不出是「你的对象存储在内网」。
+ */
+async function resolveAudioFileUrl(args: {
+  readonly cfg: TranscriptionRunnerConfig;
+  readonly fetchFn: typeof fetch;
+  readonly task: TranscriptionTaskRow;
+  readonly signal: AbortSignal;
+}): Promise<string> {
+  const s3Config = loadS3Config();
+  const publicUrl = publicObjectUrl(s3Config, args.task.audioObjectKey);
+  if (isPubliclyReachableUrl(publicUrl)) return publicUrl;
+
+  const bytes = await getObject(makeS3(s3Config), args.task.audioObjectKey);
+  return uploadToDashScopeTempStorage({
+    config: args.cfg.asr,
+    bytes,
+    fileName: args.task.fileName,
+    contentType: args.task.mimeType,
+    fetchFn: args.fetchFn,
+    signal: args.signal,
+  });
+}
+
+/** 百炼的失败码翻成人话；没收录的就把原文抛出去，别吞。 */
+const TASK_FAILURE_HINTS: Record<string, string> = {
+  ASR_RESPONSE_HAVE_NO_WORDS: "没有识别到人声（录音可能是静音、纯环境噪声或格式异常）",
+  ASR_RESPONSE_HAVE_NO_VALID_SENTENCE: "没有识别到有效语句（录音过短或没有人声）",
+  ASR_RESPONSE_HAVE_NO_VALID_WORD: "没有识别到有效字词（录音可能是静音或噪声）",
+};
+
+function taskFailureMessage(job: TranscriptionJobStatus): string {
+  const hint = job.code ? TASK_FAILURE_HINTS[job.code] : undefined;
+  if (hint) return `百炼转写任务失败：${hint}（${job.code}）`;
+  const detail = job.message && job.message !== job.code ? job.message : job.code;
+  return `百炼转写任务失败${detail ? `：${detail}` : "：百炼未返回原因"}`;
+}
+
 async function submitWithRetry(args: {
   readonly prisma: PrismaClient;
   readonly cfg: TranscriptionRunnerConfig;
@@ -138,7 +180,9 @@ async function submitWithRetry(args: {
       lastError = error;
       if (!isRetryableAsrError(error)) throw error;
       if (attempt < cfg.maxSubmitAttempts) {
-        await updateTask(prisma, task.id, { error: `提交转写任务失败（第 ${attempt} 次），${cfg.submitRetryDelayMs}ms 后重试` });
+        await updateTask(prisma, task.id, {
+          error: `提交转写任务失败（第 ${attempt} 次），${cfg.submitRetryDelayMs}ms 后重试`,
+        });
         await sleep(cfg.submitRetryDelayMs, signal);
       }
     }
@@ -176,8 +220,11 @@ async function pollUntilDone(args: {
       if (!job.transcriptionUrl) throw new Error("转写成功但未返回结果下载地址");
       return job.transcriptionUrl;
     }
-    if (job.status === "FAILED" || job.status === "CANCELED") {
-      throw new Error(`百炼转写任务${job.status === "FAILED" ? "失败" : "被取消"}${job.message ? `：${job.message}` : ""}`);
+    if (job.status === "FAILED") {
+      throw new Error(taskFailureMessage(job));
+    }
+    if (job.status === "CANCELED") {
+      throw new Error(`百炼转写任务被取消${job.message ? `：${job.message}` : ""}`);
     }
     await sleep(cfg.pollIntervalMs, signal);
   }
@@ -196,27 +243,46 @@ export async function runTranscriptionTask(args: {
   const cfg = args.cfg ?? loadTranscriptionRunnerConfig();
 
   const fresh = await prisma.transcriptionTask.findUnique({ where: { id: task.id } });
-  if (!fresh || (fresh.status !== TRANSCRIPTION_TASK_STATUS.queued && fresh.status !== TRANSCRIPTION_TASK_STATUS.running)) {
+  if (
+    !fresh ||
+    (fresh.status !== TRANSCRIPTION_TASK_STATUS.queued && fresh.status !== TRANSCRIPTION_TASK_STATUS.running)
+  ) {
     return;
   }
   await updateTask(prisma, task.id, { status: TRANSCRIPTION_TASK_STATUS.running, error: null });
 
   try {
     assertNotAborted(signal);
-    const s3Config = loadS3Config();
-    const fileUrl = publicObjectUrl(s3Config, task.audioObjectKey);
-
-    const bailianTaskId = fresh.bailianTaskId
-      ?? await submitWithRetry({ prisma, cfg, fetchFn, task, fileUrl, signal });
+    // 已经有 bailianTaskId 说明上次提交成功、只是没等到结果，续跑不该再传一遍音频
+    let bailianTaskId = fresh.bailianTaskId;
+    if (!bailianTaskId) {
+      bailianTaskId = await submitWithRetry({
+        prisma,
+        cfg,
+        fetchFn,
+        task,
+        fileUrl: await resolveAudioFileUrl({ cfg, fetchFn, task, signal }),
+        signal,
+      });
+    }
 
     const deadline = Date.now() + cfg.runTimeoutMs;
     const transcriptionUrl = await pollUntilDone({
-      prisma, cfg, fetchFn, taskId: bailianTaskId, rowId: task.id, signal, deadline,
+      prisma,
+      cfg,
+      fetchFn,
+      taskId: bailianTaskId,
+      rowId: task.id,
+      signal,
+      deadline,
     });
 
     assertNotAborted(signal);
     const result: AsrResult = await downloadTranscriptionResult({
-      config: cfg.asr, transcriptionUrl, fetchFn, signal,
+      config: cfg.asr,
+      transcriptionUrl,
+      fetchFn,
+      signal,
     });
     await updateTask(prisma, task.id, {
       status: TRANSCRIPTION_TASK_STATUS.completed,
@@ -293,21 +359,27 @@ export async function resumeStaleTasks(args: {
   const staleTasks = args.tasks.filter(
     (task) => !activeTranscriptionTasks.has(task.requestId) && isStaleRunningTask(task, args.staleTaskMs),
   );
-  const resumed = await Promise.all(staleTasks.map(async (task) => {
-    const claimed = await claimStaleTask(args.prisma, task);
-    if (!claimed) return 0;
-    args.onResume(claimed);
-    scheduleTranscriptionTask(args.scheduleTask, async (signal) => {
-      await runTranscriptionTask({
-        prisma: args.prisma,
-        fetchFn: args.fetchFn,
-        cfg: args.cfg,
-        task: claimed,
-        signal,
-        onAttemptFailure: (error, attempt) => args.onAttemptFailure(claimed, error, attempt),
-      });
-    }, claimed.requestId);
-    return 1;
-  }));
+  const resumed = await Promise.all(
+    staleTasks.map(async (task) => {
+      const claimed = await claimStaleTask(args.prisma, task);
+      if (!claimed) return 0;
+      args.onResume(claimed);
+      scheduleTranscriptionTask(
+        args.scheduleTask,
+        async (signal) => {
+          await runTranscriptionTask({
+            prisma: args.prisma,
+            fetchFn: args.fetchFn,
+            cfg: args.cfg,
+            task: claimed,
+            signal,
+            onAttemptFailure: (error, attempt) => args.onAttemptFailure(claimed, error, attempt),
+          });
+        },
+        claimed.requestId,
+      );
+      return 1;
+    }),
+  );
   return resumed.reduce<number>((sum, value) => sum + value, 0);
 }

@@ -749,7 +749,8 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
       }, { signImageUrl, loadStoredImage });
-    } catch {
+    } catch (error) {
+      app.log.warn({ err: error, objectKey: row.objectKey }, "try-on reference blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
     }
   });
@@ -772,7 +773,8 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
         contentDisposition: `inline; filename="try-on-${row.requestIndex + 1}.png"`,
       }, { signImageUrl, loadStoredImage });
-    } catch {
+    } catch (error) {
+      app.log.warn({ err: error, objectKey: row.objectKey }, "try-on output blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
     }
   });

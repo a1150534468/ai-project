@@ -532,7 +532,8 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
       const inline = await loadReferenceImage(asset, fetchFn);
       const mime = inline.mime?.startsWith("image/") ? inline.mime : "image/png";
       return reply.header("Cache-Control", "private, max-age=300").type(mime).send(Buffer.from(inline.b64, "base64"));
-    } catch {
+    } catch (error) {
+      app.log.warn({ err: error }, "ecom segment image delivery failed");
       return reply.code(502).send({ error: "分段图片下载失败" });
     }
   });

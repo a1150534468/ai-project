@@ -17,7 +17,7 @@ import {
 
 const have = !!process.env.S3_ENDPOINT;
 
-function fakeS3() {
+function fakeS3(keyPrefix = "") {
   const s3 = makeS3({
     endpoint: "https://s3.test",
     region: "test",
@@ -25,6 +25,7 @@ function fakeS3() {
     accessKey: "access-key",
     secretKey: "secret-key",
     forcePathStyle: true,
+    keyPrefix,
   });
   const sentCommands: { input: Record<string, unknown> }[] = [];
   Object.assign(s3.client, {
@@ -45,6 +46,7 @@ describe("putObject", () => {
       accessKey: "access-key",
       secretKey: "secret-key",
       forcePathStyle: true,
+      keyPrefix: "",
     });
     const sentCommands: unknown[] = [];
     Object.assign(s3.client, {
@@ -196,6 +198,54 @@ describe("deletePrefix", () => {
     });
 
     await expect(deletePrefix(s3, "kb/1/")).rejects.toThrow("without a new continuation token");
+  });
+
+  // Listing returns physical keys, so routing them back through deleteObject()
+  // would produce `dev/dev/...` and delete nothing (silently succeeding).
+  it("lists inside the environment folder and deletes the returned keys verbatim", async () => {
+    const { s3, sentCommands } = fakeS3("dev");
+    Object.assign(s3.client, {
+      send: async (command: { input: Record<string, unknown>; constructor: { name: string } }) => {
+        sentCommands.push(command);
+        if (command.constructor.name !== "ListObjectsV2Command") return {};
+        return {
+          Contents: [{ Key: "dev/kb/1/a" }, { Key: "dev/kb/1/b" }],
+          IsTruncated: false,
+        };
+      },
+    });
+
+    await deletePrefix(s3, "kb/1/");
+    const lists = sentCommands.filter((command) => command.constructor.name === "ListObjectsV2Command");
+    const deletes = sentCommands.filter((command) => command.constructor.name === "DeleteObjectCommand");
+    expect(lists[0]!.input.Prefix).toBe("dev/kb/1/");
+    expect(deletes.map((command) => command.input.Key)).toEqual(["dev/kb/1/a", "dev/kb/1/b"]);
+  });
+});
+
+describe("object keys carry the environment folder", () => {
+  it("applies the folder to put, get and delete without touching the logical key", async () => {
+    const { s3, sentCommands } = fakeS3("dev");
+    Object.assign(s3.client, {
+      send: async (command: { input: Record<string, unknown> }) => {
+        sentCommands.push({ input: command.input } as { input: Record<string, unknown> });
+        return { Body: { transformToByteArray: async () => new Uint8Array([1]) } };
+      },
+    });
+    await putObject(s3, "workflow/images/a.png", Buffer.from("x"), "image/png");
+    await expect(getObject(s3, "workflow/images/a.png")).resolves.toEqual(Buffer.from([1]));
+    await deleteObject(s3, "workflow/images/a.png");
+
+    expect(sentCommands.map((command) => command.input.Key)).toEqual([
+      "dev/workflow/images/a.png",
+      "dev/workflow/images/a.png",
+      "dev/workflow/images/a.png",
+    ]);
+  });
+
+  it("refuses a logical key that is already prefixed", async () => {
+    const { s3 } = fakeS3("dev");
+    await expect(getObject(s3, "dev/workflow/images/a.png")).rejects.toThrow(/already prefixed/);
   });
 });
 

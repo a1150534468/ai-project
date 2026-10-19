@@ -246,8 +246,17 @@
   2. 5 分钟上限的同步版 `qwen-audio-3.1-asr-flash` 不用：录音场景通常超过 5 分钟。
   3. 语言：普通话/粤语/英语三选，经 `language_hints` 透传（粤语 hint code 待 live 验证校准）。
   4. 音频 URL：复用 `storage/public-url.ts` 的 `publicObjectUrl`（生产 COS 有公网域名）；
-     对象 key 含 cuid 级 requestId，不可猜解。
-  5. 计费已下线，但 `TranscriptionTask` 预留 `asrInputTokens/asrOutputTokens/audioDurationSec`
+     对象 key 含 cuid 级 requestId，不可猜解。**算出来是内网/回环地址时**（本地 dev 的
+     MinIO `http://localhost:9000`、`*.local`、10/172.16-31/192.168 等），先调百炼的
+     `getPolicy` 把音频传到它的临时存储，用 `oss://` 地址提交并带
+     `X-DashScope-OssResourceResolve: enable`；生产配了 `S3_PUBLIC_BASE_URL` 就走公网直链，
+     不产生这次中转。判定在 `isPubliclyReachableUrl`，别在别处再写一份主机名判断。
+     不这么兜的表现是：任务跑四十多秒后失败，只回一个 `code=SERVER_ERROR`，
+     看起来像百炼挂了，其实是它拉不到你的 localhost。
+  5. 失败原因要翻译：百炼 `output.code` 单独透出（`TranscriptionJobStatus.code`），
+     `ASR_RESPONSE_HAVE_NO_WORDS` 这类码在 runner 的 `TASK_FAILURE_HINTS` 里翻成人话，
+     未收录的原样显示 —— 静音录音和配置错误不该长得一样。
+  6. 计费已下线，但 `TranscriptionTask` 预留 `asrInputTokens/asrOutputTokens/audioDurationSec`
      字段先记账，为日后 metering 留数据。
 - **理由**：filetrans 的异步三段式（提交→轮询→下载结果 JSON）天然契合仓库既有的
   租约 runner + reaper 模式；降价 95% 后输入 ¥0.8/百万 tokens，成本可接受；粤语有专门优化。

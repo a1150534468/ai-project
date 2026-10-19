@@ -4,7 +4,7 @@
 
 ## 一句话概括
 
-**React 前端（Web + Admin）+ Fastify 单体 API + 独立 Worker 进程**。数据层 PostgreSQL（pgvector）+ Redis + MinIO；所有对话类模型统一走 Anthropic Messages 协议，接入阿里云百炼与 AI Pixel 网关。
+**React 前端（Web + Admin）+ Fastify 单体 API + 独立 Worker 进程**。数据层 PostgreSQL（pgvector）+ Redis + 腾讯云 COS（S3 兼容，dev/prod 同一桶按 `S3_KEY_PREFIX` 分文件夹）；所有对话类模型统一走 Anthropic Messages 协议，接入阿里云百炼与 AI Pixel 网关。
 
 ## 运行时拓扑
 
@@ -16,7 +16,7 @@
 | Novel Worker | 8091 | `apps/api/src/workers/novel-worker.ts` |
 | Codex Pet Worker | 8092 | `apps/api/src/workers/codex-pet-worker.ts` |
 
-数据层：PostgreSQL 17 + pgvector（主库，90 个模型）+ Redis + MinIO/S3。
+数据层：PostgreSQL 17 + pgvector（主库，90 个模型）+ Redis + 腾讯云 COS/S3。
 外部模型：百炼 Anthropic 兼容（qwen 对话/embedding/生图）+ AI Pixel 网关（gpt-5.x 对话/gpt-image-2）。
 
 ## 怎么跑起来
@@ -27,7 +27,7 @@ pnpm install
 pnpm dev                     # 数据层进 Docker、业务进程热更新
 ```
 
-`pnpm dev` 启动全部服务：Docker 承载 pgvector(5433)/Redis(6380)/MinIO(9000)，本机拉起 API(8090)/Workers/Web/Admin。`Ctrl+C` 只停业务进程；`pnpm dev:infra:stop` 停数据层。完整步骤见仓库根 `README.md` 的「本地开发」一节。
+`pnpm dev` 启动全部服务：Docker 承载 pgvector(5433)/Redis(6380)，本机拉起 API(8090)/Workers/Web/Admin。对象存储不本地起服务，直连 COS。`Ctrl+C` 只停业务进程；`pnpm dev:infra:stop` 停数据层。完整步骤见仓库根 `README.md` 的「本地开发」一节。
 
 ## 仓库布局
 

@@ -1,6 +1,7 @@
 import COS from "cos-nodejs-sdk-v5";
 import { createCdnImageUrlSigner } from "./cdn-image-url.js";
 import { validateSignedImageRequest } from "./image-url-validation.js";
+import { resolveKey } from "./s3-key.js";
 import { loadS3Config } from "./s3-config.js";
 
 export interface SignedImageRequest {
@@ -57,7 +58,9 @@ export function createImageUrlSigner(env: NodeJS.ProcessEnv = process.env): Imag
         {
           Bucket: config.bucket,
           Region: config.region,
-          Key: objectKey,
+          // Sign the physical key: the signature covers this exact path, so a
+          // missing environment folder signs a URL for an object that isn't there.
+          Key: resolveKey(config, objectKey),
           Method: "GET",
           Sign: true,
           Expires: expires,

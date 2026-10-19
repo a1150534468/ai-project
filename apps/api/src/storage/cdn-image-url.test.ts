@@ -63,13 +63,16 @@ describe("CDN TypeD SHA256 image signing (local, no cloud credentials)", () => {
     await expect(createImageUrlSigner(env)({ ...request, objectKey })).rejects.toThrow("object key");
   });
 
-  it.each(["workflow/a?b.png", "workflow/a#b.png", "workflow/%2e%2e/a.png", "workflow/a%20b.png", "workflow/\ud800.png"])(
-    "preserves proxy for unsupported legacy key %j",
-    async (objectKey) => {
-      vi.spyOn(Date, "now").mockReturnValue(now);
-      expect(await createImageUrlSigner(env)({ ...request, objectKey })).toBeNull();
-    },
-  );
+  it.each([
+    "workflow/a?b.png",
+    "workflow/a#b.png",
+    "workflow/%2e%2e/a.png",
+    "workflow/a%20b.png",
+    "workflow/\ud800.png",
+  ])("preserves proxy for unsupported legacy key %j", async (objectKey) => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    expect(await createImageUrlSigner(env)({ ...request, objectKey })).toBeNull();
+  });
 
   it.each([
     ["workflow/图片.png", "/workflow/%E5%9B%BE%E7%89%87.png"],
@@ -133,7 +136,27 @@ describe("CDN TypeD SHA256 image signing (local, no cloud credentials)", () => {
     const sign = createImageUrlSigner({ ...env, WORKFLOW_IMAGE_CDN_SIGNING_KEY: key });
     const url = new URL((await sign(request))!);
     expect(url.searchParams.get("sign")).toBe(
-      createHash("sha256").update(key + url.pathname + url.searchParams.get("t")).digest("hex"),
+      createHash("sha256")
+        .update(key + url.pathname + url.searchParams.get("t"))
+        .digest("hex"),
     );
+  });
+
+  // The CDN origin is the bucket, so the signed path must include the same
+  // environment folder the object was written to, and the signature must cover
+  // that prefixed path (not the logical key).
+  it("signs the environment folder into the CDN path", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const url = new URL((await createImageUrlSigner({ ...env, S3_KEY_PREFIX: "dev" })(request))!);
+    expect(url.pathname).toBe(`/dev/${request.objectKey}`);
+    expect(verifyEdge(url, now / 1_000)).toBe(true);
+  });
+
+  it("keeps a prod object out of the dev path", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const dev = await createImageUrlSigner({ ...env, S3_KEY_PREFIX: "dev" })(request);
+    const prod = await createImageUrlSigner({ ...env, S3_KEY_PREFIX: "prod" })(request);
+    expect(dev).not.toBe(prod);
+    expect(new URL(prod!).pathname).toBe(`/prod/${request.objectKey}`);
   });
 });
