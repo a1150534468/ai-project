@@ -325,9 +325,9 @@ export function safeErrorMessage(error: unknown): string {
   return errorMessageOrFallback(error, "生成失败");
 }
 
-export function isUniqueConstraintError(error: unknown): boolean {
-  return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "P2002";
-}
+// 唯一约束冲突的判定已收进 _shared：三份（image / transcription / codex-pet）语义一致，
+// 只是「怎么把 unknown 摆成对象」写法不同。这里保留转发，调用方的 import 不用改。
+export { isUniqueConstraintError } from "../_shared/prisma-errors.js";
 
 export async function assertImageTaskRunning(prisma: PrismaClient, taskId: string): Promise<void> {
   const current = await prisma.imageGenerationTask.findUnique({ where: { id: taskId } });

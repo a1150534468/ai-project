@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Document, PrismaClient } from "@prisma/client";
 import { deleteObject, putObject, type S3 } from "../storage/s3.js";
+import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
 import { assertSafeUrl, SsrfError } from "./url-fetch.js";
 
 const DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024;
@@ -144,7 +145,8 @@ async function readSource(req: UploadRequest): Promise<IngestSource> {
         filename: requestedName(body, parsed.pathname.split("/").pop() || "document"),
       };
     } catch (error) {
-      const reason = error instanceof SsrfError ? error.message : error instanceof Error ? error.message : String(error);
+      // 非 Error 一律兜底：这个串会原样进 400 的响应体。
+      const reason = errorMessageOrFallback(error, "URL 解析失败");
       throw new IngestError(`SSRF 防护：${reason}`, 400);
     }
   }

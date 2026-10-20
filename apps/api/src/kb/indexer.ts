@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_EMBEDDING_DIMENSION, validateEmbeddingVector } from "../memory/embedding-client.js";
+import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
 import { describeTextStructure } from "./chunk.js";
 import { EmptyTextError, PermanentDocumentError } from "./parse.js";
 
@@ -45,8 +46,11 @@ function envInteger(name: string, fallback: number): number {
   return positiveInteger(Number(process.env[name]), fallback);
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+// 走共享实现：原先 `typeof error === "string" ? error : ...` 会把任意裸字符串原样
+// 透传（进 DB 的 error 列、也进上游状态码的正则匹配）。导出是为了让测试能覆盖到
+// 「非 Error 输入走 fallback」这条口径。
+export function errorMessage(error: unknown): string {
+  return errorMessageOrFallback(error, "Unknown error");
 }
 
 function upstreamStatus(error: unknown): number | null {

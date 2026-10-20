@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
+import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
 import { indexOnce, type IndexDeps } from "./indexer.js";
 
 export interface ReaperOpts {
@@ -30,8 +31,9 @@ function envInteger(name: string, fallback: number): number {
   return positiveInteger(Number(process.env[name]), fallback);
 }
 
-function failureText(error: unknown): string {
-  return error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+// 同 kb/indexer.ts：走共享实现，非 Error 一律 fallback，不再透传裸字符串。
+export function failureText(error: unknown): string {
+  return errorMessageOrFallback(error, "Unknown error");
 }
 
 /**

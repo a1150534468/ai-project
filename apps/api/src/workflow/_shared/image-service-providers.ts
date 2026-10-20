@@ -9,6 +9,7 @@
 import { Buffer } from "node:buffer";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import { trimTrailingSlash } from "../../runtime/url.js";
+import { errorMessageOrFallback } from "./error-message.js";
 import { imageResolutionFromSize } from "./image-upstream-options.js";
 import {
   BAILIAN_IMAGE_GENERATION_PATH,
@@ -132,7 +133,7 @@ export async function openAiEditImagePart(
     const base = (image.filename || fallbackFilename).replace(/\.[A-Za-z0-9]+$/, "");
     return { bytes, mime: "image/png", filename: `${base || "reference"}.png` };
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    const detail = errorMessageOrFallback(error, "unknown error");
     throw new Error(`${label} could not be normalized for GPT Image edits: ${detail}`);
   }
 }

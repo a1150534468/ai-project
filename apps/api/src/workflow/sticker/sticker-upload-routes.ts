@@ -6,6 +6,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import sharp from "sharp";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { loadS3Config, makeS3, putObject } from "../../storage/s3.js";
 
 const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
@@ -59,8 +60,8 @@ export function registerStickerUploadRoutes(app: FastifyInstance): void {
       const s3 = makeS3(loadS3Config(process.env));
       await putObject(s3, key, body, file.mimetype, {});
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      return reply.code(500).send({ error: `参考图上传失败：${message}` });
+      const detail = errorMessageOrFallback(error, "请稍后重试");
+      return reply.code(500).send({ error: `参考图上传失败：${detail}` });
     }
     return reply.send({ referenceObjectKey: key });
   });

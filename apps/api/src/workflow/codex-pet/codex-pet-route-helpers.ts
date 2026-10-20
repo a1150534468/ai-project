@@ -16,6 +16,7 @@ import {
   CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH,
   CODEX_PET_STYLES,
 } from "./codex-pet-prompts.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { sanitizeCodexPetDiagnosticText, sanitizeCodexPetEventPayload } from "./codex-pet-events.js";
 import { CODEX_PET_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import { readCodexPetGateFailureSnapshot } from "./codex-pet-gate-failure.js";
@@ -168,7 +169,7 @@ export function recordOf(value: unknown): Record<string, unknown> {
 
 export function safeDiagnostic(error: unknown): string {
   return sanitizeCodexPetDiagnosticText(
-    error instanceof Error ? error.message : String(error),
+    errorMessageOrFallback(error, "未知错误", 1_000),
     1_000,
   );
 }
@@ -448,9 +449,8 @@ export function isTerminalRunStatus(status: string): boolean {
   return (TERMINAL_RUN_STATUSES as readonly string[]).includes(status);
 }
 
-export function isUniqueConstraintError(error: unknown): boolean {
-  return recordOf(error).code === "P2002";
-}
+// 同 image-route-helpers：判定收进 _shared，这里保留转发。
+export { isUniqueConstraintError } from "../_shared/prisma-errors.js";
 
 export function resolveIdempotencyKey(
   header: string | string[] | undefined,

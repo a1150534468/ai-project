@@ -9,6 +9,7 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { publicObjectUrl } from "../../storage/public-url.js";
 import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import {
@@ -63,9 +64,9 @@ export function loadTranscriptionRunnerConfig(env: NodeJS.ProcessEnv = process.e
   };
 }
 
+// 与 transcription-route-helpers 同一份口径，见那里的注释：不用 `String(error)`。
 export function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message.slice(0, 500);
-  return String(error).slice(0, 500);
+  return errorMessageOrFallback(error, "转写任务处理失败");
 }
 
 /** 取消登记表：requestId → AbortController。绝不在别处另建一份。 */
