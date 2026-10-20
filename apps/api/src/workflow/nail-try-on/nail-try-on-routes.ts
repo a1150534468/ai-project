@@ -3,9 +3,11 @@ import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import { requireUser } from "../../auth/require-user.js";
 import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
@@ -120,6 +122,11 @@ interface NailBilling {
 interface NailRouteDeps {
   readonly prisma?: PrismaClient;
   readonly billing?: NailBilling;
+  /**
+   * 只用于生成前的额度闸。不传（单测）则该闸放行。
+   * 注意：试甲台**不养常驻 reaper**（`server-routes.ts` 的决定 A），传 redis 不会起定时任务。
+   */
+  readonly redis?: Redis;
   readonly fetchFn?: typeof fetch;
   readonly scheduleTask?: (work: () => Promise<void>) => void;
   readonly retryDelayMs?: number;
@@ -889,6 +896,10 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
       select: { id: true },
     });
     if (crossUser) return reply.code(409).send({ error: "请求编号已被使用" });
+    // 同 portrait / try-on：放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNail", req.userId, (error) => req.log.warn({ err: error }, "nail quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const roleInput = {
       handAssetId: parsed.data.handAssetId,
       nailDesignAssetId: parsed.data.nailDesignAssetId ?? null,

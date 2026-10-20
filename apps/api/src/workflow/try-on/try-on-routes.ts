@@ -12,6 +12,7 @@ import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
 import { sendImageBlob } from "../_shared/image-blob-response.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -916,6 +917,10 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
       select: { id: true },
     });
     if (crossUser) return reply.code(409).send({ error: "请求编号已被使用" });
+    // 同 portrait：放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowTryOn", req.userId, (error) => req.log.warn({ err: error }, "try-on quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const roleInput = {
       garmentFrontAssetId: parsed.data.garmentFrontAssetId,
       garmentDetailAssetId: parsed.data.garmentDetailAssetId ?? null,

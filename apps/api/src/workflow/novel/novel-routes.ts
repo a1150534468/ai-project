@@ -1,8 +1,10 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { requireUser } from "../../auth/require-user.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import { createNovelGenerator, type NovelGenerator } from "./novel-generation.js";
 import { visibleCharCount } from "./novel-billable.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
@@ -29,6 +31,8 @@ interface NovelWorkflowRouteDeps {
   readonly prisma?: PrismaClient;
   readonly generator?: NovelGenerator;
   readonly scheduleTask?: ScheduleTask;
+  /** 只用于启动生成前的额度闸。不传（单测）则该闸放行，测试不必准备计数器。 */
+  readonly redis?: Redis;
 }
 
 const compactQuerySchema = z.object({ view: z.enum(["compact"]).optional() });
@@ -264,6 +268,10 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const targetKind = ({ bible: "setupBible", characters: "setupCharacters", locations: "setupLocations", plot: "setupPlot" } as const)[params.data.setupKind];
     const active = await prisma.novelTask.findFirst({ where: { projectId: project.id, targetKind, status: { in: ["queued", "running"] } } });
     if (active) return reply.code(409).send({ error: "该设置步骤正在生成" });
+    // 额度闸放在「已有任务在跑」的短路之后、建任务之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNovel", userId, (error) => req.log.warn({ err: error }, "novel quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const task = await reserveAndCreateTask({ prisma, userId, projectId: project.id, targetKind, payload: { prompt: body.data.prompt, ...(targetKind === "setupPlot" ? { targetCount: project.targetChapters } : {}) }, delivery: taskDelivery });
     enqueue(task);
     return reply.code(202).send({ success: true, data: { task: serializeTask(task) } });
@@ -277,6 +285,9 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
     const project = await findOwnedProject(prisma, userId, params.data.projectId);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     const chapterIndex = body.data.chapterIndex ?? await nextChapterIndex(prisma, project.id);
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNovel", userId, (error) => req.log.warn({ err: error }, "novel quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const task = await reserveAndCreateTask({
       prisma,
       userId,
@@ -371,6 +382,9 @@ export async function novelWorkflowRoutes(app: FastifyInstance, deps: NovelWorkf
       },
     });
     if (active) return reply.code(409).send({ error: "该章节已有局部改写任务正在运行" });
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNovel", userId, (error) => req.log.warn({ err: error }, "novel quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const targetChars = Math.max(200, Math.min(visibleCharCount(selectedText), 6000));
     const task = await reserveAndCreateTask({
       prisma,

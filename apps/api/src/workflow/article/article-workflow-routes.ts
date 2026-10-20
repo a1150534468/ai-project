@@ -53,6 +53,7 @@ import {
   isSerializableConflict,
 } from "./article-workflow-route-actions.js";
 import { registerArticleWorkflowReadRoutes } from "./article-workflow-read-routes.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();
@@ -70,6 +71,11 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     if (!userId) return;
     const parsed = createArticleWorkflowProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
+    // 额度闸按「一次请求」计，不按平台数计：一次下单可能建 5 个平台项目，但只花用户一次操作。
+    // 没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const creationConfig: ArticleWorkflowCreationConfig =
       parsed.data.creationMode === "topic"
@@ -257,6 +263,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (project.status !== "failed") return reply.code(409).send({ error: "只有生成失败的图文可以重试" });
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const platform = project.platform as ArticleWorkflowPlatform;
     const current = readArticleWorkflowProject(project);
@@ -308,6 +317,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好改稿" });
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     // 平台不支持的模式在落库前裁定，避免库里存着 runner 不会执行的模式
     const generationMode = resolveArticleWorkflowMode(
@@ -354,6 +366,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好重生图片" });
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const current = readArticleWorkflowProject(project);
     const platformConfig = articleWorkflowPlatformConfig(current.platform);
@@ -493,6 +508,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const current = readArticleWorkflowProject(project);
     if (!current.imageManifest.some((image) => !image.imageUrl.trim())) {
       return { success: true, data: { projectId: project.id, queued: false } };
+    }
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
     }
 
     const claimed = await claimArticleWorkflowProject(

@@ -46,6 +46,7 @@ import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "..
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import {
   PORTRAIT_ACTIVE_STATUSES,
@@ -746,6 +747,11 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     if (existing) return reply.code(existing.status === "completed" || existing.status === "partial" ? 200 : 202).send({ success: true, data: { task: serializeTask(existing) } });
     const crossUser = await prisma.portraitTask.findUnique({ where: { requestId: parsed.data.requestId }, select: { id: true } });
     if (crossUser) return reply.code(409).send({ error: "请求编号已被使用" });
+    // 额度闸放在「同一个 requestId 再来一次」的短路之后、真正花钱的建任务 + 预留之前：
+    // 幂等重试不该消耗额度。没有 redis（单测）时闸门放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowPortrait", userId, (error) => req.log.warn({ err: error }, "portrait quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const references = await loadOwnedReferences(prisma, userId, parsed.data.referenceAssetIds).catch(() => null);
     if (!references) return reply.code(404).send({ error: "参考图不存在或无权访问" });
     const effectivePrompt = buildPortraitPrompt({ presetId: parsed.data.presetId as PortraitPresetId, aspectRatio: parsed.data.aspectRatio as PortraitAspectRatio, options: parsed.data.options as PortraitPromptOptions });

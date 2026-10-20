@@ -40,14 +40,15 @@ export async function registerApplicationRoutes(app: FastifyInstance): Promise<v
   );
   await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => tryOnWorkflowRoutes(instance, { redis: getRedis() }));
-  // 决定 A：试甲台不养常驻 reaper（超时任务在 /state 读取时收尸），照 ecom 裸注册，不传 redis。
-  await app.register(nailTryOnWorkflowRoutes);
+  // 决定 A 不变：试甲台仍然不养常驻 reaper（超时任务在 /state 读取时收尸）。
+  // 这里传 redis 只为了生成前的额度闸——nail 模块本来就没有 reaper，不会因此起定时任务。
+  await app.register((instance) => nailTryOnWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register(ecomWorkflowRoutes);
   await app.register(ecomMainImageRoutes);
   await app.register(ecomHelpWriteRoutes);
-  await app.register(novelWorkflowRoutes);
+  await app.register((instance) => novelWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register(novelEngineRoutes);
-  await app.register(articleWorkflowRoutes);
+  await app.register((instance) => articleWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance, _opts, done) => {
     registerStickerRoutes(instance, getPrisma());
     done();
