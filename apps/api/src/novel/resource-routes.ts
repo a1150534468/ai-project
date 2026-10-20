@@ -727,7 +727,10 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     const parsed = projectParams.safeParse(req.params);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     if (!await requireProject(prisma, userId, parsed.data.projectId)) return reply.code(404).send({ error: "项目不存在" });
-    return { success: true, data: { checkpoints: await prisma.novelCheckpoint.findMany({ where: { projectId: parsed.data.projectId }, orderBy: { createdAt: "desc" }, take: 100 }) } };
+    // 显式 select，不带 snapshot：列表页只显示「第几章、什么标签、哪条世界线」，
+    // 而 snapshot 里是整本书的正文（100 条 × 整本 ≈ ADR-011 那次 31.6 MB 事故的同形状）。
+    // 回滚/分支都是自己按 id 查 checkpoint，不依赖这个列表。
+    return { success: true, data: { checkpoints: await prisma.novelCheckpoint.findMany({ where: { projectId: parsed.data.projectId }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, label: true, chapterNumber: true, branchName: true, isHead: true, parentId: true, createdAt: true } }) } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/checkpoints", async (req, reply) => {
