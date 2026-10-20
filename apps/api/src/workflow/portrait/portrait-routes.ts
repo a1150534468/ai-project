@@ -10,7 +10,7 @@ import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
 import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
-import { sendImageBlob } from "../_shared/image-blob-response.js";
+import { logUnsignedFallback, sendImageBlob } from "../_shared/image-blob-response.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -635,7 +635,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     try {
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "portrait") });
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "portrait reference blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
@@ -652,7 +652,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
         contentDisposition: `inline; filename="portrait-${row.requestIndex + 1}.png"`,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "portrait") });
     } catch (error) {
       // Don't swallow it: a storage-side failure (bad credentials, missing
       // object, unreachable endpoint) otherwise surfaces only as a bare 502.

@@ -10,7 +10,7 @@ import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/
 import { requireUser } from "../../auth/require-user.js";
 import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
-import { sendImageBlob } from "../_shared/image-blob-response.js";
+import { logUnsignedFallback, sendImageBlob } from "../_shared/image-blob-response.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import {
@@ -749,7 +749,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     try {
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "try-on") });
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "try-on reference blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
@@ -773,7 +773,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
         contentDisposition: `inline; filename="try-on-${row.requestIndex + 1}.png"`,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "try-on") });
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "try-on output blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });

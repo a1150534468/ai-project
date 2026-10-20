@@ -1609,7 +1609,7 @@ describe("Codex pet routes", () => {
       artifacts: [sprite],
       runs: [runRow({ status: "ready", spritesheetArtifactId: "sprite-final" })],
     });
-    const signImageUrl = vi.fn(async () => "https://private.cos.example/signed-image");
+    const signImageUrl = vi.fn(async () => ({ kind: "signed" as const, url: "https://private.cos.example/signed-image" }));
     const loadArtifact = vi.fn(async () => Buffer.from("unused"));
     const { app } = await createApp(prisma, { signImageUrl, loadArtifact });
     const exp = Math.floor(NOW.getTime() / 1_000) + 900;
@@ -1632,7 +1632,7 @@ describe("Codex pet routes", () => {
     { expiresAt: new Date(NOW.getTime() - 1) },
   ])("does not sign invalid preview artifacts: %j", async (override) => {
     const { prisma } = createPrismaMock({ artifacts: [artifactRow(override)] });
-    const signImageUrl = vi.fn(async () => "https://private.cos.example/image");
+    const signImageUrl = vi.fn(async () => ({ kind: "signed" as const, url: "https://private.cos.example/image" }));
     const { app } = await createApp(prisma, { signImageUrl });
     const exp = Math.floor(NOW.getTime() / 1_000) + 300;
     const sig = signCodexPetArtifact("artifact-1", exp, "test-signing-secret-that-is-long-enough", CODEX_PET_PREVIEW_ARTIFACT_PURPOSE);

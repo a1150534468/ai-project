@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
 import { requireUser } from "../../auth/require-user.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
-import { sendImageBlob } from "../_shared/image-blob-response.js";
+import { logUnsignedFallback, sendImageBlob } from "../_shared/image-blob-response.js";
 import {
   IMAGE_REFERENCE_MAX_BYTES,
   IMAGE_REFERENCE_MIME_TYPES,
@@ -54,7 +54,7 @@ export function registerImageAssetRoutes(context: ImageRouteContext): void {
         objectKey: image.objectKey,
         mime: image.mime.startsWith("image/") ? image.mime : "image/png",
         expiresAt: query.data.exp,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "image") });
     } catch (error) {
       app.log.error(error);
       return reply.code(502).send({ error: "图片加载失败" });

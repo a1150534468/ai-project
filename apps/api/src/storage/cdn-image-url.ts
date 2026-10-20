@@ -43,7 +43,9 @@ export function createCdnImageUrlSigner(env: NodeJS.ProcessEnv): ImageUrlSigner 
       !/^image\/(?:png|jpeg|webp|gif|avif|bmp)(?: *;.*)?$/i.test(image.mime) ||
       (image.contentDisposition && !/^inline(?:;|$)/.test(image.contentDisposition))
     )
-      return null;
+      // 不是「本环境没开直连」，是「开了 CDN 但这一张签不出来」——调用方要能区分，
+      // 否则配了 CDN 的环境里这类图会静默退化成回源，CDN 等于白配。
+      return { kind: "unsigned", reason: "unsupported-asset" };
 
     const now = Math.floor(Date.now() / 1_000);
     // TypeD expires at t + console TTL, not at t. Backdate t to cap short application grants.
@@ -57,6 +59,6 @@ export function createCdnImageUrlSigner(env: NodeJS.ProcessEnv): ImageUrlSigner 
     url.searchParams.set("t", timestamp);
     // TypeD does not sign arbitrary query parameters. Rely on stored COS Content-Type;
     // do not attach unsigned response overrides or image-processing parameters.
-    return url.href;
+    return { kind: "signed", url: url.href };
   };
 }
