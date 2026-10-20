@@ -9,14 +9,12 @@ import {
   type NovelPipelineStepKind,
 } from "@ai-assistant/novel-workflow";
 import { nextPipelineStep, runStatusForStep } from "@ai-assistant/novel-workflow/server";
-import {
-  createNovelGenerator,
-  buildNovelQualityDiagnostics,
-  reserveAndCreateTask,
-  runNovelTask,
-  type NovelTaskRow,
-  type NovelTargetKind,
-} from "../workflow/novel/index.js";
+// 直接指到各自定义所在的叶子/门面层，不走 workflow/novel 的域门面（那里排着
+// novel-routes，会绕回 src/novel 形成运行时环）。
+import { createNovelGenerator } from "../workflow/novel/novel-generation.js";
+import { buildNovelQualityDiagnostics } from "../workflow/novel/novel-text-analysis.js";
+import { reserveAndCreateTask, runNovelTask, type NovelTaskRow } from "../workflow/novel/novel-task-runner.js";
+import type { NovelTargetKind } from "../workflow/novel/novel-types.js";
 import { appendNovelRunEvent } from "./events.js";
 import { createNextNovelStep } from "./run-store.js";
 import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";

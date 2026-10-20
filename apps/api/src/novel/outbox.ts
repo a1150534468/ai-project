@@ -1,5 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
-import { NOVEL_TARGET_KINDS, type NovelTargetKind } from "../workflow/novel/index.js";
+// 直接指到叶子，不走 workflow/novel 的门面：门面里排着 novel-routes 等会绕回 src/novel
+// 的模块，而本文件在**模块求值期**就要用 NOVEL_TARGET_KINDS.filter(...)，
+// 走门面等于在环里取一个还没初始化的绑定（TypeError: Cannot read properties of undefined）。
+import { NOVEL_TARGET_KINDS, type NovelTargetKind } from "../workflow/novel/novel-types.js";
 import { enqueueNovelEngineStep, enqueueNovelGenerationTask } from "./queue.js";
 
 const OUTBOX_BATCH_SIZE = 50;

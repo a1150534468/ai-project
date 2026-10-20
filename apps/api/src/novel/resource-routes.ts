@@ -7,7 +7,7 @@ import { z } from "zod";
 import { captureNovelStructuredSnapshot, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 import { syncNovelSetupAssets } from "./structured-sync.js";
 import { requireUser } from "../auth/require-user.js";
-import { refreshNovelVectorMemoryBestEffort } from "../workflow/novel/index.js";
+import { refreshNovelVectorMemoryBestEffort } from "../workflow/novel/novel-task-context.js";
 import { backfillNovelContinuityAssets } from "./continuity-assets.js";
 import { backfillNovelNarrativeLedgers } from "./narrative-ledger.js";
 import { recalculateNovelChapterScores } from "./score-backfill.js";
