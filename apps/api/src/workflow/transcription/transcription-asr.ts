@@ -21,6 +21,7 @@
  * fetchFn 可注入，便于单测用假响应覆盖提交/轮询/下载全链路。
  */
 
+import { envInt } from "../../runtime/env.js";
 import { TRANSCRIPTION_MODEL } from "./transcription-shared.js";
 
 export interface AsrConfig {
@@ -72,10 +73,6 @@ const DEFAULT_SUBMIT_TIMEOUT_MS = 30_000;
 const DEFAULT_POLL_TIMEOUT_MS = 15_000;
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 60_000;
 
-function positiveInt(raw: string | undefined, fallback: number): number {
-  const parsed = raw?.trim() ? Number(raw.trim()) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
-}
 
 export function loadAsrConfig(env: NodeJS.ProcessEnv = process.env): AsrConfig {
   const workspaceId = env.BAILIAN_WORKSPACE_ID?.trim();
@@ -95,9 +92,9 @@ export function loadAsrConfig(env: NodeJS.ProcessEnv = process.env): AsrConfig {
     baseURL: baseURL.replace(/\/+$/, ""),
     apiKey,
     model: env.TRANSCRIPTION_ASR_MODEL?.trim() || TRANSCRIPTION_MODEL,
-    submitTimeoutMs: positiveInt(env.TRANSCRIPTION_ASR_SUBMIT_TIMEOUT_MS, DEFAULT_SUBMIT_TIMEOUT_MS),
-    pollTimeoutMs: positiveInt(env.TRANSCRIPTION_ASR_POLL_TIMEOUT_MS, DEFAULT_POLL_TIMEOUT_MS),
-    downloadTimeoutMs: positiveInt(env.TRANSCRIPTION_ASR_DOWNLOAD_TIMEOUT_MS, DEFAULT_DOWNLOAD_TIMEOUT_MS),
+    submitTimeoutMs: envInt(env, "TRANSCRIPTION_ASR_SUBMIT_TIMEOUT_MS", DEFAULT_SUBMIT_TIMEOUT_MS),
+    pollTimeoutMs: envInt(env, "TRANSCRIPTION_ASR_POLL_TIMEOUT_MS", DEFAULT_POLL_TIMEOUT_MS),
+    downloadTimeoutMs: envInt(env, "TRANSCRIPTION_ASR_DOWNLOAD_TIMEOUT_MS", DEFAULT_DOWNLOAD_TIMEOUT_MS),
   };
 }
 

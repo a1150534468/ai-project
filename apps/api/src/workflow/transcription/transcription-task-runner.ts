@@ -9,6 +9,7 @@
  */
 
 import type { PrismaClient } from "@prisma/client";
+import { envInt } from "../../runtime/env.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { publicObjectUrl } from "../../storage/public-url.js";
 import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
@@ -49,18 +50,14 @@ const DEFAULT_RUN_TIMEOUT_MS = 45 * 60_000;
 const DEFAULT_MAX_SUBMIT_ATTEMPTS = 3;
 const DEFAULT_SUBMIT_RETRY_DELAY_MS = 5000;
 
-function positiveInt(raw: string | undefined, fallback: number): number {
-  const parsed = raw?.trim() ? Number(raw.trim()) : NaN;
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
-}
 
 export function loadTranscriptionRunnerConfig(env: NodeJS.ProcessEnv = process.env): TranscriptionRunnerConfig {
   return {
     asr: loadAsrConfig(env),
-    pollIntervalMs: positiveInt(env.TRANSCRIPTION_POLL_INTERVAL_MS, DEFAULT_POLL_INTERVAL_MS),
-    runTimeoutMs: positiveInt(env.TRANSCRIPTION_RUN_TIMEOUT_MS, DEFAULT_RUN_TIMEOUT_MS),
-    maxSubmitAttempts: positiveInt(env.TRANSCRIPTION_MAX_ATTEMPTS, DEFAULT_MAX_SUBMIT_ATTEMPTS),
-    submitRetryDelayMs: positiveInt(env.TRANSCRIPTION_SUBMIT_RETRY_DELAY_MS, DEFAULT_SUBMIT_RETRY_DELAY_MS),
+    pollIntervalMs: envInt(env, "TRANSCRIPTION_POLL_INTERVAL_MS", DEFAULT_POLL_INTERVAL_MS),
+    runTimeoutMs: envInt(env, "TRANSCRIPTION_RUN_TIMEOUT_MS", DEFAULT_RUN_TIMEOUT_MS),
+    maxSubmitAttempts: envInt(env, "TRANSCRIPTION_MAX_ATTEMPTS", DEFAULT_MAX_SUBMIT_ATTEMPTS),
+    submitRetryDelayMs: envInt(env, "TRANSCRIPTION_SUBMIT_RETRY_DELAY_MS", DEFAULT_SUBMIT_RETRY_DELAY_MS),
   };
 }
 

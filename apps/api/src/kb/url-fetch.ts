@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { Agent, fetch as undiciFetch, type Dispatcher, type RequestInit as UndiciRequestInit } from "undici";
 import ipaddr from "ipaddr.js";
+import { intOr } from "../runtime/env.js";
 
 export class SsrfError extends Error {
   constructor(message: string, options?: ErrorOptions) {
@@ -70,9 +71,8 @@ export async function assertSafeUrl(raw: string, lookupFn: LookupFn = lookup as 
   return (await safeAddresses(checkedUrl(raw), lookupFn)).map(({ address }) => address);
 }
 
-function positiveInteger(value: number | undefined, fallback: number): number {
-  return Number.isSafeInteger(value) && (value ?? 0) >= 0 ? value! : fallback;
-}
+// 这里的 0 是合法取值（maxRedirects: 0 = 不允许跟随跳转），所以带 allowZero。
+const zeroAllowed = { allowZero: true } as const;
 
 function pinnedDispatcher(addresses: readonly Address[]): Dispatcher {
   let cursor = 0;
@@ -120,9 +120,9 @@ export async function fetchUrl(
     dispatcherFactory?: DispatcherFactory;
   } = {},
 ): Promise<FetchResult> {
-  const maxBytes = positiveInteger(options.maxBytes, 10 * 1024 * 1024);
-  const timeoutMs = positiveInteger(options.timeoutMs, 15_000);
-  const maxRedirects = positiveInteger(options.maxRedirects, 3);
+  const maxBytes = intOr(options.maxBytes, 10 * 1024 * 1024, zeroAllowed);
+  const timeoutMs = intOr(options.timeoutMs, 15_000, zeroAllowed);
+  const maxRedirects = intOr(options.maxRedirects, 3, zeroAllowed);
   const lookupFn = options.lookupFn ?? (lookup as LookupFn);
   const fetchFn: FetchFn = options.fetchFn ?? (undiciFetch as unknown as FetchFn);
   const makeDispatcher = options.dispatcherFactory ?? pinnedDispatcher;

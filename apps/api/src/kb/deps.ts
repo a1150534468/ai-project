@@ -3,15 +3,12 @@ import { hostname } from "node:os";
 import { getPrisma } from "@ai-assistant/db";
 import { embed, loadEmbeddingConfig } from "../memory/embedding-client.js";
 import { getObject, type S3 } from "../storage/s3.js";
+import { envInt } from "../runtime/env.js";
 import { chunkText } from "./chunk.js";
 import type { IndexDeps } from "./indexer.js";
 import { parseDocument } from "./parse.js";
 import { fetchUrl } from "./url-fetch.js";
 
-function integerSetting(env: NodeJS.ProcessEnv, name: string, fallback: number): number {
-  const value = Number.parseInt(env[name] ?? "", 10);
-  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
 
 function filenameFromLocation(location: string): string {
   return location.split("/").pop() || "document";
@@ -37,9 +34,9 @@ export async function buildIndexDeps(s3: S3): Promise<IndexDeps> {
       }
       if (document.sourceType === "URL") {
         const fetched = await fetchUrl(location!, {
-          maxBytes: integerSetting(process.env, "KB_URL_MAX_BYTES", 10_485_760),
-          timeoutMs: integerSetting(process.env, "KB_URL_FETCH_TIMEOUT_MS", 15_000),
-          maxRedirects: integerSetting(process.env, "KB_URL_MAX_REDIRECTS", 3),
+          maxBytes: envInt(process.env, "KB_URL_MAX_BYTES", 10_485_760),
+          timeoutMs: envInt(process.env, "KB_URL_FETCH_TIMEOUT_MS", 15_000),
+          maxRedirects: envInt(process.env, "KB_URL_MAX_REDIRECTS", 3),
         });
         return {
           buf: fetched.buf,
@@ -51,9 +48,9 @@ export async function buildIndexDeps(s3: S3): Promise<IndexDeps> {
     },
     parse: parseDocument,
     chunk: (text) => chunkText(text, {
-      maxTokens: integerSetting(process.env, "KB_CHUNK_TOKENS", 800),
-      overlapTokens: integerSetting(process.env, "KB_CHUNK_OVERLAP", 100),
-      maxChunks: integerSetting(process.env, "KB_MAX_CHUNKS", 2_000),
+      maxTokens: envInt(process.env, "KB_CHUNK_TOKENS", 800),
+      overlapTokens: envInt(process.env, "KB_CHUNK_OVERLAP", 100),
+      maxChunks: envInt(process.env, "KB_MAX_CHUNKS", 2_000),
     }),
     embed: (input) => embed(embedding, input),
     embeddingDimension: embedding.dimension,

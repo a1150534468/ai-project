@@ -14,9 +14,12 @@
  * 所以推导一律**往长的方向取整**，且 {@link reservationTtlSeconds} 保证结果不会短于
  * billing 的全局兜底——声明 TTL 只能延长窗口，绝不能比不声明还短。
  *
- * 本文件是**叶子模块**：不 import 任何东西，只做算术。各域的窗口口径留在各自的
- * `*-shared.ts`（那里才有该域的超时/重试常量），本文件只负责「知道 billing 那几个数」。
+ * 本文件是**叶子模块**：只 import `runtime/env` 这一个同样只做算术的叶子，不碰
+ * prisma / redis / 队列。各域的窗口口径留在各自的 `*-shared.ts`（那里才有该域的
+ * 超时/重试常量），本文件只负责「知道 billing 那几个数」。
  */
+
+import { envInt } from "../../runtime/env.js";
 
 /** billing `/resource/reserve` 的硬上限（maxReservationTTLSeconds），超出直接 400。 */
 export const BILLING_MAX_RESERVATION_TTL_SECONDS = 30 * 24 * 60 * 60;
@@ -49,19 +52,14 @@ const DEFAULT_RESERVATION_RESUME_ALLOWANCE = 4;
  */
 const NON_UPSTREAM_MARGIN_RATIO = 1.5;
 
-function positiveNumber(key: string, fallback: number, env: NodeJS.ProcessEnv): number {
-  const value = Number(env[key]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 export function reservationMarginMs(env: NodeJS.ProcessEnv = process.env): number {
-  return positiveNumber("BILLING_RESERVATION_MARGIN_MS", DEFAULT_RESERVATION_MARGIN_MS, env);
+  return envInt(env, "BILLING_RESERVATION_MARGIN_MS", DEFAULT_RESERVATION_MARGIN_MS);
 }
 
 export function reservationResumeAllowance(env: NodeJS.ProcessEnv = process.env): number {
-  const value = Number(env.BILLING_RESERVATION_RESUME_ALLOWANCE);
-  // 0 是「这个域不续跑」的合法取值，所以不能用 positiveNumber。
-  return Number.isFinite(value) && value >= 0 ? value : DEFAULT_RESERVATION_RESUME_ALLOWANCE;
+  // 0 是「这个域不续跑」的合法取值 —— 这个分歧点就是当年分叉出第二份实现的原因，
+  // 现在由 envInt 的 allowZero 选项表达，不再为它单写一份。
+  return envInt(env, "BILLING_RESERVATION_RESUME_ALLOWANCE", DEFAULT_RESERVATION_RESUME_ALLOWANCE, { allowZero: true });
 }
 
 /**

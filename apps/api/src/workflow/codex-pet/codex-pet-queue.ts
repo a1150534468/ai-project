@@ -1,4 +1,5 @@
 import { Queue, Worker, type JobsOptions, type Processor } from "bullmq";
+import { envInt } from "../../runtime/env.js";
 
 export const CODEX_PET_QUEUE_NAME = "codex-pet-runs";
 
@@ -31,10 +32,6 @@ export function codexPetBullConnection(env: NodeJS.ProcessEnv = process.env) {
   };
 }
 
-function positiveInteger(env: NodeJS.ProcessEnv, key: string, fallback: number): number {
-  const value = Number(env[key]);
-  return Number.isInteger(value) && value > 0 ? value : fallback;
-}
 
 /**
  * Completed jobs are removed immediately. A run intentionally completes its
@@ -91,10 +88,10 @@ export function createCodexPetWorker(
   const env = options.env ?? process.env;
   return new Worker<CodexPetQueuePayload>(CODEX_PET_QUEUE_NAME, processor, {
     connection: codexPetBullConnection(env),
-    concurrency: options.concurrency ?? positiveInteger(
+    concurrency: options.concurrency ?? envInt(
       env,
       "CODEX_PET_WORKER_CONCURRENCY",
-      positiveInteger(env, "WORKER_CONCURRENCY", 1),
+      envInt(env, "WORKER_CONCURRENCY", 1),
     ),
   });
 }
