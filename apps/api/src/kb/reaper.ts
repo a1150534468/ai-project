@@ -1,7 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
-import { envInt, intOr } from "../runtime/env.js";
-import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
 import { indexOnce, type IndexDeps } from "./indexer.js";
+import { kbBatchSize, kbFailureText, kbLeaseMs, kbMaxAttempts, kbReaperIntervalMs } from "./strategy.js";
 
 export interface ReaperOpts {
   intervalMs?: number;
@@ -19,17 +18,10 @@ type ReapOptions = {
   shouldStop?: () => boolean;
 };
 
-const DEFAULT_INTERVAL_MS = 30_000;
-const DEFAULT_LEASE_MS = 300_000;
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_BATCH_SIZE = 20;
-
-// 正整数解析收进 runtime/env：这里的两个 helper 与 kb/indexer 的逐字节相同，
-// 而「0 算不算合法」这个分歧点靠 `intOr` 的 allowZero 选项表达。
-
-// 同 kb/indexer.ts：走共享实现，非 Error 一律 fallback，不再透传裸字符串。
+// 默认值与 env 解析全部在 ./strategy.ts —— reaper 与 indexer 共用同一份，
+// 否则「改一处不改另一处」会以不报错的方式 desync。
 export function failureText(error: unknown): string {
-  return errorMessageOrFallback(error, "Unknown error");
+  return kbFailureText(error);
 }
 
 /**
@@ -81,10 +73,10 @@ export async function reapOnce(prisma: PrismaClient, options: ReapOptions): Prom
 }
 
 export function startKbReaper(deps: IndexDeps, options: ReaperOpts = {}): { stop: () => void } {
-  const intervalMs = intOr(options.intervalMs, envInt(process.env, "KB_REAPER_INTERVAL_MS", DEFAULT_INTERVAL_MS));
-  const leaseMs = intOr(options.leaseMs, envInt(process.env, "KB_INDEX_LEASE_MS", DEFAULT_LEASE_MS));
-  const maxAttempts = intOr(options.maxAttempts, envInt(process.env, "KB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS));
-  const batchSize = intOr(options.batchSize, DEFAULT_BATCH_SIZE);
+  const intervalMs = kbReaperIntervalMs(options);
+  const leaseMs = kbLeaseMs(options);
+  const maxAttempts = kbMaxAttempts(options);
+  const batchSize = kbBatchSize(options);
   const runIndex = options.runIndex ?? ((docId) => indexOnce(deps, docId, { maxAttempts, leaseMs }));
 
   let stopped = false;

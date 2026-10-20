@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { DEFAULT_EMBEDDING_DIMENSION, validateEmbeddingVector } from "../memory/embedding-client.js";
-import { envInt, intOr } from "../runtime/env.js";
-import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
+import { intOr } from "../runtime/env.js";
+import {
+  KB_DEFAULT_LEASE_MS,
+  KB_DEFAULT_MAX_ATTEMPTS,
+  kbEmbedConcurrency,
+  kbFailureText,
+  kbLeaseMs,
+  kbMaxAttempts,
+} from "./strategy.js";
 import { describeTextStructure } from "./chunk.js";
 import { EmptyTextError, PermanentDocumentError } from "./parse.js";
 
@@ -35,18 +42,13 @@ export interface IndexOnceOptions {
   leaseMs?: number;
 }
 
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_LEASE_MS = 300_000;
-const DEFAULT_EMBED_CONCURRENCY = 4;
-
-// 同 kb/reaper：正整数解析收进 runtime/env（这两份原先逐字节相同）。
-
+// 默认值与 env 解析全部在 ./strategy.ts（与 reaper 共用）。
 
 // 走共享实现：原先 `typeof error === "string" ? error : ...` 会把任意裸字符串原样
 // 透传（进 DB 的 error 列、也进上游状态码的正则匹配）。导出是为了让测试能覆盖到
 // 「非 Error 输入走 fallback」这条口径。
 export function errorMessage(error: unknown): string {
-  return errorMessageOrFallback(error, "Unknown error");
+  return kbFailureText(error);
 }
 
 function upstreamStatus(error: unknown): number | null {
@@ -94,15 +96,15 @@ export async function claim(
   docId: string,
   owner: string,
   leaseMs: number,
-  maxAttempts = DEFAULT_MAX_ATTEMPTS,
+  maxAttempts = KB_DEFAULT_MAX_ATTEMPTS,
   now = new Date(),
 ): Promise<boolean> {
-  const expiredBefore = new Date(now.getTime() - intOr(leaseMs, DEFAULT_LEASE_MS));
+  const expiredBefore = new Date(now.getTime() - intOr(leaseMs, KB_DEFAULT_LEASE_MS));
   const rows = await prisma.$executeRaw<number>`
     UPDATE "Document"
     SET status = 'indexing', "lockedBy" = ${owner}, "lockedAt" = ${now}, attempts = attempts + 1
     WHERE id = ${docId}
-      AND attempts < ${intOr(maxAttempts, DEFAULT_MAX_ATTEMPTS)}
+      AND attempts < ${intOr(maxAttempts, KB_DEFAULT_MAX_ATTEMPTS)}
       AND (status = 'pending' OR (status = 'indexing' AND "lockedAt" < ${expiredBefore}))
   `;
   return rows === 1;
@@ -202,8 +204,8 @@ async function recordFailure(
 
 /** 单次索引 attempt；attempt token 为每次抢占加 fencing，旧 worker 永远不能发布或改终态。 */
 export async function indexOnce(deps: IndexDeps, docId: string, options: IndexOnceOptions = {}): Promise<void> {
-  const maxAttempts = intOr(options.maxAttempts, envInt(process.env, "KB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS));
-  const leaseMs = intOr(options.leaseMs, envInt(process.env, "KB_INDEX_LEASE_MS", DEFAULT_LEASE_MS));
+  const maxAttempts = kbMaxAttempts(options);
+  const leaseMs = kbLeaseMs(options);
   const owner = `${deps.workerId}:${randomUUID()}`;
   const now = deps.now?.() ?? new Date();
   if (!(await claim(deps.prisma, docId, owner, leaseMs, maxAttempts, now))) return;
@@ -227,7 +229,7 @@ export async function indexOnce(deps: IndexDeps, docId: string, options: IndexOn
     const chunks = deps.chunk(text);
     if (chunks.length === 0) throw new PermanentIndexError("No chunks after splitting");
 
-    const concurrency = envInt(process.env, "KB_EMBED_CONCURRENCY", DEFAULT_EMBED_CONCURRENCY);
+    const concurrency = kbEmbedConcurrency();
     const embeds: Array<{ vector: number[]; tokens: number }> = [];
     let totalTokens = 0;
     for (let start = 0; start < chunks.length; start += concurrency) {
