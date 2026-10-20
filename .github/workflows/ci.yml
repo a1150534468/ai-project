@@ -63,8 +63,122 @@ jobs:
           # prisma generate 只读 schema 不连库，但个别版本会校验 url 格式，给个占位值
           DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder
 
-  test:
-    name: test + build
+  # PR 上跑「受影响的包」。为什么不是把 pull_request 加进下面 test-full 的 if：
+  # 那个 job 是全仓测试 + 全仓 build，约 45 分钟/次（Free 计划 2000 分钟/月的教训
+  # 见 production.yml 与 test-full 的注释）。PR 该付的是「这次改动碰到的包」，不是全仓，
+  # 所以拆一个独立 job，用 turbo --filter=...[base] 只选受影响的包及其下游依赖。
+  test-affected:
+    name: test-affected（PR）
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    # 20 分钟上限：install + prisma + 单包测试实测应在 10 分钟内。
+    # 若实测逼近这个上限，先汇报数字再决定（不要靠 --force 或扩大 --filter 救）。
+    timeout-minutes: 20
+
+    # 这两个 service 与 test-full 逐字一致，不能省：apps/api 有一批
+    # describe.skipIf(!databaseEnabled) 守卫的测试，没有库它们会静默跳过且退出码 0
+    # ——那正是 scripts/check-test-report.mjs 要拦的假绿。缺库的话这个 job 连
+    # 「跑了但没真跑」都算不上。pgvector 镜像是硬要求（见 test-full 的注释）。
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: ai-assistant
+          POSTGRES_PASSWORD: ai-assistant
+          POSTGRES_DB: ai-assistant
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ai-assistant -d ai-assistant"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    # 与 test-full 的 env 保持同口径：两边 env 不一致会让 skip 计数在两种 job 之间
+    # 对不上（turbo 把 test 任务的 env 写进了缓存哈希，见 turbo.json 的注释）。
+    env:
+      DATABASE_URL: postgresql://ai-assistant:ai-assistant@127.0.0.1:5432/ai-assistant
+      REDIS_URL: redis://127.0.0.1:6379
+      SESSION_SECRET: ci-session-secret-that-is-long-enough-for-tests
+      ADMIN_SESSION_SECRET: ci-admin-session-secret-long-enough-for-tests
+      CODEX_PET_ARTIFACT_SIGNING_SECRET: ci-codex-pet-signing-secret-long-enough
+      LLM_BASE_URL: http://127.0.0.1:9
+      LLM_API_KEY: ci-placeholder-not-a-real-key
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # turbo --filter=...[<ref>] 要跟基准提交比对历史，fetch-depth:1 拿不到。
+          # 与上面 static job 为 biome --changed 设 fetch-depth: 0 是同一个原因。
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: 安装依赖
+        run: pnpm install --frozen-lockfile
+
+      - name: 确定测试比对基准
+        id: base
+        run: |
+          # 比对 PR 的 base 当时的提交（不是现在），即「这次改动相对哪一点」。
+          # checkout 对 pull_request 取的是 refs/pull/N/merge，fetch-depth: 0 后
+          # base.sha 一定在本地历史里。
+          ref="${{ github.event.pull_request.base.sha }}"
+          if [ -z "$ref" ]; then ref="origin/main"; fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - name: 列出受影响的 workspace
+        id: affected
+        run: |
+          pnpm exec turbo run test --filter='...[${{ steps.base.outputs.ref }}]' --dry-run=json > turbo-affected.json
+          node -e '
+            const fs = require("fs");
+            const raw = JSON.parse(fs.readFileSync("turbo-affected.json", "utf8"));
+            const pkgs = [...new Set((raw.tasks ?? [])
+              .filter((t) => t.task === "test")
+              .map((t) => t.package))].sort();
+            console.log("受影响的 workspace（" + pkgs.length + " 个）：");
+            for (const p of pkgs) console.log("  - " + p);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, "count=" + pkgs.length + "\n");
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,
+              "受影响 workspace（" + pkgs.length + "）：" + (pkgs.join(", ") || "（无）") + "\n");
+          '
+
+      - name: 生成 prisma client
+        if: steps.affected.outputs.count != '0'
+        run: pnpm --filter @ai-assistant/db generate
+
+      - name: 应用数据库迁移
+        if: steps.affected.outputs.count != '0'
+        run: pnpm --filter @ai-assistant/db exec prisma migrate deploy
+
+      - name: 跑受影响的测试
+        if: steps.affected.outputs.count != '0'
+        # 不带 --force：PR 上要的正是缓存命中（没变的包不必重跑），这一点与
+        # test-full 相反——那里带 --force 是为了让 skip 守卫读到真跑出来的报告。
+        # --continue：某个包红了也把其余跑完，否则只看到第一个红。
+        run: >-
+          pnpm exec turbo run test --filter='...[${{ steps.base.outputs.ref }}]' --continue --
+          --reporter=default --reporter=json --outputFile.json=.vitest-report.json
+
+      - name: 假绿防护（受影响范围，skip 按 workspace 收紧）
+        if: always() && steps.affected.outputs.count != '0'
+        run: node scripts/check-test-report.mjs --affected
+
+  test-full:
+    name: test-full + build
     # 按项目所有者要求：测试与构建目前只在 main 跑。ci-verify/** 用于验证本工作流自身，
     # workflow_dispatch 用于手动补跑。
     #
