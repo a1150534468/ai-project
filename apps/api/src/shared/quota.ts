@@ -26,6 +26,8 @@ export const QUOTA_SCOPE = {
   workflowNail: "workflow:nail",
   workflowNovel: "workflow:novel",
   workflowArticle: "workflow:article",
+  /** 登录失败计数。标识位是 identifier（用户名/邮箱），因为登录时还没有 userId。 */
+  authLoginFail: "auth:login-fail",
 } as const;
 
 export type QuotaScopeName = keyof typeof QUOTA_SCOPE;
@@ -41,6 +43,9 @@ export const QUOTA_PRESETS: Readonly<Record<QuotaScopeName, { readonly limit: nu
   workflowNail: { limit: 20, windowSeconds: 3600 },
   workflowNovel: { limit: 10, windowSeconds: 3600 },
   workflowArticle: { limit: 30, windowSeconds: 3600 },
+  // 撞库成本是「服务端 CPU」不是钱，窗口给短一点、次数给少一点：正常用户忘密码
+  // 试几次不会被锁，脚本批量试就撞墙。
+  authLoginFail: { limit: 10, windowSeconds: 900 },
 };
 
 export interface ConsumeQuotaArgs {
@@ -113,6 +118,14 @@ export function optionalRedis(): Redis | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * 登录失败计数的 key。登录成功后要按**同一个 key** 把计数删掉，
+ * 所以 env 的拼法只在这里出现一次。
+ */
+export function loginFailQuotaKey(identifier: string): string {
+  return quotaKey(process.env.NODE_ENV ?? "dev", QUOTA_SCOPE.authLoginFail, identifier);
 }
 
 /** 超额时统一的响应体。与头像现有的 429 同一句话，前端不用区分是哪条业务线。 */

@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { AuthRouteContext } from "./auth-route-context.js";
 import { readDemoAccountConfig } from "./demo.js";
 import { isUniqueConstraintOn, uniqueConstraintTargets } from "./prisma-errors.js";
+import { consumeNamedQuota, loginFailQuotaKey } from "../shared/quota.js";
 import { requireUser } from "./require-user.js";
 import { signToken } from "./token.js";
 import { generateUid } from "./uid.js";
@@ -17,6 +18,9 @@ const loginSchema = z.object({
   identifier: z.string().min(1).max(64),
   password: z.string().min(1).max(200),
 });
+
+/** 登录失败的对外文案。401 与 429 共用，见下方登录实现里的说明。 */
+const LOGIN_FAILED_MESSAGE = "账号或密码错误";
 
 class UsernameTakenError extends Error {}
 
@@ -77,9 +81,22 @@ export function registerAccountRoutes(app: FastifyInstance, context: AuthRouteCo
       where: { OR: [{ uid: identifier }, { username: identifier }] },
     });
     if (!user || !(await argon2.verify(user.passwordHash, password))) {
-      return reply.code(401).send({ error: "账号或密码错误" });
+      // 失败计数只记「密码没过」的那一次：先扣额度再判的话，猜对密码的那一次也会被
+      // 前面 10 次失败挡在门外，正常用户就真被自己锁住了。
+      // key 用 identifier 而不是 userId —— 登录这一步还没有 userId。
+      if (context.redis && !(await consumeNamedQuota(context.redis, "authLoginFail", identifier, (error) => request.log.warn({ err: error }, "login-fail quota check failed, allowing")))) {
+        // 故意复用密码错误那一句：回「账号已被锁定」等于替攻击者确认这个账号存在。
+        return reply.code(429).send({ error: LOGIN_FAILED_MESSAGE });
+      }
+      return reply.code(401).send({ error: LOGIN_FAILED_MESSAGE });
     }
     if (user.bannedAt) return reply.code(403).send({ error: "账号已被封禁" });
+    // 登录成功清零失败计数，否则「昨天手滑 9 次 + 今天手滑 1 次」会把人锁在外面
+    if (context.redis) {
+      await context.redis
+        .del(loginFailQuotaKey(identifier))
+        .catch((error) => request.log.warn({ err: error }, "login-fail counter reset failed"));
+    }
     await context.recordLogin(request, user.id);
     return sessionResponse(user, secret);
   });
