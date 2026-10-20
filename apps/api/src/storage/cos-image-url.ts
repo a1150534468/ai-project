@@ -10,6 +10,18 @@ export interface SignedImageRequest {
   /** Existing application bearer URL expiry, in milliseconds. */
   readonly expiresAt: number;
   readonly contentDisposition?: string;
+  /**
+   * 这个链接是发给谁的。**目前只做类型准备，不参与签名**。
+   *
+   * 为什么先只加字段：bearer URL 是行业标准做法，签发时路由层已经校验过归属，
+   * 所以这不是 bug。但这个类型里原本没有任何字段能表达「发给谁」，于是
+   * 「链接被转发后能不能吊销」在当前定义下无从回答。真正的吊销能力要改签名
+   * payload，而那会**影响所有已签发的 URL**，必须单独确认——所以这里先行占位，
+   * 让「谁在用这个链接」成为结构里可表达的一件事。
+   *
+   * 不传时签名结果与加字段之前逐字节相同（有测试钉着）。
+   */
+  readonly userId?: string;
 }
 
 /**

@@ -153,6 +153,31 @@ describe("COS private image URL signing (no cloud requests)", () => {
   });
 });
 
+describe("SignedImageRequest.userId（类型准备，尚未参与签名）", () => {
+  it("不传 userId 时签名结果与加字段之前逐字节相同", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const withoutField = await createImageUrlSigner(env)(request);
+    const withUndefined = await createImageUrlSigner(env)({ ...request, userId: undefined });
+
+    expect(withUndefined).toEqual(withoutField);
+  });
+
+  /**
+   * 这条断言钉的是**现状**：userId 只是类型上的占位，不进签名 payload。
+   * 真正的「转发后吊销」要改 payload，会影响所有已签发的 URL，必须单独确认后再做
+   * ——所以先把它写成可执行的现状说明，避免有人误以为传了 userId 就已经能吊销。
+   */
+  it("传了 userId 也不改变 URL（吊销能力尚未接线）", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const sign = createImageUrlSigner(env);
+
+    const plain = await signedUrlOf(sign(request));
+    const withUser = await signedUrlOf(sign({ ...request, userId: "u1" }));
+
+    expect(withUser).toBe(plain);
+  });
+});
+
 /** 拆开显式判定后再取 URL：kind 不是 signed 就炸，避免测试里出现 `!` 把两种 null 混为一谈。 */
 async function signedUrlOf(result: Promise<ImageUrlSignResult>): Promise<string> {
   const resolved = await result;
