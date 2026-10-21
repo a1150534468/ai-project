@@ -1,7 +1,9 @@
 /**
  * 图文批次的轮询。批次里只要还有 generating / revising 的行就每 2.5s 拉一次
- * **轻量状态端点**（只有 id/status/error，没有正文），全部落地后才做一次全量
- * 回填 + 一次历史刷新，并一次性给出「几个平台已生成」和失败原因。
+ * **轻量状态端点**（只有 id/status/error，没有正文）；任一平台新落地就做一次
+ * 全量回填让它的结果立刻可见，整批落地后再回填一次 + 刷新历史一次，并按
+ * **回填返回值**一次性给出「几个平台已生成」和失败原因（不按状态查询的旧快照
+ * 宣布完成——两查之间可能又起了新一轮生成）。
  *
  * 调度走纯逻辑 poller（src/poller.ts）：重叠保护与「落地停轮」在它里面，
  * 这个 hook 只负责把批次状态喂给它、把一轮轮询的业务动作交给它。
@@ -52,9 +54,12 @@ export function useArticleWorkflowBatchPolling(args: {
     batchProjects.find((item) => isBusyArticleWorkflowStatus(item.status))?.id ?? batchProjects[0]?.id ?? "";
 
   // poller 只建一次，输入全走 ref：批次切换/状态翻转只 notify，不重建调度器
-  const inputsRef = useRef({ batchBusy, pollBatchId, pollProjectId, loadBatch, loadBatchStatus, refreshHistory, setError, setNotice });
-  inputsRef.current = { batchBusy, pollBatchId, pollProjectId, loadBatch, loadBatchStatus, refreshHistory, setError, setNotice };
+  const inputsRef = useRef({ batchProjects, batchBusy, pollBatchId, pollProjectId, loadBatch, loadBatchStatus, refreshHistory, setError, setNotice });
+  inputsRef.current = { batchProjects, batchBusy, pollBatchId, pollProjectId, loadBatch, loadBatchStatus, refreshHistory, setError, setNotice };
   const pollerRef = useRef<Poller | null>(null);
+  // 上一轮见过的行状态：判断「这一轮有没有平台新落地」——有新落地就值得做一次
+  // 全量回填把它的正文/状态带进界面，不必等整批结束；稳态轮询仍然只打轻量端点。
+  const seenStatusRef = useRef(new Map<string, string>());
   if (pollerRef.current === null) {
     pollerRef.current = createPoller({
       intervalMs: POLL_INTERVAL_MS,
@@ -62,14 +67,31 @@ export function useArticleWorkflowBatchPolling(args: {
       refresh: async () => {
         const input = inputsRef.current;
         try {
+          // 先用界面已知的项目状态给 seen 表播种（首次轮询前它还是空的，
+          // 不播种就判断不出「忙 → 落地」的跃迁，部分落地回填永远不会触发）
+          const seen = seenStatusRef.current;
+          for (const project of input.batchProjects) {
+            if (!seen.has(project.id)) seen.set(project.id, project.status);
+          }
           const statuses = await input.loadBatchStatus({ batchId: input.pollBatchId, projectId: input.pollProjectId });
-          const summary = summarizeArticleWorkflowPoll(statuses);
-          if (summary.busy) return;
-          // 全部落地：一次性全量回填（force=false 保住正在编辑的草稿）+ 刷新历史
-          await input.loadBatch({ batchId: input.pollBatchId, projectId: input.pollProjectId, force: false });
+          const newlySettled = statuses.some((row) => {
+            const before = seen.get(row.id);
+            return before !== undefined && isBusyArticleWorkflowStatus(before) && !isBusyArticleWorkflowStatus(row.status);
+          });
+          for (const row of statuses) seen.set(row.id, row.status);
+          const lightSummary = summarizeArticleWorkflowPoll(statuses);
+          if (lightSummary.busy && !newlySettled) return;
+          // 有平台落地（或整批落地）：全量回填一次（force=false），先落地平台的
+          // 结果立刻可见，不被还没跑完的平台拖住。
+          const projects = await input.loadBatch({ batchId: input.pollBatchId, projectId: input.pollProjectId, force: false });
+          if (lightSummary.busy) return; // 部分落地：只回填，不通知、不刷历史
+          // 最终通知必须按回填的最新数据汇总：状态查询之后可能又起了新一轮生成，
+          // 拿旧快照宣布「已生成」会误报；回填结果仍忙就继续轮询、什么都不报。
+          const finalSummary = summarizeArticleWorkflowPoll(projects);
+          if (finalSummary.busy) return;
           await input.refreshHistory();
-          if (summary.notice) input.setNotice(summary.notice);
-          if (summary.error) input.setError(summary.error);
+          if (finalSummary.notice) input.setNotice(finalSummary.notice);
+          if (finalSummary.error) input.setError(finalSummary.error);
         } catch (err) {
           input.setError(errorMessage(err, "刷新项目失败"));
         }

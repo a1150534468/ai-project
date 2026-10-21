@@ -150,18 +150,74 @@ describe("createPoller", () => {
       },
     });
     poller.start();
+    // 先推进 2000ms 再手动刷新：旧 ttl 截止 = start+5000，新截止 = 刷新完成+5000 = 7000。
+    // 两者必须拉开距离，否则「推迟了 ttl」这个断言在同为 5000 时恒真、测不出回归。
+    await advance(2000);
+    expect(calls).toBe(0);
     const first = poller.refreshNow();
     const second = poller.refreshNow();
     expect(calls).toBe(1);
     release!();
     await Promise.all([first, second]);
-    // 手动刷新在 t=0 完成：ttl 唤醒应从 5000 起算而不是 start 时刻的旧排程
-    await advance(4999);
+    await advance(3000); // t=5000：旧截止到达 —— 若没推迟，这里会误触发
     expect(calls).toBe(1);
-    await advance(1);
+    await advance(1999); // t=6999
+    expect(calls).toBe(1);
+    await advance(1); // t=7000：新截止
     expect(calls).toBe(2);
     release!();
     await flush();
+    poller.stop();
+  });
+
+  it("refresh 同步抛错不弄死单飞：之后仍能真正刷新", async () => {
+    const { clock, advance } = fakeClock();
+    const onError = vi.fn();
+    let calls = 0;
+    const poller = createPoller({
+      clock,
+      intervalMs: 1000,
+      shouldPoll: () => true,
+      onError,
+      refresh: () => {
+        calls += 1;
+        if (calls === 1) throw new Error("sync boom"); // 同步抛错，不是 rejected promise
+        return Promise.resolve();
+      },
+    });
+    poller.start();
+    await advance(1000);
+    expect(calls).toBe(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    // 若单飞状态被已完成的 promise 卡死，后面每个周期都只会复用它、calls 不再涨
+    await advance(1000);
+    expect(calls).toBe(2);
+    await advance(1000);
+    expect(calls).toBe(3);
+    poller.stop();
+  });
+
+  it("overlapGuard 关闭 + ttlMs：刷新悬挂越过 ttl 时不 0ms 空转连发", async () => {
+    const { clock, advance } = fakeClock();
+    let calls = 0;
+    const poller = createPoller({
+      clock,
+      intervalMs: 1000,
+      ttlMs: 300,
+      overlapGuard: false,
+      shouldPoll: () => false,
+      refresh: () => {
+        calls += 1;
+        return new Promise<void>(() => {}); // 永远不完成
+      },
+    });
+    poller.start();
+    await advance(300); // ttl 触发第一轮
+    expect(calls).toBe(1);
+    await advance(300); // 又过一个 ttl 周期：在飞未落地，最多按 interval 节奏，不能连环引爆
+    expect(calls).toBe(1);
+    await advance(700); // t=1300 = 上轮启动 + intervalMs
+    expect(calls).toBe(2);
     poller.stop();
   });
 

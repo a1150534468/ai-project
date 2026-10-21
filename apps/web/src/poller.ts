@@ -82,7 +82,11 @@ export function createPoller(options: PollerOptions): Poller {
     if (options.shouldPoll()) delay = options.intervalMs;
     if (options.ttlMs !== undefined) {
       const ttlIn = Math.max(0, lastRefreshDoneAt + options.ttlMs - clock.now());
-      delay = delay === null ? ttlIn : Math.min(delay, ttlIn);
+      // ttl 已到期但还有刷新在飞：它完成时会更新 lastRefreshDoneAt（有保护模式下
+      // 还会重新 schedule）。这里若按 0ms 排程，无保护模式会以 0 间隔连环启动
+      // 重叠请求 —— 降为常规间隔，等在飞的那轮落地后再回到 ttl 节奏。
+      const effectiveTtlIn = ttlIn === 0 && inFlight !== null ? options.intervalMs : ttlIn;
+      delay = delay === null ? effectiveTtlIn : Math.min(delay, effectiveTtlIn);
     }
     if (delay === null) return;
     timer = clock.setTimeout(() => {
@@ -93,7 +97,10 @@ export function createPoller(options: PollerOptions): Poller {
 
   const runRefresh = (): Promise<void> => {
     if (inFlight !== null && overlapGuard) return inFlight;
-    // promise 在 IIFE 返回后立刻赋值，finally 里读它时早已就绪（definite assignment 断言）
+    // refresh 同步抛错时 IIFE 会在赋值前就跑完（catch/finally 都是同步的），
+    // finally 里没东西可清；赋值时必须识别这种情况，否则已结束的 promise
+    // 被存进 inFlight，单飞模式下后续刷新会永远复用它、实际请求永久停止。
+    let finished = false;
     let promise!: Promise<void>;
     promise = (async () => {
       try {
@@ -102,19 +109,26 @@ export function createPoller(options: PollerOptions): Poller {
         options.onError?.(error);
       } finally {
         lastRefreshDoneAt = clock.now();
+        finished = true;
         if (inFlight === promise) inFlight = null;
       }
     })();
-    inFlight = promise;
+    if (!finished) inFlight = promise;
     return promise;
   };
 
   const runCycle = async (): Promise<void> => {
     if (!started) return;
-    // 无重叠保护时先排下一轮（setInterval 语义），有保护时等本轮完成再排
-    if (!overlapGuard) schedule();
+    if (!overlapGuard) {
+      // 无重叠保护时先启动本轮再排下一轮（setInterval 语义）：schedule 要能看到
+      // 本轮的 inFlight，否则 ttl 已过期时它会按 0ms 排出一串空转周期。
+      const running = runRefresh();
+      schedule();
+      await running;
+      return;
+    }
     await runRefresh();
-    if (overlapGuard) schedule();
+    schedule();
   };
 
   return {

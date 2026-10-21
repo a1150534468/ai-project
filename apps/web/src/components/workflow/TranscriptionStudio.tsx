@@ -116,7 +116,9 @@ export function TranscriptionStudio({ token }: TranscriptionStudioProps) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    // token 变化（换号/续期）也要重拉：refresh 本身稳定、走 ref 读最新 rawRefresh，
+    // 不把 token 写进依赖的话，常驻挂载时列表会一直停在旧凭证的数据上。
+  }, [refresh, token]);
 
   useEffect(() => {
     const poller = pollerRef.current;

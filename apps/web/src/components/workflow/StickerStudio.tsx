@@ -108,6 +108,7 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   // 跟随 activePackId（不用 stale 的 detail.pack.id）：读的都是 ref，状态一变就 notify。
   const detailRef = useRef(detail);
   detailRef.current = detail;
+  const mountedRef = useRef(true);
   const refreshDetailRef = useRef(refreshDetail);
   refreshDetailRef.current = refreshDetail;
   const refreshPacksRef = useRef(refreshPacks);
@@ -129,6 +130,9 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
         const packId = activePackIdRef.current;
         if (packId === null) return;
         await refreshDetailRef.current(packId).catch(() => {});
+        // 卸载后 stop() 只停后续周期，停不掉已在飞的这一轮：详情回来后先确认
+        // 组件还活着，别在卸载后还替它发列表请求（原手写轮询有 cancelled 守卫）。
+        if (!mountedRef.current) return;
         await refreshPacksRef.current().catch(() => {});
       },
     });
@@ -136,8 +140,12 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
   useEffect(() => {
     const poller = pollerRef.current;
     if (!poller) return undefined;
+    mountedRef.current = true;
     poller.start();
-    return () => poller.stop();
+    return () => {
+      mountedRef.current = false;
+      poller.stop();
+    };
   }, []);
   useEffect(() => {
     pollerRef.current?.notify();

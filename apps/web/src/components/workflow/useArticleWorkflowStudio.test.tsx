@@ -218,6 +218,58 @@ describe("批次轮询", () => {
     expect(api.listArticleWorkflowHistory).toHaveBeenCalledTimes(1);
   });
 
+  it("单个平台先落地就回填展示，不等整批结束也不提前报完成", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockBatchBoth([project({ status: "generating" }), xiaohongshu({ status: "generating" })]);
+    const studio = await mountStudio();
+    await act(async () => {
+      studio().handleSelectBatch({ key: "batch:batch-1", batchId: "batch-1", projectId: "article-1" });
+    });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(1);
+    api.listArticleWorkflowHistory.mockClear();
+
+    // 公众号先落地、小红书还在跑：这一轮就该全量回填一次让公众号结果可见
+    mockBatchBoth([project(), xiaohongshu({ status: "generating", progressMessage: "生成中" })]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(2);
+    expect(studio().batchBusy).toBe(true);
+    expect(studio().notice).toBe("");
+    expect(api.listArticleWorkflowHistory).not.toHaveBeenCalled();
+
+    // 小红书也落地：才报完成、才刷历史
+    mockBatchBoth([project(), xiaohongshu()]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(studio().batchBusy).toBe(false);
+    expect(studio().notice).toBe("2 个平台已生成");
+    expect(api.listArticleWorkflowHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("状态端点说全落地、全量回填却又在生成时不误报完成", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockBatchBoth([project({ status: "generating" })]);
+    const studio = await mountStudio();
+    await act(async () => {
+      studio().handleSelectBatch({ key: "batch:batch-1", batchId: "batch-1", projectId: "article-1" });
+    });
+    api.listArticleWorkflowHistory.mockClear();
+
+    // 两查之间起了新一轮生成：轻量状态说 ready，全量数据仍是 generating。
+    // 通知只能按回填结果算 —— 此时宣布「已生成」就是误报。
+    api.getArticleWorkflowBatchStatus.mockResolvedValue({
+      batchId: "batch-1",
+      projects: [{ id: "article-1", platform: "wechat", status: "ready", error: null, updatedAt: "2026-08-20T06:00:00.000Z" }],
+    });
+    api.getArticleWorkflowBatch.mockResolvedValue({
+      batchId: "batch-1",
+      projects: [project({ status: "generating", progressMessage: "新一轮生成中" })],
+    });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(studio().notice).toBe("");
+    expect(studio().batchBusy).toBe(true);
+    expect(api.listArticleWorkflowHistory).not.toHaveBeenCalled();
+  });
+
   it("轮询到失败行把失败原因写进 error", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mockBatchBoth([project({ status: "generating" })]);
