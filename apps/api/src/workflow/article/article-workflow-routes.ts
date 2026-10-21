@@ -38,6 +38,7 @@ import {
 } from "./article-workflow-html-guard.js";
 import { generateArticleWorkflowImageAsset } from "./article-workflow-images.js";
 import { articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
+import { sanitizeAttributeProtocols } from "./article-workflow-html-attributes.js";
 import {
   runArticleWorkflowMissingImages,
   runArticleWorkflowRewrite,
@@ -232,9 +233,13 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       expectedVisibleText: "",
       skipVisibleTextCheck: true,
     });
-    // 落库前把出参时现签的短期地址还原成稳定地址，否则存进去的是一批会过期的死链。
+    // 落库前先剥危险协议（javascript:/data: 等），再把出参时现签的短期地址还原成稳定地址，
+    // 否则存进去的是一批会过期的死链。
     // 配图区随后会按 manifest 整段重建，这一步管的是重建覆盖不到的残留。
-    const bodyHtml = applyArticleImageManifestToHtml(articleWorkflowStableBodyHtml(guardedHtml), current.imageManifest);
+    const bodyHtml = applyArticleImageManifestToHtml(
+      articleWorkflowStableBodyHtml(sanitizeAttributeProtocols(guardedHtml)),
+      current.imageManifest,
+    );
     const updated = await updateArticleWorkflowProjectState(prisma, project.id, {
       title: parsed.data.title.trim(),
       summary: parsed.data.summary.trim(),

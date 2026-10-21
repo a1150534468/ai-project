@@ -8,6 +8,8 @@
 	header {
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
+		# CSP 起步值：img-src 必须留 blob: 与 https:，否则图文/头像的签名 URL 全挂
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 		-Server
 	}
 }

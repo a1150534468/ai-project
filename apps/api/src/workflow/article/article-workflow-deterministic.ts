@@ -8,6 +8,7 @@ import {
 } from "@ai-assistant/article-workflow";
 import { assertArticleWorkflowHtmlFragment, repairArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";
 import { articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
+import { sanitizeAttributeProtocols } from "./article-workflow-html-attributes.js";
 
 /**
  * 非 auto 主题的确定性排版：正文 Markdown + 配图清单 → 带主题内联 CSS 的 HTML 片段。
@@ -61,5 +62,5 @@ export function renderDeterministicArticleBodyHtmlGuarded(args: {
     // 「不丢字」校验前移到 plan 阶段（preserve-text 对比 bodyMarkdown vs 原文）。
     skipVisibleTextCheck: true,
   });
-  return articleWorkflowStableBodyHtml(guardedHtml);
+  return articleWorkflowStableBodyHtml(sanitizeAttributeProtocols(guardedHtml));
 }
