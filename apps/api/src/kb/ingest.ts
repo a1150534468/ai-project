@@ -3,7 +3,7 @@ import type { Document, PrismaClient } from "@prisma/client";
 import { deleteObject, putObject, type S3 } from "../storage/s3.js";
 import { envInt } from "../runtime/env.js";
 import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
-import { assertSafeUrl, SsrfError } from "./url-fetch.js";
+import { assertSafeUrl } from "./url-fetch.js";
 
 const DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_MAX_TEXT_CHARS = 200_000;
