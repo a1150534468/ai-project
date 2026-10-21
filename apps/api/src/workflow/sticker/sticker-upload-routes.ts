@@ -1,25 +1,22 @@
 /**
  * 表情包工坊：参考图上传（multipart → 对象存储）。
  *
- * 返回 referenceObjectKey，创建 pack 时传入。
+ * 返回 referenceObjectKey，创建 pack 时传入。存储从 sticker-route-context
+ * 注入（storeReference），不在 handler 内构造 S3 客户端。
  */
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
 import sharp from "sharp";
+import { requireUser } from "../../auth/require-user.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
-import { getS3 as defaultGetS3, putObject, type S3 } from "../../storage/s3.js";
+import type { StickerRouteContext } from "./sticker-route-context.js";
 
 const MAX_REFERENCE_BYTES = 10 * 1024 * 1024;
 const ALLOWED_MIMES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
-export function registerStickerUploadRoutes(
-  app: FastifyInstance,
-  deps: { readonly getS3?: () => S3 } = {},
-): void {
-  const getS3 = deps.getS3 ?? defaultGetS3;
-  app.post("/api/workflow/sticker/reference-upload", async (request, reply) => {
+export function registerStickerUploadRoutes(context: StickerRouteContext): void {
+  const { app } = context;
+  app.post("/api/workflow/sticker/reference-upload", { preHandler: requireUser }, async (request, reply) => {
     const userId = request.userId;
-    if (!userId) return reply.code(401).send({ error: "unauthorized" });
 
     const file = await (request as unknown as { file: () => Promise<unknown> }).file().catch(() => null) as {
       file: NodeJS.ReadableStream;
@@ -61,8 +58,7 @@ export function registerStickerUploadRoutes(
     const key = `workflow/stickers/${userId}/reference-${randomUUID()}.${extension}`;
 
     try {
-      const s3 = getS3();
-      await putObject(s3, key, body, file.mimetype, {});
+      await context.storeReference(key, body, file.mimetype);
     } catch (error) {
       const detail = errorMessageOrFallback(error, "请稍后重试");
       return reply.code(500).send({ error: `参考图上传失败：${detail}` });
