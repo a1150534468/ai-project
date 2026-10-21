@@ -67,6 +67,7 @@ export function useArticleWorkflowBatchPolling(args: {
   // 生成），不能每轮拿界面快照无条件覆盖 —— 服务端轮询可能先观察到某行回到
   // generating，界面还是旧的 ready 时反复覆盖会把这次落地从 seen 里抹掉。
   const lastPropsRef = useRef(new Map<string, string>());
+  const lastBatchKeyRef = useRef<string | null>(null);
   if (pollerRef.current === null) {
     pollerRef.current = createPoller({
       intervalMs: POLL_INTERVAL_MS,
@@ -74,17 +75,7 @@ export function useArticleWorkflowBatchPolling(args: {
       refresh: async () => {
         const input = inputsRef.current;
         try {
-          // seen 同步界面状态的「新变化」：某行在界面上的状态与上轮不同（回填
-          // 落地、用户重新生成），才以界面为准更新 seen；界面没变就不动 seen，
-          // 服务端轮询的观测（轻量状态行）是唯一事实来源。
           const seen = seenStatusRef.current;
-          const lastProps = lastPropsRef.current;
-          for (const project of input.batchProjects) {
-            if (lastProps.get(project.id) !== project.status) {
-              lastProps.set(project.id, project.status);
-              seen.set(project.id, project.status);
-            }
-          }
           const statuses = await input.loadBatchStatus({ batchId: input.pollBatchId, projectId: input.pollProjectId });
           const settledNow = statuses
             .filter((row) => {
@@ -123,6 +114,30 @@ export function useArticleWorkflowBatchPolling(args: {
     });
   }
 
+  // 换批次/项目时落地记账清零（渲染期按 key 变化触发）：不能放进 effect 里
+  // 无条件跑——首次挂载时它会把同一次渲染刚同步好的 seen 又清掉；放渲染期还能
+  // 保证清零与下方按新 props 重新同步在同一次渲染内完成，不留空窗。
+  const batchKey = `${pollBatchId ?? ""}|${pollProjectId}`;
+  if (lastBatchKeyRef.current !== batchKey) {
+    if (lastBatchKeyRef.current !== null) {
+      seenStatusRef.current.clear();
+      pendingSettleRef.current.clear();
+      lastPropsRef.current.clear();
+    }
+    lastBatchKeyRef.current = batchKey;
+  }
+
+  // 每次渲染跟随界面状态维护 lastProps/seen：某行状态一变（回填落地、用户重试/
+  // 重新生成）就同步进 seen。只在轮询开头采样会漏掉两次轮询之间的双翻转
+  // （落地→又变忙，采样值恰好等于最终值）；而界面没变时这里什么都不写，
+  // 也不会像无条件覆盖那样抹掉服务端轮询先观察到的状态变化。
+  for (const project of batchProjects) {
+    if (lastPropsRef.current.get(project.id) !== project.status) {
+      lastPropsRef.current.set(project.id, project.status);
+      seenStatusRef.current.set(project.id, project.status);
+    }
+  }
+
   useEffect(() => {
     const poller = pollerRef.current;
     if (!poller) return undefined;
@@ -134,10 +149,4 @@ export function useArticleWorkflowBatchPolling(args: {
     pollerRef.current?.notify();
   }, [batchBusy, pollBatchId, pollProjectId]);
 
-  // 换批次/项目时落地记账清零，别把上一个批次的行 id 带进新批次的判断
-  useEffect(() => {
-    seenStatusRef.current.clear();
-    pendingSettleRef.current.clear();
-    lastPropsRef.current.clear();
-  }, [pollBatchId, pollProjectId]);
 }

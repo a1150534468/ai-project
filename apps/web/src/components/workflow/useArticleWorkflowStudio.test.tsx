@@ -319,6 +319,41 @@ describe("批次轮询", () => {
     expect(studio().notice).toBe("");
   });
 
+  it("落地后用户重试、下一轮前又快速落地：双翻转不能漏检回填", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockBatchBoth([project({ status: "generating" }), xiaohongshu({ status: "generating" })]);
+    const studio = await mountStudio();
+    await act(async () => {
+      studio().handleSelectBatch({ key: "batch:batch-1", batchId: "batch-1", projectId: "article-1" });
+    });
+
+    // 第一轮：公众号失败落地（回填发生），小红书仍在跑——失败原因要等整批落地才统一报
+    mockBatchBoth([project({ status: "failed", error: "上游 500" }), xiaohongshu({ status: "generating", progressMessage: "生成中" })]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(2);
+    expect(studio().batchBusy).toBe(true);
+
+    // 两次轮询之间用户点了重试：界面上公众号回到 generating（服务端随即又快速跑完）
+    api.retryArticleWorkflowProject.mockResolvedValue({ projectId: "article-1" });
+    mockBatchBoth([project({ status: "generating" }), xiaohongshu({ status: "generating", progressMessage: "生成中" })]);
+    await act(async () => { studio().handleRetry("article-1"); });
+    // 等重试的回填真正落地再快照计数：不等的话，计数断言会被重试自己的回填凑数，
+    // 测不出轮询有没有检出这次落地（判别力在这一步）
+    for (let i = 0; i < 20 && studio().batchProjects.find((row) => row.id === "article-1")?.status !== "generating"; i += 1) {
+      await act(async () => { await Promise.resolve(); });
+    }
+    expect(studio().batchProjects.find((row) => row.id === "article-1")?.status).toBe("generating");
+    expect(api.retryArticleWorkflowProject).toHaveBeenCalledWith("token", "article-1");
+    const callsAfterRetry = (api.getArticleWorkflowBatch as ReturnType<typeof vi.fn>).mock.calls.length;
+
+    // 下一轮：轻量状态里公众号已 ready。若 seen 还停在上轮采样值，这次落地会被漏掉
+    mockBatchBoth([project({ title: "重试后跑出来的标题" }), xiaohongshu({ status: "generating", progressMessage: "生成中" })]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(callsAfterRetry + 1);
+    expect(studio().batchBusy).toBe(true); // 小红书还没完，不报完成
+    expect(studio().notice).not.toBe("2 个平台已生成");
+  });
+
   it("轮询到失败行把失败原因写进 error", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mockBatchBoth([project({ status: "generating" })]);
