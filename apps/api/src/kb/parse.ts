@@ -75,9 +75,32 @@ function rowText(row: readonly unknown[]): string {
   return cells.join("\t");
 }
 
+/** 工作簿解析的安全闸：xlsx 是 zip 容器，解压比不受限，必须先卡住展开规模。 */
+export const MAX_WORKBOOK_BYTES = 10 * 1024 * 1024;
+export const MAX_WORKBOOK_SHEETS = 20;
+export const MAX_WORKBOOK_CELLS = 200_000;
+
 async function parseWorkbook(buffer: Buffer): Promise<string> {
+  if (buffer.byteLength > MAX_WORKBOOK_BYTES) {
+    throw new PermanentDocumentError(`工作簿大小超过上限（${MAX_WORKBOOK_BYTES / 1024 / 1024} MB）`);
+  }
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
+  if (workbook.SheetNames.length > MAX_WORKBOOK_SHEETS) {
+    throw new PermanentDocumentError(`工作簿 sheet 数超过上限（${MAX_WORKBOOK_SHEETS}）`);
+  }
+  // 先按 !ref 包围盒估算总单元格数再展开：sheet_to_json 的内存占用大致随包围盒走，
+  // 超限时在转换前就拒绝，高压缩比工作簿（小文件、大展开）也走这条路被挡住。
+  let totalCells = 0;
+  for (const name of workbook.SheetNames) {
+    const ref = workbook.Sheets[name]?.["!ref"];
+    if (!ref) continue;
+    const range = XLSX.utils.decode_range(ref);
+    totalCells += (range.e.r - range.s.r + 1) * (range.e.c - range.s.c + 1);
+    if (totalCells > MAX_WORKBOOK_CELLS) {
+      throw new PermanentDocumentError(`工作簿单元格数超过上限（${MAX_WORKBOOK_CELLS}）`);
+    }
+  }
   const sections: string[] = [];
   for (const name of workbook.SheetNames) {
     const sheet = workbook.Sheets[name];

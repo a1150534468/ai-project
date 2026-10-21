@@ -31,6 +31,45 @@ describe("parseDocument 文本边界", () => {
   });
 });
 
+describe("parseDocument 工作簿安全闸", () => {
+  const sheetMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const buildWorkbook = async (sheets: unknown[][][], compression = false) => {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.utils.book_new();
+    sheets.forEach((rows, index) => {
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), `S${index + 1}`);
+    });
+    return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx", compression }) as Buffer);
+  };
+
+  it("超过字节上限在解析前被拒", async () => {
+    const oversized = Buffer.alloc(10 * 1024 * 1024 + 1);
+    await expect(parseDocument(oversized, sheetMime, "big.xlsx"))
+      .rejects.toThrow("工作簿大小超过上限");
+  });
+
+  it("sheet 数超过上限被拒", async () => {
+    const buffer = await buildWorkbook(Array.from({ length: 21 }, () => [["x"]]));
+    await expect(parseDocument(buffer, sheetMime, "many.xlsx"))
+      .rejects.toThrow("工作簿 sheet 数超过上限");
+  });
+
+  it("高压缩比工作簿（小文件、大展开）被单元格上限挡住，不展开成大对象", async () => {
+    // 500 列 × 500 行 = 250_000 格重复短串：压缩后文件很小，展开后远超 200_000 上限
+    const row = Array.from({ length: 500 }, () => "aaaaaaaaaaaaaaaaaaaa");
+    const buffer = await buildWorkbook([Array.from({ length: 500 }, () => row)], true);
+    expect(buffer.byteLength).toBeLessThan(2 * 1024 * 1024);
+    await expect(parseDocument(buffer, sheetMime, "bomb.xlsx"))
+      .rejects.toThrow("工作簿单元格数超过上限");
+  });
+
+  it("上限内的小工作簿仍能正常解析", async () => {
+    const buffer = await buildWorkbook([[["名称", "值"], ["甲", "1"]]]);
+    const out = await parseDocument(buffer, sheetMime, "ok.xlsx");
+    expect(out).toContain("名称\t值");
+  });
+});
+
 describe("parseDocument Office", () => {
   it("XLSX 保留稀疏列坐标与日期", async () => {
     const XLSX = await import("xlsx");
