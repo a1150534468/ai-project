@@ -130,7 +130,9 @@ function chapterIndexOf(row: Record<string, unknown>): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
 }
 
-/** 递归按字典序排键后再序列化：同一份数据无论经过几次 DB JSON 往返，串都相同。 */
+/** 递归按字典序排键后再序列化：同一份数据无论经过几次 DB JSON 往返，串都相同。
+ * 输入约定为纯 JSON 数据（章节行来自 Prisma Json/标量列，本就如此）；含 undefined、
+ * Date 等非 JSON 值时不保证与 DB 往返结果一致。 */
 export function canonicalJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
   if (value && typeof value === "object") {

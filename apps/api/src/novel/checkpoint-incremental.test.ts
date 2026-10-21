@@ -355,7 +355,7 @@ describe("差量深度压实与键序规范化", () => {
       total += 1;
       // 每个新节点都必须立刻可重建且逐字等于刚存的状态
       const rebuilt = await resolveCheckpointChapters(store, nodes.get(id)!);
-      expect(rebuilt.map((row) => row.content)).toEqual(["第一章", `第二章·${i}`]);
+      expect(rebuilt).toEqual(chapters);
     }
     expect(total).toBe(CHECKPOINT_DIFF_DEPTH_LIMIT + 3);
     // 阈值之后的节点是全量（压实），链深重新从 0 计
@@ -363,6 +363,13 @@ describe("差量深度压实与键序规范化", () => {
     expect(Array.isArray((compacted.snapshot as Row).chapters)).toBe(true);
     const afterCompact = await resolveCheckpointChaptersDetailed(store, nodes.get(`n${CHECKPOINT_DIFF_DEPTH_LIMIT + 2}`)!);
     expect(afterCompact.diffDepth).toBe(1);
+  });
+
+  it("canonicalJson 区分缺键与 null、保持数组顺序、数字按 JSON 语义", () => {
+    expect(canonicalJson({ a: 1 })).not.toBe(canonicalJson({ a: 1, b: null }));
+    expect(canonicalJson([1, 2])).not.toBe(canonicalJson([2, 1]));
+    expect(canonicalJson({ n: -0 })).toBe(canonicalJson({ n: 0 }));
+    expect(canonicalJson({ deep: [{ z: 1, a: [true, null] }] })).toBe(canonicalJson({ deep: [{ a: [true, null], z: 1 }] }));
   });
 
   it("源链已到阈值时分支存全量而不是空差量", () => {
