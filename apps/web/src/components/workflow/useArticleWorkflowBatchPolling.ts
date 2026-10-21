@@ -15,7 +15,7 @@
  *    的话用户会以为图都出好了。汇总逻辑在 articleWorkflowBatchModel 的
  *    summarizeArticleWorkflowPoll（纯逻辑，可单测）。
  */
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { errorMessage } from "../../apiError";
 import { createPoller, type Poller } from "../../poller";
 import type { ArticleWorkflowPlatform } from "@ai-assistant/article-workflow";
@@ -114,29 +114,32 @@ export function useArticleWorkflowBatchPolling(args: {
     });
   }
 
-  // 换批次/项目时落地记账清零（渲染期按 key 变化触发）：不能放进 effect 里
-  // 无条件跑——首次挂载时它会把同一次渲染刚同步好的 seen 又清掉；放渲染期还能
-  // 保证清零与下方按新 props 重新同步在同一次渲染内完成，不留空窗。
-  const batchKey = `${pollBatchId ?? ""}|${pollProjectId}`;
-  if (lastBatchKeyRef.current !== batchKey) {
-    if (lastBatchKeyRef.current !== null) {
-      seenStatusRef.current.clear();
-      pendingSettleRef.current.clear();
-      lastPropsRef.current.clear();
+  // 批次记账（seen/pendingSettle/lastProps）的同步必须发生在「提交后」：写进
+  // useLayoutEffect，清零与按变化同步在同一次 effect 里先后完成。
+  // - 不能写在渲染期：并发渲染挂起/被放弃时 ref 写入不会回滚，未提交的状态会
+  //   污染正在跑的轮询记账（把还没落地的行记成已落地）。
+  // - 不能拆成两个 effect：一拆，挂载时「先同步、后被另一个 effect 清零」的
+  //   顺序坑就会回来。
+  // 规则：key（batchId|projectId）变了才清零（首次挂载不清），随后逐行比对
+  // lastProps、只采纳界面状态的新变化（回填落地/用户重试/首次出现）；界面没变
+  // 的行不写，服务端轻量状态行的观测不会被旧界面快照覆盖。
+  useLayoutEffect(() => {
+    const batchKey = `${pollBatchId ?? ""}|${pollProjectId}`;
+    if (lastBatchKeyRef.current !== batchKey) {
+      if (lastBatchKeyRef.current !== null) {
+        seenStatusRef.current.clear();
+        pendingSettleRef.current.clear();
+        lastPropsRef.current.clear();
+      }
+      lastBatchKeyRef.current = batchKey;
     }
-    lastBatchKeyRef.current = batchKey;
-  }
-
-  // 每次渲染跟随界面状态维护 lastProps/seen：某行状态一变（回填落地、用户重试/
-  // 重新生成）就同步进 seen。只在轮询开头采样会漏掉两次轮询之间的双翻转
-  // （落地→又变忙，采样值恰好等于最终值）；而界面没变时这里什么都不写，
-  // 也不会像无条件覆盖那样抹掉服务端轮询先观察到的状态变化。
-  for (const project of batchProjects) {
-    if (lastPropsRef.current.get(project.id) !== project.status) {
-      lastPropsRef.current.set(project.id, project.status);
-      seenStatusRef.current.set(project.id, project.status);
+    for (const project of batchProjects) {
+      if (lastPropsRef.current.get(project.id) !== project.status) {
+        lastPropsRef.current.set(project.id, project.status);
+        seenStatusRef.current.set(project.id, project.status);
+      }
     }
-  }
+  }, [batchProjects, pollBatchId, pollProjectId]);
 
   useEffect(() => {
     const poller = pollerRef.current;
