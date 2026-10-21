@@ -57,6 +57,20 @@ export interface ArticleWorkflowBatch {
   readonly projects: readonly ArticleWorkflowProject[];
 }
 
+/** 轮询专用轻量状态行：不含正文，2.5s 一次也只有几百字节。 */
+export interface ArticleWorkflowStatusRow {
+  readonly id: string;
+  readonly platform: ArticleWorkflowPlatform;
+  readonly status: ArticleWorkflowProjectStatus;
+  readonly error: string | null;
+  readonly updatedAt: string;
+}
+
+export interface ArticleWorkflowBatchStatus {
+  readonly batchId: string;
+  readonly projects: readonly ArticleWorkflowStatusRow[];
+}
+
 /** 后端只是受理了活儿（首轮生成 / 改稿都在后台跑），前端拿这个 id 去轮询项目状态。 */
 export interface ArticleWorkflowJobAccepted {
   readonly projectId: string;
@@ -140,6 +154,14 @@ export function listArticleWorkflowHistory(token: string): Promise<readonly Arti
 
 export function getArticleWorkflowBatch(token: string, batchId: string): Promise<ArticleWorkflowBatch> {
   return get(token, `${BASE_PATH}/batch/${encodeURIComponent(batchId)}`, "获取图文批次失败");
+}
+
+export function getArticleWorkflowBatchStatus(token: string, batchId: string): Promise<ArticleWorkflowBatchStatus> {
+  return get(token, `${BASE_PATH}/batch/${encodeURIComponent(batchId)}/status`, "获取图文批次状态失败");
+}
+
+export function getArticleWorkflowProjectStatus(token: string, projectId: string): Promise<ArticleWorkflowStatusRow> {
+  return get(token, `${projectPath(projectId)}/status`, "获取图文项目状态失败");
 }
 
 export function getArticleWorkflowProject(token: string, projectId: string): Promise<ArticleWorkflowProject> {

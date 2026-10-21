@@ -5,6 +5,7 @@ import {
   groupArticleWorkflowHistory,
   resolveActiveArticleWorkflowProject,
   shortPlatformLabel,
+  summarizeArticleWorkflowPoll,
 } from "./articleWorkflowBatchModel";
 import { articleWorkflowDraftHash } from "./articleWorkflowStudioModel";
 
@@ -157,5 +158,56 @@ describe("articleWorkflowBatchModel", () => {
       ...base,
       bodyHtml: bodyOf("").replace("/a1/", "/a2/"),
     })).not.toBe(stable);
+  });
+});
+
+describe("summarizeArticleWorkflowPoll", () => {
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    platform: "wechat" as const,
+    status: "ready" as const,
+    error: null as string | null,
+    ...overrides,
+  });
+
+  it("还有行在 generating / revising 时继续轮询，不给结论", () => {
+    expect(summarizeArticleWorkflowPoll([row(), row({ status: "generating" })]))
+      .toEqual({ busy: true, notice: null, error: null });
+    expect(summarizeArticleWorkflowPoll([row({ status: "revising" })]).busy).toBe(true);
+  });
+
+  it("全部 ready → 报已生成数量，无错误", () => {
+    expect(summarizeArticleWorkflowPoll([row(), row({ platform: "xiaohongshu" })]))
+      .toEqual({ busy: false, notice: "2 个平台已生成", error: null });
+  });
+
+  it("failed 行单独报平台名与原因，且不计入已生成", () => {
+    const summary = summarizeArticleWorkflowPoll([
+      row(),
+      row({ platform: "douyin", status: "failed", error: "403 model denied" }),
+    ]);
+    expect(summary.notice).toBe("1 个平台已生成");
+    expect(summary.error).toBe("抖音生成失败：403 model denied");
+  });
+
+  it("全 failed → 提示图文处理失败", () => {
+    const summary = summarizeArticleWorkflowPoll([row({ status: "failed", error: "boom" })]);
+    expect(summary.notice).toBe("图文处理失败");
+    expect(summary.error).toContain("boom");
+  });
+
+  it("ready && error 的行算配图失败单独报（不看作生成失败）", () => {
+    const summary = summarizeArticleWorkflowPoll([
+      row({ platform: "xiaohongshu", status: "ready", error: "配图上游 429" }),
+    ]);
+    expect(summary.notice).toBe("1 个平台已生成");
+    expect(summary.error).toBe("小红书配图失败：配图上游 429");
+  });
+
+  it("同时有 failed 与配图失败时优先报 failed", () => {
+    const summary = summarizeArticleWorkflowPoll([
+      row({ status: "ready", error: "配图挂了" }),
+      row({ platform: "douyin", status: "failed", error: "正文挂了" }),
+    ]);
+    expect(summary.error).toBe("抖音生成失败：正文挂了");
   });
 });

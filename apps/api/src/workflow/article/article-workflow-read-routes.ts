@@ -84,6 +84,42 @@ export function registerArticleWorkflowReadRoutes(app: FastifyInstance, ctx: Rea
     };
   });
 
+  // 批次轻量状态：前端 2.5s 轮询专用，只回状态行（不带 bodyHtml 等正文），
+  // 鉴权与归属校验与全量批次接口一致（where 带 userId，他人批次 404）。
+  app.get("/api/workflow/article-workflow/batch/:batchId/status", async (req, reply) => {
+    const userId = authUserId(req as { userId?: string }, reply);
+    if (!userId) return;
+    const params = articleWorkflowBatchParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const rows = await prisma.articleWorkflowProject.findMany({
+      where: { userId, batchId: params.data.batchId },
+      orderBy: { createdAt: "asc" },
+      select: { id: true, platform: true, status: true, error: true, updatedAt: true },
+    });
+    if (!rows.length) return reply.code(404).send({ error: "批次不存在" });
+    return {
+      success: true,
+      data: {
+        batchId: params.data.batchId,
+        projects: rows.map((row) => ({ ...row, updatedAt: row.updatedAt.toISOString() })),
+      },
+    };
+  });
+
+  // 单项目轻量状态：无批次的存量项目轮询用，归属校验同详情接口。
+  app.get("/api/workflow/article-workflow/:id/status", async (req, reply) => {
+    const userId = authUserId(req as { userId?: string }, reply);
+    if (!userId) return;
+    const params = articleWorkflowProjectParamsSchema.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: "参数不合法" });
+    const row = await prisma.articleWorkflowProject.findFirst({
+      where: { id: params.data.id, userId },
+      select: { id: true, platform: true, status: true, error: true, updatedAt: true },
+    });
+    if (!row) return reply.code(404).send({ error: "项目不存在" });
+    return { success: true, data: { ...row, updatedAt: row.updatedAt.toISOString() } };
+  });
+
   app.get("/api/workflow/article-workflow/:id", async (req, reply) => {
     const userId = authUserId(req as { userId?: string }, reply);
     if (!userId) return;

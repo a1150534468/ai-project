@@ -3,7 +3,7 @@ import {
   articleWorkflowPlatformConfig,
   type ArticleWorkflowPlatform,
 } from "@ai-assistant/article-workflow";
-import type { ArticleWorkflowProject, ArticleWorkflowProjectSummary } from "../../workflowArticleApi";
+import type { ArticleWorkflowProject, ArticleWorkflowProjectSummary, ArticleWorkflowStatusRow } from "../../workflowArticleApi";
 import { isBusyArticleWorkflowStatus } from "./articleWorkflowStudioModel";
 
 export type ArticleWorkflowBatchStatus = "busy" | "ready" | "failed";
@@ -129,4 +129,40 @@ export function resolveActiveArticleWorkflowProject(
   return projects.find((item) => item.platform === activePlatform)
     ?? projects.find((item) => item.status === "ready")
     ?? projects[0]!;
+}
+
+export interface ArticleWorkflowPollSummary {
+  /** 还有行在 generating / revising，继续轮询 */
+  readonly busy: boolean;
+  /** 全部落地后的完成提示（busy 时为 null） */
+  readonly notice: string | null;
+  /** 全部落地后的失败提示（无失败为 null） */
+  readonly error: string | null;
+}
+
+/**
+ * 轻量状态行的轮询汇总（纯逻辑，轮询 hook 只负责按它发通知）。
+ * 两条规则与全量回填时代一致：
+ * - 配图失败单独报：`ready && error` 的行状态仍是 ready，只看 failed 会漏掉它；
+ * - 「已生成」计数 = 总行数 − failed 行数（配图失败的行正文已生成，算在内）。
+ */
+export function summarizeArticleWorkflowPoll(
+  rows: readonly Pick<ArticleWorkflowStatusRow, "platform" | "status" | "error">[],
+): ArticleWorkflowPollSummary {
+  if (rows.some((row) => isBusyArticleWorkflowStatus(row.status))) {
+    return { busy: true, notice: null, error: null };
+  }
+  const failed = rows.filter((row) => row.status === "failed");
+  const imageFailures = rows.filter((row) => row.status === "ready" && row.error);
+  const ready = rows.length - failed.length;
+  const notice = ready > 0 ? `${ready} 个平台已生成` : "图文处理失败";
+  let error: string | null = null;
+  if (failed.length > 0) {
+    const names = failed.map((row) => shortPlatformLabel(row.platform)).join("、");
+    error = `${names}生成失败：${failed[0]?.error || "未知原因"}`;
+  } else if (imageFailures.length > 0) {
+    const names = imageFailures.map((row) => shortPlatformLabel(row.platform)).join("、");
+    error = `${names}配图失败：${imageFailures[0]?.error || "未知原因"}`;
+  }
+  return { busy: false, notice, error };
 }

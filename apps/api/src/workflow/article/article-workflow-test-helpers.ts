@@ -175,10 +175,12 @@ export function createArticleWorkflowPrismaMock(seed?: {
           where,
           take,
           orderBy,
+          select,
         }: {
           where?: { userId?: string; batchId?: string; status?: { in: string[] }; updatedAt?: { lt?: Date } };
           take?: number;
           orderBy?: { createdAt?: "asc" | "desc"; updatedAt?: "asc" | "desc" };
+          select?: Record<string, boolean>;
         }) => {
           const rows = projects
             .filter((row) => !where?.userId || row.userId === where.userId)
@@ -190,14 +192,31 @@ export function createArticleWorkflowPrismaMock(seed?: {
           rows.sort((left, right) =>
             ascending ? left[key].getTime() - right[key].getTime() : right[key].getTime() - left[key].getTime(),
           );
-          return rows.slice(0, take ?? rows.length);
+          const sliced = rows.slice(0, take ?? rows.length);
+          if (!select) return sliced;
+          // 与真 Prisma 一致：带 select 只回选中的列（轻量状态端点的断言靠这个验不带正文）
+          return sliced.map((row) => {
+            const projected: Record<string, unknown> = {};
+            for (const key of Object.keys(select)) {
+              if (select[key]) projected[key] = (row as unknown as Record<string, unknown>)[key];
+            }
+            return projected as unknown as ProjectRow;
+          });
         },
       ),
       findFirst: vi.fn(
-        async ({ where }: { where: { id?: string; userId?: string } }) =>
-          projects.find(
-            (row) => (!where.id || row.id === where.id) && (!where.userId || row.userId === where.userId),
-          ) ?? null,
+        async ({ where, select }: { where: { id?: string; userId?: string }; select?: Record<string, boolean> }) => {
+          const row = projects.find(
+            (item) => (!where.id || item.id === where.id) && (!where.userId || item.userId === where.userId),
+          );
+          if (!row) return null;
+          if (!select) return row;
+          const projected: Record<string, unknown> = {};
+          for (const key of Object.keys(select)) {
+            if (select[key]) projected[key] = (row as unknown as Record<string, unknown>)[key];
+          }
+          return projected as unknown as ProjectRow;
+        },
       ),
       deleteMany: vi.fn(async ({ where }: {
         where: {
