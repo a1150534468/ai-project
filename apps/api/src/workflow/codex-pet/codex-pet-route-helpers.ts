@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
+import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getRedis } from "@ai-assistant/db";
@@ -416,9 +417,7 @@ export function signCodexPetArtifact(
   secret: string,
   purpose = CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
 ): string {
-  return createHmac("sha256", secret)
-    .update(`v1:${purpose}:${artifactId}:${expiresAtSeconds}`)
-    .digest("base64url");
+  return signPayload(secret, `v1:${purpose}:${artifactId}:${expiresAtSeconds}`, "base64url");
 }
 
 export function verifyCodexPetArtifactSignature(args: {
@@ -430,15 +429,12 @@ export function verifyCodexPetArtifactSignature(args: {
   readonly purpose?: string;
 }): boolean {
   if (args.expiresAtSeconds <= args.nowSeconds) return false;
-  const expected = signCodexPetArtifact(
-    args.artifactId,
-    args.expiresAtSeconds,
+  return verifyPayloadSignature(
     args.secret,
-    args.purpose ?? CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
+    `v1:${args.purpose ?? CODEX_PET_PUBLIC_ARTIFACT_PURPOSE}:${args.artifactId}:${args.expiresAtSeconds}`,
+    args.signature,
+    "base64url",
   );
-  const actualBuffer = Buffer.from(args.signature);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 export function isActiveRunStatus(status: string): boolean {

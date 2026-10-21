@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -206,24 +207,21 @@ function portraitBlobSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-function portraitBlobSignature(kind: "reference" | "output", id: string, objectKey: string, exp: number, env?: NodeJS.ProcessEnv): string {
-  return createHmac("sha256", portraitBlobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
-}
+/** 签名实现收敛在 _shared/signed-blob-url；这里只留形象照的域配置（secret 链 + 路径）。 */
+const portraitSignedBlobConfig: SignedBlobUrlConfig = {
+  resolveSecret: (env) => portraitBlobSecret(env),
+  ttlMs: PORTRAIT_BLOB_TTL_MS,
+  buildPath: (kind, id) =>
+    `/api/workflow/portraits/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob`,
+};
 
 /** 导出给素材库复用：形象照的取件链接只能由这里签，素材库不另开一条取件端点。 */
 export function portraitBlobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
-  const exp = Math.floor((Date.now() + PORTRAIT_BLOB_TTL_MS) / 1000);
-  const sig = portraitBlobSignature(kind, id, objectKey, exp, env);
-  const path = kind === "reference" ? "references" : "outputs";
-  return `/api/workflow/portraits/${path}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
+  return createSignedBlobUrl(portraitSignedBlobConfig, { kind, id, objectKey }, env);
 }
 
 function hasValidBlobSignature(kind: "reference" | "output", id: string, objectKey: string, exp: number, sig: string, env?: NodeJS.ProcessEnv): boolean {
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = portraitBlobSignature(kind, id, objectKey, exp, env);
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(sig, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+  return verifySignedBlobUrl(portraitSignedBlobConfig, { kind, id, objectKey, exp, sig }, env);
 }
 
 function isPortraitObjectKeyForUser(value: string, userId: string, kind: "references" | "outputs"): boolean {

@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -227,20 +228,16 @@ function blobSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-function blobSignature(
-  kind: "reference" | "output",
-  id: string,
-  objectKey: string,
-  exp: number,
-  env?: NodeJS.ProcessEnv,
-): string {
-  return createHmac("sha256", blobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
-}
+/** 签名实现收敛在 _shared/signed-blob-url；这里只留 try-on 的域配置（secret 链 + 路径）。 */
+const tryOnSignedBlobConfig: SignedBlobUrlConfig = {
+  resolveSecret: (env) => blobSecret(env),
+  ttlMs: TRY_ON_BLOB_TTL_MS,
+  buildPath: (kind, id) =>
+    `/api/workflow/try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob`,
+};
 
 function blobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
-  const exp = Math.floor((Date.now() + TRY_ON_BLOB_TTL_MS) / 1000);
-  const sig = blobSignature(kind, id, objectKey, exp, env);
-  return `/api/workflow/try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
+  return createSignedBlobUrl(tryOnSignedBlobConfig, { kind, id, objectKey }, env);
 }
 
 /** 素材库要的是同一条签名链接（`assets/asset-sources.ts`），别在那边重签一份。 */
@@ -254,10 +251,7 @@ function validBlobSignature(
   sig: string,
   env?: NodeJS.ProcessEnv,
 ): boolean {
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = Buffer.from(blobSignature(kind, id, objectKey, exp, env));
-  const actual = Buffer.from(sig);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  return verifySignedBlobUrl(tryOnSignedBlobConfig, { kind, id, objectKey, exp, sig }, env);
 }
 
 export function isTryOnObjectKeyForUser(value: string, userId: string, kind: "references" | "outputs"): boolean {

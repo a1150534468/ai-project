@@ -1,6 +1,7 @@
 import { ObjectCannedACL } from "@aws-sdk/client-s3";
 import { Prisma, type CodexPetArtifact, type PrismaClient } from "@prisma/client";
-import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 import { basename } from "node:path";
 import {
   deleteObject,
@@ -114,9 +115,7 @@ export function signCodexPetArtifact(args: {
   const now = args.now ?? Date.now();
   const exp = Math.trunc(args.expiresAt ?? now + CODEX_PET_INSTALL_SIGNATURE_TTL_MS);
   if (!Number.isSafeInteger(exp) || exp <= now) throw new Error("expiresAt must be a future epoch millisecond");
-  const sig = createHmac("sha256", signingSecret(args.secret))
-    .update(signaturePayload(args.artifactId, args.purpose, exp))
-    .digest("base64url");
+  const sig = signPayload(signingSecret(args.secret), signaturePayload(args.artifactId, args.purpose, exp), "base64url");
   return { exp, sig };
 }
 
@@ -130,12 +129,12 @@ export function verifyCodexPetArtifactSignature(args: {
 }): boolean {
   const now = args.now ?? Date.now();
   if (!args.artifactId || !args.purpose || !args.sig || !Number.isSafeInteger(args.exp) || args.exp <= now) return false;
-  const expected = createHmac("sha256", signingSecret(args.secret))
-    .update(signaturePayload(args.artifactId, args.purpose, args.exp))
-    .digest("base64url");
-  const expectedBytes = Buffer.from(expected);
-  const actualBytes = Buffer.from(args.sig);
-  return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes);
+  return verifyPayloadSignature(
+    signingSecret(args.secret),
+    signaturePayload(args.artifactId, args.purpose, args.exp),
+    args.sig,
+    "base64url",
+  );
 }
 
 export async function putCodexPetArtifact(args: {

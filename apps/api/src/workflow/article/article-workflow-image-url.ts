@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 
 /**
  * 配图的取图地址前缀。走 API 自己代理对象存储，而不是把图片字节塞进正文。
@@ -71,7 +71,7 @@ export function articleWorkflowSignedImageBlobUrl(args: {
   // 没有可用密钥时退回稳定地址：取图路由仍接受会话鉴权，不至于整篇打不开。
   if (!secret) return stable;
   const exp = (args.nowMs ?? Date.now()) + ARTICLE_WORKFLOW_IMAGE_BLOB_TTL_MS;
-  const sig = createHmac("sha256", secret).update(signaturePayload(args.assetId, exp)).digest("base64url");
+  const sig = signPayload(secret, signaturePayload(args.assetId, exp), "base64url");
   return `${stable}?${new URLSearchParams({ exp: String(exp), sig }).toString()}`;
 }
 
@@ -85,12 +85,7 @@ export function articleWorkflowImageBlobSignatureValid(args: {
   const secret = signingSecret(args.env);
   if (!secret) return false;
   if (args.expiresAtMs < (args.nowMs ?? Date.now())) return false;
-  const expected = createHmac("sha256", secret)
-    .update(signaturePayload(args.assetId, args.expiresAtMs))
-    .digest("base64url");
-  const actual = Buffer.from(args.signature);
-  const wanted = Buffer.from(expected);
-  return actual.length === wanted.length && timingSafeEqual(actual, wanted);
+  return verifyPayloadSignature(secret, signaturePayload(args.assetId, args.expiresAtMs), args.signature, "base64url");
 }
 
 /** 从稳定地址里取回 assetId；不是本工作流的代理地址就返回 null。 */

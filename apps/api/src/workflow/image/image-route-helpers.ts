@@ -9,8 +9,7 @@
  * 本文件不 import task-runner，方向是单向的：helpers ← task-runner ← routes。
  */
 
-import { Buffer } from "node:buffer";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
@@ -176,21 +175,14 @@ export function imageBlobSignaturePayload(imageId: string, objectKey: string, ex
 
 export function imageBlobUrl(imageId: string, objectKey: string): string {
   const exp = Date.now() + IMAGE_BLOB_URL_TTL_MS;
-  const sig = createHmac("sha256", imageBlobSigningSecret())
-    .update(imageBlobSignaturePayload(imageId, objectKey, exp))
-    .digest("base64url");
+  const sig = signPayload(imageBlobSigningSecret(), imageBlobSignaturePayload(imageId, objectKey, exp), "base64url");
   const query = new URLSearchParams({ exp: String(exp), sig });
   return `/api/workflow/images/${encodeURIComponent(imageId)}/blob?${query.toString()}`;
 }
 
 export function hasValidImageBlobAccess(imageId: string, objectKey: string, exp: number, sig: string): boolean {
   if (exp < Date.now()) return false;
-  const expected = createHmac("sha256", imageBlobSigningSecret())
-    .update(imageBlobSignaturePayload(imageId, objectKey, exp))
-    .digest("base64url");
-  const actualBuffer = Buffer.from(sig);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+  return verifyPayloadSignature(imageBlobSigningSecret(), imageBlobSignaturePayload(imageId, objectKey, exp), sig, "base64url");
 }
 
 export function serializeImageRow<Row extends {

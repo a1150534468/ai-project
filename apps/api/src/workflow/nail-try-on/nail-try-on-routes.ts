@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -235,20 +236,16 @@ function blobSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-function blobSignature(
-  kind: "reference" | "output",
-  id: string,
-  objectKey: string,
-  exp: number,
-  env?: NodeJS.ProcessEnv,
-): string {
-  return createHmac("sha256", blobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
-}
+/** 签名实现收敛在 _shared/signed-blob-url；这里只留美甲的域配置（secret 链 + 路径）。 */
+const nailSignedBlobConfig: SignedBlobUrlConfig = {
+  resolveSecret: (env) => blobSecret(env),
+  ttlMs: NAIL_BLOB_TTL_MS,
+  buildPath: (kind, id) =>
+    `/api/workflow/nail-try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob`,
+};
 
 function blobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
-  const exp = Math.floor((Date.now() + NAIL_BLOB_TTL_MS) / 1000);
-  const sig = blobSignature(kind, id, objectKey, exp, env);
-  return `/api/workflow/nail-try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
+  return createSignedBlobUrl(nailSignedBlobConfig, { kind, id, objectKey }, env);
 }
 
 /** 素材库若接入，用同一条签名链接，别在别处重签。 */
@@ -262,13 +259,9 @@ function validBlobSignature(
   sig: string,
   env?: NodeJS.ProcessEnv,
 ): boolean {
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = Buffer.from(blobSignature(kind, id, objectKey, exp, env));
-  const actual = Buffer.from(sig);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  return verifySignedBlobUrl(nailSignedBlobConfig, { kind, id, objectKey, exp, sig }, env);
 }
 
-// masks 命名空间是试甲台独有的（试穿只有 references/outputs），存无损蒙版 PNG。
 export function isNailTryOnObjectKeyForUser(
   value: string,
   userId: string,
@@ -278,6 +271,7 @@ export function isNailTryOnObjectKeyForUser(
   const parts = value.split("/");
   return parts.length >= 6 && parts[3] === userId && parts.every((part) => part.length > 0 && part !== ".");
 }
+
 function serializeReference(row: NailReferenceRow) {
   return {
     id: row.id,
