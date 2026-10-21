@@ -109,7 +109,7 @@ function createPrismaMock(seed?: { assets?: AssetRow[]; workflows?: WorkflowRow[
     create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       // 模拟 Prisma 嵌套写：user connect → userId、product.create → product 行
       const { user, product, ...rest } = data as { user?: { connect: { id: string } }; product?: { create: WorkflowRow["product"] } };
-      const row = { ...rest, userId: user?.connect.id ?? "u1", product: product?.create, segmentCount: (data as { segmentCount?: number }).segmentCount ?? 3, id: `wf-${workflows.length + 1}`, createdAt: new Date("2026-07-01T00:00:00.000Z"), updatedAt: new Date("2026-07-01T00:00:00.000Z") } as WorkflowRow;
+      const row = { ...rest, userId: user?.connect.id as string, product: product?.create, segmentCount: (data as { segmentCount?: number }).segmentCount ?? 3, id: `wf-${workflows.length + 1}`, createdAt: new Date("2026-07-01T00:00:00.000Z"), updatedAt: new Date("2026-07-01T00:00:00.000Z") } as WorkflowRow;
       workflows.push(row);
       return row;
     }),

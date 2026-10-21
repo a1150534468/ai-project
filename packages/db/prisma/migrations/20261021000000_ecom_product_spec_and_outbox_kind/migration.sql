@@ -8,7 +8,7 @@ CREATE TABLE "EcomProductSpec" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "category" TEXT NOT NULL DEFAULT '',
-    "sellingPoints" TEXT[] DEFAULT ARRAY[]::TEXT[],
+    "sellingPoints" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     "extra" TEXT NOT NULL DEFAULT '',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -17,7 +17,8 @@ CREATE TABLE "EcomProductSpec" (
     CONSTRAINT "EcomProductSpec_name_len" CHECK (char_length("name") <= 200),
     CONSTRAINT "EcomProductSpec_category_len" CHECK (char_length("category") <= 200),
     CONSTRAINT "EcomProductSpec_extra_len" CHECK (char_length("extra") <= 2000),
-    CONSTRAINT "EcomProductSpec_selling_points_max" CHECK (cardinality("sellingPoints") <= 12)
+    CONSTRAINT "EcomProductSpec_selling_points_max" CHECK (cardinality("sellingPoints") <= 12),
+    CONSTRAINT "EcomProductSpec_selling_points_1d" CHECK (array_ndims("sellingPoints") IS NULL OR array_ndims("sellingPoints") <= 1)
 );
 
 -- 2) 两张电商表加外键列（先可空，回填后收紧）
@@ -25,7 +26,9 @@ ALTER TABLE "EcomWorkflow" ADD COLUMN "productSpecId" TEXT;
 ALTER TABLE "EcomMainImageJob" ADD COLUMN "productSpecId" TEXT;
 
 -- 3) 回填：一条 job 行一条 spec（product 是 job 私有快照，不跨行共享）；
---    id 用表前缀 + job id，确定性且全局唯一，失败重跑不产生重复行
+--    id 用表前缀 + job id，确定性且全局唯一。本文件由 Prisma migrate 在单个
+--    事务里执行一次；中途失败整体回滚，修复后重跑即可，不需要手工清一半的
+--    状态（真要回退用同目录 rollback.sql）。
 INSERT INTO "EcomProductSpec" ("id", "name", "category", "sellingPoints", "extra", "createdAt", "updatedAt")
 SELECT
     'ews_' || w."id",

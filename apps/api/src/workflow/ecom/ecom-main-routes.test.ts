@@ -96,7 +96,7 @@ function createPrismaMock(seed: JobRow[] = []) {
         const { user, product, ...rest } = data as { user?: { connect: { id: string } }; product?: { create: unknown } };
         const job = {
           ...rest,
-          userId: user?.connect.id ?? "u1",
+          userId: user?.connect.id as string,
           product: product?.create,
           id: `job-${++seq}`,
           createdAt: new Date("2026-07-07T00:00:00Z"),

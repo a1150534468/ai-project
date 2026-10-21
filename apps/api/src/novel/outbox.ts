@@ -36,6 +36,18 @@ export type NovelOutboxCommand =
   | { readonly kind: "engine-step"; readonly stepId: string }
   | { readonly kind: "generation-task"; readonly taskId: string };
 
+/**
+ * 命令字段的单一来源：kind 与 payload.type 永远由这两个函数成对生成，
+ * 生产者不许再手写字面量——双写漂移在构造点就被堵死。
+ */
+export function engineStepOutboxFields(stepId: string) {
+  return { kind: "engine-step" as const, payload: { type: "engine-step", stepId } };
+}
+
+export function generationTaskOutboxFields(taskId: string) {
+  return { kind: "generation-task" as const, payload: { type: "generation-task", taskId } };
+}
+
 export function outboxCommandOf(row: { kind: string; stepId: string | null; taskId: string | null }): NovelOutboxCommand {
   switch (row.kind) {
     case "engine-step":
@@ -68,6 +80,10 @@ export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new D
     if (claimed.count !== 1) continue;
     try {
       const command = outboxCommandOf(row);
+      if (command.kind !== row.kind) {
+        // kind 与 id 不一致时解析走了兜底（迁移前在途行/历史脏数据）：留痕，别静默吞。
+        console.warn(`[novel-outbox] kind/id 不一致：row=${row.id} kind=${row.kind} stepId=${row.stepId} taskId=${row.taskId}，按 ${command.kind} 分发`);
+      }
       switch (command.kind) {
         case "engine-step":
           await enqueueNovelEngineStep(command.stepId, row.priority);
@@ -113,8 +129,7 @@ export async function recoverInterruptedNovelSteps(prisma: PrismaClient, staleBe
           projectId: (await tx.novelRun.findUniqueOrThrow({ where: { id: step.runId } })).projectId,
           runId: step.runId,
           stepId: step.id,
-          kind: "engine-step",
-          payload: { type: "engine-step", stepId: step.id },
+          ...engineStepOutboxFields(step.id),
           priority: step.priority,
         },
         update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
@@ -162,7 +177,7 @@ export async function recoverInterruptedNovelTasks(
       });
       await tx.novelCommandOutbox.upsert({
         where: { taskId: task.id },
-        create: { projectId: task.projectId, taskId: task.id, kind: "generation-task", payload: { type: "generation-task", taskId: task.id }, priority: 1, jobName: "generation-task" },
+        create: { projectId: task.projectId, taskId: task.id, ...generationTaskOutboxFields(task.id), priority: 1, jobName: "generation-task" },
         update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
       });
     });

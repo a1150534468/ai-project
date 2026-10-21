@@ -1571,6 +1571,8 @@ model NailTryOnOutput {
 // 电商商品规格：原先 EcomWorkflow / EcomMainImageJob 各存一份 Json、形状零约束，
 // 前后端各声明一份类型迟早走岔（提示词 12）。提成真表后必填/长度/条数由列与
 // CHECK 约束兜底（见对应 migration），TS 侧以 Prisma 生成类型为准。
+// 商品规格是 workflow/job 的私有快照（一行一 spec、不共享）。删除父行时必须
+// 一并删除 spec（当前全仓没有 ecom 删除路径，将来加删除功能时同步处理）。
 model EcomProductSpec {
   id                String             @id @default(cuid())
   name              String

@@ -434,13 +434,13 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
               },
               include: { product: true },
             });
-            job = updated as MainJobRow;
+            job = updated;
             if (fatalError) throw error;
           }
         }
         const finalStage = anyFailed ? "partial" : "ready";
         const finalized = await prisma.ecomMainImageJob.update({ where: { id: job.id }, data: { stage: finalStage }, include: { product: true } });
-        job = finalized as MainJobRow;
+        job = finalized;
         return { success: true, data: { job: serializeJob(job) } };
       });
     } catch (error) {
