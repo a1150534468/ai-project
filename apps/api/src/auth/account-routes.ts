@@ -77,25 +77,24 @@ export function registerAccountRoutes(app: FastifyInstance, context: AuthRouteCo
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
     const { identifier, password } = parsed.data;
+    // 先占用一次尝试额度，再查库与执行 Argon2，超额请求才能真正停止猜密码和消耗 CPU。
+    // 即使密码正确，额度耗尽后也要等待窗口结束；额度内登录成功仍清零，保留正常重试体验。
+    if (context.redis && !(await consumeNamedQuota(context.redis, "authLoginFail", identifier, (error) => request.log.warn({ err: error }, "登录限流检查失败，本次放行")))) {
+      // 沿用密码错误文案，不通过限流响应透露账号是否存在。
+      return reply.code(429).send({ error: LOGIN_FAILED_MESSAGE });
+    }
     const user = await prisma.user.findFirst({
       where: { OR: [{ uid: identifier }, { username: identifier }] },
     });
     if (!user || !(await argon2.verify(user.passwordHash, password))) {
-      // 失败计数只记「密码没过」的那一次：先扣额度再判的话，猜对密码的那一次也会被
-      // 前面 10 次失败挡在门外，正常用户就真被自己锁住了。
-      // key 用 identifier 而不是 userId —— 登录这一步还没有 userId。
-      if (context.redis && !(await consumeNamedQuota(context.redis, "authLoginFail", identifier, (error) => request.log.warn({ err: error }, "login-fail quota check failed, allowing")))) {
-        // 故意复用密码错误那一句：回「账号已被锁定」等于替攻击者确认这个账号存在。
-        return reply.code(429).send({ error: LOGIN_FAILED_MESSAGE });
-      }
       return reply.code(401).send({ error: LOGIN_FAILED_MESSAGE });
     }
     if (user.bannedAt) return reply.code(403).send({ error: "账号已被封禁" });
-    // 登录成功清零失败计数，否则「昨天手滑 9 次 + 今天手滑 1 次」会把人锁在外面
+    // 额度内登录成功清零本窗口的尝试计数。
     if (context.redis) {
       await context.redis
         .del(loginFailQuotaKey(identifier))
-        .catch((error) => request.log.warn({ err: error }, "login-fail counter reset failed"));
+        .catch((error) => request.log.warn({ err: error }, "登录尝试计数清零失败"));
     }
     await context.recordLogin(request, user.id);
     return sessionResponse(user, secret);

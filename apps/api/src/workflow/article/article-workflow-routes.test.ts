@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
+import { parseFragment } from "parse5";
 import {
   buildArticleWorkflowApp,
   buildArticleWorkflowCaptionPlan,
   buildArticleWorkflowHtml,
   buildArticleWorkflowImageManifest,
   buildArticleWorkflowPlan,
+  articleProjectRow,
   createArticleWorkflowLlmResponse,
   createArticleWorkflowPrismaMock,
 } from "./article-workflow-test-helpers.js";
@@ -566,6 +568,45 @@ describe("article-workflow routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().data.title).toBe("新标题");
     expect(response.json().data.bodyHtml).toContain("cover.png");
+  });
+
+  it("保存接口与详情回读均剥除引号属性掩盖的危险链接", async () => {
+    const prisma = createArticleWorkflowPrismaMock({
+      projects: [articleProjectRow({
+        id: "p-1",
+        userId: "u1",
+        sourceFormat: "plain-text",
+        sourceText: "正文",
+        bodyHtml: "<p>正文</p>",
+        status: "ready",
+        createdAt: new Date("2026-07-08T05:00:00.000Z"),
+        updatedAt: new Date("2026-07-08T05:00:00.000Z"),
+      })],
+    });
+    const { app } = await buildArticleWorkflowApp({ prisma });
+    try {
+      const saved = await app.inject({
+        method: "PATCH",
+        url: "/api/workflow/article-workflow/p-1",
+        payload: {
+          title: "安全正文",
+          summary: "摘要",
+          bodyHtml: `<a title=" href='https://safe.test" href="javascript:alert('review')">正文</a>`,
+        },
+      });
+      const detail = await app.inject({ method: "GET", url: "/api/workflow/article-workflow/p-1" });
+
+      expect(saved.statusCode).toBe(200);
+      expect(detail.statusCode).toBe(200);
+      for (const html of [saved.json().data.bodyHtml, detail.json().data.bodyHtml, prisma.__state.projects[0]?.bodyHtml]) {
+        const node = parseFragment(html).childNodes[0];
+        if (!node || !("attrs" in node)) throw new Error("保存或回读正文缺少链接元素");
+        expect(node.attrs.some((attribute) => attribute.name === "href")).toBe(false);
+        expect(node.attrs.find((attribute) => attribute.name === "title")?.value).toBe(" href='https://safe.test");
+      }
+    } finally {
+      await app.close();
+    }
   });
 
   it("拒绝把正文整体清空的保存，库里内容不变", async () => {

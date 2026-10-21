@@ -18,7 +18,7 @@
  *   全量（默认）：ci.yml 的 test-full + build，全仓跑一遍，用全局基线。
  *   受影响（--affected）：ci.yml 的 test-affected，PR 上只跑 turbo --filter 选中的包。
  *     此时 expectedWorkspaces / minPassed 这两个「全仓口径」的数**必然不成立**
- *     （只改了 web 时不可能有 7 份报告、1650 个 passed），所以这两条让位；
+ *     （只改了 web 时不可能有 8 份报告、1650 个 passed），所以这两条让位；
  *     换来的是 skipped 按 workspace 记账——基线里没记账的 workspace 一律要求 0，
  *     比全量模式那个全局上限更严（全局上限允许「web 一个不跑、api 跳 22 个」）。
  */

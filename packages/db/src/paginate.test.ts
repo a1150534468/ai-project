@@ -70,6 +70,16 @@ describe("paginate", () => {
     expect(negative.rows).toHaveLength(1);
   });
 
+  it.each([NaN, Infinity, -Infinity])("非有限 take 回退后仍遵守较小的 maxTake：%s", async (take) => {
+    const inner = fakeModel(rows250);
+    const findMany = vi.fn(inner.findMany);
+    const result = await paginate<FakeRow>({ findMany }, { orderBy: { n: "asc" }, take, maxTake: 2 });
+
+    expect(result.rows).toHaveLength(2);
+    expect(result.nextCursor).toBe("r2");
+    expect(findMany.mock.calls[0]?.[0].take).toBe(3);
+  });
+
   it("缺 orderBy 抛错（无排序分页不可靠）", async () => {
     await expect(paginate(fakeModel(rows250), { orderBy: undefined })).rejects.toThrow(/orderBy/);
     await expect(paginate(fakeModel(rows250), { orderBy: [] })).rejects.toThrow(/orderBy/);

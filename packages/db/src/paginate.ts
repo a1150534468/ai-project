@@ -26,7 +26,6 @@ export interface PaginateResult<Row> {
 export interface PaginateDelegate {
   // Prisma delegate 的 findMany 是带 SelectSubset 约束的泛型函数，参数类型无法用
   // 结构化类型精确表达；这里用 any 只框住「参数袋」这一个点，行类型由 Row 泛型管。
-  // biome-ignore lint/suspicious/noExplicitAny: Prisma delegate 的参数袋无法结构化表达
   findMany(args: any): Promise<readonly unknown[]>;
 }
 
@@ -74,7 +73,8 @@ export async function paginate<Row extends { readonly id: string } = { readonly 
   const maxTakeRaw = Math.trunc(options.maxTake ?? DEFAULT_MAX_TAKE);
   const maxTake = Number.isFinite(maxTakeRaw) && maxTakeRaw >= 1 ? maxTakeRaw : DEFAULT_MAX_TAKE;
   const takeRaw = Math.trunc(options.take ?? DEFAULT_TAKE);
-  const take = Number.isFinite(takeRaw) ? Math.min(Math.max(takeRaw, 1), maxTake) : DEFAULT_TAKE;
+  // 非有限值先回退，再统一夹取，默认页大小也必须遵守调用方设置的较小上限。
+  const take = Math.min(Math.max(Number.isFinite(takeRaw) ? takeRaw : DEFAULT_TAKE, 1), maxTake);
 
   const args: Record<string, unknown> = { orderBy: withIdTiebreaker(options.orderBy), take: take + 1 };
   if (options.where !== undefined) args.where = options.where;

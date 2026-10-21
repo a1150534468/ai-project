@@ -26,7 +26,7 @@ export const QUOTA_SCOPE = {
   workflowNail: "workflow:nail",
   workflowNovel: "workflow:novel",
   workflowArticle: "workflow:article",
-  /** 登录失败计数。标识位是 identifier（用户名/邮箱），因为登录时还没有 userId。 */
+  /** 登录尝试计数，沿用既有 key；成功后清零。标识位是 identifier（UID/用户名）。 */
   authLoginFail: "auth:login-fail",
 } as const;
 
@@ -121,7 +121,7 @@ export function optionalRedis(): Redis | null {
 }
 
 /**
- * 登录失败计数的 key。登录成功后要按**同一个 key** 把计数删掉，
+ * 登录尝试计数的 key。登录成功后要按**同一个 key** 把计数删掉，
  * 所以 env 的拼法只在这里出现一次。
  */
 export function loginFailQuotaKey(identifier: string): string {

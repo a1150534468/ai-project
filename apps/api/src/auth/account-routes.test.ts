@@ -1,7 +1,7 @@
 import type { PrismaClient, User } from "@prisma/client";
 import argon2 from "argon2";
 import Fastify from "fastify";
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { registerAccountRoutes } from "./account-routes.js";
 import type { AuthRouteContext } from "./auth-route-context.js";
 
@@ -26,10 +26,14 @@ function context(prisma: PrismaClient): AuthRouteContext {
 }
 
 /** 与 shared/quota.test.ts 同形状的假 Redis，多一个 del 用来观察「成功清零」。 */
-function fakeRedis() {
-  let count = 0;
+function fakeRedis(initialCount = 0) {
+  let count = initialCount;
   let ttl = -1;
-  const del = vi.fn(async (_key: string) => 1);
+  const del = vi.fn(async (_key: string) => {
+    count = 0;
+    ttl = -1;
+    return 1;
+  });
   const redis = {
     multi: () => {
       const queued: (() => number)[] = [];
@@ -52,7 +56,14 @@ function fakeRedis() {
     },
     del,
   } as never;
-  return { redis, del };
+  return {
+    redis,
+    del,
+    endWindow: () => {
+      count = 0;
+      ttl = -1;
+    },
+  };
 }
 
 describe("account registration races", () => {
@@ -98,21 +109,25 @@ describe("account registration races", () => {
   });
 });
 
-describe("login failure throttling", () => {
+describe("登录尝试限流", () => {
   let passwordHash = "";
 
   beforeAll(async () => {
     passwordHash = await argon2.hash(RIGHT_PASSWORD);
   });
 
-  function loginApp() {
-    const f = fakeRedis();
+  afterEach(() => vi.restoreAllMocks());
+
+  function loginApp(initialCount = 0) {
+    const f = fakeRedis(initialCount);
+    const findFirst = vi.fn().mockResolvedValue(user("someone", passwordHash));
     const prisma = {
-      user: { findFirst: vi.fn().mockResolvedValue(user("someone", passwordHash)) },
+      user: { findFirst },
     } as unknown as PrismaClient;
     const app = Fastify();
-    registerAccountRoutes(app, { ...context(prisma), redis: f.redis });
-    return { app, ...f };
+    const routeContext = { ...context(prisma), redis: f.redis };
+    registerAccountRoutes(app, routeContext);
+    return { app, findFirst, recordLogin: routeContext.recordLogin, ...f };
   }
 
   const login = (app: ReturnType<typeof Fastify>, password: string) =>
@@ -147,7 +162,70 @@ describe("login failure throttling", () => {
     await app.close();
   });
 
-  it("登录成功会清零失败计数", async () => {
+  it.each(["wrong-password", RIGHT_PASSWORD])("额度耗尽时不查用户、不校验密码、不签发会话：%s", async (password) => {
+    const { app, findFirst, recordLogin, del } = loginApp(10);
+    const verify = vi.spyOn(argon2, "verify");
+    try {
+      const response = await login(app, password);
+
+      expect(response.statusCode).toBe(429);
+      expect(response.json()).toEqual({ error: "账号或密码错误" });
+      expect(findFirst).not.toHaveBeenCalled();
+      expect(verify).not.toHaveBeenCalled();
+      expect(recordLogin).not.toHaveBeenCalled();
+      expect(del).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("并发请求也只有额度内的一次能进入密码校验", async () => {
+    const { app, findFirst } = loginApp(9);
+    const verify = vi.spyOn(argon2, "verify");
+    try {
+      const responses = await Promise.all(Array.from({ length: 5 }, () => login(app, "wrong-password")));
+
+      expect(responses.map((response) => response.statusCode).sort()).toEqual([401, 429, 429, 429, 429]);
+      expect(findFirst).toHaveBeenCalledTimes(1);
+      expect(verify).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("窗口到期后恢复正常登录", async () => {
+    const { app, findFirst, endWindow } = loginApp(10);
+    try {
+      expect((await login(app, RIGHT_PASSWORD)).statusCode).toBe(429);
+      expect(findFirst).not.toHaveBeenCalled();
+
+      endWindow();
+      expect((await login(app, RIGHT_PASSWORD)).statusCode).toBe(200);
+      expect(findFirst).toHaveBeenCalledTimes(1);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("Redis 故障按既有策略放行，密码校验仍然有效", async () => {
+    const findFirst = vi.fn().mockResolvedValue(user("someone", passwordHash));
+    const prisma = { user: { findFirst } } as unknown as PrismaClient;
+    const app = Fastify();
+    const failedRedis = {
+      multi: () => { throw new Error("Redis 暂时不可用"); },
+      del: vi.fn().mockResolvedValue(1),
+    } as never;
+    registerAccountRoutes(app, { ...context(prisma), redis: failedRedis });
+    try {
+      expect((await login(app, "wrong-password")).statusCode).toBe(401);
+      expect((await login(app, RIGHT_PASSWORD)).statusCode).toBe(200);
+      expect(findFirst).toHaveBeenCalledTimes(2);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it("额度内登录成功会清零尝试计数", async () => {
     const { app, del } = loginApp();
 
     for (let attempt = 0; attempt < 5; attempt += 1) await login(app, "wrong-password");
@@ -157,6 +235,12 @@ describe("login failure throttling", () => {
     expect(ok.statusCode).toBe(200);
     expect(del).toHaveBeenCalledTimes(1);
     expect(del.mock.calls[0]?.[0]).toContain(`auth:login-fail:${IDENTIFIER}`);
+
+    // 假 Redis 的 DEL 必须真的清零，验证下一轮重试不会继承上一轮失败次数。
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await login(app, "wrong-password")).statusCode).toBe(401);
+    }
+    expect((await login(app, "wrong-password")).statusCode).toBe(429);
 
     await app.close();
   });
