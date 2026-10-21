@@ -130,13 +130,24 @@ function chapterIndexOf(row: Record<string, unknown>): number {
   return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
 }
 
+/** 递归按字典序排键后再序列化：同一份数据无论经过几次 DB JSON 往返，串都相同。 */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
 function chaptersByIndex(list: readonly Record<string, unknown>[]): Map<number, Record<string, unknown>> {
   const map = new Map<number, Record<string, unknown>>();
   for (const row of list) map.set(chapterIndexOf(row), row);
   return map;
 }
 
-/** 相对父状态算章级差量：行内容逐字 JSON 对比（两侧都来自 DB 读取，键序一致）。 */
+/** 相对父状态算章级差量：两侧都规范化键序后逐字对比，DB 往返重排键序不会把未变行误判为已变。 */
 export function diffCheckpointChapters(
   parentChapters: readonly Record<string, unknown>[],
   currentChapters: readonly Record<string, unknown>[],
@@ -146,7 +157,7 @@ export function diffCheckpointChapters(
   const upserts: Record<string, unknown>[] = [];
   for (const [index, row] of currentByIndex) {
     const before = parentByIndex.get(index);
-    if (!before || JSON.stringify(before) !== JSON.stringify(row)) upserts.push(row);
+    if (!before || canonicalJson(before) !== canonicalJson(row)) upserts.push(row);
   }
   const removedChapterIndexes: number[] = [];
   for (const index of parentByIndex.keys()) {
@@ -183,34 +194,50 @@ export function directCheckpointChapters(snapshot: unknown): Record<string, unkn
   return rows(record.chapters);
 }
 
+/**
+ * 差量链深度上限（压实阈值）：父检查点的差量深度达到这个数，新检查点改存全量。
+ * 写入端必须有界——否则能一路写出超过读取端重建上限、存得进读不回的检查点。
+ * 读取端的 MAX_CHECKPOINT_CHAIN 只是防环/防损坏的硬顶，正常链靠压实远低于它。
+ */
+export const CHECKPOINT_DIFF_DEPTH_LIMIT = 100;
+
 export function buildCheckpointSnapshot(args: {
   readonly project: Record<string, unknown>;
   readonly chapters: readonly Record<string, unknown>[];
   readonly structured: unknown;
-  /** 父检查点的重建后章节；null 表示没有父检查点，本条存全量。 */
-  readonly parentChapters: readonly Record<string, unknown>[] | null;
+  /** 父检查点的重建结果（含差量深度）；null 表示没有父检查点，本条存全量。 */
+  readonly parent: { readonly chapters: readonly Record<string, unknown>[]; readonly diffDepth: number } | null;
   readonly extra?: Record<string, unknown>;
 }): Record<string, unknown> {
-  if (!args.parentChapters) {
+  if (!args.parent || args.parent.diffDepth >= CHECKPOINT_DIFF_DEPTH_LIMIT) {
     return { ...args.extra, v: 2, project: args.project, chapters: [...args.chapters], structured: args.structured };
   }
   return {
     ...args.extra,
     v: 2,
     project: args.project,
-    chaptersDiff: diffCheckpointChapters(args.parentChapters, args.chapters),
+    chaptersDiff: diffCheckpointChapters(args.parent.chapters, args.chapters),
     structured: args.structured,
   };
 }
 
-/** 分支检查点：状态与源检查点完全一致，存空差量、父链指向源检查点即可，不再整本复制。 */
-export function buildCheckpointBranchSnapshot(sourceSnapshot: unknown): Record<string, unknown> {
-  const source = snapshotRecordOf(sourceSnapshot);
+/**
+ * 分支检查点：状态与源检查点完全一致。源链还浅时存空差量、父链指向源检查点，
+ * 不再整本复制；源链已到压实阈值时直接存全量重建结果，让新分支从全量基底起步。
+ */
+export function buildCheckpointBranchSnapshot(
+  sourceSnapshot: unknown,
+  source: { readonly chapters: readonly Record<string, unknown>[]; readonly diffDepth: number },
+): Record<string, unknown> {
+  const sourceRecord = snapshotRecordOf(sourceSnapshot);
+  if (source.diffDepth >= CHECKPOINT_DIFF_DEPTH_LIMIT) {
+    return { v: 2, project: sourceRecord?.project ?? {}, chapters: [...source.chapters], structured: sourceRecord?.structured ?? null };
+  }
   return {
     v: 2,
-    project: source?.project ?? {},
+    project: sourceRecord?.project ?? {},
     chaptersDiff: { upserts: [], removedChapterIndexes: [] },
-    structured: source?.structured ?? null,
+    structured: sourceRecord?.structured ?? null,
   };
 }
 
@@ -226,14 +253,20 @@ const MAX_CHECKPOINT_CHAIN = 1000;
  * 把任意检查点（旧全量 / v2 全量 / v2 增量）重建为完整章节数组：
  * 沿 parentId 向上走到最近的全量基底，再把链上的差量逐层正向应用。
  * 父链断裂（父行缺失/环/增量没有全量祖先）直接抛错——宁可让回滚失败，
- * 也不能拿错状态覆盖正文。
+ * 也不能拿错状态覆盖正文。返回值带差量深度，供写入端做周期性全量压实。
  */
-export async function resolveCheckpointChapters(
+export interface ResolvedCheckpointChapters {
+  readonly chapters: Record<string, unknown>[];
+  /** 该检查点相对全量基底的差量层数：全量（含旧格式）为 0。 */
+  readonly diffDepth: number;
+}
+
+export async function resolveCheckpointChaptersDetailed(
   store: SnapshotStore,
   checkpoint: CheckpointChainNode,
-): Promise<Record<string, unknown>[]> {
+): Promise<ResolvedCheckpointChapters> {
   const direct = directCheckpointChapters(checkpoint.snapshot);
-  if (direct) return direct;
+  if (direct) return { chapters: direct, diffDepth: 0 };
   const diffs: CheckpointChaptersDiff[] = [];
   let cursor: CheckpointChainNode = checkpoint;
   for (let depth = 0; depth < MAX_CHECKPOINT_CHAIN; depth += 1) {
@@ -251,9 +284,16 @@ export async function resolveCheckpointChapters(
     if (parentDirect) {
       let rebuilt = parentDirect;
       for (const item of diffs.reverse()) rebuilt = applyCheckpointChaptersDiff(rebuilt, item);
-      return rebuilt;
+      return { chapters: rebuilt, diffDepth: diffs.length };
     }
     cursor = parent;
   }
   throw new Error(`检查点 ${checkpoint.id} 的父链超过 ${MAX_CHECKPOINT_CHAIN} 层，疑似成环，拒绝重建`);
+}
+
+export async function resolveCheckpointChapters(
+  store: SnapshotStore,
+  checkpoint: CheckpointChainNode,
+): Promise<Record<string, unknown>[]> {
+  return (await resolveCheckpointChaptersDetailed(store, checkpoint)).chapters;
 }

@@ -5,8 +5,11 @@ import {
   applyCheckpointChaptersDiff,
   buildCheckpointBranchSnapshot,
   buildCheckpointSnapshot,
+  canonicalJson,
+  CHECKPOINT_DIFF_DEPTH_LIMIT,
   diffCheckpointChapters,
   resolveCheckpointChapters,
+  resolveCheckpointChaptersDetailed,
 } from "./checkpoint-snapshot.js";
 import { registerNovelResourceRoutes } from "./resource-routes.js";
 
@@ -291,7 +294,7 @@ describe("resolveCheckpointChapters 父链异常", () => {
       project: {},
       chapters: [chapterRow(1, "甲")],
       structured: null,
-      parentChapters: [],
+      parent: { chapters: [], diffDepth: 0 },
     });
     const store = {
       novelCheckpoint: { findFirst: vi.fn(async () => null) },
@@ -304,7 +307,7 @@ describe("resolveCheckpointChapters 父链异常", () => {
       project: {},
       chapters: [chapterRow(1, "旧一"), chapterRow(2, "旧二")],
     };
-    const branchSnapshot = buildCheckpointBranchSnapshot(legacy);
+    const branchSnapshot = buildCheckpointBranchSnapshot(legacy, { chapters: legacy.chapters as never[], diffDepth: 0 });
     const store = {
       novelCheckpoint: {
         findFirst: vi.fn(async () => ({ id: "cp-base", parentId: null, snapshot: legacy })),
@@ -312,5 +315,63 @@ describe("resolveCheckpointChapters 父链异常", () => {
     } as unknown as PrismaClient;
     const rebuilt = await resolveCheckpointChapters(store, { id: "cp-branch", parentId: "cp-base", snapshot: branchSnapshot });
     expect(rebuilt.map((row) => row.content)).toEqual(["旧一", "旧二"]);
+  });
+});
+
+describe("差量深度压实与键序规范化", () => {
+  it("键序不同的同内容行不算变化（防 DB 往返重排键序的写放大）", () => {
+    const a = { chapterIndex: 1, content: "甲", meta: { x: 1, y: 2 } };
+    const b = { meta: { y: 2, x: 1 }, content: "甲", chapterIndex: 1 };
+    expect(canonicalJson(a)).toBe(canonicalJson(b));
+    const diff = diffCheckpointChapters([a], [b]);
+    expect(diff.upserts).toEqual([]);
+    expect(diff.removedChapterIndexes).toEqual([]);
+  });
+
+  it("链深到阈值时下一条存全量，且全量/深度内任意节点都能逐字重建", async () => {
+    type Node = { id: string; parentId: string | null; snapshot: unknown };
+    const nodes = new Map<string, Node>();
+    const store = {
+      novelCheckpoint: {
+        findFirst: vi.fn(async ({ where }: { where: Row }) => nodes.get(String(where.id)) ?? null),
+      },
+    } as unknown as PrismaClient;
+    const put = (node: Node) => nodes.set(node.id, node);
+
+    let chapters = [chapterRow(1, "第一章"), chapterRow(2, "第二章")];
+    let snapshot = buildCheckpointSnapshot({ project: {}, chapters, structured: null, parent: null });
+    put({ id: "n0", parentId: null, snapshot });
+    let parentId = "n0";
+    let total = 1;
+    // 一路只改第二章往下存，直到链深越过阈值
+    for (let i = 1; i <= CHECKPOINT_DIFF_DEPTH_LIMIT + 2; i += 1) {
+      const parentNode = nodes.get(parentId)!;
+      const resolved = await resolveCheckpointChaptersDetailed(store, parentNode);
+      chapters = [chapterRow(1, "第一章"), chapterRow(2, `第二章·${i}`)];
+      snapshot = buildCheckpointSnapshot({ project: {}, chapters, structured: null, parent: resolved });
+      const id = `n${i}`;
+      put({ id, parentId, snapshot });
+      parentId = id;
+      total += 1;
+      // 每个新节点都必须立刻可重建且逐字等于刚存的状态
+      const rebuilt = await resolveCheckpointChapters(store, nodes.get(id)!);
+      expect(rebuilt.map((row) => row.content)).toEqual(["第一章", `第二章·${i}`]);
+    }
+    expect(total).toBe(CHECKPOINT_DIFF_DEPTH_LIMIT + 3);
+    // 阈值之后的节点是全量（压实），链深重新从 0 计
+    const compacted = [...nodes.values()].find((node) => node.id === `n${CHECKPOINT_DIFF_DEPTH_LIMIT + 1}`)!;
+    expect(Array.isArray((compacted.snapshot as Row).chapters)).toBe(true);
+    const afterCompact = await resolveCheckpointChaptersDetailed(store, nodes.get(`n${CHECKPOINT_DIFF_DEPTH_LIMIT + 2}`)!);
+    expect(afterCompact.diffDepth).toBe(1);
+  });
+
+  it("源链已到阈值时分支存全量而不是空差量", () => {
+    const sourceSnapshot = { project: {}, chaptersDiff: { upserts: [], removedChapterIndexes: [] }, structured: null };
+    const branch = buildCheckpointBranchSnapshot(sourceSnapshot, {
+      chapters: [chapterRow(1, "深链正文")],
+      diffDepth: CHECKPOINT_DIFF_DEPTH_LIMIT,
+    });
+    expect(Array.isArray((branch as Row).chapters)).toBe(true);
+    expect(JSON.stringify(branch)).toContain("深链正文");
   });
 });

@@ -2,11 +2,11 @@ import { existsSync } from "node:fs";
 import { Document, HeadingLevel, Packer, Paragraph } from "docx";
 import JSZip from "jszip";
 import PDFDocument from "pdfkit";
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth/require-user.js";
-import { buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters } from "./checkpoint-snapshot.js";
+import { buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChaptersDetailed } from "./checkpoint-snapshot.js";
 
 type ExportChapter = { readonly chapterIndex: number; readonly title: string; readonly content: string };
 type ImportedChapter = ExportChapter;
@@ -226,7 +226,7 @@ export async function registerNovelExportRoutes(app: FastifyInstance, options: {
       const branchName = project.currentBranch || "main";
       await tx.novelCheckpoint.updateMany({ where: { projectId: project.id, branchName, isHead: true }, data: { isHead: false } });
       const parent = await tx.novelCheckpoint.findFirst({ where: { projectId: project.id, branchName }, orderBy: { createdAt: "desc" } });
-      const parentChapters = parent ? await resolveCheckpointChapters(tx, parent) : null;
+      const parentResolved = parent ? await resolveCheckpointChaptersDetailed(tx, parent) : null;
       await tx.novelCheckpoint.create({
         data: {
           projectId: project.id,
@@ -238,8 +238,8 @@ export async function registerNovelExportRoutes(app: FastifyInstance, options: {
             project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
             chapters: existing as unknown as Record<string, unknown>[],
             structured,
-            parentChapters,
-          }),
+            parent: parentResolved,
+          }) as Prisma.InputJsonValue,
           isHead: true,
         },
       });

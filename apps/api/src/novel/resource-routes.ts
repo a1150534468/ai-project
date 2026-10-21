@@ -4,7 +4,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { completedNovelChapterCount } from "@ai-assistant/novel-workflow";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { buildCheckpointBranchSnapshot, buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
+import { buildCheckpointBranchSnapshot, buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters, resolveCheckpointChaptersDetailed, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 import { syncNovelSetupAssets } from "./structured-sync.js";
 import { requireUser } from "../auth/require-user.js";
 import { refreshNovelVectorMemoryBestEffort } from "../workflow/novel/novel-task-context.js";
@@ -748,13 +748,14 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     const checkpoint = await prisma.$transaction(async (tx) => {
       await tx.novelCheckpoint.updateMany({ where: { projectId: project.id, branchName, isHead: true }, data: { isHead: false } });
       const parent = await tx.novelCheckpoint.findFirst({ where: { projectId: project.id, branchName }, orderBy: { createdAt: "desc" } });
-      // v2 增量：有父检查点时只存相对父状态的章级差量（见 checkpoint-snapshot.ts）
-      const parentChapters = parent ? await resolveCheckpointChapters(tx, parent) : null;
+      // v2 增量：有父检查点时只存相对父状态的章级差量；父链差量深度到阈值时
+      // 本条改存全量压实（见 checkpoint-snapshot.ts 的 CHECKPOINT_DIFF_DEPTH_LIMIT）
+      const parentResolved = parent ? await resolveCheckpointChaptersDetailed(tx, parent) : null;
       const snapshot = buildCheckpointSnapshot({
         project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
         chapters: chapters as unknown as Record<string, unknown>[],
         structured,
-        parentChapters,
+        parent: parentResolved,
       });
       return tx.novelCheckpoint.create({ data: { projectId: project.id, branchName, parentId: parent?.id ?? null, chapterNumber: chapters.at(-1)?.chapterIndex ?? null, label: body.data.label, snapshot: json(snapshot), isHead: true } });
     });
@@ -790,10 +791,10 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!checkpoint) return reply.code(404).send({ error: "检查点不存在" });
     if (await prisma.novelCheckpoint.findFirst({ where: { projectId: params.data.projectId, branchName: body.data.branchName } })) return reply.code(409).send({ error: "世界线名称已存在" });
     const branch = await prisma.$transaction(async (tx) => {
-      const chapters = await resolveCheckpointChapters(tx, checkpoint);
-      // 分支行不再整本复制快照：空差量 + 父链指向源检查点，重建时沿链取源状态
-      const created = await tx.novelCheckpoint.create({ data: { projectId: params.data.projectId, branchName: body.data.branchName, parentId: checkpoint.id, chapterNumber: checkpoint.chapterNumber, label: `从 ${checkpoint.label} 分支`, snapshot: json(buildCheckpointBranchSnapshot(checkpoint.snapshot)), isHead: true } });
-      await restoreCheckpointSnapshot({ tx, projectId: params.data.projectId, branchName: body.data.branchName, snapshot: { ...snapshotRecord(checkpoint.snapshot), chapters } });
+      const resolved = await resolveCheckpointChaptersDetailed(tx, checkpoint);
+      // 分支行不再整本复制快照：空差量 + 父链指向源检查点（源链到压实阈值时存全量）
+      const created = await tx.novelCheckpoint.create({ data: { projectId: params.data.projectId, branchName: body.data.branchName, parentId: checkpoint.id, chapterNumber: checkpoint.chapterNumber, label: `从 ${checkpoint.label} 分支`, snapshot: json(buildCheckpointBranchSnapshot(checkpoint.snapshot, resolved)), isHead: true } });
+      await restoreCheckpointSnapshot({ tx, projectId: params.data.projectId, branchName: body.data.branchName, snapshot: { ...snapshotRecord(checkpoint.snapshot), chapters: resolved.chapters } });
       return created;
     });
     return reply.code(201).send({ success: true, data: { checkpoint: branch } });
