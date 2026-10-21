@@ -28,11 +28,11 @@ ALTER TABLE "EcomMainImageJob" ADD COLUMN "productSpecId" TEXT;
 
 -- 3) 回填：一条 job 行一条 spec（product 是 job 私有快照，不跨行共享）；
 --    id 用表前缀 + job id，确定性且全局唯一。
---    执行与失败恢复：本文件由 prisma migrate deploy 执行——PostgreSQL 上每个
---    migration 文件在单个事务中运行（Prisma 官方文档的 migrate 行为；本仓
---    Prisma 版本 + 本地 PG 16.4 已实证：中途失败的 migration 所建表全部回滚
---    不留痕，_prisma_migrations 中该条 finished_at 为空即 failed 标记），中途
---    失败整体回滚、不留半成品，但该 migration 会在 _prisma_migrations 中被
+--    执行与失败恢复：本文件由 prisma migrate deploy 执行。本仓 Prisma 版本
+--    在本地 PG 16.4 实测：中途失败的 migration 所建表全部回滚不留痕（观察到
+--    逐文件整体回滚），且 deploy 以 P3018 报错、_prisma_migrations 中该条
+--    finished_at 为空（结合 P3018 判断为 failed 标记），中途失败不留半成品，
+--    但该 migration 会在 _prisma_migrations 中被
 --    标记为 failed。恢复步骤：查明并修正失败原因后，先执行
 --    `prisma migrate resolve --rolled-back 20261021000000_ecom_product_spec_and_outbox_kind`
 --    清除 failed 标记，再重新 `prisma migrate deploy`；若已手工执行过部分
