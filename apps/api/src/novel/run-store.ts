@@ -57,8 +57,7 @@ export async function createNovelRun(args: {
   readonly autoReview: boolean;
   readonly input?: Record<string, unknown>;
 }) {
-  const includePlanning = false;
-  const firstKind = pipelineForMode(args.mode, includePlanning)[0]!;
+  const firstKind = pipelineForMode()[0]!;
   return args.prisma.$transaction(async (tx) => {
     const run = await tx.novelRun.create({
       data: {

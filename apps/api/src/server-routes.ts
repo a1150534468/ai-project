@@ -15,14 +15,14 @@ import { modelRoutes } from "./models/routes.js";
 import { novelEngineRoutes } from "./novel/routes.js";
 import { articleWorkflowRoutes } from "./workflow/article/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
-import { imageWorkflowRoutes } from "./workflow/image/index.js";
+import { imageWorkflowRoutes } from "./workflow/image/image-routes.js";
 import { transcriptionWorkflowRoutes } from "./workflow/transcription/index.js";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { announcementRoutes } from "./admin/announcement-routes.js";
 
 import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
-import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
-import { nailTryOnWorkflowRoutes } from "./workflow/nail-try-on/index.js";
+import { tryOnWorkflowRoutes } from "./workflow/try-on/try-on-routes.js";
+import { nailTryOnWorkflowRoutes } from "./workflow/nail-try-on/nail-try-on-routes.js";
 import { ecomWorkflowRoutes, ecomMainImageRoutes, ecomHelpWriteRoutes } from "./workflow/ecom/index.js";
 import { registerStickerRoutes } from "./workflow/sticker/index.js";
 

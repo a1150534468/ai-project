@@ -403,7 +403,7 @@ export async function executeNovelEngineStep(args: {
       });
       return;
     }
-    const next = nextPipelineStep(freshRun.mode as "assisted" | "autopilot", initial.kind as NovelPipelineStepKind, false);
+    const next = nextPipelineStep(initial.kind as NovelPipelineStepKind);
     if (next) {
       await createNextNovelStep({
         prisma,
