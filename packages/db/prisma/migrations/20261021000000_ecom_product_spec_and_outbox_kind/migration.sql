@@ -18,7 +18,8 @@ CREATE TABLE "EcomProductSpec" (
     CONSTRAINT "EcomProductSpec_category_len" CHECK (char_length("category") <= 200),
     CONSTRAINT "EcomProductSpec_extra_len" CHECK (char_length("extra") <= 2000),
     CONSTRAINT "EcomProductSpec_selling_points_max" CHECK (cardinality("sellingPoints") <= 12),
-    CONSTRAINT "EcomProductSpec_selling_points_1d" CHECK (array_ndims("sellingPoints") IS NULL OR array_ndims("sellingPoints") <= 1)
+    CONSTRAINT "EcomProductSpec_selling_points_1d" CHECK (array_ndims("sellingPoints") IS NULL OR array_ndims("sellingPoints") <= 1),
+    CONSTRAINT "EcomProductSpec_selling_points_no_null" CHECK (array_position("sellingPoints", NULL) IS NULL)
 );
 
 -- 2) 两张电商表加外键列（先可空，回填后收紧）
