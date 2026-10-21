@@ -102,3 +102,158 @@ export async function restoreNovelStructuredSnapshot(tx: Prisma.TransactionClien
     create(dataRows<Prisma.NovelCausalEdgeCreateManyInput>(snapshot.causalEdges, projectId), tx.novelCausalEdge),
   ]);
 }
+
+// ---------------------------------------------------------------------------
+// 增量检查点（snapshot v2）：旧格式每存一次检查点就把整本书正文塞进一行 JSON，
+// 第 N 章时累计写入量 ∝ N²。v2 约定：
+// - 无父检查点（或父链起点）存全量：{ v: 2, project, chapters: [...], structured }
+// - 有父检查点存差量：{ v: 2, project, chaptersDiff: { upserts, removedChapterIndexes }, structured }
+//   upserts 是相对父检查点重建状态发生变化/新增的整行（按 chapterIndex 对齐），
+//   removedChapterIndexes 是父状态里有、当前已删除的章号。
+// - project 与 structured 仍存全量：project 是小字段；structured 是结构元数据
+//   （不是正文，N² 膨胀来自 chapters 的 content/rawContent），本轮不做增量。
+// 读取侧统一走 resolveCheckpointChapters 沿 parentId 父链重建，与旧格式
+// （无 v 字段、直接带 chapters 数组）完全兼容——旧检查点本身就是链上的全量基底。
+// ---------------------------------------------------------------------------
+
+export interface CheckpointChaptersDiff {
+  readonly upserts: Record<string, unknown>[];
+  readonly removedChapterIndexes: number[];
+}
+
+function snapshotRecordOf(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function chapterIndexOf(row: Record<string, unknown>): number {
+  const value = row.chapterIndex;
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+function chaptersByIndex(list: readonly Record<string, unknown>[]): Map<number, Record<string, unknown>> {
+  const map = new Map<number, Record<string, unknown>>();
+  for (const row of list) map.set(chapterIndexOf(row), row);
+  return map;
+}
+
+/** 相对父状态算章级差量：行内容逐字 JSON 对比（两侧都来自 DB 读取，键序一致）。 */
+export function diffCheckpointChapters(
+  parentChapters: readonly Record<string, unknown>[],
+  currentChapters: readonly Record<string, unknown>[],
+): CheckpointChaptersDiff {
+  const parentByIndex = chaptersByIndex(parentChapters);
+  const currentByIndex = chaptersByIndex(currentChapters);
+  const upserts: Record<string, unknown>[] = [];
+  for (const [index, row] of currentByIndex) {
+    const before = parentByIndex.get(index);
+    if (!before || JSON.stringify(before) !== JSON.stringify(row)) upserts.push(row);
+  }
+  const removedChapterIndexes: number[] = [];
+  for (const index of parentByIndex.keys()) {
+    if (!currentByIndex.has(index)) removedChapterIndexes.push(index);
+  }
+  return { upserts, removedChapterIndexes };
+}
+
+export function applyCheckpointChaptersDiff(
+  baseChapters: readonly Record<string, unknown>[],
+  diff: CheckpointChaptersDiff,
+): Record<string, unknown>[] {
+  const byIndex = chaptersByIndex(baseChapters);
+  for (const index of diff.removedChapterIndexes) byIndex.delete(index);
+  for (const row of diff.upserts) byIndex.set(chapterIndexOf(row), row);
+  return [...byIndex.values()].sort((a, b) => chapterIndexOf(a) - chapterIndexOf(b));
+}
+
+function readChaptersDiff(value: unknown): CheckpointChaptersDiff | null {
+  const record = snapshotRecordOf(value);
+  if (!record) return null;
+  return {
+    upserts: rows(record.upserts),
+    removedChapterIndexes: Array.isArray(record.removedChapterIndexes)
+      ? record.removedChapterIndexes.filter((item): item is number => typeof item === "number" && Number.isFinite(item)).map((item) => Math.round(item))
+      : [],
+  };
+}
+
+/** 快照里直接带全量 chapters 的（旧格式 / v2 全量）取出章节；增量格式返回 null。 */
+export function directCheckpointChapters(snapshot: unknown): Record<string, unknown>[] | null {
+  const record = snapshotRecordOf(snapshot);
+  if (!record || !Array.isArray(record.chapters)) return null;
+  return rows(record.chapters);
+}
+
+export function buildCheckpointSnapshot(args: {
+  readonly project: Record<string, unknown>;
+  readonly chapters: readonly Record<string, unknown>[];
+  readonly structured: unknown;
+  /** 父检查点的重建后章节；null 表示没有父检查点，本条存全量。 */
+  readonly parentChapters: readonly Record<string, unknown>[] | null;
+  readonly extra?: Record<string, unknown>;
+}): Record<string, unknown> {
+  if (!args.parentChapters) {
+    return { ...args.extra, v: 2, project: args.project, chapters: [...args.chapters], structured: args.structured };
+  }
+  return {
+    ...args.extra,
+    v: 2,
+    project: args.project,
+    chaptersDiff: diffCheckpointChapters(args.parentChapters, args.chapters),
+    structured: args.structured,
+  };
+}
+
+/** 分支检查点：状态与源检查点完全一致，存空差量、父链指向源检查点即可，不再整本复制。 */
+export function buildCheckpointBranchSnapshot(sourceSnapshot: unknown): Record<string, unknown> {
+  const source = snapshotRecordOf(sourceSnapshot);
+  return {
+    v: 2,
+    project: source?.project ?? {},
+    chaptersDiff: { upserts: [], removedChapterIndexes: [] },
+    structured: source?.structured ?? null,
+  };
+}
+
+interface CheckpointChainNode {
+  readonly id: string;
+  readonly parentId: string | null;
+  readonly snapshot: unknown;
+}
+
+const MAX_CHECKPOINT_CHAIN = 1000;
+
+/**
+ * 把任意检查点（旧全量 / v2 全量 / v2 增量）重建为完整章节数组：
+ * 沿 parentId 向上走到最近的全量基底，再把链上的差量逐层正向应用。
+ * 父链断裂（父行缺失/环/增量没有全量祖先）直接抛错——宁可让回滚失败，
+ * 也不能拿错状态覆盖正文。
+ */
+export async function resolveCheckpointChapters(
+  store: SnapshotStore,
+  checkpoint: CheckpointChainNode,
+): Promise<Record<string, unknown>[]> {
+  const direct = directCheckpointChapters(checkpoint.snapshot);
+  if (direct) return direct;
+  const diffs: CheckpointChaptersDiff[] = [];
+  let cursor: CheckpointChainNode = checkpoint;
+  for (let depth = 0; depth < MAX_CHECKPOINT_CHAIN; depth += 1) {
+    const record = snapshotRecordOf(cursor.snapshot);
+    const diff = record ? readChaptersDiff(record.chaptersDiff) : null;
+    if (!diff) throw new Error(`检查点 ${cursor.id} 的快照既没有全量 chapters 也没有合法的 chaptersDiff，无法重建`);
+    diffs.push(diff);
+    if (!cursor.parentId) throw new Error(`检查点 ${cursor.id} 是增量格式但父链上没有全量基底，无法重建`);
+    const parent = await store.novelCheckpoint.findFirst({
+      where: { id: cursor.parentId },
+      select: { id: true, parentId: true, snapshot: true },
+    });
+    if (!parent) throw new Error(`检查点 ${cursor.id} 的父检查点 ${cursor.parentId} 不存在，父链断裂`);
+    const parentDirect = directCheckpointChapters(parent.snapshot);
+    if (parentDirect) {
+      let rebuilt = parentDirect;
+      for (const item of diffs.reverse()) rebuilt = applyCheckpointChaptersDiff(rebuilt, item);
+      return rebuilt;
+    }
+    cursor = parent;
+  }
+  throw new Error(`检查点 ${checkpoint.id} 的父链超过 ${MAX_CHECKPOINT_CHAIN} 层，疑似成环，拒绝重建`);
+}

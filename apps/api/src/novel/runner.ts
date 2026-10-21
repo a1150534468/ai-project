@@ -17,7 +17,7 @@ import { reserveAndCreateTask, runNovelTask, type NovelTaskRow } from "../workfl
 import type { NovelTargetKind } from "../workflow/novel/novel-types.js";
 import { appendNovelRunEvent } from "./events.js";
 import { createNextNovelStep } from "./run-store.js";
-import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
+import { buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters } from "./checkpoint-snapshot.js";
 import { buildNovelRevisionGuidance, MAX_AUTOMATIC_NOVEL_REVISIONS } from "./revision.js";
 
 function record(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
@@ -104,6 +104,7 @@ async function executeStepBody(args: {
       ]);
       await tx.novelCheckpoint.updateMany({ where: { projectId: project.id, branchName, isHead: true }, data: { isHead: false } });
       const parent = await tx.novelCheckpoint.findFirst({ where: { projectId: project.id, branchName }, orderBy: { createdAt: "desc" } });
+      const parentChapters = parent ? await resolveCheckpointChapters(tx, parent) : null;
       await tx.novelCheckpoint.create({
         data: {
           projectId: project.id,
@@ -112,12 +113,13 @@ async function executeStepBody(args: {
           chapterNumber,
           label: `生成第 ${chapterNumber} 章前`,
           isHead: true,
-          snapshot: {
-            chapterNumber,
+          snapshot: buildCheckpointSnapshot({
             project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
-            chapters: snapshotChapters,
+            chapters: snapshotChapters as unknown as Record<string, unknown>[],
             structured,
-          },
+            parentChapters,
+            extra: { chapterNumber },
+          }),
         },
       });
       await tx.novelChapter.upsert({

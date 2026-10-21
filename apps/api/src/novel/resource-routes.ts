@@ -4,7 +4,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { completedNovelChapterCount } from "@ai-assistant/novel-workflow";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { captureNovelStructuredSnapshot, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
+import { buildCheckpointBranchSnapshot, buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 import { syncNovelSetupAssets } from "./structured-sync.js";
 import { requireUser } from "../auth/require-user.js";
 import { refreshNovelVectorMemoryBestEffort } from "../workflow/novel/novel-task-context.js";
@@ -748,7 +748,15 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     const checkpoint = await prisma.$transaction(async (tx) => {
       await tx.novelCheckpoint.updateMany({ where: { projectId: project.id, branchName, isHead: true }, data: { isHead: false } });
       const parent = await tx.novelCheckpoint.findFirst({ where: { projectId: project.id, branchName }, orderBy: { createdAt: "desc" } });
-      return tx.novelCheckpoint.create({ data: { projectId: project.id, branchName, parentId: parent?.id ?? null, chapterNumber: chapters.at(-1)?.chapterIndex ?? null, label: body.data.label, snapshot: json({ project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase }, chapters, structured }), isHead: true } });
+      // v2 增量：有父检查点时只存相对父状态的章级差量（见 checkpoint-snapshot.ts）
+      const parentChapters = parent ? await resolveCheckpointChapters(tx, parent) : null;
+      const snapshot = buildCheckpointSnapshot({
+        project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
+        chapters: chapters as unknown as Record<string, unknown>[],
+        structured,
+        parentChapters,
+      });
+      return tx.novelCheckpoint.create({ data: { projectId: project.id, branchName, parentId: parent?.id ?? null, chapterNumber: chapters.at(-1)?.chapterIndex ?? null, label: body.data.label, snapshot: json(snapshot), isHead: true } });
     });
     return reply.code(201).send({ success: true, data: { checkpoint } });
   });
@@ -762,7 +770,9 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     const checkpoint = await prisma.novelCheckpoint.findFirst({ where: { id: params.data.checkpointId, projectId: params.data.projectId } });
     if (!checkpoint) return reply.code(404).send({ error: "检查点不存在" });
     await prisma.$transaction(async (tx) => {
-      await restoreCheckpointSnapshot({ tx, projectId: params.data.projectId, branchName: checkpoint.branchName, snapshot: checkpoint.snapshot });
+      // 增量检查点先沿父链重建出完整章节，再走原有恢复逻辑（旧格式直接命中）
+      const chapters = await resolveCheckpointChapters(tx, checkpoint);
+      await restoreCheckpointSnapshot({ tx, projectId: params.data.projectId, branchName: checkpoint.branchName, snapshot: { ...snapshotRecord(checkpoint.snapshot), chapters } });
       await tx.novelCheckpoint.updateMany({ where: { projectId: params.data.projectId, branchName: checkpoint.branchName, isHead: true }, data: { isHead: false } });
       await tx.novelCheckpoint.update({ where: { id: checkpoint.id }, data: { isHead: true } });
     });
@@ -780,8 +790,10 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!checkpoint) return reply.code(404).send({ error: "检查点不存在" });
     if (await prisma.novelCheckpoint.findFirst({ where: { projectId: params.data.projectId, branchName: body.data.branchName } })) return reply.code(409).send({ error: "世界线名称已存在" });
     const branch = await prisma.$transaction(async (tx) => {
-      const created = await tx.novelCheckpoint.create({ data: { projectId: params.data.projectId, branchName: body.data.branchName, parentId: checkpoint.id, chapterNumber: checkpoint.chapterNumber, label: `从 ${checkpoint.label} 分支`, snapshot: nullableJson(checkpoint.snapshot), isHead: true } });
-      await restoreCheckpointSnapshot({ tx, projectId: params.data.projectId, branchName: body.data.branchName, snapshot: checkpoint.snapshot });
+      const chapters = await resolveCheckpointChapters(tx, checkpoint);
+      // 分支行不再整本复制快照：空差量 + 父链指向源检查点，重建时沿链取源状态
+      const created = await tx.novelCheckpoint.create({ data: { projectId: params.data.projectId, branchName: body.data.branchName, parentId: checkpoint.id, chapterNumber: checkpoint.chapterNumber, label: `从 ${checkpoint.label} 分支`, snapshot: json(buildCheckpointBranchSnapshot(checkpoint.snapshot)), isHead: true } });
+      await restoreCheckpointSnapshot({ tx, projectId: params.data.projectId, branchName: body.data.branchName, snapshot: { ...snapshotRecord(checkpoint.snapshot), chapters } });
       return created;
     });
     return reply.code(201).send({ success: true, data: { checkpoint: branch } });

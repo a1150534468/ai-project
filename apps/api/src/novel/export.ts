@@ -6,7 +6,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth/require-user.js";
-import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
+import { buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters } from "./checkpoint-snapshot.js";
 
 type ExportChapter = { readonly chapterIndex: number; readonly title: string; readonly content: string };
 type ImportedChapter = ExportChapter;
@@ -226,6 +226,7 @@ export async function registerNovelExportRoutes(app: FastifyInstance, options: {
       const branchName = project.currentBranch || "main";
       await tx.novelCheckpoint.updateMany({ where: { projectId: project.id, branchName, isHead: true }, data: { isHead: false } });
       const parent = await tx.novelCheckpoint.findFirst({ where: { projectId: project.id, branchName }, orderBy: { createdAt: "desc" } });
+      const parentChapters = parent ? await resolveCheckpointChapters(tx, parent) : null;
       await tx.novelCheckpoint.create({
         data: {
           projectId: project.id,
@@ -233,7 +234,12 @@ export async function registerNovelExportRoutes(app: FastifyInstance, options: {
           parentId: parent?.id ?? null,
           chapterNumber: existing.at(-1)?.chapterIndex ?? null,
           label: body.data.mode === "replace" ? "导入替换前" : "导入追加前",
-          snapshot: { project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase }, chapters: existing, structured },
+          snapshot: buildCheckpointSnapshot({
+            project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
+            chapters: existing as unknown as Record<string, unknown>[],
+            structured,
+            parentChapters,
+          }),
           isHead: true,
         },
       });
