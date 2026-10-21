@@ -2,17 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { useDialog } from "../../motion";
 import { Icon } from "@iconify/react";
-import {
-  completeNovelSetup,
-  exportNovelProject,
-  generateNovelSetup,
-  getNovelSetup,
-  importNovelProject,
-  saveNovelSetup,
-  type NovelProjectDetail,
-  type NovelSetupKind,
-  type NovelSetupPayload,
-} from "../../api";
+import { completeNovelSetup, exportNovelProject, generateNovelSetup, getNovelSetup, importNovelProject, saveNovelSetup, type NovelProjectDetail, type NovelSetupKind, type NovelSetupPayload } from "../../novelApi";
 
 const STEPS: readonly { kind: NovelSetupKind | "complete"; title: string; description: string; icon: string }[] = [
   { kind: "bible", title: "文风 / 世界观", description: "文风公约与五维世界", icon: "mdi:book-open-variant" },

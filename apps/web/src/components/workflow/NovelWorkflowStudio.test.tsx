@@ -18,13 +18,7 @@
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type {
-  NovelChapter,
-  NovelProjectDetail,
-  NovelProjectSummary,
-  NovelTask,
-  NovelWorkbenchPayload,
-} from "../../api";
+import type { NovelChapter, NovelProjectDetail, NovelProjectSummary, NovelTask, NovelWorkbenchPayload } from "../../novelApi";
 import { NovelReviewPanel } from "./NovelReviewPanel";
 import { NovelWorkflowStudio } from "./NovelWorkflowStudio";
 import { createDefaultNovelDraft, type NovelCreateDraft } from "./NovelCreatePage";
@@ -102,6 +96,11 @@ const probe = vi.hoisted(() => ({
 
 vi.mock("../../api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../api")>()),
+  ...api,
+}));
+
+vi.mock("../../novelApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../novelApi")>()),
   ...api,
 }));
 

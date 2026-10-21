@@ -23,6 +23,11 @@ vi.mock("../../api", async (importOriginal) => ({
   ...api,
 }));
 
+vi.mock("../../novelApi", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../novelApi")>(),
+  ...api,
+}));
+
 vi.mock("../novel/NovelLibraryPage", () => ({ NovelLibraryPage: () => <div>书库</div> }));
 vi.mock("../novel/NovelSetupWizard", () => ({ NovelSetupWizard: () => null }));
 vi.mock("../novel/NovelWorkbenchShell", () => ({

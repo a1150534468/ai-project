@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { NovelIntelligenceWorkspace } from "./NovelIntelligenceWorkspace";
 import { NovelRunCockpit, novelRunEventScope, novelRunEventText, novelRunEventTime } from "./NovelRunCockpit";
-import type { NovelEngineEvent } from "../../api";
+import type { NovelEngineEvent } from "../../novelApi";
 
 describe("novel engine workbench", () => {
   it("renders one focused autopilot view without the duplicate operations tab", () => {

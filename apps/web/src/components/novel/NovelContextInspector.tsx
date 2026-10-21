@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import { getNovelSetup, listNovelProps, type NovelChapter, type NovelSetupPayload, type NovelWorkbenchPayload } from "../../api";
+import { getNovelSetup, listNovelProps, type NovelChapter, type NovelSetupPayload, type NovelWorkbenchPayload } from "../../novelApi";
 import { NovelReviewPanel } from "../workflow/NovelReviewPanel";
 
 type InspectorTab = "context" | "characters" | "storylines" | "foreshadow" | "world" | "quality";

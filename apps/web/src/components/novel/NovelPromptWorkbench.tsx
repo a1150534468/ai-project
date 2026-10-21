@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
-import { listModels, listNovelPrompts, rollbackNovelPrompt, saveNovelPrompt, type NovelPromptTemplate } from "../../api";
+import { listNovelPrompts, rollbackNovelPrompt, saveNovelPrompt, type NovelPromptTemplate } from "../../novelApi";
+import { listModels } from "../../api";
 
 const DEFAULT_CONTENT = "你是中文长篇小说创作助手。\n\n作品：{{projectTitle}}\n当前章节：{{chapterNumber}}\n章节任务：{{chapterPlan}}\n\n请遵守叙事契约、人物状态与世界规则。";
 

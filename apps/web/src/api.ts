@@ -1,8 +1,7 @@
 /**
- * 前端 API 客户端的门面 + 尚未分域的接口。P2.4 批次二 Step 2 把三个最大的域整块搬走了：
- * 小说 → `novelApi.ts`（68 个导出）、知识库 → `kbApi.ts`（12 个）、记忆 → `memoryApi.ts`（9 个）。
- * 这里用 `export *` 原样转发，纯粹是为了让 68 个调用方和全部测试文件一行都不用改；
- * **新代码请直接从域文件 import**，也不要再往本文件加小说 / 知识库 / 记忆的接口。
+ * 前端 API 客户端：尚未分域的接口。三个最大的域已经整块独立，调用方一律直连域文件
+ * （本文件不再转发）：小说 → `novelApi.ts`、知识库 → `kbApi.ts`、记忆 → `memoryApi.ts`。
+ * 不要再往本文件加这三个域的接口。
  *
  * 留在这里的是还没独立成域的几块：auth、`streamChat`、生图工作流、微信绑定、模型列表、
  * 会话、智能体。`streamChat` 刻意不搬 —— 它是聊天页唯一的流式入口，拆出去会把 auth 的
@@ -10,10 +9,6 @@
  */
 import { ApiError } from "./apiError";
 import { request, requestResponse } from "./http";
-
-export * from "./novelApi";
-export * from "./kbApi";
-export * from "./memoryApi";
 
 // ── 四个反复出现的形状收在这里，下面的接口就只剩「路径 + 文案」 ────────────────
 

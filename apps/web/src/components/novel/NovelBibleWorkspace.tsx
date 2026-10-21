@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
-import {
-  createNovelCharacterRelation,
-  createNovelResource,
-  deleteNovelResource,
-  getNovelSetup,
-  updateNovelResource,
-  type NovelSetupPayload,
-} from "../../api";
+import { createNovelCharacterRelation, createNovelResource, deleteNovelResource, getNovelSetup, updateNovelResource, type NovelSetupPayload } from "../../novelApi";
 
 type BibleTab = "world" | "characters" | "locations";
 type AssetEditor = { kind: "characters" | "locations"; id: string; values: Record<string, string> };

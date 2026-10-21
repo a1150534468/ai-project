@@ -2,7 +2,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { NovelEngineEvent, NovelEngineRun, NovelEngineStep, NovelNarrativeDashboard } from "../../api";
+import type { NovelEngineEvent, NovelEngineRun, NovelEngineStep, NovelNarrativeDashboard } from "../../novelApi";
 import { NovelRunCockpit } from "./NovelRunCockpit";
 
 const api = vi.hoisted(() => ({
@@ -17,7 +17,7 @@ const api = vi.hoisted(() => ({
   streamNovelEngineEvents: vi.fn(),
 }));
 
-vi.mock("../../api", () => api);
+vi.mock("../../novelApi", () => api);
 
 const run: NovelEngineRun = {
   id: "run-1",

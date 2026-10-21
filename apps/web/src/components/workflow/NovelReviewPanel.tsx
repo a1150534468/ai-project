@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "@iconify/react";
-import type { NovelWorkbenchPayload } from "../../api";
+import type { NovelWorkbenchPayload } from "../../novelApi";
 
 type ReviewPayload = { status?: "pending" | "approved" | "revise"; reviewNotes?: string; regenerateAi?: boolean };
 

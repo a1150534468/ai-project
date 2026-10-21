@@ -1,14 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  analyzeNovelChapter,
-  generateNovelChapter,
-  generateNovelSetup,
-  getNovelProject,
-  getNovelWorkbench,
-  rewriteNovelChapterSelection,
-  saveNovelChapter,
-  saveNovelChapterReview,
-} from "./api";
+import { analyzeNovelChapter, generateNovelChapter, generateNovelSetup, getNovelProject, getNovelWorkbench, rewriteNovelChapterSelection, saveNovelChapter, saveNovelChapterReview } from "./novelApi";
 
 /**
  * 小说接口本身住在 `novelApi.ts`，这里刻意从 `./api` 门面 import —— 68 个调用方走的是

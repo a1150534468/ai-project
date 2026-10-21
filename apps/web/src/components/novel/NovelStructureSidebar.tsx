@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Icon } from "@iconify/react";
-import type { NovelChapter, NovelStructureNode } from "../../api";
+import type { NovelChapter, NovelStructureNode } from "../../novelApi";
 
 const NODE_LABELS: Record<string, string> = { book: "书", volume: "卷", act: "幕", chapter: "章" };
 
