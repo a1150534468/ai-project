@@ -84,6 +84,36 @@ describe("parseDocument 工作簿安全闸", () => {
       .rejects.toThrow("工作簿解压后大小超过上限");
   });
 
+  it("声明大小造假（报小实际大）在读前闸被实际解压计数识破", async () => {
+    // 本地头与中央目录一致地把未压缩大小谎报为 10，实际 deflate 流解开有 2MB：
+    // 只信声明值的闸会放行，按实际输出计数并交叉校验的闸必须拒绝。
+    const { deflateRawSync } = await import("node:zlib");
+    const raw = Buffer.alloc(2 * 1024 * 1024, "a");
+    const compressed = deflateRawSync(raw);
+    const name = Buffer.from("xl/worksheets/sheet1.xml");
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x0403_4b50, 0);
+    local.writeUInt16LE(8, 8); // 方法 deflate
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(10, 22); // 谎报的未压缩大小
+    local.writeUInt16LE(name.length, 26);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x0201_4b50, 0);
+    cd.writeUInt16LE(8, 10);
+    cd.writeUInt32LE(compressed.length, 20);
+    cd.writeUInt32LE(10, 24); // 与本地头一致地谎报
+    cd.writeUInt16LE(name.length, 28);
+    const cdOffset = local.length + name.length + compressed.length;
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x0605_4b50, 0);
+    eocd.writeUInt16LE(1, 10);
+    eocd.writeUInt32LE(cd.length + name.length, 12);
+    eocd.writeUInt32LE(cdOffset, 16);
+    const liar = Buffer.concat([local, name, compressed, cd, name, eocd]);
+    await expect(parseDocument(liar, sheetMime, "liar.xlsx"))
+      .rejects.toThrow("声明大小与实际解压不一致");
+  });
+
   it("上限内的小工作簿仍能正常解析", async () => {
     const buffer = await buildWorkbook([[["名称", "值"], ["甲", "1"]]]);
     const out = await parseDocument(buffer, sheetMime, "ok.xlsx");

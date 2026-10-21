@@ -270,6 +270,55 @@ describe("批次轮询", () => {
     expect(api.listArticleWorkflowHistory).not.toHaveBeenCalled();
   });
 
+  it("部分回填恰好拿到整批完成结果时同样报完成并刷历史", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockBatchBoth([project({ status: "generating" }), xiaohongshu({ status: "generating" })]);
+    const studio = await mountStudio();
+    await act(async () => {
+      studio().handleSelectBatch({ key: "batch:batch-1", batchId: "batch-1", projectId: "article-1" });
+    });
+    api.listArticleWorkflowHistory.mockClear();
+
+    // 轻量状态只看到公众号落地（触发部分回填），但全量回填时小红书其实也已完成：
+    // 完成与否按回填返回值算，这一轮就该报完成，不能等下一轮（轮询马上就停了）
+    api.getArticleWorkflowBatchStatus.mockResolvedValue({
+      batchId: "batch-1",
+      projects: [
+        { id: "article-1", platform: "wechat", status: "ready", error: null, updatedAt: "2026-08-20T06:00:00.000Z" },
+        { id: "article-2", platform: "xiaohongshu", status: "generating", error: null, updatedAt: "2026-08-20T06:00:00.000Z" },
+      ],
+    });
+    api.getArticleWorkflowBatch.mockResolvedValue({ batchId: "batch-1", projects: [project(), xiaohongshu()] });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+
+    expect(studio().batchBusy).toBe(false);
+    expect(studio().notice).toBe("2 个平台已生成");
+    expect(api.listArticleWorkflowHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it("落地后的回填失败不丢事件：下一轮状态没变也重试回填", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockBatchBoth([project({ status: "generating" }), xiaohongshu({ status: "generating" })]);
+    const studio = await mountStudio();
+    await act(async () => {
+      studio().handleSelectBatch({ key: "batch:batch-1", batchId: "batch-1", projectId: "article-1" });
+    });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(1);
+
+    // 公众号落地，但回填请求失败一次
+    mockBatchBoth([project(), xiaohongshu({ status: "generating", progressMessage: "生成中" })]);
+    api.getArticleWorkflowBatch.mockRejectedValueOnce(new Error("network down"));
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(2);
+    expect(studio().batchBusy).toBe(true);
+
+    // 状态没有任何新变化，仍要把欠下的回填重试出来（否则公众号结果永远进不了界面）
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+    expect(api.getArticleWorkflowBatch).toHaveBeenCalledTimes(3);
+    expect(studio().batchBusy).toBe(true);
+    expect(studio().notice).toBe("");
+  });
+
   it("轮询到失败行把失败原因写进 error", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     mockBatchBoth([project({ status: "generating" })]);

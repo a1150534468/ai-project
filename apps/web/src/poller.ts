@@ -125,6 +125,10 @@ export function createPoller(options: PollerOptions): Poller {
       const running = runRefresh();
       schedule();
       await running;
+      // ttl 节奏按「上次刷新完成时刻」算：启动时排的那一程用的是旧完成时刻，
+      // 本轮若很快完成，ttl 截止已被推后，必须按新完成时刻重排一次，
+      // 否则 ttl 会长期退化成 intervalMs。仅 ttl 模式需要，纯间隔模式不扰动。
+      if (options.ttlMs !== undefined) schedule();
       return;
     }
     await runRefresh();

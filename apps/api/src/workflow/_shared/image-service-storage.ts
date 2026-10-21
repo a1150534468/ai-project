@@ -65,7 +65,7 @@ export function tryLoadS3(env: NodeJS.ProcessEnv): { readonly cfg: S3Config; rea
   try {
     const cfg = loadS3Config(env);
     // 客户端走进程级 provider 缓存，不再每次调用都新建 SDK 客户端/连接池；
-    // 未配置时 getS3 抛错，这里仍按 try 语义吞成 null（失败同样被 provider 记住）。
+    // 未配置时 loadS3Config 先抛错、根本走不到 provider，这里仍按 try 语义吞成 null。
     return { cfg, s3: getS3(env) };
   } catch {
     return null;

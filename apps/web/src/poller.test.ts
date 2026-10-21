@@ -221,6 +221,30 @@ describe("createPoller", () => {
     poller.stop();
   });
 
+  it("overlapGuard 关闭 + ttlMs：快速完成的刷新按完成时刻续 ttl，不退化成 intervalMs", async () => {
+    const { clock, advance } = fakeClock();
+    let calls = 0;
+    const poller = createPoller({
+      clock,
+      intervalMs: 1000,
+      ttlMs: 300,
+      overlapGuard: false,
+      shouldPoll: () => false,
+      refresh: () => {
+        calls += 1;
+        return Promise.resolve();
+      },
+    });
+    poller.start();
+    await advance(300); // t=300 第一轮，立即完成 → 下一轮应排在完成+300=600，而非启动+1000=1300
+    expect(calls).toBe(1);
+    await advance(300); // t=600
+    expect(calls).toBe(2);
+    await advance(300); // t=900，节奏稳定在 ttl 上
+    expect(calls).toBe(3);
+    poller.stop();
+  });
+
   it("refresh 抛错走 onError 且不弄死调度器", async () => {
     const { clock, advance } = fakeClock();
     const onError = vi.fn();
