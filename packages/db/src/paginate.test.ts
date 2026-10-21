@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { paginate, type PaginateResult } from "./paginate.js";
 
 /**
@@ -92,9 +92,13 @@ describe("paginate", () => {
   });
 
   it("orderBy 字段有并列值时靠自动补的 id 兜底排序不重不漏", async () => {
-    // n 大量并列：只按 n 排序时边界行顺序不稳定，paginate 必须自动补 { id: 'asc' }
-    const tied: FakeRow[] = Array.from({ length: 9 }, (_, i) => ({ id: `t${i + 1}`, n: 7, tag: "x" }));
-    const model = fakeModel(tied);
+    // n 全部并列且输入顺序打乱：只按 n 排（稳定排序保留输入序）时翻页顺序是乱的，
+    // paginate 必须自动补 { id: 'asc' } 把顺序钉死——撤掉兜底这条测试就会红。
+    const shuffled = ["t5", "t2", "t9", "t1", "t7", "t3", "t8", "t4", "t6"];
+    const tied: FakeRow[] = shuffled.map((id) => ({ id, n: 7, tag: "x" }));
+    const inner = fakeModel(tied);
+    const findMany = vi.fn(inner.findMany);
+    const model = { findMany };
     const seen: string[] = [];
     let cursor: string | null = null;
     do {
@@ -103,6 +107,17 @@ describe("paginate", () => {
       cursor = result.nextCursor;
     } while (cursor);
     expect(seen).toEqual(["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"]);
+    // 直接断言传给 delegate 的 orderBy 真的带上了 id 兜底（asc 跟随主方向、desc 同理）
+    expect(findMany.mock.calls[0]![0]!.orderBy).toEqual([{ n: "asc" }, { id: "asc" }]);
+    await paginate<FakeRow>(model, { orderBy: { n: "desc" }, take: 2 });
+    expect(findMany.mock.calls.at(-1)![0]!.orderBy).toEqual([{ n: "desc" }, { id: "desc" }]);
+  });
+
+  it("orderBy 里 id 值无效（undefined）不算已排，会被剔除并补上真兜底", async () => {
+    const inner = fakeModel(rows250.slice(0, 3));
+    const findMany = vi.fn(inner.findMany);
+    await paginate<FakeRow>({ findMany }, { orderBy: { n: "desc", id: undefined } as never, take: 2 });
+    expect(findMany.mock.calls[0]![0]!.orderBy).toEqual([{ n: "desc" }, { id: "desc" }]);
   });
 
   it("where 与 select 原样透传给 delegate", async () => {
