@@ -179,12 +179,13 @@ describe("outboxCommandOf（#12 kind 判别）", () => {
     expect(() => outboxCommandOf({ kind: "engine-step", stepId: null, taskId: null })).toThrow("missing stepId/taskId");
   });
 
-  it("带 kind 的行经分发器按 kind 投递（生产者→分发组合）", async () => {
+  it("生产者 helper 造出的行经分发器按 kind 投递（生产者→分发组合）", async () => {
+    const { engineStepOutboxFields, generationTaskOutboxFields } = await import("./outbox.js");
     const prisma = {
       novelCommandOutbox: {
         findMany: vi.fn(async () => [
-          { id: "ob-step", kind: "engine-step", stepId: "step-9", taskId: null, priority: 3, attempts: 0 },
-          { id: "ob-task", kind: "generation-task", stepId: null, taskId: "task-9", priority: 1, attempts: 0 },
+          { id: "ob-step", stepId: "step-9", taskId: null, priority: 3, attempts: 0, ...engineStepOutboxFields("step-9") },
+          { id: "ob-task", stepId: null, taskId: "task-9", priority: 1, attempts: 0, ...generationTaskOutboxFields("task-9") },
         ]),
         updateMany: vi.fn(async () => ({ count: 1 })),
         update: vi.fn(async () => undefined),

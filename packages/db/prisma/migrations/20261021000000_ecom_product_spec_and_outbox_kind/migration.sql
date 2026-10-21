@@ -27,9 +27,14 @@ ALTER TABLE "EcomWorkflow" ADD COLUMN "productSpecId" TEXT;
 ALTER TABLE "EcomMainImageJob" ADD COLUMN "productSpecId" TEXT;
 
 -- 3) 回填：一条 job 行一条 spec（product 是 job 私有快照，不跨行共享）；
---    id 用表前缀 + job id，确定性且全局唯一。本文件由 Prisma migrate 在单个
---    事务里执行一次；中途失败整体回滚，修复后重跑即可，不需要手工清一半的
---    状态（真要回退用同目录 rollback.sql）。
+--    id 用表前缀 + job id，确定性且全局唯一。
+--    执行与失败恢复：本文件由 prisma migrate deploy 执行——PostgreSQL 上每个
+--    migration 文件在单个事务中运行（Prisma 官方文档的 migrate 行为），中途
+--    失败整体回滚、不留半成品，但该 migration 会在 _prisma_migrations 中被
+--    标记为 failed。恢复步骤：查明并修正失败原因后，先执行
+--    `prisma migrate resolve --rolled-back 20261021000000_ecom_product_spec_and_outbox_kind`
+--    清除 failed 标记，再重新 `prisma migrate deploy`；若已手工执行过部分
+--    语句，先用同目录 rollback.sql 清理后同样 resolve 再部署。
 INSERT INTO "EcomProductSpec" ("id", "name", "category", "sellingPoints", "extra", "createdAt", "updatedAt")
 SELECT
     'ews_' || w."id",
@@ -81,4 +86,12 @@ SET "kind" = COALESCE(
 UPDATE "NovelCommandOutbox"
 SET "kind" = CASE WHEN "stepId" IS NOT NULL THEN 'engine-step' ELSE 'generation-task' END
 WHERE "kind" NOT IN ('engine-step', 'generation-task');
+-- 最终对账：payload 可能说谎（合法枚举值但与唯一 id 不符，如 taskId 行的
+-- type 写成 engine-step），以上面的回填结果为准不够——kind 必须与行内唯一
+-- id 一致，这一步按 id 强制对齐；双 id 行（生产者从未写出）按旧分发优先级
+-- （stepId 先行）归 engine-step。
+UPDATE "NovelCommandOutbox" SET "kind" = 'engine-step'
+WHERE "stepId" IS NOT NULL AND "kind" <> 'engine-step';
+UPDATE "NovelCommandOutbox" SET "kind" = 'generation-task'
+WHERE "stepId" IS NULL AND "taskId" IS NOT NULL AND "kind" <> 'generation-task';
 ALTER TABLE "NovelCommandOutbox" ADD CONSTRAINT "NovelCommandOutbox_kind_check" CHECK ("kind" IN ('engine-step', 'generation-task'));
