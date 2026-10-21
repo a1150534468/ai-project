@@ -79,11 +79,60 @@ function rowText(row: readonly unknown[]): string {
 export const MAX_WORKBOOK_BYTES = 10 * 1024 * 1024;
 export const MAX_WORKBOOK_SHEETS = 20;
 export const MAX_WORKBOOK_CELLS = 200_000;
+export const MAX_WORKBOOK_UNCOMPRESSED_BYTES = 100 * 1024 * 1024;
+export const MAX_WORKBOOK_ZIP_ENTRIES = 2000;
+
+/**
+ * 读前闸：只看 zip 中央目录里声明的条目数与未压缩总大小，不解压、不展开。
+ * XLSX.read 本身就会把整个工作簿物化成 JS 对象，sheet/单元格检查都在它之后，
+ * 挡不住高压缩比的解压炸弹 —— 必须在 read 之前先按中央目录把规模卡死。
+ * 不是 zip（老式 .xls 等）时返回 false，交给 XLSX.read 自己处理/报错。
+ */
+function assertWorkbookZipBudget(buffer: Buffer): void {
+  // EOCD 记录在文件尾部（最长 64KB 注释 + 22 字节定长），从尾部往前找签名。
+  const tailStart = Math.max(0, buffer.byteLength - (65_557 + 22));
+  let eocd = -1;
+  for (let i = buffer.byteLength - 22; i >= tailStart; i -= 1) {
+    if (buffer.readUInt32LE(i) === 0x0605_4b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd === -1) return;
+  const totalEntries = buffer.readUInt16LE(eocd + 10);
+  const cdSize = buffer.readUInt32LE(eocd + 12);
+  const cdOffset = buffer.readUInt32LE(eocd + 16);
+  // ZIP64 哨兵值：规模已超出普通字段表达范围，直接按超限处理（fail-closed）。
+  if (totalEntries === 0xffff || cdSize === 0xffff_ffff || cdOffset === 0xffff_ffff) {
+    throw new PermanentDocumentError("工作簿压缩包规模超过上限（ZIP64）");
+  }
+  if (totalEntries > MAX_WORKBOOK_ZIP_ENTRIES) {
+    throw new PermanentDocumentError(`工作簿压缩包条目数超过上限（${MAX_WORKBOOK_ZIP_ENTRIES}）`);
+  }
+  let totalUncompressed = 0;
+  let cursor = cdOffset;
+  for (let entry = 0; entry < totalEntries; entry += 1) {
+    if (cursor + 46 > buffer.byteLength || buffer.readUInt32LE(cursor) !== 0x0201_4b50) {
+      throw new PermanentDocumentError("工作簿压缩包中央目录损坏");
+    }
+    totalUncompressed += buffer.readUInt32LE(cursor + 24);
+    if (totalUncompressed > MAX_WORKBOOK_UNCOMPRESSED_BYTES) {
+      throw new PermanentDocumentError(
+        `工作簿解压后大小超过上限（${MAX_WORKBOOK_UNCOMPRESSED_BYTES / 1024 / 1024} MB）`,
+      );
+    }
+    const nameLen = buffer.readUInt16LE(cursor + 28);
+    const extraLen = buffer.readUInt16LE(cursor + 30);
+    const commentLen = buffer.readUInt16LE(cursor + 32);
+    cursor += 46 + nameLen + extraLen + commentLen;
+  }
+}
 
 async function parseWorkbook(buffer: Buffer): Promise<string> {
   if (buffer.byteLength > MAX_WORKBOOK_BYTES) {
     throw new PermanentDocumentError(`工作簿大小超过上限（${MAX_WORKBOOK_BYTES / 1024 / 1024} MB）`);
   }
+  assertWorkbookZipBudget(buffer);
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   if (workbook.SheetNames.length > MAX_WORKBOOK_SHEETS) {

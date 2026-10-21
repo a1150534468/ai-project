@@ -23,8 +23,16 @@ function decodeCharRefs(value: string): string {
 
 function isAllowedAttributeValue(rawValue: string): boolean {
   const unquoted = rawValue.startsWith('"') || rawValue.startsWith("'") ? rawValue.slice(1, -1) : rawValue;
-  // 浏览器判协议前会剥掉值首的空白与控制字符，`  javascript:` / `\x01javascript:` 同样生效
-  const decoded = decodeCharRefs(unquoted).replace(/^[\s\u0000-\u0020]+/, "");
+  // 浏览器判协议前会剥掉值首的空白与控制字符，`  javascript:` / `\x01javascript:` 同样生效；
+  // 且 URL 解析会把值内所有 tab / 换行直接删除，`java&#9;script:` 解码后要按 `javascript:` 判。
+  const decoded = decodeCharRefs(unquoted)
+    .replace(/^[\s\u0000-\u0020]+/, "")
+    .replace(/[\u0009\u000A\u000D]/g, "");
+  // 协议区（第一个 : / ? # 之前）若还残留命名实体（&colon; / &Tab; 等 decodeCharRefs
+  // 没覆盖的），浏览器解码后可能拼出危险协议 —— 一律 fail-closed 剥掉，不猜。
+  const regionEnd = decoded.search(/[:/?#]/);
+  const schemeRegion = regionEnd === -1 ? decoded : decoded.slice(0, regionEnd);
+  if (/&[a-zA-Z][a-zA-Z0-9]*;/.test(schemeRegion)) return false;
   const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(decoded);
   if (!schemeMatch) return true; // 无协议：相对路径 / #锚点 / //协议相对地址
   return ALLOWED_SCHEMES.has(schemeMatch[1].toLowerCase());

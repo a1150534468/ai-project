@@ -13,6 +13,7 @@ vi.mock("../../storage/s3.js", () => ({
   deleteObject: vi.fn(async () => undefined),
   listObjects: vi.fn(async () => []),
   makeS3: vi.fn(() => ({ client: {}, bucket: "test-bucket" })),
+  getS3: vi.fn(() => ({ client: {}, bucket: "test-bucket" })),
   loadS3Config: vi.fn(() => ({
     endpoint: "http://localhost:9000",
     region: "us-east-1",

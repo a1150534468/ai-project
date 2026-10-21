@@ -63,6 +63,27 @@ describe("parseDocument 工作簿安全闸", () => {
       .rejects.toThrow("工作簿单元格数超过上限");
   });
 
+  it("中央目录声明的解压后大小超限时在 XLSX.read 之前被拒（解压炸弹读前闸）", async () => {
+    // 手工拼一个最小 zip：本地头 + 中央目录 + EOCD，中央目录把未压缩大小谎报为 150MB。
+    // XLSX.read 若先跑会因结构不完整报别的错；断言命中读前闸的文案即证明闸在 read 之前。
+    const name = Buffer.from("xl/worksheets/sheet1.xml");
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x0403_4b50, 0);
+    local.writeUInt16LE(name.length, 26);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x0201_4b50, 0);
+    cd.writeUInt32LE(150 * 1024 * 1024, 24); // 未压缩大小
+    cd.writeUInt16LE(name.length, 28);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x0605_4b50, 0);
+    eocd.writeUInt16LE(1, 10); // 条目总数
+    eocd.writeUInt32LE(cd.length + name.length, 12); // 中央目录大小
+    eocd.writeUInt32LE(local.length + name.length, 16); // 中央目录偏移
+    const bomb = Buffer.concat([local, name, cd, name, eocd]);
+    await expect(parseDocument(bomb, sheetMime, "zipbomb.xlsx"))
+      .rejects.toThrow("工作簿解压后大小超过上限");
+  });
+
   it("上限内的小工作簿仍能正常解析", async () => {
     const buffer = await buildWorkbook([[["名称", "值"], ["甲", "1"]]]);
     const out = await parseDocument(buffer, sheetMime, "ok.xlsx");

@@ -913,10 +913,6 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
       select: { id: true },
     });
     if (crossUser) return reply.code(409).send({ error: "请求编号已被使用" });
-    // 同 portrait：放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
-    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowTryOn", req.userId, (error) => req.log.warn({ err: error }, "try-on quota check failed, allowing")))) {
-      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
-    }
     const roleInput = {
       garmentFrontAssetId: parsed.data.garmentFrontAssetId,
       garmentDetailAssetId: parsed.data.garmentDetailAssetId ?? null,
@@ -924,6 +920,10 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     };
     const references = await loadRoleReferences(prisma, req.userId, roleInput).catch(() => null);
     if (!references) return reply.code(404).send({ error: "试穿素材不存在、类型不匹配或无权访问" });
+    // 同 portrait：归属校验之后、放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowTryOn", req.userId, (error) => req.log.warn({ err: error }, "try-on quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const effectivePrompt = buildTryOnPrompt({
       aspectRatio: parsed.data.aspectRatio,
       hasItemDetail: Boolean(parsed.data.garmentDetailAssetId),

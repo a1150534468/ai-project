@@ -371,14 +371,14 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好重生图片" });
-    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
-      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
-    }
-
     const current = readArticleWorkflowProject(project);
     const platformConfig = articleWorkflowPlatformConfig(current.platform);
     const target = findArticleImageBySlot(current.imageManifest, params.data.slot);
     if (!target) return reply.code(400).send({ error: "图片槽位不存在" });
+    // 额度在槽位校验之后才扣：槽位不存在的请求不该白耗用户额度。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const claimed = await claimArticleWorkflowProject(
       prisma,

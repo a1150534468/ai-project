@@ -6,6 +6,8 @@ import type {
   ArticleWorkflowProjectStatus,
 } from "@ai-assistant/article-workflow";
 import { jsonValue } from "./article-workflow-serializer.js";
+import { sanitizeAttributeProtocols } from "./article-workflow-html-attributes.js";
+import { articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
 import type { ArticleProjectRow } from "./article-workflow-shared.js";
 
 type ArticleWorkflowDb = Pick<PrismaClient, "articleWorkflowProject">;
@@ -55,7 +57,13 @@ function projectStateData(patch: ArticleWorkflowProjectStatePatch, updatedAt?: D
     title: patch.title,
     summary: patch.summary,
     generationMode: patch.generationMode,
-    bodyHtml: patch.bodyHtml,
+    // 正文落库的唯一收口：任何路径（LLM 生成 / 确定性重渲 / 手工保存 / 配图回填）
+    // 写进来的 bodyHtml 都先过协议白名单 + 稳定地址还原，杜绝某一路径漏清洗的
+    // 存储型 XSS。两道处理都是幂等的，调用方已清洗过也不会二次损伤。
+    bodyHtml:
+      patch.bodyHtml === undefined
+        ? undefined
+        : articleWorkflowStableBodyHtml(sanitizeAttributeProtocols(patch.bodyHtml)),
     bodyMarkdown: patch.bodyMarkdown,
     captionText: patch.captionText,
     tagsJson: patch.tags === undefined ? undefined : jsonValue(patch.tags),

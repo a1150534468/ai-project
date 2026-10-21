@@ -60,4 +60,16 @@ describe("article workflow state CAS", () => {
     expect(updated?.tagsJson).toEqual([]);
     expect(updated?.imageManifestJson).toEqual([]);
   });
+
+  it("正文落库统一过协议白名单：任何路径写 bodyHtml 都剥掉危险协议", async () => {
+    const { prisma, row } = store();
+
+    const updated = await updateArticleWorkflowProjectState(prisma as never, "p-1", {
+      bodyHtml: '<p><a href="javascript:alert(1)">坏链</a><a href="https://example.com">好链</a></p>',
+    });
+
+    expect(updated?.bodyHtml).not.toContain("javascript:");
+    expect(updated?.bodyHtml).toContain('href="https://example.com"');
+    expect(row.bodyHtml).toBe(updated?.bodyHtml);
+  });
 });

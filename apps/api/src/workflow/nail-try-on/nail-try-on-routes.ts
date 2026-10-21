@@ -890,16 +890,16 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
       select: { id: true },
     });
     if (crossUser) return reply.code(409).send({ error: "请求编号已被使用" });
-    // 同 portrait / try-on：放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
-    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNail", req.userId, (error) => req.log.warn({ err: error }, "nail quota check failed, allowing")))) {
-      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
-    }
     const roleInput = {
       handAssetId: parsed.data.handAssetId,
       nailDesignAssetId: parsed.data.nailDesignAssetId ?? null,
     };
     const references = await loadRoleReferences(prisma, req.userId, roleInput).catch(() => null);
     if (!references) return reply.code(404).send({ error: "试甲素材不存在、类型不匹配或无权访问" });
+    // 同 portrait / try-on：放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNail", req.userId, (error) => req.log.warn({ err: error }, "nail quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const handRef = references[0]!;
     // 蒙版必须逐像素对齐手部照片（footgun #1）：期望尺寸 = 手照档位 = 蒙版尺寸。
     const expected = parseSize(humanImageOutputSize(parsed.data.resolution, parsed.data.aspectRatio));

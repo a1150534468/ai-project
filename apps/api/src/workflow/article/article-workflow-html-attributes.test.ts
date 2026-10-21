@@ -29,6 +29,15 @@ describe("sanitizeAttributeProtocols", () => {
     expect(sanitizeAttributeProtocols(html)).toBe(html);
   });
 
+  it.each([
+    '<a href="javascript&colon;alert(1)">x</a>',
+    '<a href="java&#9;script:alert(1)">x</a>',
+    '<a href="java&Tab;script:alert(1)">x</a>',
+    '<a href="java&NewLine;script:alert(1)">x</a>',
+  ])("命名实体/内嵌控制字符拼出的危险协议同样剥除：%s", (html) => {
+    expect(sanitizeAttributeProtocols(html)).toBe("<a>x</a>");
+  });
+
   it("只剥目标属性，同标签其它属性与正文不动", () => {
     const html = '<a class="keep" href="javascript:alert(1)" title="t">正文</a>';
     expect(sanitizeAttributeProtocols(html)).toBe('<a class="keep" title="t">正文</a>');
