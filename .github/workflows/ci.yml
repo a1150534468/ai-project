@@ -63,6 +63,13 @@ jobs:
           # prisma generate 只读 schema 不连库，但个别版本会校验 url 格式，给个占位值
           DATABASE_URL: postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder
 
+      # 首屏体积预算：单一 JS chunk 的 gzip 体积超 350 KB 就红灯。
+      # 拆 lazy/manualChunks 是一次性收益，没有门禁守着，静态 import 会把它涨回去。
+      - name: 前端构建 + bundle 体积预算
+        run: |
+          pnpm --filter @ai-assistant/web build
+          node scripts/check-bundle-size.mjs
+
   # PR 上跑「受影响的包」。为什么不是把 pull_request 加进下面 test-full 的 if：
   # 那个 job 是全仓测试 + 全仓 build，约 45 分钟/次（Free 计划 2000 分钟/月的教训
   # 见 production.yml 与 test-full 的注释）。PR 该付的是「这次改动碰到的包」，不是全仓，
