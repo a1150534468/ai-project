@@ -152,3 +152,27 @@ describe("novel outbox", () => {
     expect(taskUpdate.mock.calls.map(([args]) => args.where.id)).toEqual(["chapter-route", "rewrite"]);
   });
 });
+
+describe("outboxCommandOf（#12 kind 判别）", () => {
+  it("kind 与 id 一致时按 kind 解析", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(outboxCommandOf({ kind: "engine-step", stepId: "s1", taskId: null })).toEqual({ kind: "engine-step", stepId: "s1" });
+    expect(outboxCommandOf({ kind: "generation-task", stepId: null, taskId: "t1" })).toEqual({ kind: "generation-task", taskId: "t1" });
+  });
+
+  it("kind 与 stepId 同时存在时 kind 优先（旧实现按 stepId 先行会误派）", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(outboxCommandOf({ kind: "generation-task", stepId: "s1", taskId: "t1" })).toEqual({ kind: "generation-task", taskId: "t1" });
+  });
+
+  it("kind 对应 id 缺失时按另一 id 兜底（迁移前在途行）", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(outboxCommandOf({ kind: "engine-step", stepId: null, taskId: "t9" })).toEqual({ kind: "generation-task", taskId: "t9" });
+    expect(outboxCommandOf({ kind: "unknown-kind", stepId: "s9", taskId: null })).toEqual({ kind: "engine-step", stepId: "s9" });
+  });
+
+  it("两个 id 都没有时抛错判坏行", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(() => outboxCommandOf({ kind: "engine-step", stepId: null, taskId: null })).toThrow("missing stepId/taskId");
+  });
+});

@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { getPrisma, getRedis } from "@ai-assistant/db";
+import type { Prisma as PrismaTypes } from "@prisma/client";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
 import { buildEcomMainImagePrompt } from "./ecom-main-prompts.js";
 import { ecomMainImageResourceKey, ecomMainImageSize, normalizeEcomMainResolution, ECOM_MAIN_RESOLUTIONS, type EcomMainRatio, type EcomMainResolution, type EcomMainStyleId } from "./ecom-main.js";
@@ -33,7 +34,7 @@ import { getEcomPlatform } from "./ecom-prompts.js";
 
 const LEGACY_ECOM_MAIN_MODEL = "ecom_main_image";
 type Prisma = ReturnType<typeof getPrisma>;
-type MainJobRow = NonNullable<Awaited<ReturnType<Prisma["ecomMainImageJob"]["findFirst"]>>>;
+type MainJobRow = PrismaTypes.EcomMainImageJobGetPayload<{ include: { product: true } }>;
 type MainImageRecord = {
   index: number;
   assetId: string | null;
@@ -222,7 +223,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
         data: { images, error: null },
       });
       if (updated.count !== 1) throw new WorkflowMutationConflictError();
-      const next = await tx.ecomMainImageJob.findFirst({ where: { id: args.job.id, userId: args.job.userId } });
+      const next = await tx.ecomMainImageJob.findFirst({ where: { id: args.job.id, userId: args.job.userId }, include: { product: true } });
       if (!next) throw new Error("job not found");
       return next;
     });
@@ -249,7 +250,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
         where: { id: job.id, userId: job.userId, updatedAt },
         data: { billingOperationIds: { push: id } },
       }),
-      reload: () => prisma.ecomMainImageJob.findFirst({ where: { id: job.id, userId: job.userId } }) as Promise<MainJobRow | null>,
+      reload: () => prisma.ecomMainImageJob.findFirst({ where: { id: job.id, userId: job.userId }, include: { product: true } }) as Promise<MainJobRow | null>,
     });
     const chargeRow = resolveImageChargeRow(priceRows, {
       resolution: normalizeEcomMainResolution(chargedJob.resolution),
@@ -332,14 +333,14 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
   app.get("/api/workflow/ecom/main/current", async (req, reply) => {
     const userId = authUserId(req as { userId?: string }, reply);
     if (!userId) return;
-    const job = await prisma.ecomMainImageJob.findFirst({ where: { userId }, orderBy: { createdAt: "desc" } });
+    const job = await prisma.ecomMainImageJob.findFirst({ where: { userId }, orderBy: { createdAt: "desc" }, include: { product: true } });
     return { success: true, data: { job: job ? serializeJob(job) : null } };
   });
 
   app.get("/api/workflow/ecom/main/history", async (req, reply) => {
     const userId = authUserId(req as { userId?: string }, reply);
     if (!userId) return;
-    const jobs = await prisma.ecomMainImageJob.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 20 });
+    const jobs = await prisma.ecomMainImageJob.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 20, include: { product: true } });
     return { success: true, data: { jobs: jobs.map(serializeJob) } };
   });
 
@@ -390,7 +391,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
         });
         let job = await prisma.ecomMainImageJob.create({
           data: {
-            userId,
+            user: { connect: { id: userId } },
             platform: parsed.data.platformId,
             language,
             ratio: parsed.data.ratio,
@@ -399,7 +400,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
             style: parsed.data.style,
             customStyle: parsed.data.customStyle,
             withText: parsed.data.withText,
-            product: parsed.data.product,
+            product: { create: parsed.data.product },
             referenceAssetIds: parsed.data.referenceAssetIds,
             count: parsed.data.count,
             images: pendingImages,
@@ -407,6 +408,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
             error: null,
             billingOperationIds: [],
           },
+          include: { product: true },
         });
         let anyFailed = false;
         for (let index = 0; index < parsed.data.count; index += 1) {
@@ -430,13 +432,14 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
                 error: safeErrorMessage(error),
                 ...(fatalError ? { stage: hasReadyImage ? "partial" : "failed" } : {}),
               },
+              include: { product: true },
             });
             job = updated as MainJobRow;
             if (fatalError) throw error;
           }
         }
         const finalStage = anyFailed ? "partial" : "ready";
-        const finalized = await prisma.ecomMainImageJob.update({ where: { id: job.id }, data: { stage: finalStage } });
+        const finalized = await prisma.ecomMainImageJob.update({ where: { id: job.id }, data: { stage: finalStage }, include: { product: true } });
         job = finalized as MainJobRow;
         return { success: true, data: { job: serializeJob(job) } };
       });
@@ -451,7 +454,7 @@ export async function ecomMainImageRoutes(app: FastifyInstance, deps: EcomMainRo
     if (!userId) return;
     const params = mainImageParamsSchema.safeParse(req.params);
     if (!params.success) return reply.code(400).send({ error: "参数不合法" });
-    const job = await prisma.ecomMainImageJob.findFirst({ where: { id: params.data.jobId, userId } });
+    const job = await prisma.ecomMainImageJob.findFirst({ where: { id: params.data.jobId, userId }, include: { product: true } });
     if (!job) return reply.code(404).send({ error: "主图任务不存在" });
     if (params.data.index >= job.count) return reply.code(400).send({ error: "序号越界" });
     try {

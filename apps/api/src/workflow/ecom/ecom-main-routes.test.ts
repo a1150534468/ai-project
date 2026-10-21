@@ -92,8 +92,12 @@ function createPrismaMock(seed: JobRow[] = []) {
     imageAsset: { findMany: vi.fn(async () => []) },
     ecomMainImageJob: {
       create: vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
+        // 模拟 Prisma 嵌套写：user connect → userId、product.create → product 行
+        const { user, product, ...rest } = data as { user?: { connect: { id: string } }; product?: { create: unknown } };
         const job = {
-          ...data,
+          ...rest,
+          userId: user?.connect.id ?? "u1",
+          product: product?.create,
           id: `job-${++seq}`,
           createdAt: new Date("2026-07-07T00:00:00Z"),
           updatedAt: new Date("2026-07-07T00:00:00Z"),

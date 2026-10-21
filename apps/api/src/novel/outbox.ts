@@ -31,6 +31,28 @@ const TARGET_ID_HOLDS_STEP_ID: Record<NovelTargetKind, boolean> = {
 
 const STEP_OWNED_TARGET_KINDS = NOVEL_TARGET_KINDS.filter((kind) => TARGET_ID_HOLDS_STEP_ID[kind]);
 
+/** outbox 命令的判别联合：kind 列是唯一判别来源（#12 起），解析时校验对应 id 存在。 */
+export type NovelOutboxCommand =
+  | { readonly kind: "engine-step"; readonly stepId: string }
+  | { readonly kind: "generation-task"; readonly taskId: string };
+
+export function outboxCommandOf(row: { kind: string; stepId: string | null; taskId: string | null }): NovelOutboxCommand {
+  switch (row.kind) {
+    case "engine-step":
+      if (row.stepId) return { kind: "engine-step", stepId: row.stepId };
+      break;
+    case "generation-task":
+      if (row.taskId) return { kind: "generation-task", taskId: row.taskId };
+      break;
+    default:
+      break;
+  }
+  // kind 与 id 不一致（迁移前在途行/脏数据）时按 id 兜底，保持旧分发行为；两者皆无才判坏行。
+  if (row.stepId) return { kind: "engine-step", stepId: row.stepId };
+  if (row.taskId) return { kind: "generation-task", taskId: row.taskId };
+  throw new Error("outbox command is missing stepId/taskId");
+}
+
 export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new Date()): Promise<number> {
   const rows = await prisma.novelCommandOutbox.findMany({
     where: { status: "pending", availableAt: { lte: now } },
@@ -45,9 +67,15 @@ export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new D
     });
     if (claimed.count !== 1) continue;
     try {
-      if (row.stepId) await enqueueNovelEngineStep(row.stepId, row.priority);
-      else if (row.taskId) await enqueueNovelGenerationTask(row.taskId);
-      else throw new Error("outbox command is missing stepId/taskId");
+      const command = outboxCommandOf(row);
+      switch (command.kind) {
+        case "engine-step":
+          await enqueueNovelEngineStep(command.stepId, row.priority);
+          break;
+        case "generation-task":
+          await enqueueNovelGenerationTask(command.taskId);
+          break;
+      }
       await prisma.novelCommandOutbox.update({
         where: { id: row.id },
         data: { status: "sent", sentAt: new Date(), lastError: null },
@@ -85,6 +113,7 @@ export async function recoverInterruptedNovelSteps(prisma: PrismaClient, staleBe
           projectId: (await tx.novelRun.findUniqueOrThrow({ where: { id: step.runId } })).projectId,
           runId: step.runId,
           stepId: step.id,
+          kind: "engine-step",
           payload: { type: "engine-step", stepId: step.id },
           priority: step.priority,
         },
@@ -133,7 +162,7 @@ export async function recoverInterruptedNovelTasks(
       });
       await tx.novelCommandOutbox.upsert({
         where: { taskId: task.id },
-        create: { projectId: task.projectId, taskId: task.id, payload: { type: "generation-task", taskId: task.id }, priority: 1, jobName: "generation-task" },
+        create: { projectId: task.projectId, taskId: task.id, kind: "generation-task", payload: { type: "generation-task", taskId: task.id }, priority: 1, jobName: "generation-task" },
         update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
       });
     });

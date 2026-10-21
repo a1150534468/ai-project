@@ -8,44 +8,43 @@ datasource db {
 }
 
 model User {
-  portraitReferenceAssets     PortraitReferenceAsset[]
-  portraitTasks               PortraitTask[]
-  portraitOutputs             PortraitOutput[]
-  tryOnReferenceAssets        TryOnReferenceAsset[]
-  tryOnTasks                  TryOnTask[]
-  tryOnOutputs                TryOnOutput[]
-  nailTryOnReferenceAssets    NailTryOnReferenceAsset[]
-  nailTryOnTasks              NailTryOnTask[]
-  nailTryOnOutputs            NailTryOnOutput[]
-  ecomWorkflows               EcomWorkflow[]
-  ecomMainImageJobs           EcomMainImageJob[]
-  id                          String                       @id @default(cuid())
-  uid                         String                       @unique
-  username                    String                       @unique
-  passwordHash                String
-  bannedAt                    DateTime?
-  memoryEnabled               Boolean                      @default(true)
-  createdAt                   DateTime                     @default(now())
-  sessions                    Session[]
-  agents                      UserAgent[]
-  imageAssets                 ImageAsset[]
-  imageGenerationTasks        ImageGenerationTask[]
-  transcriptionTasks          TranscriptionTask[]
-  videoAssets                 VideoAsset[]
-  audioAssets                 AudioAsset[]
-  articleWorkflowProjects     ArticleWorkflowProject[]
-  novelProjects               NovelProject[]
-  novelTasks                  NovelTask[]
-  novelRuns                   NovelRun[]
-  avatars                     Avatar[]
-  codexPetProjects            CodexPetProject[]
-  codexPetRuns                CodexPetRun[]
-  codexPetJobs                CodexPetJob[]
-  codexPetArtifacts           CodexPetArtifact[]
-  codexPetEvents              CodexPetEvent[]
-  codexPetImageCalls          CodexPetImageCall[]
-  stickerPacks                StickerPack[]
-
+  portraitReferenceAssets  PortraitReferenceAsset[]
+  portraitTasks            PortraitTask[]
+  portraitOutputs          PortraitOutput[]
+  tryOnReferenceAssets     TryOnReferenceAsset[]
+  tryOnTasks               TryOnTask[]
+  tryOnOutputs             TryOnOutput[]
+  nailTryOnReferenceAssets NailTryOnReferenceAsset[]
+  nailTryOnTasks           NailTryOnTask[]
+  nailTryOnOutputs         NailTryOnOutput[]
+  ecomWorkflows            EcomWorkflow[]
+  ecomMainImageJobs        EcomMainImageJob[]
+  id                       String                    @id @default(cuid())
+  uid                      String                    @unique
+  username                 String                    @unique
+  passwordHash             String
+  bannedAt                 DateTime?
+  memoryEnabled            Boolean                   @default(true)
+  createdAt                DateTime                  @default(now())
+  sessions                 Session[]
+  agents                   UserAgent[]
+  imageAssets              ImageAsset[]
+  imageGenerationTasks     ImageGenerationTask[]
+  transcriptionTasks       TranscriptionTask[]
+  videoAssets              VideoAsset[]
+  audioAssets              AudioAsset[]
+  articleWorkflowProjects  ArticleWorkflowProject[]
+  novelProjects            NovelProject[]
+  novelTasks               NovelTask[]
+  novelRuns                NovelRun[]
+  avatars                  Avatar[]
+  codexPetProjects         CodexPetProject[]
+  codexPetRuns             CodexPetRun[]
+  codexPetJobs             CodexPetJob[]
+  codexPetArtifacts        CodexPetArtifact[]
+  codexPetEvents           CodexPetEvent[]
+  codexPetImageCalls       CodexPetImageCall[]
+  stickerPacks             StickerPack[]
 }
 
 model Session {
@@ -160,58 +159,58 @@ model KnowledgeBase {
 }
 
 model Document {
-  id           String        @id @default(cuid())
-  kbId         String
-  name         String
-  sourceType   String // "FILE" | "URL" | "TEXT"（ARTIFACT 随 P1.2/P5.2 退役：产物不再进知识库）
-  sourceUri    String?
-  mime         String?
-  sizeBytes    Int?
-  status       String        @default("pending") // pending|indexing|indexed|failed
-  error        String?
-  chunkCount   Int           @default(0)
-  tokensUsed   Int           @default(0)
+  id         String        @id @default(cuid())
+  kbId       String
+  name       String
+  sourceType String // "FILE" | "URL" | "TEXT"（ARTIFACT 随 P1.2/P5.2 退役：产物不再进知识库）
+  sourceUri  String?
+  mime       String?
+  sizeBytes  Int?
+  status     String        @default("pending") // pending|indexing|indexed|failed
+  error      String?
+  chunkCount Int           @default(0)
+  tokensUsed Int           @default(0)
   // 解析质量追踪：{ chars, headingCount, tableSectionCount, strategy, parseMs }
-  parseMeta    Json?
-  opId         String?
-  lockedBy     String?
-  lockedAt     DateTime?
-  attempts     Int           @default(0)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  kb           KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
-  chunks       Chunk[]
+  parseMeta  Json?
+  opId       String?
+  lockedBy   String?
+  lockedAt   DateTime?
+  attempts   Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  kb         KnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  chunks     Chunk[]
 
   @@index([kbId])
   @@index([status])
 }
 
 model CodexPetProject {
-  id                   String             @id @default(cuid())
-  userId               String
-  name                 String
-  description          String             @default("")
-  prompt               String             @default("")
-  actionPrompts        Json               @default("{}")
-  stylePreset          String             @default("auto")
-  styleNotes           String             @default("")
-  referenceAssetIds    String[]           @default([])
-  autoContinue         Boolean            @default(false)
-  imageModel           String             @default("gpt-image-2")
-  visualQaModel        String             @default("gpt-5.6-sol")
-  qualityInspectionEnabled Boolean         @default(false)
-  status               String             @default("draft")
-  latestRunId          String?
-  createIdempotencyKey String?
-  deletedAt            DateTime?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  runs                 CodexPetRun[]
-  jobs                 CodexPetJob[]
-  artifacts            CodexPetArtifact[]
-  events               CodexPetEvent[]
-  imageCalls           CodexPetImageCall[]
+  id                       String              @id @default(cuid())
+  userId                   String
+  name                     String
+  description              String              @default("")
+  prompt                   String              @default("")
+  actionPrompts            Json                @default("{}")
+  stylePreset              String              @default("auto")
+  styleNotes               String              @default("")
+  referenceAssetIds        String[]            @default([])
+  autoContinue             Boolean             @default(false)
+  imageModel               String              @default("gpt-image-2")
+  visualQaModel            String              @default("gpt-5.6-sol")
+  qualityInspectionEnabled Boolean             @default(false)
+  status                   String              @default("draft")
+  latestRunId              String?
+  createIdempotencyKey     String?
+  deletedAt                DateTime?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  user                     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  runs                     CodexPetRun[]
+  jobs                     CodexPetJob[]
+  artifacts                CodexPetArtifact[]
+  events                   CodexPetEvent[]
+  imageCalls               CodexPetImageCall[]
 
   @@unique([userId, createIdempotencyKey])
   @@index([userId, updatedAt])
@@ -220,29 +219,29 @@ model CodexPetProject {
 }
 
 model CodexPetRun {
-  id                            String             @id @default(cuid())
+  id                            String              @id @default(cuid())
   projectId                     String
   userId                        String
   idempotencyKey                String?
-  inputSnapshot                 Json               @default("{}")
-  status                        String             @default("queued")
-  progressStage                 String             @default("queued")
-  progressPercent               Int                @default(0)
+  inputSnapshot                 Json                @default("{}")
+  status                        String              @default("queued")
+  progressStage                 String              @default("queued")
+  progressPercent               Int                 @default(0)
   progressMessage               String?
-  autoContinue                  Boolean            @default(false)
+  autoContinue                  Boolean             @default(false)
   colorKey                      String?
-  billingOperationId            String?            @unique
-  billingMode                   String             @default("legacy_package_v1")
+  billingOperationId            String?             @unique
+  billingMode                   String              @default("legacy_package_v1")
   billingResourceKey            String?
-  billingReservedUnits          Int                @default(0)
-  billingSettledUnits           Int                @default(0)
-  billingReservedPoints         Int                @default(0)
-  billingSettledPoints          Int                @default(0)
-  billingSettlementStatus       String             @default("none")
+  billingReservedUnits          Int                 @default(0)
+  billingSettledUnits           Int                 @default(0)
+  billingReservedPoints         Int                 @default(0)
+  billingSettledPoints          Int                 @default(0)
+  billingSettlementStatus       String              @default("none")
   billingSettledAt              DateTime?
-  billingPoints                 Int                @default(0)
-  billingChargeStatus           String             @default("pending")
-  billingChargeAttemptCount     Int                @default(0)
+  billingPoints                 Int                 @default(0)
+  billingChargeStatus           String              @default("pending")
+  billingChargeAttemptCount     Int                 @default(0)
   billingChargeError            String?
   billingChargeLastAttemptAt    DateTime?
   billingChargeNextRetryAt      DateTime?
@@ -250,37 +249,37 @@ model CodexPetRun {
   billingChargedAt              DateTime?
   billingActivatedAt            DateTime?
   billingRefundedAt             DateTime?
-  billingRefundStatus           String             @default("none")
+  billingRefundStatus           String              @default("none")
   billingRefundError            String?
-  billingRefundRetryCount       Int                @default(0)
+  billingRefundRetryCount       Int                 @default(0)
   billingRefundLastAttemptAt    DateTime?
   billingRefundNextRetryAt      DateTime?
-  cancelRequested               Boolean            @default(false)
-  hasSuccessfulImage            Boolean            @default(false)
+  cancelRequested               Boolean             @default(false)
+  hasSuccessfulImage            Boolean             @default(false)
   selectedBaseArtifactId        String?
   spritesheetArtifactId         String?
   packageArtifactId             String?
   previewArtifactId             String?
   validationReport              Json?
-  requestedModel                String             @default("gpt-image-2")
-  visualQaModel                 String             @default("gpt-5.6-sol")
-  qualityInspectionEnabled      Boolean            @default(true)
-  imageGenerationCallCount      Int                @default(0)
-  plannedImageCallLimit         Int                @default(0)
-  imageGenerationApprovalBudget Int                @default(0)
+  requestedModel                String              @default("gpt-image-2")
+  visualQaModel                 String              @default("gpt-5.6-sol")
+  qualityInspectionEnabled      Boolean             @default(true)
+  imageGenerationCallCount      Int                 @default(0)
+  plannedImageCallLimit         Int                 @default(0)
+  imageGenerationApprovalBudget Int                 @default(0)
   pendingImageJobKey            String?
-  actualModels                  String[]           @default([])
+  actualModels                  String[]            @default([])
   usage                         Json?
-  lastEventSequence             Int                @default(0)
+  lastEventSequence             Int                 @default(0)
   workerId                      String?
   heartbeatAt                   DateTime?
   startedAt                     DateTime?
   completedAt                   DateTime?
   error                         String?
-  createdAt                     DateTime           @default(now())
-  updatedAt                     DateTime           @updatedAt
-  project                       CodexPetProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user                          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt                     DateTime            @default(now())
+  updatedAt                     DateTime            @updatedAt
+  project                       CodexPetProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user                          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   jobs                          CodexPetJob[]
   artifacts                     CodexPetArtifact[]
   events                        CodexPetEvent[]
@@ -432,76 +431,76 @@ model Chunk {
 }
 
 model ImageAsset {
-  id                      String               @id @default(cuid())
-  userId                  String
-  requestId               String
-  requestIndex            Int
-  prompt                  String
-  model                   String
-  size                    String
-  originalUrl             String
-  thumbnailUrl            String
-  objectKey               String?
-  mime                    String               @default("image/png")
+  id           String   @id @default(cuid())
+  userId       String
+  requestId    String
+  requestIndex Int
+  prompt       String
+  model        String
+  size         String
+  originalUrl  String
+  thumbnailUrl String
+  objectKey    String?
+  mime         String   @default("image/png")
   // size 是"请求"的尺寸；这两列是上游"实际交付"的像素，用于按真实交付档位结算。
   // 历史数据与拿不到二进制的 url 直存场景为 null。
-  width                   Int?
-  height                  Int?
-  createdAt               DateTime             @default(now())
-  user                    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  width        Int?
+  height       Int?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([requestId, requestIndex])
   @@index([userId, createdAt])
 }
 
 model ImageGenerationTask {
-  id                String   @id @default(cuid())
-  userId            String
-  requestId         String   @unique
-  prompt            String
-  model             String
-  size              String
-  referenceAssetIds String[] @default([])
-  sourceImageAssetId String?
-  generationIntent   String   @default("new")
-  count             Int
-  status            String   @default("running")
-  completedCount    Int      @default(0)
-  error             String?
-  billingMode          String  @default("charge")
+  id                   String   @id @default(cuid())
+  userId               String
+  requestId            String   @unique
+  prompt               String
+  model                String
+  size                 String
+  referenceAssetIds    String[] @default([])
+  sourceImageAssetId   String?
+  generationIntent     String   @default("new")
+  count                Int
+  status               String   @default("running")
+  completedCount       Int      @default(0)
+  error                String?
+  billingMode          String   @default("charge")
   billingResourceKey   String?
-  billingReservedUnits Int     @default(0)
+  billingReservedUnits Int      @default(0)
   billingSettledUnits  Int?
   billingStatus        String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([status, updatedAt])
 }
 
 model TranscriptionTask {
-  id                String   @id @default(cuid())
-  userId            String
-  requestId         String   @unique
-  audioObjectKey    String
-  fileName          String
-  mimeType          String
-  sizeBytes         Int
-  audioDurationSec  Int?
-  language          String   @default("zh-CN")
-  model             String   @default("qwen-audio-3.1-asr-flash-filetrans")
-  status            String   @default("queued")
-  bailianTaskId     String?
-  transcriptText    String?
-  segmentsJson      String?
-  asrInputTokens    Int?
-  asrOutputTokens   Int?
-  error             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String   @id @default(cuid())
+  userId           String
+  requestId        String   @unique
+  audioObjectKey   String
+  fileName         String
+  mimeType         String
+  sizeBytes        Int
+  audioDurationSec Int?
+  language         String   @default("zh-CN")
+  model            String   @default("qwen-audio-3.1-asr-flash-filetrans")
+  status           String   @default("queued")
+  bailianTaskId    String?
+  transcriptText   String?
+  segmentsJson     String?
+  asrInputTokens   Int?
+  asrOutputTokens  Int?
+  error            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([status, updatedAt])
@@ -529,23 +528,23 @@ model VideoAsset {
 }
 
 model AudioAsset {
-  id                      String                      @id @default(cuid())
-  userId                  String
-  projectId               String?
-  requestId               String?
-  kind                    String
-  source                  String
-  provider                String?
-  providerModel           String?
-  originalUrl             String
-  objectKey               String?
-  mime                    String                      @default("audio/wav")
-  format                  String                      @default("wav")
-  durationSec             Int                         @default(0)
-  textContent             String?
-  metadata                Json?
-  createdAt               DateTime                    @default(now())
-  user                    User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String   @id @default(cuid())
+  userId        String
+  projectId     String?
+  requestId     String?
+  kind          String
+  source        String
+  provider      String?
+  providerModel String?
+  originalUrl   String
+  objectKey     String?
+  mime          String   @default("audio/wav")
+  format        String   @default("wav")
+  durationSec   Int      @default(0)
+  textContent   String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([projectId, createdAt])
@@ -554,41 +553,41 @@ model AudioAsset {
 }
 
 model ArticleWorkflowProject {
-  id                String   @id @default(cuid())
-  userId            String
-  creationMode      String   @default("source")
-  creationConfigJson Json    @default("{}")
-  sourceFormat      String
-  sourceText        String
-  generationMode    String   @default("preserve-text")
+  id                 String   @id @default(cuid())
+  userId             String
+  creationMode       String   @default("source")
+  creationConfigJson Json     @default("{}")
+  sourceFormat       String
+  sourceText         String
+  generationMode     String   @default("preserve-text")
   // 产物平台：wechat 出排版 HTML，xiaohongshu / douyin 出文案 + 竖版配图
-  platform          String   @default("wechat")
+  platform           String   @default("wechat")
   // 一次导入 = 同 batchId 的 N 行；存量行为 null，视为单平台独立批次
-  batchId           String?
+  batchId            String?
   // 公众号排版主题：auto = AI 自由发挥；themeColor 为空 = 用主题默认主色
-  theme             String   @default("auto")
-  themeColor        String?
+  theme              String   @default("auto")
+  themeColor         String?
   // 配图画廊布局模式：collage / grid / stack；caption 平台恒为 collage
-  galleryMode       String   @default("collage")
-  title             String   @default("")
-  summary           String   @default("")
-  bodyHtml          String   @default("")
+  galleryMode        String   @default("collage")
+  title              String   @default("")
+  summary            String   @default("")
+  bodyHtml           String   @default("")
   // 公众号正文的 Markdown 原文：确定性主题换肤的前端本地渲染输入；auto 主题为空串
-  bodyMarkdown      String   @default("")
+  bodyMarkdown       String   @default("")
   // caption 平台的正文文案与话题标签；公众号项目保持空值
-  captionText       String   @default("")
-  tagsJson          Json     @default("[]")
-  imageManifestJson Json     @default("[]")
-  status            String   @default("draft")
-  progressStage     String   @default("draft")
-  progressPercent   Int      @default(0)
-  progressMessage   String?
-  error             String?
+  captionText        String   @default("")
+  tagsJson           Json     @default("[]")
+  imageManifestJson  Json     @default("[]")
+  status             String   @default("draft")
+  progressStage      String   @default("draft")
+  progressPercent    Int      @default(0)
+  progressMessage    String?
+  error              String?
   // 文本 reserve 的 operationId：进程崩溃后 reaper 靠它退款，终态写入时清空
   billingOperationId String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, updatedAt])
   @@index([userId, status])
@@ -971,6 +970,9 @@ model NovelCommandOutbox {
   taskId      String?       @unique
   queueName   String        @default("novel-runs")
   jobName     String        @default("execute-step")
+  // 判别列：与 payload.type 同值（engine-step / generation-task），出队侧按它穷举
+  // 分发；取值由 migration 的 CHECK 约束兜底，新生产者必须显式写。
+  kind        String        @default("engine-step")
   payload     Json
   priority    Int           @default(5)
   status      String        @default("pending")
@@ -1353,8 +1355,6 @@ model Avatar {
   @@index([userId, createdAt])
 }
 
-
-
 model PortraitReferenceAsset {
   id        String    @id @default(cuid())
   userId    String
@@ -1445,34 +1445,34 @@ model TryOnReferenceAsset {
 }
 
 model TryOnTask {
-  id                     String        @id @default(cuid())
-  userId                 String
-  requestId              String        @unique
-  model                  String
-  aspectRatio            String
-  resolution             String
-  count                  Int
-  description            String        @default("")
-  effectivePrompt        String
-  garmentFrontAssetId    String
-  garmentDetailAssetId   String?
-  modelAssetId           String?
-  status                 String        @default("running")
-  completedCount         Int           @default(0)
-  error                  String?
-  consentVersion         String?
-  billingOperationId     String        @unique
-  billingResourceKey     String
-  billingReservedUnits   Int           @default(0)
-  billingSettledUnits    Int           @default(0)
-  billingStatus          String        @default("pending")
-  cancelRequested        Boolean       @default(false)
-  startedAt              DateTime      @default(now())
-  completedAt            DateTime?
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  user                    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outputs                 TryOnOutput[]
+  id                   String        @id @default(cuid())
+  userId               String
+  requestId            String        @unique
+  model                String
+  aspectRatio          String
+  resolution           String
+  count                Int
+  description          String        @default("")
+  effectivePrompt      String
+  garmentFrontAssetId  String
+  garmentDetailAssetId String?
+  modelAssetId         String?
+  status               String        @default("running")
+  completedCount       Int           @default(0)
+  error                String?
+  consentVersion       String?
+  billingOperationId   String        @unique
+  billingResourceKey   String
+  billingReservedUnits Int           @default(0)
+  billingSettledUnits  Int           @default(0)
+  billingStatus        String        @default("pending")
+  cancelRequested      Boolean       @default(false)
+  startedAt            DateTime      @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  user                 User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outputs              TryOnOutput[]
 
   @@index([userId, createdAt])
   @@index([status, updatedAt])
@@ -1517,34 +1517,34 @@ model NailTryOnReferenceAsset {
 
 // @@NAIL_SCHEMA_TAIL@@
 model NailTryOnTask {
-  id                     String            @id @default(cuid())
-  userId                 String
-  requestId              String            @unique
-  model                  String
-  aspectRatio            String
-  resolution             String
-  count                  Int
-  description            String            @default("")
-  effectivePrompt        String
-  handAssetId            String
-  nailDesignAssetId      String?
-  maskObjectKey          String
-  status                 String            @default("running")
-  completedCount         Int               @default(0)
-  error                  String?
-  consentVersion         String?
-  billingOperationId     String            @unique
-  billingResourceKey     String
-  billingReservedUnits   Int               @default(0)
-  billingSettledUnits    Int               @default(0)
-  billingStatus          String            @default("pending")
-  cancelRequested        Boolean           @default(false)
-  startedAt              DateTime          @default(now())
-  completedAt            DateTime?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  user                    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  outputs                 NailTryOnOutput[]
+  id                   String            @id @default(cuid())
+  userId               String
+  requestId            String            @unique
+  model                String
+  aspectRatio          String
+  resolution           String
+  count                Int
+  description          String            @default("")
+  effectivePrompt      String
+  handAssetId          String
+  nailDesignAssetId    String?
+  maskObjectKey        String
+  status               String            @default("running")
+  completedCount       Int               @default(0)
+  error                String?
+  consentVersion       String?
+  billingOperationId   String            @unique
+  billingResourceKey   String
+  billingReservedUnits Int               @default(0)
+  billingSettledUnits  Int               @default(0)
+  billingStatus        String            @default("pending")
+  cancelRequested      Boolean           @default(false)
+  startedAt            DateTime          @default(now())
+  completedAt          DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  user                 User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  outputs              NailTryOnOutput[]
 
   @@index([userId, createdAt])
   @@index([status, updatedAt])
@@ -1568,52 +1568,69 @@ model NailTryOnOutput {
   @@index([userId, createdAt])
 }
 
+// 电商商品规格：原先 EcomWorkflow / EcomMainImageJob 各存一份 Json、形状零约束，
+// 前后端各声明一份类型迟早走岔（提示词 12）。提成真表后必填/长度/条数由列与
+// CHECK 约束兜底（见对应 migration），TS 侧以 Prisma 生成类型为准。
+model EcomProductSpec {
+  id                String             @id @default(cuid())
+  name              String
+  category          String             @default("")
+  sellingPoints     String[]           @default([])
+  extra             String             @default("")
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  ecomWorkflows     EcomWorkflow[]
+  ecomMainImageJobs EcomMainImageJob[]
+}
+
 model EcomWorkflow {
-  id                  String   @id @default(cuid())
+  id                  String          @id @default(cuid())
   userId              String
   platform            String
   language            String
   template            String
-  resolution          String   @default("1K")
+  resolution          String          @default("1K")
   model               String?
-  segmentCount        Int      @default(3)
-  product             Json
-  referenceAssetIds   String[] @default([])
+  segmentCount        Int             @default(3)
+  productSpecId       String
+  product             EcomProductSpec @relation(fields: [productSpecId], references: [id], onDelete: Restrict)
+  referenceAssetIds   String[]        @default([])
   masterAssetId       String?
-  segments            Json     @default("[]")
+  segments            Json            @default("[]")
   stitchedAssetId     String?
-  stage               String   @default("draft")
+  stage               String          @default("draft")
   error               String?
-  billingOperationIds String[] @default([])
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billingOperationIds String[]        @default([])
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([userId, stage])
 }
 
 model EcomMainImageJob {
-  id                  String   @id @default(cuid())
+  id                  String          @id @default(cuid())
   userId              String
   platform            String
   language            String
   ratio               String
-  resolution          String   @default("1K")
+  resolution          String          @default("1K")
   model               String?
   style               String
-  customStyle         String   @default("")
-  withText            Boolean  @default(true)
-  product             Json
-  referenceAssetIds   String[] @default([])
+  customStyle         String          @default("")
+  withText            Boolean         @default(true)
+  productSpecId       String
+  product             EcomProductSpec @relation(fields: [productSpecId], references: [id], onDelete: Restrict)
+  referenceAssetIds   String[]        @default([])
   count               Int
-  images              Json     @default("[]")
-  stage               String   @default("draft")
+  images              Json            @default("[]")
+  stage               String          @default("draft")
   error               String?
-  billingOperationIds String[] @default([])
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  billingOperationIds String[]        @default([])
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  user                User            @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([userId, stage])

@@ -268,7 +268,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
         prisma.novelRunStep.update({ where: { id: pending.id }, data: { status: "queued", error: null, workerId: null } }),
         prisma.novelCommandOutbox.upsert({
           where: { stepId: pending.id },
-          create: { projectId: run.projectId, runId: run.id, stepId: pending.id, payload: { type: "engine-step", stepId: pending.id }, priority: pending.priority },
+          create: { projectId: run.projectId, runId: run.id, stepId: pending.id, kind: "engine-step", payload: { type: "engine-step", stepId: pending.id }, priority: pending.priority },
           update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
         }),
       ]);

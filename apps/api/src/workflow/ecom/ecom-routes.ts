@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { getPrisma, getRedis } from "@ai-assistant/db";
+import type { Prisma as PrismaTypes } from "@prisma/client";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
 import { buildEcomPrompt, ECOM_PLATFORMS, ECOM_TEMPLATES, getEcomPlatform, getEcomTemplate } from "./ecom-prompts.js";
 import { ecomMasterResourceKey, ecomModelSizeError, ecomSegmentResourceKey, ecomSizeForResolution, normalizeEcomResolution, type EcomResolution } from "./ecom-resolution.js";
@@ -23,7 +24,7 @@ const ECOM_STITCH_FREE_PRICE = {
   perUnits: 1,
   enabled: true,
 } as const;
-type EcomWorkflowRow = NonNullable<Awaited<ReturnType<ReturnType<typeof getPrisma>["ecomWorkflow"]["findFirst"]>>>;
+type EcomWorkflowRow = PrismaTypes.EcomWorkflowGetPayload<{ include: { product: true } }>;
 type StoredWorkflowImage = Awaited<ReturnType<NonNullable<EcomRouteDeps["storeWorkflowImage"]>>>;
 type CommittedArtifact = Awaited<ReturnType<typeof commitArtifact>>;
 
@@ -59,7 +60,7 @@ async function commitArtifact(args: {
       data: args.updateWorkflow(asset.id, asset.createdAt),
     });
     if (updated.count !== 1) throw new WorkflowMutationConflictError();
-    const workflow = await tx.ecomWorkflow.findFirst({ where: { id: args.workflow.id, userId: args.workflow.userId } });
+    const workflow = await tx.ecomWorkflow.findFirst({ where: { id: args.workflow.id, userId: args.workflow.userId }, include: { product: true } });
     if (!workflow) throw new Error("workflow not found");
     return { asset, workflow };
   });
@@ -96,7 +97,7 @@ async function runChargedOperation<T>(args: {
       where: { id: args.workflow.id, userId: args.workflow.userId, updatedAt },
       data: { billingOperationIds: { push: id } },
     }),
-    reload: () => args.prisma.ecomWorkflow.findFirst({ where: { id: args.workflow.id, userId: args.workflow.userId } }) as Promise<EcomWorkflowRow | null>,
+    reload: () => args.prisma.ecomWorkflow.findFirst({ where: { id: args.workflow.id, userId: args.workflow.userId }, include: { product: true } }) as Promise<EcomWorkflowRow | null>,
   });
   const { reserveResource, settleResource } = args.billing;
   const canReserve = Boolean(reserveResource && settleResource);
@@ -184,7 +185,7 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     return replyBillingFailure(args.reply, args.error, args.fallback);
   };
   const markWorkflowStage = (workflow: EcomWorkflowRow, stage: string) =>
-    prisma.ecomWorkflow.update({ where: { id: workflow.id }, data: { stage, error: null } });
+    prisma.ecomWorkflow.update({ where: { id: workflow.id }, data: { stage, error: null }, include: { product: true } });
 
   /**
    * 按实际交付像素定结算档位。交付像素拿不到（url 直存等）时返回 null，按请求档结算。
@@ -395,7 +396,7 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     try {
       const priceRows = await listPriceRows();
       return await workflowMutationLocker.withLock(workflowCreateMutationKey(userId), async () => {
-        const workflow = await prisma.ecomWorkflow.create({ data: { userId, platform: parsed.data.platformId, language: resolveLanguage(parsed.data.platformId), template: parsed.data.templateId, resolution: parsed.data.resolution, model: parsed.data.model ?? null, segmentCount: parsed.data.segmentCount, product: parsed.data.product, referenceAssetIds: parsed.data.referenceAssetIds, masterAssetId: null, segments: [], stitchedAssetId: null, stage: "master_running", error: null, billingOperationIds: [] } });
+        const workflow = await prisma.ecomWorkflow.create({ data: { user: { connect: { id: userId } }, platform: parsed.data.platformId, language: resolveLanguage(parsed.data.platformId), template: parsed.data.templateId, resolution: parsed.data.resolution, model: parsed.data.model ?? null, segmentCount: parsed.data.segmentCount, product: { create: parsed.data.product }, referenceAssetIds: parsed.data.referenceAssetIds, masterAssetId: null, segments: [], stitchedAssetId: null, stage: "master_running", error: null, billingOperationIds: [] }, include: { product: true } });
         try {
           const committed = await generateMaster(workflow, priceRows);
           return { success: true, data: { workflow: await loadSerializedWorkflow(prisma, committed.workflow) } };
@@ -421,7 +422,7 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
     if (referenceAssets.length !== parsed.data.referenceAssetIds.length) return reply.code(400).send({ error: "引用图不存在" });
     try {
       return await workflowMutationLocker.withLock(workflowCreateMutationKey(userId), async () => {
-        const workflow = await prisma.ecomWorkflow.create({ data: { userId, platform: parsed.data.platformId, language: resolveLanguage(parsed.data.platformId), template: parsed.data.templateId, resolution: parsed.data.resolution, model: parsed.data.model ?? null, segmentCount: parsed.data.segmentCount, product: parsed.data.product, referenceAssetIds: parsed.data.referenceAssetIds, masterAssetId: parsed.data.masterAssetId, segments: [], stitchedAssetId: null, stage: "master_ready", error: null, billingOperationIds: [] } });
+        const workflow = await prisma.ecomWorkflow.create({ data: { user: { connect: { id: userId } }, platform: parsed.data.platformId, language: resolveLanguage(parsed.data.platformId), template: parsed.data.templateId, resolution: parsed.data.resolution, model: parsed.data.model ?? null, segmentCount: parsed.data.segmentCount, product: { create: parsed.data.product }, referenceAssetIds: parsed.data.referenceAssetIds, masterAssetId: parsed.data.masterAssetId, segments: [], stitchedAssetId: null, stage: "master_ready", error: null, billingOperationIds: [] }, include: { product: true } });
         return { success: true, data: { workflow: await loadSerializedWorkflow(prisma, workflow) } };
       });
     } catch (error) {
@@ -456,7 +457,7 @@ export async function ecomWorkflowRoutes(app: FastifyInstance, deps: EcomRouteDe
         let currentWorkflow: EcomWorkflowRow = await markWorkflowStage(baseWorkflow, "segments_running");
         const missingIndexes = Array.from({ length: currentWorkflow.segmentCount }, (_, i) => i).filter((index) => !parseSegments(currentWorkflow.segments).find((item) => item.index === index));
         if (missingIndexes.length === 0) {
-          return prisma.ecomWorkflow.update({ where: { id: currentWorkflow.id }, data: { stage: "segments_ready", error: null } });
+          return prisma.ecomWorkflow.update({ where: { id: currentWorkflow.id }, data: { stage: "segments_ready", error: null }, include: { product: true } });
         }
         for (const index of missingIndexes) {
           currentWorkflow = await generateSegment(currentWorkflow, index, priceRows, index === missingIndexes.at(-1) ? "segments_ready" : "segments_running");

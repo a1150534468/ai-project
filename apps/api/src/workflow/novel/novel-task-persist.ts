@@ -68,6 +68,7 @@ export async function reserveAndCreateTask(args: {
         data: {
           projectId: args.projectId,
           taskId: task.id,
+          kind: "generation-task",
           payload: { type: "generation-task", taskId: task.id },
           priority: 1,
           jobName: "generation-task",

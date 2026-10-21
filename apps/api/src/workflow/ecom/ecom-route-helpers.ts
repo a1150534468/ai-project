@@ -1,5 +1,6 @@
 import type { FastifyReply } from "fastify";
 import { getPrisma } from "@ai-assistant/db";
+import type { Prisma } from "@prisma/client";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { imageDispatchWorstWaitMs } from "../_shared/image-dispatch-gate.js";
 import { loadImageAttemptTimeoutMs } from "../_shared/image-service.js";
@@ -44,7 +45,7 @@ type AssetShape = {
   readonly createdAt: Date;
 };
 
-type EcomWorkflowRow = NonNullable<Awaited<ReturnType<ReturnType<typeof getPrisma>["ecomWorkflow"]["findFirst"]>>>;
+type EcomWorkflowRow = Prisma.EcomWorkflowGetPayload<{ include: { product: true } }>;
 
 export class RefundCompensationError extends Error {
   readonly name = "RefundCompensationError";
@@ -62,18 +63,18 @@ export async function findWorkflowOrReply(
   userId: string,
   reply: FastifyReply,
 ): Promise<EcomWorkflowRow | null> {
-  const workflow = await prisma.ecomWorkflow.findFirst({ where: { id: workflowId, userId } });
+  const workflow = await prisma.ecomWorkflow.findFirst({ where: { id: workflowId, userId }, include: { product: true } });
   if (workflow) return workflow;
   reply.code(404).send({ error: "工作流不存在" });
   return null;
 }
 
 export function findCurrentWorkflow(prisma: ReturnType<typeof getPrisma>, userId: string) {
-  return prisma.ecomWorkflow.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" } });
+  return prisma.ecomWorkflow.findFirst({ where: { userId }, orderBy: { updatedAt: "desc" }, include: { product: true } });
 }
 
 export function listRecentWorkflows(prisma: ReturnType<typeof getPrisma>, userId: string, take = 20) {
-  return prisma.ecomWorkflow.findMany({ where: { userId }, orderBy: { updatedAt: "desc" }, take });
+  return prisma.ecomWorkflow.findMany({ where: { userId }, orderBy: { updatedAt: "desc" }, take, include: { product: true } });
 }
 
 export function resolveLanguage(platformId: string): string {
