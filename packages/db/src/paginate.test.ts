@@ -18,8 +18,17 @@ function fakeModel(rows: FakeRow[]) {
       let list = [...rows];
       const where = args.where as { tag?: string } | undefined;
       if (where?.tag !== undefined) list = list.filter((row) => row.tag === where.tag);
-      const orderBy = args.orderBy as { n: "asc" | "desc" };
-      list.sort((a, b) => (orderBy.n === "asc" ? a.n - b.n : b.n - a.n));
+      const orderList = (Array.isArray(args.orderBy) ? args.orderBy : [args.orderBy]) as Record<string, "asc" | "desc">[];
+      list.sort((a, b) => {
+        for (const order of orderList) {
+          const [field, direction] = Object.entries(order)[0]!;
+          const av = a[field as keyof FakeRow];
+          const bv = b[field as keyof FakeRow];
+          const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+          if (cmp !== 0) return direction === "asc" ? cmp : -cmp;
+        }
+        return 0;
+      });
       if (args.cursor) {
         const cursorId = (args.cursor as { id: string }).id;
         const idx = list.findIndex((row) => row.id === cursorId);
@@ -80,6 +89,20 @@ describe("paginate", () => {
     expect(pages).toBe(3);
     expect(seen).toEqual(["r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10"]);
     expect(cursor).toBeNull();
+  });
+
+  it("orderBy 字段有并列值时靠自动补的 id 兜底排序不重不漏", async () => {
+    // n 大量并列：只按 n 排序时边界行顺序不稳定，paginate 必须自动补 { id: 'asc' }
+    const tied: FakeRow[] = Array.from({ length: 9 }, (_, i) => ({ id: `t${i + 1}`, n: 7, tag: "x" }));
+    const model = fakeModel(tied);
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const result: PaginateResult<FakeRow> = await paginate<FakeRow>(model, { orderBy: { n: "asc" }, take: 4, cursor });
+      seen.push(...result.rows.map((row) => row.id));
+      cursor = result.nextCursor;
+    } while (cursor);
+    expect(seen).toEqual(["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8", "t9"]);
   });
 
   it("where 与 select 原样透传给 delegate", async () => {
