@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
+import { createPoller, type Poller } from "../../poller";
 import { useAuthGate } from "../../app/authGate";
 import {
   analyzeNovelChapter,
@@ -355,11 +356,29 @@ export function NovelWorkflowStudio({ token }: NovelWorkflowStudioProps) {
    */
   const openProjectId = detail?.project.id ?? "";
   const hasActiveTask = detail?.tasks.some((task) => isActiveTask(task.status)) ?? false;
+  // 轮询走纯逻辑 poller：依赖仍只认「项目 id + 有没有在跑的任务」，但定时器不再
+  // 随每次状态翻转拆建——输入走 ref，翻转时只 notify（重叠保护也在 poller 里）。
+  const novelPollInputsRef = useRef({ openProjectId, hasActiveTask, refreshProject });
+  novelPollInputsRef.current = { openProjectId, hasActiveTask, refreshProject };
+  const novelPollerRef = useRef<Poller | null>(null);
+  if (novelPollerRef.current === null) {
+    novelPollerRef.current = createPoller({
+      intervalMs: 2200,
+      shouldPoll: () => novelPollInputsRef.current.openProjectId !== "" && novelPollInputsRef.current.hasActiveTask,
+      refresh: async () => {
+        await novelPollInputsRef.current.refreshProject(novelPollInputsRef.current.openProjectId, true);
+      },
+    });
+  }
   useEffect(() => {
-    if (!openProjectId || !hasActiveTask) return undefined;
-    const timer = window.setInterval(() => void refreshProject(openProjectId, true), 2200);
-    return () => window.clearInterval(timer);
-  }, [hasActiveTask, openProjectId, refreshProject]);
+    const poller = novelPollerRef.current;
+    if (!poller) return undefined;
+    poller.start();
+    return () => poller.stop();
+  }, []);
+  useEffect(() => {
+    novelPollerRef.current?.notify();
+  }, [hasActiveTask, openProjectId]);
 
   /** 盯着一次引擎运行：跑完了就刷正文、清掉 watch，顺带按最终状态说一句话。 */
   useEffect(() => {

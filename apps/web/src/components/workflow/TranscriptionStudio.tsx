@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { cx } from "../ui";
 import { errorMessage } from "../../apiError";
+import { createPoller, type Poller } from "../../poller";
 import {
   createTranscriptionRequestId,
   deleteTranscriptionTask,
@@ -66,8 +67,8 @@ export function TranscriptionStudio({ token }: TranscriptionStudioProps) {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  /** 同一时刻只允许一个列表请求在飞：轮询比响应还快时不该叠加请求。 */
-  const refreshingRef = useRef(false);
+  /** 轮询调度（纯逻辑 poller）：重叠保护/落地停轮都在它里面，不再手写 refreshingRef。 */
+  const pollerRef = useRef<Poller | null>(null);
   /** 上一条已经弹过的错误。后端持续不可用时，每 5 秒重弹同一条提示只会糊屏。 */
   const lastErrorRef = useRef<string | null>(null);
 
@@ -78,9 +79,7 @@ export function TranscriptionStudio({ token }: TranscriptionStudioProps) {
   const hasActive = useMemo(() => tasks.some(isActiveTask), [tasks]);
   const draftDirty = selected?.transcriptText !== undefined && draft !== (selected?.transcriptText ?? "");
 
-  const refresh = useCallback(async () => {
-    if (refreshingRef.current) return;
-    refreshingRef.current = true;
+  const rawRefresh = useCallback(async () => {
     try {
       const list = await listTranscriptionTasks(token);
       lastErrorRef.current = null;
@@ -97,20 +96,38 @@ export function TranscriptionStudio({ token }: TranscriptionStudioProps) {
         lastErrorRef.current = message;
         toast.show("err", message);
       }
-    } finally {
-      refreshingRef.current = false;
     }
   }, [token, toast]);
+
+  // poller 只建一次：refresh/shouldPoll 都读 ref，避免回调换引用导致调度器重建。
+  const rawRefreshRef = useRef(rawRefresh);
+  rawRefreshRef.current = rawRefresh;
+  const hasActiveRef = useRef(hasActive);
+  hasActiveRef.current = hasActive;
+  if (pollerRef.current === null) {
+    pollerRef.current = createPoller({
+      intervalMs: POLL_MS,
+      shouldPoll: () => hasActiveRef.current,
+      refresh: () => rawRefreshRef.current(),
+    });
+  }
+  /** 对外统一入口：手动刷新与轮询共用 poller 的重叠保护（同一时刻只允许一个列表请求在飞）。 */
+  const refresh = useCallback(() => pollerRef.current?.refreshNow() ?? Promise.resolve(), []);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!hasActive) return;
-    const timer = setInterval(() => void refresh(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [hasActive, refresh]);
+    const poller = pollerRef.current;
+    if (!poller) return undefined;
+    poller.start();
+    return () => poller.stop();
+  }, []);
+
+  useEffect(() => {
+    pollerRef.current?.notify();
+  }, [hasActive]);
 
   useEffect(() => {
     setDraft(selected?.transcriptText ?? "");
