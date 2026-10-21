@@ -114,6 +114,39 @@ describe("parseDocument 工作簿安全闸", () => {
       .rejects.toThrow("声明大小与实际解压不一致");
   });
 
+  it("中央目录与本地头的压缩方法/flags 不一致时读前闸拒绝（防语义伪造绕过）", async () => {
+    const buildLiar = (localMethod: number, cdMethod: number, localFlags: number, cdFlags: number, localUncompressed: number, cdUncompressed: number) => {
+      const name = Buffer.from("xl/worksheets/sheet1.xml");
+      const data = Buffer.alloc(64, "b");
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x0403_4b50, 0);
+      local.writeUInt16LE(localFlags, 6);
+      local.writeUInt16LE(localMethod, 8);
+      local.writeUInt32LE(data.length, 18);
+      local.writeUInt32LE(localUncompressed, 22);
+      local.writeUInt16LE(name.length, 26);
+      const cd = Buffer.alloc(46);
+      cd.writeUInt32LE(0x0201_4b50, 0);
+      cd.writeUInt16LE(cdFlags, 8);
+      cd.writeUInt16LE(cdMethod, 10);
+      cd.writeUInt32LE(data.length, 20);
+      cd.writeUInt32LE(cdUncompressed, 24);
+      cd.writeUInt16LE(name.length, 28);
+      const eocd = Buffer.alloc(22);
+      eocd.writeUInt32LE(0x0605_4b50, 0);
+      eocd.writeUInt16LE(1, 10);
+      eocd.writeUInt32LE(cd.length + name.length, 12);
+      eocd.writeUInt32LE(local.length + name.length + data.length, 16);
+      return Buffer.concat([local, name, data, cd, name, eocd]);
+    };
+    // 中央目录报 stored、本地头报 deflate：只按中央目录数存储字节的闸会被骗过去
+    await expect(parseDocument(buildLiar(8, 0, 0, 0, 64, 64), sheetMime, "method-lie.xlsx"))
+      .rejects.toThrow("本地头与中央目录不一致");
+    // 单方面伪造中央目录 bit3 想跳过本地大小校验（本地大小故意写错）
+    await expect(parseDocument(buildLiar(0, 0, 0, 0x08, 71, 64), sheetMime, "flag-lie.xlsx"))
+      .rejects.toThrow("本地头与中央目录不一致");
+  });
+
   it("上限内的小工作簿仍能正常解析", async () => {
     const buffer = await buildWorkbook([[["名称", "值"], ["甲", "1"]]]);
     const out = await parseDocument(buffer, sheetMime, "ok.xlsx");

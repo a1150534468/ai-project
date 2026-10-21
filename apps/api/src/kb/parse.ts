@@ -186,6 +186,14 @@ async function assertWorkbookZipBudget(buffer: Buffer): Promise<void> {
     if (at + 30 > buffer.byteLength || buffer.readUInt32LE(at) !== 0x0403_4b50) {
       throw new PermanentDocumentError("工作簿压缩包本地头损坏");
     }
+    // 解压语义先对齐：本地头的压缩方法与 flags 必须与中央目录一致，否则攻击者
+    // 可以让中央目录报 stored（本闸只数存储字节就放行）、本地头报 deflate，
+    // 或单方面伪造中央目录的 bit3 来跳过本地大小校验。
+    const localFlags = buffer.readUInt16LE(at + 6);
+    const localMethod = buffer.readUInt16LE(at + 8);
+    if (localMethod !== entry.method || localFlags !== entry.flags) {
+      throw new PermanentDocumentError("工作簿压缩包本地头与中央目录不一致");
+    }
     // bit3（数据描述符）置位时本地头的大小字段按规范为 0，跳过本地交叉校验
     if ((entry.flags & 0x08) === 0) {
       const localCompressed = buffer.readUInt32LE(at + 18);

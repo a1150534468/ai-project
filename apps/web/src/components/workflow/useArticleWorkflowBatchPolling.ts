@@ -63,6 +63,10 @@ export function useArticleWorkflowBatchPolling(args: {
   // 已落地但回填失败的行：状态本身不会再变，靠这本账在下一轮把回填重试出来，
   // 否则「落地 → 回填失败」之后新结果永远进不了界面（除非整批结束）。
   const pendingSettleRef = useRef(new Set<string>());
+  // 上一轮见过的界面状态：seen 只采纳「界面状态的新变化」（回填落地、用户重新
+  // 生成），不能每轮拿界面快照无条件覆盖 —— 服务端轮询可能先观察到某行回到
+  // generating，界面还是旧的 ready 时反复覆盖会把这次落地从 seen 里抹掉。
+  const lastPropsRef = useRef(new Map<string, string>());
   if (pollerRef.current === null) {
     pollerRef.current = createPoller({
       intervalMs: POLL_INTERVAL_MS,
@@ -70,10 +74,17 @@ export function useArticleWorkflowBatchPolling(args: {
       refresh: async () => {
         const input = inputsRef.current;
         try {
-          // seen 每轮先与界面已知状态对齐（覆盖写）：用户重新生成会让行回到
-          // generating，只补缺失项的话，旧的 ready 记录会把下一次落地吞掉。
+          // seen 同步界面状态的「新变化」：某行在界面上的状态与上轮不同（回填
+          // 落地、用户重新生成），才以界面为准更新 seen；界面没变就不动 seen，
+          // 服务端轮询的观测（轻量状态行）是唯一事实来源。
           const seen = seenStatusRef.current;
-          for (const project of input.batchProjects) seen.set(project.id, project.status);
+          const lastProps = lastPropsRef.current;
+          for (const project of input.batchProjects) {
+            if (lastProps.get(project.id) !== project.status) {
+              lastProps.set(project.id, project.status);
+              seen.set(project.id, project.status);
+            }
+          }
           const statuses = await input.loadBatchStatus({ batchId: input.pollBatchId, projectId: input.pollProjectId });
           const settledNow = statuses
             .filter((row) => {
@@ -127,5 +138,6 @@ export function useArticleWorkflowBatchPolling(args: {
   useEffect(() => {
     seenStatusRef.current.clear();
     pendingSettleRef.current.clear();
+    lastPropsRef.current.clear();
   }, [pollBatchId, pollProjectId]);
 }
