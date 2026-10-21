@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, renderHook } from "@testing-library/react";
+import { act, render, renderHook } from "@testing-library/react";
+import { startTransition, Suspense } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ArticleWorkflowProject, ArticleWorkflowStatusRow } from "../../workflowArticleApi";
 import { useArticleWorkflowBatchPolling } from "./useArticleWorkflowBatchPolling";
@@ -83,5 +84,58 @@ describe("useArticleWorkflowBatchPolling 时序", () => {
     expect(loadBatch).toHaveBeenCalledTimes(2);
     expect(setNotice).not.toHaveBeenCalled();
     hook.unmount();
+  });
+
+  it("挂起/被放弃的渲染不能污染 seen：未提交的 ready 不得让随后真落地漏检", async () => {
+    let serverRows = [project("b", "generating"), project("a", "generating")];
+    const loadBatchStatus = vi.fn(async () => serverRows.map(statusRow));
+    const loadBatch = vi.fn(async () => serverRows);
+    const refreshHistory = vi.fn(async () => undefined);
+    const setError = vi.fn();
+    const setNotice = vi.fn();
+
+    // hook 调用之后抛未决 Promise 让本次渲染挂起、永不提交：若记账写在渲染期，
+    // 这次「未提交的 ready」就会污染 seen；写在 layout effect 里则不会运行。
+    let suspend = false;
+    function Probe({ projects }: { projects: ArticleWorkflowProject[] }) {
+      useArticleWorkflowBatchPolling({
+        batchProjects: projects,
+        batchBusy: true,
+        loadBatch,
+        loadBatchStatus,
+        refreshHistory,
+        setError,
+        setNotice,
+      });
+      if (suspend) throw new Promise<void>(() => {});
+      return null;
+    }
+
+    const view = render(
+      <Suspense fallback={null}>
+        <Probe projects={[project("b", "generating"), project("a", "generating")]} />
+      </Suspense>,
+    );
+
+    // 服务端把 a 跑完；同一时刻一次试图把 a=ready 画上界面的渲染被挂起（未提交）
+    serverRows = [project("b", "generating"), project("a", "ready")];
+    suspend = true;
+    await act(async () => {
+      startTransition(() => {
+        view.rerender(
+          <Suspense fallback={null}>
+            <Probe projects={[project("b", "generating"), project("a", "ready")]} />
+          </Suspense>,
+        );
+      });
+    });
+
+    // 轮询观测到真落地：seen 里 a 必须仍是 generating → 跃迁成立 → 回填发生。
+    // 若 seen 被挂起渲染污染成 ready，这里会 ready→ready 漏检、loadBatch 不被调用。
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2500);
+    });
+    expect(loadBatch).toHaveBeenCalledTimes(1);
+    view.unmount();
   });
 });
