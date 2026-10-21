@@ -94,11 +94,6 @@ const probe = vi.hoisted(() => ({
   shell: null as ShellProbeProps | null,
 }));
 
-vi.mock("../../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../api")>()),
-  ...api,
-}));
-
 vi.mock("../../novelApi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../novelApi")>()),
   ...api,

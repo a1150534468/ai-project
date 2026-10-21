@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { analyzeNovelChapter, generateNovelChapter, generateNovelSetup, getNovelProject, getNovelWorkbench, rewriteNovelChapterSelection, saveNovelChapter, saveNovelChapterReview } from "./novelApi";
 
 /**
- * 小说接口本身住在 `novelApi.ts`，这里刻意从 `./api` 门面 import —— 68 个调用方走的是
- * 这条路，`export *` 哪天漏了一个名字，得由这个文件先红。
+ * 小说接口的请求形状测试：直接对 `novelApi.ts` 本体断言（api.ts 的 `export *`
+ * 门面桥已拆除、调用方全部直连域文件，不再需要门面兼容性守卫）。
  */
 
 const AT = "2026-07-01T08:00:00.000Z";

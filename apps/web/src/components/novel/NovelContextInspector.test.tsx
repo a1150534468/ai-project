@@ -11,11 +11,6 @@ const api = vi.hoisted(() => ({
   listNovelStorylines: vi.fn(),
 }));
 
-vi.mock("../../api", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../../api")>(),
-  ...api,
-}));
-
 vi.mock("../../novelApi", async (importOriginal) => ({
   ...await importOriginal<typeof import("../../novelApi")>(),
   ...api,
