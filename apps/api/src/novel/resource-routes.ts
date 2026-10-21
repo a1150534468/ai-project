@@ -4,6 +4,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { completedNovelChapterCount } from "@ai-assistant/novel-workflow";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { paginate, type PaginateResult } from "@ai-assistant/db/paginate";
 import { buildCheckpointBranchSnapshot, buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChapters, resolveCheckpointChaptersDetailed, restoreNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
 import { syncNovelSetupAssets } from "./structured-sync.js";
 import { requireUser } from "../auth/require-user.js";
@@ -163,6 +164,42 @@ async function hasActiveNovelRun(prisma: PrismaClient, projectId: string): Promi
     where: { projectId, status: { in: ["queued", "planning", "writing", "validating", "postprocessing", "awaitingReview", "paused", "failed"] } },
     select: { id: true },
   }));
+}
+
+const CHECKPOINT_CHAPTER_SELECT = {
+  chapterIndex: true, volumeIndex: true, title: true, summary: true, outline: true, generationHint: true,
+  executionPlan: true, microBeats: true, content: true, rawContent: true, openThreads: true,
+  contextSnapshot: true, generationMeta: true, consistencyJson: true, status: true, reviewStatus: true,
+  reviewNotes: true, aiReview: true, aiActionItems: true, modificationRate: true, billableChars: true,
+  tensionScore: true, plotTension: true, emotionalTension: true, pacingTension: true, qualityScore: true,
+} as const;
+
+/**
+ * 检查点捕获要读整本书（// unbounded: 快照语义要求全量），但单次查询仍要有界：
+ * 经 paginate 游标分批（每批 200 章）累积，避免一本书一口气全量进内存的查询峰值。
+ * 分页要借 id 做游标，累积后把 id 剥掉——快照行的形状与改动前逐字一致。
+ */
+async function readChaptersForCheckpointSnapshot(
+  prisma: PrismaClient,
+  projectId: string,
+): Promise<Record<string, unknown>[]> {
+  const chapters: Record<string, unknown>[] = [];
+  let cursor: string | null = null;
+  do {
+    const page: PaginateResult<{ id: string; [key: string]: unknown }> = await paginate(prisma.novelChapter, {
+      where: { projectId },
+      orderBy: { chapterIndex: "asc" },
+      select: { id: true, ...CHECKPOINT_CHAPTER_SELECT },
+      take: 200,
+      cursor,
+    });
+    for (const row of page.rows) {
+      const { id: _cursorOnly, ...snapshotRow } = row as unknown as Record<string, unknown>;
+      chapters.push(snapshotRow);
+    }
+    cursor = page.nextCursor;
+  } while (cursor);
+  return chapters;
 }
 
 async function restoreCheckpointSnapshot(args: {
@@ -730,7 +767,21 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     // 显式 select，不带 snapshot：列表页只显示「第几章、什么标签、哪条世界线」，
     // 而 snapshot 里是整本书的正文（100 条 × 整本 ≈ ADR-011 那次 31.6 MB 事故的同形状）。
     // 回滚/分支都是自己按 id 查 checkpoint，不依赖这个列表。
-    return { success: true, data: { checkpoints: await prisma.novelCheckpoint.findMany({ where: { projectId: parsed.data.projectId }, orderBy: { createdAt: "desc" }, take: 100, select: { id: true, label: true, chapterNumber: true, branchName: true, isHead: true, parentId: true, createdAt: true } }) } };
+    const { rows: checkpoints } = await paginate<{
+      id: string;
+      label: string;
+      chapterNumber: number | null;
+      branchName: string;
+      isHead: boolean;
+      parentId: string | null;
+      createdAt: Date;
+    }>(prisma.novelCheckpoint, {
+      where: { projectId: parsed.data.projectId },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+      select: { id: true, label: true, chapterNumber: true, branchName: true, isHead: true, parentId: true, createdAt: true },
+    });
+    return { success: true, data: { checkpoints } };
   });
 
   app.post("/api/workflow/novels/projects/:projectId/checkpoints", async (req, reply) => {
@@ -742,7 +793,7 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     const branchName = body.data.branchName ?? project.currentBranch ?? "main";
     const [chapters, structured] = await Promise.all([
-      prisma.novelChapter.findMany({ where: { projectId: project.id }, orderBy: { chapterIndex: "asc" }, select: { chapterIndex: true, volumeIndex: true, title: true, summary: true, outline: true, generationHint: true, executionPlan: true, microBeats: true, content: true, rawContent: true, openThreads: true, contextSnapshot: true, generationMeta: true, consistencyJson: true, status: true, reviewStatus: true, reviewNotes: true, aiReview: true, aiActionItems: true, modificationRate: true, billableChars: true, tensionScore: true, plotTension: true, emotionalTension: true, pacingTension: true, qualityScore: true } }),
+      readChaptersForCheckpointSnapshot(prisma, project.id),
       captureNovelStructuredSnapshot(prisma, project.id),
     ]);
     const checkpoint = await prisma.$transaction(async (tx) => {
@@ -753,11 +804,11 @@ export async function registerNovelResourceRoutes(app: FastifyInstance, options:
       const parentResolved = parent ? await resolveCheckpointChaptersDetailed(tx, parent) : null;
       const snapshot = buildCheckpointSnapshot({
         project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
-        chapters: chapters as unknown as Record<string, unknown>[],
+        chapters,
         structured,
         parent: parentResolved,
       });
-      return tx.novelCheckpoint.create({ data: { projectId: project.id, branchName, parentId: parent?.id ?? null, chapterNumber: chapters.at(-1)?.chapterIndex ?? null, label: body.data.label, snapshot: json(snapshot), isHead: true } });
+      return tx.novelCheckpoint.create({ data: { projectId: project.id, branchName, parentId: parent?.id ?? null, chapterNumber: snapshotNumber(chapters.at(-1)?.chapterIndex) || null, label: body.data.label, snapshot: json(snapshot), isHead: true } });
     });
     return reply.code(201).send({ success: true, data: { checkpoint } });
   });
