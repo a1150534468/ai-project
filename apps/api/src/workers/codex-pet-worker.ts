@@ -17,7 +17,7 @@
 import { assertRequiredEnv } from "../env.js";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "@ai-assistant/db";
-import { getObject, makeS3 } from "../storage/s3.js";
+import { getObject, getS3 } from "../storage/s3.js";
 import {
   closeCodexPetCleanupQueue,
   createCodexPetCleanupWorker,
@@ -109,7 +109,7 @@ export async function startCodexPetWorker(options: {
   } else {
     console.info("[codex-pet-worker] visual QA preflight skipped; no quality-enabled Codex pet run is active");
   }
-  const s3 = makeS3();
+  const s3 = getS3();
   const artifacts = createCodexPetArtifactStore({ prisma, s3 });
   const metrics = createCodexPetWorkerMetrics();
   await refreshDatabaseGauges(prisma, metrics);

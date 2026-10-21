@@ -9,7 +9,7 @@ import {
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, getS3 } from "../../storage/s3.js";
 import { normalizeArticleWorkflowCreationSource } from "./article-workflow-creation.js";
 import { renderDeterministicArticleBodyHtmlGuarded } from "./article-workflow-deterministic.js";
 import {
@@ -62,7 +62,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
   const fetchFn = deps.fetchFn ?? fetch;
   const env = deps.env ?? process.env;
   const scheduleTask = deps.scheduleTask ?? scheduledRunner(app);
-  const loadImageBlob = deps.loadImageBlob ?? ((objectKey: string) => getObject(makeS3(loadS3Config(env)), objectKey));
+  const loadImageBlob = deps.loadImageBlob ?? ((objectKey: string) => getObject(getS3(env), objectKey));
   const model = env.ARTICLE_WORKFLOW_MODEL?.trim() || env.LLM_DEFAULT_MODEL?.trim() || DEFAULT_ARTICLE_MODEL;
 
   registerArticleWorkflowReadRoutes(app, { prisma, env, loadImageBlob });

@@ -3,13 +3,7 @@ import { Prisma, type CodexPetArtifact, type PrismaClient } from "@prisma/client
 import { createHash, randomUUID } from "node:crypto";
 import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 import { basename } from "node:path";
-import {
-  deleteObject,
-  getObject,
-  makeS3,
-  putObject,
-  type S3,
-} from "../../storage/s3.js";
+import { deleteObject, getObject, putObject, type S3, getS3 } from "../../storage/s3.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 
 export const CODEX_PET_ARTIFACT_PREFIX = "workflow/codex-pets";
@@ -168,7 +162,7 @@ export async function putCodexPetArtifact(args: {
     actualWidth = raster.width;
     actualHeight = raster.height;
   }
-  const s3 = args.s3 ?? makeS3();
+  const s3 = args.s3 ?? getS3();
   const id = randomUUID();
   const filename = safeArtifactFilename(args.name, args.mime);
   const objectKey = `${codexPetArtifactPrefix(args)}${id}/${filename}`;
@@ -228,13 +222,13 @@ export function createCodexPetArtifactStore(args: {
       s3: args.s3,
       metadata: (input.metadata ?? {}) as Prisma.InputJsonObject,
     }),
-    load: (artifact: Pick<CodexPetArtifact, "objectKey"> | string) => loadCodexPetArtifact(artifact, args.s3 ?? makeS3()),
+    load: (artifact: Pick<CodexPetArtifact, "objectKey"> | string) => loadCodexPetArtifact(artifact, args.s3 ?? getS3()),
   };
 }
 
 export async function loadCodexPetArtifact(
   artifactOrObjectKey: Pick<CodexPetArtifact, "objectKey"> | string,
-  s3: S3 = makeS3(),
+  s3: S3 = getS3(),
 ): Promise<Buffer> {
   const objectKey = typeof artifactOrObjectKey === "string" ? artifactOrObjectKey : artifactOrObjectKey.objectKey;
   if (!isCodexPetArtifactObjectKey(objectKey)) throw new Error("invalid Codex pet artifact object key");
@@ -253,7 +247,7 @@ export async function deleteCodexPetArtifact(args: {
   });
   if (!artifact) return false;
   if (!isCodexPetArtifactObjectKeyFor(artifact)) throw new Error("invalid Codex pet artifact ownership or object key");
-  await deleteObject(args.s3 ?? makeS3(), artifact.objectKey);
+  await deleteObject(args.s3 ?? getS3(), artifact.objectKey);
   await args.prisma.codexPetArtifact.delete({ where: { id: artifact.id } });
   return true;
 }
@@ -268,7 +262,7 @@ export async function deleteCodexPetProjectArtifacts(args: {
     where: { projectId: args.projectId, userId: args.userId },
     select: { id: true, objectKey: true, userId: true, projectId: true, runId: true },
   });
-  const s3 = args.s3 ?? makeS3();
+  const s3 = args.s3 ?? getS3();
   const deletedIds: string[] = [];
   const errors: unknown[] = [];
   for (const artifact of artifacts) {

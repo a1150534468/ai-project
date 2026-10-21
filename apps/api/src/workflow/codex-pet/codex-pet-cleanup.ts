@@ -1,6 +1,6 @@
 import { Queue, Worker, type Processor } from "bullmq";
 import type { PrismaClient } from "@prisma/client";
-import { deleteObject, makeS3, type S3 } from "../../storage/s3.js";
+import { deleteObject, type S3, getS3 } from "../../storage/s3.js";
 import { codexPetBullConnection } from "./codex-pet-queue.js";
 import { isCodexPetArtifactObjectKeyFor } from "./codex-pet-storage.js";
 
@@ -103,7 +103,7 @@ export async function executeCodexPetProjectCleanup(args: {
     return [...new Map(refs.map((ref) => [ref.objectKey, ref])).values()];
   };
   const deleteObjectRefs = async (refs: readonly CodexPetCleanupObjectRef[]) => {
-    const s3 = args.s3 ?? makeS3();
+    const s3 = args.s3 ?? getS3();
     for (const ref of refs) await deleteObject(s3, ref.objectKey);
   };
 

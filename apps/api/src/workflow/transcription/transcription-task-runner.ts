@@ -12,7 +12,7 @@ import type { PrismaClient } from "@prisma/client";
 import { envInt } from "../../runtime/env.js";
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { publicObjectUrl } from "../../storage/public-url.js";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, loadS3Config, getS3 } from "../../storage/s3.js";
 import {
   downloadTranscriptionResult,
   isPubliclyReachableUrl,
@@ -127,7 +127,7 @@ async function resolveAudioFileUrl(args: {
   const publicUrl = publicObjectUrl(s3Config, args.task.audioObjectKey);
   if (isPubliclyReachableUrl(publicUrl)) return publicUrl;
 
-  const bytes = await getObject(makeS3(s3Config), args.task.audioObjectKey);
+  const bytes = await getObject(getS3(), args.task.audioObjectKey);
   return uploadToDashScopeTempStorage({
     config: args.cfg.asr,
     bytes,

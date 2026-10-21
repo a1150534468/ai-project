@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => {
     store: vi.fn(async (_db: unknown, _s3: unknown, _kbId: string, _userId: string, _request: UploadAdapter) => ({
       docId: "doc-new",
     })),
-    makeS3: vi.fn(() => ({ name: "test-s3" })),
+    getS3: vi.fn(() => ({ name: "test-s3" })),
     deleteObject: vi.fn(async () => undefined),
     buildIndexDeps: vi.fn(async () => ({ name: "index-deps" })),
     indexOnce: vi.fn(async () => undefined),
@@ -47,7 +47,7 @@ vi.mock("./service.js", () => ({
   assertKbReadable: mocks.assertReadable,
   deleteKbDocument: mocks.removeDocument,
 }));
-vi.mock("../storage/s3.js", () => ({ makeS3: mocks.makeS3, deleteObject: mocks.deleteObject }));
+vi.mock("../storage/s3.js", () => ({ getS3: mocks.getS3, deleteObject: mocks.deleteObject }));
 vi.mock("./deps.js", () => ({ buildIndexDeps: mocks.buildIndexDeps }));
 vi.mock("./indexer.js", () => ({ indexOnce: mocks.indexOnce }));
 vi.mock("./ingest.js", () => {
@@ -101,7 +101,7 @@ beforeEach(() => {
   mocks.assertReadable.mockResolvedValue({ id: "kb", ownerType: "USER" });
   mocks.removeDocument.mockResolvedValue({ sourceType: "TEXT", sourceUri: "kb/kb/doc/source.txt" });
   mocks.store.mockResolvedValue({ docId: "doc-new" });
-  mocks.makeS3.mockReturnValue({ name: "test-s3" });
+  mocks.getS3.mockReturnValue({ name: "test-s3" });
   mocks.deleteObject.mockResolvedValue(undefined);
   mocks.buildIndexDeps.mockResolvedValue({ name: "index-deps" });
   mocks.indexOnce.mockResolvedValue(undefined);
@@ -133,7 +133,7 @@ describe("知识库 CRUD", () => {
     const response = await inject({ method: "GET", url: "/api/kb", headers: authHeader });
     expect(response.json()).toEqual([{ id: "mine" }, { id: "official" }]);
     expect(mocks.list).toHaveBeenCalledWith(mocks.prisma, "user-1");
-    expect(mocks.makeS3).not.toHaveBeenCalled();
+    expect(mocks.getS3).not.toHaveBeenCalled();
   });
 
   it("POST 用 Zod 拒绝空名和过长描述", async () => {
@@ -198,7 +198,7 @@ describe("知识库 CRUD", () => {
     const removed = await inject({ method: "DELETE", url: "/api/kb/kb-1", headers: authHeader });
     expect(removed.statusCode).toBe(204);
     expect(mocks.remove).toHaveBeenLastCalledWith(mocks.prisma, { name: "test-s3" }, "kb-1", "user-1");
-    expect(mocks.makeS3).toHaveBeenCalledTimes(2);
+    expect(mocks.getS3).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -269,7 +269,7 @@ describe("文档删除", () => {
     mocks.removeDocument.mockResolvedValueOnce(null);
     const missing = await inject({ method: "DELETE", url: "/api/kb/kb/documents/doc", headers: authHeader });
     expect(missing.statusCode).toBe(404);
-    expect(mocks.makeS3).not.toHaveBeenCalled();
+    expect(mocks.getS3).not.toHaveBeenCalled();
     expect(mocks.deleteObject).not.toHaveBeenCalled();
   });
 
@@ -293,7 +293,7 @@ describe("文档删除", () => {
     mocks.removeDocument.mockResolvedValueOnce({ sourceType: "URL", sourceUri: "https://example.test/doc" });
     const response = await inject({ method: "DELETE", url: "/api/kb/kb/documents/doc", headers: authHeader });
     expect(response.statusCode).toBe(204);
-    expect(mocks.makeS3).not.toHaveBeenCalled();
+    expect(mocks.getS3).not.toHaveBeenCalled();
   });
 });
 
@@ -307,7 +307,7 @@ describe("文档入库", () => {
       payload: { text: "hello" },
     });
     expect(response.statusCode).toBe(403);
-    expect(mocks.makeS3).not.toHaveBeenCalled();
+    expect(mocks.getS3).not.toHaveBeenCalled();
     expect(mocks.store).not.toHaveBeenCalled();
   });
 

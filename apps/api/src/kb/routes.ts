@@ -2,7 +2,7 @@ import { getPrisma } from "@ai-assistant/db";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { requireUser } from "../auth/require-user.js";
-import { deleteObject, makeS3 } from "../storage/s3.js";
+import { deleteObject, getS3 } from "../storage/s3.js";
 import { buildIndexDeps } from "./deps.js";
 import { IngestError, storeAndCreateDocument } from "./ingest.js";
 import { indexOnce } from "./indexer.js";
@@ -44,8 +44,6 @@ const storedObject = (doc: { sourceType: string; sourceUri: string | null }) =>
 export async function kbRoutes(app: FastifyInstance) {
   app.addHook("preHandler", requireUser);
   const prisma = getPrisma();
-  let s3: ReturnType<typeof makeS3> | null = null;
-  const getS3 = () => (s3 ??= makeS3());
 
   app.get("/api/kb", async (req, reply) => reply.send(await listKbsForUser(prisma, req.userId)));
 

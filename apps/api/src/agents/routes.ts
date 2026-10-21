@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { requireUser } from "../auth/require-user.js";
-import { deleteObject, loadS3Config, makeS3, putObject } from "../storage/s3.js";
+import { deleteObject, putObject, getS3 } from "../storage/s3.js";
 import { AVATAR_MIME, AvatarImageError, normalizeAvatarImage } from "./image.js";
 import { consumeAvatarQuota } from "./ratelimit.js";
 import {
@@ -51,7 +51,7 @@ export async function agentRoutes(app: FastifyInstance, opts: AgentRoutesOpts = 
   let cachedStorage: AvatarStorage | null = null;
 
   function defaultStorage(): AvatarStorage {
-    const s3 = makeS3(loadS3Config());
+    const s3 = getS3();
     return {
       // public-read：头像要能被 <img> 直接引用，签名 URL 会过期。
       put: (key, body, mime) => putObject(s3, key, body, mime, { acl: "public-read" }),

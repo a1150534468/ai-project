@@ -20,7 +20,7 @@ import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { DEFAULT_IMAGE_MODEL } from "../_shared/image-service-constants.js";
 import { loadImageGenerationConfigForModel } from "../_shared/image-service-providers.js";
 import { storeWorkflowImage } from "../_shared/image-service-storage.js";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, getS3 } from "../../storage/s3.js";
 import type { GeneratedImage } from "../_shared/image-service-types.js";
 import {
   buildBaseCharacterPrompt,
@@ -186,7 +186,7 @@ async function resolveBaseImage(args: {
   const { prisma, pack, executionToken, fetchFn, env, signal, maxAttempts } = args;
   // 1) 用户上传的参考图
   if (pack.referenceObjectKey) {
-    const s3 = makeS3(loadS3Config(env));
+    const s3 = getS3(env);
     const buffer = await getObject(s3, pack.referenceObjectKey);
     return { buffer, mime: sniffImageMime(buffer) };
   }
