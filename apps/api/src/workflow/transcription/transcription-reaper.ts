@@ -8,6 +8,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
 import {
   loadTranscriptionStaleTaskMs,
   TRANSCRIPTION_TASK_STATUS,
@@ -47,16 +48,11 @@ export function startTranscriptionReaper(args: {
   readonly env?: NodeJS.ProcessEnv;
   readonly onError?: (error: unknown) => void;
 }): NodeJS.Timeout {
-  const tick = async () => {
-    const got = await args.redis.set(TRANSCRIPTION_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);
-    if (got !== "OK") return;
-    try {
-      await scanStaleTranscriptionTasks(args);
-    } catch (error) {
-      args.onError?.(error);
-    }
-  };
-  const timer = setInterval(() => void tick(), TRANSCRIPTION_REAPER_INTERVAL_MS);
-  timer.unref();
-  return timer;
+  return createStaleScanner({
+    lockKey: TRANSCRIPTION_REAPER_LOCK_KEY,
+    redis: args.redis,
+    intervalMs: TRANSCRIPTION_REAPER_INTERVAL_MS,
+    scan: () => scanStaleTranscriptionTasks(args),
+    onError: args.onError,
+  }).start();
 }

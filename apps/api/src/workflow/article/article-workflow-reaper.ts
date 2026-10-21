@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
 import { articleProjectStaleMs } from "./article-workflow-shared.js";
 
 export const ARTICLE_REAPER_LOCK_KEY = "ai-assistant:article-workflow:reaper:lock";
@@ -47,16 +48,11 @@ export function startArticleWorkflowReaper(args: {
   readonly redis: Redis;
   readonly env?: NodeJS.ProcessEnv;
 }): NodeJS.Timeout {
-  const tick = async () => {
-    const got = await args.redis.set(ARTICLE_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);
-    if (got !== "OK") return;
-    try {
-      await reapStaleArticleWorkflowProjects(args);
-    } catch {
-      // 留给下一轮重试
-    }
-  };
-  const timer = setInterval(() => void tick(), ARTICLE_REAPER_INTERVAL_MS);
-  timer.unref();
-  return timer;
+  // 扫描失败不传 onError：scanner 吞掉这一轮，留给下一轮重试（原有语义）
+  return createStaleScanner({
+    lockKey: ARTICLE_REAPER_LOCK_KEY,
+    redis: args.redis,
+    intervalMs: ARTICLE_REAPER_INTERVAL_MS,
+    scan: () => reapStaleArticleWorkflowProjects(args),
+  }).start();
 }

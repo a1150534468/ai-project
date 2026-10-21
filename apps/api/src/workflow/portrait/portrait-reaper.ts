@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
 import {
   PORTRAIT_ACTIVE_STATUSES,
   PORTRAIT_TERMINAL_STATUSES,
@@ -118,17 +119,14 @@ export function startPortraitReaper(args: {
   readonly env?: NodeJS.ProcessEnv;
   readonly onError?: (error: unknown) => void;
 }): NodeJS.Timeout {
-  const tick = async () => {
-    const got = await args.redis.set(PORTRAIT_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);
-    if (got !== "OK") return;
-    try {
+  return createStaleScanner({
+    lockKey: PORTRAIT_REAPER_LOCK_KEY,
+    redis: args.redis,
+    intervalMs: PORTRAIT_REAPER_INTERVAL_MS,
+    scan: async () => {
       await scanStalePortraitTasks(args);
       await reconcileStalePortraitBilling(args);
-    } catch (error) {
-      args.onError?.(error);
-    }
-  };
-  const timer = setInterval(() => void tick(), PORTRAIT_REAPER_INTERVAL_MS);
-  timer.unref();
-  return timer;
+    },
+    onError: args.onError,
+  }).start();
 }

@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
 import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
@@ -664,10 +665,11 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
   void cleanupExpiredReferences(prisma, deleteStoredImage).catch(() => undefined);
 
   const reaperTimer = deps.redis
-    ? setInterval(() => {
-        void (async () => {
-          const got = await deps.redis!.set(TRY_ON_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);
-          if (got !== "OK") return;
+    ? createStaleScanner({
+        lockKey: TRY_ON_REAPER_LOCK_KEY,
+        redis: deps.redis,
+        intervalMs: TRY_ON_REAPER_INTERVAL_MS,
+        scan: async () => {
           const threshold = new Date(Date.now() - portraitTaskStaleMs());
           const [active, unsettled] = await Promise.all([
             prisma.tryOnTask.findMany({
@@ -688,10 +690,10 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
           await recover(active as unknown as TryOnTaskRow[]);
           for (const task of unsettled as unknown as TryOnTaskRow[])
             await settleBilling(prisma, billing, task, task.completedCount).catch(() => undefined);
-        })().catch((error) => app.log.warn({ error: safeErrorMessage(error) }, "try-on reaper tick failed"));
-      }, TRY_ON_REAPER_INTERVAL_MS)
+        },
+        onError: (error) => app.log.warn({ error: safeErrorMessage(error) }, "try-on reaper tick failed"),
+      }).start()
     : undefined;
-  reaperTimer?.unref?.();
 
   app.addHook("onClose", async () => {
     clearInterval(cleanupTimer);
