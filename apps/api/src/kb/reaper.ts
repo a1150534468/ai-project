@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import { indexOnce, type IndexDeps } from "./indexer.js";
+import { kbBatchSize, kbFailureText, kbLeaseMs, kbMaxAttempts, kbReaperIntervalMs } from "./strategy.js";
 
 export interface ReaperOpts {
   intervalMs?: number;
@@ -17,21 +18,10 @@ type ReapOptions = {
   shouldStop?: () => boolean;
 };
 
-const DEFAULT_INTERVAL_MS = 30_000;
-const DEFAULT_LEASE_MS = 300_000;
-const DEFAULT_MAX_ATTEMPTS = 3;
-const DEFAULT_BATCH_SIZE = 20;
-
-function positiveInteger(value: number | undefined, fallback: number): number {
-  return Number.isSafeInteger(value) && (value ?? 0) > 0 ? value! : fallback;
-}
-
-function envInteger(name: string, fallback: number): number {
-  return positiveInteger(Number(process.env[name]), fallback);
-}
-
-function failureText(error: unknown): string {
-  return error instanceof Error ? error.message : typeof error === "string" ? error : "Unknown error";
+// 默认值与 env 解析全部在 ./strategy.ts —— reaper 与 indexer 共用同一份，
+// 否则「改一处不改另一处」会以不报错的方式 desync。
+export function failureText(error: unknown): string {
+  return kbFailureText(error);
 }
 
 /**
@@ -83,10 +73,10 @@ export async function reapOnce(prisma: PrismaClient, options: ReapOptions): Prom
 }
 
 export function startKbReaper(deps: IndexDeps, options: ReaperOpts = {}): { stop: () => void } {
-  const intervalMs = positiveInteger(options.intervalMs, envInteger("KB_REAPER_INTERVAL_MS", DEFAULT_INTERVAL_MS));
-  const leaseMs = positiveInteger(options.leaseMs, envInteger("KB_INDEX_LEASE_MS", DEFAULT_LEASE_MS));
-  const maxAttempts = positiveInteger(options.maxAttempts, envInteger("KB_MAX_ATTEMPTS", DEFAULT_MAX_ATTEMPTS));
-  const batchSize = positiveInteger(options.batchSize, DEFAULT_BATCH_SIZE);
+  const intervalMs = kbReaperIntervalMs(options);
+  const leaseMs = kbLeaseMs(options);
+  const maxAttempts = kbMaxAttempts(options);
+  const batchSize = kbBatchSize(options);
   const runIndex = options.runIndex ?? ((docId) => indexOnce(deps, docId, { maxAttempts, leaseMs }));
 
   let stopped = false;

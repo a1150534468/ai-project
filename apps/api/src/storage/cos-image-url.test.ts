@@ -1,6 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createImageUrlSigner } from "./cos-image-url.js";
+import type { ImageUrlSignResult } from "./cos-image-url.js";
 
 const env = {
   WORKFLOW_IMAGE_DELIVERY: "cos",
@@ -22,13 +23,13 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("COS private image URL signing (no cloud requests)", () => {
   it("defaults to proxy without needing any storage configuration", async () => {
-    expect(await createImageUrlSigner({})(request)).toBeNull();
-    expect(await createImageUrlSigner({ WORKFLOW_IMAGE_DELIVERY: "proxy" })(request)).toBeNull();
+    expect(await createImageUrlSigner({})(request)).toEqual({ kind: "unsigned", reason: "delivery-disabled" });
+    expect(await createImageUrlSigner({ WORKFLOW_IMAGE_DELIVERY: "proxy" })(request)).toEqual({ kind: "unsigned", reason: "delivery-disabled" });
   });
 
   it("signs GET, the exact encoded key, host and response headers using the official SDK", async () => {
     vi.spyOn(Date, "now").mockReturnValue(now);
-    const url = new URL((await createImageUrlSigner(env)(request))!);
+    const url = new URL(await signedUrlOf(createImageUrlSigner(env)(request)));
     expect(url.protocol).toBe("https:");
     expect(url.hostname).toBe("test-images-1234567890.cos.ap-guangzhou.myqcloud.com");
     expect(decodeURIComponent(url.pathname)).toBe(`/${request.objectKey}`);
@@ -58,7 +59,7 @@ describe("COS private image URL signing (no cloud requests)", () => {
 
   it("caps the grant to the remaining application URL lifetime", async () => {
     vi.spyOn(Date, "now").mockReturnValue(now);
-    const url = new URL((await createImageUrlSigner(env)({ ...request, expiresAt: now + 12_500 }))!);
+    const url = new URL(await signedUrlOf(createImageUrlSigner(env)({ ...request, expiresAt: now + 12_500 })));
     const [start, end] = url.searchParams.get("q-sign-time")!.split(";").map(Number);
     expect(end! - start!).toBe(12);
     expect(end! * 1000).toBeLessThanOrEqual(now + 12_500);
@@ -69,7 +70,7 @@ describe("COS private image URL signing (no cloud requests)", () => {
   // URL for an object that does not exist.
   it("signs the environment folder into both the path and the signature", async () => {
     vi.spyOn(Date, "now").mockReturnValue(now);
-    const url = new URL((await createImageUrlSigner({ ...env, S3_KEY_PREFIX: "dev" })(request))!);
+    const url = new URL(await signedUrlOf(createImageUrlSigner({ ...env, S3_KEY_PREFIX: "dev" })(request)));
     const physicalKey = `dev/${request.objectKey}`;
     expect(decodeURIComponent(url.pathname)).toBe(`/${physicalKey}`);
 
@@ -120,7 +121,7 @@ describe("COS private image URL signing (no cloud requests)", () => {
       S3_PUBLIC_BASE_URL: "https://cdn.example.com",
       IMAGE_S3_PUBLIC_BASE_URL: "https://images.example.com",
     });
-    expect(new URL((await sign(request))!).hostname).toBe(`${env.S3_BUCKET}.cos.ap-guangzhou.myqcloud.com`);
+    expect(new URL(await signedUrlOf(sign(request))).hostname).toBe(`${env.S3_BUCKET}.cos.ap-guangzhou.myqcloud.com`);
   });
 
   it("fails on unknown delivery mode or missing credentials", () => {
@@ -139,15 +140,47 @@ describe("COS private image URL signing (no cloud requests)", () => {
   it("preserves legitimate content type parameters from existing stored images", async () => {
     vi.spyOn(Date, "now").mockReturnValue(now);
     const mime = "image/png; charset=utf-8";
-    const url = new URL((await createImageUrlSigner(env)({ ...request, mime }))!);
+    const url = new URL(await signedUrlOf(createImageUrlSigner(env)({ ...request, mime })));
     expect(url.searchParams.get("response-content-type")).toBe(mime);
   });
 
   it("keeps percent-encoded dot-like names as literal object key characters", async () => {
     vi.spyOn(Date, "now").mockReturnValue(now);
     const objectKey = "workflow/images/u1/run/%2e%2e/file.png";
-    const url = new URL((await createImageUrlSigner(env)({ ...request, objectKey }))!);
+    const url = new URL(await signedUrlOf(createImageUrlSigner(env)({ ...request, objectKey })));
     expect(url.pathname).toContain("%252e%252e");
     expect(decodeURIComponent(url.pathname)).toBe(`/${objectKey}`);
   });
 });
+
+describe("SignedImageRequest.userId（类型准备，尚未参与签名）", () => {
+  it("不传 userId 时签名结果与加字段之前逐字节相同", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const withoutField = await createImageUrlSigner(env)(request);
+    const withUndefined = await createImageUrlSigner(env)({ ...request, userId: undefined });
+
+    expect(withUndefined).toEqual(withoutField);
+  });
+
+  /**
+   * 这条断言钉的是**现状**：userId 只是类型上的占位，不进签名 payload。
+   * 真正的「转发后吊销」要改 payload，会影响所有已签发的 URL，必须单独确认后再做
+   * ——所以先把它写成可执行的现状说明，避免有人误以为传了 userId 就已经能吊销。
+   */
+  it("传了 userId 也不改变 URL（吊销能力尚未接线）", async () => {
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    const sign = createImageUrlSigner(env);
+
+    const plain = await signedUrlOf(sign(request));
+    const withUser = await signedUrlOf(sign({ ...request, userId: "u1" }));
+
+    expect(withUser).toBe(plain);
+  });
+});
+
+/** 拆开显式判定后再取 URL：kind 不是 signed 就炸，避免测试里出现 `!` 把两种 null 混为一谈。 */
+async function signedUrlOf(result: Promise<ImageUrlSignResult>): Promise<string> {
+  const resolved = await result;
+  if (resolved.kind !== "signed") throw new Error(`expected a signed URL, got ${resolved.reason}`);
+  return resolved.url;
+}

@@ -11,7 +11,8 @@
 import { useEffect, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { useAuthGate } from "../../app/authGate";
-import { listKb, listModels, type ChatAttachmentPayload, type KnowledgeBase } from "../../api";
+import { listKb, type KnowledgeBase } from "../../kbApi";
+import { listModels, type ChatAttachmentPayload } from "../../api";
 import { filesToChatAttachments, stripAttachmentForApi, type ChatAttachment } from "../../chatAttachments";
 import { pickInitialModel } from "../../chatState";
 

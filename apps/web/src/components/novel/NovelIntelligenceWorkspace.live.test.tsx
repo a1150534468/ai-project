@@ -22,7 +22,7 @@ const api = vi.hoisted(() => ({
   updateNovelResource: vi.fn(),
 }));
 
-vi.mock("../../api", () => api);
+vi.mock("../../novelApi", () => api);
 vi.mock("@iconify/react", () => ({ Icon: ({ icon }: { readonly icon: string }) => <span data-icon={icon} /> }));
 
 describe("NovelIntelligenceWorkspace continuity backfill", () => {

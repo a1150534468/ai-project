@@ -17,7 +17,7 @@ out
 .codex/
 # Go binaries
 /services/billing/billing
-infra/k8s/secrets.env
+docs/legacy/k8s/secrets.env
 # docs 全部入库（P1.4 Step 3），仅忽略 macOS 系统文件
 docs/.DS_Store
 docs/**/.DS_Store

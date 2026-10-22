@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import type { NovelPipelineStepKind, NovelRunMode } from "@ai-assistant/novel-workflow/contracts";
 import { pipelineForMode } from "@ai-assistant/novel-workflow/server";
+import { engineStepOutboxFields } from "./outbox.js";
 
 function json(value: Record<string, unknown>): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
@@ -56,8 +57,7 @@ export async function createNovelRun(args: {
   readonly autoReview: boolean;
   readonly input?: Record<string, unknown>;
 }) {
-  const includePlanning = false;
-  const firstKind = pipelineForMode(args.mode, includePlanning)[0]!;
+  const firstKind = pipelineForMode()[0]!;
   return args.prisma.$transaction(async (tx) => {
     const run = await tx.novelRun.create({
       data: {
@@ -84,12 +84,14 @@ export async function createNovelRun(args: {
         input: json(args.input ?? {}),
       },
     });
+    const outboxFields = engineStepOutboxFields(step.id);
     await tx.novelCommandOutbox.create({
       data: {
         projectId: args.projectId,
         runId: run.id,
         stepId: step.id,
-        payload: json({ type: "engine-step", stepId: step.id }),
+        kind: outboxFields.kind,
+        payload: json(outboxFields.payload),
         priority: step.priority,
       },
     });
@@ -133,12 +135,14 @@ export async function createNextNovelStep(args: {
         input: json(args.input ?? {}),
       },
     });
+    const outboxFields = engineStepOutboxFields(step.id);
     await tx.novelCommandOutbox.create({
       data: {
         projectId: run.projectId,
         runId: run.id,
         stepId: step.id,
-        payload: json({ type: "engine-step", stepId: step.id }),
+        kind: outboxFields.kind,
+        payload: json(outboxFields.payload),
         priority: args.priority,
       },
     });

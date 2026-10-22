@@ -10,7 +10,9 @@ const api = vi.hoisted(() => ({
   deleteArticleWorkflowProject: vi.fn(),
   generateArticleWorkflowImages: vi.fn(),
   getArticleWorkflowBatch: vi.fn(),
+  getArticleWorkflowBatchStatus: vi.fn(),
   getArticleWorkflowProject: vi.fn(),
+  getArticleWorkflowProjectStatus: vi.fn(),
   listArticleWorkflowHistory: vi.fn(),
   regenerateArticleWorkflowImage: vi.fn(),
   retryArticleWorkflowProject: vi.fn(),
@@ -74,6 +76,14 @@ function enterEditMode() {
 beforeEach(() => {
   api.deleteArticleWorkflowProject.mockResolvedValue({ deleted: 1, batchId: "batch-1" });
   api.listArticleWorkflowHistory.mockResolvedValue([]);
+  // 轮询走轻量状态端点：默认一直 busy，让轮询在这些用例里保持安静（不落地、不刷历史）
+  api.getArticleWorkflowBatchStatus.mockResolvedValue({
+    batchId: "batch-1",
+    projects: [{ id: "article-1", platform: "xiaohongshu", status: "generating", error: null, updatedAt: "2026-08-20T06:00:00.000Z" }],
+  });
+  api.getArticleWorkflowProjectStatus.mockResolvedValue(
+    { id: "article-1", platform: "xiaohongshu", status: "generating", error: null, updatedAt: "2026-08-20T06:00:00.000Z" },
+  );
 });
 
 afterEach(() => {

@@ -9,7 +9,7 @@
 
 import { Buffer } from "node:buffer";
 import { randomUUID } from "node:crypto";
-import { loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
+import { getS3, loadS3Config, makeS3, putObject, type S3Config } from "../../storage/s3.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import { publicObjectUrl as basePublicObjectUrl } from "../../storage/public-url.js";
 import { DEFAULT_IMAGE_MAX_BYTES, GPT_IMAGE_MAX_PIXELS } from "./image-service-constants.js";
@@ -64,7 +64,9 @@ export function shouldInlineStoredImageForLocalEndpoint(cfg: S3Config, env: Node
 export function tryLoadS3(env: NodeJS.ProcessEnv): { readonly cfg: S3Config; readonly s3: ReturnType<typeof makeS3> } | null {
   try {
     const cfg = loadS3Config(env);
-    return { cfg, s3: makeS3(cfg) };
+    // 客户端走进程级 provider 缓存，不再每次调用都新建 SDK 客户端/连接池；
+    // 未配置时 loadS3Config 先抛错、根本走不到 provider，这里仍按 try 语义吞成 null。
+    return { cfg, s3: getS3(env) };
   } catch {
     return null;
   }

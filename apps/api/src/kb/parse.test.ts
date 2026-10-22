@@ -31,6 +31,129 @@ describe("parseDocument 文本边界", () => {
   });
 });
 
+describe("parseDocument 工作簿安全闸", () => {
+  const sheetMime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  const buildWorkbook = async (sheets: unknown[][][], compression = false) => {
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.utils.book_new();
+    sheets.forEach((rows, index) => {
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), `S${index + 1}`);
+    });
+    return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx", compression }) as Buffer);
+  };
+
+  it("超过字节上限在解析前被拒", async () => {
+    const oversized = Buffer.alloc(10 * 1024 * 1024 + 1);
+    await expect(parseDocument(oversized, sheetMime, "big.xlsx"))
+      .rejects.toThrow("工作簿大小超过上限");
+  });
+
+  it("sheet 数超过上限被拒", async () => {
+    const buffer = await buildWorkbook(Array.from({ length: 21 }, () => [["x"]]));
+    await expect(parseDocument(buffer, sheetMime, "many.xlsx"))
+      .rejects.toThrow("工作簿 sheet 数超过上限");
+  });
+
+  it("高压缩比工作簿（小文件、大展开）被单元格上限挡住，不展开成大对象", async () => {
+    // 500 列 × 500 行 = 250_000 格重复短串：压缩后文件很小，展开后远超 200_000 上限
+    const row = Array.from({ length: 500 }, () => "aaaaaaaaaaaaaaaaaaaa");
+    const buffer = await buildWorkbook([Array.from({ length: 500 }, () => row)], true);
+    expect(buffer.byteLength).toBeLessThan(2 * 1024 * 1024);
+    await expect(parseDocument(buffer, sheetMime, "bomb.xlsx"))
+      .rejects.toThrow("工作簿单元格数超过上限");
+  });
+
+  it("中央目录声明的解压后大小超限时在 XLSX.read 之前被拒（解压炸弹读前闸）", async () => {
+    // 手工拼一个最小 zip：本地头 + 中央目录 + EOCD，中央目录把未压缩大小谎报为 150MB。
+    // XLSX.read 若先跑会因结构不完整报别的错；断言命中读前闸的文案即证明闸在 read 之前。
+    const name = Buffer.from("xl/worksheets/sheet1.xml");
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x0403_4b50, 0);
+    local.writeUInt16LE(name.length, 26);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x0201_4b50, 0);
+    cd.writeUInt32LE(150 * 1024 * 1024, 24); // 未压缩大小
+    cd.writeUInt16LE(name.length, 28);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x0605_4b50, 0);
+    eocd.writeUInt16LE(1, 10); // 条目总数
+    eocd.writeUInt32LE(cd.length + name.length, 12); // 中央目录大小
+    eocd.writeUInt32LE(local.length + name.length, 16); // 中央目录偏移
+    const bomb = Buffer.concat([local, name, cd, name, eocd]);
+    await expect(parseDocument(bomb, sheetMime, "zipbomb.xlsx"))
+      .rejects.toThrow("工作簿解压后大小超过上限");
+  });
+
+  it("声明大小造假（报小实际大）在读前闸被实际解压计数识破", async () => {
+    // 本地头与中央目录一致地把未压缩大小谎报为 10，实际 deflate 流解开有 2MB：
+    // 只信声明值的闸会放行，按实际输出计数并交叉校验的闸必须拒绝。
+    const { deflateRawSync } = await import("node:zlib");
+    const raw = Buffer.alloc(2 * 1024 * 1024, "a");
+    const compressed = deflateRawSync(raw);
+    const name = Buffer.from("xl/worksheets/sheet1.xml");
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x0403_4b50, 0);
+    local.writeUInt16LE(8, 8); // 方法 deflate
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(10, 22); // 谎报的未压缩大小
+    local.writeUInt16LE(name.length, 26);
+    const cd = Buffer.alloc(46);
+    cd.writeUInt32LE(0x0201_4b50, 0);
+    cd.writeUInt16LE(8, 10);
+    cd.writeUInt32LE(compressed.length, 20);
+    cd.writeUInt32LE(10, 24); // 与本地头一致地谎报
+    cd.writeUInt16LE(name.length, 28);
+    const cdOffset = local.length + name.length + compressed.length;
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x0605_4b50, 0);
+    eocd.writeUInt16LE(1, 10);
+    eocd.writeUInt32LE(cd.length + name.length, 12);
+    eocd.writeUInt32LE(cdOffset, 16);
+    const liar = Buffer.concat([local, name, compressed, cd, name, eocd]);
+    await expect(parseDocument(liar, sheetMime, "liar.xlsx"))
+      .rejects.toThrow("声明大小与实际解压不一致");
+  });
+
+  it("中央目录与本地头的压缩方法/flags 不一致时读前闸拒绝（防语义伪造绕过）", async () => {
+    const buildLiar = (localMethod: number, cdMethod: number, localFlags: number, cdFlags: number, localUncompressed: number, cdUncompressed: number) => {
+      const name = Buffer.from("xl/worksheets/sheet1.xml");
+      const data = Buffer.alloc(64, "b");
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x0403_4b50, 0);
+      local.writeUInt16LE(localFlags, 6);
+      local.writeUInt16LE(localMethod, 8);
+      local.writeUInt32LE(data.length, 18);
+      local.writeUInt32LE(localUncompressed, 22);
+      local.writeUInt16LE(name.length, 26);
+      const cd = Buffer.alloc(46);
+      cd.writeUInt32LE(0x0201_4b50, 0);
+      cd.writeUInt16LE(cdFlags, 8);
+      cd.writeUInt16LE(cdMethod, 10);
+      cd.writeUInt32LE(data.length, 20);
+      cd.writeUInt32LE(cdUncompressed, 24);
+      cd.writeUInt16LE(name.length, 28);
+      const eocd = Buffer.alloc(22);
+      eocd.writeUInt32LE(0x0605_4b50, 0);
+      eocd.writeUInt16LE(1, 10);
+      eocd.writeUInt32LE(cd.length + name.length, 12);
+      eocd.writeUInt32LE(local.length + name.length + data.length, 16);
+      return Buffer.concat([local, name, data, cd, name, eocd]);
+    };
+    // 中央目录报 stored、本地头报 deflate：只按中央目录数存储字节的闸会被骗过去
+    await expect(parseDocument(buildLiar(8, 0, 0, 0, 64, 64), sheetMime, "method-lie.xlsx"))
+      .rejects.toThrow("本地头与中央目录不一致");
+    // 单方面伪造中央目录 bit3 想跳过本地大小校验（本地大小故意写错）
+    await expect(parseDocument(buildLiar(0, 0, 0, 0x08, 71, 64), sheetMime, "flag-lie.xlsx"))
+      .rejects.toThrow("本地头与中央目录不一致");
+  });
+
+  it("上限内的小工作簿仍能正常解析", async () => {
+    const buffer = await buildWorkbook([[["名称", "值"], ["甲", "1"]]]);
+    const out = await parseDocument(buffer, sheetMime, "ok.xlsx");
+    expect(out).toContain("名称\t值");
+  });
+});
+
 describe("parseDocument Office", () => {
   it("XLSX 保留稀疏列坐标与日期", async () => {
     const XLSX = await import("xlsx");

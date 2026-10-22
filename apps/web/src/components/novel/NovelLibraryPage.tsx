@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
-import type { NovelProjectSummary } from "../../api";
+import type { NovelProjectSummary } from "../../novelApi";
 import { cx } from "../ui";
 import { WF_PANEL, WF_SHELL_FORM } from "../workflow/workflowLayout";
 import { NovelCreatePage, type NovelCreateDraft } from "../workflow/NovelCreatePage";

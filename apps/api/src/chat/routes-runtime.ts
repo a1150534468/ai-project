@@ -11,8 +11,13 @@
  * `positiveNumberEnv` / `positiveIntEnv` 对 NaN、0、负数一律退回 fallback。这是刻意的:一个写错的
  * 环境变量应当退化成默认值,而不是让 KB 检索拿到 topK=0 静默返回空结果。
  *
- * 依赖方向:本文件是叶子,不 import 任何本仓模块。
+ * 依赖方向:本文件是叶子,只 import `runtime/env` 这一个共享叶子。
+ *
+ * `positiveNumberEnv` 保留自己的浮点实现:`KB_MIN_SCORE` 是 0.35 这种小数,
+ * 共享的 `envInt` 只收整数。整数那四个走 `positiveIntEnv`。
  */
+
+import { envInt } from "../runtime/env.js";
 
 export const DEFAULT_KB_MIN_SCORE = 0.35;
 export const DEFAULT_KB_TOPK = 8;
@@ -27,5 +32,5 @@ export function positiveNumberEnv(name: string, fallback: number): number {
 }
 
 export function positiveIntEnv(name: string, fallback: number): number {
-  return Math.floor(positiveNumberEnv(name, fallback));
+  return envInt(process.env, name, fallback);
 }

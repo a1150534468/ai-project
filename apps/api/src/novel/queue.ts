@@ -1,4 +1,5 @@
 import { Queue, Worker, type JobsOptions, type Processor } from "bullmq";
+import { envInt } from "../runtime/env.js";
 
 export const NOVEL_QUEUE_NAME = "novel-runs";
 
@@ -33,17 +34,12 @@ function queue(): Queue<NovelQueuePayload> {
   return producerQueue;
 }
 
-function positiveInteger(value: string | undefined, fallback: number): number {
-  const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 function defaultJobOptions(env: NodeJS.ProcessEnv = process.env): JobsOptions {
   return {
     attempts: 3,
     backoff: { type: "exponential", delay: 5000 },
-    removeOnComplete: positiveInteger(env.QUEUE_COMPLETED_JOB_COUNT, 100),
-    removeOnFail: positiveInteger(env.QUEUE_FAILED_JOB_COUNT, 200),
+    removeOnComplete: envInt(env, "QUEUE_COMPLETED_JOB_COUNT", 100),
+    removeOnFail: envInt(env, "QUEUE_FAILED_JOB_COUNT", 200),
   };
 }
 
@@ -93,9 +89,10 @@ export function createNovelWorker(
   processor: Processor<NovelQueuePayload>,
   concurrency?: number,
 ): Worker<NovelQueuePayload> {
-  const configured = positiveInteger(
-    process.env.NOVEL_WORKER_CONCURRENCY,
-    positiveInteger(process.env.WORKER_CONCURRENCY, 1),
+  const configured = envInt(
+    process.env,
+    "NOVEL_WORKER_CONCURRENCY",
+    envInt(process.env, "WORKER_CONCURRENCY", 1),
   );
   return new Worker<NovelQueuePayload>(NOVEL_QUEUE_NAME, processor, {
     connection: novelBullConnection(),

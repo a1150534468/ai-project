@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { parseFragment } from "parse5";
 import { articleProjectRow, createArticleWorkflowPrismaMock } from "./article-workflow-test-helpers.js";
 import {
   ArticleWorkflowLeaseLostError,
   updateArticleWorkflowProjectState,
   writeArticleWorkflowRunState,
 } from "./article-workflow-store.js";
+import { assertArticleWorkflowHtmlFragment } from "./article-workflow-html-guard.js";
+import { applyArticleImageManifestToHtml } from "./article-workflow-image-manifest.js";
+import { sanitizeAttributeProtocols } from "./article-workflow-html-attributes.js";
 
 const version = new Date("2026-07-08T05:00:00.000Z");
 
@@ -59,5 +63,44 @@ describe("article workflow state CAS", () => {
 
     expect(updated?.tagsJson).toEqual([]);
     expect(updated?.imageManifestJson).toEqual([]);
+  });
+
+  it("正文落库统一过协议白名单：任何路径写 bodyHtml 都剥掉危险协议", async () => {
+    const { prisma, row } = store();
+
+    const updated = await updateArticleWorkflowProjectState(prisma as never, "p-1", {
+      bodyHtml: '<p><a href="javascript:alert(1)">坏链</a><a href="https://example.com">好链</a></p>',
+    });
+
+    expect(updated?.bodyHtml).not.toContain("javascript:");
+    expect(updated?.bodyHtml).toContain('href="https://example.com"');
+    expect(row.bodyHtml).toBe(updated?.bodyHtml);
+  });
+
+  it("引号属性绕过在 HTML 校验、配图序列化和最终落库串联后仍被阻断", async () => {
+    const { prisma, row } = store();
+    const source = `<a title=" href='https://safe.test" href="javascript:alert('review')">正文</a>`;
+    const guarded = assertArticleWorkflowHtmlFragment({ html: source, expectedVisibleText: "正文" });
+    const bodyHtml = applyArticleImageManifestToHtml(sanitizeAttributeProtocols(guarded), []);
+
+    await updateArticleWorkflowProjectState(prisma as never, "p-1", { bodyHtml });
+
+    const node = parseFragment(row.bodyHtml).childNodes[0];
+    if (!node || !("attrs" in node)) throw new Error("落库正文缺少链接元素");
+    expect(node.attrs.some((attribute) => attribute.name === "href")).toBe(false);
+    expect(node.attrs.find((attribute) => attribute.name === "title")?.value).toBe(" href='https://safe.test");
+    expect(row.bodyHtml).toContain("正文");
+  });
+
+  it("直接写入最终漏斗的引号绕过也无法落库，不依赖调用方预先清洗", async () => {
+    const { prisma, row } = store();
+    const bodyHtml = `<a title=" href='https://safe.test" href="javascript:alert('review')">正文</a>`;
+
+    await updateArticleWorkflowProjectState(prisma as never, "p-1", { bodyHtml });
+
+    const node = parseFragment(row.bodyHtml).childNodes[0];
+    if (!node || !("attrs" in node)) throw new Error("落库正文缺少链接元素");
+    expect(node.attrs.some((attribute) => attribute.name === "href")).toBe(false);
+    expect(row.bodyHtml).toContain("正文");
   });
 });

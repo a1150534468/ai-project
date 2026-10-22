@@ -9,7 +9,7 @@ const api = vi.hoisted(() => ({
   listNovelGenerationRequests: vi.fn(),
   restoreNovelChapterVersion: vi.fn(),
 }));
-vi.mock("../../api", () => api);
+vi.mock("../../novelApi", () => api);
 vi.mock("@iconify/react", () => ({ Icon: ({ icon }: { readonly icon: string }) => <span data-icon={icon} /> }));
 
 describe("NovelChapterDesk prompt audit", () => {

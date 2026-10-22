@@ -16,10 +16,11 @@ import {
   callImageEdit,
   callImageGeneration,
 } from "../_shared/image-service-calls.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { DEFAULT_IMAGE_MODEL } from "../_shared/image-service-constants.js";
 import { loadImageGenerationConfigForModel } from "../_shared/image-service-providers.js";
 import { storeWorkflowImage } from "../_shared/image-service-storage.js";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, getS3 } from "../../storage/s3.js";
 import type { GeneratedImage } from "../_shared/image-service-types.js";
 import {
   buildBaseCharacterPrompt,
@@ -185,7 +186,7 @@ async function resolveBaseImage(args: {
   const { prisma, pack, executionToken, fetchFn, env, signal, maxAttempts } = args;
   // 1) 用户上传的参考图
   if (pack.referenceObjectKey) {
-    const s3 = makeS3(loadS3Config(env));
+    const s3 = getS3(env);
     const buffer = await getObject(s3, pack.referenceObjectKey);
     return { buffer, mime: sniffImageMime(buffer) };
   }
@@ -484,7 +485,8 @@ export async function runStickerPack(args: RunStickerPackArgs): Promise<StickerP
     return (await getPack(prisma, pack.id))!;
   } catch (error) {
     if (error instanceof StickerPackStoppedError) throw error;
-    const message = error instanceof Error ? error.message : String(error);
+    // 这个串会写进 DB 的 error 列并回到前端，非 Error 一律兜底。
+    const message = errorMessageOrFallback(error, "表情包生成失败", 1_000);
     // 终态写也带归属校验：若已易主（抛 StoppedError），新一轮负责 outcome，本轮直接退出
     await updateOwnedPack(prisma, pack.id, executionToken, {
       status: STICKER_PACK_STATUS.failed,

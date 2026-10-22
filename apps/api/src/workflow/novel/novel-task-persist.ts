@@ -23,6 +23,7 @@ import { NOVEL_TASK_STATUS, type NovelTargetKind } from "./novel-types.js";
 import { buildNovelChapterPostprocessPayload } from "./novel-postprocess.js";
 import { buildNovelReviewPayload } from "./novel-review.js";
 import { syncNovelContinuityAssetsForChapter } from "../../novel/continuity-assets.js";
+import { generationTaskOutboxFields } from "../../novel/outbox.js";
 import { syncNovelNarrativeLedgersForChapter } from "../../novel/narrative-ledger.js";
 import { syncNovelSetupAssets } from "../../novel/structured-sync.js";
 import { isPlainObject } from "../../runtime/records.js";
@@ -68,7 +69,7 @@ export async function reserveAndCreateTask(args: {
         data: {
           projectId: args.projectId,
           taskId: task.id,
-          payload: { type: "generation-task", taskId: task.id },
+          ...generationTaskOutboxFields(task.id),
           priority: 1,
           jobName: "generation-task",
         },

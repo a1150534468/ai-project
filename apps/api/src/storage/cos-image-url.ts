@@ -10,14 +10,38 @@ export interface SignedImageRequest {
   /** Existing application bearer URL expiry, in milliseconds. */
   readonly expiresAt: number;
   readonly contentDisposition?: string;
+  /**
+   * 这个链接是发给谁的。**目前只做类型准备，不参与签名**。
+   *
+   * 为什么先只加字段：bearer URL 是行业标准做法，签发时路由层已经校验过归属，
+   * 所以这不是 bug。但这个类型里原本没有任何字段能表达「发给谁」，于是
+   * 「链接被转发后能不能吊销」在当前定义下无从回答。真正的吊销能力要改签名
+   * payload，而那会**影响所有已签发的 URL**，必须单独确认——所以这里先行占位，
+   * 让「谁在用这个链接」成为结构里可表达的一件事。
+   *
+   * 不传时签名结果与加字段之前逐字节相同（有测试钉着）。
+   */
+  readonly userId?: string;
 }
 
-export type ImageUrlSigner = (request: SignedImageRequest) => Promise<string | null>;
+/**
+ * 签名结果。原先是 `string | null`，而 `null` 折叠了两种完全不同的含义：
+ * - `delivery-disabled`：本环境根本没开直连（proxy 模式），回源是**预期行为**；
+ * - `unsupported-asset`：开了 CDN 但这一张签不出来（非图片 mime / key 含 CDN 不收的字符），
+ *   回源是**退化**——配了 CDN 的环境里它意味着 CDN 白配了，必须可见。
+ *
+ * 消费方不能再把两者当成一回事（"反正 null 就回源"），决策权交回调用方。
+ */
+export type ImageUrlSignResult =
+  | { readonly kind: "signed"; readonly url: string }
+  | { readonly kind: "unsigned"; readonly reason: "delivery-disabled" | "unsupported-asset" };
+
+export type ImageUrlSigner = (request: SignedImageRequest) => Promise<ImageUrlSignResult>;
 
 /** Signing is local only; no object read or cloud configuration change. */
 export function createImageUrlSigner(env: NodeJS.ProcessEnv = process.env): ImageUrlSigner {
   const mode = env.WORKFLOW_IMAGE_DELIVERY?.trim() || "proxy";
-  if (mode === "proxy") return async () => null;
+  if (mode === "proxy") return async () => ({ kind: "unsigned", reason: "delivery-disabled" });
   if (mode === "cdn") return createCdnImageUrlSigner(env);
   if (mode !== "cos") throw new Error("WORKFLOW_IMAGE_DELIVERY must be proxy, cos or cdn");
 
@@ -53,7 +77,7 @@ export function createImageUrlSigner(env: NodeJS.ProcessEnv = process.env): Imag
     // COS SDK backdates its signing window slightly; don't issue a grant that is already expiring.
     if (!Number.isFinite(expiresAt) || expires < 2) throw new Error("Image URL has expired");
 
-    return await new Promise<string>((resolve, reject) => {
+    return await new Promise<ImageUrlSignResult>((resolve, reject) => {
       cos.getObjectUrl(
         {
           Bucket: config.bucket,
@@ -74,7 +98,7 @@ export function createImageUrlSigner(env: NodeJS.ProcessEnv = process.env): Imag
         },
         (error, result) => {
           if (error) reject(new Error("COS image URL signing failed"));
-          else resolve(result.Url);
+          else resolve({ kind: "signed", url: result.Url });
         },
       );
     });

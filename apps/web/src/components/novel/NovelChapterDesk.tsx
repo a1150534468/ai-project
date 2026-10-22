@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { useDialog } from "../../motion";
 import { Icon } from "@iconify/react";
-import { listNovelChapterVersions, listNovelGenerationRequests, restoreNovelChapterVersion, type NovelChapter, type NovelChapterVersion, type NovelGenerationRequest } from "../../api";
+import { listNovelChapterVersions, listNovelGenerationRequests, restoreNovelChapterVersion, type NovelChapter, type NovelChapterVersion, type NovelGenerationRequest } from "../../novelApi";
 
 type DeskTab = "prose" | "plan" | "prompts" | "compare" | "versions";
 

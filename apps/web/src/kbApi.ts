@@ -1,6 +1,6 @@
 /**
  * 知识库（KB）的前端 API 客户端。P2.4 批次二 Step 2 从 `api.ts` 整块搬来，逐字未动，
- * `api.ts` 用 `export *` 转发，调用方无感。
+ * 调用方直接从本文件 import（`api.ts` 不再转发）。
  *
  * `addKbFile` 直接把 FormData 交给统一客户端：不手写 content-type，让 fetch 自己补 boundary。
  */

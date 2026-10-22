@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@iconify/react";
 import { nextNovelChapterIndex } from "@ai-assistant/novel-workflow";
-import { getNovelStructure, type NovelChapter, type NovelProjectDetail, type NovelStructureNode, type NovelWorkbenchPayload } from "../../api";
+import { getNovelStructure, type NovelChapter, type NovelProjectDetail, type NovelStructureNode, type NovelWorkbenchPayload } from "../../novelApi";
 import { Alert, Button } from "../ui";
 import { NovelChapterDesk } from "./NovelChapterDesk";
 import { NovelContextInspector } from "./NovelContextInspector";

@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { paginate } from "@ai-assistant/db/paginate";
 import { iconForAgentId } from "../agents/service.js";
 
 async function sessionOwner(
@@ -25,7 +26,15 @@ async function sessionOwner(
 
 export function registerSessionRoutes(app: FastifyInstance, prisma: PrismaClient): void {
   app.get("/api/sessions", async (request, reply) => {
-    const rows = await prisma.session.findMany({
+    // 经 paginate 公共出口（强制 orderBy、take 夹上限）；只取第一页 50 条，
+    // 响应组装与原先逐字一致，nextCursor 暂不下发。
+    const { rows } = await paginate<{
+      id: string;
+      agentId: string | null;
+      agentName: string | null;
+      updatedAt: Date;
+      messages: { content: string }[];
+    }>(prisma.session, {
       where: { userId: request.userId },
       select: {
         id: true,

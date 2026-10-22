@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { NovelProjectDetail, NovelSetupPayload } from "../../api";
+import type { NovelProjectDetail, NovelSetupPayload } from "../../novelApi";
 import { NovelSetupWizard } from "./NovelSetupWizard";
 
 const api = vi.hoisted(() => ({
@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   saveNovelSetup: vi.fn(),
 }));
 
-vi.mock("../../api", () => api);
+vi.mock("../../novelApi", () => api);
 
 const project: NovelProjectDetail["project"] = {
   id: "project-1",

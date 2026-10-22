@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -8,9 +9,9 @@ import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
-import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { deleteObject, getObject, getS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
-import { sendImageBlob } from "../_shared/image-blob-response.js";
+import { logUnsignedFallback, sendImageBlob } from "../_shared/image-blob-response.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -46,6 +47,7 @@ import { deliveredImageResolution, minDeliveredPixels, pixelsFromSize } from "..
 import { errorMessageOrFallback } from "../_shared/error-message.js";
 import type { ImageResolutionLabel } from "../_shared/image-upstream-options.js";
 import { startPortraitReaper } from "./portrait-reaper.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import {
   PORTRAIT_ACTIVE_STATUSES,
@@ -205,24 +207,21 @@ function portraitBlobSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-function portraitBlobSignature(kind: "reference" | "output", id: string, objectKey: string, exp: number, env?: NodeJS.ProcessEnv): string {
-  return createHmac("sha256", portraitBlobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
-}
+/** 签名实现收敛在 _shared/signed-blob-url；这里只留形象照的域配置（secret 链 + 路径）。 */
+const portraitSignedBlobConfig: SignedBlobUrlConfig = {
+  resolveSecret: (env) => portraitBlobSecret(env),
+  ttlMs: PORTRAIT_BLOB_TTL_MS,
+  buildPath: (kind, id) =>
+    `/api/workflow/portraits/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob`,
+};
 
 /** 导出给素材库复用：形象照的取件链接只能由这里签，素材库不另开一条取件端点。 */
 export function portraitBlobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
-  const exp = Math.floor((Date.now() + PORTRAIT_BLOB_TTL_MS) / 1000);
-  const sig = portraitBlobSignature(kind, id, objectKey, exp, env);
-  const path = kind === "reference" ? "references" : "outputs";
-  return `/api/workflow/portraits/${path}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
+  return createSignedBlobUrl(portraitSignedBlobConfig, { kind, id, objectKey }, env);
 }
 
 function hasValidBlobSignature(kind: "reference" | "output", id: string, objectKey: string, exp: number, sig: string, env?: NodeJS.ProcessEnv): boolean {
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = portraitBlobSignature(kind, id, objectKey, exp, env);
-  const a = Buffer.from(expected, "utf8");
-  const b = Buffer.from(sig, "utf8");
-  return a.length === b.length && timingSafeEqual(a, b);
+  return verifySignedBlobUrl(portraitSignedBlobConfig, { kind, id, objectKey, exp, sig }, env);
 }
 
 function isPortraitObjectKeyForUser(value: string, userId: string, kind: "references" | "outputs"): boolean {
@@ -499,9 +498,9 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
   const billing = deps.billing ?? createUnmeteredImageUsage();
   const fetchFn = deps.fetchFn ?? fetch;
   const storeImage = deps.storeImage ?? storeWorkflowImageService;
-  const loadStoredImage = deps.loadStoredImage ?? ((objectKey: string) => getObject(makeS3(loadS3Config()), objectKey));
+  const loadStoredImage = deps.loadStoredImage ?? ((objectKey: string) => getObject(getS3(), objectKey));
   const signImageUrl = deps.signImageUrl ?? createImageUrlSigner();
-  const deleteStoredImage = deps.deleteStoredImage ?? ((objectKey: string) => deleteObject(makeS3(loadS3Config()), objectKey));
+  const deleteStoredImage = deps.deleteStoredImage ?? ((objectKey: string) => deleteObject(getS3(), objectKey));
   const callImageEdit = deps.callImageEdit ?? (async (args: Parameters<typeof callImageEditService>[0]) => callImageEditService(args));
   const scheduleTask = deps.scheduleTask ?? ((work: () => Promise<void>) => { void work().catch(() => undefined); });
   const retryDelayMs = deps.retryDelayMs ?? portraitRetryDelayMs();
@@ -634,7 +633,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     try {
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "portrait") });
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "portrait reference blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
@@ -651,7 +650,7 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
         contentDisposition: `inline; filename="portrait-${row.requestIndex + 1}.png"`,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "portrait") });
     } catch (error) {
       // Don't swallow it: a storage-side failure (bad credentials, missing
       // object, unreachable endpoint) otherwise surfaces only as a bare 502.
@@ -748,6 +747,11 @@ export async function portraitWorkflowRoutes(app: FastifyInstance, deps: Portrai
     if (crossUser) return reply.code(409).send({ error: "请求编号已被使用" });
     const references = await loadOwnedReferences(prisma, userId, parsed.data.referenceAssetIds).catch(() => null);
     if (!references) return reply.code(404).send({ error: "参考图不存在或无权访问" });
+    // 额度闸放在「同一个 requestId 再来一次」的短路之后、真正花钱的建任务 + 预留之前：
+    // 幂等重试不该消耗额度。没有 redis（单测）时闸门放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowPortrait", userId, (error) => req.log.warn({ err: error }, "portrait quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const effectivePrompt = buildPortraitPrompt({ presetId: parsed.data.presetId as PortraitPresetId, aspectRatio: parsed.data.aspectRatio as PortraitAspectRatio, options: parsed.data.options as PortraitPromptOptions });
     // 管理台可为「模型专属/通用分辨率」key 配价，实际扣费必须使用命中的 resourceKey。
     const chargeRow = resolveImageChargeRow(await listPriceRows(), { resolution: parsed.data.resolution, model: model.value });

@@ -1,19 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
-import {
-  controlNovelEngineRun,
-  getNovelEngineRun,
-  getNovelNarrativeDashboard,
-  listNovelEngineEvents,
-  listNovelEngineRuns,
-  startNovelAutopilotRun,
-  streamNovelEngineEvents,
-  type NovelEngineEvent,
-  type NovelEngineRun,
-  type NovelEngineStep,
-  type NovelNarrativeDashboard,
-} from "../../api";
+import { controlNovelEngineRun, getNovelEngineRun, getNovelNarrativeDashboard, listNovelEngineEvents, listNovelEngineRuns, startNovelAutopilotRun, streamNovelEngineEvents, type NovelEngineEvent, type NovelEngineRun, type NovelEngineStep, type NovelNarrativeDashboard } from "../../novelApi";
 import { NovelScoreTrend } from "./NovelScoreTrend";
 
 const ACTIVE_STATUSES = new Set(["queued", "planning", "writing", "validating", "postprocessing"]);

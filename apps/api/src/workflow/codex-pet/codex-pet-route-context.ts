@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { createImageUrlSigner } from "../../storage/cos-image-url.js";
 import { getPrisma } from "@ai-assistant/db";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, getS3 } from "../../storage/s3.js";
 import { enqueueCodexPetRun } from "./codex-pet-queue.js";
 import { IMAGE_REFERENCE_MIME_TYPES } from "../_shared/image-service.js";
 import { isCodexPetArtifactObjectKey } from "./codex-pet-storage.js";
@@ -27,7 +27,7 @@ export function createCodexPetRouteContext(app: FastifyInstance, deps: CodexPetR
     // The caller performs the row-level ownership check before invoking this
     // loader. Keep the generic namespace guard here as defense in depth.
     if (!isCodexPetArtifactObjectKey(objectKey)) throw new Error("invalid Codex pet artifact object key");
-    return getObject(makeS3(loadS3Config()), objectKey);
+    return getObject(getS3(), objectKey);
   });
   const validateReferenceAsset = deps.validateReferenceAsset ?? ((asset: {
     readonly id: string;
@@ -36,7 +36,7 @@ export function createCodexPetRouteContext(app: FastifyInstance, deps: CodexPetR
     readonly mime: string;
   }) => validateCodexPetReferenceAsset(
     asset,
-    (objectKey) => getObject(makeS3(loadS3Config()), objectKey),
+    (objectKey) => getObject(getS3(), objectKey),
   ));
 
   async function ownedProject(userId: string, projectId: string) {

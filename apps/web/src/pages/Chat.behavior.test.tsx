@@ -24,8 +24,12 @@ const apiMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../api", () => ({
-  listKb: apiMocks.listKb,
   listModels: apiMocks.listModels,
+}));
+
+// listKb 住在 kbApi（api.ts 门面拆除后组件直连域文件），mock 必须挂到域模块上
+vi.mock("../kbApi", () => ({
+  listKb: apiMocks.listKb,
 }));
 
 vi.mock("../components/AssistantMessageActions", () => ({

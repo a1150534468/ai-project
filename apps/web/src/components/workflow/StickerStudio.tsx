@@ -14,6 +14,7 @@ import {
   type StickerPreset,
 } from "../../stickerApi";
 import { cx } from "../ui/cx";
+import { createPoller, type Poller } from "../../poller";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -103,31 +104,52 @@ export function StickerStudio({ token }: { readonly token: string }): React.Reac
     void refreshDetail(activePackId);
   }, [activePackId, refreshDetail]);
 
-  // 活跃任务轮询：跟随 activePackId（不用 stale 的 detail.pack.id），
-  // 递归 setTimeout 等上一轮完成再调度，避免慢请求下多轮重叠互相作废。
+  // 活跃任务轮询走纯逻辑 poller（原手写递归 setTimeout 的重叠保护已内化进 poller）。
+  // 跟随 activePackId（不用 stale 的 detail.pack.id）：读的都是 ref，状态一变就 notify。
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
+  const mountedRef = useRef(true);
+  const refreshDetailRef = useRef(refreshDetail);
+  refreshDetailRef.current = refreshDetail;
+  const refreshPacksRef = useRef(refreshPacks);
+  refreshPacksRef.current = refreshPacks;
+  const pollerRef = useRef<Poller | null>(null);
+  if (pollerRef.current === null) {
+    pollerRef.current = createPoller({
+      intervalMs: POLL_INTERVAL_MS,
+      shouldPoll: () => {
+        const packId = activePackIdRef.current;
+        const current = detailRef.current;
+        return (
+          packId !== null &&
+          current?.pack?.id === packId &&
+          (current.pack.status === "queued" || current.pack.status === "running")
+        );
+      },
+      refresh: async () => {
+        const packId = activePackIdRef.current;
+        if (packId === null) return;
+        await refreshDetailRef.current(packId).catch(() => {});
+        // 卸载后 stop() 只停后续周期，停不掉已在飞的这一轮：详情回来后先确认
+        // 组件还活着，别在卸载后还替它发列表请求（原手写轮询有 cancelled 守卫）。
+        if (!mountedRef.current) return;
+        await refreshPacksRef.current().catch(() => {});
+      },
+    });
+  }
   useEffect(() => {
-    let cancelled = false;
-    let timer: number | null = null;
-    const poll = async (): Promise<void> => {
-      if (cancelled) return;
-      timer = null;
-      const packId = activePackId;
-      if (
-        packId !== null &&
-        detail?.pack?.id === packId &&
-        (detail.pack.status === "queued" || detail.pack.status === "running")
-      ) {
-        await refreshDetail(packId).catch(() => {});
-        if (!cancelled) await refreshPacks().catch(() => {});
-      }
-      if (!cancelled) timer = window.setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
-    };
-    timer = window.setTimeout(() => { void poll(); }, POLL_INTERVAL_MS);
+    const poller = pollerRef.current;
+    if (!poller) return undefined;
+    mountedRef.current = true;
+    poller.start();
     return () => {
-      cancelled = true;
-      if (timer !== null) window.clearTimeout(timer);
+      mountedRef.current = false;
+      poller.stop();
     };
-  }, [activePackId, detail?.pack?.id, detail?.pack?.status, refreshDetail, refreshPacks]);
+  }, []);
+  useEffect(() => {
+    pollerRef.current?.notify();
+  }, [activePackId, detail?.pack?.id, detail?.pack?.status]);
 
   const togglePreset = (key: string): void => {
     setSelectedPresets((current) => {

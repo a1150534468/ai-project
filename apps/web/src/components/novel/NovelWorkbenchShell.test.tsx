@@ -11,13 +11,13 @@ import "@testing-library/jest-dom";
 import type { ComponentProps } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { NovelProjectDetail } from "../../api";
+import type { NovelProjectDetail } from "../../novelApi";
 import { NovelWorkbenchShell } from "./NovelWorkbenchShell";
 
 const api = vi.hoisted(() => ({ getNovelStructure: vi.fn() }));
 
-vi.mock("../../api", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../api")>()),
+vi.mock("../../novelApi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../novelApi")>()),
   ...api,
 }));
 

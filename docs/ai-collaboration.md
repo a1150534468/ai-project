@@ -144,6 +144,10 @@ pnpm test                                       # 全量，仅阶段收尾
 - `.catch(() => null)` 只用于**真正的 best-effort 清理**（删对象、取消订阅）。当前 174 处里多数合理，但 `admin/user-detail.ts` / `admin/analytics-routes.ts` 把 billing 故障静默转成 `null`，导致**管理后台显示空白而非报错**，运维会误判成"这用户没数据"。**依赖外部服务的读取失败要能被区分出来。**
 - 用 `app.log` / `request.log`（当前 142 处），不要用 `console.*`（当前仍有 54 处绕过结构化日志）。
 
+### 6.5 查询分页红线
+
+- **新增 `findMany` 必须显式写 `take`**（或走 `@ai-assistant/db/paginate` 的 `paginate()`，它强制 `orderBy` 并把 `take` 夹在上限内）。确实需要全量时，在调用处写明 `// unbounded: <理由>`（例如检查点捕获必须读整本书）——没有这行注释的无界 `findMany` 在 review 里打回。背景：全仓 202 处 `findMany` 里 122 处没写 `take`，全量读表是「单请求内存 ∝ 数据量」类事故（ADR-011、检查点 N² 写入）的共同病根。
+
 ---
 
 ## 7. 收尾（Definition of Done）

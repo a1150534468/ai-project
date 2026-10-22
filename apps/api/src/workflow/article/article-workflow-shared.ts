@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Redis } from "ioredis";
 import {
   ARTICLE_WORKFLOW_PLATFORM_CONFIGS,
   type ArticleWorkflowCreationConfig,
@@ -73,6 +74,8 @@ export interface ArticleWorkflowRouteDeps {
   readonly env?: NodeJS.ProcessEnv;
   /** 配图取图时从对象存储读字节，测试里替换掉即可脱开 S3 */
   readonly loadImageBlob?: (objectKey: string) => Promise<Buffer>;
+  /** 只用于启动生成前的额度闸。不传（单测）则该闸放行，测试不必准备计数器。 */
+  readonly redis?: Redis;
 }
 
 export type ArticleProjectRow = NonNullable<Awaited<ReturnType<PrismaClient["articleWorkflowProject"]["findFirst"]>>>;

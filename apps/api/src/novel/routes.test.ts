@@ -14,7 +14,10 @@ vi.mock("./run-store.js", async (importOriginal) => ({
   createNovelRun: mocks.createNovelRun,
   createNextNovelStep: mocks.createNextNovelStep,
 }));
-vi.mock("./outbox.js", () => ({ dispatchNovelOutboxBatch: mocks.dispatchNovelOutboxBatch }));
+vi.mock("./outbox.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./outbox.js")>(),
+  dispatchNovelOutboxBatch: mocks.dispatchNovelOutboxBatch,
+}));
 vi.mock("./events.js", async (importOriginal) => ({
   ...await importOriginal<typeof import("./events.js")>(),
   appendNovelRunEvent: mocks.appendNovelRunEvent,

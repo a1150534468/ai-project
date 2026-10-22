@@ -1,4 +1,4 @@
-import type { NovelPipelineStepKind, NovelRunMode, NovelRunStatus } from "../contracts.js";
+import type { NovelPipelineStepKind, NovelRunStatus } from "../contracts.js";
 
 export const ASSISTED_PIPELINE: readonly NovelPipelineStepKind[] = [
   "prepareChapter",
@@ -18,16 +18,14 @@ export function runStatusForStep(step: NovelPipelineStepKind): NovelRunStatus {
   return "postprocessing";
 }
 
-export function pipelineForMode(_mode: NovelRunMode, _includePlanning = false): readonly NovelPipelineStepKind[] {
+export function pipelineForMode(): readonly NovelPipelineStepKind[] {
   return ASSISTED_PIPELINE;
 }
 
 export function nextPipelineStep(
-  mode: NovelRunMode,
   current: NovelPipelineStepKind,
-  includePlanning: boolean,
 ): NovelPipelineStepKind | null {
-  const pipeline = pipelineForMode(mode, includePlanning);
+  const pipeline = pipelineForMode();
   const index = pipeline.indexOf(current);
   return index >= 0 && index + 1 < pipeline.length ? pipeline[index + 1]! : null;
 }

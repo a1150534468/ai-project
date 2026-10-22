@@ -1,15 +1,18 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
+import type { Redis } from "ioredis";
 import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import { requireUser } from "../../auth/require-user.js";
-import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { deleteObject, getObject, getS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
-import { sendImageBlob } from "../_shared/image-blob-response.js";
+import { logUnsignedFallback, sendImageBlob } from "../_shared/image-blob-response.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
 import {
   callImageEdit as callImageEditService,
@@ -120,6 +123,11 @@ interface NailBilling {
 interface NailRouteDeps {
   readonly prisma?: PrismaClient;
   readonly billing?: NailBilling;
+  /**
+   * 只用于生成前的额度闸。不传（单测）则该闸放行。
+   * 注意：试甲台**不养常驻 reaper**（`server-routes.ts` 的决定 A），传 redis 不会起定时任务。
+   */
+  readonly redis?: Redis;
   readonly fetchFn?: typeof fetch;
   readonly scheduleTask?: (work: () => Promise<void>) => void;
   readonly retryDelayMs?: number;
@@ -228,20 +236,16 @@ function blobSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-function blobSignature(
-  kind: "reference" | "output",
-  id: string,
-  objectKey: string,
-  exp: number,
-  env?: NodeJS.ProcessEnv,
-): string {
-  return createHmac("sha256", blobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
-}
+/** 签名实现收敛在 _shared/signed-blob-url；这里只留美甲的域配置（secret 链 + 路径）。 */
+const nailSignedBlobConfig: SignedBlobUrlConfig = {
+  resolveSecret: (env) => blobSecret(env),
+  ttlMs: NAIL_BLOB_TTL_MS,
+  buildPath: (kind, id) =>
+    `/api/workflow/nail-try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob`,
+};
 
 function blobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
-  const exp = Math.floor((Date.now() + NAIL_BLOB_TTL_MS) / 1000);
-  const sig = blobSignature(kind, id, objectKey, exp, env);
-  return `/api/workflow/nail-try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
+  return createSignedBlobUrl(nailSignedBlobConfig, { kind, id, objectKey }, env);
 }
 
 /** 素材库若接入，用同一条签名链接，别在别处重签。 */
@@ -255,13 +259,9 @@ function validBlobSignature(
   sig: string,
   env?: NodeJS.ProcessEnv,
 ): boolean {
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = Buffer.from(blobSignature(kind, id, objectKey, exp, env));
-  const actual = Buffer.from(sig);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  return verifySignedBlobUrl(nailSignedBlobConfig, { kind, id, objectKey, exp, sig }, env);
 }
 
-// masks 命名空间是试甲台独有的（试穿只有 references/outputs），存无损蒙版 PNG。
 export function isNailTryOnObjectKeyForUser(
   value: string,
   userId: string,
@@ -271,6 +271,7 @@ export function isNailTryOnObjectKeyForUser(
   const parts = value.split("/");
   return parts.length >= 6 && parts[3] === userId && parts.every((part) => part.length > 0 && part !== ".");
 }
+
 function serializeReference(row: NailReferenceRow) {
   return {
     id: row.id,
@@ -556,9 +557,9 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
   const billing = deps.billing ?? createUnmeteredImageUsage();
   const fetchFn = deps.fetchFn ?? fetch;
   const storeImage = deps.storeImage ?? storeWorkflowImageService;
-  const loadStoredImage = deps.loadStoredImage ?? ((key: string) => getObject(makeS3(loadS3Config()), key));
+  const loadStoredImage = deps.loadStoredImage ?? ((key: string) => getObject(getS3(), key));
   const signImageUrl = deps.signImageUrl ?? createImageUrlSigner();
-  const deleteStoredImage = deps.deleteStoredImage ?? ((key: string) => deleteObject(makeS3(loadS3Config()), key));
+  const deleteStoredImage = deps.deleteStoredImage ?? ((key: string) => deleteObject(getS3(), key));
   const callImageEdit =
     deps.callImageEdit ?? ((args: Parameters<typeof callImageEditService>[0]) => callImageEditService(args));
   const scheduleTask =
@@ -712,7 +713,7 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
       return await sendImageBlob(
         reply,
         { objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000 },
-        { signImageUrl, loadStoredImage },
+        { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "nail") },
       );
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "nail try-on reference blob delivery failed");
@@ -742,7 +743,7 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
           expiresAt: query.data.exp * 1000,
           contentDisposition: `inline; filename="nail-try-on-${row.requestIndex + 1}.png"`,
         },
-        { signImageUrl, loadStoredImage },
+        { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "nail") },
       );
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "nail try-on output blob delivery failed");
@@ -895,6 +896,10 @@ export async function nailTryOnWorkflowRoutes(app: FastifyInstance, deps: NailRo
     };
     const references = await loadRoleReferences(prisma, req.userId, roleInput).catch(() => null);
     if (!references) return reply.code(404).send({ error: "试甲素材不存在、类型不匹配或无权访问" });
+    // 同 portrait / try-on：放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowNail", req.userId, (error) => req.log.warn({ err: error }, "nail quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const handRef = references[0]!;
     // 蒙版必须逐像素对齐手部照片（footgun #1）：期望尺寸 = 手照档位 = 蒙版尺寸。
     const expected = parseSize(humanImageOutputSize(parsed.data.resolution, parsed.data.aspectRatio));

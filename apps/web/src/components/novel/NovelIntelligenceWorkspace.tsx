@@ -1,27 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { errorMessage } from "../../apiError";
 import { Icon } from "@iconify/react";
-import {
-  backfillNovelNarrativeAssets,
-  createNovelBranch,
-  createNovelCheckpoint,
-  createNovelResource,
-  createNovelStorylineMilestone,
-  deleteNovelResource,
-  getNovelNarrativeAssets,
-  getNovelNarrativeDashboard,
-  getNovelStructure,
-  listNovelCheckpoints,
-  listNovelCharacters,
-  listNovelProps,
-  listNovelStorylines,
-  rollbackNovelCheckpoint,
-  updateNovelResource,
-  type NovelEditableResource,
-  type NovelNarrativeAssets,
-  type NovelNarrativeDashboard,
-  type NovelStructureNode,
-} from "../../api";
+import { backfillNovelNarrativeAssets, createNovelBranch, createNovelCheckpoint, createNovelResource, createNovelStorylineMilestone, deleteNovelResource, getNovelNarrativeAssets, getNovelNarrativeDashboard, getNovelStructure, listNovelCheckpoints, listNovelCharacters, listNovelProps, listNovelStorylines, rollbackNovelCheckpoint, updateNovelResource, type NovelEditableResource, type NovelNarrativeAssets, type NovelNarrativeDashboard, type NovelStructureNode } from "../../novelApi";
 import { NovelPromptWorkbench } from "./NovelPromptWorkbench";
 import { NovelScoreTrend } from "./NovelScoreTrend";
 

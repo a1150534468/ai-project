@@ -21,18 +21,20 @@
  * 回调命名：带真逻辑的（异步、要找东西、要收窄类型）叫 `handleXxx`，单纯改一下本地状态的
  * 就用动词本身（`enterChat` / `closeAgentPicker` / `logout`）。
  */
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { AgentOption } from "./api";
 import Shell, { type ViewType } from "./components/shell/Shell";
 import LoginModal from "./components/LoginModal";
 import Landing from "./components/landing/Landing";
-import Chat from "./pages/Chat";
-import Knowledge from "./pages/Knowledge";
-import Assets from "./pages/Assets";
-import Workflow from "./pages/Workflow";
-import Memory from "./pages/Memory";
-import Settings from "./pages/Settings";
-import ModelMarketplace from "./pages/ModelMarketplace";
+// 页面级懒加载：7 个页面各自成 chunk，切到哪页才下哪页。
+// 首屏（落地页/对话页外壳）不再为工作流那 51% 的代码买单（见 check-bundle-size.mjs 的预算）。
+const Chat = lazy(() => import("./pages/Chat"));
+const Knowledge = lazy(() => import("./pages/Knowledge"));
+const Assets = lazy(() => import("./pages/Assets"));
+const Workflow = lazy(() => import("./pages/Workflow"));
+const Memory = lazy(() => import("./pages/Memory"));
+const Settings = lazy(() => import("./pages/Settings"));
+const ModelMarketplace = lazy(() => import("./pages/ModelMarketplace"));
 import { useConfirm } from "./components/ConfirmDialog";
 import { AgentPicker } from "./components/AgentPicker";
 import { useAccountOverview } from "./app/useAccountOverview";
@@ -49,6 +51,21 @@ import { AnimatePresence } from "motion/react";
 
 /** 首选模型存在 localStorage 里。设置页也按这个键自己写了一遍，换键要两边一起改。 */
 const PREFERRED_MODEL_KEY = "preferredModel";
+
+/** 懒加载页面的骨架屏：用块面占位而不是转圈，转圈会让首屏看起来卡住。 */
+function PageSkeleton() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-6 lg:px-6" aria-busy="true" aria-label="页面加载中">
+      <div className="h-8 w-48 animate-pulse rounded-lg bg-ink/10" />
+      <div className="h-4 w-96 max-w-full animate-pulse rounded bg-ink/10" />
+      <div className="mt-2 grid flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="animate-pulse rounded-2xl bg-ink/5" />
+        <div className="animate-pulse rounded-2xl bg-ink/5" />
+        <div className="animate-pulse rounded-2xl bg-ink/5" />
+      </div>
+    </div>
+  );
+}
 
 /**
  * 「已进入应用」标记：未登录用户点过落地页「开始使用」后就不再回落地页。
@@ -342,12 +359,12 @@ export default function App() {
         {canAnimateTransitions ? (
           <AnimatePresence mode="wait" initial={false}>
             <PageTransition key={nav.view} direction={transitionDirection} className="flex min-h-0 flex-1 flex-col">
-              {renderContent()}
+              <Suspense fallback={<PageSkeleton />}>{renderContent()}</Suspense>
             </PageTransition>
           </AnimatePresence>
         ) : (
           <PageTransition key={nav.view} direction={transitionDirection} className="flex min-h-0 flex-1 flex-col">
-            {renderContent()}
+            <Suspense fallback={<PageSkeleton />}>{renderContent()}</Suspense>
           </PageTransition>
         )}
       </Shell>

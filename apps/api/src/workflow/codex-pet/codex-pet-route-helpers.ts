@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
+import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getRedis } from "@ai-assistant/db";
@@ -16,6 +17,7 @@ import {
   CODEX_PET_ACTION_PROMPTS_MAX_TOTAL_LENGTH,
   CODEX_PET_STYLES,
 } from "./codex-pet-prompts.js";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import { sanitizeCodexPetDiagnosticText, sanitizeCodexPetEventPayload } from "./codex-pet-events.js";
 import { CODEX_PET_VISUAL_QA_MODEL } from "./codex-pet-model-contract.js";
 import { readCodexPetGateFailureSnapshot } from "./codex-pet-gate-failure.js";
@@ -168,7 +170,7 @@ export function recordOf(value: unknown): Record<string, unknown> {
 
 export function safeDiagnostic(error: unknown): string {
   return sanitizeCodexPetDiagnosticText(
-    error instanceof Error ? error.message : String(error),
+    errorMessageOrFallback(error, "未知错误", 1_000),
     1_000,
   );
 }
@@ -415,9 +417,7 @@ export function signCodexPetArtifact(
   secret: string,
   purpose = CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
 ): string {
-  return createHmac("sha256", secret)
-    .update(`v1:${purpose}:${artifactId}:${expiresAtSeconds}`)
-    .digest("base64url");
+  return signPayload(secret, `v1:${purpose}:${artifactId}:${expiresAtSeconds}`, "base64url");
 }
 
 export function verifyCodexPetArtifactSignature(args: {
@@ -429,15 +429,12 @@ export function verifyCodexPetArtifactSignature(args: {
   readonly purpose?: string;
 }): boolean {
   if (args.expiresAtSeconds <= args.nowSeconds) return false;
-  const expected = signCodexPetArtifact(
-    args.artifactId,
-    args.expiresAtSeconds,
+  return verifyPayloadSignature(
     args.secret,
-    args.purpose ?? CODEX_PET_PUBLIC_ARTIFACT_PURPOSE,
+    `v1:${args.purpose ?? CODEX_PET_PUBLIC_ARTIFACT_PURPOSE}:${args.artifactId}:${args.expiresAtSeconds}`,
+    args.signature,
+    "base64url",
   );
-  const actualBuffer = Buffer.from(args.signature);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
 }
 
 export function isActiveRunStatus(status: string): boolean {
@@ -448,9 +445,8 @@ export function isTerminalRunStatus(status: string): boolean {
   return (TERMINAL_RUN_STATUSES as readonly string[]).includes(status);
 }
 
-export function isUniqueConstraintError(error: unknown): boolean {
-  return recordOf(error).code === "P2002";
-}
+// 同 image-route-helpers：判定收进 _shared，这里保留转发。
+export { isUniqueConstraintError } from "../_shared/prisma-errors.js";
 
 export function resolveIdempotencyKey(
   header: string | string[] | undefined,

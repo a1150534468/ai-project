@@ -1,5 +1,7 @@
 import { Buffer } from "node:buffer";
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { createSignedBlobUrl, verifySignedBlobUrl, type SignedBlobUrlConfig } from "../_shared/signed-blob-url.js";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
+import { randomUUID } from "node:crypto";
 import type { Metadata } from "sharp";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
@@ -8,10 +10,11 @@ import { z } from "zod";
 import { getPrisma } from "@ai-assistant/db";
 import { createUnmeteredImageUsage, InsufficientBalanceError } from "../_shared/unmetered-image-usage.js";
 import { requireUser } from "../../auth/require-user.js";
-import { deleteObject, getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { deleteObject, getObject, getS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
-import { sendImageBlob } from "../_shared/image-blob-response.js";
+import { logUnsignedFallback, sendImageBlob } from "../_shared/image-blob-response.js";
 import { loadSharp } from "../../runtime/resource-limits.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 import {
   callImageEdit as callImageEditService,
   IMAGE_REFERENCE_MAX_BYTES,
@@ -226,20 +229,16 @@ function blobSecret(env: NodeJS.ProcessEnv = process.env): string {
   return secret;
 }
 
-function blobSignature(
-  kind: "reference" | "output",
-  id: string,
-  objectKey: string,
-  exp: number,
-  env?: NodeJS.ProcessEnv,
-): string {
-  return createHmac("sha256", blobSecret(env)).update(`${kind}:${id}:${objectKey}:${exp}`).digest("hex");
-}
+/** 签名实现收敛在 _shared/signed-blob-url；这里只留 try-on 的域配置（secret 链 + 路径）。 */
+const tryOnSignedBlobConfig: SignedBlobUrlConfig = {
+  resolveSecret: (env) => blobSecret(env),
+  ttlMs: TRY_ON_BLOB_TTL_MS,
+  buildPath: (kind, id) =>
+    `/api/workflow/try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob`,
+};
 
 function blobUrl(kind: "reference" | "output", id: string, objectKey: string, env?: NodeJS.ProcessEnv): string {
-  const exp = Math.floor((Date.now() + TRY_ON_BLOB_TTL_MS) / 1000);
-  const sig = blobSignature(kind, id, objectKey, exp, env);
-  return `/api/workflow/try-ons/${kind === "reference" ? "references" : "outputs"}/${encodeURIComponent(id)}/blob?exp=${exp}&sig=${sig}`;
+  return createSignedBlobUrl(tryOnSignedBlobConfig, { kind, id, objectKey }, env);
 }
 
 /** 素材库要的是同一条签名链接（`assets/asset-sources.ts`），别在那边重签一份。 */
@@ -253,10 +252,7 @@ function validBlobSignature(
   sig: string,
   env?: NodeJS.ProcessEnv,
 ): boolean {
-  if (exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = Buffer.from(blobSignature(kind, id, objectKey, exp, env));
-  const actual = Buffer.from(sig);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
+  return verifySignedBlobUrl(tryOnSignedBlobConfig, { kind, id, objectKey, exp, sig }, env);
 }
 
 export function isTryOnObjectKeyForUser(value: string, userId: string, kind: "references" | "outputs"): boolean {
@@ -577,9 +573,9 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     createUnmeteredImageUsage();
   const fetchFn = deps.fetchFn ?? fetch;
   const storeImage = deps.storeImage ?? storeWorkflowImageService;
-  const loadStoredImage = deps.loadStoredImage ?? ((key: string) => getObject(makeS3(loadS3Config()), key));
+  const loadStoredImage = deps.loadStoredImage ?? ((key: string) => getObject(getS3(), key));
   const signImageUrl = deps.signImageUrl ?? createImageUrlSigner();
-  const deleteStoredImage = deps.deleteStoredImage ?? ((key: string) => deleteObject(makeS3(loadS3Config()), key));
+  const deleteStoredImage = deps.deleteStoredImage ?? ((key: string) => deleteObject(getS3(), key));
   const callImageEdit =
     deps.callImageEdit ?? ((args: Parameters<typeof callImageEditService>[0]) => callImageEditService(args));
   const scheduleTask =
@@ -669,10 +665,11 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
   void cleanupExpiredReferences(prisma, deleteStoredImage).catch(() => undefined);
 
   const reaperTimer = deps.redis
-    ? setInterval(() => {
-        void (async () => {
-          const got = await deps.redis!.set(TRY_ON_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);
-          if (got !== "OK") return;
+    ? createStaleScanner({
+        lockKey: TRY_ON_REAPER_LOCK_KEY,
+        redis: deps.redis,
+        intervalMs: TRY_ON_REAPER_INTERVAL_MS,
+        scan: async () => {
           const threshold = new Date(Date.now() - portraitTaskStaleMs());
           const [active, unsettled] = await Promise.all([
             prisma.tryOnTask.findMany({
@@ -693,10 +690,10 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
           await recover(active as unknown as TryOnTaskRow[]);
           for (const task of unsettled as unknown as TryOnTaskRow[])
             await settleBilling(prisma, billing, task, task.completedCount).catch(() => undefined);
-        })().catch((error) => app.log.warn({ error: safeErrorMessage(error) }, "try-on reaper tick failed"));
-      }, TRY_ON_REAPER_INTERVAL_MS)
+        },
+        onError: (error) => app.log.warn({ error: safeErrorMessage(error) }, "try-on reaper tick failed"),
+      }).start()
     : undefined;
-  reaperTimer?.unref?.();
 
   app.addHook("onClose", async () => {
     clearInterval(cleanupTimer);
@@ -748,7 +745,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     try {
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "try-on") });
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "try-on reference blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
@@ -772,7 +769,7 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
       return await sendImageBlob(reply, {
         objectKey: row.objectKey, mime: row.mime, expiresAt: query.data.exp * 1000,
         contentDisposition: `inline; filename="try-on-${row.requestIndex + 1}.png"`,
-      }, { signImageUrl, loadStoredImage });
+      }, { signImageUrl, loadStoredImage, onUnsigned: logUnsignedFallback(req.log, "try-on") });
     } catch (error) {
       app.log.warn({ err: error, objectKey: row.objectKey }, "try-on output blob delivery failed");
       return reply.code(502).send({ error: "图片加载失败" });
@@ -923,6 +920,10 @@ export async function tryOnWorkflowRoutes(app: FastifyInstance, deps: TryOnRoute
     };
     const references = await loadRoleReferences(prisma, req.userId, roleInput).catch(() => null);
     if (!references) return reply.code(404).send({ error: "试穿素材不存在、类型不匹配或无权访问" });
+    // 同 portrait：归属校验之后、放在幂等短路之后、建任务 + 预留之前。没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowTryOn", req.userId, (error) => req.log.warn({ err: error }, "try-on quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
     const effectivePrompt = buildTryOnPrompt({
       aspectRatio: parsed.data.aspectRatio,
       hasItemDetail: Boolean(parsed.data.garmentDetailAssetId),

@@ -58,6 +58,18 @@ describe("consumeAvatarQuota", () => {
     expect(f.expire).toHaveBeenCalledWith(expect.stringContaining("u1"), 3600);
   });
 
+  // 泛化后的通用额度闸 key 是 `${env}:quota:${scope}:${userId}`，但头像这个计数器
+  // 线上正在用，换格式等于给所有用户重置额度，所以这里钉死老格式。
+  it("仍然走老 key（不带 quota: 段），不因泛化把线上额度清零", async () => {
+    const f = fakeRedis();
+
+    await consumeAvatarQuota(f.redis, "u1");
+
+    const key = f.expire.mock.calls[0]?.[0] as string;
+    expect(key).toMatch(/^[^:]+:agent:avatar:ratelimit:u1$/);
+    expect(key).not.toContain("quota:");
+  });
+
   // 每次都续 TTL 的话，活跃用户的窗口永远不结束，限流就形同虚设
   it("窗口中间不碰 TTL", async () => {
     const f = fakeRedis({ count: 3, ttl: 1800 });

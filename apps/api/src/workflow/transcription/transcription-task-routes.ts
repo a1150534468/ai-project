@@ -3,9 +3,9 @@ import { deleteObject } from "../../storage/s3-objects.js";
 import { requireUser } from "../../auth/require-user.js";
 import { cancelTranscriptionTask } from "./transcription-task-runner.js";
 import type { TranscriptionRouteContext } from "./transcription-route-context.js";
+import { isUniqueConstraintError } from "../_shared/prisma-errors.js";
 import {
   extensionOf,
-  isUniqueConstraintError,
   resolveAudioMime,
   safeErrorMessage,
   sanitizeFilename,

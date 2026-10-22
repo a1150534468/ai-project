@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "@iconify/react";
 import { useAuthGate } from "../../app/authGate";
+import { createPoller, type Poller } from "../../poller";
 import { InAppSelect } from "../ui/InAppSelect";
 import { cx } from "../ui/cx";
 import { DownloadOverlayButton } from "./DownloadOverlayButton";
@@ -210,20 +211,33 @@ export function PortraitWorkflowStudio({ token, onBalanceRefresh }: PortraitWork
   }, [token]);
 
   const hasActiveTask = tasks.some(isActive);
+  // 轮询走纯逻辑 poller：有活跃任务时按 POLL_MS 刷；无活跃任务时靠 ttlMs 唤醒——
+  // 交付图是签名 URL（URL_REFRESH_MS = 10 分钟过期），挂着不动也要定期重拉，
+  // 此前这是第二个手写 setInterval，现在是 poller 的第二条触发条件。
+  const refreshStateRef = useRef(refreshState);
+  refreshStateRef.current = refreshState;
+  const hasActiveTaskRef = useRef(hasActiveTask);
+  hasActiveTaskRef.current = hasActiveTask;
+  const pollerRef = useRef<Poller | null>(null);
+  if (pollerRef.current === null) {
+    pollerRef.current = createPoller({
+      intervalMs: POLL_MS,
+      ttlMs: URL_REFRESH_MS,
+      shouldPoll: () => hasActiveTaskRef.current,
+      refresh: async () => { await refreshStateRef.current(); },
+      onError: () => undefined,
+    });
+  }
   useEffect(() => {
-    if (!hasActiveTask) return;
-    const timer = window.setInterval(() => {
-      void refreshState().catch(() => undefined);
-    }, POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [hasActiveTask, refreshState]);
+    const poller = pollerRef.current;
+    if (!poller) return undefined;
+    poller.start();
+    return () => poller.stop();
+  }, []);
+  useEffect(() => {
+    pollerRef.current?.notify();
+  }, [hasActiveTask]);
 
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      void refreshState().catch(() => undefined);
-    }, URL_REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [refreshState]);
 
   const presets = options?.presets.length ? options.presets : FALLBACK_PRESETS;
   const models = options?.models?.length ? options.models : FALLBACK_MODELS;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuthGate } from "../../app/authGate";
 import * as workflowEcomApi from "../../workflowEcomApi";
 import type { ImageModel } from "../../workflowState";
@@ -13,6 +13,7 @@ import type {
   WorkflowEcomWorkflow,
 } from "../../workflowEcomApi";
 import { requestResponse } from "../../http";
+import { createPoller, type Poller } from "../../poller";
 import { stitchEcomSegments } from "./ecomWorkflowStitch";
 import {
   ECOM_MAX_REFERENCE_COUNT,
@@ -202,26 +203,36 @@ export function EcomWorkflowStudio({
     isWorkflowMutating: workflowMutating,
   });
 
+  // 轮询调度走纯逻辑 poller：「有任一进行中动作就刷」与重叠保护都在它里面。
+  // 此前这里是 6 个 boolean 拼的 effect 依赖（任一翻转就拆掉重建定时器），现在只 notify。
+  const refreshCurrentWorkflowRef = useRef(refreshCurrentWorkflow);
+  refreshCurrentWorkflowRef.current = refreshCurrentWorkflow;
+  const pollActiveRef = useRef(false);
+  pollActiveRef.current = Boolean(
+    isServerGenerating || isSubmittingMaster || isRetryingMaster || isConfirmingSegments || redrawingIndexes.length > 0,
+  );
+  const pollerRef = useRef<Poller | null>(null);
+  if (pollerRef.current === null) {
+    pollerRef.current = createPoller({
+      intervalMs: ECOM_POLL_MS,
+      shouldPoll: () => pollActiveRef.current,
+      refresh: () => refreshCurrentWorkflowRef.current(),
+    });
+  }
   useEffect(() => {
-    if (
-      !isServerGenerating &&
-      !isSubmittingMaster &&
-      !isRetryingMaster &&
-      !isConfirmingSegments &&
-      redrawingIndexes.length === 0
-    )
-      return undefined;
-    const timer = window.setInterval(() => {
-      void refreshCurrentWorkflow();
-    }, ECOM_POLL_MS);
-    return () => window.clearInterval(timer);
+    const poller = pollerRef.current;
+    if (!poller) return undefined;
+    poller.start();
+    return () => poller.stop();
+  }, []);
+  useEffect(() => {
+    pollerRef.current?.notify();
   }, [
     isConfirmingSegments,
     isRetryingMaster,
     isServerGenerating,
     isSubmittingMaster,
     redrawingIndexes.length,
-    refreshCurrentWorkflow,
   ]);
 
   const clearFeedback = () => {

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { errorMessage as kbErrorMessage } from "../../kb/indexer.js";
+import { failureText as kbFailureText } from "../../kb/reaper.js";
+import { safeErrorMessage as transcriptionRouteMessage } from "../transcription/transcription-route-helpers.js";
+import { safeErrorMessage as transcriptionRunnerMessage } from "../transcription/transcription-task-runner.js";
 import { errorMessageOrFallback } from "./error-message.js";
+import { isUniqueConstraintError } from "./prisma-errors.js";
 
 describe("errorMessageOrFallback", () => {
   it("Error 有话说就用它的 message", () => {
@@ -35,5 +40,55 @@ describe("errorMessageOrFallback", () => {
       }
     }
     expect(errorMessageOrFallback(new UpstreamRejectedError(), "人像生成失败", 300)).toBe("上游模型拒绝了这次请求");
+  });
+});
+
+/**
+ * 下面这组存在的理由：上面测的是共享实现自己，而 transcription 与 kb 曾经各留一份
+ * 迁移前的实现，恰恰用了禁止的 `String(error)` —— 共享模块的注释让人误以为已经统一，
+ * 结果是**测试通过而生产行为不同**。所以「非 Error 走 fallback」这条口径必须钉在
+ * 每个域对外的那个函数上，只测共享实现覆盖不到它们。
+ */
+const nonErrors: { label: string; value: unknown }[] = [
+  { label: "裸字符串", value: "上游炸了" },
+  { label: "上游返回的裸对象", value: { code: "SERVER_ERROR", requestId: "req-1" } },
+  { label: "null", value: null },
+  { label: "undefined", value: undefined },
+  { label: "数字", value: 500 },
+];
+
+describe("各域的 error→string 都必须走共享口径", () => {
+  const cases = [
+    { name: "transcription 路由层", fn: transcriptionRouteMessage, fallback: "转写任务处理失败" },
+    { name: "transcription 执行层", fn: transcriptionRunnerMessage, fallback: "转写任务处理失败" },
+    { name: "kb indexer", fn: kbErrorMessage, fallback: "Unknown error" },
+    { name: "kb reaper", fn: kbFailureText, fallback: "Unknown error" },
+  ];
+
+  for (const { name, fn, fallback } of cases) {
+    describe(name, () => {
+      for (const { label, value } of nonErrors) {
+        it(`非 Error 输入（${label}）走 fallback，不被原样泄进响应体`, () => {
+          expect(fn(value)).toBe(fallback);
+        });
+      }
+
+      it("Error 的 message 仍然透传（业务文案不丢）", () => {
+        expect(fn(new Error("真实原因"))).toBe("真实原因");
+      });
+    });
+  }
+});
+
+describe("isUniqueConstraintError", () => {
+  it("只认 P2002", () => {
+    expect(isUniqueConstraintError({ code: "P2002" })).toBe(true);
+    expect(isUniqueConstraintError({ code: "P2003" })).toBe(false);
+  });
+
+  it("非对象一律 false，不抛", () => {
+    for (const value of [null, undefined, "P2002", 2002, new Error("P2002")]) {
+      expect(isUniqueConstraintError(value)).toBe(false);
+    }
   });
 });

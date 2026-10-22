@@ -6,7 +6,7 @@ import { completedNovelChapterCount, nextNovelChapterIndex } from "@ai-assistant
 import { novelAssistedRunSchema, novelAutopilotStartSchema } from "@ai-assistant/novel-workflow/contracts";
 import { requireUser } from "../auth/require-user.js";
 import { appendNovelRunEvent, novelRunChannel, serializeNovelRunEvent } from "./events.js";
-import { dispatchNovelOutboxBatch } from "./outbox.js";
+import { dispatchNovelOutboxBatch, engineStepOutboxFields } from "./outbox.js";
 import { createNovelRun, createNextNovelStep, serializeNovelRun } from "./run-store.js";
 import { registerNovelResourceRoutes } from "./resource-routes.js";
 import { registerNovelExportRoutes } from "./export.js";
@@ -268,7 +268,7 @@ export async function novelEngineRoutes(app: FastifyInstance, options: {
         prisma.novelRunStep.update({ where: { id: pending.id }, data: { status: "queued", error: null, workerId: null } }),
         prisma.novelCommandOutbox.upsert({
           where: { stepId: pending.id },
-          create: { projectId: run.projectId, runId: run.id, stepId: pending.id, payload: { type: "engine-step", stepId: pending.id }, priority: pending.priority },
+          create: { projectId: run.projectId, runId: run.id, stepId: pending.id, ...engineStepOutboxFields(pending.id), priority: pending.priority },
           update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
         }),
       ]);

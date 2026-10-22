@@ -35,8 +35,8 @@ Codex 桌宠的新项目仅使用 `GPT Image 2` 经 Pixel 路由生成和编辑�
 ```
 apps/       api（Fastify 单体 + workers）、web、admin
 packages/   db（Prisma）、llm、novel/article/codex-pet 流水线、connector-protocol
-infra/      Docker 镜像与 Caddy（生产部署见 docs/deploy-compose.md）；
-            另有保留但**不在部署链路上**的 K8s/Kustomize 配置（见 infra/k8s/README.md）
+infra/      Docker 镜像与 Caddy（生产部署见 docs/deploy-compose.md）
+docs/legacy/ 保留但**不在部署链路上**的旧配置（K8s/Kustomize 清单）
 docs/       项目文档（扁平结构，一个模块一个文档 + superpowers/plans 计划归档，导航见 docs/README.md）
 ```
 

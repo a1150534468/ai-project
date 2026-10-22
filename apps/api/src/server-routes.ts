@@ -15,14 +15,14 @@ import { modelRoutes } from "./models/routes.js";
 import { novelEngineRoutes } from "./novel/routes.js";
 import { articleWorkflowRoutes } from "./workflow/article/index.js";
 import { codexPetRoutes, enqueueCodexPetProjectCleanup } from "./workflow/codex-pet/index.js";
-import { imageWorkflowRoutes } from "./workflow/image/index.js";
+import { imageWorkflowRoutes } from "./workflow/image/image-routes.js";
 import { transcriptionWorkflowRoutes } from "./workflow/transcription/index.js";
 import { novelWorkflowRoutes } from "./workflow/novel/index.js";
 import { announcementRoutes } from "./admin/announcement-routes.js";
 
 import { portraitWorkflowRoutes } from "./workflow/portrait/index.js";
-import { tryOnWorkflowRoutes } from "./workflow/try-on/index.js";
-import { nailTryOnWorkflowRoutes } from "./workflow/nail-try-on/index.js";
+import { tryOnWorkflowRoutes } from "./workflow/try-on/try-on-routes.js";
+import { nailTryOnWorkflowRoutes } from "./workflow/nail-try-on/nail-try-on-routes.js";
 import { ecomWorkflowRoutes, ecomMainImageRoutes, ecomHelpWriteRoutes } from "./workflow/ecom/index.js";
 import { registerStickerRoutes } from "./workflow/sticker/index.js";
 
@@ -40,14 +40,15 @@ export async function registerApplicationRoutes(app: FastifyInstance): Promise<v
   );
   await app.register((instance) => portraitWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance) => tryOnWorkflowRoutes(instance, { redis: getRedis() }));
-  // 决定 A：试甲台不养常驻 reaper（超时任务在 /state 读取时收尸），照 ecom 裸注册，不传 redis。
-  await app.register(nailTryOnWorkflowRoutes);
+  // 决定 A 不变：试甲台仍然不养常驻 reaper（超时任务在 /state 读取时收尸）。
+  // 这里传 redis 只为了生成前的额度闸——nail 模块本来就没有 reaper，不会因此起定时任务。
+  await app.register((instance) => nailTryOnWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register(ecomWorkflowRoutes);
   await app.register(ecomMainImageRoutes);
   await app.register(ecomHelpWriteRoutes);
-  await app.register(novelWorkflowRoutes);
+  await app.register((instance) => novelWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register(novelEngineRoutes);
-  await app.register(articleWorkflowRoutes);
+  await app.register((instance) => articleWorkflowRoutes(instance, { redis: getRedis() }));
   await app.register((instance, _opts, done) => {
     registerStickerRoutes(instance, getPrisma());
     done();

@@ -120,6 +120,29 @@ describe("novel checkpoint resources", () => {
     await app.close();
   });
 
+  /**
+   * 列表页只想显示「第几章、什么标签、哪条世界线」，而 snapshot 里是整本书的正文
+   * —— 100 条 × 整本，就是 ADR-011 那次 31.6 MB 接口的同形状。
+   */
+  it("检查点列表只回元数据，不带 snapshot", async () => {
+    const findMany = vi.fn(async (_args: { select?: Record<string, boolean> }) => [
+      { id: "checkpoint-1", label: "第一章后", chapterNumber: 1, branchName: "main", isHead: true, parentId: null, createdAt: new Date(0) },
+    ]);
+    const prisma = {
+      novelProject: { findFirst: vi.fn(async () => ({ id: "project-1", userId: "user-1" })) },
+      novelCheckpoint: { findMany },
+    } as unknown as PrismaClient;
+    const app = await appFor(prisma);
+
+    const response = await app.inject({ method: "GET", url: "/api/workflow/novels/projects/project-1/checkpoints" });
+
+    expect(response.statusCode).toBe(200);
+    const select = findMany.mock.calls[0]?.[0]?.select;
+    expect(select).toMatchObject({ id: true, label: true, chapterNumber: true, branchName: true, isHead: true });
+    expect(select).not.toHaveProperty("snapshot");
+    await app.close();
+  });
+
   it("restores the project and chapters while switching branches", async () => {
     const state = checkpointPrisma();
     const app = await appFor(state.prisma);

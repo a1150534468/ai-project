@@ -152,3 +152,47 @@ describe("novel outbox", () => {
     expect(taskUpdate.mock.calls.map(([args]) => args.where.id)).toEqual(["chapter-route", "rewrite"]);
   });
 });
+
+describe("outboxCommandOf（#12 kind 判别）", () => {
+  it("kind 与 id 一致时按 kind 解析", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(outboxCommandOf({ kind: "engine-step", stepId: "s1", taskId: null })).toEqual({ kind: "engine-step", stepId: "s1" });
+    expect(outboxCommandOf({ kind: "generation-task", stepId: null, taskId: "t1" })).toEqual({ kind: "generation-task", taskId: "t1" });
+  });
+
+  // 双 id 行在生产中不可达：stepId/taskId 各自 @unique、每个生产者只写其一、
+  // upsert 也按该 unique 键定位。这里只钉解析器自身的契约——真出现时以 kind 为准，
+  // 且分发兜底会 console.warn 留痕（见 dispatchNovelOutboxBatch）。
+  it("kind 与 stepId 同时存在时 kind 优先（解析器契约）", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(outboxCommandOf({ kind: "generation-task", stepId: "s1", taskId: "t1" })).toEqual({ kind: "generation-task", taskId: "t1" });
+  });
+
+  it("kind 对应 id 缺失时按另一 id 兜底（迁移前在途行）", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(outboxCommandOf({ kind: "engine-step", stepId: null, taskId: "t9" })).toEqual({ kind: "generation-task", taskId: "t9" });
+    expect(outboxCommandOf({ kind: "unknown-kind", stepId: "s9", taskId: null })).toEqual({ kind: "engine-step", stepId: "s9" });
+  });
+
+  it("两个 id 都没有时抛错判坏行", async () => {
+    const { outboxCommandOf } = await import("./outbox.js");
+    expect(() => outboxCommandOf({ kind: "engine-step", stepId: null, taskId: null })).toThrow("missing stepId/taskId");
+  });
+
+  it("生产者 helper 造出的行经分发器按 kind 投递（生产者→分发组合）", async () => {
+    const { engineStepOutboxFields, generationTaskOutboxFields } = await import("./outbox.js");
+    const prisma = {
+      novelCommandOutbox: {
+        findMany: vi.fn(async () => [
+          { id: "ob-step", stepId: "step-9", taskId: null, priority: 3, attempts: 0, ...engineStepOutboxFields("step-9") },
+          { id: "ob-task", stepId: null, taskId: "task-9", priority: 1, attempts: 0, ...generationTaskOutboxFields("task-9") },
+        ]),
+        updateMany: vi.fn(async () => ({ count: 1 })),
+        update: vi.fn(async () => undefined),
+      },
+    } as unknown as PrismaClient;
+    await expect(dispatchNovelOutboxBatch(prisma)).resolves.toBe(2);
+    expect(enqueueNovelEngineStep).toHaveBeenCalledWith("step-9", 3);
+    expect(enqueueNovelGenerationTask).toHaveBeenCalledWith("task-9");
+  });
+});

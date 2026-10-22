@@ -174,18 +174,22 @@ export function registerCodexPetDeliveryRoutes(app: FastifyInstance, ctx: CodexP
     if (!shape) return reply.code(404).send({ error: "桌宠资源不存在" });
     try {
       // Row ownership includes the private namespace guard; never sign before it.
-      const url = await signImageUrl({
+      const signed = await signImageUrl({
         objectKey: shape.objectKey,
         mime: shape.mime,
         expiresAt: Math.min(query.data.exp * 1_000, shape.expiresAt?.getTime() ?? Infinity),
         contentDisposition: "inline",
       });
-      if (url) {
+      if (signed.kind === "signed") {
         return reply
           .header("Cache-Control", "private, no-store")
           .header("Referrer-Policy", "no-referrer")
           .header("X-Content-Type-Options", "nosniff")
-          .redirect(url, 302);
+          .redirect(signed.url, 302);
+      }
+      // delivery-disabled 是预期（proxy 模式）；unsupported-asset 是退化，留一条 warn。
+      if (signed.reason === "unsupported-asset") {
+        app.log.warn({ runId: shape.runId, objectKey: shape.objectKey, mime: shape.mime }, "codex pet artifact not signable by CDN, falling back to origin read");
       }
       const bytes = await loadArtifact(shape.objectKey);
       const maxAge = Math.max(0, Math.min(300, query.data.exp - Math.floor(now().getTime() / 1_000)));

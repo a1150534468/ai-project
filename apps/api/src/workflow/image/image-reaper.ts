@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
 import {
   IMAGE_TASK_STATUS,
   type ImageGenerationTaskRow,
@@ -63,16 +64,11 @@ export function startImageReaper(args: {
   readonly env?: NodeJS.ProcessEnv;
   readonly onError?: (error: unknown) => void;
 }): NodeJS.Timeout {
-  const tick = async () => {
-    const got = await args.redis.set(IMAGE_REAPER_LOCK_KEY, "1", "EX", 55, "NX").catch(() => null);
-    if (got !== "OK") return;
-    try {
-      await scanStaleImageTasks(args);
-    } catch (error) {
-      args.onError?.(error);
-    }
-  };
-  const timer = setInterval(() => void tick(), IMAGE_REAPER_INTERVAL_MS);
-  timer.unref();
-  return timer;
+  return createStaleScanner({
+    lockKey: IMAGE_REAPER_LOCK_KEY,
+    redis: args.redis,
+    intervalMs: IMAGE_REAPER_INTERVAL_MS,
+    scan: () => scanStaleImageTasks(args),
+    onError: args.onError,
+  }).start();
 }

@@ -11,8 +11,8 @@ const api = vi.hoisted(() => ({
   listNovelStorylines: vi.fn(),
 }));
 
-vi.mock("../../api", async (importOriginal) => ({
-  ...await importOriginal<typeof import("../../api")>(),
+vi.mock("../../novelApi", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../../novelApi")>(),
   ...api,
 }));
 vi.mock("@iconify/react", () => ({ Icon: ({ icon }: { readonly icon: string }) => <span data-icon={icon} /> }));

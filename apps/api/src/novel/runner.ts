@@ -9,17 +9,15 @@ import {
   type NovelPipelineStepKind,
 } from "@ai-assistant/novel-workflow";
 import { nextPipelineStep, runStatusForStep } from "@ai-assistant/novel-workflow/server";
-import {
-  createNovelGenerator,
-  buildNovelQualityDiagnostics,
-  reserveAndCreateTask,
-  runNovelTask,
-  type NovelTaskRow,
-  type NovelTargetKind,
-} from "../workflow/novel/index.js";
+// 直接指到各自定义所在的叶子/门面层，不走 workflow/novel 的域门面（那里排着
+// novel-routes，会绕回 src/novel 形成运行时环）。
+import { createNovelGenerator } from "../workflow/novel/novel-generation.js";
+import { buildNovelQualityDiagnostics } from "../workflow/novel/novel-text-analysis.js";
+import { reserveAndCreateTask, runNovelTask, type NovelTaskRow } from "../workflow/novel/novel-task-runner.js";
+import type { NovelTargetKind } from "../workflow/novel/novel-types.js";
 import { appendNovelRunEvent } from "./events.js";
 import { createNextNovelStep } from "./run-store.js";
-import { captureNovelStructuredSnapshot } from "./checkpoint-snapshot.js";
+import { buildCheckpointSnapshot, captureNovelStructuredSnapshot, resolveCheckpointChaptersDetailed } from "./checkpoint-snapshot.js";
 import { buildNovelRevisionGuidance, MAX_AUTOMATIC_NOVEL_REVISIONS } from "./revision.js";
 
 function record(value: Prisma.JsonValue | null | undefined): Record<string, unknown> {
@@ -106,6 +104,7 @@ async function executeStepBody(args: {
       ]);
       await tx.novelCheckpoint.updateMany({ where: { projectId: project.id, branchName, isHead: true }, data: { isHead: false } });
       const parent = await tx.novelCheckpoint.findFirst({ where: { projectId: project.id, branchName }, orderBy: { createdAt: "desc" } });
+      const parentResolved = parent ? await resolveCheckpointChaptersDetailed(tx, parent) : null;
       await tx.novelCheckpoint.create({
         data: {
           projectId: project.id,
@@ -114,12 +113,13 @@ async function executeStepBody(args: {
           chapterNumber,
           label: `生成第 ${chapterNumber} 章前`,
           isHead: true,
-          snapshot: {
-            chapterNumber,
+          snapshot: buildCheckpointSnapshot({
             project: { title: project.title, genre: project.genre, premise: project.premise, settings: project.settings, generationPrefs: project.generationPrefs, narrativeContract: project.narrativeContract, storyPhase: project.storyPhase },
-            chapters: snapshotChapters,
+            chapters: snapshotChapters as unknown as Record<string, unknown>[],
             structured,
-          },
+            parent: parentResolved,
+            extra: { chapterNumber },
+          }) as Prisma.InputJsonValue,
         },
       });
       await tx.novelChapter.upsert({
@@ -403,7 +403,7 @@ export async function executeNovelEngineStep(args: {
       });
       return;
     }
-    const next = nextPipelineStep(freshRun.mode as "assisted" | "autopilot", initial.kind as NovelPipelineStepKind, false);
+    const next = nextPipelineStep(initial.kind as NovelPipelineStepKind);
     if (next) {
       await createNextNovelStep({
         prisma,

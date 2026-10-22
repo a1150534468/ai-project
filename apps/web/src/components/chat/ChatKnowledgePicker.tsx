@@ -7,7 +7,7 @@
  *  - **勾选写的是草稿**,「确定」才落地;「关闭知识库」把已生效的一起清掉。
  */
 import { Icon } from "@iconify/react";
-import type { KnowledgeBase } from "../../api";
+import type { KnowledgeBase } from "../../kbApi";
 
 export function ChatKnowledgePicker({
   open,

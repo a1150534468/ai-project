@@ -1,5 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
-import { NOVEL_TARGET_KINDS, type NovelTargetKind } from "../workflow/novel/index.js";
+// 直接指到叶子，不走 workflow/novel 的门面：门面里排着 novel-routes 等会绕回 src/novel
+// 的模块，而本文件在**模块求值期**就要用 NOVEL_TARGET_KINDS.filter(...)，
+// 走门面等于在环里取一个还没初始化的绑定（TypeError: Cannot read properties of undefined）。
+import { NOVEL_TARGET_KINDS, type NovelTargetKind } from "../workflow/novel/novel-types.js";
 import { enqueueNovelEngineStep, enqueueNovelGenerationTask } from "./queue.js";
 
 const OUTBOX_BATCH_SIZE = 50;
@@ -28,6 +31,40 @@ const TARGET_ID_HOLDS_STEP_ID: Record<NovelTargetKind, boolean> = {
 
 const STEP_OWNED_TARGET_KINDS = NOVEL_TARGET_KINDS.filter((kind) => TARGET_ID_HOLDS_STEP_ID[kind]);
 
+/** outbox 命令的判别联合：kind 列是唯一判别来源（#12 起），解析时校验对应 id 存在。 */
+export type NovelOutboxCommand =
+  | { readonly kind: "engine-step"; readonly stepId: string }
+  | { readonly kind: "generation-task"; readonly taskId: string };
+
+/**
+ * 命令字段的单一来源：kind 与 payload.type 永远由这两个函数成对生成，
+ * 生产者不许再手写字面量——双写漂移在构造点就被堵死。
+ */
+export function engineStepOutboxFields(stepId: string) {
+  return { kind: "engine-step" as const, payload: { type: "engine-step", stepId } };
+}
+
+export function generationTaskOutboxFields(taskId: string) {
+  return { kind: "generation-task" as const, payload: { type: "generation-task", taskId } };
+}
+
+export function outboxCommandOf(row: { kind: string; stepId: string | null; taskId: string | null }): NovelOutboxCommand {
+  switch (row.kind) {
+    case "engine-step":
+      if (row.stepId) return { kind: "engine-step", stepId: row.stepId };
+      break;
+    case "generation-task":
+      if (row.taskId) return { kind: "generation-task", taskId: row.taskId };
+      break;
+    default:
+      break;
+  }
+  // kind 与 id 不一致（迁移前在途行/脏数据）时按 id 兜底，保持旧分发行为；两者皆无才判坏行。
+  if (row.stepId) return { kind: "engine-step", stepId: row.stepId };
+  if (row.taskId) return { kind: "generation-task", taskId: row.taskId };
+  throw new Error("outbox command is missing stepId/taskId");
+}
+
 export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new Date()): Promise<number> {
   const rows = await prisma.novelCommandOutbox.findMany({
     where: { status: "pending", availableAt: { lte: now } },
@@ -42,9 +79,19 @@ export async function dispatchNovelOutboxBatch(prisma: PrismaClient, now = new D
     });
     if (claimed.count !== 1) continue;
     try {
-      if (row.stepId) await enqueueNovelEngineStep(row.stepId, row.priority);
-      else if (row.taskId) await enqueueNovelGenerationTask(row.taskId);
-      else throw new Error("outbox command is missing stepId/taskId");
+      const command = outboxCommandOf(row);
+      if (command.kind !== row.kind) {
+        // kind 与 id 不一致时解析走了兜底（迁移前在途行/历史脏数据）：留痕，别静默吞。
+        console.warn(`[novel-outbox] kind/id 不一致：row=${row.id} kind=${row.kind} stepId=${row.stepId} taskId=${row.taskId}，按 ${command.kind} 分发`);
+      }
+      switch (command.kind) {
+        case "engine-step":
+          await enqueueNovelEngineStep(command.stepId, row.priority);
+          break;
+        case "generation-task":
+          await enqueueNovelGenerationTask(command.taskId);
+          break;
+      }
       await prisma.novelCommandOutbox.update({
         where: { id: row.id },
         data: { status: "sent", sentAt: new Date(), lastError: null },
@@ -82,7 +129,7 @@ export async function recoverInterruptedNovelSteps(prisma: PrismaClient, staleBe
           projectId: (await tx.novelRun.findUniqueOrThrow({ where: { id: step.runId } })).projectId,
           runId: step.runId,
           stepId: step.id,
-          payload: { type: "engine-step", stepId: step.id },
+          ...engineStepOutboxFields(step.id),
           priority: step.priority,
         },
         update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
@@ -130,7 +177,7 @@ export async function recoverInterruptedNovelTasks(
       });
       await tx.novelCommandOutbox.upsert({
         where: { taskId: task.id },
-        create: { projectId: task.projectId, taskId: task.id, payload: { type: "generation-task", taskId: task.id }, priority: 1, jobName: "generation-task" },
+        create: { projectId: task.projectId, taskId: task.id, ...generationTaskOutboxFields(task.id), priority: 1, jobName: "generation-task" },
         update: { status: "pending", availableAt: new Date(), sentAt: null, lastError: null },
       });
     });

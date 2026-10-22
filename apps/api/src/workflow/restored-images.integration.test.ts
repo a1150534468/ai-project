@@ -5,7 +5,7 @@ import sharp from "sharp";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { portraitWorkflowRoutes } from "./portrait/index.js";
 import { PORTRAIT_CONSENT_VERSION } from "./portrait/portrait-prompts.js";
-import { tryOnWorkflowRoutes } from "./try-on/index.js";
+import { tryOnWorkflowRoutes } from "./try-on/try-on-routes.js";
 import type { GeneratedImage } from "./_shared/image-service.js";
 
 const prisma = getPrisma();

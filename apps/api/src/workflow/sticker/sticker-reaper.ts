@@ -6,6 +6,7 @@
  */
 import type { PrismaClient } from "@prisma/client";
 import { loadStickerStaleTaskMs, STICKER_PACK_STATUS } from "./sticker-shared.js";
+import { createStaleScanner } from "../_shared/stale-scanner.js";
 
 export interface ReapStickerPacksResult {
   readonly reaped: number;
@@ -54,10 +55,11 @@ export function startStickerReaper(args: {
   readonly intervalMs?: number;
   readonly onError?: (error: unknown) => void;
 }): NodeJS.Timeout {
-  const intervalMs = args.intervalMs ?? 5 * 60 * 1000;
-  const timer = setInterval(() => {
-    void reapStickerPacks(args.prisma, args.env).catch((error) => args.onError?.(error));
-  }, intervalMs);
-  timer.unref();
-  return timer;
+  // 无锁是刻意的：状态机转换幂等（见上方 reapStickerPacks 的论证），scanner 用 lockKey: null 表达
+  return createStaleScanner({
+    lockKey: null,
+    intervalMs: args.intervalMs ?? 5 * 60 * 1000,
+    scan: () => reapStickerPacks(args.prisma, args.env),
+    onError: args.onError,
+  }).start();
 }

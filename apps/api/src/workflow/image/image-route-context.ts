@@ -2,7 +2,7 @@ import type { Buffer } from "node:buffer";
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { getPrisma } from "@ai-assistant/db";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, getS3 } from "../../storage/s3.js";
 import { createImageUrlSigner, type ImageUrlSigner } from "../../storage/cos-image-url.js";
 import type { ImageGenerationTaskRow } from "./image-shared.js";
 import { loadImageStaleTaskMs } from "./image-shared.js";
@@ -43,7 +43,7 @@ export function createImageRouteContext(app: FastifyInstance, deps: ImageWorkflo
     fetchFn,
     signImageUrl: deps.signImageUrl ?? createImageUrlSigner(),
     loadStoredImage: deps.loadStoredImage
-      ?? ((objectKey: string) => getObject(makeS3(loadS3Config()), objectKey)),
+      ?? ((objectKey: string) => getObject(getS3(), objectKey)),
     promptOptimizer: deps.promptOptimizer ?? optimizeImagePrompt,
     scheduleTask,
     retryDelayMs,

@@ -9,7 +9,7 @@ import {
   type ArticleWorkflowPlatform,
   type ArticleWorkflowSourceFormat,
 } from "@ai-assistant/article-workflow";
-import { getObject, loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getObject, getS3 } from "../../storage/s3.js";
 import { normalizeArticleWorkflowCreationSource } from "./article-workflow-creation.js";
 import { renderDeterministicArticleBodyHtmlGuarded } from "./article-workflow-deterministic.js";
 import {
@@ -38,6 +38,7 @@ import {
 } from "./article-workflow-html-guard.js";
 import { generateArticleWorkflowImageAsset } from "./article-workflow-images.js";
 import { articleWorkflowStableBodyHtml } from "./article-workflow-image-url.js";
+import { sanitizeAttributeProtocols } from "./article-workflow-html-attributes.js";
 import {
   runArticleWorkflowMissingImages,
   runArticleWorkflowRewrite,
@@ -53,6 +54,7 @@ import {
   isSerializableConflict,
 } from "./article-workflow-route-actions.js";
 import { registerArticleWorkflowReadRoutes } from "./article-workflow-read-routes.js";
+import { consumeNamedQuota, QUOTA_EXCEEDED_MESSAGE } from "../../shared/quota.js";
 
 export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleWorkflowRouteDeps = {}) {
   const prisma = deps.prisma ?? getPrisma();
@@ -60,7 +62,7 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
   const fetchFn = deps.fetchFn ?? fetch;
   const env = deps.env ?? process.env;
   const scheduleTask = deps.scheduleTask ?? scheduledRunner(app);
-  const loadImageBlob = deps.loadImageBlob ?? ((objectKey: string) => getObject(makeS3(loadS3Config(env)), objectKey));
+  const loadImageBlob = deps.loadImageBlob ?? ((objectKey: string) => getObject(getS3(env), objectKey));
   const model = env.ARTICLE_WORKFLOW_MODEL?.trim() || env.LLM_DEFAULT_MODEL?.trim() || DEFAULT_ARTICLE_MODEL;
 
   registerArticleWorkflowReadRoutes(app, { prisma, env, loadImageBlob });
@@ -70,6 +72,11 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     if (!userId) return;
     const parsed = createArticleWorkflowProjectSchema.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "参数不合法" });
+    // 额度闸按「一次请求」计，不按平台数计：一次下单可能建 5 个平台项目，但只花用户一次操作。
+    // 没有 redis（单测）时放行。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const creationConfig: ArticleWorkflowCreationConfig =
       parsed.data.creationMode === "topic"
@@ -226,9 +233,13 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
       expectedVisibleText: "",
       skipVisibleTextCheck: true,
     });
-    // 落库前把出参时现签的短期地址还原成稳定地址，否则存进去的是一批会过期的死链。
+    // 落库前先剥危险协议（javascript:/data: 等），再把出参时现签的短期地址还原成稳定地址，
+    // 否则存进去的是一批会过期的死链。
     // 配图区随后会按 manifest 整段重建，这一步管的是重建覆盖不到的残留。
-    const bodyHtml = applyArticleImageManifestToHtml(articleWorkflowStableBodyHtml(guardedHtml), current.imageManifest);
+    const bodyHtml = applyArticleImageManifestToHtml(
+      articleWorkflowStableBodyHtml(sanitizeAttributeProtocols(guardedHtml)),
+      current.imageManifest,
+    );
     const updated = await updateArticleWorkflowProjectState(prisma, project.id, {
       title: parsed.data.title.trim(),
       summary: parsed.data.summary.trim(),
@@ -257,6 +268,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (project.status !== "failed") return reply.code(409).send({ error: "只有生成失败的图文可以重试" });
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const platform = project.platform as ArticleWorkflowPlatform;
     const current = readArticleWorkflowProject(project);
@@ -308,6 +322,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好改稿" });
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     // 平台不支持的模式在落库前裁定，避免库里存着 runner 不会执行的模式
     const generationMode = resolveArticleWorkflowMode(
@@ -354,11 +371,14 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const project = await findOwnedArticleWorkflowProject(prisma, userId, params.data.id);
     if (!project) return reply.code(404).send({ error: "项目不存在" });
     if (!canRecoverArticleProject(project.status)) return reply.code(409).send({ error: "项目尚未准备好重生图片" });
-
     const current = readArticleWorkflowProject(project);
     const platformConfig = articleWorkflowPlatformConfig(current.platform);
     const target = findArticleImageBySlot(current.imageManifest, params.data.slot);
     if (!target) return reply.code(400).send({ error: "图片槽位不存在" });
+    // 额度在槽位校验之后才扣：槽位不存在的请求不该白耗用户额度。
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
+    }
 
     const claimed = await claimArticleWorkflowProject(
       prisma,
@@ -493,6 +513,9 @@ export async function articleWorkflowRoutes(app: FastifyInstance, deps: ArticleW
     const current = readArticleWorkflowProject(project);
     if (!current.imageManifest.some((image) => !image.imageUrl.trim())) {
       return { success: true, data: { projectId: project.id, queued: false } };
+    }
+    if (deps.redis && !(await consumeNamedQuota(deps.redis, "workflowArticle", userId, (error) => req.log.warn({ err: error }, "article quota check failed, allowing")))) {
+      return reply.code(429).send({ error: QUOTA_EXCEEDED_MESSAGE });
     }
 
     const claimed = await claimArticleWorkflowProject(

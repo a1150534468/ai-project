@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorMessageOrFallback } from "../_shared/error-message.js";
 import {
   DEFAULT_TRANSCRIPTION_LANGUAGE,
   isTranscriptionLanguage,
@@ -52,13 +53,10 @@ export function resolveAudioMime(filename: string, declaredMime: string): string
   return null;
 }
 
+// 走共享实现，不用 `String(error)`：后者会把任意值（含上游返回的裸对象）原样泄进响应体。
+// 迁移前这里就是那个被 `errorMessageOrFallback` 注释明令禁止的写法。
 export function safeErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message.slice(0, 500);
-  return String(error).slice(0, 500);
-}
-
-export function isUniqueConstraintError(error: unknown): boolean {
-  return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "P2002";
+  return errorMessageOrFallback(error, "转写任务处理失败");
 }
 
 export interface SerializedTranscriptionTask {

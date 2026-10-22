@@ -8,11 +8,12 @@
  * 依赖方向:本文件(叶子)→ metrics → recovery → codex-pet-worker.ts。
  */
 
+import { envInt } from "../runtime/env.js";
 import { sanitizeCodexPetDiagnosticText } from "../workflow/codex-pet/index.js";
 
+/** 保留这个名字是因为 worker 与 recovery 都按它 import；实现收敛到共享的 envInt。 */
 export function positiveNumber(key: string, fallback: number, env: NodeJS.ProcessEnv = process.env): number {
-  const value = Number(env[key]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
+  return envInt(env, key, fallback);
 }
 
 export function safeWorkerError(error: unknown): string {

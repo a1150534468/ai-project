@@ -1,11 +1,10 @@
-// novel 域门面（P2.1）：域外（server.ts / workers / src/novel 引擎）只从这里导入，
+// novel 域门面（P2.1）：域外（server.ts / workers）只从这里导入，
 // 不直接 import 本目录内的实现文件。
 //
-// 导出顺序有意义，勿随手调：`workflow/novel` 与 `src/novel` 之间本来就存在模块环
-// （novel-routes -> src/novel/outbox -> 本门面），而 outbox 在模块求值期就要用
-// NOVEL_TARGET_KINDS.filter(...)。门面里叶子模块（类型/常量）必须排在 routes、
-// task-runner 这些会绕回 src/novel 的模块之前，否则回边拿到的是未初始化的绑定
-// （TypeError: Cannot read properties of undefined）。
+// 2026-10-20：`src/novel` 那 6 处回边已改为直连叶子文件，本门面不再靠「谁排在谁前面」
+// 维持正确性——原来那段注释讲的是 outbox 在模块求值期要取 NOVEL_TARGET_KINDS 而踩到
+// 环的事故，现在 outbox 直连 novel-types，环已断。
+// 门面仍然保留：它是域外唯一入口，只是里面的排列顺序不再是不变量。
 export { NOVEL_TARGET_KINDS } from "./novel-types.js";
 export type { NovelTargetKind } from "./novel-types.js";
 export type { NovelEventCard, NovelForeshadowPayload } from "./novel-workbench-types.js";

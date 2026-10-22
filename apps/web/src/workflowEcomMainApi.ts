@@ -1,4 +1,4 @@
-import { requestWorkflowEcom } from "./workflowEcomApi";
+import { requestWorkflowEcom, type WorkflowEcomProductInput } from "./workflowEcomApi";
 import type { ImageModel } from "./workflowState";
 
 export type EcomMainRatio = "1:1" | "3:4" | "4:5" | "16:9" | "9:16";
@@ -51,7 +51,7 @@ export type CreateEcomMainPayload = {
   readonly customStyle: string;
   readonly withText: boolean;
   readonly count: number;
-  readonly product: { readonly name: string; readonly category: string; readonly sellingPoints: readonly string[]; readonly extra: string };
+  readonly product: WorkflowEcomProductInput;
   readonly referenceAssetIds: readonly string[];
 };
 

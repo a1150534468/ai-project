@@ -13,6 +13,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { errorMessage } from "../../apiError";
+import { createPoller, type Poller } from "../../poller";
 import {
   cancelWorkflowImageTask,
   generateWorkflowImages,
@@ -178,13 +179,28 @@ export function useImageWorkflowStudio(args: {
     void refreshImageState(true);
   }, [refreshImageState]);
 
+  // 轮询走纯逻辑 poller：有活跃任务才刷、上一轮没回来不开下一轮、落地停轮。
+  const imagePollInputsRef = useRef({ hasActiveTask: tasks.some(isActiveTask), refreshImageState });
+  imagePollInputsRef.current = { hasActiveTask: tasks.some(isActiveTask), refreshImageState };
+  const imagePollerRef = useRef<Poller | null>(null);
+  if (imagePollerRef.current === null) {
+    imagePollerRef.current = createPoller({
+      intervalMs: TASK_POLL_MS,
+      shouldPoll: () => imagePollInputsRef.current.hasActiveTask,
+      refresh: async () => {
+        await imagePollInputsRef.current.refreshImageState(false);
+      },
+    });
+  }
   useEffect(() => {
-    if (!tasks.some(isActiveTask)) return undefined;
-    const timer = window.setInterval(() => {
-      void refreshImageState(false);
-    }, TASK_POLL_MS);
-    return () => window.clearInterval(timer);
-  }, [refreshImageState, tasks]);
+    const poller = imagePollerRef.current;
+    if (!poller) return undefined;
+    poller.start();
+    return () => poller.stop();
+  }, []);
+  useEffect(() => {
+    imagePollerRef.current?.notify();
+  }, [tasks]);
 
   useEffect(() => {
     if (!pendingVersionRequestId) return;

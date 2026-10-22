@@ -1,11 +1,14 @@
 import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import type { FastifyRequest } from "fastify";
+import type { Redis } from "ioredis";
 
 export interface AuthRouteContext {
   readonly prisma: PrismaClient;
   readonly secret: string;
   readonly recordLogin: (request: FastifyRequest, userId: string) => Promise<void>;
+  /** 只用于登录失败计数。不传（单测）则计数闸放行，测试不必准备 Redis。 */
+  readonly redis?: Redis;
 }
 
 export function requireSessionSecret(env: NodeJS.ProcessEnv = process.env): string {
@@ -14,10 +17,11 @@ export function requireSessionSecret(env: NodeJS.ProcessEnv = process.env): stri
   return secret;
 }
 
-export function createAuthRouteContext(prisma: PrismaClient): AuthRouteContext {
+export function createAuthRouteContext(prisma: PrismaClient, redis?: Redis): AuthRouteContext {
   return {
     prisma,
     secret: requireSessionSecret(),
+    redis,
     async recordLogin(request, userId) {
       try {
         await prisma.$executeRaw`

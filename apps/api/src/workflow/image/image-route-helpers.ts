@@ -9,8 +9,7 @@
  * 本文件不 import task-runner，方向是单向的：helpers ← task-runner ← routes。
  */
 
-import { Buffer } from "node:buffer";
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { signPayload, verifyPayloadSignature } from "../_shared/signed-blob-url.js";
 import type { PrismaClient } from "@prisma/client";
 import { z } from "zod";
 import { createLlmClient, loadLlmConfig } from "@ai-assistant/llm";
@@ -176,21 +175,14 @@ export function imageBlobSignaturePayload(imageId: string, objectKey: string, ex
 
 export function imageBlobUrl(imageId: string, objectKey: string): string {
   const exp = Date.now() + IMAGE_BLOB_URL_TTL_MS;
-  const sig = createHmac("sha256", imageBlobSigningSecret())
-    .update(imageBlobSignaturePayload(imageId, objectKey, exp))
-    .digest("base64url");
+  const sig = signPayload(imageBlobSigningSecret(), imageBlobSignaturePayload(imageId, objectKey, exp), "base64url");
   const query = new URLSearchParams({ exp: String(exp), sig });
   return `/api/workflow/images/${encodeURIComponent(imageId)}/blob?${query.toString()}`;
 }
 
 export function hasValidImageBlobAccess(imageId: string, objectKey: string, exp: number, sig: string): boolean {
   if (exp < Date.now()) return false;
-  const expected = createHmac("sha256", imageBlobSigningSecret())
-    .update(imageBlobSignaturePayload(imageId, objectKey, exp))
-    .digest("base64url");
-  const actualBuffer = Buffer.from(sig);
-  const expectedBuffer = Buffer.from(expected);
-  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+  return verifyPayloadSignature(imageBlobSigningSecret(), imageBlobSignaturePayload(imageId, objectKey, exp), sig, "base64url");
 }
 
 export function serializeImageRow<Row extends {
@@ -325,9 +317,9 @@ export function safeErrorMessage(error: unknown): string {
   return errorMessageOrFallback(error, "生成失败");
 }
 
-export function isUniqueConstraintError(error: unknown): boolean {
-  return Boolean(error) && typeof error === "object" && (error as { code?: unknown }).code === "P2002";
-}
+// 唯一约束冲突的判定已收进 _shared：三份（image / transcription / codex-pet）语义一致，
+// 只是「怎么把 unknown 摆成对象」写法不同。这里保留转发，调用方的 import 不用改。
+export { isUniqueConstraintError } from "../_shared/prisma-errors.js";
 
 export async function assertImageTaskRunning(prisma: PrismaClient, taskId: string): Promise<void> {
   const current = await prisma.imageGenerationTask.findUnique({ where: { id: taskId } });

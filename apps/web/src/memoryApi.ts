@@ -1,6 +1,6 @@
 /**
  * 记忆（Memory）的前端 API 客户端。P2.4 批次二 Step 2 从 `api.ts` 整块搬来，逐字未动，
- * `api.ts` 用 `export *` 转发，调用方无感。
+ * 调用方直接从本文件 import（`api.ts` 不再转发）。
  *
  * `getMemorySettings` 的 `memoryEnabled ?? enabled` 双回落是刻意保留的 —— 后端这个字段
  * 历史上两种拼法都出现过，去掉任一分支都会让老接口读出 undefined。

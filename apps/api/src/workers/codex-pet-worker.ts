@@ -6,7 +6,7 @@
  * - `codex-pet-worker-metrics.ts`   WorkerMetrics、事件 → 指标增量、/metrics 与 health server
  * - `codex-pet-worker-recovery.ts`  量表刷新、产物清理、软删项目与卡死运行重投、等授权超时收尸、抢占释放
  *
- * 本文件**不能**变成纯 re-export 门面:`infra/k8s/base/37-codex-pet-worker.yaml` 与
+ * 本文件**不能**变成纯 re-export 门面:`docs/legacy/k8s/base/37-codex-pet-worker.yaml` 与
  * package.json 的 `worker:codex-pet` 都按这个路径起进程,底部的 `isDirectWorkerEntrypoint`
  * 守卫必须留在这里;`env.test.ts` 还钉着"这个文件里出现 assertRequiredEnv()"。
  *
@@ -17,7 +17,7 @@
 import { assertRequiredEnv } from "../env.js";
 import { randomUUID } from "node:crypto";
 import { getPrisma } from "@ai-assistant/db";
-import { getObject, makeS3 } from "../storage/s3.js";
+import { getObject, getS3 } from "../storage/s3.js";
 import {
   closeCodexPetCleanupQueue,
   createCodexPetCleanupWorker,
@@ -109,7 +109,7 @@ export async function startCodexPetWorker(options: {
   } else {
     console.info("[codex-pet-worker] visual QA preflight skipped; no quality-enabled Codex pet run is active");
   }
-  const s3 = makeS3();
+  const s3 = getS3();
   const artifacts = createCodexPetArtifactStore({ prisma, s3 });
   const metrics = createCodexPetWorkerMetrics();
   await refreshDatabaseGauges(prisma, metrics);

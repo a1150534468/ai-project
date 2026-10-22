@@ -43,7 +43,9 @@ import {
   deleteArticleWorkflowProject,
   generateArticleWorkflowImages,
   getArticleWorkflowBatch,
+  getArticleWorkflowBatchStatus,
   getArticleWorkflowProject,
+  getArticleWorkflowProjectStatus,
   listArticleWorkflowHistory,
   regenerateArticleWorkflowImage,
   retryArticleWorkflowProject,
@@ -312,6 +314,15 @@ export function useArticleWorkflowStudio({
     [hydrateProjects, token],
   );
 
+  /** 轮询专用：只拉轻量状态行，不带正文、不回填草稿。 */
+  const loadBatchStatus = useCallback(
+    async (args: { readonly batchId: string | null; readonly projectId: string }) =>
+      args.batchId
+        ? (await getArticleWorkflowBatchStatus(token, args.batchId)).projects
+        : [await getArticleWorkflowProjectStatus(token, args.projectId)],
+    [token],
+  );
+
   // 服务端直出了历史列表就不再拉一次；自己拉的话不论成败都得把首屏骨架关掉
   useEffect(() => {
     if (initialHistory) {
@@ -335,7 +346,7 @@ export function useArticleWorkflowStudio({
     setBatch((current) => ({ ...current, syncKey }));
   }, [initialProject, noteSaved]);
 
-  useArticleWorkflowBatchPolling({ batchProjects, batchBusy, loadBatch, refreshHistory, setError, setNotice });
+  useArticleWorkflowBatchPolling({ batchProjects, batchBusy, loadBatch, loadBatchStatus, refreshHistory, setError, setNotice });
 
   const { saving, saveProject } = useArticleWorkflowSave({
     token,

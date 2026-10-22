@@ -1,18 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { Document, PrismaClient } from "@prisma/client";
 import { deleteObject, putObject, type S3 } from "../storage/s3.js";
-import { assertSafeUrl, SsrfError } from "./url-fetch.js";
+import { envInt } from "../runtime/env.js";
+import { errorMessageOrFallback } from "../workflow/_shared/error-message.js";
+import { assertSafeUrl } from "./url-fetch.js";
 
 const DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024;
 const DEFAULT_MAX_TEXT_CHARS = 200_000;
 
-function positiveInteger(raw: string | undefined, fallback: number): number {
-  const value = Number(raw);
-  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
-
-export const KB_MAX_FILE_BYTES = positiveInteger(process.env.KB_MAX_FILE_BYTES, DEFAULT_MAX_FILE_BYTES);
-export const KB_MAX_TEXT_CHARS = positiveInteger(process.env.KB_MAX_TEXT_CHARS, DEFAULT_MAX_TEXT_CHARS);
+export const KB_MAX_FILE_BYTES = envInt(process.env, "KB_MAX_FILE_BYTES", DEFAULT_MAX_FILE_BYTES);
+export const KB_MAX_TEXT_CHARS = envInt(process.env, "KB_MAX_TEXT_CHARS", DEFAULT_MAX_TEXT_CHARS);
 
 const MIME_BY_EXTENSION = new Map<string, ReadonlySet<string>>([
   [".txt", new Set(["text/plain"])],
@@ -144,7 +141,8 @@ async function readSource(req: UploadRequest): Promise<IngestSource> {
         filename: requestedName(body, parsed.pathname.split("/").pop() || "document"),
       };
     } catch (error) {
-      const reason = error instanceof SsrfError ? error.message : error instanceof Error ? error.message : String(error);
+      // 非 Error 一律兜底：这个串会原样进 400 的响应体。
+      const reason = errorMessageOrFallback(error, "URL 解析失败");
       throw new IngestError(`SSRF 防护：${reason}`, 400);
     }
   }

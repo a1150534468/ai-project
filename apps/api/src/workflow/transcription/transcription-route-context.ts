@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { getPrisma } from "@ai-assistant/db";
-import { loadS3Config, makeS3 } from "../../storage/s3.js";
+import { getS3 } from "../../storage/s3.js";
 import type { S3 } from "../../storage/s3-types.js";
 import { putObject } from "../../storage/s3-objects.js";
 import {
@@ -44,13 +44,8 @@ export function createTranscriptionRouteContext(
 ): TranscriptionRouteContext {
   const prisma = deps.prisma ?? getPrisma();
   const fetchFn = deps.fetchFn ?? fetch;
-  // S3 懒加载：测试/CI 环境可能没配 S3_ENDPOINT，路由注册时不能炸；
-  // 第一次真正上传/删除音频时才初始化，配错了报错信息也更贴近实际操作。
-  let cachedS3: S3 | undefined;
-  const getS3 = (): S3 => {
-    if (!cachedS3) cachedS3 = makeS3(loadS3Config());
-    return cachedS3;
-  };
+  // S3 走 storage 的进程级 provider（懒加载 + 记失败）：路由注册时不初始化，
+  // 第一次真正上传/删除音频时才取，测试/CI 没配 S3 也不会在注册期炸。
   const maxBytes = deps.maxBytes ?? loadTranscriptionMaxBytes();
   const staleTaskMs = loadTranscriptionStaleTaskMs();
   const scheduleTask: ScheduleTask = deps.scheduleTask
