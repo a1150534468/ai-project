@@ -134,7 +134,7 @@ services:
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
-    command: sh -c "pnpm --filter @ai-assistant/web dev -- --host 0.0.0.0 --port 5174"
+    command: sh -c "pnpm --filter @ai-assistant/web exec vite --host 0.0.0.0 --port 5174"
     ports: ["127.0.0.1:5174:5174"]
     environment:
       PORT: "5174"
@@ -156,7 +156,7 @@ services:
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
-    command: sh -c "pnpm --filter @ai-assistant/admin dev -- --host 0.0.0.0 --port 5175"
+    command: sh -c "pnpm --filter @ai-assistant/admin exec vite --host 0.0.0.0 --port 5175"
     ports: ["127.0.0.1:5175:5175"]
     environment:
       PORT: "5175"
