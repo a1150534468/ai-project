@@ -10,12 +10,9 @@
 # 项目名保持默认 aiproject → 数据卷 aiproject_ai_assistant_pg 不变；
 # 本文件任何改动都不要配 `down -v`（会删卷丢数据）。
 
-# 5 个 app 服务 + migrate 共用同一个镜像，只构建一次。
-x-dev-image:
-  build:
-    context: .
-    dockerfile: infra/docker/dev/Dockerfile
-  image: ai-assistant-dev:local
+# 5 个 app 服务 + migrate 共用同一个镜像 ai-assistant-dev:local。
+# build 只挂在 migrate 一个服务上：多服务并行 build 会竞争打同一个 tag，
+# compose 以 image "already exists" 报错；其余服务仅按 tag 引用该镜像。
 
 # 容器网络内的数据层地址；environment 优先级高于 env_file，
 # 覆盖 .env 里指向宿主 localhost:5433/6380 的 DATABASE_URL/REDIS_URL。
@@ -84,9 +81,6 @@ services:
 
   api:
     profiles: ["app"]
-    build:
-      context: .
-      dockerfile: infra/docker/dev/Dockerfile
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
@@ -105,9 +99,6 @@ services:
 
   novel-worker:
     profiles: ["app"]
-    build:
-      context: .
-      dockerfile: infra/docker/dev/Dockerfile
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
@@ -125,9 +116,6 @@ services:
 
   codex-pet-worker:
     profiles: ["app"]
-    build:
-      context: .
-      dockerfile: infra/docker/dev/Dockerfile
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
@@ -143,9 +131,6 @@ services:
 
   web:
     profiles: ["app"]
-    build:
-      context: .
-      dockerfile: infra/docker/dev/Dockerfile
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
@@ -168,9 +153,6 @@ services:
 
   admin:
     profiles: ["app"]
-    build:
-      context: .
-      dockerfile: infra/docker/dev/Dockerfile
     image: ai-assistant-dev:local
     working_dir: /repo
     init: true
