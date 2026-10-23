@@ -22,6 +22,24 @@ pnpm dev
 
 `Ctrl+C` 只停止本机业务服务，Docker 数据层会保留；停止数据层用 `pnpm dev:infra:stop`。
 
+### 全容器模式（可选）
+
+上面是默认的混合模式；也可以把 API、两个 Worker、Web、Admin 全部放进 Docker（方案与决策见 [docs/plans/2026-10-22-dev-container.md](docs/plans/2026-10-22-dev-container.md)）：
+
+```bash
+pnpm dev:docker        # 构建镜像（首建约 4~8 分钟）并起全部 7 个服务，等 /ready 就绪
+pnpm dev:docker:logs   # 跟随 api / workers / web / admin 日志
+pnpm dev:docker:down   # 停止全部服务（不带 -v，数据卷保留）
+```
+
+入口地址与混合模式一致（5174 / 5175 / 8090）。注意：
+
+- node 版本固定在镜像里（node:24，与生产同基础镜像），不随宿主 shell 漂移；
+- 两个模式抢同样的端口，不能同时跑；`dev:docker` 启动前会检查并明确报错；
+- 改 `package.json` 或 prisma schema 后要 `docker compose -f docker-compose.dev.yml --profile app up -d --build` 重建镜像（lockfile 没变时命中缓存，很快）；只改源码即时热更新，无需重建；
+- worker 健康端口 8091/8092 未发布到宿主，排查用 `pnpm dev:docker:logs`；
+- 任何情况下都不要对这个 compose 项目用 `down -v`——那会删掉数据库卷。
+
 模型网关（百炼 / AI Pixel / 生图 / 向量）的配置项见 [.env.example](.env.example)，模型选型与踩坑见 [docs/image.md](docs/image.md) 与 [docs/pitfalls.md](docs/pitfalls.md#一模型网关与配额)；本地开发细节与常见问题见 [docs/overview.md](docs/overview.md) 与 [docs/pitfalls.md](docs/pitfalls.md)。
 
 ## Codex 桌宠调用合同
@@ -43,7 +61,8 @@ docs/       项目文档（扁平结构，一个模块一个文档 + superpowers
 ## 常用命令
 
 ```bash
-pnpm dev             # 启动混合开发环境
+pnpm dev             # 启动混合开发环境（宿主进程 + Docker 数据层）
+pnpm dev:docker      # 全容器开发环境（可选，见「全容器模式」）
 pnpm test            # turbo 全仓测试
 pnpm typecheck       # 生成 Prisma Client 并全仓类型检查
 pnpm build           # 全仓构建
