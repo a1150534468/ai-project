@@ -2,6 +2,8 @@
 
 本文档对应 `docker-compose.prod.yml`。API 和统一 Worker 通过 `tsx` 运行 TypeScript 源码；Web/Admin 编译后由 Gateway 容器提供。宿主机现有 Caddy 负责 DSH 和三个生产域名的 HTTPS，Gateway 只监听本机 `18080`。生产不运行 Kubernetes、MinIO、Vite 或 watch 进程，也不再有计费服务（见 ADR-012）。
 
+> 边界说明（2026-10-23）：`docker-compose.dev.yml` 是**本地开发专用**文件——除 pg/redis 外，它通过 `--profile app` 提供把 API / 两个 Worker / Web / Admin 也放进容器的开发模式（用法见 README「全容器模式」）。它与本文档的生产链路（`docker-compose.prod.yml`、`infra/docker/api` 等）完全独立：dev 侧新增的 `infra/docker/dev/Dockerfile` 只在本地构建（`ai-assistant-dev:local`），不进 CI、不推镜像仓库、不影响发版。
+
 ## 1. 服务器准备
 
 - 目标系统建议使用 64 位 Linux，安装 Docker Engine、Compose Plugin、`curl`、`awk`。
